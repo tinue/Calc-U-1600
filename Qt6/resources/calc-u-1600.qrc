@@ -1,4 +1,7 @@
 <RCC>
+  <qresource prefix="/app">
+    <file alias="icon.png">linux/calc-u-1600.png</file>
+  </qresource>
   <qresource prefix="/faceplates">
     <file alias="pc1500.png">faceplates/pc1500.png</file>
     <file alias="pc1500A.png">faceplates/pc1500A.png</file>

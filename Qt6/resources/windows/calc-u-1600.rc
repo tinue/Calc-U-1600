@@ -1,0 +1,4 @@
+// Embeds the app icon into the .exe itself (Explorer/Start Menu/taskbar
+// pinned icon before launch) -- separate from QApplication::setWindowIcon()
+// in app/main.cpp, which only covers the running window.
+IDI_ICON1 ICON "calc-u-1600.ico"

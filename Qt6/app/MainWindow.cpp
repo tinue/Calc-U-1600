@@ -25,7 +25,7 @@
 #include <QCoreApplication>
 
 MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
-    setWindowTitle(tr("Calc-U-1600 (Qt6 prototype)"));
+    setWindowTitle(tr("Calc-U-1600"));
     setFocusPolicy(Qt::StrongFocus);
 
     m_controller = std::make_unique<MachineController>(this);

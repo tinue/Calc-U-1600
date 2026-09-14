@@ -2,7 +2,7 @@
 
 ROMs are not in this repository (see `.gitignore`) — they're Sharp
 Corporation's copyrighted firmware. Run
-[`tools/fetch_roms.sh`](../tools/fetch_roms.sh) to (re)download the 12
+[`tools/fetch_roms.sh`](../tools/fetch_roms.sh) to (re)download all 13
 with a known public source into this directory before building; it
 verifies each against the md5 in the table below.
 
@@ -11,7 +11,7 @@ verifies each against the md5 in the table below.
 | `PC-1500_A04.ROM` | [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | Runs on **both** PC-1500 and PC-1500A — originally developed for the PC-1500A's release, later also used in later-production PC-1500 (non-A) units. Sole/default ROM for the PC-1500A-only build; also one of three options in the PC-1500 ROM selector. | Confirmed |
 | `PC-1500_A01.ROM` | [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | PC-1500 (non-A) **only** — must not be offered for PC-1500A. | Confirmed |
 | `PC-1500_A03.ROM` | [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | PC-1500 (non-A) **only**, same as A01. | Confirmed |
-| `CE-150.ROM` | **None yet.** Not fetched by `fetch_roms.sh`. The Jeff-Birt repo (previously cited here) only has `lib/CE-150.lib`, a symbol table, not the ROM binary itself; no other public source is known -- needs a fresh hardware dump. If you have your own copy, keep it here locally (gitignored); without it, CE-150 support is unavailable in any build assembled via `fetch_roms.sh` (currently: CI builds -- local builds work if you have your own copy). | CE-150 printer/plotter/cassette-interface firmware, 8192 bytes, md5 `eb9aa5156c6849890b137799efc50a4b`. Runs on the host LH5801 from guest 0xA000–0xBFFF (its pc1500 and pc1500A copies are byte-identical). Also bundled as `Calc-U-1600/Resources/CE-150.bin`. | **Unverified against real hardware.** |
+| `CE-150.ROM` | [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (`dumps/CE-150.BIN`) | CE-150 printer/plotter/cassette-interface firmware, 8192 bytes, md5 `eb9aa5156c6849890b137799efc50a4b`. Runs on the host LH5801 from guest 0xA000–0xBFFF (its pc1500 and pc1500A copies are byte-identical). Also bundled as `Calc-U-1600/Resources/CE-150.bin`. | Confirmed, dumped from real hardware |
 | `PC1600-LH5803-C000-FFFF.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/`) | PC-1600's LH5803 co-processor ROM (its own C000–FFFF) | Confirmed, dumped from real hardware |
 | `PC1600-P0-B0.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/`) | Bank 0 lower half, 0x0000, system ROM (CS001, never switched out) | Confirmed, dumped from real hardware |
 | `PC1600-P1-B0.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/`) | Bank 0 upper half, 0x4000 | Confirmed, dumped from real hardware |

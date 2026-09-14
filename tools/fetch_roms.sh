@@ -10,7 +10,7 @@
 #
 # Usage: tools/fetch_roms.sh
 #
-# Writes (12 files):
+# Writes (13 files):
 #   roms/PC-1500_A01.ROM, PC-1500_A03.ROM, PC-1500_A04.ROM
 #     -- from Jeff-Birt/Sharp_PC-1500_ROM_Disassembly (Original_ROMs/)
 #   roms/PC1600-*.bin (8 files)
@@ -18,13 +18,8 @@
 #        lowercase .bin here to match this repo's existing convention)
 #   roms/CE-158.ROM
 #     -- from Jeff-Birt/Sharp_CE-158 (CE-158_ROM_ORIG.bin)
-#
-# Deliberately NOT fetched:
-#   roms/CE-150.ROM -- no public source exists yet (needs a fresh hardware
-#   dump). If you have your own copy, keep it in roms/ locally; it's
-#   gitignored like everything else here. Without it, CE-150 support is
-#   simply unavailable in a build assembled by this script (a CI build
-#   currently has no route to it at all).
+#   roms/CE-150.ROM
+#     -- from tinue/PC-1500-ROM (dumps/CE-150.BIN)
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -92,8 +87,7 @@ fetch_if_needed "$PC1600_BASE/PC1600-P2-B6.BIN"             "$ROMS_DIR/PC1600-P2
 # ---- CE-158 (Jeff-Birt/Sharp_CE-158) ----
 fetch_if_needed "https://raw.githubusercontent.com/Jeff-Birt/Sharp_CE-158/main/CE-158_ROM_ORIG.bin" "$ROMS_DIR/CE-158.ROM" aa952878fb29da4844791d95185649ca
 
-if [ ! -f "$ROMS_DIR/CE-150.ROM" ]; then
-  log "note: roms/CE-150.ROM not present and has no fetchable source yet (see this script's header) -- CE-150 support will be unavailable"
-fi
+# ---- CE-150 (tinue/PC-1500-ROM, dumps/) ----
+fetch_if_needed "https://raw.githubusercontent.com/tinue/PC-1500-ROM/main/dumps/CE-150.BIN" "$ROMS_DIR/CE-150.ROM" eb9aa5156c6849890b137799efc50a4b
 
 log "done"

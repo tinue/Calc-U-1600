@@ -96,9 +96,14 @@ endif()
 # Resources), not a bare executable -- needed both for normal macOS app
 # behavior (Dock icon, Info.plist) and because the bundled .card.yaml
 # resources below are placed under Contents/Resources, which only exists
-# for a bundled target.
+# for a bundled target. WIN32 (plain CMake add_executable() keyword,
+# passed through by qt_add_executable): link with the Windows GUI
+# subsystem instead of the console one, so no terminal window opens
+# alongside the app -- see app/AppLogging.cpp for where qDebug/qWarning/
+# etc. go instead now that there's no console to print them to.
 qt_add_executable(CalcU1600Qt
   MACOSX_BUNDLE
+  WIN32
   app/main.cpp
   app/MainWindow.cpp
   app/MachineController.cpp
@@ -112,6 +117,7 @@ qt_add_executable(CalcU1600Qt
   app/keylayout/PC1500KeyLayout.cpp
   app/keylayout/PC1600KeyLayout.cpp
   app/AppPaths.cpp
+  app/AppLogging.cpp
   app/MemoryModuleManager.cpp
   app/SettingsDialog.cpp
   app/PresetController.cpp
@@ -122,6 +128,14 @@ qt_add_executable(CalcU1600Qt
 if(APPLE)
   target_sources(CalcU1600Qt PRIVATE app/MacClipboardImage.mm)
   target_link_libraries(CalcU1600Qt PRIVATE "-framework Cocoa")
+endif()
+
+if(WIN32)
+  # Embeds the app icon into the .exe itself (Explorer/Start Menu/taskbar
+  # pinned icon before launch) -- see resources/windows/calc-u-1600.rc.
+  # Separate from QApplication::setWindowIcon() in app/main.cpp, which
+  # only covers the running window.
+  target_sources(CalcU1600Qt PRIVATE resources/windows/calc-u-1600.rc)
 endif()
 
 target_include_directories(CalcU1600Qt PRIVATE ${CORE_ROOT} app)
@@ -167,11 +181,12 @@ if(EXISTS ${SHARPDX_LIB})
   target_compile_definitions(CalcU1600Qt PRIVATE CALCU1600_PRESET_LOADER_AVAILABLE)
 endif()
 
-# ---- App icon (macOS only -- Windows/Linux Qt builds have no equivalent
-# bundle-icon mechanism in this prototype yet). Generated once from the
-# Xcode project's own Assets.xcassets/AppIcon.appiconset via `iconutil -c
-# icns` and committed here, same as the vendored libsharpdx.a above --
-# regenerate with iconutil if the source PNGs ever change.
+# ---- App icon (macOS bundle icon; Windows' equivalent is the WIN32
+# block's calc-u-1600.rc above, Linux's is the AppImage's --icon-file in
+# build.yml). Generated once from the Xcode project's own
+# Assets.xcassets/AppIcon.appiconset via `iconutil -c icns` and committed
+# here, same as the vendored libsharpdx.a above -- regenerate with
+# iconutil if the source PNGs ever change.
 if(APPLE)
   set(APP_ICON_FILE ${CMAKE_CURRENT_SOURCE_DIR}/resources/CalcU1600.icns)
   set_source_files_properties(${APP_ICON_FILE} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
@@ -185,8 +200,16 @@ if(APPLE)
     MACOSX_BUNDLE_GUI_IDENTIFIER ch.erzberger.CalcU1600Qt
     MACOSX_BUNDLE_BUNDLE_VERSION 0.1.0
     MACOSX_BUNDLE_SHORT_VERSION_STRING 0.1.0
+    MACOSX_BUNDLE_BUNDLE_NAME "Calc-U-1600"
   )
 endif()
+
+# User-facing output name: "Calc-U-1600" everywhere (the .app bundle on
+# macOS, the plain executable on Linux/Windows) -- the CMake target
+# identifier above stays CalcU1600Qt (internal only, not user-visible;
+# renaming it would mean touching every target_* call in this file for
+# no user-facing benefit).
+set_target_properties(CalcU1600Qt PROPERTIES OUTPUT_NAME "Calc-U-1600")
 
 # ---- Memory-card resource files, and bundled ROMs (loose, NOT .qrc --
 # Core's scanMemoryCardDirectory()/BundledRomCatalog read a real filesystem

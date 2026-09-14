@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Publishes a new Qt6-prototype build to the sibling Calc-U-1600-Binary
-# repo: downloads the four platform artifacts from the GitHub Actions run
-# for the current HEAD commit, packages them into the same
-# Calc-U-1600-Qt6-<platform> names the README's download table already
-# uses (.zip for Linux/Windows, signed+notarized .dmg for macOS), copies a
+# repo: downloads the four platform artifacts from the latest GitHub
+# Actions run (build.yml runs on workflow_dispatch only -- trigger one
+# yourself first if you want a fresh build; this script doesn't check it
+# against any particular commit), packages them into the same file names the
+# README's download table already uses (.AppImage for Linux,
+# signed+notarized .dmg for macOS, installer .exe for Windows), copies a
 # curated set of example presets into Calc-U-1600-Binary/examples/, pauses
 # so you can hand-edit Calc-U-1600-Binary/README.md (this script never
 # edits it for you), then commits, pushes, and creates a GitHub Release
@@ -169,26 +171,37 @@ run_publish() {
   [ -d "$BINARY_REPO/.git" ] || die "$BINARY_REPO is not a git repo"
   ( cd "$BINARY_REPO" && [ "$(git branch --show-current)" = "main" ] ) \
     || die "$BINARY_REPO is not on branch main"
-  ( cd "$BINARY_REPO" && [ -z "$(git status --porcelain)" ] ) \
-    || die "$BINARY_REPO has uncommitted changes -- commit/stash first"
+  # README.md is allowed to already be dirty -- step 7 below has you edit
+  # it by hand mid-flow anyway, so an in-progress edit at startup is
+  # normal, not a sign of stray uncommitted work.
+  ( cd "$BINARY_REPO" && [ -z "$(git status --porcelain -- . ':!README.md')" ] ) \
+    || die "$BINARY_REPO has uncommitted changes other than README.md -- commit/stash first"
   gh auth status >/dev/null 2>&1 || die "gh is not authenticated -- run 'gh auth login'"
 
-  # 2. Resolve the source commit & CI run.
+  # 2. Resolve the latest CI run -- no commit matching. build.yml only
+  # runs on workflow_dispatch, so "the commit currently checked out here"
+  # and "what the latest run actually built" aren't guaranteed to be the
+  # same thing; just take whatever the most recent run built, and report
+  # that (not local HEAD) as the source.
   local sha commit_subject
-  sha=$(git rev-parse HEAD)
-  commit_subject=$(git log -1 --format=%s)
-  log "resolving CI run for commit $sha"
+  log "resolving latest $WORKFLOW run"
   local run_id run_status run_conclusion
-  run_id=$(gh run list -R "$SOURCE_REPO_SLUG" --workflow "$WORKFLOW" --commit "$sha" \
+  run_id=$(gh run list -R "$SOURCE_REPO_SLUG" --workflow "$WORKFLOW" \
     --json databaseId --limit 1 -q '.[0].databaseId' 2>/dev/null || true)
-  [ -n "$run_id" ] && [ "$run_id" != "null" ] || die "no $WORKFLOW run found for commit $sha -- push first or wait for Actions"
-  run_status=$(gh run list -R "$SOURCE_REPO_SLUG" --workflow "$WORKFLOW" --commit "$sha" \
+  [ -n "$run_id" ] && [ "$run_id" != "null" ] || die "no $WORKFLOW runs found -- trigger one first (gh workflow run $WORKFLOW)"
+  run_status=$(gh run list -R "$SOURCE_REPO_SLUG" --workflow "$WORKFLOW" \
     --json status --limit 1 -q '.[0].status')
-  run_conclusion=$(gh run list -R "$SOURCE_REPO_SLUG" --workflow "$WORKFLOW" --commit "$sha" \
+  run_conclusion=$(gh run list -R "$SOURCE_REPO_SLUG" --workflow "$WORKFLOW" \
     --json conclusion --limit 1 -q '.[0].conclusion')
-  [ "$run_status" = "completed" ] || die "run $run_id is still '$run_status' -- wait for it to finish"
-  [ "$run_conclusion" = "success" ] || die "run $run_id concluded '$run_conclusion', not success"
-  log "using run $run_id"
+  [ "$run_status" = "completed" ] || die "latest run $run_id is still '$run_status' -- wait for it to finish"
+  [ "$run_conclusion" = "success" ] || die "latest run $run_id concluded '$run_conclusion', not success"
+  sha=$(gh run view "$run_id" -R "$SOURCE_REPO_SLUG" --json headSha -q '.headSha')
+  # NOT the run's own displayTitle: for a workflow_dispatch run that's
+  # just the workflow's name ("Build"), not the commit message -- pull
+  # the real subject from git by the sha instead.
+  commit_subject=$(git log -1 --format=%s "$sha" 2>/dev/null) \
+    || die "commit $sha (from run $run_id) not found in local git history -- fetch first"
+  log "using run $run_id (built from $sha: $commit_subject)"
 
   # 3. Download artifacts.
   # `work` is intentionally NOT `local`: the EXIT trap below runs after
@@ -207,29 +220,36 @@ run_publish() {
   # as /bin/bash, which predates associative-array support entirely.)
   local zips=()
   local name dir zip_name
-  for name in calcu1600qt-linux-x86_64 calcu1600qt-linux-arm64 calcu1600qt-macos-arm64 calcu1600qt-windows-x86_64; do
+  for name in Calc-U-1600-linux-x86_64 Calc-U-1600-linux-aarch64 Calc-U-1600-mac-aarch64 Calc-U-1600-windows-x86_64; do
     dir="$work/artifacts/$name"
-    [ -d "$dir" ] || { log "no artifact '$name' (skipped, e.g. linux-arm64 continue-on-error) -- skipping"; continue; }
+    [ -d "$dir" ] || { log "no artifact '$name' (skipped, e.g. linux-aarch64 continue-on-error) -- skipping"; continue; }
+    # Each artifact is a single, complete, directly-runnable file (an
+    # .AppImage, a signed/notarized/stapled .dmg, or a Windows installer
+    # .exe) -- copy+rename, don't zip (zipping the .dmg would strip its
+    # notarization ticket staple; an .AppImage/.exe installer is meant to
+    # be run directly).
+    # Asset names mirror the CI artifact names exactly (Calc-U-1600-<os>-
+    # <arch>), just with the right file extension appended.
     case "$name" in
-      calcu1600qt-linux-x86_64)   zip_name="Calc-U-1600-Qt6-linux-x86_64.zip" ;;
-      calcu1600qt-linux-arm64)    zip_name="Calc-U-1600-Qt6-linux-arm64.zip" ;;
-      calcu1600qt-macos-arm64)    zip_name="Calc-U-1600-Qt6-macos-arm64.dmg" ;;
-      calcu1600qt-windows-x86_64) zip_name="Calc-U-1600-Qt6-windows-x86_64.zip" ;;
+      Calc-U-1600-linux-x86_64)
+        zip_name="Calc-U-1600-linux-x86_64.AppImage"
+        chmod +x "$dir"/Calc-U-1600-*.AppImage
+        cp "$dir"/Calc-U-1600-*.AppImage "$zipdir/$zip_name"
+        ;;
+      Calc-U-1600-linux-aarch64)
+        zip_name="Calc-U-1600-linux-aarch64.AppImage"
+        chmod +x "$dir"/Calc-U-1600-*.AppImage
+        cp "$dir"/Calc-U-1600-*.AppImage "$zipdir/$zip_name"
+        ;;
+      Calc-U-1600-mac-aarch64)
+        zip_name="Calc-U-1600-mac-aarch64.dmg"
+        cp "$dir/Calc-U-1600.dmg" "$zipdir/$zip_name"
+        ;;
+      Calc-U-1600-windows-x86_64)
+        zip_name="Calc-U-1600-windows-x86_64.exe"
+        cp "$dir/Calc-U-1600-Setup.exe" "$zipdir/$zip_name"
+        ;;
     esac
-
-    if [ "$name" = "calcu1600qt-macos-arm64" ]; then
-      # The macOS job now uploads a single already-signed/notarized/stapled
-      # .dmg (not a raw .app directory) -- just rename it, don't re-zip it
-      # (zipping would strip the notarization ticket staple).
-      cp "$dir/CalcU1600Qt.dmg" "$zipdir/$zip_name"
-      zips+=("$zipdir/$zip_name")
-      log "packaged $zip_name"
-      continue
-    fi
-
-    if [ -f "$dir/CalcU1600Qt" ]; then chmod +x "$dir/CalcU1600Qt"; fi
-
-    (cd "$dir" && zip -r -q "$zipdir/$zip_name" .)
     zips+=("$zipdir/$zip_name")
     log "packaged $zip_name"
   done
