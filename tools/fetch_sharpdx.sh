@@ -47,7 +47,7 @@ set -eu
 cd "$(dirname "$0")/.."
 REPO_ROOT=$(pwd)
 DST="$REPO_ROOT/Core/Basic/vendor/sharpdx"
-TAG=${SHARPDX_TAG:-v0.1.2}
+TAG=${SHARPDX_TAG:-v0.1.3}
 
 detect_platform() {
   os=$(uname -s)

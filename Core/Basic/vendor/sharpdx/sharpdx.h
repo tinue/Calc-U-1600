@@ -35,6 +35,29 @@ typedef enum {
     SDE_DEVICE_PC1600 = 1,
 } SdeDevice;
 
+/*
+ Line ending for a de-tokenized listing (`sde_detokenize` / `sde_convert`).
+ Ignored when tokenizing — `CR` and `CRLF` input are always accepted.
+ */
+typedef enum {
+    /*
+     Host default: `\r\n` on Windows, `\n` elsewhere.
+     */
+    SDE_LINE_ENDING_PLATFORM = 0,
+    /*
+     `\n` (LF).
+     */
+    SDE_LINE_ENDING_LF = 1,
+    /*
+     `\r\n` (CRLF).
+     */
+    SDE_LINE_ENDING_CR_LF = 2,
+    /*
+     `\r` (CR) — the PC-1500's own line terminator.
+     */
+    SDE_LINE_ENDING_CR = 3,
+} SdeLineEnding;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -82,7 +105,8 @@ int32_t sde_tokenize(SdeDevice device,
 
 /*
  Tokenized bytes -> ASCII BASIC (UTF-8). Accepts a CE-158 / PC-1600 header (device
- then taken from it) or a bare payload (uses `device`).
+ then taken from it) or a bare payload (uses `device`). `line_ending` sets the
+ listing's line terminator (`SDE_LINE_ENDING_PLATFORM` = the host default).
 
  # Safety
  As `sde_tokenize`.
@@ -90,12 +114,15 @@ int32_t sde_tokenize(SdeDevice device,
 int32_t sde_detokenize(SdeDevice device,
                        const uint8_t *input,
                        size_t in_len,
+                       SdeLineEnding line_ending,
                        uint8_t **out,
                        size_t *out_len);
 
 /*
  Content-driven convert (mirrors the CLI): picks direction from `in`. Writes
- `*out_kind` with the detected input kind when non-NULL.
+ `*out_kind` with the detected input kind when non-NULL. `line_ending` sets the
+ line terminator of a de-tokenized listing (`SDE_LINE_ENDING_PLATFORM` = the
+ host default); it is ignored when the input is ASCII BASIC.
 
  # Safety
  As `sde_tokenize`; `out_kind` is NULL or writable.
@@ -104,6 +131,7 @@ int32_t sde_convert(SdeDevice device,
                     const char *name,
                     const uint8_t *input,
                     size_t in_len,
+                    SdeLineEnding line_ending,
                     uint8_t **out,
                     size_t *out_len,
                     SdeContent *out_kind);
