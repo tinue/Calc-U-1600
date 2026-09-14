@@ -42,7 +42,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake ninja-build patchelf \
-            qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev
+            qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev \
+            qt6-gtk-platformtheme
 
       - name: Fetch ROMs
         shell: bash
@@ -119,6 +120,39 @@ jobs:
             echo "::warning::wayland-graphics-integration-client plugin dir not found at $QT_PLUGINS_DIR -- Wayland EGL rendering may not work"
           fi
 
+          # --plugin=qt only bundles the "platforms" plugin category
+          # (libqxcb.so + the Wayland ones above) -- it never bundles
+          # "platformthemes", which is what actually queries the desktop
+          # (GTK settings / xdg-desktop-portal) for light/dark mode and
+          # feeds Qt an updated QPalette. Without it the AppImage never
+          # learns the OS is in dark mode at all, unlike a native build
+          # that picks up the system Qt install's platformthemes plugin.
+          # qt6-gtk-platformtheme (installed above) provides libqgtk3.so.
+          if [ -d "$QT_PLUGINS_DIR/platformthemes" ]; then
+            cp -r "$QT_PLUGINS_DIR/platformthemes" AppDir/usr/plugins/
+            ./linuxdeploy.AppImage \
+              --appdir=AppDir \
+              --deploy-deps-only=AppDir/usr/plugins/platformthemes
+          else
+            echo "::warning::platformthemes plugin dir not found at $QT_PLUGINS_DIR -- dark/light mode won't be detected"
+          fi
+
+          # Bundling the plugin isn't enough on its own -- Qt only loads a
+          # platformthemes plugin if QT_QPA_PLATFORMTHEME names it, and
+          # linuxdeploy-plugin-qt's generated AppRun doesn't set that. Wrap
+          # it so the bundled gtk3 theme is used by default, but still
+          # respect an existing QT_QPA_PLATFORMTHEME (e.g. a KDE session
+          # exporting QT_QPA_PLATFORMTHEME=kde) rather than overriding it
+          # with a plugin we didn't bundle.
+          mv AppDir/AppRun AppDir/AppRun.qt
+          printf '%s\n' \
+            '#!/bin/sh' \
+            'export QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-gtk3}"' \
+            'HERE="$(dirname "$(readlink -f "$0")")"' \
+            'exec "$HERE/AppRun.qt" "$@"' \
+            > AppDir/AppRun
+          chmod +x AppDir/AppRun
+
           ./linuxdeploy.AppImage --appdir=AppDir --output=appimage
 
       - name: Upload artifact
@@ -142,7 +176,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake ninja-build patchelf \
-            qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev
+            qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev \
+            qt6-gtk-platformtheme
 
       - name: Fetch ROMs
         shell: bash
@@ -195,6 +230,26 @@ jobs:
           else
             echo "::warning::wayland-graphics-integration-client plugin dir not found at $QT_PLUGINS_DIR -- Wayland EGL rendering may not work"
           fi
+
+          # See linux-x86_64's identical step for what this does (bundles
+          # the platformthemes plugin so dark/light mode is detected).
+          if [ -d "$QT_PLUGINS_DIR/platformthemes" ]; then
+            cp -r "$QT_PLUGINS_DIR/platformthemes" AppDir/usr/plugins/
+            ./linuxdeploy.AppImage \
+              --appdir=AppDir \
+              --deploy-deps-only=AppDir/usr/plugins/platformthemes
+          else
+            echo "::warning::platformthemes plugin dir not found at $QT_PLUGINS_DIR -- dark/light mode won't be detected"
+          fi
+
+          mv AppDir/AppRun AppDir/AppRun.qt
+          printf '%s\n' \
+            '#!/bin/sh' \
+            'export QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-gtk3}"' \
+            'HERE="$(dirname "$(readlink -f "$0")")"' \
+            'exec "$HERE/AppRun.qt" "$@"' \
+            > AppDir/AppRun
+          chmod +x AppDir/AppRun
 
           ./linuxdeploy.AppImage --appdir=AppDir --output=appimage
 

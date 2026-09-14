@@ -37,4 +37,15 @@ Where the macOS packaging / ROM-sourcing work stands, and what's left.
      bundled by inspecting the built AppImage directly — not yet smoke-
      tested on a real Wayland desktop by hand (the Raspberry Pi report
      that started this was against the pre-fix build).
+     A third bug: `--plugin=qt` never bundles the `platformthemes` plugin
+     category (only `platforms`), which is what queries the desktop for
+     light/dark mode and feeds Qt an updated `QPalette` — without it the
+     AppImage can't detect OS theme switches at all, on both x86_64 and
+     the Raspberry Pi arm64 build, unlike a native build using the system
+     Qt install's own `platformthemes` plugin. Fixed by installing
+     `qt6-gtk-platformtheme`, copying its `platformthemes` plugin dir into
+     the AppImage the same way as the Wayland plugin, and wrapping the
+     generated `AppRun` to export `QT_QPA_PLATFORMTHEME=gtk3` (only if not
+     already set, so an existing desktop-session value like KDE's `kde` is
+     left alone). Not yet verified against a real desktop by hand.
    - Windows: still undecided/unexecuted.
