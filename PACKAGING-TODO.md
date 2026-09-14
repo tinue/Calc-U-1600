@@ -38,31 +38,14 @@ Where the macOS packaging / ROM-sourcing work stands, and what's left.
      tested on a real Wayland desktop by hand (the Raspberry Pi report
      that started this was against the pre-fix build).
      A third bug: `--plugin=qt` never bundles the `platformthemes` plugin
-     category (only `platforms`), which — on Qt < 6.8 — is what queries
-     the desktop for light/dark mode and feeds Qt an updated `QPalette`;
-     without it the AppImage couldn't detect OS theme switches at all, on
-     both x86_64 and the Raspberry Pi arm64 build. First attempt: installed
-     `qt6-gtk-platformtheme` (Ubuntu 24.04's apt-packaged Qt is 6.4.2),
-     bundled its `platformthemes` plugin dir the same way as the Wayland
-     plugin, and wrapped the generated `AppRun` to export
-     `QT_QPA_PLATFORMTHEME=gtk3`. Verified on the actual Raspberry Pi
-     (`desktoppi`) that the plugin loaded correctly (`libqgtk3.so` +
-     `libgtk-3.so.0` present in the process's `/proc/*/maps`) — but dark
-     mode still didn't switch, because `libqgtk3.so` only detects dark
-     mode via the GTK theme *name* containing "dark", not the RPi
-     desktop's actual theme (`PiXonyx`, toggled without a name change).
-     Root cause turned out to be a Qt version mismatch: the Pi's native
-     Qt is 6.8.2, which reads the OS's `org.freedesktop.appearance`
-     xdg-desktop-portal setting natively (no `platformthemes` plugin
-     needed at all) — confirmed by running the native
-     `Qt6/build/Calc-U-1600` build and seeing zero `QT_QPA_PLATFORMTHEME`
-     env var and zero platform-theme plugin loaded, yet dark mode still
-     tracked correctly. Real fix: build the AppImage against Qt 6.8.2 via
-     aqtinstall (`jurplel/install-qt-action`, same tool the
-     `windows-x86_64` job already uses) instead of apt, dropping the
-     `qt6-gtk-platformtheme`/`AppRun`-wrapper workaround entirely. The
-     Wayland `EXTRA_PLATFORM_PLUGINS`/`wayland-graphics-integration-client`
-     handling (bug (b) above) is unrelated to Qt's version — it's
-     `linuxdeploy-plugin-qt`'s own default plugin selection — and stays.
-     Not yet verified against a real desktop by hand.
+     category (only `platforms`), which is what queries the desktop for
+     light/dark mode and feeds Qt an updated `QPalette` — without it the
+     AppImage can't detect OS theme switches at all, on both x86_64 and
+     the Raspberry Pi arm64 build, unlike a native build using the system
+     Qt install's own `platformthemes` plugin. Fixed by installing
+     `qt6-gtk-platformtheme`, copying its `platformthemes` plugin dir into
+     the AppImage the same way as the Wayland plugin, and wrapping the
+     generated `AppRun` to export `QT_QPA_PLATFORMTHEME=gtk3` (only if not
+     already set, so an existing desktop-session value like KDE's `kde` is
+     left alone). Not yet verified against a real desktop by hand.
    - Windows: still undecided/unexecuted.
