@@ -49,10 +49,7 @@ jobs:
       # See the windows-x86_64 job's identical step for why aqtinstall
       # (not apt) -- same reasoning here, plus it's what gets us Qt 6.8+
       # (see the top-of-file comment on why that version matters for
-      # Linux specifically). No `modules:` needed -- unlike qt6-wayland
-      # being a separate apt package, aqt's official Linux qtbase already
-      # bundles the Wayland client/QPA plugins (only qtwaylandcompositor,
-      # server-side, is a separate module).
+      # Linux specifically). qtwayland isn't installed by default.
       - name: Install Qt6 (aqtinstall)
         uses: jurplel/install-qt-action@v4
         with:
@@ -60,6 +57,7 @@ jobs:
           host: 'linux'
           target: 'desktop'
           arch: 'linux_gcc_64'
+          modules: 'qtwayland'
 
       - name: Fetch ROMs
         shell: bash
@@ -93,8 +91,8 @@ jobs:
           # only platform plugin it deploys unless told otherwise --
           # without this, the AppImage has no Wayland support at all and
           # silently falls back to XWayland (blurry/non-HiDPI) on a
-          # Wayland session, even though the Qt install above does
-          # include the Wayland platform plugins (bundled in qtbase).
+          # Wayland session, even though the qtwayland module is
+          # installed above.
           EXTRA_PLATFORM_PLUGINS: "libqwayland-egl.so;libqwayland-generic.so"
         run: |
           set -euo pipefail
@@ -159,10 +157,10 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake ninja-build patchelf libgl1-mesa-dev
 
-      # See linux-x86_64's identical step for why aqtinstall (and why no
-      # `modules:`). host/arch differ here: linux_arm64/linux_gcc_arm64
-      # is aqt's arm64 desktop Qt, only available from Qt 6.7.0 on --
-      # 6.8.2 (same pin as linux-x86_64/windows-x86_64) is well past that.
+      # See linux-x86_64's identical step for why aqtinstall. host/arch
+      # differ here: linux_arm64/linux_gcc_arm64 is aqt's arm64 desktop
+      # Qt, only available from Qt 6.7.0 on -- 6.8.2 (same pin as
+      # linux-x86_64/windows-x86_64) is well past that.
       - name: Install Qt6 (aqtinstall)
         uses: jurplel/install-qt-action@v4
         with:
@@ -170,6 +168,7 @@ jobs:
           host: 'linux_arm64'
           target: 'desktop'
           arch: 'linux_gcc_arm64'
+          modules: 'qtwayland'
 
       - name: Fetch ROMs
         shell: bash
