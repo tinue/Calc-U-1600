@@ -1,0 +1,47 @@
+# A fictional PC-1500 memory card that never existed in reality --
+# written as a walkthrough sample for docs/User-Guide.md's "Custom YAML
+# memory cards" section, not a model of real Sharp hardware.
+#
+# Every general-purpose expansion pin the PC-1500 mainboard exposes, all
+# wired to plain unbanked SRAM at once: Y0's full 16 KB window (behind no
+# on-module decode -- unlike CE-155, which gates one of its four chips on
+# Y0 AND three address lines) plus the three bare 2 KB S1/S2/S3 strobes,
+# for 22 KB total. Same "OR of bare per-strobe groups" shape as
+# ce155.card.yaml's S1/S2/S3 groups, just with Y0 given the whole 16 KB
+# instead of one more 2 KB slice behind an address-bits decode.
+#
+# docs/Memory-Card-Definition-Spec.md's own worked-example table has a
+# "maxed out" PC-1500/1500A row that also throws in S4 (pin 5) for a full
+# 24 KB on a PC-1500 (S4/pin 5 is NC on the PC-1500A, so that variant would
+# only reach the same 22 KB this file already gives both models) -- this
+# file deliberately stops at S1-S3 so the same definition is identically
+# "maxed out" on both models, with nothing dormant on either.
+
+module-name: "PC-1500 Maxed-Out (fictional)"
+compatible-hosts: [PC-1500, PC-1500A]
+definition-terminology: PC-1500
+
+notes: "Demo-only card for the docs' custom-YAML walkthrough. Not a real Sharp module -- no CE-1xx part number corresponds to this pin combination."
+
+regions:
+  - name: sram-22k
+    capacity: 0x5800   # 16 KB (Y0) + 3 x 2 KB (S1/S2/S3) = 22 KB
+    banking: none
+    content:
+      kind: regular
+      writable: true
+      power-up-fill: 0xFF
+    addressing:
+      any-of:
+        - chip-select: Y0
+          span: 0x4000
+          maps-to: 0x0000
+        - chip-select: S1
+          span: 0x0800
+          maps-to: 0x4000
+        - chip-select: S2
+          span: 0x0800
+          maps-to: 0x4800
+        - chip-select: S3
+          span: 0x0800
+          maps-to: 0x5000

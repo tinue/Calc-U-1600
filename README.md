@@ -9,6 +9,15 @@ All three machines boot to BASIC with keyboard, dot-matrix display, RTC,
 expansion-card, and serial-port support. See [TODO.md](TODO.md) for known
 issues and open work.
 
+## Documentation
+
+- [docs/User-Guide.md](docs/User-Guide.md) — using the emulator: the
+  keyboard, memory modules and plotter, saving battery-backed module
+  state, Settings, and advanced topics (Debug panel, custom YAML memory
+  cards, presets).
+- [docs/Building.md](docs/Building.md) — building from source
+  (prerequisites, ROMs, per-platform build steps).
+
 ## Serial port
 
 The emulated PC-1600's RS-232C port is always live and backed by a host

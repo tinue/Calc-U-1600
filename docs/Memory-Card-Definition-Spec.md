@@ -5,7 +5,12 @@ definition file must express and *why*, in prose. The concrete
 serialization — YAML key names, grammar, byte-block encoding — now lives
 in `Memory-Card-Definition-Format.md`, with worked examples under
 `examples/memory-cards/`; that spelling is revisable, this content model
-is the fixed part. This document also isn't the "concrete
+is the fixed part. For a gentler, example-first introduction (starting
+from the "fully maxed out" fictional PC-1500 card in
+`examples/memory-cards/pc1500-maxed-out.card.yaml`), see
+`docs/User-Guide.md`'s "Custom YAML memory cards" section — this document
+and the format spec are the full reference the walkthrough links back to.
+This document also isn't the "concrete
 software-defined memory module" implementation itself
 (`Core/Connector/SoftwareDefinedCard.hpp`, the one general-purpose runtime
 module that *reads* files in this format) — it's the contract that

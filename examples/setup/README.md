@@ -1,5 +1,8 @@
 # examples/setup
 
+See also `docs/User-Guide.md`'s "Preloaded-data cards & Dump Card YAML"
+section for a narrative walkthrough of the workflow below.
+
 These files are not demos to look at — they are **preparation scripts**. Each one
 drives the emulator through the steps needed to get a memory card (or expansion
 module) into a known, useful state: format it, split it as a RAM disk, load a set
