@@ -1,13 +1,12 @@
-# PC-1500A memory test. Loads into the machine program area and starts with:
+# PC-1500A memory test. Loads into the fixed machine-language area, which
+# is present regardless of any memory module -- no module needed here.
+# Starts with:
 #  X=2 (for 2 passes)
 #  CALL &7C01,X
 # When finished, check X for the test result.
 
 model: PC-1500A
 firmware: A04
-
-memory-expansion:
-  - modulespec: CE-1638
 
 keys:
   - key: cl

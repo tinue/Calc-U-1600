@@ -4,7 +4,7 @@
 # When finished, check X for the test result.
 
 model: PC-1500
-firmware: A04.ROM
+firmware: A04
 
 keys:
   - key: cl

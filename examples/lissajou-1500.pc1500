@@ -1,10 +1,8 @@
-# PC-1600 plotter test -- draws a Lissajous figure on the CE-1600P.
+# PC-1500A plotter test -- draws a Lissajous figure on the CE-150.
 
 model: PC-1500A
 
-# Start with the CE-1600P pen-plotter connected (attached before the cold
-# boot, so the ROM detects it). The PC-1600 also takes a CE-150, so this
-# names the peripheral rather than a plain on/off.
+# CE-150 pen-plotter attached.
 plotter: ce150
 
 # Bring the machine into PRO mode to accept a typed-in program.
@@ -12,8 +10,8 @@ keys:
   - key: cl
   - type: NEW0
 
-# `format: basic-binary` with a `.bas` path tokenizes the listing in
-# process on load (via the vendored libsharpdx) -- no separate .bbin step.
+# `format: basic-binary` with a `.bas` path tokenizes the program while
+# loading, which is much faster than simulated typing the ascii version.
 program:
   path: lissajou-1500.bas
   format: basic-binary

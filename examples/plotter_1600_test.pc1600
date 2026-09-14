@@ -1,7 +1,8 @@
 # PC-1600 plotter test -- draws text and a rectangle of maximum size
 
 model: PC-1600
-# Start with the CE-1600P pen-plotter connected .
+
+# CE-1600P pen-plotter attached.
 plotter: ce1600p
 
 # Print a few things

@@ -1,21 +1,25 @@
-# PC-1600 plotter test -- draws a Lissajous figure on the CE-1600P.
+# PC-1600 plotter test -- prints an ASCII/hex character chart on the
+# CE-1600P (font size, border colour and font colour are asked for at
+# start, answered below as size 2 / border 1 / font 0).
+# Program found on https://www.sharp-pc-1600.de
 
 model: PC-1600
 
-# Start with the CE-1600P pen-plotter connected (attached before the cold
-# boot, so the ROM detects it). The PC-1600 also takes a CE-150, so this
-# names the peripheral rather than a plain on/off.
+# CE-1600P pen-plotter attached.
 plotter: ce1600p
 
 # Bring the machine into PRO mode to accept a typed-in program.
 keys:
   - key: mode
 
+# `format: basic-binary` with a `.bas` path tokenizes the program while
+# loading, which is much faster than simulated typing the ascii version.
 program:
   path: ascii.bas
   format: basic-binary
 
-# Back to RUN mode, then run it -- the figure plots on the virtual paper.
+# Back to RUN mode, then run it -- answers the size/colour prompts and
+# prints the chart to the virtual paper.
 keys:
   - key: mode
   - type: RUN

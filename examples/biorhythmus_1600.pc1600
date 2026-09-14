@@ -1,8 +1,10 @@
-# PC-1600 plotter test -- draws a globe of the earth on the CE-1600P.
+# PC-1600 plotter program -- plots a biorhythm chart (physical/psychical/
+# intellectual cycles) for a given name and birth date on the CE-1600P.
 # Program found on https://www.sharp-pc-1600.de
 
-# This version is for the PC-1600 with PC-1600P
 model: PC-1600
+
+# CE-1600P pen-plotter attached.
 plotter: ce1600p
 
 # After reset, a NEW0 is required in PRO mode (PC-1600 starts up in RUN)
@@ -10,14 +12,14 @@ keys:
   - key: mode
   - type: NEW0
 
-# `format: basic-binary` with a `.bas` path tokenizes the listing in
-# process on load (via the vendored libsharpdx) -- no separate .bbin step.
+# `format: basic-binary` with a `.bas` path tokenizes the program while
+# loading, which is much faster than simulated typing the ascii version.
 program:
   path: biorhythmus_1600.bas
   format: basic-binary
 
-# After loading, switch to RUM mode and start the program. Answer the
-# input paraneters and then wait for finish.
+# After loading, switch to RUN mode and start the program. Answer the
+# input parameters and then wait for finish.
 keys:
   - key: mode
   - type: RUN

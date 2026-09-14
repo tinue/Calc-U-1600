@@ -19,7 +19,7 @@
 ; reproduced independently on real hardware, by anyone, straight from
 ; PEEK.
 ;
-; Target: PC-1500A, machine-language area (see examples/memtest.pc1500a
+; Target: PC-1500A, machine-language area (see examples/memtest_1500a.pc1500a
 ; for why that area needs no NEW/module reservation on this model).
 ;
 ; ============================================================

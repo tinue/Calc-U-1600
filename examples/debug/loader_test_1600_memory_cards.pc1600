@@ -17,8 +17,8 @@ keys:
   - type: INIT"S2:","F"
   - type: INIT"S2:","M"
 
-# `format: basic-binary` with a `.bas` path tokenizes the listing in
-# process on load (via the vendored libsharpdx) -- no separate .bbin step.
+# `format: basic-binary` with a `.bas` path tokenizes the program while
+# loading, which is much faster than simulated typing the ascii version.
 program:
   path: ../globus.bas
   format: basic-binary
