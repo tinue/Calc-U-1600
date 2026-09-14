@@ -38,14 +38,42 @@ Where the macOS packaging / ROM-sourcing work stands, and what's left.
      tested on a real Wayland desktop by hand (the Raspberry Pi report
      that started this was against the pre-fix build).
      A third bug: `--plugin=qt` never bundles the `platformthemes` plugin
-     category (only `platforms`), which is what queries the desktop for
-     light/dark mode and feeds Qt an updated `QPalette` — without it the
+     category (only `platforms`), which is what feeds Qt an updated
+     `QPalette` when the OS switches light/dark — without it the
      AppImage can't detect OS theme switches at all, on both x86_64 and
      the Raspberry Pi arm64 build, unlike a native build using the system
-     Qt install's own `platformthemes` plugin. Fixed by installing
-     `qt6-gtk-platformtheme`, copying its `platformthemes` plugin dir into
-     the AppImage the same way as the Wayland plugin, and wrapping the
-     generated `AppRun` to export `QT_QPA_PLATFORMTHEME=gtk3` (only if not
-     already set, so an existing desktop-session value like KDE's `kde` is
-     left alone). Not yet verified against a real desktop by hand.
+     Qt install's own `platformthemes` plugin.
+
+     First attempt: installed `qt6-gtk-platformtheme`, bundled its
+     `platformthemes` plugin dir, and wrapped `AppRun` to default
+     `QT_QPA_PLATFORMTHEME=gtk3`. Verified on the actual Raspberry Pi
+     (`desktoppi`) that `libqgtk3.so` loaded correctly (present in
+     `/proc/<pid>/maps`) — but dark mode still didn't switch. Briefly
+     suspected a Qt-version gap (the AppImage builds against Ubuntu
+     24.04's apt Qt 6.4.2; Qt 6.8's qtbase gained built-in
+     xdg-desktop-portal color-scheme reading) and switched the AppImage
+     build to Qt 6.8.2 via aqtinstall — that turned out to be a wrong
+     turn (reverted): querying the portal directly on desktopi
+     (`gdbus call ... org.freedesktop.portal.Settings.Read ...
+     color-scheme`) returns "no preference" even while the desktop is
+     visibly dark, because Raspberry Pi OS's PIXEL desktop doesn't
+     populate the portal or GTK settings at all for its own dark-mode
+     toggle.
+
+     Root cause, found by comparing `/proc/<pid>/environ` and
+     `/proc/<pid>/maps` between a native run and an AppImage run side by
+     side on desktoppi: PIXEL sets `QT_QPA_PLATFORMTHEME=qt5ct` in the
+     session, and the native process resolves that to
+     `/usr/lib/.../qt6/plugins/platformthemes/libqt6ct.so` — the `qt6ct`
+     package ("Qt6 Configuration Tool"), which reads
+     `~/.config/qt6ct/qt6ct.conf` directly, independent of GTK/portal.
+     The AppImage had no plugin registered under either name, so Qt
+     silently loaded none. Real fix: install `qt6ct` alongside
+     `qt6-gtk-platformtheme` (both land `.so`s in the same apt Qt
+     `platformthemes` dir, so the existing bundling copy picks up both
+     automatically) plus qt6ct's `styles` plugin dir, keeping the
+     Qt-6.4.2-via-apt build (no aqtinstall) and the `AppRun`
+     `QT_QPA_PLATFORMTHEME=gtk3` fallback-default wrapper as a
+     reasonable default for desktops (e.g. plain GNOME) that don't set
+     their own. Not yet verified against a real desktop by hand.
    - Windows: still undecided/unexecuted.

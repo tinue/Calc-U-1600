@@ -43,7 +43,7 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake ninja-build patchelf \
             qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev \
-            qt6-gtk-platformtheme
+            qt6-gtk-platformtheme qt6ct
 
       - name: Fetch ROMs
         shell: bash
@@ -122,12 +122,29 @@ jobs:
 
           # --plugin=qt only bundles the "platforms" plugin category
           # (libqxcb.so + the Wayland ones above) -- it never bundles
-          # "platformthemes", which is what actually queries the desktop
-          # (GTK settings / xdg-desktop-portal) for light/dark mode and
-          # feeds Qt an updated QPalette. Without it the AppImage never
-          # learns the OS is in dark mode at all, unlike a native build
-          # that picks up the system Qt install's platformthemes plugin.
-          # qt6-gtk-platformtheme (installed above) provides libqgtk3.so.
+          # "platformthemes", which is what actually feeds Qt an updated
+          # QPalette when the OS switches light/dark. Without it the
+          # AppImage never learns the OS is in dark mode at all, unlike a
+          # native build that picks up the system Qt install's
+          # platformthemes plugin. Both packages installed above land in
+          # this one directory, so a single copy covers both:
+          # qt6-gtk-platformtheme's libqgtk3.so (GTK-theme-name heuristic;
+          # a reasonable default for plain GNOME-ish desktops with no
+          # theming tool of their own) and qt6ct's libqt6ct.so (reads
+          # ~/.config/qt6ct/qt6ct.conf directly -- confirmed via /proc/
+          # <pid>/maps against a real desktop, Raspberry Pi OS's PIXEL,
+          # that this is what a *native* Calc-U-1600 build there actually
+          # uses; PIXEL doesn't go through GTK settings or
+          # xdg-desktop-portal at all, so gtk3 alone silently detected
+          # nothing there despite loading fine). qt6ct's plugin also
+          # covers the QT_QPA_PLATFORMTHEME=qt5ct that some sessions
+          # (including PIXEL's) set by default -- it responds to both
+          # names. The "styles" dir is qt6ct's separate, optional
+          # QStyle plugin (native widget look) -- not required for
+          # palette/dark-mode detection since this app doesn't use
+          # QStyle (see ChromeColors.hpp's QSS-based chrome instead), but
+          # bundled anyway since it's what a native install also loads
+          # alongside the platformtheme plugin.
           if [ -d "$QT_PLUGINS_DIR/platformthemes" ]; then
             cp -r "$QT_PLUGINS_DIR/platformthemes" AppDir/usr/plugins/
             ./linuxdeploy.AppImage \
@@ -136,14 +153,20 @@ jobs:
           else
             echo "::warning::platformthemes plugin dir not found at $QT_PLUGINS_DIR -- dark/light mode won't be detected"
           fi
+          if [ -d "$QT_PLUGINS_DIR/styles" ]; then
+            cp -r "$QT_PLUGINS_DIR/styles" AppDir/usr/plugins/
+            ./linuxdeploy.AppImage \
+              --appdir=AppDir \
+              --deploy-deps-only=AppDir/usr/plugins/styles
+          fi
 
-          # Bundling the plugin isn't enough on its own -- Qt only loads a
-          # platformthemes plugin if QT_QPA_PLATFORMTHEME names it, and
-          # linuxdeploy-plugin-qt's generated AppRun doesn't set that. Wrap
-          # it so the bundled gtk3 theme is used by default, but still
-          # respect an existing QT_QPA_PLATFORMTHEME (e.g. a KDE session
-          # exporting QT_QPA_PLATFORMTHEME=kde) rather than overriding it
-          # with a plugin we didn't bundle.
+          # Bundling the plugins isn't enough on its own -- Qt only loads
+          # a platformthemes plugin if QT_QPA_PLATFORMTHEME names one,
+          # and linuxdeploy-plugin-qt's generated AppRun doesn't set
+          # that. Wrap it so the bundled gtk3 theme is used as a
+          # fallback default, but still respect an existing
+          # QT_QPA_PLATFORMTHEME (e.g. PIXEL's own qt5ct, or a KDE
+          # session's kde) rather than overriding it.
           mv AppDir/AppRun AppDir/AppRun.qt
           printf '%s\n' \
             '#!/bin/sh' \
@@ -177,7 +200,7 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake ninja-build patchelf \
             qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev \
-            qt6-gtk-platformtheme
+            qt6-gtk-platformtheme qt6ct
 
       - name: Fetch ROMs
         shell: bash
@@ -232,7 +255,8 @@ jobs:
           fi
 
           # See linux-x86_64's identical step for what this does (bundles
-          # the platformthemes plugin so dark/light mode is detected).
+          # both gtk3's and qt6ct's platformthemes plugins, plus qt6ct's
+          # styles plugin, so dark/light mode is detected).
           if [ -d "$QT_PLUGINS_DIR/platformthemes" ]; then
             cp -r "$QT_PLUGINS_DIR/platformthemes" AppDir/usr/plugins/
             ./linuxdeploy.AppImage \
@@ -240,6 +264,12 @@ jobs:
               --deploy-deps-only=AppDir/usr/plugins/platformthemes
           else
             echo "::warning::platformthemes plugin dir not found at $QT_PLUGINS_DIR -- dark/light mode won't be detected"
+          fi
+          if [ -d "$QT_PLUGINS_DIR/styles" ]; then
+            cp -r "$QT_PLUGINS_DIR/styles" AppDir/usr/plugins/
+            ./linuxdeploy.AppImage \
+              --appdir=AppDir \
+              --deploy-deps-only=AppDir/usr/plugins/styles
           fi
 
           mv AppDir/AppRun AppDir/AppRun.qt
