@@ -1,0 +1,21 @@
+# PC-1600 strategy game -- Towers of Hanoi, with stacks of up to seven bricks.
+# Original code from HR-Soft; fixed, extended (7 bricks) and refined by
+# Patrick Zumstein. Posted to the "Sharp PC" Facebook group, 2026-09-13:
+# https://www.facebook.com/groups/sharppc/posts/3533086636858521/
+
+model: PC-1600
+
+# After reset, a NEW0 is required in PRO mode (PC-1600 starts up in RUN)
+keys:
+  - key: mode
+  - type: NEW0
+
+# `format: basic-binary` with a `.bas` path tokenizes the listing in
+# process on load (via the vendored libsharpdx) -- no separate .bbin step.
+program:
+  path: hanoi.bas
+  format: basic-binary
+
+keys:
+  - key: mode
+  - type: RUN
