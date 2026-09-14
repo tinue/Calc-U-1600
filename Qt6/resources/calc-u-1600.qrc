@@ -1,0 +1,7 @@
+<RCC>
+  <qresource prefix="/faceplates">
+    <file alias="pc1500.png">faceplates/pc1500.png</file>
+    <file alias="pc1500A.png">faceplates/pc1500A.png</file>
+    <file alias="pc1600.png">faceplates/pc1600.png</file>
+  </qresource>
+</RCC>

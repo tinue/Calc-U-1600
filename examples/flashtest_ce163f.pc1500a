@@ -1,0 +1,51 @@
+# PC-1500A + the CE-163F module (16 banks: 0-7 RAM, 8-F FLASH).
+#
+# Smallest demo of the runtime flash-write protocol, driven entirely from
+# BASIC POKE/PEEK -- no binary, no firmware. It shows three things:
+#
+#   1. A FLASH bank powers up filled with 0xAA (an analysis pattern), not
+#      0xFF and not 0x00.
+#   2. A bare POKE into a FLASH bank does nothing (the bank is locked).
+#   3. After a sector erase (-> 0xFF) + the JEDEC unlock/program sequence,
+#      the byte programs normally.
+#
+# Bank select: POKE &6808+N  (pin 18 / S5 on the PC-1500A, low nibble = N).
+# Here N=9 -> FLASH bank 9.
+#
+# SST39SF010A command set, low-11-bit decode, so the firmware's real
+# &1555/&2AAA addresses are used (not the datasheet's &5555/&2AAA):
+#
+#   sector erase : &AA->&1555 &55->&2AAA &80->&1555 &AA->&1555 &55->&2AAA
+#                  &30->addr-in-sector
+#   byte program : &AA->&1555 &55->&2AAA &A0->&1555  byte->addr
+#
+# Expected on the LCD after RUN:
+#   init    -> 170      (&100 before erase: the 0xAA power-up pattern)
+#   locked  -> 170      (bare POKE at &101 never took)
+#   flashed -> 90       (&5A programmed at &100 after erase + unlock)
+#
+# NOTE: this emulated CE-163F models a simplified bank latch (any S5 write
+# samples A0-A3); it does NOT model the real module's separate address-
+# strobe latch, so the real firmware's interleaved &6808/&6809 writes are
+# not reproduced here -- issue the sequences as pure &1555/&2AAA writes.
+
+model: PC-1500A
+firmware: A04
+
+memory-expansion:
+  - modulespec: CE-163F
+
+keys:
+  - key: cl
+  - type: NEW0
+  - key: mode
+  - type: '10 POKE &6809,0'
+  - type: '20 PRINT "init    ->";PEEK &100'
+  - type: '30 POKE &101,&33'
+  - type: '40 POKE &1555,&AA : POKE &2AAA,&55 : POKE &1555,&80 : POKE &1555,&AA : POKE &2AAA,&55 : POKE &100,&30'
+  - type: '50 POKE &1555,&AA : POKE &2AAA,&55 : POKE &1555,&A0 : POKE &100,&5A'
+  - type: '60 PRINT "locked  ->";PEEK &101'
+  - type: '70 PRINT "flashed ->";PEEK &100'
+  - key: mode
+  - type: RUN
+  - wait: 5

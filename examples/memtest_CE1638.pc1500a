@@ -1,0 +1,26 @@
+# PC-1500A memory test. Loads into the machine program area and starts with:
+#  X=2 (for 2 passes)
+#  CALL &7C01,X
+# When finished, check X for the test result.
+
+model: PC-1500A
+firmware: A04
+
+memory-expansion:
+  - modulespec: CE-1638
+
+keys:
+  - key: cl
+  - type: NEW0
+  - key: mode
+
+program:
+  path: memtest_1500a.bin
+  format: binary
+  address: 0x7C01
+
+keys:
+  - type: X=2
+  - type: CALL&7C01,X
+  - type: X
+  - wait: 5

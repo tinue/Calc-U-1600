@@ -1,0 +1,18 @@
+# PC-1600 loading a basic program. Validate the program loader.
+
+model: PC-1600
+
+# Bring the machine into PRO mode
+keys:
+  - key: mode
+  - type: NEW0
+
+# Load the program
+program:
+  path: intro.bas
+  format: basic-binary
+
+# Back to RUN mode, then start the program
+keys:
+  - key: mode
+  - type: RUN

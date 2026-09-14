@@ -1,0 +1,28 @@
+# Demonstrates the `- trace:` preset step (a port of Calc-U-59's
+# `KEYSTROKES:` `Trace:` directive). Loads a tiny BASIC loop, then wraps
+# its RUN in a CPU instruction trace written to `trace_demo.bin` under the
+# configured trace directory (the CLI's cwd; the app's
+# AppSettings.traceDirectory()).
+#
+#   tools/build_cli.sh && ./pc1500_cli --preset examples/debug/trace_demo.pc1500a
+#   python3 tools/read_trace.py trace_demo.bin
+#
+# Starting a new `- trace:` closes any open one; a trace still running when
+# the preset finishes is closed automatically.
+model: PC-1500A
+firmware: A04
+
+program:
+  format: basic-text
+  text: |
+    10 FOR I = 1 TO 20
+    20 PRINT I
+    30 NEXT I
+
+keys:
+  - key: cl
+  - key: mode
+  - trace: trace_demo.bin
+  - type: RUN
+  - wait: 1
+  - trace: off

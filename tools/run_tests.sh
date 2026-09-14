@@ -1,0 +1,66 @@
+#!/bin/sh
+# Builds and runs the headless Core test suite. Must be run from the repo
+# root (tests load roms/PC-1500_A04.ROM via a relative path).
+set -e
+cd "$(dirname "$0")/.."
+clang++ -std=c++17 -Wall -Wextra -O1 \
+  Core/CPU/LH5801/LH5801.cpp \
+  Core/PC1500/PC1500Memory.cpp \
+  Core/PC1500/PC1500Machine.cpp \
+  Core/PC1500/PC1500Keyboard.cpp \
+  Core/PC1500/PC1500Display.cpp \
+  Core/PC1500/Upd1990ac.cpp \
+  Core/PC1500/PresetFile.cpp \
+  Core/PC1500/PC1500BasicTyper.cpp \
+  Core/PC1500/PC1500BasicLoader.cpp \
+  Core/PC1500/PC1500PresetLoader.cpp \
+  Core/PC1500/PC1500TraceFile.cpp \
+  Core/PC1600/PC1600Memory.cpp \
+  Core/PC1600/PC1600Keyboard.cpp \
+  Core/PC1600/PC1600Display.cpp \
+  Core/PC1600/PC1600SubCpu.cpp \
+  Core/PC1600/TC8576F.cpp \
+  Core/CPU/SC7852/SC7852.cpp \
+  Core/CPU/LH5803/LH5803Memory.cpp \
+  Core/CPU/LH5803/LH5803SharedMemory.cpp \
+  Core/PC1600/PC1600Machine.cpp \
+  Core/PC1600/PC1600BasicTyper.cpp \
+  Core/PC1600/PC1600BasicLoader.cpp \
+  Core/PC1600/PC1600ProgramPlacement.cpp \
+  Core/PC1600/PC1600MachineImage.cpp \
+  Core/PC1600/PC1600PresetLoader.cpp \
+  Core/Basic/BasicBinaryImage.cpp \
+  Core/Basic/BasicProgramSource.cpp \
+  Core/tests/lh5801_tests.cpp \
+  Core/tests/connector_tests.cpp \
+  Core/tests/ce155_tests.cpp \
+  Core/tests/ce1638plus_tests.cpp \
+  Core/tests/ce163f_tests.cpp \
+  Core/tests/memory_card_tests.cpp \
+  Core/tests/battery_card_instance_tests.cpp \
+  Core/tests/preset_tests.cpp \
+  Core/tests/basictyper_tests.cpp \
+  Core/tests/presetloader_trace_tests.cpp \
+  Core/tests/pc1600_basictyper_tests.cpp \
+  Core/tests/pc1600_bank_tests.cpp \
+  Core/tests/sc7852_tests.cpp \
+  Core/tests/tc8576f_tests.cpp \
+  Core/tests/lh5803_tests.cpp \
+  Core/tests/pc1600_machine_tests.cpp \
+  Core/tests/pc1600_phase54_tests.cpp \
+  Core/tests/pc1600_keyboard_display_tests.cpp \
+  Core/tests/pc1600_slot_ram_tests.cpp \
+  Core/tests/pc1600_slot_module_tests.cpp \
+  Core/tests/pc1600_preset_tests.cpp \
+  Core/tests/ce1600p_tests.cpp \
+  Core/tests/ce150_tests.cpp \
+  Core/tests/pc1600_ce150_tests.cpp \
+  Core/tests/basic_binary_image_tests.cpp \
+  Core/tests/basic_fastloader_tests.cpp \
+  Core/tests/pc1600_basicloader_tests.cpp \
+  Core/tests/pc1600_program_placement_tests.cpp \
+  Core/tests/pc1600_machine_image_tests.cpp \
+  Core/tests/basic_program_source_tests.cpp \
+  Core/Basic/vendor/sharpdx/libsharpdx.a \
+  -o /tmp/lh5801_tests
+/tmp/lh5801_tests

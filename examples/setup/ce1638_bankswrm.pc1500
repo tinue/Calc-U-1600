@@ -1,0 +1,31 @@
+# PC-1500 with the real CE-1638 memory module (128k, 8 banks of 16k).
+
+model: PC-1500
+firmware: A04
+
+memory-expansion:
+  - modulespec: CE-1638
+
+keys:
+  - key: cl
+  - type: NEW0
+
+program:
+  path: ce1638_bankswrm_fixed.bin
+  format: binary
+  address: 0x4100
+
+keys:
+  - key: mode
+  - type: CALL&4100
+  - key: mode
+  - type: '10 PRINT "Bank: 7"'
+  - key: mode
+  - type: X=0
+  - type: CALL&D5,X
+  - key: mode
+  - type: '10 PRINT "Bank: 0"'
+  - key: mode
+  - type: X=7
+  - type: CALL&D5,X
+  - type: RUN

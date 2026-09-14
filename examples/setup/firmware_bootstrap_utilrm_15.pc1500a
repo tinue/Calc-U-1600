@@ -1,0 +1,45 @@
+# PC-1500A + the CE-163F module (16 banks: 0-7 RAM, 8-F FLASH).
+#
+# Performs the full firmware flash from scratch:
+#  Start with the generic flasher. It installs a helper into bank 8
+#    that allows to load the utilities into bank 8 as well.
+#  Then use this flasher to load the utilities.
+#  Last use the utilities to format the chip (flash and ram)
+
+model: PC-1500A
+
+memory-expansion:
+  - modulespec: CE-163F
+
+keys:
+  - key: cl
+  - type: NEW0
+
+program:
+  path: updaterm.bas
+  format: basic-binary
+
+keys:
+  - key: mode
+  - type: RUN
+  - wait: 1s
+  - type: X=9
+  - type: CALL &4100,X
+  - type: PRINT"Checksum: (-30440?)";X
+  - key: mode
+
+program:
+  path: utilrm_15.bas
+  format: basic-binary
+
+keys:
+  - key: mode
+  - type: X=32
+  - type: POKE&6808,0
+  - type: CALL &150A,X
+  - type: PRINT"Checksum (-2315?): ";X
+  - type: X=0
+  - type: POKE&6808,0
+  - type: CALL&29A,X
+  - type: X=0
+  - type: CALL &E3,X

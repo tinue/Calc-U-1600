@@ -1,0 +1,32 @@
+# PC-1600 plotter test -- draws text and a rectangle of maximum size
+
+model: PC-1600
+# Start with the CE-1600P pen-plotter connected .
+plotter: ce1600p
+
+# Print a few things
+keys:
+  - type: CSIZE1
+  - type: LPRINT"According to the manual, size 2 allows up to 160 characters!"
+  - type: LF
+  - type: LF
+  - type: COLOR 1
+  - type: CSIZE2
+  - type: LPRINT"This is a test in size 2, less characters will fit"
+  - type: LF
+  - type: CSIZE3
+  - type: COLOR 2
+  - type: LPRINT"This test is in size 3"
+  - type: COLOR 3
+  - type: LPRINT"Now on to size 3"
+  - type: LF
+  - type: COLOR 0
+  - type: CSIZE 9
+  - type: LPRINT"Size 9!!"
+  - type: GRAPH
+  - type: SORGN
+  - type: X=960
+  - type: LLINE -(X,0)-(X,-X)-(0,-X)-(0,0)
+  - wait: 10
+# The wait: 10 keeps the high speed loop running and finishes the rectangle quickly.
+

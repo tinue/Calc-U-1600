@@ -1,0 +1,236 @@
+# superRAM -- 512 KB vertically-banked SRAM module, PC-1600 Slot 2 only.
+#
+# The "maxed-out Slot 2" card the Memory-Card-Definition-Spec.md §6 / §9
+# tables already name: mechanically a CE-1601M with a wider vertical-bank
+# decoder. Where the CE-1601M fits two 32 KB chips behind a 3-to-8
+# decoder/latch and only populates banks 0-1, superRAM fills the whole
+# decoder -- 16 x 32 KB chips = 512 KB -- and widens the latch to a 4-bit
+# register so all 16 can be addressed:
+#
+#   * VERTICAL BANK -- which 32 KB chip sits behind the 8000-BFFF window.
+#     The host picks it with `OUT (28H), A`; the module's decoder/latch
+#     samples the DATA bus (the value in A) on that write strobe and holds
+#     it until the next one. superRAM samples D0-D3 (CE-1601M samples only
+#     D0-D2), so the latched bank number runs 0-15. TRIGGER-BASED latch
+#     (Memory-Card-Definition-Spec.md §6), source-domain data -- the exact
+#     mechanism of the CE-1601M, one address line wider. PC1600Bank's
+#     Port 28H notes already anticipate this ("superRAM hardware extends
+#     this to 0-15").
+#
+#   * HALF-SELECT within the current 32 KB bank -- PVOUT (pin 5), the
+#     host's Port 31H b4, picks the low or high 16 KB. Same nested
+#     sub-range the CE-1601M carries in its bank-window (spec §4 / §9):
+#     "selected bank AND PVOUT level", one level deeper than a plain
+#     region.
+#
+# RAM1 (pin 4) is a bare enable strobe gated by the host to the 8000-BFFF
+# window, so no address-range term is needed -- `span` gives the slice
+# size and the module offsets by the low address bits.
+#
+# Slot 2 only: the Port 28H strobe (K0-K2) has no wiring on Slot 1, so the
+# vertical-bank mechanism cannot be reached there.
+#
+# As on the CE-1601M, only vertical bank 0 is usable for program /
+# expansion memory (the PC-1600 maps its module header + BASIC/machine
+# area there); banks 1-15 are RAM-disk / S0: file storage, formatted by
+# the PC-1600's own INIT (INIT"S2:","F" then split with "M"/"P",n -- see
+# docs/PC1600-RAM-Disk-INIT-Handoff.md), not baked into the module.
+#
+# Ships blank (plain-ram-no-header).
+
+module-name: "superRAM"
+compatible-hosts: [PC-1600-Slot-2]
+definition-terminology: PC-1600-Slot-2
+battery: true
+
+regions:
+  - name: vram-512k
+    pc1600-module-class: plain-ram-no-header
+    content:
+      kind: regular
+      writable: true
+      power-up-fill: 0xFF
+    # Region-level "is this a banked access at all" -- a pure gate, no
+    # span/maps-to. The module's whole enable is RAM1 (host-gated to the
+    # 8000-BFFF window); the real slice mapping lives in bank-window.
+    addressing:
+      chip-select: RAM1
+    banking:
+      latch:
+        type: trigger-based
+        trigger: { io-port: 0x28 }         # OUT (28H) -- the Port 28H vertical-bank write
+        sampled-lines: [D0, D1, D2, D3]    # bank number = the byte written (first line = LSB)
+        source-domain: data
+      bank-count: 16                        # 16 x 32 KB vertical banks = 512 KB
+      bank-size: 0x8000                     # 32 KB per vertical bank (Z-80 Bank 2 + Bank 3)
+      bank-window:
+        any-of:
+          # PVOUT low -> low 16 KB half of the current 32 KB bank.
+          - all-of:
+              - chip-select: RAM1
+              - signal-negated: PVOUT
+            span: 0x4000
+            maps-to: 0x0000
+          # PVOUT high -> high 16 KB half.
+          - all-of:
+              - chip-select: RAM1
+              - signal: PVOUT
+            span: 0x4000
+            maps-to: 0x4000
+
+    initial-content:
+      blocks:
+        - bank: 0
+          offset: 0x0000
+          encoding: addressed-hex
+          # Whole-medium geometry descriptor. INIT wrote the 256 KB row
+          # (media F8); patched here to the 512 KB row (media FB): 2 KB
+          # clusters -- off 0DH sectors/cluster-1 01->03, off 0EH CLSSFT
+          # 02->03 -- so the 8-bit FAT still spans the volume, and off 15H
+          # MAXCLS F7H(247) -> FCH(252) = the full 512 KB, less one.
+          bytes: |
+            $0000: FF FF FF FF FF FF FF FF  FB 00 02 0F 04 03 03 01
+            $0010: 00 02 FE 14 00 FC 00 01  03 00 08 00 00 00 00 00
+            $0020: 00...
+            $00C0: 00 00 00 00 00 FF 00 00  00 00 00 00 00 00 00 00
+            $00D0: 00...
+            $0200: FB 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+            $0210: 00...
+            $0FF0: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 FF
+            $1000: 00...
+            $1FF0: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 FF
+            $2000: 00...
+            $2800: FF...
+        - bank: 1
+          offset: 0x0000
+          encoding: addressed-hex
+          # Mounted S2: volume: boot sector ($0000), FAT ($0200). INIT
+          # wrote the 224 KB row (media F7). Patched to media FB with
+          # MAXCLS cut for the 32 KB S0: carve -- there is no 480 KB media
+          # ID, so this is FB's 512 KB row (off 0DH/0EH = 03/03, 2 KB
+          # clusters; off 12H MAXDIR F0H->FEH; off 13H first-data 12H->14H)
+          # with off 15H MAXCLS FCH(252) - 16 = ECH(236): 16 clusters x
+          # 2 KB = the 32 KB carved for program memory. DSKF = (236-1) x
+          # 2048 = 481280.
+          #   off 02H checksum B2H -> 87H (boot bytes $00..$1F sum = 0).
+          bytes: |
+            $0000: 55 80 87 00 00 00 00 81  FB 00 02 0F 04 03 03 01
+            $0010: 00 02 FE 14 00 EC 00 01  03 00 08 00 00 00 00 00
+            $0020: 00...
+            $0200: FB 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00
+            $0210: 00...
+            $2400: FF...
+            $4000: 03 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 2
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 04 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 05 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 3
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 06 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 07 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 4
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 08 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 09 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 5
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 0A FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 0B FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 6
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 0C FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 0D FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 7
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 0E FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 0F FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 8
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 10 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 11 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 9
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 12 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 13 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 10
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 14 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 15 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 11
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 16 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 17 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 12
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 18 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 19 FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 13
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 1A FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 1B FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 14
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 1C FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 1D FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...
+        - bank: 15
+          offset: 0x0000
+          encoding: addressed-hex
+          bytes: |
+            $0000: 1E FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $0010: FF...
+            $4000: 1F FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF
+            $4010: FF...

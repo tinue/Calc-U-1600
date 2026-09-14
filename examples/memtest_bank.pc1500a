@@ -1,0 +1,26 @@
+# PC-1500A + a CE-163-style banked low-16K memory module:
+#
+# Runs a memtest over all banks, 2 passes.
+
+model: PC-1500A
+firmware: A04
+
+memory-expansion:
+  - modulespec: CE-1638
+
+keys:
+  - key: cl
+  - type: NEW0
+  - key: mode
+
+program:
+  path: memtest_bank.bin
+  format: binary
+  address: 0x7C01
+
+keys:
+  - type: X$="2.8"
+  - type: CALL&7C01,X$
+  - wait: 200
+  - type: X$
+  - wait: 5

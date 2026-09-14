@@ -1,0 +1,29 @@
+# PC-1600 DiskWorks v2 program by Christian Becker (KiKiSoft, 1993)
+#
+# A machine-language program carried in a 16-byte PC-1600 ML transfer
+# header (magic FF 10 00 00, type 0x10): load $D000 (S0 internal RAM),
+# auto-run $E252. The loader pokes it linearly and then types `CALL &E252`
+# -- so the machine must be in RUN mode at that point (it is by default
+# after boot; don't switch to PRO before the `program:` block).
+
+model: PC-1600
+
+memory-expansion-1:
+  - modulespec: CE-1600M
+memory-expansion-2:
+  - modulespec: CE-1601M - Progs
+
+# The card is pre-populated, only NEW0
+keys:
+  - key: mode
+  - type: NEW"S0:",&E900
+
+program:
+  path: DiskWorks.bin
+  format: binary
+  slot: S0
+  # DiskWorks.bin's header length field (6055) disagrees with the file
+  # (6127 bytes follow the 16-byte header, and it looks truncated at EOF),
+  # so an explicit length: is required. This loads every byte present;
+  # re-export the .bin from a clean transfer to drop this override.
+  length: 6127

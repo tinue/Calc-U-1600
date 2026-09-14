@@ -1,0 +1,73 @@
+#pragma once
+#include <QWidget>
+#include <QVector>
+#include "MachineController.hpp"
+#include "MemoryModuleManager.hpp"
+
+class QComboBox;
+class QLabel;
+class QPushButton;
+
+// Reset + model picker + per-slot memory-module pickers + Settings,
+// directly under the faceplate.
+class ControlBar : public QWidget {
+    Q_OBJECT
+public:
+    explicit ControlBar(QWidget* parent = nullptr);
+
+    void setModel(Model model); // reflect an externally-driven model change
+
+    // ROM-revision picker -- PC-1500 (plain) only; PC-1500A is A04-only
+    // (see PC1500Variant.hpp) so there's nothing worth picking there, and
+    // PC-1600 has its own fixed ROM set entirely. Mirrors setModel()'s
+    // QSignalBlocker'd external-resync shape.
+    void setRomRevision(PC1500RomRevision revision);
+    void setRomPickerVisible(bool visible);
+
+    // Resyncs slot `slot`'s (1 or 2) combo box: bundled entries, then a
+    // separator, then instance entries, with a leading "-empty-" item;
+    // `selectedOrEmpty` picks the current item without re-emitting
+    // moduleSelected (QSignalBlocker'd, like setModel()).
+    void setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& bundled,
+                         const QVector<MemoryModuleManager::ModuleEntry>& instances,
+                         const QString& selectedOrEmpty);
+    void setSlotBatteryBacked(int slot, bool battery); // shows/hides the save button
+    void setSlot2Visible(bool visible);                // PC1600 vs PC1500/1500A
+
+    // Plotter toggle buttons -- checked state reflects live attachment,
+    // enabled state reflects mutual exclusion (the other plotter attached)
+    // and PlotterController's busy/power-cycling state. Never re-emits
+    // ce150ToggleRequested/ce1600pToggleRequested (QSignalBlocker'd, like
+    // setModel()). CE-1600P only exists on PC-1600.
+    void setCe150State(bool attached, bool enabled);
+    void setCe1600pState(bool attached, bool enabled);
+    void setCe1600pVisible(bool visible);
+
+signals:
+    void modelSelected(Model model);
+    void romRevisionSelected(PC1500RomRevision revision);
+    void resetClicked(bool allReset); // allReset == Cmd-click
+    void moduleSelected(int slot, QString moduleNameOrEmpty); // "" => -empty-
+    void nameAndSaveRequested(int slot);
+    void settingsRequested();
+    void openPresetRequested();
+    void ce150ToggleRequested();
+    void ce1600pToggleRequested();
+
+private:
+    QComboBox* m_modelCombo = nullptr;
+    QComboBox* m_romCombo = nullptr;
+    QPushButton* m_resetButton = nullptr;
+    QPushButton* m_openPresetButton = nullptr;
+    QPushButton* m_settingsButton = nullptr;
+    QPushButton* m_ce150Button = nullptr;
+    QPushButton* m_ce1600pButton = nullptr;
+
+    struct SlotWidgets {
+        QLabel* label = nullptr;           // "1:" / "2:", hidden together with the slot
+        QComboBox* combo = nullptr;
+        QPushButton* saveButton = nullptr; // hidden unless battery-backed
+    };
+    SlotWidgets m_slot[2]; // slot 1 = [0], slot 2 = [1]
+    QWidget* m_slot2Separator = nullptr; // hidden together with slot 2 (PC1500/1500A)
+};

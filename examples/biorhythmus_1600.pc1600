@@ -1,0 +1,32 @@
+# PC-1600 plotter test -- draws a globe of the earth on the CE-1600P.
+# Program found on https://www.sharp-pc-1600.de
+
+# This version is for the PC-1600 with PC-1600P
+model: PC-1600
+plotter: ce1600p
+
+# After reset, a NEW0 is required in PRO mode (PC-1600 starts up in RUN)
+keys:
+  - key: mode
+  - type: NEW0
+
+# `format: basic-binary` with a `.bas` path tokenizes the listing in
+# process on load (via the vendored libsharpdx) -- no separate .bbin step.
+program:
+  path: biorhythmus_1600.bas
+  format: basic-binary
+
+# After loading, switch to RUM mode and start the program. Answer the
+# input paraneters and then wait for finish.
+keys:
+  - key: mode
+  - type: RUN
+  - wait: 20
+  - type: Martin
+  - type: 6
+  - type: 8
+  - type: 1965
+  - wait: 1
+  - type: 9
+  - type: 2026
+  - wait:

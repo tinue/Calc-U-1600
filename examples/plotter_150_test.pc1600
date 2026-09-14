@@ -1,0 +1,32 @@
+# PC-1600 plotter test -- draws text and a rectangle of maximum size
+
+model: PC-1600
+# Start with the CE-CE-150 pen-plotter connected .
+plotter: ce150
+
+# Print a few things
+keys:
+  - type: CSIZE1
+  - type: LPRINT"Size 1, really small"
+  - type: LF1
+  - type: COLOR 1
+  - type: CSIZE2
+  - type: LPRINT"Size 2, bigger"
+  - type: CSIZE3
+  - type: COLOR 2
+  - type: LPRINT"Size 3"
+  - type: COLOR 3
+  - type: CSIZE4
+  - type: LPRINT"Size 4"
+  - type: LF1
+  - type: COLOR 0
+  - type: CSIZE 9
+  - type: LPRINT"9!!"
+  - type: GRAPH
+  - type: GLCURSOR(0,50)
+  - type: SORGN
+  - type: X=216
+  - type: LLINE -(X,0)-(X,-X)-(0,-X)-(0,0)
+  - wait: 10
+# The wait: 10 keeps the high speed loop running and finishes the rectangle quickly.
+

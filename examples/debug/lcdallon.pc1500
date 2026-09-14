@@ -1,0 +1,32 @@
+# Lights every dot-matrix pixel and every status indicator on the
+# PC-1500A's LCD at once, for visually checking LCDDisplayView's
+# indicator/dot-matrix sizing (plan.md Phase 2a "LOG panel" work)
+# against real hardware. See lcdallon_1500a.asm's own header for the
+# full background, display-RAM layout, and BREAK-poll details.
+#
+# post-load-keys runs `CALL &7C01,X` automatically -- safe even though
+# the routine loops until BREAK (ON) is pressed and never returns
+# during loading: every preset step (a bounded runCycles() call, per
+# PC1500PresetLoader.cpp) still terminates on its own cycle budget
+# regardless of what the CPU is doing, it just leaves the CPU parked
+# inside the routine's own wait loop once the preset finishes applying
+# -- exactly the state this preset wants to hand the app: display
+# already fully lit, waiting only for BREAK.
+#
+# After this preset loads, in the running app: everything is already
+# lit -- just press ON (BREAK) when done looking, to return to the
+# READY prompt.
+model: PC-1500A
+
+keys:
+  - key: cl
+  - type: NEW0
+  - key: mode
+
+program:
+  path: lcdallon_1500a.bin
+  format: binary
+  address: 0x7C01
+
+keys:
+  - type: CALL&7C01,X

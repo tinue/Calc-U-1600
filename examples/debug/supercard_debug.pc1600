@@ -1,0 +1,19 @@
+# PC-1600 Debug set for Super RAM card
+
+# This version is for the PC-1600 with PC-1600P
+model: PC-1600
+
+memory-expansion-2:
+  - modulespec: superRAM
+
+# init the card
+keys:
+  - key: mode
+  - type: NEW0
+  - type: INIT"S2:","F"
+  - type: INIT"S2:","M"
+  - type: X=MEM
+  - type: Y=DSKF"S2:"
+  - key: shift
+  - key: cl
+  - type: PRINT"Memory:";X;" Disk:";Y

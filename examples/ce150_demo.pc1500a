@@ -1,0 +1,29 @@
+# PC-1500A with the CE-150 4-colour plotter/printer attached. Draws a
+# four-colour spiral of nested boxes, then prints a caption -- exercises
+# GRAPH mode (LINE/COLOR/GLCURSOR), the colour turret, and TEXT-mode
+# LPRINT. The CE-150 paper pane opens automatically (right of the debug
+# log) once the plotter is attached.
+
+model: PC-1500A
+firmware: A04
+plotter: ce150
+
+program:
+  format: basic-text
+  text: |
+    10 GRAPH
+    20 FOR K=0 TO 3
+    30 COLOR K
+    40 S=90-K*20
+    50 GLCURSOR (-S,-S)
+    60 LINE (-S,-S)-(S,-S)-(S,S)-(-S,S)-(-S,-S)
+    70 NEXT K
+    80 TEXT
+    90 COLOR 0
+    100 LPRINT "CE-150 OK"
+    110 END
+
+keys:
+  - key: cl
+  - key: mode
+  - type: RUN

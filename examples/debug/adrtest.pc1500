@@ -1,0 +1,32 @@
+# ADR flag-preservation test (docs/Up-Down-Key-Investigation.md, "The
+# ADR conflict" section) -- loads and CALLs adrtest_1500a.bin (see that
+# file's own header for the full background and its calling
+# convention), then PRINTs the result:
+#
+#   1 = carry survived ADR -> flags PRESERVED -> matches Calc-U-1600's
+#       current, provisional ADR fix -- the manual's ADR row is wrong.
+#   0 = carry was cleared  -> flags PUBLISHED per the manual -- the fix
+#       is wrong, and the real bug lies elsewhere (see the
+#       investigation doc's "Still unresolved" section).
+#
+# Confirm the result matches here in the emulator, then load the same
+# adrtest_1500a.bin onto real hardware (CALL &7C01,X ; PRINT X, or
+# PRINT PEEK(&7C03) for the independent cross-check) -- real hardware
+# outranks both the manual and every emulator, this project's own
+# included.
+model: PC-1500A
+
+keys:
+  - key: cl
+  - type: NEW0
+  - key: mode
+
+program:
+  path: adrtest_1500a.bin
+  format: binary
+  address: 0x7C01
+
+keys:
+  - type: CALL&7C01,X
+  - type: PRINT X
+  - wait: 1

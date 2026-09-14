@@ -1,0 +1,79 @@
+# PC-1600 serial setup for SharpDataExchange, adapted from
+# sharp-pocket-computer/SharpCommunicator/.../setcom1600.bas
+#
+# The emulator's RS-232C port ("COM1:", the TC8576F UART) is a raw host
+# pseudo-terminal: it carries the byte stream but none of the RS-232C
+# modem lines. The original program is written for real hardware where
+# CTS/CD/DSR are wired, so three settings are changed here:
+#
+#   61010  SETCOM "COM1:",9600,8,N,1,N,N   (unchanged from the original)
+#          NO XON/XOFF and NO SHIFT-IN/OUT. Both would corrupt a binary
+#          LOAD"COM1:": the receiver silently eats any 0x11 / 0x13 byte
+#          (XON/XOFF) or 0x0E / 0x0F byte (SI/SO) from the stream, and the
+#          PC-1600 16-byte transfer header is  FF 10 00 00 <type> <len:3>
+#          <addr:3> <addr:3> 00 0F  -- its length field can hold 0x11/0x13
+#          and its end marker IS 0x0F. Eat one byte there and the header
+#          check fails with ERROR 157. Flow control on the emulator's PTY
+#          is instead: the chip meters RX at the emulated baud rate and a
+#          program that fits the INIT buffer (below) never overruns.
+#
+#   61030  SNDSTAT "COM1:",28,60           (was ...,24)
+#   61040  RCVSTAT "COM1:",28,60           (was ...,24)
+#          The original ",24" makes send/receive WAIT for CTS to be high
+#          before moving a byte. On a raw PTY there is no CTS line, and
+#          the emulator's modelled CTS/CD/DSR (a PSR-overlay guess, still
+#          TODO(trace) in docs/PC1600-Serial-Port-Plan.md) may not read
+#          as asserted -- so LOAD"COM1:" hangs in the handshake wait
+#          before it ever reads a byte. ",28" ignores CTS/CD/DSR (flow
+#          control is left entirely to XON/XOFF). The ",60" adds a 30 s
+#          timeout so a bad handshake errors out instead of hanging.
+#
+#   61020  OUTSTAT "COM1:",0               (was OUTSTAT "COM1:")
+#          Force RTS + DTR permanently high rather than dynamic; the
+#          firmware's automatic buffer-full RTS drop would never reach
+#          the peer through a PTY anyway.
+#
+# The original's SETDEV "COM1:",PO and PCONSOLE "COM1:",80,2 (COM1 as the
+# printer device) are dropped -- this preset is for SAVE"COM1:" /
+# LOAD"COM1:" data exchange only.
+#
+# After it loads the machine is left in RUN mode with the port initialised
+# (the preset runs label "J"). Then, on the PC-1600:
+#     RUN "S"    save the resident BASIC program out over COM1
+#     RUN "L"    load a BASIC program in over COM1  (start this FIRST,
+#                then run SharpDataExchange put)
+# On the Mac, point SharpDataExchange at the stable symlink (see README):
+#     get -p ~/Library/Containers/ch.erzberger.calcu1600/Data/Library/Application\ Support/Calc-U-1600/serial
+
+model: PC-1600
+
+memory-expansion-2:
+  - modulespec: CE-1601M
+
+# Bring the machine into PRO mode to accept a typed-in program, and format the memory as disk.
+keys:
+  - key: mode
+  - type: TITLE
+  - type: INIT"S2:","F"
+  - type: INIT"S2:","M"
+
+program:
+  path: setcom1600.bas
+  format: basic-text
+
+# Back to RUN mode, then initialise the port (label "J")
+keys:
+  - key: mode
+  - type: SAVE"S2:COMM.BAS"
+  - key: shift
+  - key: mode
+  - type: NEW
+  - key: rsv
+  - key: f1
+  - type: LOAD"S2:COMM.BAS"@
+  - key: mode
+  - type: RUN "J"
+  - type: A$="F1 to load comm.bas"
+  - key: shift
+  - key: cl
+  - type: A$

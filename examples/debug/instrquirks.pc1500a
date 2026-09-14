@@ -1,0 +1,29 @@
+# PC-1500A real-hardware verification of DRL/DRR (nibble-rotate) and
+# ADR (flag preservation) -- three LH5801 instructions implemented
+# inconsistently across existing emulators. See instrquirks_1500a.asm
+# for the full discussion and the expected-values table.
+#
+# Loads instrquirks_1500a.bin (D=0x7C01, CALL entry at D+6=0x7C07) into
+# the machine-language area, which is present and addressable regardless
+# of whether any memory module is installed -- no `memory-expansion:`
+# needed.
+#
+# `check: 0` isn't used -- this project's preset loader doesn't support
+# it yet. Verify by hand instead: after CALL&7C07 runs,
+#   PRINT PEEK(&7C02);PEEK(&7C03);PEEK(&7C04);PEEK(&7C05);PEEK(&7C06)
+# and compare against the table in instrquirks_1500a.asm.
+model: PC-1500A
+
+keys:
+  - key: cl
+  - type: NEW0
+  - key: mode
+
+program:
+  path: instrquirks_1500a.bin
+  format: binary
+  address: 0x7C01
+
+keys:
+  - type: CALL&7C07
+  - wait: 1

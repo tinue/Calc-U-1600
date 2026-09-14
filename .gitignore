@@ -1,0 +1,59 @@
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+build/
+
+# Compiled object files
+*.o
+
+# Python bytecode cache (tools/*.py helper scripts)
+__pycache__/
+*.pyc
+
+# Headless CLI/probe tool builds and their throwaway debug output (ROM/RAM
+# dumps, format-utility test images, ad hoc trace captures, disassembly
+# scratch, etc.) -- see headless/README.md. Everything under here is
+# regenerable or disposable; only the README is tracked.
+/headless/*
+!/headless/README.md
+
+# Debug trace captures dropped at the repo root by an ad hoc CLI/preset run
+# outside headless/ (see Core/PC1500/PC1500TraceFile.hpp for the format) --
+# root only, other .bin under subdirectories is unaffected by this rule.
+/*.bin
+
+# Sharp firmware ROM dumps -- ROMs are not in this repository.
+# tools/fetch_roms.sh (re)downloads the 11 with a known public source into
+# roms/ before building; roms/CE-150.ROM has no public source yet and, if
+# you have your own dump, stays local-only. roms/README.md (provenance
+# notes) stays tracked.
+roms/*.ROM
+roms/*.bin
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# VS Code editor settings (local/per-checkout preference, e.g. pointing
+# cmake.sourceDirectory at Qt6/)
+/.vscode/
+
+# A `git worktree add swift-archive` checkout nested inside this repo's own
+# working directory -- git doesn't auto-exclude a nested worktree from the
+# main repo's status, so this does it by hand. Not the swift-archive branch
+# itself (that lives on origin regardless), just this optional local checkout.
+/swift-archive/
+
+# Non-macOS libsharpdx binaries fetched by tools/fetch_sharpdx.sh (see
+# Qt6/CMakeLists.txt) -- unlike Core/Basic/vendor/sharpdx/libsharpdx.a
+# (macOS, committed, refreshed via tools/refresh_sharpdx.sh), these are
+# meant to stay a local/CI-only build artifact, never committed.
+/Core/Basic/vendor/sharpdx/libsharpdx-linux.a
+/Core/Basic/vendor/sharpdx/sharpdx.lib
+/Core/Basic/vendor/sharpdx/native-libs-windows.txt

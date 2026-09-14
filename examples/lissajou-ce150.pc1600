@@ -1,0 +1,24 @@
+# PC-1600 plotter test -- draws a Lissajous figure on the CE-1600P.
+
+model: PC-1600
+
+# Start with the CE-1600P pen-plotter connected (attached before the cold
+# boot, so the ROM detects it). The PC-1600 also takes a CE-150, so this
+# names the peripheral rather than a plain on/off.
+plotter: ce150
+
+# Bring the machine into PRO mode to accept a typed-in program.
+keys:
+  - key: mode
+  - type: NEW
+  - type: MODE1
+
+program:
+  path: lissajou-ce150-1600.bas
+  format: basic-binary
+
+# Back to RUN mode, then run it -- the figure plots on the virtual paper.
+keys:
+  - key: mode
+  - type: RUN
+  - wait: 600

@@ -1,0 +1,70 @@
+# PC-1600 Prepare a card for later use with DiskWorks. Load a few Basic programs
+# and store them to S2: plus set-up the required CW.CFG file.
+# When done, save the card as "CE-1601M - Progs" for use in the DiskWorks preset file.
+
+model: PC-1600
+plotter: ce1600p
+
+
+memory-expansion-1:
+  - modulespec: CE-1600M
+memory-expansion-2:
+  - modulespec: CE-1601M
+
+# Set the power-on title and format + split the CE-1601M as a RAM disk
+keys:
+  - type: TITLE
+  - type: INIT"S2:","F"
+  - type: INIT"S2:","M"
+  - key: mode
+  - type: NEW0
+  - key: mode
+
+# Load the programs, ans save each ine to S2
+program:
+  path: ../globus.bas
+  format: basic-binary
+
+keys:
+  - type: SAVE"S2:GLOBUS.BAS"
+
+program:
+  path: ../biorhythmus_1600.bas
+  format: basic-binary
+
+keys:
+  - type: SAVE"S2:BIO.BAS"
+
+program:
+  path: ../lissajou-1600.bas
+  format: basic-binary
+
+keys:
+  - type: SAVE"S2:LISSAJOU.BAS"
+
+program:
+  path: ../ascii.bas
+  format: basic-binary
+
+keys:
+  - type: SAVE"S2:ASCII.BAS"
+
+program:
+  path: ../setcom1600.bas
+  format: basic-binary
+
+keys:
+  - type: SAVE"S2:COMM.BAS"
+
+# Setup the DW.CFG file on S2:
+keys:
+  - type: MAXFILES=1
+  - type: OPEN"S2:DW.CFG" FOR OUTPUT AS #1
+  - type: PRINT#1,"C \31\LOAD"+CHR$(&22)+"S2:COMM.BAS"+CHR$(&22)
+  - type: PRINT#1,"^"
+  - type: CLOSE #1
+
+# Some debug output at the end
+keys:
+  - type: DSKF"S2:"
+  - type: FILES"S2:"

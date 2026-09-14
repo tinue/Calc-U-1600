@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+
+  <!-- Layer: backdrop (shared squircle, matches Calc-U-59 family background) -->
+  <g id="backdrop">
+    <rect width="1024" height="1024" fill="#ffffff"/>
+    <path fill="#2d271f" d="
+      M 870.03 0.00
+      Q 873.25 0.32 876.49 0.57
+      C 954.63 6.69 1017.19 68.55 1023.40 147.26
+      Q 1023.66 150.48 1024.00 153.68
+      L 1024.00 870.15
+      Q 1023.65 873.94 1023.33 877.74
+      C 1016.82 955.10 955.20 1016.65 877.98 1023.31
+      Q 874.11 1023.64 870.24 1024.00
+      L 153.84 1024.00
+      Q 150.56 1023.67 147.25 1023.41
+      C 104.45 1020.07 65.28 999.76 37.70 967.07
+      Q 5.35 928.73 0.72 877.74
+      Q 0.38 874.02 0.00 870.32
+      L 0.00 153.86
+      Q 2.82 97.96 37.55 57.03
+      Q 82.38 4.19 153.74 0.00
+      Z"/>
+  </g>
+
+  <!-- Layer: calculator body (brushed-silver chassis, landscape) -->
+  <g id="calculator-body">
+    <rect x="72" y="272" width="880" height="480" rx="42"
+          fill="#d7d9dc" stroke="#8f9196" stroke-width="8"/>
+  </g>
+
+  <!-- Layer: display bezel and LCD glass -->
+  <g id="display">
+    <rect x="104" y="304" width="478" height="170" rx="16" fill="#0f0c09" stroke="#4a4d52" stroke-width="4"/>
+    <rect x="126" y="326" width="434" height="126" rx="8" fill="#8fae9a"/>
+  </g>
+
+  <!-- Layer: LCD readout "1600" (lit segments) -->
+  <g id="lcd-readout" fill="#ff6050">
+    <rect x="284.00" y="361.00" width="7.00" height="24.50" rx="3"/> <!-- 1:b -->
+    <rect x="284.00" y="392.50" width="7.00" height="24.50" rx="3"/> <!-- 1:c -->
+    <rect x="310.00" y="354.00" width="20.00" height="7.00" rx="3"/> <!-- 6:a -->
+    <rect x="303.00" y="361.00" width="7.00" height="24.50" rx="3"/> <!-- 6:f -->
+    <rect x="310.00" y="385.50" width="20.00" height="7.00" rx="3"/> <!-- 6:g -->
+    <rect x="303.00" y="392.50" width="7.00" height="24.50" rx="3"/> <!-- 6:e -->
+    <rect x="330.00" y="392.50" width="7.00" height="24.50" rx="3"/> <!-- 6:c -->
+    <rect x="310.00" y="417.00" width="20.00" height="7.00" rx="3"/> <!-- 6:d -->
+    <rect x="356.00" y="354.00" width="20.00" height="7.00" rx="3"/> <!-- 0:a -->
+    <rect x="376.00" y="361.00" width="7.00" height="24.50" rx="3"/> <!-- 0:b -->
+    <rect x="376.00" y="392.50" width="7.00" height="24.50" rx="3"/> <!-- 0:c -->
+    <rect x="356.00" y="417.00" width="20.00" height="7.00" rx="3"/> <!-- 0:d -->
+    <rect x="349.00" y="392.50" width="7.00" height="24.50" rx="3"/> <!-- 0:e -->
+    <rect x="349.00" y="361.00" width="7.00" height="24.50" rx="3"/> <!-- 0:f -->
+    <rect x="402.00" y="354.00" width="20.00" height="7.00" rx="3"/> <!-- 0:a -->
+    <rect x="422.00" y="361.00" width="7.00" height="24.50" rx="3"/> <!-- 0:b -->
+    <rect x="422.00" y="392.50" width="7.00" height="24.50" rx="3"/> <!-- 0:c -->
+    <rect x="402.00" y="417.00" width="20.00" height="7.00" rx="3"/> <!-- 0:d -->
+    <rect x="395.00" y="392.50" width="7.00" height="24.50" rx="3"/> <!-- 0:e -->
+    <rect x="395.00" y="361.00" width="7.00" height="24.50" rx="3"/> <!-- 0:f -->
+  </g>
+
+  <!-- Layer: function keys under the display -->
+  <g id="fn-keys">
+    <rect x="104.00" y="498.00" width="100.00" height="32.00" rx="6.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="223.50" y="498.00" width="100.00" height="32.00" rx="6.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="343.00" y="498.00" width="100.00" height="32.00" rx="6.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="462.50" y="498.00" width="100.00" height="32.00" rx="6.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+  </g>
+
+  <!-- Layer: brand bezel (right side, above keys) -->
+  <g id="brand-bezel">
+    <rect x="612" y="304" width="340" height="70" rx="10" fill="#0f0c09"/>
+  </g>
+
+  <!-- Layer: top function-key row (BS / SHIFT / OFF / BREAK-ON) -->
+  <g id="top-fn-keys">
+    <rect x="612" y="388" width="68" height="36" rx="6" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="697" y="388" width="68" height="36" rx="6" fill="#e8821e"/> <!-- SHIFT accent -->
+    <rect x="782" y="388" width="68" height="36" rx="6" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="867" y="388" width="68" height="36" rx="6" fill="none" stroke="#6d6f73" stroke-width="5"/>
+  </g>
+
+  <!-- Layer: numeric keypad, 4 cols x 3 rows, with CL accent -->
+  <g id="numeric-keypad">
+    <rect x="612.00" y="438.00" width="68.00" height="40.00" rx="8.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="697.00" y="438.00" width="68.00" height="40.00" rx="8.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="782.00" y="438.00" width="68.00" height="40.00" rx="8.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="867.00" y="438.00" width="68.00" height="40.00" rx="8.00" fill="#c0271f"/> <!-- CL accent -->
+    <rect x="612.00" y="489.00" width="68.00" height="40.00" rx="8.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="697.00" y="489.00" width="68.00" height="40.00" rx="8.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="782.00" y="489.00" width="68.00" height="40.00" rx="8.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="867.00" y="489.00" width="68.00" height="40.00" rx="8.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="612.00" y="540.00" width="68.00" height="40.00" rx="8.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="697.00" y="540.00" width="68.00" height="40.00" rx="8.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="782.00" y="540.00" width="68.00" height="40.00" rx="8.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+    <rect x="867.00" y="540.00" width="68.00" height="40.00" rx="8.00" fill="none" stroke="#6d6f73" stroke-width="5"/>
+  </g>
+
+  <!-- Layer: QWERTY keyboard swath, 2 rows, capped to the left column (under the display, does not extend under the numeric keypad) -->
+  <g id="keyboard">
+    <rect x="104.00" y="554.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="172.29" y="554.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="240.57" y="554.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="308.86" y="554.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="377.14" y="554.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="445.43" y="554.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="513.71" y="554.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="104.00" y="596.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="172.29" y="596.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="240.57" y="596.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="308.86" y="596.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="377.14" y="596.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="445.43" y="596.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+    <rect x="513.71" y="596.00" width="54.29" height="34.00" rx="5.00" fill="none" stroke="#6d6f73" stroke-width="4"/>
+  </g>
+
+</svg>

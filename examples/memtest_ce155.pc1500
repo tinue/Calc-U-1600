@@ -1,0 +1,27 @@
+# PC-1500 memory test with the CE-155 loaded through the universal
+# software-defined module (Core/Connector/SoftwareDefinedCard.hpp) from
+# its card definition file, rather than the hardcoded CE155Card.
+#  X=2 (2 passes)
+#  CALL &38C5,X   -> X holds the test result when finished
+
+model: PC-1500
+firmware: A04
+
+memory-expansion:
+  - modulespec: CE-155
+
+keys:
+  - key: cl
+  - type: NEW&397D
+  - key: mode
+
+program:
+  path: memtest_CE155.bin
+  format: binary
+  address: 0x38C5
+
+keys:
+  - type: X=2
+  - type: CALL&38C5,X
+  - type: X
+  - wait: 5

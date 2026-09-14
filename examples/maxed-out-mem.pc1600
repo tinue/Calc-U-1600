@@ -1,0 +1,38 @@
+# PC-1600 with the CE-1601M (64 KB = 2 x 32 KB vertical banks) in Slot 2,
+# loaded through the universal software-defined module from its card
+# definition. Exercises trigger-based banking on OUT (28H) sampling the
+# data bus, plus the PVOUT 16 KB half-select nested in the bank window.
+
+model: PC-1600
+
+memory-expansion-1:
+  - modulespec: CE-1600M
+memory-expansion-2:
+  - modulespec: CE-1601M
+
+# Hard trial-and-error plus ROM analysis yielded that a fresh card first
+# needs to be formatted fully, with option "F". Then it can be split with
+# either "M" ( expansion memory) or "P" (program memory).
+# If the full format is missing, any file command gives ERROR 160
+keys:
+ - key: mode
+ - type: TITLE
+ - type: INIT"S2:","F"
+ - type: INIT"S2:","M"
+
+program:
+  format: basic-text
+  text: |
+    10 WAIT 0
+    20 FOR I = 1 TO 100
+    30 PRINT I
+    40 NEXT I
+
+keys:
+  - type: SAVE"S2:LOOP.BAS"
+  - type: NEW
+  - key: mode
+  - type: A=MEM
+  - key: cl
+  - type: PRINT"Memory:";A
+  - type: FILES"S2:"
