@@ -108,11 +108,18 @@ cmake --build Qt6/build
 This produces a plain `Qt6/build/Calc-U-1600` executable plus a
 `Qt6/build/resources/` folder (bundled `.card.yaml` definitions and ROMs)
 that must stay next to it. That's enough to run on the machine that built
-it. To package a standalone `.AppImage` that runs on other Linux machines,
-see the `linux-x86_64`/`linux-aarch64` jobs in
+it — though note the apt-packaged Qt above is whatever your distro
+ships (Ubuntu 24.04 is 6.4.2), which predates qtbase's built-in
+xdg-desktop-portal dark/light mode detection (Qt 6.8+); on an older Qt
+your build won't track the OS theme unless a `platformthemes` plugin for
+your desktop is separately installed and configured. To package a
+standalone `.AppImage` that runs on other Linux machines, see the
+`linux-x86_64`/`linux-aarch64` jobs in
 [`.github/workflows/build.yml`](../.github/workflows/build.yml) for the
 full `linuxdeploy`/`linuxdeploy-plugin-qt` recipe (it's involved enough —
-Wayland plugin handling included — that it's not worth hand-transcribing
+Wayland plugin handling included, plus Qt itself comes from aqtinstall
+there rather than apt, specifically to get Qt 6.8+ — that it's not worth
+hand-transcribing
 here; run the workflow or copy its steps directly). Linux arm64 CI is
 `continue-on-error` in that workflow, i.e. best-effort even there.
 

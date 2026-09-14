@@ -8,13 +8,16 @@ name: Build
 # but produces a binary with no firmware bundled, silently non-functional.
 # The linux-x86_64/linux-aarch64 jobs build once, then package the
 # result as a genuinely standalone .AppImage (linuxdeploy + its Qt
-# plugin, the Linux analogue of macdeployqt below) on ubuntu-24.04 --
-# this repo's CMakeLists.txt needs Qt 6.3+'s qt_standard_project_setup(),
-# which an older Ubuntu baseline can't provide (22.04's apt-packaged Qt6
-# is only 6.2.4). Tradeoff: the AppImage only runs forward from
-# roughly-24.04-equivalent glibc, less than AppImage's usual promise of
-# running on much older systems too, but that's an acceptable bar here.
-# macOS runs macdeployqt to embed the Qt frameworks (see
+# plugin, the Linux analogue of macdeployqt below) on ubuntu-24.04.
+# Qt itself comes from aqtinstall (jurplel/install-qt-action), not apt --
+# Ubuntu 24.04's packaged Qt is only 6.4.2, which predates qtbase's
+# built-in xdg-desktop-portal color-scheme reading (added in Qt 6.8): a
+# 6.4.2 AppImage can't detect OS dark/light mode at all without extra
+# platformtheme-plugin bundling that turned out fragile in practice
+# (see PACKAGING-TODO.md). Building against Qt 6.8+ instead gets that
+# detection for free, matching real-world Linux desktops running a
+# distro-packaged Qt 6.8+ natively. macOS runs macdeployqt to embed the
+# Qt frameworks (see
 # Qt6/CMakeLists.txt's MACOSX_BUNDLE), then Developer-ID-signs the .app
 # (hardened runtime), notarizes + staples it, and packages it into a
 # signed/notarized/stapled .dmg -- same Developer ID/Team ID as
@@ -37,13 +40,24 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install Qt6 + build tools
+      - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential cmake ninja-build patchelf \
-            qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev \
-            qt6-gtk-platformtheme
+            build-essential cmake ninja-build patchelf libgl1-mesa-dev
+
+      # See the windows-x86_64 job's identical step for why aqtinstall
+      # (not apt) -- same reasoning here, plus it's what gets us Qt 6.8+
+      # (see the top-of-file comment on why that version matters for
+      # Linux specifically). qtwayland isn't installed by default.
+      - name: Install Qt6 (aqtinstall)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.2' # verify this is available in aqt's index if this step ever fails; bump to another 6.8.x/6.9.x release otherwise
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          modules: 'qtwayland'
 
       - name: Fetch ROMs
         shell: bash
@@ -68,11 +82,6 @@ jobs:
 
       - name: Build AppImage
         env:
-          # linuxdeploy-plugin-qt locates the Qt install via `qmake`/
-          # `qtpaths` on PATH under those exact names -- Ubuntu's
-          # qt6-base-dev-tools instead provides them as qmake6/qtpaths6,
-          # so point it there explicitly.
-          QMAKE: /usr/lib/qt6/bin/qmake6
           # GitHub-hosted runners generally lack FUSE, which linuxdeploy's
           # own AppImage packaging (and the AppImages it downloads below)
           # need to mount themselves -- this makes them extract-and-run
@@ -82,7 +91,8 @@ jobs:
           # only platform plugin it deploys unless told otherwise --
           # without this, the AppImage has no Wayland support at all and
           # silently falls back to XWayland (blurry/non-HiDPI) on a
-          # Wayland session, even though qt6-wayland is installed above.
+          # Wayland session, even though the qtwayland module is
+          # installed above.
           EXTRA_PLATFORM_PLUGINS: "libqwayland-egl.so;libqwayland-generic.so"
         run: |
           set -euo pipefail
@@ -109,8 +119,11 @@ jobs:
           # integration-client plugin category libqwayland-egl.so needs at
           # runtime -- linuxdeploy-plugin-qt doesn't bundle that category
           # at all. Copy it in by hand and resolve its own dependencies
-          # with a second linuxdeploy pass.
-          QT_PLUGINS_DIR=$("$QMAKE" -query QT_INSTALL_PLUGINS)
+          # with a second linuxdeploy pass. This is independent of where
+          # Qt itself comes from (apt vs. aqtinstall) -- it's
+          # linuxdeploy-plugin-qt's own default plugin selection that's
+          # incomplete, not a Qt packaging issue.
+          QT_PLUGINS_DIR=$(qmake -query QT_INSTALL_PLUGINS)
           if [ -d "$QT_PLUGINS_DIR/wayland-graphics-integration-client" ]; then
             cp -r "$QT_PLUGINS_DIR/wayland-graphics-integration-client" AppDir/usr/plugins/
             ./linuxdeploy.AppImage \
@@ -119,39 +132,6 @@ jobs:
           else
             echo "::warning::wayland-graphics-integration-client plugin dir not found at $QT_PLUGINS_DIR -- Wayland EGL rendering may not work"
           fi
-
-          # --plugin=qt only bundles the "platforms" plugin category
-          # (libqxcb.so + the Wayland ones above) -- it never bundles
-          # "platformthemes", which is what actually queries the desktop
-          # (GTK settings / xdg-desktop-portal) for light/dark mode and
-          # feeds Qt an updated QPalette. Without it the AppImage never
-          # learns the OS is in dark mode at all, unlike a native build
-          # that picks up the system Qt install's platformthemes plugin.
-          # qt6-gtk-platformtheme (installed above) provides libqgtk3.so.
-          if [ -d "$QT_PLUGINS_DIR/platformthemes" ]; then
-            cp -r "$QT_PLUGINS_DIR/platformthemes" AppDir/usr/plugins/
-            ./linuxdeploy.AppImage \
-              --appdir=AppDir \
-              --deploy-deps-only=AppDir/usr/plugins/platformthemes
-          else
-            echo "::warning::platformthemes plugin dir not found at $QT_PLUGINS_DIR -- dark/light mode won't be detected"
-          fi
-
-          # Bundling the plugin isn't enough on its own -- Qt only loads a
-          # platformthemes plugin if QT_QPA_PLATFORMTHEME names it, and
-          # linuxdeploy-plugin-qt's generated AppRun doesn't set that. Wrap
-          # it so the bundled gtk3 theme is used by default, but still
-          # respect an existing QT_QPA_PLATFORMTHEME (e.g. a KDE session
-          # exporting QT_QPA_PLATFORMTHEME=kde) rather than overriding it
-          # with a plugin we didn't bundle.
-          mv AppDir/AppRun AppDir/AppRun.qt
-          printf '%s\n' \
-            '#!/bin/sh' \
-            'export QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-gtk3}"' \
-            'HERE="$(dirname "$(readlink -f "$0")")"' \
-            'exec "$HERE/AppRun.qt" "$@"' \
-            > AppDir/AppRun
-          chmod +x AppDir/AppRun
 
           ./linuxdeploy.AppImage --appdir=AppDir --output=appimage
 
@@ -171,13 +151,24 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install Qt6 + build tools
+      - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential cmake ninja-build patchelf \
-            qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev \
-            qt6-gtk-platformtheme
+            build-essential cmake ninja-build patchelf libgl1-mesa-dev
+
+      # See linux-x86_64's identical step for why aqtinstall. host/arch
+      # differ here: linux_arm64/linux_gcc_arm64 is aqt's arm64 desktop
+      # Qt, only available from Qt 6.7.0 on -- 6.8.2 (same pin as
+      # linux-x86_64/windows-x86_64) is well past that.
+      - name: Install Qt6 (aqtinstall)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.2'
+          host: 'linux_arm64'
+          target: 'desktop'
+          arch: 'linux_gcc_arm64'
+          modules: 'qtwayland'
 
       - name: Fetch ROMs
         shell: bash
@@ -198,7 +189,6 @@ jobs:
       # See linux-x86_64's identical step for what each part of this does.
       - name: Build AppImage
         env:
-          QMAKE: /usr/lib/qt6/bin/qmake6
           APPIMAGE_EXTRACT_AND_RUN: "1"
           EXTRA_PLATFORM_PLUGINS: "libqwayland-egl.so;libqwayland-generic.so"
         run: |
@@ -221,7 +211,7 @@ jobs:
             --icon-file=Qt6/resources/linux/calc-u-1600.png \
             --plugin=qt
 
-          QT_PLUGINS_DIR=$("$QMAKE" -query QT_INSTALL_PLUGINS)
+          QT_PLUGINS_DIR=$(qmake -query QT_INSTALL_PLUGINS)
           if [ -d "$QT_PLUGINS_DIR/wayland-graphics-integration-client" ]; then
             cp -r "$QT_PLUGINS_DIR/wayland-graphics-integration-client" AppDir/usr/plugins/
             ./linuxdeploy.AppImage \
@@ -230,26 +220,6 @@ jobs:
           else
             echo "::warning::wayland-graphics-integration-client plugin dir not found at $QT_PLUGINS_DIR -- Wayland EGL rendering may not work"
           fi
-
-          # See linux-x86_64's identical step for what this does (bundles
-          # the platformthemes plugin so dark/light mode is detected).
-          if [ -d "$QT_PLUGINS_DIR/platformthemes" ]; then
-            cp -r "$QT_PLUGINS_DIR/platformthemes" AppDir/usr/plugins/
-            ./linuxdeploy.AppImage \
-              --appdir=AppDir \
-              --deploy-deps-only=AppDir/usr/plugins/platformthemes
-          else
-            echo "::warning::platformthemes plugin dir not found at $QT_PLUGINS_DIR -- dark/light mode won't be detected"
-          fi
-
-          mv AppDir/AppRun AppDir/AppRun.qt
-          printf '%s\n' \
-            '#!/bin/sh' \
-            'export QT_QPA_PLATFORMTHEME="${QT_QPA_PLATFORMTHEME:-gtk3}"' \
-            'HERE="$(dirname "$(readlink -f "$0")")"' \
-            'exec "$HERE/AppRun.qt" "$@"' \
-            > AppDir/AppRun
-          chmod +x AppDir/AppRun
 
           ./linuxdeploy.AppImage --appdir=AppDir --output=appimage
 
