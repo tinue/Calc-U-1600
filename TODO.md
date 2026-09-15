@@ -1,22 +1,7 @@
 # TODO
 
 The living backlog: known bugs, unbuilt features, and pre-release
-obligations. Supersedes the old `cleanup.md`, `MinorIssues.md`, and
-`examples/todo.md`.
-
-## Before going public
-
-- **Git history.** Decide how much of the existing commit history to
-  carry forward as-is vs. squash/rewrite — the working tree no longer
-  references other emulator projects, but old commits still do. Options:
-  start fresh from the current state (loses history); rewrite existing
-  commits to scrub the same references; rewrite plus squash to a handful
-  of milestone commits.
-- **CE-1638+ memory chips/firmware**: ask permission to keep bundling
-  these (chip behavior + firmware). If not granted, remove them from the
-  bundled catalogue.
-- **Release build scripts**: port/adapt the release packaging scripts
-  from the sibling Calc-U-1500 project rather than writing new ones.
+obligations.
 
 ## Known issues
 
@@ -31,12 +16,11 @@ obligations. Supersedes the old `cleanup.md`, `MinorIssues.md`, and
   key (Mac keyboards have none; an external PC keyboard's key of that
   name may report differently or be intercepted before Qt sees it).
 - **Pixels on the dot-matrix display render as squares, not dots.**
-- **Settings doesn't allow PC-1600 as the startup model.**
 - **Minor display timing difference**: real LCD hardware is slower than
   the emulation, so a spurious character can briefly appear while
   scrolling.
-- **No way to latch Shift on-screen** (tapping Shift on a Mac keyboard
-  doesn't produce a visible latched state in the UI).
+- **No way to latch Shift from the host keyboard** (tapping Shift doesn't
+  produce a visible latched state in the UI).
 - **CE-1600P / CE-150 plotter: pen colour can drift out of sync after
   OFF/ON.** Deliberately left as a known limitation. Set a colour
   (`COLOR 2`), power off/on, print again — the plotter draws in the
@@ -104,24 +88,11 @@ obligations. Supersedes the old `cleanup.md`, `MinorIssues.md`, and
 
 ## Feature ideas
 
-- **PC-1500 OFF/ON**: Core already models the CPU-level power-down
-  (`LH5801::poweredOff()`/`powerOn()`, the `FD 4C` gate), but there's no
-  GUI affordance (OFF/ON control, blanked-LCD state) or a Settings
-  toggle for auto-power-off suppression yet.
-- **Memory modules**: finish out the standard module catalogue and make
-  them selectable from Settings; clarify in the GUI what's shown as a
-  module's name (module names may need shortening for the picker).
-- **Debug panel "Pointers" section**: surface more of the documented
-  PC-1600 work-area pointers.
-- Research how PC-1600 assembly-language programs are loaded and how
-  their memory is reserved.
-- Document PC-1600-specific BASIC keywords (e.g. `TITLE`).
 - What is the "second program memory" for BASIC programs on the PC-1600
   (relevant for ROM modules and battery-backed RAM modules)?
-- CE-1600P and CE-1600F: remaining peripheral support.
+- CE-1600F: remaining peripheral support.
 - Research MODE 1 (LH-5803/PC-1500-compat mode): does it genuinely reuse
   the old ROM for things like `PRINT`?
-- Research ERROR 110 (MODE 1 unavailable when too much RAM is attached).
 
 ## Code cleanup backlog
 
