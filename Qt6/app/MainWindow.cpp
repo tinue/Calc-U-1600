@@ -108,9 +108,19 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     auto openPresetDialog = [this] {
         const QString startDir = AppSettings::presetOpenDir().isEmpty() ? QDir::homePath()
                                                                           : AppSettings::presetOpenDir();
-        const QString path = QFileDialog::getOpenFileName(this, tr("Open Preset"), startDir,
+        const QString path = QFileDialog::getOpenFileName(this, tr("Load Preset"), startDir,
                                                             tr("Presets (*.pc1500 *.pc1500a *.pc1600);;All Files (*)"));
         if (path.isEmpty()) return;
+
+        // A preset doesn't just open a file -- it replaces the running
+        // machine (model/ROM/modules/plotter/program) with whatever the
+        // preset specifies, same destructive-to-current-state rationale as
+        // Load BASIC Program's own confirmation.
+        const auto reply = QMessageBox::question(
+            this, tr("Load Preset"),
+            tr("This replaces the current machine and its state with the one specified in the preset. Continue?"),
+            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+        if (reply != QMessageBox::Yes) return;
 
         // Stop the frame timer for the (possibly multi-second, synchronous)
         // duration of the load -- see PresetController's own doc comment
@@ -135,7 +145,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         m_frameTimer->start(16);
 
         if (!ok) {
-            QMessageBox::warning(this, tr("Open Preset"), error);
+            QMessageBox::warning(this, tr("Load Preset"), error);
         }
     };
     connect(m_controlBar, &ControlBar::openPresetRequested, this, openPresetDialog);
@@ -148,7 +158,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         dialog.exec();
     });
     connect(m_loadBasicProgramAction, &QAction::triggered, this, [this] {
-        // Shares the "Default samples folder" setting with Open Preset --
+        // Shares the "Default samples folder" setting with Load Preset --
         // both preset files and bare .bas listings live in the same
         // samples folder in practice, so one setting covers both pickers.
         const QString startDir = AppSettings::presetOpenDir().isEmpty() ? QDir::homePath()
@@ -168,7 +178,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
         // The load choreography resets the machine and clears the resident
         // program (see PresetController::loadBasicProgramLive) -- unlike
-        // Open Preset, this runs against a machine the user may have been
+        // Load Preset, this runs against a machine the user may have been
         // actively using, so confirm first.
         const auto reply = QMessageBox::question(
             this, tr("Load BASIC Program"),
@@ -176,7 +186,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
         if (reply != QMessageBox::Yes) return;
 
-        // Same rationale as Open Preset -- stop the frame timer for the
+        // Same rationale as Load Preset -- stop the frame timer for the
         // duration of the (synchronous) load so nothing else drives the
         // machine mid-script.
         m_frameTimer->stop();
@@ -378,7 +388,7 @@ void MainWindow::buildMenuBar() {
     // constructor, right alongside the ControlBar signal they duplicate, so
     // both use the exact same handler closure.
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
-    m_openPresetAction = fileMenu->addAction(tr("Open Preset…"));
+    m_openPresetAction = fileMenu->addAction(tr("Load Preset…"));
     m_loadBasicProgramAction = fileMenu->addAction(tr("Load BASIC Program…"));
     fileMenu->addSeparator();
     m_settingsAction = fileMenu->addAction(tr("Settings…"));

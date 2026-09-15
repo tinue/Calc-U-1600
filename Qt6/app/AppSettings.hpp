@@ -26,7 +26,7 @@ inline void setInstanceDirOverride(const QString& dir) {
         s.setValue(QStringLiteral("storage/instanceDirOverride"), dir);
 }
 
-// Key: "preset/openDir" -- the folder both the "Open Preset…" and "Load
+// Key: "preset/openDir" -- the folder both the "Load Preset…" and "Load
 // BASIC Program…" file dialogs start in (labeled "Default samples folder"
 // in Settings, since preset files and bare .bas listings both live there
 // in practice). Unlike instanceDirOverride, this has no environment-

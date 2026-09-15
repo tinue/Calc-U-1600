@@ -32,7 +32,7 @@ class PresetController;
 //
 // The menu bar (buildMenuBar()) duplicates ControlBar's model/ROM-revision
 // pickers and Reset/Reset All as QActions, and adds File/Help entries
-// (Open Preset/Load BASIC Program/Settings/Quit, About) -- see
+// (Load Preset/Load BASIC Program/Settings/Quit, About) -- see
 // applyModelSelection()/applyRomRevisionSelection() and the
 // syncMachineMenuFrom*() pair for how the two views of the same
 // MachineController state stay in sync without fighting each other.

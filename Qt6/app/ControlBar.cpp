@@ -120,7 +120,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     setRomPickerVisible(false); // PC-1500A is the default model (see m_modelCombo above)
 
     addSeparator(layout, this);
-    m_openPresetButton = new QPushButton(tr("Open Preset…"), this);
+    m_openPresetButton = new QPushButton(tr("Load Preset…"), this);
     m_openPresetButton->setFocusPolicy(Qt::NoFocus);
     layout->addWidget(m_openPresetButton);
 

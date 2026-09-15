@@ -22,7 +22,7 @@ class MemoryModuleManager;
 // (macOS for now -- see Qt6/CMakeLists.txt's CORE_SOURCES if(APPLE) block:
 // BASIC program loading needs the vendored Rust libsharpdx, currently only
 // built for macOS). MainWindow checks that macro itself and disables the
-// "Open Preset…" action instead of constructing this class when it's
+// "Load Preset…" action instead of constructing this class when it's
 // undefined, so this header is safe to include unconditionally.
 class PresetController : public QObject {
     Q_OBJECT
