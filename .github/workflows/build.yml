@@ -524,7 +524,12 @@ jobs:
           version: '6.8.2' # keep in sync with the windows-x86_64 job above
           host: 'windows'
           target: 'desktop'
-          arch: 'win64_msvc2022_arm64'
+          # NOT 'win64_msvc2022_arm64' -- that string doesn't exist in
+          # aqt's package index (`aqt list-qt windows desktop --arch
+          # 6.8.2` was the way to confirm this after a CI failure:
+          # "packages ['qt_base'] were not found"). The real identifier
+          # is the "_cross_compiled" one below.
+          arch: 'win64_msvc2022_arm64_cross_compiled'
 
       - name: Set up MSVC dev environment (x86_64 host, ARM64 target)
         uses: ilammy/msvc-dev-cmd@v1
