@@ -1,0 +1,23 @@
+{
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/AppSettings.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings.dia",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings.swiftdeps"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/BasicPointers.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers.dia",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers.swiftdeps"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/BatteryCardInstanceWriter.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter.dia",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter.swiftdeps"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "source": "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Calc_U_1600App.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Load Preset…",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 49
+        }
+      }
+    ]
+  },
+  "version": 1
+}

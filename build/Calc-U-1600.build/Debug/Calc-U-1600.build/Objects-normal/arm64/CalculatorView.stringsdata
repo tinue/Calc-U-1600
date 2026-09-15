@@ -1,0 +1,112 @@
+{
+  "source": "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/CalculatorView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Error",
+        "location": {
+          "startingColumn": 16,
+          "startingLine": 23
+        }
+      },
+      {
+        "comment": "",
+        "key": "Name & Save Card",
+        "location": {
+          "startingColumn": 16,
+          "startingLine": 28
+        }
+      },
+      {
+        "comment": "",
+        "key": "OK",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 24
+        }
+      },
+      {
+        "comment": "",
+        "key": "Card name",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 32
+        }
+      },
+      {
+        "comment": "",
+        "key": "Save",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 36
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cancel",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 37
+        }
+      },
+      {
+        "comment": "",
+        "key": "Save this card's current contents under a name you can reload from the slot's dropdown, and keep it durably up to date from now on.",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 39
+        }
+      },
+      {
+        "comment": "",
+        "key": "Preset",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 348
+        }
+      },
+      {
+        "comment": "",
+        "key": "ALL RESET",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 367
+        }
+      },
+      {
+        "comment": "",
+        "key": "Reset",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 367
+        }
+      },
+      {
+        "comment": "",
+        "key": "CE-150",
+        "location": {
+          "startingColumn": 16,
+          "startingLine": 498
+        }
+      },
+      {
+        "comment": "",
+        "key": "CE-1600P",
+        "location": {
+          "startingColumn": 16,
+          "startingLine": 479
+        }
+      },
+      {
+        "comment": "",
+        "key": "Name & Save this battery-backed card",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 535
+        }
+      }
+    ]
+  },
+  "version": 1
+}

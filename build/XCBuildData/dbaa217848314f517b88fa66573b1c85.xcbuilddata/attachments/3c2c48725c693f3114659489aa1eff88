@@ -1,0 +1,329 @@
+{
+  "" : {
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc-U-1600-primary.dia",
+    "emit-module-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc-U-1600-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc-U-1600-primary-emit-module.dia",
+    "pch" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc-U-1600-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc-U-1600-primary.swiftdeps"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/AppSettings.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/AppSettings~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/BasicPointers.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BasicPointers~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/BatteryCardInstanceWriter.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardInstanceWriter~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/BatteryCardStorage.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardStorage.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardStorage.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardStorage.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardStorage.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardStorage.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardStorage.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardStorage.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/BatteryCardStorage~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Calc_U_1600App.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600App.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600App.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600App.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600App.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600App.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600App.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600App.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600App~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/ContentView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/EmulatorViewModel.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/EmulatorViewModel.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/EmulatorViewModel.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/EmulatorViewModel.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/EmulatorViewModel.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/EmulatorViewModel.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/EmulatorViewModel.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/EmulatorViewModel.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/EmulatorViewModel~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/FilePickerMode.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/FilePickerMode.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/FilePickerMode.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/FilePickerMode.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/FilePickerMode.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/FilePickerMode.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/FilePickerMode.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/FilePickerMode.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/FilePickerMode~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/KeyboardFeedback.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/KeyboardFeedback.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/KeyboardFeedback.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/KeyboardFeedback.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/KeyboardFeedback.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/KeyboardFeedback.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/KeyboardFeedback.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/KeyboardFeedback.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/KeyboardFeedback~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/MemoryCardResources.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/MemoryCardResources.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/MemoryCardResources.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/MemoryCardResources.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/MemoryCardResources.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/MemoryCardResources.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/MemoryCardResources.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/MemoryCardResources.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/MemoryCardResources~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/PC1500KeyLayout.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyLayout.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyLayout.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyLayout.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyLayout.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyLayout.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyLayout.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyLayout.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyLayout~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/PC1500KeyboardMap.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyboardMap.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyboardMap.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyboardMap.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyboardMap.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyboardMap.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyboardMap.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyboardMap.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1500KeyboardMap~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/PC1600KeyLayout.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600KeyLayout.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600KeyLayout.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600KeyLayout.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600KeyLayout.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600KeyLayout.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600KeyLayout.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600KeyLayout.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600KeyLayout~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/PC1600Pointers.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600Pointers.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600Pointers.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600Pointers.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600Pointers.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600Pointers.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600Pointers.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600Pointers.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600Pointers~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/PCKeyLayoutKey.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCKeyLayoutKey.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCKeyLayoutKey.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCKeyLayoutKey.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCKeyLayoutKey.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCKeyLayoutKey.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCKeyLayoutKey.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCKeyLayoutKey.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCKeyLayoutKey~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/PCVariant+Display.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCVariant+Display.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCVariant+Display.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCVariant+Display.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCVariant+Display.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCVariant+Display.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCVariant+Display.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCVariant+Display.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PCVariant+Display~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Persistence.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Persistence.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Persistence.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Persistence.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Persistence.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Persistence.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Persistence.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Persistence.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Persistence~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/ROMLoader.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ROMLoader.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ROMLoader.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ROMLoader.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ROMLoader.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ROMLoader.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ROMLoader.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ROMLoader.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/ROMLoader~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/TraceWriter.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/TraceWriter.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/TraceWriter.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/TraceWriter.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/TraceWriter.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/TraceWriter.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/TraceWriter.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/TraceWriter.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/TraceWriter~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/CE150PaperView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/CE1600PPaperView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/CalculatorBodyView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/CalculatorView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/DebugLogView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/DotMatrixCanvas.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/LCDDisplayView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/PC1600LCDDisplayView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/SettingsView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/DerivedSources/CoreDataGenerated/Calc_U_1600/Calc_U_1600+CoreDataModel.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600+CoreDataModel.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600+CoreDataModel.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600+CoreDataModel.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600+CoreDataModel.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600+CoreDataModel.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600+CoreDataModel.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600+CoreDataModel.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Calc_U_1600+CoreDataModel~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/DerivedSources/CoreDataGenerated/Calc_U_1600/Item+CoreDataClass.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataClass.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataClass.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataClass.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataClass.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataClass.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataClass.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataClass.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataClass~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/DerivedSources/CoreDataGenerated/Calc_U_1600/Item+CoreDataProperties.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataProperties.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataProperties.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataProperties.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataProperties.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataProperties.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataProperties.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataProperties.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/Item+CoreDataProperties~partial.swiftmodule"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  }
+}

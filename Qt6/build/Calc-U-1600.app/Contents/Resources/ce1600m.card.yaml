@@ -1,0 +1,53 @@
+# CE-1600M -- 32 KB battery-backed SRAM module for the PC-1600.
+#
+# Confirmed from the CE-1600M Schaltplan (PC-1600-Memory-Bank-Switching.md
+# Part 7): 4 x 8 KB SRAM behind a TC74HC139F. The module is active only
+# over the 8000-BFFF window; the gate array gates its enable (RAM2 on
+# Slot 1, pin 4) to exactly that window and to this slot, so RAM2 is a
+# bare strobe here -- the module needs no address decode of its own to
+# know the window.
+#
+# Its 15th address bit is PVOUT (pin 5) -- the host's Port 31H b4, acting
+# as the module's A14-equivalent -- which picks the low or high 16 KB of
+# the 32 KB part. That is chosen by the *host's* native Port 31H
+# remapping and reaches the module only as an ordinary address-select
+# line, with no latch and no module-side bank register: an UNBANKED
+# region (Memory-Card-Definition-Spec.md section 6), with PVOUT expressed
+# as an AND qualifier that splits the window, not as a D4 bank latch.
+#
+# Declared for both PC-1600 slots from one file. Terminology is
+# PC-1600-Slot-1, so `RAM2` resolves (once, at parse time -- spec
+# section 1) to pin 4; pin 4 is the module enable on Slot 2 as well (the
+# Slot-2 vocabulary just calls it RAM1). `PVOUT` is pin 5 in both
+# vocabularies. So the one fixed addressing spec below works on both
+# slots with no per-slot file and no terminology change -- exactly the
+# "one terminology, several compatible hosts" case in spec section 1.
+
+module-name: "CE-1600M"
+compatible-hosts: [PC-1600-Slot-1, PC-1600-Slot-2]
+definition-terminology: PC-1600-Slot-1
+battery: true
+
+regions:
+  - name: sram-32k
+    capacity: 0x8000
+    banking: none
+    pc1600-module-class: plain-ram-no-header
+    content:
+      kind: regular
+      writable: true
+      power-up-fill: 0xFF
+    addressing:
+      any-of:
+        # PVOUT low -> module's low 16 KB half.
+        - all-of:
+            - chip-select: RAM2
+            - signal-negated: PVOUT
+          span: 0x4000
+          maps-to: 0x0000
+        # PVOUT high -> module's high 16 KB half.
+        - all-of:
+            - chip-select: RAM2
+            - signal: PVOUT
+          span: 0x4000
+          maps-to: 0x4000

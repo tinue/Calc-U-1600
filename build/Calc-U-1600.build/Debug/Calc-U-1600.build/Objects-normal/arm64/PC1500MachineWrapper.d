@@ -1,0 +1,31 @@
+dependencies: \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/PC1500MachineWrapper.mm \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/PC1500MachineWrapper.h \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/PCPresetLoadResult_Internal.h \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/CpuFrameBridging.h \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/TraceTypes.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/Connector/MemoryCardCatalog.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/Connector/MemoryCardDefinition.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/Connector/../Yaml.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/Connector/SoftwareDefinedCard.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/Connector/ExpansionCard.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/PC1500BasicLoader.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/PC1500Machine.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/../CPU/LH5801/LH5801.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/../CPU/LH5801/../../TraceTypes.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/../Connector/Ce150Card.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/../Connector/AlpsPlotterMechanism.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/../Connector/ExpansionCard.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/../Connector/ExpansionConnector.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/../Connector/PC1500SignalDecode.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/../Connector/../PC1500/PC1500Variant.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/../Connector/SystemBus.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/PC1500Display.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/PC1500Memory.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/PC1500Keyboard.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/PC1500Variant.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/Upd1990ac.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/PC1500TraceFile.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/../TraceTypes.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/PresetFile.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Bridge/../Core/PC1500/PC1500PresetLoader.hpp

@@ -1,0 +1,23 @@
+{
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/CE1600PPaperView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView.dia",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE1600PPaperView.swiftdeps"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/DebugLogView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView.dia",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DebugLogView.swiftdeps"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/DotMatrixCanvas.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas.dia",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/DotMatrixCanvas.swiftdeps"
+  }
+}

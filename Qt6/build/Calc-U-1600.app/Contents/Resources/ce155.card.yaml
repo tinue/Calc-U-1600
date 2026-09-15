@@ -1,0 +1,64 @@
+# CE-155 -- 8 KB static RAM module for the PC-1500 family.
+#
+# Fully confirmed design (PC-1500-Address-Decoding.md section 3.2). Four
+# 2 KB RAM chips, reached two different ways:
+#
+#   * ONE chip via Y0: Y0 alone is a raw 16 KB enable, so this chip sits
+#     behind the module's *own* onboard 138-family decoder. That decoder
+#     tests only three address lines -- A11, A12, A13 (all high) -- plus
+#     Y0 on an enable input; it does NOT compare the whole address bus
+#     against a window, and it does NOT look at A0-A10 (those are the
+#     offset into the 2 KB chip). Hence `address-bits: {A13:1,A12:1,A11:1}`
+#     rather than an address range.
+#
+#   * THREE chips via S1 / S2 / S3: each is a dedicated 2 KB chip-select
+#     wired straight from the mainboard to one chip -- no decode logic on
+#     the module at all on this path. The module uses the low 11 address
+#     lines (A0-A10) as the offset into whichever chip's select is live.
+#     Three separate OR'd groups of bare strobes, each with an explicit
+#     `span`, NOT one "S1+S2+S3" group.
+#
+# Hosts (terminology PC-1500 -- the family the module shipped for):
+#   * PC-1500 -- native.
+#   * PC-1600 Slot 1 -- empirically confirmed: loads with the full 8 KB
+#     recognised.
+#
+# Compatibility here is an author-declared list, not a pin-derived one
+# (spec section 1): the one fixed addressing spec below is simply approved
+# for these hosts. The loader declines any host not listed (spec
+# section 2) without second-guessing the list against pin tables.
+
+module-name: "CE-155"
+compatible-hosts: [PC-1500, PC-1500A, PC-1600-Slot-1]
+definition-terminology: PC-1500
+
+regions:
+  - name: sram-8k
+    capacity: 0x2000
+    banking: none
+    content:
+      kind: regular
+      writable: true
+      power-up-fill: 0xFF
+    addressing:
+      any-of:
+        # Y0 enable + the on-module decoder testing A11=A12=A13=1.
+        # The effective window works out to &3800-&3FFF, but the hardware
+        # only checks those three lines, not a full-bus range. The 2 KB
+        # offset is A0-A10.
+        - all-of:
+            - chip-select: Y0
+            - address-bits: { A13: 1, A12: 1, A11: 1 }
+          span: 0x0800
+          maps-to: 0x0000
+        # Three dedicated mainboard chip-selects, one 2 KB chip each,
+        # no on-module address decode.
+        - chip-select: S1
+          span: 0x0800
+          maps-to: 0x0800
+        - chip-select: S2
+          span: 0x0800
+          maps-to: 0x1000
+        - chip-select: S3
+          span: 0x0800
+          maps-to: 0x1800

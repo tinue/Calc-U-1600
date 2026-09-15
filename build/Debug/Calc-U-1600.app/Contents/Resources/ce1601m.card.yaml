@@ -1,0 +1,70 @@
+# CE-1601M -- 64 KB vertically-banked SRAM module, PC-1600 Slot 2 only.
+#
+# Confirmed from the CE-1601M Service Manual (PC-1600-Memory-Bank-Switching
+# .md Part 7a): 2 x 32Kx8 SRAM (RAM0, RAM1) behind a 74HC137-class
+# 3-to-8 decoder/latch. Two selection layers:
+#
+#   * VERTICAL BANK -- which 32 KB chip sits behind the 8000-BFFF window.
+#     The host picks it with `OUT (28H), A`; the module's decoder/latch
+#     samples the DATA bus (the value in A) on that write strobe and holds
+#     it until the next one. Values 0-1 are populated here; the decoder
+#     has headroom for 8 (the 256 KB Slot-2 ceiling). This is a
+#     TRIGGER-BASED latch (Memory-Card-Definition-Spec.md section 6) --
+#     same family as the CE-163, which instead samples the ADDRESS bus on
+#     its own S3 write strobe.
+#
+#   * HALF-SELECT within the current 32 KB bank -- PVOUT (pin 5), the
+#     host's Port 31H b4, picks the low or high 16 KB. This is the nested
+#     sub-range the bank window carries in its own addressing spec
+#     (spec section 4 / section 9): "selected bank AND PVOUT level",
+#     one level deeper than a plain region.
+#
+# RAM1 (pin 4) is a bare enable strobe gated by the host to the 8000-BFFF
+# window, so no address-range term is needed -- `span` gives the slice
+# size and the module offsets by the low address bits.
+#
+# Slot 2 only: the Port 28H strobe (K0-K2) has no wiring on Slot 1, so the
+# vertical-bank mechanism cannot be reached there.
+#
+# Ships blank (plain-ram-no-header): a RAM-disk / S0: expansion image is
+# written into it by the PC-1600's own INIT, not baked into the module.
+
+module-name: "CE-1601M"
+compatible-hosts: [PC-1600-Slot-2]
+definition-terminology: PC-1600-Slot-2
+battery: true
+
+regions:
+  - name: vram-64k
+    pc1600-module-class: plain-ram-no-header
+    content:
+      kind: regular
+      writable: true
+      power-up-fill: 0xFF
+    # Region-level "is this a banked access at all" -- a pure gate, no
+    # span/maps-to. The module's whole enable is RAM1 (host-gated to the
+    # 8000-BFFF window); the real slice mapping lives in bank-window.
+    addressing:
+      chip-select: RAM1
+    banking:
+      latch:
+        type: trigger-based
+        trigger: { io-port: 0x28 }     # OUT (28H) -- the Port 28H vertical-bank write
+        sampled-lines: [D0, D1, D2]    # bank number = the byte written (first line = LSB)
+        source-domain: data
+      bank-count: 2                    # banks 0-1 fitted; latch width allows up to 8
+      bank-size: 0x8000             # 32 KB per vertical bank (Z-80 Bank 2 + Bank 3)
+      bank-window:
+        any-of:
+          # PVOUT low -> low 16 KB half of the current 32 KB bank.
+          - all-of:
+              - chip-select: RAM1
+              - signal-negated: PVOUT
+            span: 0x4000
+            maps-to: 0x0000
+          # PVOUT high -> high 16 KB half.
+          - all-of:
+              - chip-select: RAM1
+              - signal: PVOUT
+            span: 0x4000
+            maps-to: 0x4000

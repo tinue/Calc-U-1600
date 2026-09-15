@@ -1,0 +1,32 @@
+{
+  "source": "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/CE150PaperView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Copied to clipboard",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 127
+        }
+      },
+      {
+        "comment": "",
+        "key": "Copy the paper to the clipboard as an image",
+        "location": {
+          "startingColumn": 19,
+          "startingLine": 147
+        }
+      },
+      {
+        "comment": "",
+        "key": "Copy the paper, then tear it off (clears the plot)",
+        "location": {
+          "startingColumn": 19,
+          "startingLine": 152
+        }
+      }
+    ]
+  },
+  "version": 1
+}

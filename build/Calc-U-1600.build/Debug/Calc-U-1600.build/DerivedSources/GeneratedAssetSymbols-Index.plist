@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>colors</key>
+	<array/>
+	<key>images</key>
+	<array>
+		<dict>
+			<key>catalogPath</key>
+			<string>/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Assets.xcassets</string>
+			<key>objcSymbol</key>
+			<string>ACImageNamePc1500</string>
+			<key>relativePath</key>
+			<string>./pc1500.imageset</string>
+			<key>swiftSymbol</key>
+			<string>pc1500</string>
+		</dict>
+		<dict>
+			<key>catalogPath</key>
+			<string>/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Assets.xcassets</string>
+			<key>objcSymbol</key>
+			<string>ACImageNamePc1500A</string>
+			<key>relativePath</key>
+			<string>./pc1500A.imageset</string>
+			<key>swiftSymbol</key>
+			<string>pc1500A</string>
+		</dict>
+		<dict>
+			<key>catalogPath</key>
+			<string>/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Assets.xcassets</string>
+			<key>objcSymbol</key>
+			<string>ACImageNamePc1600</string>
+			<key>relativePath</key>
+			<string>./pc1600.imageset</string>
+			<key>swiftSymbol</key>
+			<string>pc1600</string>
+		</dict>
+	</array>
+	<key>symbols</key>
+	<array/>
+</dict>
+</plist>

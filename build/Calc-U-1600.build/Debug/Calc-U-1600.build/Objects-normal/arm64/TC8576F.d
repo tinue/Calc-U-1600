@@ -1,0 +1,29 @@
+dependencies: \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/TC8576F.cpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/TC8576F.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/PC1600SubCpu.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/SerialLink.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/PC1600Machine.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../Connector/CE1600PCard.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../Connector/AlpsPlotterMechanism.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../Connector/PC1600SystemBus.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../Connector/ExpansionCard.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../CPU/LH5803/LH5803.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../CPU/LH5803/../LH5801/LH5801.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../CPU/LH5803/../LH5801/../../TraceTypes.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../CPU/LH5803/LH5803SharedMemory.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../CPU/LH5803/../../Connector/Ce150Card.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../CPU/LH5803/../../Connector/AlpsPlotterMechanism.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../CPU/LH5803/../../Connector/ExpansionCard.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../CPU/SC7852/SC7852.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../CPU/SC7852/../../TraceTypes.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../PC1500/PC1500TraceFile.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../PC1500/../TraceTypes.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/PC1600Bank.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/PC1600BusArbiter.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/PC1600Memory.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../Connector/MemorySlotConnector.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/../Connector/../PC1600/PC1600Bank.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/PC1600Display.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/PC1600StatusLine.hpp \
+  /Users/me/Development/sharp/Calc-U-1600/Core/PC1600/PC1600Keyboard.hpp

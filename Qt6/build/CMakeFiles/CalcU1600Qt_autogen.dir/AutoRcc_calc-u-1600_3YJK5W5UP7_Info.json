@@ -1,0 +1,28 @@
+{
+	"BUILD_DIR" : "/Users/me/Development/sharp/Calc-U-1600/Qt6/build/CalcU1600Qt_autogen",
+	"CMAKE_BINARY_DIR" : "/Users/me/Development/sharp/Calc-U-1600/Qt6/build",
+	"CMAKE_CURRENT_BINARY_DIR" : "/Users/me/Development/sharp/Calc-U-1600/Qt6/build",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/Users/me/Development/sharp/Calc-U-1600/Qt6",
+	"CMAKE_SOURCE_DIR" : "/Users/me/Development/sharp/Calc-U-1600/Qt6",
+	"CROSS_CONFIG" : false,
+	"GENERATOR" : "Ninja",
+	"INCLUDE_DIR" : "/Users/me/Development/sharp/Calc-U-1600/Qt6/build/CalcU1600Qt_autogen/include",
+	"INPUTS" : 
+	[
+		"/Users/me/Development/sharp/Calc-U-1600/Qt6/resources/faceplates/pc1600.png",
+		"/Users/me/Development/sharp/Calc-U-1600/Qt6/resources/faceplates/pc1500A.png",
+		"/Users/me/Development/sharp/Calc-U-1600/Qt6/resources/faceplates/pc1500.png",
+		"/Users/me/Development/sharp/Calc-U-1600/Qt6/resources/linux/calc-u-1600.png"
+	],
+	"LOCK_FILE" : "/Users/me/Development/sharp/Calc-U-1600/Qt6/build/CMakeFiles/CalcU1600Qt_autogen.dir/AutoRcc_calc-u-1600_3YJK5W5UP7_Lock.lock",
+	"MULTI_CONFIG" : false,
+	"OPTIONS" : [ "-name", "calc_u_1600" ],
+	"OUTPUT_CHECKSUM" : "3YJK5W5UP7",
+	"OUTPUT_NAME" : "qrc_calc-u-1600.cpp",
+	"RCC_EXECUTABLE" : "/opt/homebrew/opt/qt/share/qt/libexec/rcc",
+	"RCC_LIST_OPTIONS" : [ "--list" ],
+	"SETTINGS_FILE" : "/Users/me/Development/sharp/Calc-U-1600/Qt6/build/CMakeFiles/CalcU1600Qt_autogen.dir/AutoRcc_calc-u-1600_3YJK5W5UP7_Used.txt",
+	"SOURCE" : "/Users/me/Development/sharp/Calc-U-1600/Qt6/resources/calc-u-1600.qrc",
+	"USE_BETTER_GRAPH" : true,
+	"VERBOSITY" : 0
+}

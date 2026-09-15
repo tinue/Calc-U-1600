@@ -1,0 +1,56 @@
+{
+  "source": "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/DebugLogView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "DEBUG LOG",
+        "location": {
+          "startingColumn": 14,
+          "startingLine": 46
+        }
+      },
+      {
+        "comment": "",
+        "key": "Pointers",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 99
+        }
+      },
+      {
+        "comment": "",
+        "key": "Dump Mem",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 100
+        }
+      },
+      {
+        "comment": "",
+        "key": "Dump Card YAML",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 104
+        }
+      },
+      {
+        "comment": "",
+        "key": "TRACE",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 118
+        }
+      },
+      {
+        "comment": "",
+        "key": "LOG",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 137
+        }
+      }
+    ]
+  },
+  "version": 1
+}

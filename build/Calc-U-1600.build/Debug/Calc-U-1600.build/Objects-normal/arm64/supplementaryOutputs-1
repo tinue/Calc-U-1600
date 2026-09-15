@@ -1,0 +1,23 @@
+{
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/CE150PaperView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView.dia",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CE150PaperView.swiftdeps"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/CalculatorBodyView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView.dia",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorBodyView.swiftdeps"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/CalculatorView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView.dia",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/CalculatorView.swiftdeps"
+  }
+}

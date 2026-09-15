@@ -1,0 +1,5 @@
+/Users/me/Development/sharp/Calc-U-1600/Qt6/build/CMakeFiles/CalcU1600Qt.dir
+/Users/me/Development/sharp/Calc-U-1600/Qt6/build/CMakeFiles/edit_cache.dir
+/Users/me/Development/sharp/Calc-U-1600/Qt6/build/CMakeFiles/rebuild_cache.dir
+/Users/me/Development/sharp/Calc-U-1600/Qt6/build/CMakeFiles/CalcU1600Qt_autogen_timestamp_deps.dir
+/Users/me/Development/sharp/Calc-U-1600/Qt6/build/CMakeFiles/CalcU1600Qt_autogen.dir

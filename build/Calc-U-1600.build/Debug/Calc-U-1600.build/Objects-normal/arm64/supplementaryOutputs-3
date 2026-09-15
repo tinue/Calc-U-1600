@@ -1,0 +1,23 @@
+{
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/LCDDisplayView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView.dia",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/LCDDisplayView.swiftdeps"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/PC1600LCDDisplayView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView.dia",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/PC1600LCDDisplayView.swiftdeps"
+  },
+  "/Users/me/Development/sharp/Calc-U-1600/Calc-U-1600/Views/SettingsView.swift" : {
+    "const-values" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView.swiftconstvalues",
+    "dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView.d",
+    "diagnostics" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView.dia",
+    "object" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView.o",
+    "swift-dependencies" : "/Users/me/Development/sharp/Calc-U-1600/build/Calc-U-1600.build/Debug/Calc-U-1600.build/Objects-normal/arm64/SettingsView.swiftdeps"
+  }
+}
