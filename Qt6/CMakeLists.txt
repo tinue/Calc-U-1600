@@ -23,7 +23,7 @@ set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../Core)
 # Single source of truth for the version number -- both the generated
 # Version.h below and the MACOSX_BUNDLE_*VERSION* properties further down
 # reference this instead of each hardcoding "0.1.0" separately.
-set(APP_VERSION "0.1.0")
+set(APP_VERSION "0.2.0")
 
 # git describe gives a short, human-meaningful build id (tag or short hash,
 # +"-dirty" if the tree has local changes) for bug reports. Falls back to
