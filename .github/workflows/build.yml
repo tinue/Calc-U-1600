@@ -19,13 +19,17 @@ name: Build
 # (hardened runtime), notarizes + staples it, and packages it into a
 # signed/notarized/stapled .dmg -- same Developer ID/Team ID as
 # SharpDataExchangeRust, see .github/macos-signing.md for the repo
-# secrets this needs and how to rotate them. The Windows job runs
+# secrets this needs and how to rotate them. The Windows jobs run
 # windeployqt so the staged folder is genuinely standalone-runnable (Qt
 # DLLs + MSVC runtime bundled alongside the .exe, since Windows has no
 # equivalent to Linux's "the system already has Qt installed" or macOS's
-# shared Homebrew prefix), then packages that folder into an Inno Setup
+# shared Homebrew prefix), then package that folder into an Inno Setup
 # installer (Start Menu shortcut, optional desktop icon, uninstaller)
-# via Qt6/resources/windows/calc-u-1600.iss.
+# via Qt6/resources/windows/calc-u-1600.iss. windows-arm64 cross-compiles
+# from an ordinary x86_64 windows-latest runner (no GitHub-hosted native
+# ARM64 Windows runner generally available yet) and skips vendoring
+# sharpdx (preset/BASIC loading), since no windows-arm64
+# SharpDataExchangeRust release exists -- see that job's own comments.
 on:
   # Manual trigger only (Actions tab, or `gh workflow run build.yml`).
   # The eventual plan is to trigger on pre-release tag creation instead.
@@ -33,6 +37,9 @@ on:
 
 jobs:
   linux-x86_64:
+    # TEMP: disabled while testing the new windows-arm64 job in isolation --
+    # revert this `if: false` once windows-arm64 is verified working.
+    if: false
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -186,6 +193,9 @@ jobs:
           if-no-files-found: error
 
   linux-aarch64:
+    # TEMP: disabled while testing the new windows-arm64 job in isolation --
+    # revert this `if: false` once windows-arm64 is verified working.
+    if: false
     # GitHub-hosted Linux arm64 runners aren't available on every plan/repo
     # visibility combination -- don't fail the whole workflow if this one
     # can't be scheduled or the runner label isn't available.
@@ -291,6 +301,9 @@ jobs:
           if-no-files-found: error
 
   mac-aarch64:
+    # TEMP: disabled while testing the new windows-arm64 job in isolation --
+    # revert this `if: false` once windows-arm64 is verified working.
+    if: false
     runs-on: macos-14 # Apple Silicon (arm64) hosted runner
     steps:
       - uses: actions/checkout@v5
@@ -418,6 +431,9 @@ jobs:
           if-no-files-found: error
 
   windows-x86_64:
+    # TEMP: disabled while testing the new windows-arm64 job in isolation --
+    # revert this `if: false` once windows-arm64 is verified working.
+    if: false
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -488,4 +504,87 @@ jobs:
         with:
           name: Calc-U-1600-windows-x86_64
           path: Calc-U-1600-Setup.exe
+          if-no-files-found: error
+
+  windows-arm64:
+    # No GitHub-hosted native ARM64 Windows runner is generally available
+    # yet, so this cross-compiles from an ordinary (x86_64) windows-latest
+    # runner: install-qt-action's win64_msvc2022_arm64 arch fetches
+    # ARM64-target Qt binaries (its qmake/tools stay x86_64, host-side),
+    # and msvc-dev-cmd's amd64_arm64 arch sets up the matching MSVC cross
+    # toolchain (cl.exe etc. also stay x86_64 host binaries, but emit
+    # ARM64 code) -- the standard way to build Qt-for-Windows-on-ARM.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Qt6 (MSVC, ARM64 target)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.2' # keep in sync with the windows-x86_64 job above
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_arm64'
+
+      - name: Set up MSVC dev environment (x86_64 host, ARM64 target)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64_arm64
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v6
+
+      # `shell: bash` runs it via the Git Bash already on windows-latest
+      # runners -- tools/fetch_roms.sh is a POSIX sh script. ROMs aren't
+      # architecture-specific, so this is identical to the x86_64 job.
+      - name: Fetch ROMs
+        shell: bash
+        run: tools/fetch_roms.sh
+
+      # Unlike the other jobs, sharpdx (preset/BASIC loading) is skipped
+      # here rather than fetched: there is no windows-arm64
+      # SharpDataExchangeRust release to vendor, and fetching the
+      # windows-x86_64 one would hand the ARM64-target linker a
+      # wrong-machine-type .lib (fails the build, not a soft-fail). See
+      # Qt6/CMakeLists.txt's EXISTS(SHARPDX_LIB) gating -- CalcU1600Qt
+      # still builds and runs fine without it, just with "Open Preset…"
+      # reporting the feature unavailable. Revisit once SharpDataExchangeRust
+      # ships an arm64 Windows release.
+      - name: Skip sharpdx (no windows-arm64 release yet)
+        shell: bash
+        run: |
+          echo "skipping tools/fetch_sharpdx.sh -- no windows-arm64 SharpDataExchangeRust release"
+
+      - name: Configure
+        run: cmake -S Qt6 -B Qt6/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build Qt6/build
+
+      - name: Stage standalone-runnable folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path Qt6/dist | Out-Null
+          Copy-Item Qt6/build/Calc-U-1600.exe Qt6/dist/
+          # See the windows-x86_64 job's identical step for what this does.
+          Copy-Item Qt6/build/resources Qt6/dist/resources -Recurse
+          windeployqt --release --compiler-runtime Qt6/dist/Calc-U-1600.exe
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y
+
+      - name: Build installer
+        shell: pwsh
+        # Same .iss as windows-x86_64, but with /DAPP_ARCH=arm64 so it
+        # produces an ARM64-only installer (ArchitecturesAllowed=arm64)
+        # named Calc-U-1600-Setup-arm64.exe instead -- see the .iss's own
+        # APP_ARCH comment. Unsigned for now.
+        run: ISCC.exe /DAPP_ARCH=arm64 Qt6\resources\windows\calc-u-1600.iss
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: Calc-U-1600-windows-arm64
+          path: Calc-U-1600-Setup-arm64.exe
           if-no-files-found: error

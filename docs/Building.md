@@ -141,6 +141,14 @@ then package the staged folder with Inno Setup using
 — see the `windows-x86_64` job in `build.yml` for the exact staging
 layout. The installer is currently unsigned.
 
+CI also cross-compiles a native ARM64 build (`windows-arm64` job) from
+the same x86_64 runner, using Qt's `win64_msvc2022_arm64` target and
+`ilammy/msvc-dev-cmd`'s `amd64_arm64` cross toolchain, and passes
+`/DAPP_ARCH=arm64` to `ISCC.exe` so the `.iss` above produces an
+ARM64-only `Calc-U-1600-Setup-arm64.exe` instead. It skips BASIC preset
+loading (no `windows-arm64` SharpDataExchangeRust release exists yet —
+see `tools/fetch_sharpdx.sh`), otherwise identical to the x86_64 build.
+
 ## Running the tests
 
 ```sh

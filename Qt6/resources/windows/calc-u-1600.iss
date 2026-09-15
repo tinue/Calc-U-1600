@@ -1,8 +1,16 @@
 ; Inno Setup script for Calc-U-1600. Compiled headlessly in CI via
-; ISCC.exe (see .github/workflows/build.yml's windows-x86_64 job) against
-; the already-staged Qt6\dist folder (exe + Qt DLLs + MSVC runtime +
-; resources\, produced by that job's "Stage standalone-runnable folder"
-; step). Unsigned for now.
+; ISCC.exe (see .github/workflows/build.yml's windows-x86_64 and
+; windows-arm64 jobs) against the already-staged Qt6\dist folder (exe +
+; Qt DLLs + MSVC runtime + resources\, produced by that job's "Stage
+; standalone-runnable folder" step). Unsigned for now.
+;
+; APP_ARCH selects which arch's installer this produces -- pass
+; /DAPP_ARCH=arm64 on the ISCC command line for the arm64 build; the
+; windows-x86_64 job doesn't pass it, so it keeps the original x64
+; defaults/filename below.
+#ifndef APP_ARCH
+  #define APP_ARCH "x64"
+#endif
 
 [Setup]
 AppName=Calc-U-1600
@@ -10,11 +18,17 @@ AppVersion=0.1.0
 DefaultDirName={autopf}\Calc-U-1600
 DefaultGroupName=Calc-U-1600
 UninstallDisplayIcon={app}\Calc-U-1600.exe
-OutputBaseFilename=Calc-U-1600-Setup
+#if APP_ARCH == "arm64"
+  OutputBaseFilename=Calc-U-1600-Setup-arm64
+  ArchitecturesInstallIn64BitMode=arm64
+  ArchitecturesAllowed=arm64
+#else
+  OutputBaseFilename=Calc-U-1600-Setup
+  ArchitecturesInstallIn64BitMode=x64compatible
+#endif
 OutputDir=..\..\..
 Compression=lzma2
 SolidCompression=yes
-ArchitecturesInstallIn64BitMode=x64compatible
 
 [Files]
 Source: "..\..\dist\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion

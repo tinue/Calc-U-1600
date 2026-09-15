@@ -17,7 +17,9 @@
 # Env vars:
 #   SHARPDX_TAG       release tag to fetch (default: v0.1.2)
 #   SHARPDX_PLATFORM  override auto-detected platform: linux-x86_64,
-#                     linux-aarch64, or windows-x86_64
+#                     linux-aarch64, or windows-x86_64 (there is no
+#                     windows-arm64 release yet -- see the MINGW*/MSYS*/
+#                     CYGWIN* branch below)
 #
 # Writes:
 #   Core/Basic/vendor/sharpdx/sharpdx.h                 (header)
@@ -62,7 +64,17 @@ detect_platform() {
       ;;
     MINGW*|MSYS*|CYGWIN*)
       # Git Bash / MSYS on a Windows CI runner (`shell: bash` in Actions).
-      echo windows-x86_64
+      # PROCESSOR_ARCHITECTURE reflects the *host* OS, not a cross-compile
+      # target -- fine for the native windows-x86_64 job, but the
+      # windows-arm64 job cross-compiles from an x86_64 host (see
+      # .github/workflows/build.yml), so it skips this script entirely
+      # rather than relying on detection here. This branch only exists for
+      # a genuinely native ARM64 Windows host/runner, and there's no
+      # windows-arm64 release to fetch yet either way.
+      case "${PROCESSOR_ARCHITECTURE:-}${PROCESSOR_ARCHITEW6432:-}" in
+        *ARM64*) echo windows-arm64 ;;
+        *)       echo windows-x86_64 ;;
+      esac
       ;;
     Darwin)
       echo "fetch_sharpdx.sh: macOS already has a committed binary -- use tools/refresh_sharpdx.sh instead" >&2
@@ -74,6 +86,10 @@ detect_platform() {
 }
 
 PLATFORM=${SHARPDX_PLATFORM:-$(detect_platform)}
+if [ "$PLATFORM" = "windows-arm64" ]; then
+  echo "fetch_sharpdx.sh: no windows-arm64 SharpDataExchangeRust release yet -- skipping; CalcU1600Qt will build without preset/BASIC loading on this build" >&2
+  exit 0
+fi
 case "$PLATFORM" in
   linux-x86_64|linux-aarch64) EXT=tar.gz ;;
   windows-x86_64)             EXT=zip ;;
