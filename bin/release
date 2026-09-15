@@ -37,17 +37,18 @@
 #      before the tag goes out -- this only happens once; a real date is never
 #      overwritten by a later re-run.
 #
-#   2. Full release (create/fast-forward main, squash-commit this version's
-#      state onto it, tag "vX.Y.Z" there; RETARGET the "vX.Y.Z-pre" GitHub
-#      release onto that tag in place via `gh release edit --tag` -- same
-#      release object, same already-uploaded assets, no download/re-upload,
-#      matching how GitHub's own "promote to release" UI action works):
+#   2. Full release (fast-forward main, squash-commit this version's state
+#      onto it as one commit, tag "vX.Y.Z" there; RETARGET the "vX.Y.Z-pre"
+#      GitHub release onto that tag in place via `gh release edit --tag` --
+#      same release object, same already-uploaded assets, no download/re-
+#      upload, matching how GitHub's own "promote to release" UI action
+#      works):
 #        bin/release --release
 #      Pre-conditions: not on main; working tree clean; a "vX.Y.Z-pre" GitHub
-#      pre-release exists with at least one asset attached.
-#      The very first time this runs, "main" does not exist yet -- it is
-#      created as a fresh orphan branch whose single commit IS this release
-#      (see "main handling" below), not merged from any prior main history.
+#      pre-release exists with at least one asset attached; "main" already
+#      exists (it was bootstrapped once, by hand, when this repo went
+#      public -- see git log on main -- this script has never needed to
+#      create it itself).
 #
 #   3. Start the next cycle (from main: cut "dev-X.Y.Z", bump Qt6/CMakeLists.txt's
 #      APP_VERSION, open a new "## [X.Y.Z] - work in progress" CHANGELOG
@@ -362,31 +363,20 @@ if $DO_RELEASE; then
     [ -z "$NOTES" ] && NOTES="Release $TAG. See $CHANGELOG."
     COMMIT_MSG="Release $TAG"$'\n\n'"${NOTES}"
 
-    # ── main handling ──
-    # First release ever: main does not exist yet -- create it as a fresh
-    # orphan branch. --orphan keeps the current index/working tree (this
-    # branch's current state) but starts with zero parent commits, so the
-    # single commit made below really is main's *entire* history: "a main
-    # branch with one single commit: the released release."
-    MAIN_EXISTS_LOCAL=false
-    MAIN_EXISTS_REMOTE=false
-    git show-ref --verify --quiet "refs/heads/$MAIN_BRANCH" && MAIN_EXISTS_LOCAL=true
-    git ls-remote --exit-code --heads origin "$MAIN_BRANCH" &>/dev/null && MAIN_EXISTS_REMOTE=true
-
-    if ! $MAIN_EXISTS_LOCAL && ! $MAIN_EXISTS_REMOTE; then
-        echo "No '$MAIN_BRANCH' branch exists yet -- creating it fresh from ${CURRENT_BRANCH}'s current state…"
-        run_cmd git switch --orphan "$MAIN_BRANCH"
-        run_cmd git add -A
-        run_cmd git commit -m "$COMMIT_MSG"
-    else
-        echo "Squash-merging $CURRENT_BRANCH into ${MAIN_BRANCH}…"
-        run_cmd git fetch origin "$MAIN_BRANCH" --quiet
-        run_cmd git checkout "$MAIN_BRANCH"
-        run_cmd git merge --ff-only "origin/$MAIN_BRANCH" || true
-        run_cmd git merge --squash "$CURRENT_BRANCH"
-        run_cmd git commit -m "$COMMIT_MSG"
-    fi
-    run_cmd git push -u origin "$MAIN_BRANCH"
+    # main always exists from here on (bootstrapped once, by hand, when this
+    # repo went public -- not this script's job) -- just squash-merge the
+    # dev branch's current state onto it as one commit. `git merge --squash`
+    # stages only the tracked diff between the two branches; unlike `git add
+    # -A` it never sweeps up untracked working-directory files, so this is
+    # safe regardless of whatever build output/fetched ROMs/etc. happen to
+    # be sitting in the working tree at release time.
+    echo "Squash-merging $CURRENT_BRANCH into ${MAIN_BRANCH}…"
+    run_cmd git fetch origin "$MAIN_BRANCH" --quiet
+    run_cmd git checkout "$MAIN_BRANCH"
+    run_cmd git merge --ff-only "origin/$MAIN_BRANCH"
+    run_cmd git merge --squash "$CURRENT_BRANCH"
+    run_cmd git commit -m "$COMMIT_MSG"
+    run_cmd git push origin "$MAIN_BRANCH"
 
     echo "Tagging $TAG on ${MAIN_BRANCH}…"
     run_cmd git tag "$TAG"
