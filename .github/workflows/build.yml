@@ -580,6 +580,31 @@ jobs:
           # be invoked by full path here.
           & "$env:QT_HOST_PATH\bin\windeployqt.exe" --release --compiler-runtime Qt6/dist/Calc-U-1600.exe
 
+      # TEMP diagnostic: the app fails on real ARM64 hardware with
+      # 0xc000007b (STATUS_INVALID_IMAGE_FORMAT), which the Windows loader
+      # raises when the .exe or one of its *implicitly* linked DLLs is the
+      # wrong PE machine type -- despite the compile/link step using the
+      # genuine ARM64 cl.exe/link.exe (confirmed clean, no LNK4272
+      # warnings), so this dumps every staged binary's machine type to
+      # find which one is actually wrong (suspect: windeployqt-bundled Qt
+      # DLLs from the win64_msvc2022_arm64_cross_compiled aqt package).
+      # Remove once the mismatch is found and fixed.
+      - name: Diagnose PE machine types in staged dist
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path Qt6/dist -Recurse -Include *.exe,*.dll | ForEach-Object {
+            $bytes = [System.IO.File]::ReadAllBytes($_.FullName)
+            $peOffset = [System.BitConverter]::ToInt32($bytes, 0x3C)
+            $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
+            $machineName = switch ($machine) {
+              0x8664 { "x64" }
+              0xAA64 { "ARM64" }
+              0x14C  { "x86" }
+              default { "UNKNOWN(0x{0:X4})" -f $machine }
+            }
+            Write-Host "$($_.FullName.Substring((Resolve-Path Qt6/dist).Path.Length + 1)): $machineName"
+          }
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup -y
