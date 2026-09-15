@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.0] - work in progress
+## [0.1.0] - 2026-09-15
 First public release. Calc-U-1600 is an emulator for the Sharp PC-1500,
 PC-1500A, and PC-1600 pocket computers, built as a Qt6 desktop app for
 macOS, Linux, and Windows.
