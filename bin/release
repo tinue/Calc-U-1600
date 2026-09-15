@@ -1,0 +1,558 @@
+#!/bin/bash
+#
+# Release script for Calc-U-1600.
+#
+# Unlike a local build, the actual cross-platform artifacts are produced by
+# .github/workflows/build.yml. Unlike SharpDataExchangeRust's release.yml,
+# that workflow is NOT triggered by pushing a tag -- it is workflow_dispatch
+# only, with no release-publishing job of its own. This script's job is to
+# run the local checks, push the tag, TRIGGER build.yml itself against that
+# tag, wait for it, and create the GitHub release from its artifacts.
+#
+# Full release-cycle recipe ("release this version"):
+#
+#   bin/release            # 1. pre-release: finalize CHANGELOG date, push "vX.Y.Z-pre",
+#                           #    trigger build.yml, wait for it, publish a GitHub pre-release
+#   bin/release --release  # 2. only once step 1 is green: promote the pre-release to the
+#                           #    real "vX.Y.Z" release IN PLACE (same release object/assets,
+#                           #    no rebuild, no re-upload -- see its own section below)
+#   bin/release --next     # 3. only once step 2 is verified: cut "dev-X.Y.(Z+1)" from
+#                           #    main (default: minor bump), bump APP_VERSION, open a new
+#                           #    "- work in progress" CHANGELOG section
+#
+# Stop and report rather than retrying if any step fails -- see each mode's
+# pre-conditions below; some of these steps aren't safe to blindly re-run once
+# partially applied.
+#
+# Individual modes:
+#
+#   1. Pre-release (push a disposable "vX.Y.Z-pre" tag, trigger build.yml
+#      against it, wait for the run, and publish/update a GitHub pre-release
+#      with its artifacts -- re-cut as often as you like while iterating):
+#        bin/release
+#      Pre-conditions: not on main; no staged-but-uncommitted changes; branch is
+#      in sync with its remote; CHANGELOG.md has an entry for the current version.
+#      Also: if that CHANGELOG entry's header is still "- work in progress" (or
+#      missing a date), it is stamped with today's date, committed, and pushed
+#      before the tag goes out -- this only happens once; a real date is never
+#      overwritten by a later re-run.
+#
+#   2. Full release (create/fast-forward main, squash-commit this version's
+#      state onto it, tag "vX.Y.Z" there; RETARGET the "vX.Y.Z-pre" GitHub
+#      release onto that tag in place via `gh release edit --tag` -- same
+#      release object, same already-uploaded assets, no download/re-upload,
+#      matching how GitHub's own "promote to release" UI action works):
+#        bin/release --release
+#      Pre-conditions: not on main; working tree clean; a "vX.Y.Z-pre" GitHub
+#      pre-release exists with at least one asset attached.
+#      The very first time this runs, "main" does not exist yet -- it is
+#      created as a fresh orphan branch whose single commit IS this release
+#      (see "main handling" below), not merged from any prior main history.
+#
+#   3. Start the next cycle (from main: cut "dev-X.Y.Z", bump Qt6/CMakeLists.txt's
+#      APP_VERSION, open a new "## [X.Y.Z] - work in progress" CHANGELOG
+#      section, commit, push):
+#        bin/release --next [--version X.Y.Z]
+#      Pre-condition: "dev-X.Y.Z" must not already exist locally or on origin;
+#      "main" must already exist (run --release first).
+#      Default (no --version): a minor bump of whatever version is on main's
+#      Qt6/CMakeLists.txt (X.Y.Z -> X.(Y+1).0).
+#
+# Append --dry-run to any invocation to preview state-changing actions.
+#
+# Prerequisites: git, gh (brew install gh; gh auth login), zip.
+# No local build tooling is needed -- this script never builds locally; the
+# GitHub Actions matrix in build.yml is the only, authoritative build.
+#
+# Known, accepted quirks:
+#   - build.yml's linux-aarch64 job is `continue-on-error: true` -- a release
+#     can legitimately ship without that one artifact if the job fails/isn't
+#     scheduled; every other platform is required.
+#   - Because --release never rebuilds, the shipped binary's in-app About
+#     dialog (git-describe-derived APP_BUILD_ID) will still read "vX.Y.Z-pre",
+#     not "vX.Y.Z" -- expected, since promotion is asset-preserving.
+#   - The Windows installer is currently unsigned (see PACKAGING-TODO.md) --
+#     not something this script addresses.
+#
+
+set -euo pipefail
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+
+CMAKELISTS="Qt6/CMakeLists.txt"
+CHANGELOG="CHANGELOG.md"
+MAIN_BRANCH="main"
+REPO_SLUG="tinue/Calc-U-1600"
+WORKFLOW="build.yml"
+APP_NAME="Calc-U-1600"
+
+cd "$(dirname "$0")/.."
+
+VERSION=$(grep -m 1 '^set(APP_VERSION' "$CMAKELISTS" | sed -E 's/.*"([^"]+)".*/\1/')
+if [ -z "${VERSION:-}" ]; then
+    echo "Error: could not read APP_VERSION from $CMAKELISTS"
+    exit 1
+fi
+TAG="v$VERSION"
+PRE_TAG="v${VERSION}-pre"
+
+# ── Argument parsing ─────────────────────────────────────────────────────────────
+
+DO_RELEASE=false
+DO_NEXT=false
+DRY_RUN=false
+NEXT_VERSION_OVERRIDE=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --release) DO_RELEASE=true; shift ;;
+        --next)    DO_NEXT=true; shift ;;
+        --dry-run) DRY_RUN=true; shift ;;
+        --version)
+            [ $# -ge 2 ] || { echo "Error: --version needs an argument"; exit 1; }
+            NEXT_VERSION_OVERRIDE="$2"; shift 2 ;;
+        *) echo "Unknown argument: $1"; exit 1 ;;
+    esac
+done
+
+if $DO_RELEASE && $DO_NEXT; then
+    echo "Error: --release and --next are mutually exclusive."
+    exit 1
+fi
+if [ -n "$NEXT_VERSION_OVERRIDE" ] && ! $DO_NEXT; then
+    echo "Error: --version only makes sense together with --next."
+    exit 1
+fi
+
+run_cmd() {
+    if $DRY_RUN; then
+        echo "[dry-run] $*"
+    else
+        "$@"
+    fi
+}
+
+if ! command -v gh &>/dev/null; then
+    echo "Error: 'gh' CLI not found. Install with: brew install gh"
+    exit 1
+fi
+if ! command -v zip &>/dev/null; then
+    echo "Error: 'zip' not found."
+    exit 1
+fi
+
+# ── Unstaged-changes helper ────────────────────────────────────────────────────
+#
+# Unstaged changes are the one pre-condition we recover from: offer to stash and
+# restore via the EXIT trap. Staged-but-uncommitted changes and unpushed commits
+# still hard-abort.
+
+STASHED=false
+restore_stash() {
+    if $STASHED; then
+        echo "Restoring stashed changes…"
+        git stash pop
+    fi
+}
+trap restore_stash EXIT
+
+stash_unstaged_changes() {
+    if ! git diff --quiet; then
+        echo "Unstaged changes present:"
+        git status --short
+        read -p "Stash them and restore after release finishes? (yes/no) " -r
+        if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+            echo "Aborted: commit or stash unstaged changes first."
+            exit 1
+        fi
+        run_cmd git stash push -m "bin/release autostash"
+        $DRY_RUN || STASHED=true
+    fi
+}
+
+# ── CHANGELOG helpers ──────────────────────────────────────────────────────────
+
+# Print the CHANGELOG section body for $1 (a version), trimmed of blank
+# leading/trailing lines. Empty if there is no such section.
+changelog_notes() {
+    local v="$1"
+    awk -v v="$v" '
+        $0 ~ "^## \\[" v "\\]" { grab=1; next }
+        grab && /^## / { exit }
+        grab {
+            if (!started && $0 ~ /^[[:space:]]*$/) next
+            started = 1
+            buf = buf $0 "\n"
+        }
+        END {
+            sub(/\n+$/, "\n", buf)
+            printf "%s", buf
+        }
+    ' "$CHANGELOG"
+}
+
+# Replace "## [$VERSION] - work in progress" (or a bare "## [$VERSION]") with
+# today's date. A no-op if the header already carries a real date -- never
+# overwrites one.
+finalize_changelog_date() {
+    if ! grep -qE "^## \[$VERSION\]( - work in progress)?\$" "$CHANGELOG"; then
+        return 0
+    fi
+    local today
+    today=$(date +%Y-%m-%d)
+    echo "Setting $CHANGELOG release date for $VERSION to ${today}…"
+    run_cmd sed -i.bak -E "s/^## \[$VERSION\]( - work in progress)?\$/## [$VERSION] - $today/" "$CHANGELOG"
+    run_cmd rm -f "$CHANGELOG.bak"
+    run_cmd git add "$CHANGELOG"
+    run_cmd git commit -m "Set $VERSION release date to $today"
+    run_cmd git push
+}
+
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# ── 3. Next cycle ──────────────────────────────────────────────────────────────
+#
+# Standalone: no `gh` calls (pure git + file edits), so this could run before
+# the gh-presence check above, but that check is cheap and harmless either way.
+
+if $DO_NEXT; then
+    if ! git show-ref --verify --quiet "refs/heads/$MAIN_BRANCH" && \
+       ! git ls-remote --exit-code --heads origin "$MAIN_BRANCH" &>/dev/null; then
+        echo "Error: '$MAIN_BRANCH' does not exist yet locally or on origin."
+        echo "  Run 'bin/release --release' first to establish it."
+        exit 1
+    fi
+
+    stash_unstaged_changes
+    if ! git diff --cached --quiet; then
+        echo "Error: staged but uncommitted changes present. Commit them first."
+        git status --short
+        exit 1
+    fi
+
+    echo "Fetching ${MAIN_BRANCH}…"
+    run_cmd git fetch origin "$MAIN_BRANCH" --quiet
+    run_cmd git checkout "$MAIN_BRANCH"
+    run_cmd git merge --ff-only "origin/$MAIN_BRANCH"
+
+    if $DRY_RUN; then
+        # checkout/merge above were no-ops under --dry-run, so CMAKELISTS here
+        # is still whatever branch we started on; use the top-of-file reading
+        # as an approximation for preview purposes only.
+        CUR_VERSION="$VERSION"
+    else
+        CUR_VERSION=$(grep -m 1 '^set(APP_VERSION' "$CMAKELISTS" | sed -E 's/.*"([^"]+)".*/\1/')
+    fi
+
+    if [ -n "$NEXT_VERSION_OVERRIDE" ]; then
+        NEXT_VERSION="$NEXT_VERSION_OVERRIDE"
+    else
+        IFS=. read -r NEXT_MAJ NEXT_MIN NEXT_PAT <<< "$CUR_VERSION"
+        NEXT_VERSION="$NEXT_MAJ.$((NEXT_MIN + 1)).0"
+    fi
+    NEXT_BRANCH="dev-$NEXT_VERSION"
+
+    if git show-ref --verify --quiet "refs/heads/$NEXT_BRANCH"; then
+        echo "Error: branch '$NEXT_BRANCH' already exists locally."
+        exit 1
+    fi
+    if git ls-remote --exit-code --heads origin "$NEXT_BRANCH" &>/dev/null; then
+        echo "Error: branch '$NEXT_BRANCH' already exists on origin."
+        exit 1
+    fi
+
+    echo "Starting $NEXT_VERSION on branch $NEXT_BRANCH (from $MAIN_BRANCH @ $CUR_VERSION)…"
+    run_cmd git checkout -b "$NEXT_BRANCH"
+
+    run_cmd sed -i.bak -E "s/^set\(APP_VERSION \"$CUR_VERSION\"\)/set(APP_VERSION \"$NEXT_VERSION\")/" "$CMAKELISTS"
+    run_cmd rm -f "$CMAKELISTS.bak"
+
+    if $DRY_RUN; then
+        echo "[dry-run] would insert '## [$NEXT_VERSION] - work in progress' section at the top of $CHANGELOG"
+    else
+        awk -v nextver="$NEXT_VERSION" '
+            NR == 1 { print; print ""; print "## [" nextver "] - work in progress"; next }
+            { print }
+        ' "$CHANGELOG" > "$CHANGELOG.tmp"
+        mv "$CHANGELOG.tmp" "$CHANGELOG"
+    fi
+
+    run_cmd git add "$CMAKELISTS" "$CHANGELOG"
+    run_cmd git commit -m "Bump version to $NEXT_VERSION"
+    run_cmd git push -u origin "$NEXT_BRANCH"
+
+    if $DRY_RUN; then
+        echo "Done.  [dry-run] No changes made."
+    else
+        echo "Done.  $NEXT_BRANCH is checked out and pushed, starting $NEXT_VERSION."
+        echo "  $CHANGELOG's '## [$NEXT_VERSION] - work in progress' section is where new entries go;"
+        echo "  running 'bin/release' will replace 'work in progress' with the real date on the first pre-release."
+    fi
+    exit 0
+fi
+
+# ── 2. Full release: promote in place ───────────────────────────────────────────
+
+if $DO_RELEASE; then
+    if [ "$CURRENT_BRANCH" = "$MAIN_BRANCH" ]; then
+        echo "Error: --release must run from a development branch, not '$MAIN_BRANCH'."
+        exit 1
+    fi
+
+    stash_unstaged_changes
+    if ! git diff --cached --quiet; then
+        echo "Error: staged but uncommitted changes present. Commit them first."
+        git status --short
+        exit 1
+    fi
+
+    if ! gh release view "$PRE_TAG" &>/dev/null; then
+        echo "Error: no GitHub pre-release '$PRE_TAG'. Run 'bin/release' first."
+        exit 1
+    fi
+    if ! gh release view "$PRE_TAG" --json isPrerelease -q .isPrerelease | grep -q true; then
+        echo "Error: '$PRE_TAG' exists but is not a pre-release. Nothing to promote."
+        exit 1
+    fi
+    PRE_ASSET_COUNT=$(gh release view "$PRE_TAG" --json assets --jq '.assets | length')
+    if [ "$PRE_ASSET_COUNT" -eq 0 ]; then
+        echo "Error: '$PRE_TAG' has no assets attached. Something went wrong building it."
+        exit 1
+    fi
+
+    read -p "Have CHANGELOG.md and APP_VERSION been finalized for $VERSION? (yes/no) " -r
+    if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+        echo "Aborted."
+        exit 1
+    fi
+
+    NOTES=$(changelog_notes "$VERSION")
+    [ -z "$NOTES" ] && NOTES="Release $TAG. See $CHANGELOG."
+    COMMIT_MSG="Release $TAG"$'\n\n'"${NOTES}"
+
+    # ── main handling ──
+    # First release ever: main does not exist yet -- create it as a fresh
+    # orphan branch. --orphan keeps the current index/working tree (this
+    # branch's current state) but starts with zero parent commits, so the
+    # single commit made below really is main's *entire* history: "a main
+    # branch with one single commit: the released release."
+    MAIN_EXISTS_LOCAL=false
+    MAIN_EXISTS_REMOTE=false
+    git show-ref --verify --quiet "refs/heads/$MAIN_BRANCH" && MAIN_EXISTS_LOCAL=true
+    git ls-remote --exit-code --heads origin "$MAIN_BRANCH" &>/dev/null && MAIN_EXISTS_REMOTE=true
+
+    if ! $MAIN_EXISTS_LOCAL && ! $MAIN_EXISTS_REMOTE; then
+        echo "No '$MAIN_BRANCH' branch exists yet -- creating it fresh from ${CURRENT_BRANCH}'s current state…"
+        run_cmd git switch --orphan "$MAIN_BRANCH"
+        run_cmd git add -A
+        run_cmd git commit -m "$COMMIT_MSG"
+    else
+        echo "Squash-merging $CURRENT_BRANCH into ${MAIN_BRANCH}…"
+        run_cmd git fetch origin "$MAIN_BRANCH" --quiet
+        run_cmd git checkout "$MAIN_BRANCH"
+        run_cmd git merge --ff-only "origin/$MAIN_BRANCH" || true
+        run_cmd git merge --squash "$CURRENT_BRANCH"
+        run_cmd git commit -m "$COMMIT_MSG"
+    fi
+    run_cmd git push -u origin "$MAIN_BRANCH"
+
+    echo "Tagging $TAG on ${MAIN_BRANCH}…"
+    run_cmd git tag "$TAG"
+    run_cmd git push origin "$TAG"
+    run_cmd git checkout "$CURRENT_BRANCH"
+
+    NOTES_FILE=$(mktemp)
+    printf '%s\n' "$NOTES" > "$NOTES_FILE"
+    echo "Retargeting ${PRE_TAG}'s GitHub release onto ${TAG} in place (no re-upload)…"
+    run_cmd gh release edit "$PRE_TAG" \
+        --tag "$TAG" \
+        --title "$APP_NAME $VERSION" \
+        --notes-file "$NOTES_FILE" \
+        --prerelease=false \
+        --latest
+    rm -f "$NOTES_FILE"
+
+    echo "Removing the now-orphaned ${PRE_TAG} tag ref…"
+    run_cmd git push origin --delete "$PRE_TAG" || true
+    run_cmd git tag -d "$PRE_TAG" 2>/dev/null || true
+
+    if $DRY_RUN; then
+        echo "Done.  [dry-run] No changes made."
+        exit 0
+    fi
+
+    echo "Verifying published release ${TAG}…"
+    ASSET_COUNT=$(gh release view "$TAG" --json assets --jq '.assets | length')
+    if [ "$ASSET_COUNT" -ne "$PRE_ASSET_COUNT" ]; then
+        echo "Error: release $TAG has $ASSET_COUNT asset(s), expected $PRE_ASSET_COUNT (unchanged from $PRE_TAG)."
+        exit 1
+    fi
+    if [ "$(gh release view "$TAG" --json isDraft -q .isDraft)" = "true" ]; then
+        echo "Error: release $TAG is a draft unexpectedly."
+        exit 1
+    fi
+    if [ "$(gh release view "$TAG" --json isPrerelease -q .isPrerelease)" = "true" ]; then
+        echo "Error: release $TAG is still marked as a pre-release."
+        exit 1
+    fi
+
+    echo "Done.  Release ${TAG}: $(gh release view "${TAG}" --json url -q .url)  ($ASSET_COUNT assets)"
+    exit 0
+fi
+
+# ── 1. Pre-release: trigger the build, wait, publish ────────────────────────────
+
+if [ "$CURRENT_BRANCH" = "$MAIN_BRANCH" ]; then
+    echo "Error: pre-release must run from a development branch, not '$MAIN_BRANCH'."
+    exit 1
+fi
+
+stash_unstaged_changes
+if ! git diff --cached --quiet; then
+    echo "Error: staged but uncommitted changes present. Commit them first."
+    git status --short
+    exit 1
+fi
+
+UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true)
+if [ -z "$UPSTREAM" ]; then
+    echo "Error: branch '$CURRENT_BRANCH' has no upstream. Run: git push -u origin $CURRENT_BRANCH"
+    exit 1
+fi
+
+if [ ! -f "$CHANGELOG" ]; then
+    echo "Error: $CHANGELOG not found."
+    exit 1
+fi
+if [ -z "$(changelog_notes "$VERSION")" ]; then
+    echo "Error: no '## [$VERSION]' entry in $CHANGELOG. Add one before releasing."
+    exit 1
+fi
+
+finalize_changelog_date
+
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse "$UPSTREAM")" ]; then
+    AHEAD=$(git rev-list --count "${UPSTREAM}..HEAD")
+    if [ "$AHEAD" -gt 0 ]; then
+        echo "Error: $AHEAD unpushed commit(s) on '$CURRENT_BRANCH'. Push before releasing."
+    else
+        echo "Error: '$CURRENT_BRANCH' is behind '$UPSTREAM'. Pull before releasing."
+    fi
+    exit 1
+fi
+
+echo ""
+echo "── Release notes for $PRE_TAG (from $CHANGELOG) ────────────"
+changelog_notes "$VERSION"
+echo "──────────────────────────────────────────────────────────"
+echo ""
+read -p "Push tag '$PRE_TAG' at $(git rev-parse --short HEAD), trigger a build, and publish a pre-release? (yes/no) " -r
+if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    echo "Aborted."
+    exit 1
+fi
+
+SHA=$(git rev-parse HEAD)
+
+# -f: the -pre tag is disposable and moves to the latest pre-release commit.
+run_cmd git tag -f "$PRE_TAG"
+run_cmd git push -f origin "$PRE_TAG"
+
+if $DRY_RUN; then
+    echo "Done.  [dry-run] No changes made."
+    exit 0
+fi
+
+DISPATCH_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+echo "Triggering $WORKFLOW at $PRE_TAG (commit ${SHA:0:7})…"
+gh workflow run "$WORKFLOW" --ref "$PRE_TAG"
+
+echo "Waiting for the triggered run to appear…"
+RUN_ID=""
+for _ in $(seq 1 30); do
+    RUN_ID=$(gh run list --workflow="$WORKFLOW" --event=workflow_dispatch \
+        --json databaseId,headSha,createdAt \
+        --jq "[.[] | select(.headSha == \"$SHA\" and .createdAt >= \"$DISPATCH_TIME\")] | sort_by(.createdAt) | last | .databaseId // empty" \
+        2>/dev/null || true)
+    [ -n "$RUN_ID" ] && break
+    sleep 2
+done
+if [ -z "$RUN_ID" ]; then
+    echo "Error: no $WORKFLOW run for $PRE_TAG (commit ${SHA:0:7}) appeared within 60s."
+    echo "  Check manually:  gh run list --workflow=$WORKFLOW"
+    exit 1
+fi
+
+echo "Found run $RUN_ID — waiting for it to finish (all platforms build + package, several minutes)…"
+if ! gh run watch "$RUN_ID" --exit-status; then
+    echo "Error: CI run $RUN_ID for $PRE_TAG failed."
+    echo "  View logs:   gh run view $RUN_ID --log-failed"
+    echo "  Fix the problem, then re-run 'bin/release' to re-cut $PRE_TAG."
+    exit 1
+fi
+
+echo "Downloading artifacts from run ${RUN_ID}…"
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"; restore_stash' EXIT
+gh run download "$RUN_ID" -D "$WORK/artifacts"
+
+# Each artifact is a single, complete, directly-runnable file (an .AppImage, a
+# signed/notarized/stapled .dmg, or a Windows installer .exe) -- copy+rename,
+# don't zip (zipping the .dmg would strip its notarization ticket staple).
+# linux-aarch64 is `continue-on-error: true` in build.yml -- tolerate it being
+# absent; every other platform is required.
+ZIPDIR="$WORK/assets"
+mkdir -p "$ZIPDIR"
+ASSET_COUNT=0
+for name in Calc-U-1600-linux-x86_64 Calc-U-1600-linux-aarch64 Calc-U-1600-mac-aarch64 Calc-U-1600-windows-x86_64; do
+    dir="$WORK/artifacts/$name"
+    if [ ! -d "$dir" ]; then
+        if [ "$name" = "Calc-U-1600-linux-aarch64" ]; then
+            echo "  no artifact '$name' (continue-on-error job, tolerated) -- skipping"
+            continue
+        fi
+        echo "Error: expected artifact '$name' not found in run $RUN_ID."
+        exit 1
+    fi
+    case "$name" in
+        Calc-U-1600-linux-x86_64)
+            asset="Calc-U-1600-linux-x86_64.AppImage"
+            chmod +x "$dir"/Calc-U-1600-*.AppImage
+            cp "$dir"/Calc-U-1600-*.AppImage "$ZIPDIR/$asset" ;;
+        Calc-U-1600-linux-aarch64)
+            asset="Calc-U-1600-linux-aarch64.AppImage"
+            chmod +x "$dir"/Calc-U-1600-*.AppImage
+            cp "$dir"/Calc-U-1600-*.AppImage "$ZIPDIR/$asset" ;;
+        Calc-U-1600-mac-aarch64)
+            asset="Calc-U-1600-mac-aarch64.dmg"
+            cp "$dir/Calc-U-1600.dmg" "$ZIPDIR/$asset" ;;
+        Calc-U-1600-windows-x86_64)
+            asset="Calc-U-1600-windows-x86_64.exe"
+            cp "$dir/Calc-U-1600-Setup.exe" "$ZIPDIR/$asset" ;;
+    esac
+    ASSET_COUNT=$((ASSET_COUNT + 1))
+    echo "  packaged $asset"
+done
+[ "$ASSET_COUNT" -gt 0 ] || { echo "Error: no artifacts downloaded -- nothing to publish."; exit 1; }
+
+echo "Zipping examples/…"
+run_cmd zip -rq "$ZIPDIR/Calc-U-1600-examples.zip" examples/
+ASSET_COUNT=$((ASSET_COUNT + 1))
+
+NOTES_FILE=$(mktemp)
+changelog_notes "$VERSION" > "$NOTES_FILE"
+if gh release view "$PRE_TAG" &>/dev/null; then
+    echo "Pre-release $PRE_TAG exists — updating…"
+    run_cmd gh release edit "$PRE_TAG" --title "$APP_NAME $VERSION (pre-release)" \
+        --notes-file "$NOTES_FILE" --prerelease
+    run_cmd gh release upload "$PRE_TAG" "$ZIPDIR"/* --clobber
+else
+    echo "Creating GitHub pre-release ${PRE_TAG}…"
+    run_cmd gh release create "$PRE_TAG" "$ZIPDIR"/* \
+        --title "$APP_NAME $VERSION (pre-release)" \
+        --notes-file "$NOTES_FILE" \
+        --prerelease
+fi
+rm -f "$NOTES_FILE"
+
+echo "Done.  Pre-release ${PRE_TAG}: $(gh release view "${PRE_TAG}" --json url -q .url)  ($ASSET_COUNT assets)"
