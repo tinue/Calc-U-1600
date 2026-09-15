@@ -37,9 +37,6 @@ on:
 
 jobs:
   linux-x86_64:
-    # TEMP: disabled while testing the new windows-arm64 job in isolation --
-    # revert this `if: false` once windows-arm64 is verified working.
-    if: false
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -193,9 +190,6 @@ jobs:
           if-no-files-found: error
 
   linux-aarch64:
-    # TEMP: disabled while testing the new windows-arm64 job in isolation --
-    # revert this `if: false` once windows-arm64 is verified working.
-    if: false
     # GitHub-hosted Linux arm64 runners aren't available on every plan/repo
     # visibility combination -- don't fail the whole workflow if this one
     # can't be scheduled or the runner label isn't available.
@@ -301,9 +295,6 @@ jobs:
           if-no-files-found: error
 
   mac-aarch64:
-    # TEMP: disabled while testing the new windows-arm64 job in isolation --
-    # revert this `if: false` once windows-arm64 is verified working.
-    if: false
     runs-on: macos-14 # Apple Silicon (arm64) hosted runner
     steps:
       - uses: actions/checkout@v5
@@ -431,9 +422,6 @@ jobs:
           if-no-files-found: error
 
   windows-x86_64:
-    # TEMP: disabled while testing the new windows-arm64 job in isolation --
-    # revert this `if: false` once windows-arm64 is verified working.
-    if: false
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
