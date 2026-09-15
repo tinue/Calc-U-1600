@@ -19,6 +19,39 @@ qt_standard_project_setup()
 
 set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../Core)
 
+# ---- App version / build id (About dialog, macOS bundle Info.plist) ----
+# Single source of truth for the version number -- both the generated
+# Version.h below and the MACOSX_BUNDLE_*VERSION* properties further down
+# reference this instead of each hardcoding "0.1.0" separately.
+set(APP_VERSION "0.1.0")
+
+# git describe gives a short, human-meaningful build id (tag or short hash,
+# +"-dirty" if the tree has local changes) for bug reports. Falls back to
+# "unknown" when building from a source tree with no .git (e.g. a tarball
+# produced by `git archive`) or when git itself isn't available -- this is
+# a graceful degradation, not a build failure. Captured once at CMake
+# configure time (not re-derived on every rebuild); re-run cmake to refresh
+# it after checking out a different commit.
+set(APP_BUILD_ID "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../.git)
+  execute_process(
+    COMMAND ${GIT_EXECUTABLE} describe --always --dirty
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE APP_BUILD_ID_RAW
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE GIT_DESCRIBE_RESULT
+    ERROR_QUIET
+  )
+  if(GIT_DESCRIBE_RESULT EQUAL 0 AND NOT APP_BUILD_ID_RAW STREQUAL "")
+    set(APP_BUILD_ID ${APP_BUILD_ID_RAW})
+  endif()
+endif()
+message(STATUS "Calc-U-1600 version ${APP_VERSION} build ${APP_BUILD_ID}")
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/app/Version.h.in
+               ${CMAKE_CURRENT_BINARY_DIR}/generated/Version.h @ONLY)
+
 # Trimmed from tools/build_cli.sh / tools/build_pc1600_cli.sh's own source
 # lists. Core/Connector/* is header-only (no .cpp files exist there at
 # all), so nothing from it needs to be added to this list even though
@@ -120,6 +153,7 @@ qt_add_executable(CalcU1600Qt
   app/AppLogging.cpp
   app/MemoryModuleManager.cpp
   app/SettingsDialog.cpp
+  app/AboutDialog.cpp
   app/PresetController.cpp
   ${CORE_SOURCES}
   resources/calc-u-1600.qrc
@@ -138,7 +172,7 @@ if(WIN32)
   target_sources(CalcU1600Qt PRIVATE resources/windows/calc-u-1600.rc)
 endif()
 
-target_include_directories(CalcU1600Qt PRIVATE ${CORE_ROOT} app)
+target_include_directories(CalcU1600Qt PRIVATE ${CORE_ROOT} app ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(CalcU1600Qt PRIVATE Qt6::Widgets)
 
 if(EXISTS ${SHARPDX_LIB})
@@ -198,8 +232,8 @@ if(APPLE)
   set_target_properties(CalcU1600Qt PROPERTIES
     MACOSX_BUNDLE_ICON_FILE CalcU1600.icns
     MACOSX_BUNDLE_GUI_IDENTIFIER ch.erzberger.CalcU1600Qt
-    MACOSX_BUNDLE_BUNDLE_VERSION 0.1.0
-    MACOSX_BUNDLE_SHORT_VERSION_STRING 0.1.0
+    MACOSX_BUNDLE_BUNDLE_VERSION ${APP_VERSION}
+    MACOSX_BUNDLE_SHORT_VERSION_STRING ${APP_VERSION}
     MACOSX_BUNDLE_BUNDLE_NAME "Calc-U-1600"
   )
 endif()

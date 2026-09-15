@@ -9,6 +9,7 @@
 #include "PlotterController.hpp"
 #include "PlotterPaperWidget.hpp"
 #include "SettingsDialog.hpp"
+#include "AboutDialog.hpp"
 #include "PresetController.hpp"
 #include "AppSettings.hpp"
 
@@ -23,8 +24,13 @@
 #include <QFileDialog>
 #include <QDir>
 #include <QCoreApplication>
+#include <QMenuBar>
+#include <QMenu>
+#include <QAction>
+#include <QActionGroup>
+#include <QKeySequence>
 
-MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle(tr("Calc-U-1600"));
     setFocusPolicy(Qt::StrongFocus);
 
@@ -32,15 +38,20 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     m_moduleManager = std::make_unique<MemoryModuleManager>(m_controller.get(), this);
     m_controller->setModuleManager(m_moduleManager.get());
     m_presetController = std::make_unique<PresetController>(m_controller.get(), m_moduleManager.get(), this);
-    m_faceplate = new FaceplateWidget(this);
-    m_controlBar = new ControlBar(this);
-    m_debugPanel = new DebugPanel(m_controller.get(), this);
+
+    // QMainWindow requires exactly one central widget -- everything that
+    // used to be added straight into `this`'s own QVBoxLayout now lives in
+    // this wrapper instead, freeing `this` up for setMenuBar() below.
+    auto* central = new QWidget(this);
+    m_faceplate = new FaceplateWidget(central);
+    m_controlBar = new ControlBar(central);
+    m_debugPanel = new DebugPanel(m_controller.get(), central);
     m_debugPanel->setModuleManager(m_moduleManager.get());
     m_plotterController = std::make_unique<PlotterController>(m_controller.get(), this);
-    m_plotterPaper = new PlotterPaperWidget(m_controller.get(), this);
+    m_plotterPaper = new PlotterPaperWidget(m_controller.get(), central);
     m_plotterPaper->hide(); // added to m_debugRowLayout only once a plotter attaches
 
-    auto* layout = new QVBoxLayout(this);
+    auto* layout = new QVBoxLayout(central);
     layout->setContentsMargins(6, 6, 6, 4);
     layout->setSpacing(4);
     // Faceplate is stretch 0 (pinned to its own aspect-locked heightForWidth
@@ -50,28 +61,18 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     layout->addWidget(m_faceplate, /*stretch=*/0);
     layout->addWidget(m_controlBar, /*stretch=*/0);
 
-    m_debugRow = new QWidget(this);
+    m_debugRow = new QWidget(central);
     m_debugRowLayout = new QHBoxLayout(m_debugRow);
     m_debugRowLayout->setContentsMargins(0, 0, 0, 0);
     m_debugRowLayout->setSpacing(4);
     m_debugRowLayout->addWidget(m_debugPanel, /*stretch=*/2);
     layout->addWidget(m_debugRow, /*stretch=*/1);
 
-    connect(m_controlBar, &ControlBar::modelSelected, this, [this](Model model) {
-        m_moduleManager->flushPendingPersist();
-        m_moduleManager->onModelChanged(model);
-        m_controller->switchModel(model); // rebuilds the machine -- any live plotter attachment is already gone
-        m_plotterController->resetOnModelSwitch();
-        m_faceplate->setModel(model);
-        m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
-        syncControlBarForModel();
-        refreshModuleCombos();
-    });
-    connect(m_controlBar, &ControlBar::romRevisionSelected, this, [this](PC1500RomRevision revision) {
-        m_moduleManager->flushPendingPersist();
-        m_controller->setPC1500RomRevision(revision); // rebuilds the machine
-        refreshModuleCombos();
-    });
+    setCentralWidget(central);
+    buildMenuBar();
+
+    connect(m_controlBar, &ControlBar::modelSelected, this, &MainWindow::applyModelSelection);
+    connect(m_controlBar, &ControlBar::romRevisionSelected, this, &MainWindow::applyRomRevisionSelection);
     connect(m_controlBar, &ControlBar::resetClicked, this, [this](bool allReset) {
         if (allReset) {
             m_controller->resetAll();
@@ -98,12 +99,13 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
         }
         refreshModuleCombos();
     });
-    connect(m_controlBar, &ControlBar::settingsRequested, this, [this] {
+    auto openSettingsDialog = [this] {
         SettingsDialog dialog(m_controller.get(), this);
         dialog.exec();
-    });
+    };
+    connect(m_controlBar, &ControlBar::settingsRequested, this, openSettingsDialog);
     connect(m_presetController.get(), &PresetController::armed, this, &MainWindow::onPresetArmed);
-    connect(m_controlBar, &ControlBar::openPresetRequested, this, [this] {
+    auto openPresetDialog = [this] {
         const QString startDir = AppSettings::presetOpenDir().isEmpty() ? QDir::homePath()
                                                                           : AppSettings::presetOpenDir();
         const QString path = QFileDialog::getOpenFileName(this, tr("Open Preset"), startDir,
@@ -135,6 +137,15 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
         if (!ok) {
             QMessageBox::warning(this, tr("Open Preset"), error);
         }
+    };
+    connect(m_controlBar, &ControlBar::openPresetRequested, this, openPresetDialog);
+    // File/Help menu actions reuse the exact same handlers as their
+    // ControlBar equivalents -- see buildMenuBar()'s own doc comment.
+    connect(m_openPresetAction, &QAction::triggered, this, openPresetDialog);
+    connect(m_settingsAction, &QAction::triggered, this, openSettingsDialog);
+    connect(m_aboutAction, &QAction::triggered, this, [this] {
+        AboutDialog dialog(this);
+        dialog.exec();
     });
     connect(m_moduleManager.get(), &MemoryModuleManager::errorMessage, this,
             [this](const QString& text) { QMessageBox::warning(this, tr("Memory Module"), text); });
@@ -181,6 +192,8 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     m_controlBar->setModel(m_controller->currentModel());
     m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
     syncControlBarForModel();
+    syncMachineMenuFromModel(m_controller->currentModel());
+    syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
     refreshModuleCombos();
 
     resize(AppSettings::windowSize());
@@ -192,7 +205,7 @@ MainWindow::~MainWindow() = default;
 void MainWindow::closeEvent(QCloseEvent* event) {
     AppSettings::setWindowSize(size());
     m_moduleManager->flushPendingPersist();
-    QWidget::closeEvent(event);
+    QMainWindow::closeEvent(event);
 }
 
 void MainWindow::syncControlBarForModel() {
@@ -201,7 +214,9 @@ void MainWindow::syncControlBarForModel() {
     m_controlBar->setCe1600pVisible(isPC1600);
     // PC-1500A is A04-only (PC1500Variant.hpp), so the picker is only worth
     // showing for the plain PC-1500.
-    m_controlBar->setRomPickerVisible(m_controller->currentModel() == Model::PC1500);
+    const bool romPickerVisible = m_controller->currentModel() == Model::PC1500;
+    m_controlBar->setRomPickerVisible(romPickerVisible);
+    if (m_romMenuAction) m_romMenuAction->setVisible(romPickerVisible);
 }
 
 void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
@@ -226,6 +241,8 @@ void MainWindow::onPresetArmed() {
     m_controlBar->setModel(m_controller->currentModel());
     m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
     syncControlBarForModel();
+    syncMachineMenuFromModel(m_controller->currentModel());
+    syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
     refreshModuleCombos();
     // The preset attached its plotter directly on the Core machine,
     // bypassing PlotterController/attachCE150()/attachCE1600P() entirely --
@@ -309,4 +326,97 @@ void MainWindow::onFrameTick() {
     m_debugPanel->onFrameTick();
     m_plotterController->onFrameTick();
     if (m_plotterPaperInLayout) m_plotterPaper->onFrameTick();
+}
+
+void MainWindow::buildMenuBar() {
+    // File: one-shot actions ControlBar's own buttons also expose --
+    // openPresetAction/settingsAction/aboutAction are connected by the
+    // constructor, right alongside the ControlBar signal they duplicate, so
+    // both use the exact same handler closure.
+    QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
+    m_openPresetAction = fileMenu->addAction(tr("Open Preset…"));
+    fileMenu->addSeparator();
+    m_settingsAction = fileMenu->addAction(tr("Settings…"));
+    fileMenu->addSeparator();
+    QAction* quitAction = fileMenu->addAction(tr("Quit"));
+    quitAction->setMenuRole(QAction::QuitRole);
+    quitAction->setShortcut(QKeySequence::Quit);
+    connect(quitAction, &QAction::triggered, this, &QWidget::close);
+
+    // Machine: duplicates ControlBar's model/ROM pickers (checkable, exclusive
+    // per group) plus Reset/Reset All, which today only reachable via
+    // ControlBar's Reset button and its Cmd-click "reset all" gesture.
+    QMenu* machineMenu = menuBar()->addMenu(tr("&Machine"));
+
+    QMenu* modelMenu = machineMenu->addMenu(tr("Model"));
+    m_modelActionGroup = new QActionGroup(this);
+    m_modelActionGroup->setExclusive(true);
+    auto addModelAction = [&](Model model, const QString& label) {
+        QAction* action = modelMenu->addAction(label);
+        action->setCheckable(true);
+        m_modelActionGroup->addAction(action);
+        m_modelActions.insert(model, action);
+        connect(action, &QAction::triggered, this, [this, model] { applyModelSelection(model); });
+    };
+    addModelAction(Model::PC1500, tr("PC-1500"));
+    addModelAction(Model::PC1500A, tr("PC-1500A"));
+    addModelAction(Model::PC1600, tr("PC-1600"));
+
+    QMenu* romMenu = machineMenu->addMenu(tr("ROM Revision"));
+    m_romMenuAction = romMenu->menuAction();
+    m_romActionGroup = new QActionGroup(this);
+    m_romActionGroup->setExclusive(true);
+    auto addRomAction = [&](PC1500RomRevision revision, const QString& label) {
+        QAction* action = romMenu->addAction(label);
+        action->setCheckable(true);
+        m_romActionGroup->addAction(action);
+        m_romActions.insert(revision, action);
+        connect(action, &QAction::triggered, this, [this, revision] { applyRomRevisionSelection(revision); });
+    };
+    addRomAction(PC1500RomRevision::A01, tr("A01"));
+    addRomAction(PC1500RomRevision::A03, tr("A03"));
+    addRomAction(PC1500RomRevision::A04, tr("A04"));
+
+    machineMenu->addSeparator();
+    QAction* resetAction = machineMenu->addAction(tr("Reset"));
+    resetAction->setShortcut(QKeySequence(Qt::ControlModifier | Qt::Key_R));
+    connect(resetAction, &QAction::triggered, this, [this] { m_controller->resetSimple(); });
+    QAction* resetAllAction = machineMenu->addAction(tr("Reset All"));
+    resetAllAction->setShortcut(QKeySequence(Qt::ControlModifier | Qt::ShiftModifier | Qt::Key_R));
+    connect(resetAllAction, &QAction::triggered, this, [this] { m_controller->resetAll(); });
+
+    // Help
+    QMenu* helpMenu = menuBar()->addMenu(tr("&Help"));
+    m_aboutAction = helpMenu->addAction(tr("About Calc-U-1600…"));
+    m_aboutAction->setMenuRole(QAction::AboutRole);
+}
+
+void MainWindow::applyModelSelection(Model model) {
+    m_moduleManager->flushPendingPersist();
+    m_moduleManager->onModelChanged(model);
+    m_controller->switchModel(model); // rebuilds the machine -- any live plotter attachment is already gone
+    m_plotterController->resetOnModelSwitch();
+    m_faceplate->setModel(model);
+    m_controlBar->setModel(model);
+    m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
+    syncControlBarForModel();
+    syncMachineMenuFromModel(model);
+    syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
+    refreshModuleCombos();
+}
+
+void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
+    m_moduleManager->flushPendingPersist();
+    m_controller->setPC1500RomRevision(revision); // rebuilds the machine
+    m_controlBar->setRomRevision(revision);
+    syncMachineMenuFromRomRevision(revision);
+    refreshModuleCombos();
+}
+
+void MainWindow::syncMachineMenuFromModel(Model model) {
+    if (QAction* action = m_modelActions.value(model, nullptr)) action->setChecked(true);
+}
+
+void MainWindow::syncMachineMenuFromRomRevision(PC1500RomRevision revision) {
+    if (QAction* action = m_romActions.value(revision, nullptr)) action->setChecked(true);
 }

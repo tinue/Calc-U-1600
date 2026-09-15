@@ -1,31 +1,42 @@
 #pragma once
-#include <QWidget>
+#include <QMainWindow>
 #include <QHash>
 #include <memory>
 #include <string>
+
+#include "MachineController.hpp" // Model, PC1500RomRevision (menu<->ControlBar sync)
 
 class QTimer;
 class QKeyEvent;
 class QCloseEvent;
 class QHBoxLayout;
+class QAction;
+class QActionGroup;
 class FaceplateWidget;
 class ControlBar;
 class DebugPanel;
 class PlotterController;
 class PlotterPaperWidget;
-class MachineController;
 class MemoryModuleManager;
 class PresetController;
 
 // Top-level window: FaceplateWidget (stretch) over ControlBar (fixed) over
-// the debug row (fixed); the module pickers live in ControlBar itself. The
-// debug row is a QHBoxLayout (m_debugRow / m_debugRowLayout) holding
-// DebugPanel at stretch 2 always, plus PlotterPaperWidget at stretch 1
-// whenever a plotter is attached (a fixed 2:1 split, full width when the
-// paper widget is absent). Owns the MachineController and the single
-// ~60Hz frame timer that both advances emulation and repaints the LCD.
-// Also owns physical-keyboard capture -- see PC1500KeyboardMap.hpp.
-class MainWindow : public QWidget {
+// the debug row (fixed), all inside a central QWidget (QMainWindow requires
+// exactly one); the module pickers live in ControlBar itself. The debug row
+// is a QHBoxLayout (m_debugRow / m_debugRowLayout) holding DebugPanel at
+// stretch 2 always, plus PlotterPaperWidget at stretch 1 whenever a plotter
+// is attached (a fixed 2:1 split, full width when the paper widget is
+// absent). Owns the MachineController and the single ~60Hz frame timer that
+// both advances emulation and repaints the LCD. Also owns physical-keyboard
+// capture -- see PC1500KeyboardMap.hpp.
+//
+// The menu bar (buildMenuBar()) duplicates ControlBar's model/ROM-revision
+// pickers and Reset/Reset All as QActions, and adds File/Help entries
+// (Open Preset/Load BASIC Program/Settings/Quit, About) -- see
+// applyModelSelection()/applyRomRevisionSelection() and the
+// syncMachineMenuFrom*() pair for how the two views of the same
+// MachineController state stay in sync without fighting each other.
+class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
     explicit MainWindow(QWidget* parent = nullptr);
@@ -49,6 +60,38 @@ private:
     QWidget* m_debugRow = nullptr;
     QHBoxLayout* m_debugRowLayout = nullptr;
     QTimer* m_frameTimer = nullptr;
+
+    void buildMenuBar();
+
+    // Shared by both ControlBar's combo-box signal and the Machine menu's
+    // QActions, so either source of a model/ROM-revision change drives the
+    // exact same rebuild + resync path (previously these were ControlBar-
+    // only lambdas in the constructor).
+    void applyModelSelection(Model model);
+    void applyRomRevisionSelection(PC1500RomRevision revision);
+
+    // Re-checks the Machine menu's model/ROM QActions to match `model`/
+    // `revision` without themselves triggering another applyModelSelection/
+    // applyRomRevisionSelection -- QAction::setChecked() doesn't emit
+    // triggered() on its own (only user activation does), so this is safe
+    // to call from applyModelSelection() itself and from every place that
+    // resyncs ControlBar (constructor, onPresetArmed()).
+    void syncMachineMenuFromModel(Model model);
+    void syncMachineMenuFromRomRevision(PC1500RomRevision revision);
+
+    QHash<Model, QAction*> m_modelActions;
+    QHash<PC1500RomRevision, QAction*> m_romActions;
+    QActionGroup* m_modelActionGroup = nullptr;
+    QActionGroup* m_romActionGroup = nullptr;
+    QAction* m_romMenuAction = nullptr; // Machine > ROM Revision submenu's own action, for show/hide
+
+    // File/Help actions whose handlers are wired up in the constructor
+    // (alongside the equivalent ControlBar signal), not inside
+    // buildMenuBar() itself, so both share one closure over local
+    // constructor state (m_presetController, m_frameTimer, ...).
+    QAction* m_openPresetAction = nullptr;
+    QAction* m_settingsAction = nullptr;
+    QAction* m_aboutAction = nullptr;
 
     void refreshModuleCombos();
 
