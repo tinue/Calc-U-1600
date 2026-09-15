@@ -17,8 +17,13 @@ PresetController::PresetController(MachineController* controller, MemoryModuleMa
 #include "PC1500/PresetFile.hpp"
 #include "PC1500/PC1500PresetLoader.hpp"
 #include "PC1500/PC1500Machine.hpp"
+#include "PC1500/PC1500BasicTyper.hpp"
+#include "PC1500/PC1500BasicLoader.hpp"
 #include "PC1600/PC1600PresetLoader.hpp"
 #include "PC1600/PC1600Machine.hpp"
+#include "PC1600/PC1600BasicTyper.hpp"
+#include "PC1600/PC1600BasicLoader.hpp"
+#include "Basic/BasicProgramSource.hpp"
 
 namespace {
 
@@ -37,6 +42,88 @@ void seedClockFromHost(Machine& machine) {
     const QDateTime now = QDateTime::currentDateTime();
     machine.seedClock(now.date().year(), now.date().month(), now.date().day(), now.time().hour(),
                        now.time().minute(), now.time().second());
+}
+
+// Live-machine analog of the `- key: cl` / `- key: mode` + `- type: NEW0`
+// choreography every basic-binary preset's own author writes before its
+// `program:` section (see examples/lissajou-1500.pc1500 / examples/hanoi.pc1600)
+// -- PC1500BasicLoader/PC1600BasicLoader's loadBasicBinaryPayload() only
+// pokes memory, it never types anything (see their own header doc
+// comments), and NEW0 only clears the program when the machine is already
+// in the right mode (PRO for both, though the PC-1500 boots into PRO by
+// default while the PC-1600 boots into RUN). Since the load destroys the
+// resident program either way, resetting first -- exactly the state a
+// basic-binary preset's own `keys:` block assumes -- is simpler and more
+// robust than trying to recover into the right mode from whatever the
+// live machine was doing (a running program, an open menu, ...).
+constexpr uint64_t kPC1500CpuHz = 1300000; // matches PC1500BasicTyper.cpp's own kCpuHz
+constexpr uint64_t kPC1500BootSettleCycles = kPC1500CpuHz * 2;
+constexpr uint64_t kPC1500IdleCap = kPC1500CpuHz * 5;
+constexpr uint64_t kPC1600BootSettleTStates = PC1600Machine::kTStateHz * 2;
+constexpr uint64_t kPC1600IdleCap = PC1600Machine::kTStateHz * 5;
+
+bool loadBasicProgramLivePC1500(PC1500Machine& machine, const std::string& path, QString* error) {
+    machine.reset();
+    machine.runCycles(kPC1500BootSettleCycles);
+    waitIdle(machine, kPC1500IdleCap);
+    // PC-1500(A) boots straight into PRO mode with a sign-on message still
+    // on screen -- CL clears it and reaches the "> " prompt (same
+    // unconditional first step examples/lissajou-1500.pc1500's own `keys:`
+    // block uses).
+    tapKey(machine, "cl");
+    std::string typeError;
+    if (!typeLine(machine, "NEW0", /*pressEnter=*/true, &typeError)) {
+        *error = QString::fromStdString(typeError);
+        return false;
+    }
+    basic::BasicProgramSource src = basic::readBasicProgramSource(path, basic::TransferModel::PC1500);
+    if (!src.ok) {
+        *error = QString::fromStdString(src.error);
+        return false;
+    }
+    PC1500BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
+    if (!loaded.ok) {
+        *error = QString::fromStdString(loaded.error);
+        return false;
+    }
+    // Back to RUN mode, same as the `- key: mode` step every basic-binary
+    // preset's own author writes after its `program:` section (see
+    // examples/lissajou-1500.pc1500) -- loadBasicBinaryPayload() only poked
+    // memory, it never leaves the ROM's own mode state anywhere but where
+    // CL/NEW0 put it (PRO).
+    tapKey(machine, "mode");
+    return true;
+}
+
+bool loadBasicProgramLivePC1600(PC1600Machine& machine, const std::string& path, QString* error) {
+    machine.allReset(); // matches applyPC1600Preset()'s own cold-boot level
+    machine.runCycles(kPC1600BootSettleTStates);
+    waitIdle(machine, kPC1600IdleCap);
+    waitForKeyboardScanLoop(machine); // no-op unless a plotter is attached
+    // PC-1600 boots into RUN mode with no message -- MODE switches to PRO
+    // (same unconditional first step examples/hanoi.pc1600's own `keys:`
+    // block uses).
+    tapKey(machine, "mode");
+    std::string typeError;
+    if (!typeLine(machine, "NEW0", /*pressEnter=*/true, &typeError)) {
+        *error = QString::fromStdString(typeError);
+        return false;
+    }
+    basic::BasicProgramSource src = basic::readBasicProgramSource(path, basic::TransferModel::PC1600);
+    if (!src.ok) {
+        *error = QString::fromStdString(src.error);
+        return false;
+    }
+    PC1600BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
+    if (!loaded.ok) {
+        *error = QString::fromStdString(loaded.error);
+        return false;
+    }
+    // Back to RUN mode, same as the `- key: mode` step every basic-binary
+    // preset's own author writes after its `program:` section (see
+    // examples/hanoi.pc1600).
+    tapKey(machine, "mode");
+    return true;
 }
 
 }  // namespace
@@ -129,11 +216,51 @@ bool PresetController::loadPreset(const QString& path, QString* error) {
     return true;
 }
 
+bool PresetController::loadBasicProgramLive(const QString& path, QString* error) {
+    if (m_controller->currentModel() == Model::PC1600) {
+        PC1600Machine* machine = m_controller->pc1600();
+        if (!machine) {
+            *error = tr("No PC-1600 machine is running.");
+            return false;
+        }
+        return loadBasicProgramLivePC1600(*machine, path.toStdString(), error);
+    }
+    PC1500Machine* machine = m_controller->pc1500();
+    if (!machine) {
+        *error = tr("No PC-1500 machine is running.");
+        return false;
+    }
+    return loadBasicProgramLivePC1500(*machine, path.toStdString(), error);
+}
+
+bool PresetController::checkBasicProgramTokenizes(const QString& path, QString* error) {
+    const basic::TransferModel model =
+        (m_controller->currentModel() == Model::PC1600) ? basic::TransferModel::PC1600 : basic::TransferModel::PC1500;
+    basic::BasicProgramSource src = basic::readBasicProgramSource(path.toStdString(), model);
+    if (!src.ok) {
+        *error = QString::fromStdString(src.error);
+        return false;
+    }
+    return true;
+}
+
 #else  // !CALCU1600_PRESET_LOADER_AVAILABLE
 
 bool PresetController::loadPreset(const QString&, QString* error) {
     *error = tr("Preset loading isn't available in this build yet (it currently requires the macOS build -- "
                 "see Qt6/CMakeLists.txt).");
+    return false;
+}
+
+bool PresetController::checkBasicProgramTokenizes(const QString&, QString* error) {
+    *error = tr("Loading a BASIC program isn't available in this build yet (it currently requires the macOS "
+                "build -- see Qt6/CMakeLists.txt).");
+    return false;
+}
+
+bool PresetController::loadBasicProgramLive(const QString&, QString* error) {
+    *error = tr("Loading a BASIC program isn't available in this build yet (it currently requires the macOS "
+                "build -- see Qt6/CMakeLists.txt).");
     return false;
 }
 

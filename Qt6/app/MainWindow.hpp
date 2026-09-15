@@ -90,6 +90,7 @@ private:
     // buildMenuBar() itself, so both share one closure over local
     // constructor state (m_presetController, m_frameTimer, ...).
     QAction* m_openPresetAction = nullptr;
+    QAction* m_loadBasicProgramAction = nullptr;
     QAction* m_settingsAction = nullptr;
     QAction* m_aboutAction = nullptr;
 

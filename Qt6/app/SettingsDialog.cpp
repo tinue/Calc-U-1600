@@ -114,7 +114,7 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
 
     addSeparator(layout, this);
     addDirectoryRow(
-        layout, this, tr("Default \"Open Preset…\" folder:"), tr("Choose Preset Folder"),
+        layout, this, tr("Default samples folder:"), tr("Choose Samples Folder"),
         [] { return AppSettings::presetOpenDir().isEmpty() ? QDir::homePath() : AppSettings::presetOpenDir(); },
         [] {
             const QString dir = AppSettings::presetOpenDir();

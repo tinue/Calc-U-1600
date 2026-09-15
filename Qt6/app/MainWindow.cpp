@@ -147,6 +147,50 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         AboutDialog dialog(this);
         dialog.exec();
     });
+    connect(m_loadBasicProgramAction, &QAction::triggered, this, [this] {
+        // Shares the "Default samples folder" setting with Open Preset --
+        // both preset files and bare .bas listings live in the same
+        // samples folder in practice, so one setting covers both pickers.
+        const QString startDir = AppSettings::presetOpenDir().isEmpty() ? QDir::homePath()
+                                                                          : AppSettings::presetOpenDir();
+        const QString path = QFileDialog::getOpenFileName(this, tr("Load BASIC Program"), startDir,
+                                                            tr("BASIC Programs (*.bas);;All Files (*)"));
+        if (path.isEmpty()) return;
+
+        // Step 0: tokenize before touching anything else -- a listing that
+        // doesn't even tokenize should fail here with no popup and no
+        // reset, not after the machine's already been cleared for it.
+        QString precheckError;
+        if (!m_presetController->checkBasicProgramTokenizes(path, &precheckError)) {
+            QMessageBox::warning(this, tr("Load BASIC Program"), precheckError);
+            return;
+        }
+
+        // The load choreography resets the machine and clears the resident
+        // program (see PresetController::loadBasicProgramLive) -- unlike
+        // Open Preset, this runs against a machine the user may have been
+        // actively using, so confirm first.
+        const auto reply = QMessageBox::question(
+            this, tr("Load BASIC Program"),
+            tr("This resets the machine and clears the current program before loading the new one. Continue?"),
+            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+        if (reply != QMessageBox::Yes) return;
+
+        // Same rationale as Open Preset -- stop the frame timer for the
+        // duration of the (synchronous) load so nothing else drives the
+        // machine mid-script.
+        m_frameTimer->stop();
+        m_moduleManager->flushPendingPersist();
+        setCursor(Qt::WaitCursor);
+        QString error;
+        const bool ok = m_presetController->loadBasicProgramLive(path, &error);
+        unsetCursor();
+        m_frameTimer->start(16);
+
+        if (!ok) {
+            QMessageBox::warning(this, tr("Load BASIC Program"), error);
+        }
+    });
     connect(m_moduleManager.get(), &MemoryModuleManager::errorMessage, this,
             [this](const QString& text) { QMessageBox::warning(this, tr("Memory Module"), text); });
     connect(m_controlBar, &ControlBar::ce150ToggleRequested, this,
@@ -335,6 +379,7 @@ void MainWindow::buildMenuBar() {
     // both use the exact same handler closure.
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
     m_openPresetAction = fileMenu->addAction(tr("Open Preset…"));
+    m_loadBasicProgramAction = fileMenu->addAction(tr("Load BASIC Program…"));
     fileMenu->addSeparator();
     m_settingsAction = fileMenu->addAction(tr("Settings…"));
     fileMenu->addSeparator();

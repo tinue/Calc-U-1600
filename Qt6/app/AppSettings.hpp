@@ -26,12 +26,14 @@ inline void setInstanceDirOverride(const QString& dir) {
         s.setValue(QStringLiteral("storage/instanceDirOverride"), dir);
 }
 
-// Key: "preset/openDir" -- the folder the "Open Preset…" file dialog
-// starts in. Unlike instanceDirOverride, this has no environment-derived
-// default at all: empty/absent just means "let QFileDialog pick" (its own
-// last-visited-directory recall). A configured value here is fixed (set
-// via Settings), not auto-updated by each Open -- picking a preset
-// elsewhere doesn't silently change it.
+// Key: "preset/openDir" -- the folder both the "Open Preset…" and "Load
+// BASIC Program…" file dialogs start in (labeled "Default samples folder"
+// in Settings, since preset files and bare .bas listings both live there
+// in practice). Unlike instanceDirOverride, this has no environment-
+// derived default at all: empty/absent just means "let QFileDialog pick"
+// (its own last-visited-directory recall). A configured value here is
+// fixed (set via Settings), not auto-updated by each Open -- picking a
+// file elsewhere doesn't silently change it.
 inline QString presetOpenDir() {
     return backingStore().value(QStringLiteral("preset/openDir"), QString()).toString();
 }
