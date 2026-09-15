@@ -33,3 +33,13 @@ ROM images under `roms/` are third-party copyrighted firmware belonging
 to Sharp Corporation. They are **not** covered by this project's GPLv3
 license -- see [LICENSE](LICENSE) for Calc-U-1600's own code, and treat
 `roms/` as a separate, unlicensed-by-us inclusion.
+
+`examples/dwx.bin` is the PC-1600 DiskWorks v2 program by Christian Becker
+(KiKiSoft, 1993) -- see [github.com/hzprky/DiskWorks](https://github.com/hzprky/DiskWorks)
+and `examples/DiskWorks.pc1600`. Bundled with the author's permission; not
+covered by this project's GPLv3 license.
+
+`examples/setup/util_15.bas`, `utilrm_15.bas`, `utilrm_20.bas`, and the
+`firmware_bootstrap_util*.pc1500a` presets that load them are CE-163F
+firmware-flashing utilities from [Soigeneris](https://www.soigeneris.com/sharp-pc-1500-memory-modules).
+Bundled with permission; not covered by this project's GPLv3 license.
