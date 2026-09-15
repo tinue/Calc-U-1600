@@ -573,7 +573,12 @@ jobs:
           Copy-Item Qt6/build/Calc-U-1600.exe Qt6/dist/
           # See the windows-x86_64 job's identical step for what this does.
           Copy-Item Qt6/build/resources Qt6/dist/resources -Recurse
-          windeployqt --release --compiler-runtime Qt6/dist/Calc-U-1600.exe
+          # For this cross-compiled kit, windeployqt is a host-side tool
+          # that lives under QT_HOST_PATH's bin\ (set by install-qt-action)
+          # -- unlike the target kit's own bin\ (msvc2022_arm64\bin, which
+          # IS on PATH), it's not added to PATH automatically, so it must
+          # be invoked by full path here.
+          & "$env:QT_HOST_PATH\bin\windeployqt.exe" --release --compiler-runtime Qt6/dist/Calc-U-1600.exe
 
       - name: Install Inno Setup
         shell: pwsh
