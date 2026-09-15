@@ -86,6 +86,15 @@ REPO_SLUG="tinue/Calc-U-1600"
 WORKFLOW="build.yml"
 APP_NAME="Calc-U-1600"
 
+# GitHub Releases does not preserve Unix file permissions on uploaded assets
+# (true for every asset, uploaded however) -- a downloaded .AppImage always
+# loses its executable bit regardless of what chmod was run before upload,
+# so this has to be told to users in the release notes instead of fixed in
+# the packaging step. Appended (not part of a version's own CHANGELOG
+# entry, which is about what changed, not how to run it) to every release's
+# notes -- see write_release_notes().
+LINUX_APPIMAGE_NOTE="**Linux**: the downloaded .AppImage needs its executable bit set before it will run — GitHub Releases doesn't preserve file permissions on uploaded assets. Run \`chmod +x Calc-U-1600-*.AppImage\` once after downloading, then launch it directly."
+
 cd "$(dirname "$0")/.."
 
 # Reads APP_VERSION out of $CMAKELISTS as it stands right now.
@@ -204,6 +213,19 @@ changelog_notes() {
             printf "%s", buf
         }
     ' "$CHANGELOG"
+}
+
+# Writes $1's (a version's) full GitHub release notes to file $2: the
+# CHANGELOG section body plus LINUX_APPIMAGE_NOTE. Used for both the
+# pre-release and its --release promotion, so the platform note is never
+# missing from one but not the other. NOT used for the squash-merge commit
+# message (COMMIT_MSG in --release) -- that's about what changed, the
+# platform note isn't.
+write_release_notes() {
+    local v="$1" out="$2" notes
+    notes=$(changelog_notes "$v")
+    [ -z "$notes" ] && notes="Release v$v. See $CHANGELOG."
+    { printf '%s\n' "$notes"; echo ""; printf '%s\n' "$LINUX_APPIMAGE_NOTE"; } > "$out"
 }
 
 # Replace "## [$VERSION] - work in progress" (or a bare "## [$VERSION]") with
@@ -372,7 +394,7 @@ if $DO_RELEASE; then
     run_cmd git checkout "$CURRENT_BRANCH"
 
     NOTES_FILE=$(mktemp)
-    printf '%s\n' "$NOTES" > "$NOTES_FILE"
+    write_release_notes "$VERSION" "$NOTES_FILE"
     echo "Retargeting ${PRE_TAG}'s GitHub release onto ${TAG} in place (no re-upload)…"
     run_cmd gh release edit "$PRE_TAG" \
         --tag "$TAG" \
@@ -550,7 +572,7 @@ run_cmd zip -rq "$ZIPDIR/Calc-U-1600-examples.zip" examples/
 ASSET_COUNT=$((ASSET_COUNT + 1))
 
 NOTES_FILE=$(mktemp)
-changelog_notes "$VERSION" > "$NOTES_FILE"
+write_release_notes "$VERSION" "$NOTES_FILE"
 if gh release view "$PRE_TAG" &>/dev/null; then
     echo "Pre-release $PRE_TAG exists — updating…"
     run_cmd gh release edit "$PRE_TAG" --title "$APP_NAME $VERSION (pre-release)" \
