@@ -22,13 +22,13 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QFileDialog>
-#include <QDir>
 #include <QCoreApplication>
 #include <QMenuBar>
 #include <QMenu>
 #include <QAction>
 #include <QActionGroup>
 #include <QKeySequence>
+#include <functional>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle(tr("Calc-U-1600"));
@@ -106,9 +106,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_controlBar, &ControlBar::settingsRequested, this, openSettingsDialog);
     connect(m_presetController.get(), &PresetController::armed, this, &MainWindow::onPresetArmed);
     auto openPresetDialog = [this] {
-        const QString startDir = AppSettings::presetOpenDir().isEmpty() ? QDir::homePath()
-                                                                          : AppSettings::presetOpenDir();
-        const QString path = QFileDialog::getOpenFileName(this, tr("Load Preset"), startDir,
+        const QString path = QFileDialog::getOpenFileName(this, tr("Load Preset"), AppSettings::presetOpenDirOrHome(),
                                                             tr("Presets (*.pc1500 *.pc1500a *.pc1600);;All Files (*)"));
         if (path.isEmpty()) return;
 
@@ -122,31 +120,18 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
         if (reply != QMessageBox::Yes) return;
 
-        // Stop the frame timer for the (possibly multi-second, synchronous)
-        // duration of the load -- see PresetController's own doc comment
-        // for why: nothing else may drive the machine while the preset
-        // loader is mid-script.
-        m_frameTimer->stop();
-        m_moduleManager->flushPendingPersist();
-        setCursor(Qt::WaitCursor);
-        QString error;
-        const bool ok = m_presetController->loadPreset(path, &error);
-        unsetCursor();
-
-        // PresetController::armed (connected above to onPresetArmed()) has
-        // already resynced the control bar/plotter/module combos once,
-        // mid-load, while the machine was still armed-but-off. Call it
-        // again now that loadPreset() has returned so a preset that failed
-        // before ever arming (bad modulespec, missing ROM, ...) -- which
-        // never fires armed() -- still gets the UI resynced to whatever's
-        // actually attached; resetBareForPresetPC1600/1500() already
-        // replaced the underlying machine either way.
-        onPresetArmed();
-        m_frameTimer->start(16);
-
-        if (!ok) {
-            QMessageBox::warning(this, tr("Load Preset"), error);
-        }
+        runSynchronousLoad(
+            tr("Load Preset"), [this, path](QString* error) { return m_presetController->loadPreset(path, error); },
+            // PresetController::armed (connected above to onPresetArmed())
+            // has already resynced the control bar/plotter/module combos
+            // once, mid-load, while the machine was still armed-but-off.
+            // Call it again now that loadPreset() has returned so a preset
+            // that failed before ever arming (bad modulespec, missing ROM,
+            // ...) -- which never fires armed() -- still gets the UI
+            // resynced to whatever's actually attached;
+            // resetBareForPresetPC1600/1500() already replaced the
+            // underlying machine either way.
+            [this] { onPresetArmed(); });
     };
     connect(m_controlBar, &ControlBar::openPresetRequested, this, openPresetDialog);
     // File/Help menu actions reuse the exact same handlers as their
@@ -161,9 +146,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         // Shares the "Default samples folder" setting with Load Preset --
         // both preset files and bare .bas listings live in the same
         // samples folder in practice, so one setting covers both pickers.
-        const QString startDir = AppSettings::presetOpenDir().isEmpty() ? QDir::homePath()
-                                                                          : AppSettings::presetOpenDir();
-        const QString path = QFileDialog::getOpenFileName(this, tr("Load BASIC Program"), startDir,
+        const QString path = QFileDialog::getOpenFileName(this, tr("Load BASIC Program"),
+                                                            AppSettings::presetOpenDirOrHome(),
                                                             tr("BASIC Programs (*.bas);;All Files (*)"));
         if (path.isEmpty()) return;
 
@@ -186,20 +170,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
         if (reply != QMessageBox::Yes) return;
 
-        // Same rationale as Load Preset -- stop the frame timer for the
-        // duration of the (synchronous) load so nothing else drives the
-        // machine mid-script.
-        m_frameTimer->stop();
-        m_moduleManager->flushPendingPersist();
-        setCursor(Qt::WaitCursor);
-        QString error;
-        const bool ok = m_presetController->loadBasicProgramLive(path, &error);
-        unsetCursor();
-        m_frameTimer->start(16);
-
-        if (!ok) {
-            QMessageBox::warning(this, tr("Load BASIC Program"), error);
-        }
+        runSynchronousLoad(tr("Load BASIC Program"), [this, path](QString* error) {
+            return m_presetController->loadBasicProgramLive(path, error);
+        });
     });
     connect(m_moduleManager.get(), &MemoryModuleManager::errorMessage, this,
             [this](const QString& text) { QMessageBox::warning(this, tr("Memory Module"), text); });
@@ -270,7 +243,27 @@ void MainWindow::syncControlBarForModel() {
     // showing for the plain PC-1500.
     const bool romPickerVisible = m_controller->currentModel() == Model::PC1500;
     m_controlBar->setRomPickerVisible(romPickerVisible);
-    if (m_romMenuAction) m_romMenuAction->setVisible(romPickerVisible);
+    m_romMenuAction->setVisible(romPickerVisible);
+}
+
+void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::function<bool(QString*)>& loadFn,
+                                     const std::function<void()>& afterLoad) {
+    // Stop the frame timer for the (possibly multi-second, synchronous)
+    // duration of the load -- see PresetController's own doc comment for
+    // why: nothing else may drive the machine while a preset/BASIC-program
+    // loader is mid-script.
+    m_frameTimer->stop();
+    m_moduleManager->flushPendingPersist();
+    setCursor(Qt::WaitCursor);
+    QString error;
+    const bool ok = loadFn(&error);
+    unsetCursor();
+    if (afterLoad) afterLoad();
+    m_frameTimer->start(16);
+
+    if (!ok) {
+        QMessageBox::warning(this, errorTitle, error);
+    }
 }
 
 void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {

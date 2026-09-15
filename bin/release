@@ -88,7 +88,12 @@ APP_NAME="Calc-U-1600"
 
 cd "$(dirname "$0")/.."
 
-VERSION=$(grep -m 1 '^set(APP_VERSION' "$CMAKELISTS" | sed -E 's/.*"([^"]+)".*/\1/')
+# Reads APP_VERSION out of $CMAKELISTS as it stands right now.
+read_app_version() {
+    grep -m 1 '^set(APP_VERSION' "$CMAKELISTS" | sed -E 's/.*"([^"]+)".*/\1/'
+}
+
+VERSION=$(read_app_version)
 if [ -z "${VERSION:-}" ]; then
     echo "Error: could not read APP_VERSION from $CMAKELISTS"
     exit 1
@@ -170,6 +175,16 @@ stash_unstaged_changes() {
     fi
 }
 
+# Staged-but-uncommitted changes are never auto-resolved (unlike unstaged
+# changes above) -- hard-abort so the user commits them first.
+require_clean_index() {
+    if ! git diff --cached --quiet; then
+        echo "Error: staged but uncommitted changes present. Commit them first."
+        git status --short
+        exit 1
+    fi
+}
+
 # ── CHANGELOG helpers ──────────────────────────────────────────────────────────
 
 # Print the CHANGELOG section body for $1 (a version), trimmed of blank
@@ -224,11 +239,7 @@ if $DO_NEXT; then
     fi
 
     stash_unstaged_changes
-    if ! git diff --cached --quiet; then
-        echo "Error: staged but uncommitted changes present. Commit them first."
-        git status --short
-        exit 1
-    fi
+    require_clean_index
 
     echo "Fetching ${MAIN_BRANCH}…"
     run_cmd git fetch origin "$MAIN_BRANCH" --quiet
@@ -241,7 +252,7 @@ if $DO_NEXT; then
         # as an approximation for preview purposes only.
         CUR_VERSION="$VERSION"
     else
-        CUR_VERSION=$(grep -m 1 '^set(APP_VERSION' "$CMAKELISTS" | sed -E 's/.*"([^"]+)".*/\1/')
+        CUR_VERSION=$(read_app_version)
     fi
 
     if [ -n "$NEXT_VERSION_OVERRIDE" ]; then
@@ -300,21 +311,20 @@ if $DO_RELEASE; then
     fi
 
     stash_unstaged_changes
-    if ! git diff --cached --quiet; then
-        echo "Error: staged but uncommitted changes present. Commit them first."
-        git status --short
-        exit 1
-    fi
+    require_clean_index
 
-    if ! gh release view "$PRE_TAG" &>/dev/null; then
+    # One round trip for both checks below -- gh's --jq is self-contained
+    # (no system `jq` needed), so it can format both fields into one line.
+    if ! PRE_INFO=$(gh release view "$PRE_TAG" --json isPrerelease,assets \
+        --jq '(.isPrerelease | tostring) + " " + (.assets | length | tostring)' 2>/dev/null); then
         echo "Error: no GitHub pre-release '$PRE_TAG'. Run 'bin/release' first."
         exit 1
     fi
-    if ! gh release view "$PRE_TAG" --json isPrerelease -q .isPrerelease | grep -q true; then
+    read -r PRE_IS_PRERELEASE PRE_ASSET_COUNT <<< "$PRE_INFO"
+    if [ "$PRE_IS_PRERELEASE" != "true" ]; then
         echo "Error: '$PRE_TAG' exists but is not a pre-release. Nothing to promote."
         exit 1
     fi
-    PRE_ASSET_COUNT=$(gh release view "$PRE_TAG" --json assets --jq '.assets | length')
     if [ "$PRE_ASSET_COUNT" -eq 0 ]; then
         echo "Error: '$PRE_TAG' has no assets attached. Something went wrong building it."
         exit 1
@@ -382,21 +392,25 @@ if $DO_RELEASE; then
     fi
 
     echo "Verifying published release ${TAG}…"
-    ASSET_COUNT=$(gh release view "$TAG" --json assets --jq '.assets | length')
+    # One round trip for all four checks/values below -- see the matching
+    # comment on the pre-release fetch above for why a single --jq call.
+    TAG_INFO=$(gh release view "$TAG" --json assets,isDraft,isPrerelease,url \
+        --jq '(.assets | length | tostring) + " " + (.isDraft | tostring) + " " + (.isPrerelease | tostring) + " " + .url')
+    read -r ASSET_COUNT TAG_IS_DRAFT TAG_IS_PRERELEASE TAG_URL <<< "$TAG_INFO"
     if [ "$ASSET_COUNT" -ne "$PRE_ASSET_COUNT" ]; then
         echo "Error: release $TAG has $ASSET_COUNT asset(s), expected $PRE_ASSET_COUNT (unchanged from $PRE_TAG)."
         exit 1
     fi
-    if [ "$(gh release view "$TAG" --json isDraft -q .isDraft)" = "true" ]; then
+    if [ "$TAG_IS_DRAFT" = "true" ]; then
         echo "Error: release $TAG is a draft unexpectedly."
         exit 1
     fi
-    if [ "$(gh release view "$TAG" --json isPrerelease -q .isPrerelease)" = "true" ]; then
+    if [ "$TAG_IS_PRERELEASE" = "true" ]; then
         echo "Error: release $TAG is still marked as a pre-release."
         exit 1
     fi
 
-    echo "Done.  Release ${TAG}: $(gh release view "${TAG}" --json url -q .url)  ($ASSET_COUNT assets)"
+    echo "Done.  Release ${TAG}: $TAG_URL  ($ASSET_COUNT assets)"
     exit 0
 fi
 
@@ -408,11 +422,7 @@ if [ "$CURRENT_BRANCH" = "$MAIN_BRANCH" ]; then
 fi
 
 stash_unstaged_changes
-if ! git diff --cached --quiet; then
-    echo "Error: staged but uncommitted changes present. Commit them first."
-    git status --short
-    exit 1
-fi
+require_clean_index
 
 UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || true)
 if [ -z "$UPSTREAM" ]; then

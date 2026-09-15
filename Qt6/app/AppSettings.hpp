@@ -1,4 +1,5 @@
 #pragma once
+#include <QDir>
 #include <QSettings>
 #include <QSize>
 #include <QString>
@@ -44,6 +45,13 @@ inline void setPresetOpenDir(const QString& dir) {
         s.remove(QStringLiteral("preset/openDir"));
     else
         s.setValue(QStringLiteral("preset/openDir"), dir);
+}
+
+// presetOpenDir(), or the user's home directory when unset -- the start
+// directory every "Load Preset…"/"Load BASIC Program…" file dialog uses.
+inline QString presetOpenDirOrHome() {
+    const QString dir = presetOpenDir();
+    return dir.isEmpty() ? QDir::homePath() : dir;
 }
 
 // Key: "trace/dirOverride" -- empty/absent means "write TRACE.bin under

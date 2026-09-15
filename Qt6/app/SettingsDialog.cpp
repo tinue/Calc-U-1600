@@ -5,7 +5,6 @@
 
 #include <QComboBox>
 #include <QDialogButtonBox>
-#include <QDir>
 #include <QFileDialog>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -115,7 +114,7 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     addSeparator(layout, this);
     addDirectoryRow(
         layout, this, tr("Default samples folder:"), tr("Choose Samples Folder"),
-        [] { return AppSettings::presetOpenDir().isEmpty() ? QDir::homePath() : AppSettings::presetOpenDir(); },
+        [] { return AppSettings::presetOpenDirOrHome(); },
         [] {
             const QString dir = AppSettings::presetOpenDir();
             return dir.isEmpty() ? SettingsDialog::tr("(system default)") : dir;

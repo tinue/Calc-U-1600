@@ -1,6 +1,8 @@
 #pragma once
 #include <QMainWindow>
 #include <QHash>
+#include <QString>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -113,6 +115,14 @@ private:
     // before the (possibly long) boot + preset script actually runs, so the
     // user briefly sees the armed-but-off machine.
     void onPresetArmed();
+
+    // Shared choreography for Load Preset/Load BASIC Program: stops the
+    // frame timer and shows a wait cursor around the (synchronous) `loadFn`
+    // call so nothing else drives the machine mid-script, runs `afterLoad`
+    // (if given) before the timer restarts, then reports `loadFn`'s error
+    // via a warning dialog titled `errorTitle` on failure.
+    void runSynchronousLoad(const QString& errorTitle, const std::function<bool(QString*)>& loadFn,
+                             const std::function<void()>& afterLoad = {});
 
     // Qt::Key -> the logical calculator key name that was pressed for it,
     // so releaseEvent always releases exactly what pressEvent pressed even
