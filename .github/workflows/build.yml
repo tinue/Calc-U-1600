@@ -566,6 +566,26 @@ jobs:
       - name: Build
         run: cmake --build Qt6/build
 
+      # TEMP diagnostic: windeployqt (a host-side x86_64 tool) was found to
+      # deploy Qt6*.dll and plugin DLLs from its OWN (host, x64) Qt tree
+      # instead of the ARM64 target kit, even though it's pointed at a
+      # genuinely ARM64 Calc-U-1600.exe -- confirmed via a PE-header dump
+      # showing every bundled Qt/plugin DLL as x64 while the .exe itself is
+      # ARM64 (see the app's real-hardware 0xc000007b, invalid image
+      # format). This lists the target kit's bin\ for a qtpaths shim (the
+      # documented way to point windeployqt at a *different* Qt install
+      # for cross-compiled deployment) and dumps windeployqt's own --help
+      # so the next step can use the right flag. Remove once resolved.
+      - name: Diagnose windeployqt cross-deploy options
+        shell: pwsh
+        run: |
+          Write-Host "--- QT_ROOT_DIR (target) bin contents ---"
+          Get-ChildItem "$env:QT_ROOT_DIR\bin"
+          Write-Host "--- QT_HOST_PATH (host) bin: qtpaths* ---"
+          Get-ChildItem "$env:QT_HOST_PATH\bin" -Filter "qtpaths*"
+          Write-Host "--- windeployqt --help ---"
+          & "$env:QT_HOST_PATH\bin\windeployqt.exe" --help
+
       - name: Stage standalone-runnable folder
         shell: pwsh
         run: |
@@ -578,6 +598,12 @@ jobs:
           # -- unlike the target kit's own bin\ (msvc2022_arm64\bin, which
           # IS on PATH), it's not added to PATH automatically, so it must
           # be invoked by full path here.
+          #
+          # TEMP: known broken for cross-compiled ARM64 -- windeployqt
+          # deploys host (x64) Qt DLLs instead of the ARM64 target's (see
+          # the diagnostic step above/its own comment). Left as-is for one
+          # more run to capture windeployqt --help and the target kit's
+          # bin\ contents before fixing with the correct flag.
           & "$env:QT_HOST_PATH\bin\windeployqt.exe" --release --compiler-runtime Qt6/dist/Calc-U-1600.exe
 
       # TEMP diagnostic: the app fails on real ARM64 hardware with
