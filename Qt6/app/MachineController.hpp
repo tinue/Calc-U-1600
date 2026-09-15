@@ -92,8 +92,27 @@ public:
     // character that needs a host Shift to produce: press "shift", wait,
     // release "shift", wait, press baseName, wait, release baseName.
     // Fire-and-forget -- self-contained, nothing for the caller to release
-    // later.
+    // later. PC-1600 only, called by MainWindow's PC-1600 branch -- see
+    // enqueueShiftedKey() for the PC-1500 equivalent.
     void tapShiftedKey(const std::string& baseName);
+
+    // PC-1500 live-typing keystroke buffer, so fast host typing can't
+    // outrun the ROM's key-scan loop and drop characters -- forwards to
+    // PC1500Machine::enqueueKey(), which owns the whole press/hold/
+    // release/idle cycle at the ROM's own confirmed-reliable cadence (see
+    // its doc comment). No-op (silently ignored) when PC-1600 is active --
+    // PC-1600 keystroke buffering is out of scope for now; MainWindow's
+    // PC-1600 branch never calls this.
+    void enqueueKey(const std::string& name);
+
+    // PC-1500 equivalent of tapShiftedKey(), via the same queue: Shift is
+    // a one-shot latch on real hardware (confirmed in
+    // PC1500BasicTyper.cpp's typeLine()) -- tapped immediately before the
+    // base key, not held -- so queueing "shift" then baseName reproduces
+    // that exact confirmed technique instead of tapShiftedKey()'s
+    // wall-clock QTimer chain, which can interleave incorrectly under
+    // fast typing.
+    void enqueueShiftedKey(const std::string& baseName);
 
     void advance(std::uint64_t cyclesBudget);
     DisplayFrame currentDisplay() const;

@@ -317,6 +317,19 @@ void MainWindow::refreshModuleCombos() {
     }
 }
 
+namespace {
+// PC-1500 only: the ROM itself auto-repeats these when held (confirmed
+// on real hardware) -- they must bypass the live-typing keystroke queue
+// (see keyPressEvent) and go straight through as a continuous, unmodified
+// press...hold...release, or the queue's fixed tap/gap cadence would chop
+// a physical hold into synthetic taps and the ROM's own repeat could
+// never engage. Backspace resolves to base key "left" on PC-1500
+// (PC1500KeyboardMap.cpp), so it's covered here automatically.
+bool isPc1500RepeatKey(const std::string& baseKey) {
+    return baseKey == "left" || baseKey == "right" || baseKey == "up" || baseKey == "down";
+}
+} // namespace
+
 void MainWindow::keyPressEvent(QKeyEvent* event) {
     if (event->isAutoRepeat()) {
         // Qt delivers OS auto-repeat as repeated .down events -- without
@@ -334,13 +347,37 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
         return;
     }
 
+    if (isPC1600) {
+        // PC-1600 keystroke buffering is out of scope for now -- this
+        // branch is unchanged.
+        if (resolved->needsShift) {
+            // Self-contained fire-and-forget sequence -- nothing to track
+            // for the matching .up event, so release skips it too.
+            m_controller->tapShiftedKey(resolved->baseKey);
+        } else {
+            m_controller->pressKey(resolved->baseKey);
+            m_physicalKeysDown.insert(event->key(), resolved->baseKey);
+        }
+        event->accept();
+        return;
+    }
+
+    // PC-1500: cursor keys bypass the queue so the ROM's own confirmed
+    // real-hardware auto-repeat can engage on a genuine physical hold;
+    // everything else (including shifted keys) is queued so fast typing
+    // can't outrun the key-scan loop and lose keystrokes -- see
+    // MachineController::enqueueKey()/enqueueShiftedKey().
     if (resolved->needsShift) {
-        // Self-contained fire-and-forget sequence -- nothing to track for
-        // the matching .up event, so release skips it too.
-        m_controller->tapShiftedKey(resolved->baseKey);
-    } else {
+        // Self-contained: the queue owns shift's whole tap-then-base-key
+        // sequence, nothing to track for the matching .up event.
+        m_controller->enqueueShiftedKey(resolved->baseKey);
+    } else if (isPc1500RepeatKey(resolved->baseKey)) {
         m_controller->pressKey(resolved->baseKey);
         m_physicalKeysDown.insert(event->key(), resolved->baseKey);
+    } else {
+        // Self-contained: the queue owns the whole press/hold/release/idle
+        // cycle, nothing to track for the matching .up event.
+        m_controller->enqueueKey(resolved->baseKey);
     }
     event->accept();
 }

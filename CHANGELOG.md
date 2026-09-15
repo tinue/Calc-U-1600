@@ -2,6 +2,11 @@
 
 ## [0.2.0] - work in progress
 
+- **Keyboard** PC-1500/1500A live typing is now buffered, so typing
+  quickly no longer drops keystrokes. Cursor keys (Left/Right/Up/Down)
+  still pass straight through, so the ROM's own auto-repeat still works
+  when held.
+
 ## [0.1.0] - 2026-09-15
 First public release. Calc-U-1600 is an emulator for the Sharp PC-1500,
 PC-1500A, and PC-1600 pocket computers, built as a Qt6 desktop app for

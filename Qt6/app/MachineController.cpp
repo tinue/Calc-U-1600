@@ -1,7 +1,10 @@
 #include "MachineController.hpp"
 
+#include <cstdlib>
+
 #include <QDateTime>
 #include <QDebug>
+#include <QMessageBox>
 #include <QTimer>
 
 #include "PC1500/PC1500Machine.hpp"
@@ -31,6 +34,31 @@ Model initialModel() {
     if (pref == QLatin1String("PC1500A")) return Model::PC1500A;
     if (pref == QLatin1String("PC1600")) return Model::PC1600;
     return static_cast<Model>(AppSettings::lastUsedModel());
+}
+
+// A missing/unreadable bundled ROM means the install is broken -- there's
+// no usable machine to fall back to (this is called both at startup and
+// from a later model switch, and either way the app can't proceed without
+// its firmware). Previously this was qFatal(), which aborts (SIGABRT) --
+// on a packaged macOS/Windows build launched normally (not from a
+// terminal) that's just a silent crash/bounce with no visible message at
+// all. Show the user what's actually wrong and where Calc-U-1600 looked,
+// then exit cleanly instead. std::exit() (not returning to unwind the
+// call stack) is deliberate: this can be reached mid-construction of
+// MainWindow/MachineController, which aren't set up to unwind safely from
+// here, and terminating the process reclaims everything the OS owns
+// regardless.
+[[noreturn]] void reportMissingRomAndExit(const std::string& err) {
+    const QString searchedIn = AppPaths::bundledResourcesDir();
+    const QString message =
+        QObject::tr("Calc-U-1600 could not start:\n\n%1\n\nSearched in: %2\n\n"
+                     "If you built this from source, run tools/fetch_roms.sh to "
+                     "download the required ROM files. If you're running an "
+                     "installed copy, the app's ROM files may be missing or "
+                     "corrupted -- try reinstalling.")
+            .arg(QString::fromStdString(err), searchedIn);
+    QMessageBox::critical(nullptr, QObject::tr("Missing ROM File"), message);
+    std::exit(1);
 }
 
 } // namespace
@@ -70,7 +98,7 @@ void MachineController::switchModel(Model model) {
         std::string err;
         if (!BundledRoms::loadPC1500Rom(*m_pc1500, pc1500RomVariantName(m_pc1500RomRevision),
                                         bundledRomDirs(), &err)) {
-            qFatal("Qt6 prototype: %s", err.c_str());
+            reportMissingRomAndExit(err);
         }
 
         if (m_moduleManager) m_moduleManager->attachAllToFreshMachine();
@@ -96,7 +124,7 @@ std::vector<std::string> MachineController::bundledRomDirs() {
 void MachineController::loadPC1600RomSet(PC1600Machine& machine) {
     std::string err;
     if (!BundledRoms::loadPC1600RomSet(machine, bundledRomDirs(), &err)) {
-        qFatal("Qt6 prototype: %s", err.c_str());
+        reportMissingRomAndExit(err);
     }
 }
 
@@ -208,6 +236,20 @@ void MachineController::tapShiftedKey(const std::string& baseName) {
     QTimer::singleShot(30, this, [this] { releaseKey("shift"); });
     QTimer::singleShot(30 + 100, this, [this, baseName] { pressKey(baseName); });
     QTimer::singleShot(30 + 100 + 30, this, [this, baseName] { releaseKey(baseName); });
+}
+
+void MachineController::enqueueKey(const std::string& name) {
+    if (m_pc1500) {
+        m_pc1500->enqueueKey(name);
+    }
+    // PC-1600 buffering is out of scope for now -- silently ignored,
+    // matching pressKey()/releaseKey()'s existing convention for a
+    // name/model combination that doesn't apply.
+}
+
+void MachineController::enqueueShiftedKey(const std::string& baseName) {
+    enqueueKey("shift");
+    enqueueKey(baseName);
 }
 
 void MachineController::advance(std::uint64_t cyclesBudget) {
