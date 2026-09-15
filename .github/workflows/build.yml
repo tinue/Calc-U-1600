@@ -566,26 +566,6 @@ jobs:
       - name: Build
         run: cmake --build Qt6/build
 
-      # TEMP diagnostic: windeployqt (a host-side x86_64 tool) was found to
-      # deploy Qt6*.dll and plugin DLLs from its OWN (host, x64) Qt tree
-      # instead of the ARM64 target kit, even though it's pointed at a
-      # genuinely ARM64 Calc-U-1600.exe -- confirmed via a PE-header dump
-      # showing every bundled Qt/plugin DLL as x64 while the .exe itself is
-      # ARM64 (see the app's real-hardware 0xc000007b, invalid image
-      # format). This lists the target kit's bin\ for a qtpaths shim (the
-      # documented way to point windeployqt at a *different* Qt install
-      # for cross-compiled deployment) and dumps windeployqt's own --help
-      # so the next step can use the right flag. Remove once resolved.
-      - name: Diagnose windeployqt cross-deploy options
-        shell: pwsh
-        run: |
-          Write-Host "--- QT_ROOT_DIR (target) bin contents ---"
-          Get-ChildItem "$env:QT_ROOT_DIR\bin"
-          Write-Host "--- QT_HOST_PATH (host) bin: qtpaths* ---"
-          Get-ChildItem "$env:QT_HOST_PATH\bin" -Filter "qtpaths*"
-          Write-Host "--- windeployqt --help ---"
-          & "$env:QT_HOST_PATH\bin\windeployqt.exe" --help
-
       - name: Stage standalone-runnable folder
         shell: pwsh
         run: |
@@ -593,32 +573,37 @@ jobs:
           Copy-Item Qt6/build/Calc-U-1600.exe Qt6/dist/
           # See the windows-x86_64 job's identical step for what this does.
           Copy-Item Qt6/build/resources Qt6/dist/resources -Recurse
-          # For this cross-compiled kit, windeployqt is a host-side tool
-          # that lives under QT_HOST_PATH's bin\ (set by install-qt-action)
-          # -- unlike the target kit's own bin\ (msvc2022_arm64\bin, which
-          # IS on PATH), it's not added to PATH automatically, so it must
-          # be invoked by full path here.
-          #
-          # TEMP: known broken for cross-compiled ARM64 -- windeployqt
-          # deploys host (x64) Qt DLLs instead of the ARM64 target's (see
-          # the diagnostic step above/its own comment). Left as-is for one
-          # more run to capture windeployqt --help and the target kit's
-          # bin\ contents before fixing with the correct flag.
-          & "$env:QT_HOST_PATH\bin\windeployqt.exe" --release --compiler-runtime Qt6/dist/Calc-U-1600.exe
+          # For this cross-compiled kit, windeployqt is a host-side (x64)
+          # tool that lives under QT_HOST_PATH's bin\ -- unlike the target
+          # kit's own bin\ (msvc2022_arm64\bin, which IS on PATH), it's
+          # not added to PATH automatically, so it must be invoked by full
+          # path here. Without --qtpaths, windeployqt resolves "which Qt"
+          # to deploy relative to its OWN location (the host x64 tree), so
+          # it silently bundled x64 Qt6*.dll/plugin DLLs next to a
+          # genuinely ARM64 Calc-U-1600.exe -- confirmed via a PE-header
+          # dump and the app failing on real ARM64 hardware with
+          # 0xc000007b (invalid image format). --qtpaths, pointed at the
+          # target kit's own qtpaths6.bat shim (present specifically for
+          # this cross-deploy scenario -- see its neighboring
+          # target_qt.conf), tells windeployqt to deploy from
+          # QT_ROOT_DIR (the ARM64 kit) instead.
+          & "$env:QT_HOST_PATH\bin\windeployqt.exe" --qtpaths "$env:QT_ROOT_DIR\bin\qtpaths6.bat" --release --compiler-runtime Qt6/dist/Calc-U-1600.exe
 
-      # TEMP diagnostic: the app fails on real ARM64 hardware with
-      # 0xc000007b (STATUS_INVALID_IMAGE_FORMAT), which the Windows loader
-      # raises when the .exe or one of its *implicitly* linked DLLs is the
-      # wrong PE machine type -- despite the compile/link step using the
-      # genuine ARM64 cl.exe/link.exe (confirmed clean, no LNK4272
-      # warnings), so this dumps every staged binary's machine type to
-      # find which one is actually wrong (suspect: windeployqt-bundled Qt
-      # DLLs from the win64_msvc2022_arm64_cross_compiled aqt package).
-      # Remove once the mismatch is found and fixed.
-      - name: Diagnose PE machine types in staged dist
+      # Verifies every staged .exe/.dll is genuinely ARM64 (not host x64) --
+      # see the --qtpaths comment above for why this was necessary. Fails
+      # the build if windeployqt (or anything else) regresses to bundling
+      # wrong-arch binaries again, rather than shipping a silently broken
+      # installer. vc_redist.arm64.exe is excluded: Microsoft's redist
+      # bootstrapper stubs are themselves x86 launchers by design,
+      # regardless of which runtime architecture they install.
+      - name: Verify staged binaries are ARM64
         shell: pwsh
         run: |
-          Get-ChildItem -Path Qt6/dist -Recurse -Include *.exe,*.dll | ForEach-Object {
+          $distRoot = (Resolve-Path Qt6/dist).Path
+          $bad = @()
+          Get-ChildItem -Path Qt6/dist -Recurse -Include *.exe,*.dll | Where-Object {
+            $_.Name -ne "vc_redist.arm64.exe"
+          } | ForEach-Object {
             $bytes = [System.IO.File]::ReadAllBytes($_.FullName)
             $peOffset = [System.BitConverter]::ToInt32($bytes, 0x3C)
             $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
@@ -628,7 +613,15 @@ jobs:
               0x14C  { "x86" }
               default { "UNKNOWN(0x{0:X4})" -f $machine }
             }
-            Write-Host "$($_.FullName.Substring((Resolve-Path Qt6/dist).Path.Length + 1)): $machineName"
+            $relPath = $_.FullName.Substring($distRoot.Length + 1)
+            Write-Host "${relPath}: $machineName"
+            if ($machineName -ne "ARM64") {
+              $script:bad += "${relPath}: $machineName"
+            }
+          }
+          if ($bad.Count -gt 0) {
+            Write-Host "::error::Non-ARM64 binaries found in staged dist: $($bad -join ', ')"
+            exit 1
           }
 
       - name: Install Inno Setup
