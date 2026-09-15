@@ -33,6 +33,20 @@ SolidCompression=yes
 [Files]
 Source: "..\..\dist\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
+; windeployqt --compiler-runtime (see build.yml's "Stage standalone-
+; runnable folder" step) no longer drops loose msvcp140.dll/vcruntime140.dll
+; etc. into dist\ for this Qt/VS toolset -- it drops the vc_redist
+; bootstrapper (vc_redist.x64.exe / vc_redist.arm64.exe) instead, copied
+; into {app} by the [Files] entry above, on the assumption the installer
+; will run it. Without this [Run] entry the app fails to start on a clean
+; machine with "missing MSVCP140.dll" (confirmed on real ARM64 hardware).
+; /install /quiet /norestart is the standard silent-bootstrap invocation;
+; it's a no-op (nonzero exit, e.g. 1638) if an equal-or-newer redist is
+; already present, which Inno doesn't treat as a Setup failure.
+[Run]
+Filename: "{app}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing Visual C++ Redistributable..."; Check: FileExists(ExpandConstant('{app}\vc_redist.x64.exe')); Flags: waituntilterminated
+Filename: "{app}\vc_redist.arm64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing Visual C++ Redistributable..."; Check: FileExists(ExpandConstant('{app}\vc_redist.arm64.exe')); Flags: waituntilterminated
+
 [Icons]
 Name: "{group}\Calc-U-1600"; Filename: "{app}\Calc-U-1600.exe"
 Name: "{group}\Uninstall Calc-U-1600"; Filename: "{uninstallexe}"
