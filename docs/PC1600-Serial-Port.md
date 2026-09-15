@@ -22,8 +22,13 @@ symlink.
 
 **Fidelity: internal line model + software flow-through.** XON/XOFF and
 SHIFT-IN/SHIFT-OUT (`SETCOM"COM1:",…,X,N` / `…,N,S`) are in-band bytes
-that pass straight through. The RS-232C hardware lines are modelled
-inside the TC8576F: RTS/DTR from the serial command register are
+that pass straight through -- there's no device driver on the host side
+to intercept them the way a real UART's flow-control layer would, so
+XON/XOFF bytes just become part of the data stream as far as the host
+app is concerned. In practice this makes `X` handshake tricky to use;
+see "Using SharpDataExchange" below for the recommended alternative (no
+handshake, paced with a delay instead). The RS-232C hardware lines are
+modelled inside the TC8576F: RTS/DTR from the serial command register are
 forwarded via `SerialLink::setControl()`, and the peer's CTS/DCD/DSR are
 cached each `tick()` and overlaid on PSR bits b0/b1/b2. A raw PTY carries
 no modem lines, so `PtySerialLink::getStatus()` reports CTS and DSR
@@ -45,7 +50,7 @@ sender stalls — the PTY stand-in for a real RTS drop.
 On the emulated PC-1600 (once per power-on):
 
 ```
-SETCOM "COM1:",9600,8,N,1,X,N        ' X = XON/XOFF -- in-band, survives a PTY
+SETCOM "COM1:",9600,8,N,1,N,N        ' no handshake -- see the Fidelity note above for why not X
 INIT   "COM1:",4096
 OUTSTAT "COM1:"
 RCVSTAT "COM1:",24
@@ -53,13 +58,15 @@ RCVSTAT "COM1:",24
 
 then `SAVE "COM1:"` / `LOAD "COM1:"`.
 
-On the Mac, point `SharpDataExchange` at the stable symlink (SharpDataExchange's
-own auto-detect only scans `cu.usb*`/`ttyACM*`/`ttyUSB*`, so the explicit
-path is required):
+On the Mac/Linux side, point `SharpDataExchange` at the stable symlink
+(SharpDataExchange's own auto-detect only scans `cu.usb*`/`ttyACM*`/
+`ttyUSB*`, so the explicit path is required) with its `--raw` option,
+which paces the transfer with a fixed delay instead of relying on
+XON/XOFF:
 
 ```
-java -jar SharpDataExchange.jar get -p <path to calcu1600.serial> myprogram.bas
-java -jar SharpDataExchange.jar put -p <path to calcu1600.serial> myprogram.bas
+java -jar SharpDataExchange.jar get --raw -p <path to calcu1600.serial> myprogram.bas
+java -jar SharpDataExchange.jar put --raw -p <path to calcu1600.serial> myprogram.bas
 ```
 
 ## Probe tooling
@@ -69,7 +76,7 @@ can hold a live port open for a manual transfer:
 
 ```
 PC1600_SERIAL=1 PC1600_SERIAL_SECONDS=180 \
-  ./headless/pc1600_uart_probe roms 'SETCOM"COM1:",9600,8,N,1,X,N;INIT"COM1:",4096'
+  ./headless/pc1600_uart_probe roms 'SETCOM"COM1:",9600,8,N,1,N,N;INIT"COM1:",4096'
 ```
 
 This types the BASIC line, then holds the port open, stepping ~real-time,

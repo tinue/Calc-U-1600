@@ -71,8 +71,8 @@
 #   - Because --release never rebuilds, the shipped binary's in-app About
 #     dialog (git-describe-derived APP_BUILD_ID) will still read "vX.Y.Z-pre",
 #     not "vX.Y.Z" -- expected, since promotion is asset-preserving.
-#   - The Windows installer is currently unsigned (see PACKAGING-TODO.md) --
-#     not something this script addresses.
+#   - The Windows installer is currently unsigned -- not something this
+#     script addresses.
 #
 
 set -euo pipefail

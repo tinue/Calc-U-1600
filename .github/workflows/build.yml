@@ -479,9 +479,8 @@ jobs:
         shell: pwsh
         # Packages the Qt6/dist folder staged above into a Start Menu +
         # optional-desktop-icon + uninstaller installer -- see
-        # Qt6/resources/windows/calc-u-1600.iss. Unsigned for now (see
-        # PACKAGING-TODO.md); produces Calc-U-1600-Setup.exe at the repo
-        # root (OutputDir in the .iss).
+        # Qt6/resources/windows/calc-u-1600.iss. Unsigned for now; produces
+        # Calc-U-1600-Setup.exe at the repo root (OutputDir in the .iss).
         run: ISCC.exe Qt6\resources\windows\calc-u-1600.iss
 
       - name: Upload artifact

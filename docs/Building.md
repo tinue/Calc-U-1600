@@ -92,8 +92,8 @@ $(brew --prefix qt)/bin/macdeployqt Qt6/build/Calc-U-1600.app
 Without that step the app still runs from this build directory (Qt is
 found via the Homebrew prefix), just not as a portable, relocatable
 bundle. The signing/notarizing/DMG steps CI does after this are
-release-packaging concerns — see
-[`PACKAGING-TODO.md`](../PACKAGING-TODO.md) for where that stands.
+release-packaging concerns — see the `mac-aarch64` job in
+[`.github/workflows/build.yml`](../.github/workflows/build.yml).
 
 ### Linux (best-effort — CI-derived, not verified on a fresh machine)
 
@@ -139,7 +139,7 @@ windeployqt --release --compiler-runtime Qt6\build\Calc-U-1600.exe
 then package the staged folder with Inno Setup using
 [`Qt6/resources/windows/calc-u-1600.iss`](../Qt6/resources/windows/calc-u-1600.iss)
 — see the `windows-x86_64` job in `build.yml` for the exact staging
-layout. The installer is currently unsigned (see `PACKAGING-TODO.md`).
+layout. The installer is currently unsigned.
 
 ## Running the tests
 
@@ -153,7 +153,8 @@ tests load `roms/PC-1500_A04.ROM` via a relative path.
 
 ## Packaging
 
-Release packaging (code signing, notarization, installers) is still
-being worked out per platform — see
-[`PACKAGING-TODO.md`](../PACKAGING-TODO.md) for current status rather
-than duplicating it here.
+Release packaging (code signing, notarization, installers) is handled
+by CI — see [`.github/workflows/build.yml`](../.github/workflows/build.yml)
+and [`bin/release`](../bin/release) rather than duplicating it here. The
+Windows installer is currently unsigned; every other platform's package
+is signed (macOS) or otherwise complete.

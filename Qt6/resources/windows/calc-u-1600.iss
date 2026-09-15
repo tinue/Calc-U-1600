@@ -2,7 +2,7 @@
 ; ISCC.exe (see .github/workflows/build.yml's windows-x86_64 job) against
 ; the already-staged Qt6\dist folder (exe + Qt DLLs + MSVC runtime +
 ; resources\, produced by that job's "Stage standalone-runnable folder"
-; step). Unsigned for now -- see PACKAGING-TODO.md.
+; step). Unsigned for now.
 
 [Setup]
 AppName=Calc-U-1600
