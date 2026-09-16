@@ -3,7 +3,7 @@
 `libsharpdx.a` + `sharpdx.h` are the prebuilt static library and generated C
 header of the **`convert`**-verb tokenizer from
 [`SharpDataExchangeRust`](../../../../SharpDataExchangeRust) (crate `sharpdx`,
-version 0.1.0). Calc-U-1600 links it so a `program: format: basic-binary`
+version 0.1.4). Calc-U-1600 links it so a `program: format: basic-binary`
 preset section can point `path:` at a plain-text `.bas` listing and have it
 tokenized in-process at load time (see `Core/Basic/BasicProgramSource.cpp`).
 
