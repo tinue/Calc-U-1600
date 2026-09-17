@@ -53,10 +53,18 @@ On the emulated PC-1600 (once per power-on):
 SETCOM "COM1:",9600,8,N,1,N,N        ' no handshake -- see the Fidelity note above for why not X
 INIT   "COM1:",4096
 OUTSTAT "COM1:"
-RCVSTAT "COM1:",24
+RCVSTAT "COM1:",28
 ```
 
 then `SAVE "COM1:"` / `LOAD "COM1:"`.
+
+`28` disables the CTS/CD/DSR handshake checks entirely, which is the
+right choice against `PtySerialLink`: a raw PTY carries no real modem
+lines, so `getStatus()` just hardcodes CTS/DSR asserted -- a "must be
+high" check (`24`, which enables the CTS check) would pass trivially
+rather than test anything. On real PC-1600 hardware talking to a real
+UART, use `24` (or the matching `SNDSTAT` value) instead, since genuine
+RTS/CTS flow control is meaningful there.
 
 On the Mac/Linux side, point `SharpDataExchange` at the stable symlink
 (SharpDataExchange's own auto-detect only scans `cu.usb*`/`ttyACM*`/
