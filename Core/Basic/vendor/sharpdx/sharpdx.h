@@ -58,6 +58,20 @@ typedef enum {
     SDE_LINE_ENDING_CR = 3,
 } SdeLineEnding;
 
+/*
+ How a `#SEGMENT` marker line tokenizes (`sde_tokenize` only; a device saving
+ multiple GOSUB "LABEL" program segments together). `Wire` is the 3-byte sequence
+ `0xFF 0x00 0x00` actually sent over `SAVE "COM1:"`. `Memory` is the bare `0xFF`
+ the ROM's own serial receiver actually stores into the program area -- use this
+ when building bytes for a direct RAM poke rather than a real/emulated serial
+ transfer (confirmed against a real PC-1600's `LOAD "COM1:"` pointers: BASPRG_END
+ comes out exactly 2 bytes short of the `Wire` form, once per marker).
+ */
+typedef enum {
+    SDE_SEGMENT_MARKER_WIRE = 0,
+    SDE_SEGMENT_MARKER_MEMORY = 1,
+} SdeSegmentMarker;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -89,7 +103,9 @@ void sde_buf_free(uint8_t *ptr, size_t len);
 int32_t sde_detect(const uint8_t *input, size_t in_len, SdeContent *out_kind);
 
 /*
- ASCII BASIC bytes -> tokenized payload. `with_header != 0` prepends the serial header.
+ ASCII BASIC bytes -> tokenized payload. `with_header != 0` prepends the serial
+ header. `segment_marker` selects how a `#SEGMENT` line renders -- see
+ [`SdeSegmentMarker`]; pass `SDE_SEGMENT_MARKER_WIRE` for the previous behavior.
 
  # Safety
  Pointer/length pairs must describe readable buffers; `name` is NULL or a C string;
@@ -97,6 +113,7 @@ int32_t sde_detect(const uint8_t *input, size_t in_len, SdeContent *out_kind);
  */
 int32_t sde_tokenize(SdeDevice device,
                      int with_header,
+                     SdeSegmentMarker segment_marker,
                      const char *name,
                      const uint8_t *input,
                      size_t in_len,

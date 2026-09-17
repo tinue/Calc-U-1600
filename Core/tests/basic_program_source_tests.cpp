@@ -73,6 +73,46 @@ void test_missing_file_rejected() {
     CHECK(s.error.find("open") != std::string::npos);
 }
 
+// Two independently line-numbered programs concatenated with a `#SEGMENT`
+// marker line -- the real-hardware mechanism behind GOSUB "LABEL" jumping
+// into a second program saved right after the first (see
+// SharpDataExchangeRust's scanner.rs and docs/PC1600-Serial-Port.md).
+// readBasicProgramSource() asks the tokenizer for SDE_SEGMENT_MARKER_MEMORY,
+// which renders the marker as the bare 0xFF the ROM's serial receiver
+// actually stores in the program area -- not the 3-byte 0xFF 0x00 0x00 wire
+// form SAVE "COM1:" transmits (that trailing 0x00 0x00 is a transmission-only
+// pacing marker, see sender.rs). Confirmed against the emulator's own
+// LOAD "COM1:" -- BASPRG_END - BASPRG_ST == 0x52 (82), matching this
+// payload's length exactly.
+void test_segment_marker_tokenized() {
+    std::string path = writeTemp("bps_segment.bas",
+                                  "5 \"PART1\"\n"
+                                  "10 \"A\"CLS : WAIT: GOSUB \"PART2\"\n"
+                                  "15 \"B\"CLS :PRINT\"Part 1\"\n"
+                                  "#SEGMENT\n"
+                                  "5 \"PART2\":PRINT\"Part 2\"\n"
+                                  "10 RETURN\n");
+    basic::BasicProgramSource s = basic::readBasicProgramSource(path, basic::TransferModel::PC1600);
+    CHECK(s.ok);
+    if (!s.ok) {
+        std::fprintf(stderr, "  error: %s\n", s.error.c_str());
+        return;
+    }
+    const std::vector<uint8_t> want = {
+        0x00, 0x05, 0x08, 0x22, 0x50, 0x41, 0x52, 0x54, 0x31, 0x22, 0x0D,
+        0x00, 0x0A, 0x13, 0x22, 0x41, 0x22, 0xF0, 0x88, 0x3A, 0xF1, 0xB3, 0x3A, 0xF1, 0x94, 0x22,
+        0x50, 0x41, 0x52, 0x54, 0x32, 0x22, 0x0D,
+        0x00, 0x0F, 0x11, 0x22, 0x42, 0x22, 0xF0, 0x88, 0x3A, 0xF0, 0x97, 0x22, 0x50, 0x61, 0x72,
+        0x74, 0x20, 0x31, 0x22, 0x0D,
+        0xFF,  // #SEGMENT -> just the leading 0xFF; the pacing pad is dropped
+        0x00, 0x05, 0x13, 0x22, 0x50, 0x41, 0x52, 0x54, 0x32, 0x22, 0x3A, 0xF0, 0x97, 0x22, 0x50,
+        0x61, 0x72, 0x74, 0x20, 0x32, 0x22, 0x0D,
+        0x00, 0x0A, 0x03, 0xF1, 0x99, 0x0D,
+    };
+    CHECK(s.payload == want);
+    CHECK(s.payload.size() == 0x52);  // matches BASPRG_END - BASPRG_ST on real LOAD "COM1:"
+}
+
 }  // namespace
 
 int run_basic_program_source_tests() {
@@ -80,6 +120,7 @@ int run_basic_program_source_tests() {
     test_device_is_passed_through();
     test_non_listing_rejected();
     test_missing_file_rejected();
+    test_segment_marker_tokenized();
 
     std::printf("basic_program_source_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

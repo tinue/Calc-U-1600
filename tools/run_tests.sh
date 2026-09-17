@@ -62,5 +62,6 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/pc1600_machine_image_tests.cpp \
   Core/tests/basic_program_source_tests.cpp \
   Core/Basic/vendor/sharpdx/libsharpdx.a \
+  -framework CoreFoundation -framework IOKit -framework Security \
   -o /tmp/lh5801_tests
 /tmp/lh5801_tests
