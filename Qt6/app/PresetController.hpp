@@ -38,14 +38,6 @@ public:
     // revision, a missing/rejected sibling file, etc).
     bool loadPreset(const QString& path, QString* error);
 
-    // Step 0 of loading a `.bas` file live (see loadBasicProgramLive()
-    // below) -- tokenizes `path` for the currently selected model and
-    // discards the result, touching nothing else. Callers should run this
-    // BEFORE asking the user to confirm/reset: a listing that doesn't even
-    // tokenize (bad syntax, non-ASCII on a PC-1500, ...) should fail with
-    // no popup and no machine side effect at all, not burn a reset first.
-    bool checkBasicProgramTokenizes(const QString& path, QString* error);
-
     // Loads a plain `.bas` listing directly into the *currently running*
     // machine -- no preset wrapper, no model/ROM/module rebuild (only a
     // reset). Runs the same "reset, reach PRO mode, NEW0, poke the
@@ -54,9 +46,7 @@ public:
     // PC1500BasicLoader.hpp/PC1600BasicLoader.hpp's own doc comments), just
     // driven here instead of by preset steps. Synchronous on the calling
     // thread, same caller contract as loadPreset() (stop the frame timer
-    // first). Resets the machine and destroys the current program (NEW0)
-    // -- the caller should run checkBasicProgramTokenizes() and confirm
-    // with the user BEFORE calling this (see its own doc comment).
+    // first). Resets the machine and destroys the current program (NEW0).
     bool loadBasicProgramLive(const QString& path, QString* error);
 
 signals:

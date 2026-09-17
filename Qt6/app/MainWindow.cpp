@@ -110,16 +110,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
                                                             tr("Presets (*.pc1500 *.pc1500a *.pc1600);;All Files (*)"));
         if (path.isEmpty()) return;
 
-        // A preset doesn't just open a file -- it replaces the running
-        // machine (model/ROM/modules/plotter/program) with whatever the
-        // preset specifies, same destructive-to-current-state rationale as
-        // Load BASIC Program's own confirmation.
-        const auto reply = QMessageBox::question(
-            this, tr("Load Preset"),
-            tr("This replaces the current machine and its state with the one specified in the preset. Continue?"),
-            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-        if (reply != QMessageBox::Yes) return;
-
         runSynchronousLoad(
             tr("Load Preset"), [this, path](QString* error) { return m_presetController->loadPreset(path, error); },
             // PresetController::armed (connected above to onPresetArmed())
@@ -150,25 +140,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
                                                             AppSettings::presetOpenDirOrHome(),
                                                             tr("BASIC Programs (*.bas);;All Files (*)"));
         if (path.isEmpty()) return;
-
-        // Step 0: tokenize before touching anything else -- a listing that
-        // doesn't even tokenize should fail here with no popup and no
-        // reset, not after the machine's already been cleared for it.
-        QString precheckError;
-        if (!m_presetController->checkBasicProgramTokenizes(path, &precheckError)) {
-            QMessageBox::warning(this, tr("Load BASIC Program"), precheckError);
-            return;
-        }
-
-        // The load choreography resets the machine and clears the resident
-        // program (see PresetController::loadBasicProgramLive) -- unlike
-        // Load Preset, this runs against a machine the user may have been
-        // actively using, so confirm first.
-        const auto reply = QMessageBox::question(
-            this, tr("Load BASIC Program"),
-            tr("This resets the machine and clears the current program before loading the new one. Continue?"),
-            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-        if (reply != QMessageBox::Yes) return;
 
         runSynchronousLoad(tr("Load BASIC Program"), [this, path](QString* error) {
             return m_presetController->loadBasicProgramLive(path, error);

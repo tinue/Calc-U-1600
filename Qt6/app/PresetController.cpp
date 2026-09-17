@@ -233,28 +233,11 @@ bool PresetController::loadBasicProgramLive(const QString& path, QString* error)
     return loadBasicProgramLivePC1500(*machine, path.toStdString(), error);
 }
 
-bool PresetController::checkBasicProgramTokenizes(const QString& path, QString* error) {
-    const basic::TransferModel model =
-        (m_controller->currentModel() == Model::PC1600) ? basic::TransferModel::PC1600 : basic::TransferModel::PC1500;
-    basic::BasicProgramSource src = basic::readBasicProgramSource(path.toStdString(), model);
-    if (!src.ok) {
-        *error = QString::fromStdString(src.error);
-        return false;
-    }
-    return true;
-}
-
 #else  // !CALCU1600_PRESET_LOADER_AVAILABLE
 
 bool PresetController::loadPreset(const QString&, QString* error) {
     *error = tr("Preset loading isn't available in this build yet (it currently requires the macOS build -- "
                 "see Qt6/CMakeLists.txt).");
-    return false;
-}
-
-bool PresetController::checkBasicProgramTokenizes(const QString&, QString* error) {
-    *error = tr("Loading a BASIC program isn't available in this build yet (it currently requires the macOS "
-                "build -- see Qt6/CMakeLists.txt).");
     return false;
 }
 
