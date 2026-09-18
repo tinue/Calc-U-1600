@@ -30,33 +30,33 @@ program:
 keys:
   - type: SAVE"X:BIO.BAS"
 
-#program:
-#  path: ../lissajou-1600.bas
-#  format: basic-binary
-#keys:
-#  - type: SAVE"X:LISSAJOU.BAS"
-#
-#program:
-#  path: ../ascii.bas
-#  format: basic-binary
-#keys:
-#  - type: SAVE"X:ASCII.BAS"
-#
-#program:
-#  path: ../setcom1600.bas
-#  format: basic-binary
-#keys:
-#  - type: SAVE"X:COMM.BAS"
-#
-## Setup the DW.CFG file on X:
-#keys:
-#  - type: MAXFILES=1
-#  - type: OPEN"X:DW.CFG" FOR OUTPUT AS #1
-#  - type: PRINT#1,"C \31\LOAD"+CHR$(&22)+"X:COMM.BAS"+CHR$(&22)
-#  - type: PRINT#1,"^"
-#  - type: CLOSE #1
-#
-## Some debug output at the end
-#keys:
-#  - type: DSKF"X:"
-#  - type: FILES"X:"
+program:
+  path: ../lissajou-1600.bas
+  format: basic-binary
+keys:
+  - type: SAVE"X:LISSAJOU.BAS"
+
+program:
+  path: ../ascii.bas
+  format: basic-binary
+keys:
+  - type: SAVE"X:ASCII.BAS"
+
+program:
+  path: ../setcom1600.bas
+  format: basic-binary
+keys:
+  - type: SAVE"X:COMM.BAS"
+
+# Setup the DW.CFG file on X:
+keys:
+  - type: MAXFILES=1
+  - type: OPEN"X:DW.CFG" FOR OUTPUT AS #1
+  - type: PRINT#1,"C \31\LOAD"+CHR$(&22)+"X:COMM.BAS"+CHR$(&22)
+  - type: PRINT#1,"^"
+  - type: CLOSE #1
+
+# Some debug output at the end
+keys:
+  - type: DSKF"X:"
+  - type: FILES"X:"
