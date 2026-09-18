@@ -15,6 +15,17 @@ namespace PC1500KeyboardMap {
 struct ResolvedKey {
     std::string baseKey;
     bool needsShift = false;
+
+    // PC-1500 only: the ROM itself auto-repeats these when held (confirmed
+    // on real hardware) -- they must bypass the live-typing keystroke queue
+    // and go straight through as a continuous, unmodified press...hold...
+    // release, or the queue's fixed tap/gap cadence would chop a physical
+    // hold into synthetic taps and the ROM's own repeat could never engage.
+    // Backspace resolves to base key "left" on PC-1500, so it's covered
+    // here automatically.
+    bool isPc1500RepeatKey() const {
+        return baseKey == "left" || baseKey == "right" || baseKey == "up" || baseKey == "down";
+    }
 };
 
 // `key`/`modifiers`/`text` are taken as plain values (not QKeyEvent*) so

@@ -31,6 +31,12 @@
 #include <chrono>
 #include <functional>
 
+namespace {
+// ~60 Hz. Shared by the frame timer's own period and by the turbo
+// fast-forward budget below, so the two stay in lockstep if this changes.
+constexpr int kFrameIntervalMs = 16;
+} // namespace
+
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle(tr("Calc-U-1600"));
     setFocusPolicy(Qt::StrongFocus);
@@ -182,7 +188,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_frameTimer = new QTimer(this);
     m_frameTimer->setTimerType(Qt::PreciseTimer);
     connect(m_frameTimer, &QTimer::timeout, this, &MainWindow::onFrameTick);
-    m_frameTimer->start(16); // ~60 Hz
+    m_frameTimer->start(kFrameIntervalMs);
 
     // MachineController's constructor already booted whatever model the
     // "Startup device" setting picked (see AppSettings::startupModelPreference()),
@@ -233,7 +239,7 @@ void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::functi
     const bool ok = loadFn(&error);
     unsetCursor();
     if (afterLoad) afterLoad();
-    m_frameTimer->start(16);
+    m_frameTimer->start(kFrameIntervalMs);
 
     if (!ok) {
         QMessageBox::warning(this, errorTitle, error);
@@ -291,19 +297,6 @@ void MainWindow::refreshModuleCombos() {
     }
 }
 
-namespace {
-// PC-1500 only: the ROM itself auto-repeats these when held (confirmed
-// on real hardware) -- they must bypass the live-typing keystroke queue
-// (see keyPressEvent) and go straight through as a continuous, unmodified
-// press...hold...release, or the queue's fixed tap/gap cadence would chop
-// a physical hold into synthetic taps and the ROM's own repeat could
-// never engage. Backspace resolves to base key "left" on PC-1500
-// (PC1500KeyboardMap.cpp), so it's covered here automatically.
-bool isPc1500RepeatKey(const std::string& baseKey) {
-    return baseKey == "left" || baseKey == "right" || baseKey == "up" || baseKey == "down";
-}
-} // namespace
-
 void MainWindow::keyPressEvent(QKeyEvent* event) {
     if (event->isAutoRepeat()) {
         // Qt delivers OS auto-repeat as repeated .down events -- without
@@ -321,6 +314,13 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
         return;
     }
 
+    // A real held press/release, tracked for the matching .up event --
+    // used for any key that bypasses the live-typing queue.
+    auto trackAndPress = [this, event](const std::string& baseKey) {
+        m_controller->pressKey(baseKey);
+        m_physicalKeysDown.insert(event->key(), baseKey);
+    };
+
     if (isPC1600) {
         // PC-1600 keystroke buffering is out of scope for now -- this
         // branch is unchanged.
@@ -329,8 +329,7 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
             // for the matching .up event, so release skips it too.
             m_controller->tapShiftedKey(resolved->baseKey);
         } else {
-            m_controller->pressKey(resolved->baseKey);
-            m_physicalKeysDown.insert(event->key(), resolved->baseKey);
+            trackAndPress(resolved->baseKey);
         }
         event->accept();
         return;
@@ -345,9 +344,8 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
         // Self-contained: the queue owns shift's whole tap-then-base-key
         // sequence, nothing to track for the matching .up event.
         m_controller->enqueueShiftedKey(resolved->baseKey);
-    } else if (isPc1500RepeatKey(resolved->baseKey)) {
-        m_controller->pressKey(resolved->baseKey);
-        m_physicalKeysDown.insert(event->key(), resolved->baseKey);
+    } else if (resolved->isPc1500RepeatKey()) {
+        trackAndPress(resolved->baseKey);
     } else {
         // Self-contained: the queue owns the whole press/hold/release/idle
         // cycle, nothing to track for the matching .up event.
@@ -380,10 +378,15 @@ void MainWindow::onFrameTick() {
         // budget, instead of the usual real-time-paced amount. The display
         // still only repaints once per tick (below), so this reads as a
         // fast-forward rather than a smoother/faster-refreshing picture.
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(14);
+        // processEvents() is pumped between bursts so the mouse-release
+        // event that ends turbo (and any paint/close events) isn't starved
+        // for the whole budget.
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::milliseconds(kFrameIntervalMs - 2);
         do {
             m_controller->advance(cyclesPerFrame);
-        } while (std::chrono::steady_clock::now() < deadline);
+            QCoreApplication::processEvents();
+        } while (m_turboActive && std::chrono::steady_clock::now() < deadline);
     } else {
         m_controller->advance(cyclesPerFrame);
     }

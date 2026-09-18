@@ -34,6 +34,12 @@ PC1600BasicLoadResult fail(const std::string& msg) {
     return r;
 }
 
+bool writePlacementSegment(PC1600Machine& machine, const pc1600::PlacementWrite& w, const uint8_t* src) {
+    return (w.kind == pc1600::ProgramSegment::Kind::InternalRam)
+               ? machine.debugWriteInternalRam(w.backingOffset, src, w.length)
+               : machine.debugWriteSlotImage(w.slot, w.backingOffset, src, w.length);
+}
+
 pc1600::SlotGeometry slotGeometry(PC1600Machine& machine, int slot) {
     pc1600::SlotGeometry g;
     std::vector<uint8_t> img = machine.debugSlotImage(slot);
@@ -127,10 +133,7 @@ PC1600BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
             std::vector<uint8_t> blank(oldLen + 1, 0x00);
             for (const pc1600::PlacementWrite& w : clearPlan.writes) {
                 const uint8_t* src = blank.data() + w.sourceOffset;
-                bool okWrite = (w.kind == pc1600::ProgramSegment::Kind::InternalRam)
-                                   ? machine.debugWriteInternalRam(w.backingOffset, src, w.length)
-                                   : machine.debugWriteSlotImage(w.slot, w.backingOffset, src, w.length);
-                if (!okWrite) {
+                if (!writePlacementSegment(machine, w, src)) {
                     std::fprintf(stderr,
                                  "[PC1600BasicLoader] note: failed to clear old program segment\n");
                 }
@@ -148,10 +151,7 @@ PC1600BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
 
     for (const pc1600::PlacementWrite& w : plan.writes) {
         const uint8_t* src = image.data() + w.sourceOffset;
-        bool okWrite = (w.kind == pc1600::ProgramSegment::Kind::InternalRam)
-                           ? machine.debugWriteInternalRam(w.backingOffset, src, w.length)
-                           : machine.debugWriteSlotImage(w.slot, w.backingOffset, src, w.length);
-        if (!okWrite) {
+        if (!writePlacementSegment(machine, w, src)) {
             char buf[192];
             if (w.kind == pc1600::ProgramSegment::Kind::InternalRam)
                 std::snprintf(buf, sizeof(buf),
