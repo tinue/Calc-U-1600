@@ -227,6 +227,105 @@ void test_ce1600m_module_equivalence_and_run() {
     CHECK(afterRun == want);
 }
 
+// Reloading over a resident program must fully erase its tail rather than
+// just moving BASPRG_END back -- otherwise a shorter reload leaves stale
+// tokens dangling in RAM (harmless to RUN, but a stray dump of that area
+// would show leftover garbage from the previous program).
+void test_reload_over_shorter_program_clears_tail_stock() {
+    PC1600Machine m;
+    if (!bootIntoProNew0(m)) {
+        std::fprintf(stderr, "SKIP pc1600_basicloader reload-shorter: PC-1600 ROM set not found\n");
+        return;
+    }
+    std::vector<uint8_t> longPayload = {0x00, 0x0A, 0x03, 0xF1, 0x22, 0x48, 0x45, 0x4C, 0x4C, 0x4F,
+                                       0x22, 0x0D};
+    std::vector<uint8_t> shortPayload = {0x00, 0x0A, 0x03, 0xF1, 0x30, 0x0D};
+    CHECK(longPayload.size() > shortPayload.size());
+
+    PC1600BasicLoadResult first = loadBasicBinaryPayload(m, longPayload);
+    CHECK(first.ok);
+    if (!first.ok) {
+        std::fprintf(stderr, "  loader error: %s\n", first.error.c_str());
+        return;
+    }
+    uint16_t oldEnd = first.endAddr;
+
+    PC1600BasicLoadResult second = loadBasicBinaryPayload(m, shortPayload);
+    CHECK(second.ok);
+    if (!second.ok) {
+        std::fprintf(stderr, "  loader error: %s\n", second.error.c_str());
+        return;
+    }
+    CHECK(second.baseAddr == first.baseAddr);   // same BASPRG_ST, no NEW involved
+    CHECK(second.endAddr < oldEnd);
+    CHECK(toZ80(be16(m, 0xF867)) == second.endAddr);
+
+    for (uint16_t a = static_cast<uint16_t>(second.endAddr + 1); a <= oldEnd; a++) {
+        CHECK(m.memory().peek(a) == 0x00);
+    }
+}
+
+// A live BASPRG_END that doesn't sit at/after BASPRG_ST must be rejected --
+// the loader relies on it to know how much of the resident program to erase.
+void test_rejects_invalid_basprg_end() {
+    PC1600Machine m;
+    if (!bootIntoProNew0(m)) {
+        std::fprintf(stderr, "SKIP pc1600_basicloader invalid-end: PC-1600 ROM set not found\n");
+        return;
+    }
+    uint16_t st = be16(m, 0xF865);
+    uint16_t badEnd = static_cast<uint16_t>(st - 1);
+    m.memory().poke(0xF867, static_cast<uint8_t>(badEnd >> 8));
+    m.memory().poke(0xF868, static_cast<uint8_t>(badEnd & 0xFF));
+
+    std::vector<uint8_t> payload = {0x00, 0x0A, 0x03, 0xF1, 0x30, 0x0D};
+    PC1600BasicLoadResult r = loadBasicBinaryPayload(m, payload);
+    CHECK(!r.ok);
+    CHECK(r.error.find("BASPRG_END") != std::string::npos);
+}
+
+// Same as test_reload_over_shorter_program_clears_tail_stock, but with a
+// Slot-1 RAM module fitted, so the vacated tail lives in the module's
+// backing store rather than internal RAM -- the erase plan must still find
+// and clear it via the same scattered-placement logic used for writes.
+void test_reload_over_shorter_program_clears_tail_module() {
+    PC1600Machine m;
+    if (!bootIntoProNew0Slot1Ram(m, 0x8000)) {
+        std::fprintf(stderr, "SKIP pc1600_basicloader reload-shorter-module: PC-1600 ROM set not found\n");
+        return;
+    }
+    std::vector<uint8_t> longPayload = {0x00, 0x0A, 0x03, 0xF1, 0x22, 0x48, 0x45, 0x4C, 0x4C, 0x4F,
+                                       0x22, 0x0D};
+    std::vector<uint8_t> shortPayload = {0x00, 0x0A, 0x03, 0xF1, 0x30, 0x0D};
+
+    PC1600BasicLoadResult first = loadBasicBinaryPayload(m, longPayload);
+    CHECK(first.ok);
+    if (!first.ok) {
+        std::fprintf(stderr, "  loader error: %s\n", first.error.c_str());
+        return;
+    }
+    uint16_t oldEndLh = be16(m, 0xF867);
+
+    PC1600BasicLoadResult second = loadBasicBinaryPayload(m, shortPayload);
+    CHECK(second.ok);
+    if (!second.ok) {
+        std::fprintf(stderr, "  loader error: %s\n", second.error.c_str());
+        return;
+    }
+    uint16_t newEndLh = be16(m, 0xF867);
+    CHECK(newEndLh < oldEndLh);
+
+    // Both ends land inside the module window here (0x00C5-based, well below
+    // the module's 32K size), so the vacated tail is entirely in the
+    // module's own backing store.
+    std::vector<uint8_t> img = m.debugSlotImage(1);
+    CHECK(!img.empty());
+    if (img.empty() || oldEndLh >= img.size()) return;
+    for (uint16_t a = static_cast<uint16_t>(newEndLh + 1); a <= oldEndLh; a++) {
+        CHECK(img[a] == 0x00);
+    }
+}
+
 void test_rejects_pc1500_transfer_file() {
     PC1600Machine m;
     if (!bootIntoProNew0(m)) {
@@ -251,6 +350,9 @@ void test_rejects_pc1500_transfer_file() {
 int run_pc1600_basicloader_tests() {
     test_equivalence_against_typer();
     test_ce1600m_module_equivalence_and_run();
+    test_reload_over_shorter_program_clears_tail_stock();
+    test_reload_over_shorter_program_clears_tail_module();
+    test_rejects_invalid_basprg_end();
     test_rejects_pc1500_transfer_file();
 
     std::printf("pc1600_basicloader_tests: %d passed, %d failed\n", g_pass, g_fail);

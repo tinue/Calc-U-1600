@@ -13,9 +13,15 @@ class PC1600Machine;
 // program area, appends the 0xFF end marker, and writes BASPRG_END --
 // instead of typing the program in character by character.
 //
-// It does NOT type anything: the preset must first put the machine in PRO
-// mode and run NEW0 (`- key: mode` / `- type: NEW0`), the same contract
-// `format: basic-text` has.
+// It does NOT type anything and never resets the machine or touches MODE:
+// this is LOAD semantics, not NEW+type. It works off whatever
+// BASPRG_ST/BASPRG_END are currently live -- validates both are plausible,
+// erases the resident program between them, pokes the new payload in from
+// BASPRG_ST, and fixes up BASPRG_END. The caller is responsible for having
+// prepared the machine first (memory cards, `NEW`, mode) exactly as on real
+// hardware; a preset's own `- type: NEW0` step (the same contract
+// `format: basic-text` has) works fine too, since a freshly-NEW0'd program
+// is zero-length and the erase step is then a no-op.
 //
 // Layout facts (verifiable with tools/pc1600_cli --preset ... --dump-basic
 // against the keystroke typer): the in-RAM line records are
@@ -38,8 +44,10 @@ struct PC1600BasicLoadResult {
     std::string error;
 };
 
-/// `transferFile` = a full PC-1600 transfer file, header included. Used by
-/// the GUI `-loadBasicBinary:` action.
+/// `transferFile` = a full PC-1600 transfer file, header included. Requires
+/// only that BASPRG_ST/BASPRG_END are currently valid pointers -- no reset,
+/// mode change, or NEW0 is performed. Used by the GUI `-loadBasicBinary:`
+/// action.
 PC1600BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,
                                              const std::vector<uint8_t>& transferFile);
 

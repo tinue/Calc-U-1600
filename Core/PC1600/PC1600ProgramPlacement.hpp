@@ -98,7 +98,11 @@ struct PlacementResult {
 
 /// Plan the S0 placement for a `payloadLen`-byte tokenised image (the
 /// terminating $FF is accounted for on top). Reads S0MTb / ADTBL /
-/// BASPRG_ST / VARIABLE POINTER via `in.peek`.
+/// BASPRG_ST / VARIABLE POINTER via `in.peek`. Safe to call twice against the
+/// same `PlacementInput` with different lengths (e.g. once with the resident
+/// program's length to find which physical segments to erase, once with the
+/// new program's length for the real write plan) -- module/bank geometry
+/// never changes between the two calls, only how far the segment walk goes.
 PlacementResult planS0Placement(const PlacementInput& in, size_t payloadLen);
 
 /// Plan placement into an independent PROGRAM-module region (doc §2): the

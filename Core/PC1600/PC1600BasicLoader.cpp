@@ -64,9 +64,13 @@ PC1600BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,
 
 PC1600BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
                                              const std::vector<uint8_t>& payload) {
-    // The preset is responsible for the clean loadable state first -- PRO
-    // mode (`- key: mode`) and a cleared program (`- type: NEW0`) -- the
-    // same contract `format: basic-text` has. This loader types nothing.
+    // LOAD semantics: this works off whatever BASPRG_ST/BASPRG_END are
+    // currently live -- no reset, no mode change, no NEW0 typed here. The
+    // caller (the user, via the menu, or a preset's own `- type: NEW0` step)
+    // is responsible for having the machine in a state where these pointers
+    // are valid; this loader validates them, erases the resident program
+    // between them, pokes the new payload in from BASPRG_ST, and fixes up
+    // BASPRG_END.
     //
     // Placement is delegated to pc1600::planS0Placement(), which reads the
     // firmware-maintained work-area bytes (S0MTb / ADTBL / BASPRG_ST) and
@@ -75,14 +79,26 @@ PC1600BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
     // module's 16 KB banks then internal RAM. The bytes are copied straight
     // into the emulator's backing store (debugWriteInternalRam /
     // debugWriteSlotImage), bypassing the bus and its post-NEW0 bank
-    // gating.
+    // gating. It's safe (and used here) to call planS0Placement() twice with
+    // different payload lengths against the same PlacementInput -- once to
+    // find which physical segments hold the resident program (to erase),
+    // once for the real payload -- since LOAD never changes module/bank
+    // geometry.
     uint16_t stLh = readBE16(machine, kBasPrgSt);
     if (stLh == 0x0000 || stLh == 0xFFFF || stLh >= 0xF000) {
         char buf[192];
         std::snprintf(buf, sizeof(buf),
-                      "BASPRG_ST looks uninitialised ($F865=$%04X) -- put the machine in PRO mode "
-                      "and run NEW0 before the program block (`- key: mode` / `- type: NEW0`)",
-                      stLh);
+                      "BASPRG_ST looks uninitialised ($F865=$%04X) -- run NEW before loading", stLh);
+        return fail(buf);
+    }
+
+    uint16_t endLhOld = readBE16(machine, kBasPrgEnd);
+    if (endLhOld == 0x0000 || endLhOld == 0xFFFF || endLhOld >= 0xF000 || endLhOld < stLh) {
+        char buf[192];
+        std::snprintf(buf, sizeof(buf),
+                      "BASPRG_END looks invalid ($F867=$%04X) for BASPRG_ST $%04X -- run NEW before "
+                      "loading",
+                      endLhOld, stLh);
         return fail(buf);
     }
 
@@ -100,6 +116,29 @@ PC1600BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
         // bank state is not what NEW0 usually leaves.
         std::fprintf(stderr, "[PC1600BasicLoader] note: $F5CF=$%04X != program start $%04X\n", f5cf,
                      plan.startAddr);
+    }
+
+    // Erase the resident program (whatever was there before) so a shorter
+    // reload doesn't leave stale tokens dangling past the new BASPRG_END.
+    size_t oldLen = static_cast<size_t>(endLhOld - stLh);
+    if (oldLen > 0) {
+        pc1600::PlacementResult clearPlan = pc1600::planS0Placement(in, oldLen);
+        if (clearPlan.ok) {
+            std::vector<uint8_t> blank(oldLen + 1, 0x00);
+            for (const pc1600::PlacementWrite& w : clearPlan.writes) {
+                const uint8_t* src = blank.data() + w.sourceOffset;
+                bool okWrite = (w.kind == pc1600::ProgramSegment::Kind::InternalRam)
+                                   ? machine.debugWriteInternalRam(w.backingOffset, src, w.length)
+                                   : machine.debugWriteSlotImage(w.slot, w.backingOffset, src, w.length);
+                if (!okWrite) {
+                    std::fprintf(stderr,
+                                 "[PC1600BasicLoader] note: failed to clear old program segment\n");
+                }
+            }
+        } else {
+            std::fprintf(stderr, "[PC1600BasicLoader] note: could not plan clear of old program: %s\n",
+                         clearPlan.error.c_str());
+        }
     }
 
     // The tokenised body followed by its single 0xFF terminator -- the

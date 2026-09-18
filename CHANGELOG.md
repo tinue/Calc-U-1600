@@ -11,9 +11,13 @@
 - **Startup** A missing or corrupted bundled ROM now shows a dialog
   naming the file and where it looked, instead of silently crashing.
 - **Loading** Support loading segmented PC-1600 BASIC programs.
-- **Loading** File ▸ Load Preset… and File ▸ Load BASIC Program… no
-  longer ask for confirmation before resetting the machine — picking a
-  file loads and resets immediately.
+- **Loading** File ▸ Load Preset… no longer asks for confirmation before
+  resetting the machine — picking a preset loads and resets immediately.
+- **Loading** File ▸ Load BASIC Program… now behaves like a real LOAD:
+  it no longer resets the machine, switches RUN/PRO mode, or types NEW0.
+  It loads into whatever BASIC program area is currently live, so you can
+  prepare the machine yourself first (fit a memory card, run `NEW`,
+  attach a plotter) exactly as you would on real hardware.
 - **Windows installer** Fixed a "missing MSVCP140.dll" failure on a
   clean machine by running the bundled Visual C++ redistributable
   during install.

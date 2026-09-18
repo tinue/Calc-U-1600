@@ -54,6 +54,27 @@ obligations.
   useful measurement: an LCD-free busy-loop benchmark (compute without
   drawing) in both modes, to separate CPU/pacing error from display
   timing.
+- **RAM power-up fill byte may be wrong (0xFF vs 0x00).** The codebase
+  currently fills RAM with `0xFF` at construction/reset and documents
+  this as "confirmed real hardware behavior"
+  (`Core/PC1500/PC1500Memory.cpp:26-29,48-58`,
+  `Core/CPU/LH5803/LH5803Memory.cpp:24-28`, generalized to the whole
+  PC-1500/1500A/1600 family), with the same default propagated into
+  `Core/Connector/CE163FCard.hpp` and the generic YAML memory-card
+  format's `powerUpFill` (`Core/Connector/MemoryCardDefinition.hpp:86`),
+  and cited in `docs/Memory-Card-Definition-Spec.md` /
+  `-Format.md` / `User-Guide.md`. A domain-expert check said real
+  hardware actually zeros RAM on startup, not `0xFF` — needs a proper
+  hardware verification pass. If `0x00` turns out to be correct, this is
+  a coordinated fix across those memory constructors/reset paths, the
+  card model, the generic card-definition default, ~a dozen test
+  assertions (e.g. `lh5803_tests.cpp:97`, `memory_card_tests.cpp:903`,
+  `pc1600_slot_ram_tests.cpp:50`), and the two spec/format docs — not
+  just a comment fix. Note in passing: open-bus/unmapped-address reads
+  and flash-erase-to-`0xFF` are a different mechanism and would be
+  unaffected either way; and `Core/PC1600/PC1600Memory.hpp:372,488`
+  already zero-inits the Z-80-side internal RAM bank, so the codebase is
+  already inconsistent with itself regardless of which byte is correct.
 - **`TIME`/the RTC advances at emulated-CPU rate, not wall-clock** — it
   races ahead when the emulator runs faster than real-time, since the
   clock is seeded once from the host and thereafter advanced only by

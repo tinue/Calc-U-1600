@@ -160,12 +160,15 @@ void test_rejects_pc1600_transfer_file() {
     CHECK(r.error.find("PC-1600") != std::string::npos);
 }
 
-// A preset that forgot its `- type: NEW0` leaves BASPRG_ST uninitialised
-// ($FFFF after a bare boot, or a $00 low byte). The loader must reject that
-// with an actionable message rather than poking into system RAM, while
-// still accepting the perfectly valid post-NEW0 base $00C5 (16K RAM card
-// in the low window).
-void test_rejects_missing_new0() {
+// A bare-booted machine (never NEW0'd, e.g. one where the user forgot to
+// run NEW) leaves BASPRG_ST uninitialised ($FFFF after a bare boot, or a
+// $00 low byte). The loader must reject that with an actionable message
+// rather than poking into system RAM, while still accepting the perfectly
+// valid post-NEW0 base $00C5 (16K RAM card in the low window), or any other
+// live BASPRG_ST value a `NEW &nnnn` might leave behind -- the loader has no
+// notion of "the" expected NEW0 target, only of "is the current pointer
+// plausible."
+void test_rejects_uninitialized_basprg_st() {
     std::vector<uint8_t> payload;
     uint16_t st = 0, end = 0;
     uint8_t marker = 0;
@@ -181,7 +184,73 @@ void test_rejects_missing_new0() {
     // Deliberately do NOT primeNew0(m).
     PC1500BasicLoadResult r = loadBasicBinaryProgram(m, wrapCe158(payload));
     CHECK(!r.ok);
-    CHECK(r.error.find("NEW0") != std::string::npos);
+    CHECK(r.error.find("BASPRG_ST") != std::string::npos);
+}
+
+// A live BASPRG_END that doesn't sit at/after BASPRG_ST (corrupted or
+// otherwise implausible) must be rejected too -- it's the pointer the
+// loader relies on to know how much of the resident program to erase.
+void test_rejects_invalid_basprg_end() {
+    PC1500Machine m;
+    if (!bootMachine(m)) {
+        std::fprintf(stderr, "SKIP basic_fastloader invalid-end: roms/PC-1500_A04.ROM not found\n");
+        return;
+    }
+    primeNew0(m);
+    uint16_t st = be16(m, 0x7865);
+    // Corrupt BASPRG_END to point before BASPRG_ST.
+    uint16_t badEnd = static_cast<uint16_t>(st - 1);
+    m.memory().poke(0x7867, static_cast<uint8_t>(badEnd >> 8));
+    m.memory().poke(0x7868, static_cast<uint8_t>(badEnd & 0xFF));
+
+    std::vector<uint8_t> payload = {0x0A, 0x03, 0xF1, 0x8E, 0x0D};  // "10 PRINT" (rough shape)
+    PC1500BasicLoadResult r = loadBasicBinaryProgram(m, wrapCe158(payload));
+    CHECK(!r.ok);
+    CHECK(r.error.find("BASPRG_END") != std::string::npos);
+}
+
+// Reloading over a resident program must not leave any of its tail dangling
+// past the new (shorter) BASPRG_END: LOADing "10 PRINT X" then a shorter
+// "10 END" must fully erase the first program's leftover bytes, not just
+// move the end pointer back.
+void test_reload_over_shorter_program_clears_tail() {
+    std::vector<uint8_t> longPayload, shortPayload;
+    uint16_t stLong = 0, endLong = 0, stShort = 0, endShort = 0;
+    uint8_t markerLong = 0, markerShort = 0;
+    if (!tokenizeViaOracle("10 PRINT \"HELLO WORLD\"\n20 GOTO 10\n", &longPayload, &stLong, &endLong,
+                          &markerLong) ||
+        !tokenizeViaOracle("10 END\n", &shortPayload, &stShort, &endShort, &markerShort)) {
+        std::fprintf(stderr, "SKIP basic_fastloader reload-shorter: ROM not available\n");
+        return;
+    }
+    if (longPayload.size() <= shortPayload.size()) {
+        std::fprintf(stderr, "SKIP basic_fastloader reload-shorter: fixture programs not ordered\n");
+        return;
+    }
+    PC1500Machine m;
+    if (!bootMachine(m)) {
+        std::fprintf(stderr, "SKIP basic_fastloader reload-shorter: roms/PC-1500_A04.ROM not found\n");
+        return;
+    }
+    primeNew0(m);
+    PC1500BasicLoadResult first = loadBasicBinaryProgram(m, wrapCe158(longPayload));
+    CHECK(first.ok);
+    if (!first.ok) return;
+    uint16_t oldEnd = first.endAddr;
+
+    PC1500BasicLoadResult second = loadBasicBinaryProgram(m, wrapCe158(shortPayload));
+    CHECK(second.ok);
+    if (!second.ok) return;
+
+    CHECK(second.baseAddr == first.baseAddr);              // same BASPRG_ST, no NEW involved
+    CHECK(second.endAddr < oldEnd);                        // shorter program, tighter end
+    CHECK(be16(m, 0x7867) == second.endAddr);              // BASPRG_END reflects only the new program
+
+    // Everything between the new marker and the old program's old end must
+    // now read 0x00 -- no leftover tokens from the first program survive.
+    for (uint16_t a = static_cast<uint16_t>(second.endAddr + 1); a <= oldEnd; a++) {
+        CHECK(m.memory().peek(a) == 0x00);
+    }
 }
 
 void test_rejects_garbage() {
@@ -198,7 +267,9 @@ int run_basic_fastloader_tests() {
     test_equivalence_small();
     test_equivalence_rem_and_data();
     test_rejects_pc1600_transfer_file();
-    test_rejects_missing_new0();
+    test_rejects_uninitialized_basprg_st();
+    test_rejects_invalid_basprg_end();
+    test_reload_over_shorter_program_clears_tail();
     test_rejects_garbage();
 
     std::printf("basic_fastloader_tests: %d passed, %d failed\n", g_pass, g_fail);
