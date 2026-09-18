@@ -190,6 +190,23 @@ void FloppyDiskManager::markDirtyAndSchedulePersist() {
     m_debounceTimer->start(500);
 }
 
+int FloppyDiskManager::side() const {
+    auto* m1600 = m_controller->pc1600();
+    return m1600 ? m1600->ce1600fSide() : 0;
+}
+
+void FloppyDiskManager::toggleSide() {
+    auto* m1600 = m_controller->pc1600();
+    if (!m1600 || !m1600->ce1600fAttached()) return;
+    m1600->ce1600fSetSide(m1600->ce1600fSide() == 0 ? 1 : 0);
+    m_lastSeenRevision = m1600->ce1600fRevision();
+}
+
+bool FloppyDiskManager::motorOn() const {
+    auto* m1600 = m_controller->pc1600();
+    return m1600 && m1600->ce1600fMotorOn();
+}
+
 void FloppyDiskManager::flushPendingPersist() {
     m_debounceTimer->stop();
     if (!m_persistPending) return;

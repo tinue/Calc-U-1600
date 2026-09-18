@@ -170,6 +170,14 @@ public:
     void ce1600fInsertBlank();
     bool ce1600fLoadImage(const uint8_t* data, size_t size);  // live hot-swap, no power-cycle needed
     void ce1600fClearDirty();
+    /// 0 = side A, 1 = side B -- the software analogue of ejecting and
+    /// flipping the physical disk (CE1600FCard::setSide()'s own comment).
+    /// A no-op when no floppy is attached.
+    int ce1600fSide() const;
+    void ce1600fSetSide(int side);
+    /// The "green lamp" (drive-active indicator) -- see CE1600FCard::
+    /// motorOn(). False when no floppy is attached.
+    bool ce1600fMotorOn() const;
 
     // ── CE-150 plotter (LH5803 side, MODE 1) ────────────────────────────
     //

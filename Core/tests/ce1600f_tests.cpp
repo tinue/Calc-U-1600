@@ -136,6 +136,65 @@ void test_load_image_and_insert_blank_manage_dirty_and_revision() {
     CHECK(!card.loadImage(image.data(), image.size() - 1));  // wrong size rejected
 }
 
+// A freshly constructed/blanked/loaded card reports "disk changed" (base+2
+// bit6) until a step command (0x20) acknowledges it -- modeled on a real
+// FDC's DSKCHG latch.
+void test_disk_changed_latch_starts_set_and_clears_on_step() {
+    CE1600FCard card;
+    CHECK((readReg(card, 0x7A) & 0x40) != 0);
+    writeReg(card, 0x78, 0x20);  // step command
+    CHECK((readReg(card, 0x7A) & 0x40) == 0);
+
+    card.insertBlankDisk();
+    CHECK((readReg(card, 0x7A) & 0x40) != 0);
+}
+
+// setSide() is the software analogue of ejecting and flipping the disk --
+// it re-arms the changed-disk latch and switches which 64KB half of the
+// image sector/data access addresses, without disturbing the other side's
+// contents.
+void test_set_side_switches_data_and_rearms_changed_latch() {
+    CE1600FCard card;
+    writeReg(card, 0x78, 0x20);  // acknowledge the initial changed-disk latch
+    CHECK((readReg(card, 0x7A) & 0x40) == 0);
+    CHECK(card.side() == 0);
+
+    writeReg(card, 0x79, 0);
+    writeReg(card, 0x78, 0x60);
+    writeReg(card, 0x7B, 0xAA);  // side A, sector 0, byte 0 = 0xAA
+
+    card.setSide(1);
+    CHECK(card.side() == 1);
+    CHECK((readReg(card, 0x7A) & 0x40) != 0);  // flipping the disk re-arms it
+    writeReg(card, 0x78, 0x20);                // acknowledge again
+
+    writeReg(card, 0x79, 0);
+    writeReg(card, 0x78, 0x60);
+    writeReg(card, 0x7B, 0xBB);  // side B, sector 0, byte 0 = 0xBB
+
+    const auto image = card.imageForSave();
+    CHECK(image.size() == CE1600FCard::kImageSize);
+    CHECK(image[0] == 0xAA);                          // side A untouched by the side-B write
+    CHECK(image[CE1600FCard::kSideSize] == 0xBB);      // side B lives right after side A
+
+    card.setSide(0);
+    CHECK(card.side() == 0);
+    writeReg(card, 0x79, 0);
+    writeReg(card, 0x78, 0x40);
+    CHECK(readReg(card, 0x7B) == 0xAA);  // back on side A, original byte intact
+}
+
+// motorOn() is the "green lamp" the GUI reads to tell the user when it's
+// safe to eject and flip the disk.
+void test_motor_on_reflects_motor_register_writes() {
+    CE1600FCard card;
+    CHECK(!card.motorOn());
+    writeReg(card, 0x7A, 0x81);
+    CHECK(card.motorOn());
+    writeReg(card, 0x7A, 0x00);
+    CHECK(!card.motorOn());
+}
+
 // Only ports 0x70-0x7F and the write side of 0x81 are claimed -- everything
 // else (e.g. CE1600PCard's own 0x81 read, 0x82/0x83) must be left alone.
 void test_claims_only_its_own_ports() {
@@ -157,6 +216,9 @@ int run_ce1600f_tests() {
     test_format_command_zero_fills_selected_sector();
     test_port_0x81_reset_clears_motor_and_command_state();
     test_load_image_and_insert_blank_manage_dirty_and_revision();
+    test_disk_changed_latch_starts_set_and_clears_on_step();
+    test_set_side_switches_data_and_rearms_changed_latch();
+    test_motor_on_reflects_motor_register_writes();
     test_claims_only_its_own_ports();
 
     std::printf("ce1600f_tests: %d passed, %d failed\n", g_pass, g_fail);

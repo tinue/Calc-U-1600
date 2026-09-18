@@ -673,7 +673,25 @@ void test_parser_accepts_floppy_with_ce1600p() {
     std::string err;
     CHECK(parse("model: PC-1600\nplotter: ce1600p\nfloppy: mydisk\n", &p, &err));
     CHECK(p.floppy == "mydisk");
+    CHECK(p.floppySide == 0);
     CHECK(p.plotter == "ce1600p");
+}
+
+// `floppy: <name>,A`/`,B` (case-insensitive) strips the side suffix into
+// floppySide and leaves floppy as the bare disk name.
+void test_parser_accepts_floppy_side_suffix() {
+    PresetFile p;
+    std::string err;
+    CHECK(parse("model: PC-1600\nplotter: ce1600p\nfloppy: mydisk,B\n", &p, &err));
+    CHECK(p.floppy == "mydisk");
+    CHECK(p.floppySide == 1);
+
+    CHECK(parse("model: PC-1600\nplotter: ce1600p\nfloppy: mydisk,a\n", &p, &err));
+    CHECK(p.floppy == "mydisk");
+    CHECK(p.floppySide == 0);
+
+    CHECK(!parse("model: PC-1600\nplotter: ce1600p\nfloppy: mydisk,Q\n", &p, &err));
+    CHECK(err.find("side") != std::string::npos);
 }
 
 // Functional: attaching CE-1600P with no `floppy:` key gets the usual
@@ -724,6 +742,27 @@ void test_loader_floppy_key_loads_named_disk_image() {
     CHECK(image[CE1600FCard::kImageSize - 1] == 0x5A);
 }
 
+// `floppy: <name>,B` selects side B after loading -- loadImage() itself
+// always resets to side A, so the preset loader must apply the suffix
+// after attach.
+void test_loader_floppy_key_side_suffix_selects_side_b() {
+    PresetFile p;
+    std::string err;
+    CHECK(parse("model: PC-1600\nplotter: ce1600p\nfloppy: mydiskb,B\n", &p, &err));
+
+    std::vector<uint8_t> diskImage(CE1600FCard::kImageSize, 0x33);
+    CHECK(writeFile("/tmp/mydiskb.floppy.img", diskImage));
+
+    PC1600Machine m;
+    PC1600PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "/tmp", {}, {"roms"});
+    if (!r.ok) {
+        std::fprintf(stderr, "SKIP test_loader_floppy_key_side_suffix_selects_side_b: %s\n", r.error.c_str());
+        return;
+    }
+    CHECK(m.ce1600fAttached());
+    CHECK(m.ce1600fSide() == 1);
+}
+
 // A `floppy:` name that doesn't resolve to any `<name>.floppy.img` is a
 // clear error, not a crash or a silent blank disk.
 void test_loader_floppy_key_missing_file_is_an_error() {
@@ -768,8 +807,10 @@ int run_pc1600_preset_tests() {
     test_parser_rejects_floppy_without_ce1600p();
     test_parser_rejects_floppy_on_pc1500();
     test_parser_accepts_floppy_with_ce1600p();
+    test_parser_accepts_floppy_side_suffix();
     test_loader_ce1600p_with_no_floppy_key_gets_blank_disk();
     test_loader_floppy_key_loads_named_disk_image();
+    test_loader_floppy_key_side_suffix_selects_side_b();
     test_loader_floppy_key_missing_file_is_an_error();
 
     std::printf("pc1600_preset_tests: %d passed, %d failed\n", g_pass, g_fail);

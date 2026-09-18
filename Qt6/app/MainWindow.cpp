@@ -133,7 +133,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             // underlying machine either way.
             [this] { onPresetArmed(); });
     };
-    connect(m_controlBar, &ControlBar::openPresetRequested, this, openPresetDialog);
     // File/Help menu actions reuse the exact same handlers as their
     // ControlBar equivalents -- see buildMenuBar()'s own doc comment.
     connect(m_openPresetAction, &QAction::triggered, this, openPresetDialog);
@@ -160,6 +159,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_controlBar, &ControlBar::floppyDiskSelected, this, [this](QString diskNameOrEmpty) {
         m_floppyManager->selectDisk(diskNameOrEmpty);
         refreshFloppyCombo();
+        m_controlBar->setFloppySide(m_floppyManager->side());
+    });
+    connect(m_controlBar, &ControlBar::floppySideToggleRequested, this, [this] {
+        m_floppyManager->toggleSide();
+        m_controlBar->setFloppySide(m_floppyManager->side());
     });
     connect(m_controlBar, &ControlBar::floppyNameAndSaveRequested, this, [this] {
         bool ok = false;
@@ -242,6 +246,12 @@ void MainWindow::syncControlBarForModel() {
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     m_controlBar->setSlot2Visible(isPC1600);
     m_controlBar->setCe1600pVisible(isPC1600);
+    // Always shown on a PC-1600 (never hidden alongside the CE-1600P
+    // toggle) so the control bar doesn't jump around as the plotter/
+    // floppy union attaches and detaches -- onPlotterAttachedChanged()
+    // grays the row out instead via setFloppyEnabled().
+    m_controlBar->setFloppyVisible(isPC1600);
+    if (isPC1600) refreshFloppyCombo();
     // PC-1500A is A04-only (PC1500Variant.hpp), so the picker is only worth
     // showing for the plain PC-1500.
     const bool romPickerVisible = m_controller->currentModel() == Model::PC1500;
@@ -280,9 +290,11 @@ void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
         // CE-1600F attaches as a union with CE-1600P (PC1600Machine::
         // attachCE1600P()) -- push the previously selected disk (or leave
         // the freshly-inserted blank default) whenever the plotter/floppy
-        // pair (re)attaches, and hide/show the picker alongside it.
+        // pair (re)attaches, and gray the picker in/out alongside it (it
+        // stays visible either way -- see syncControlBarForModel()).
         if (attached) m_floppyManager->attachToMachine();
-        m_controlBar->setFloppyVisible(attached);
+        m_controlBar->setFloppyEnabled(attached);
+        m_controlBar->setFloppySide(m_floppyManager->side());
         refreshFloppyCombo();
     }
     if (attached) {
@@ -333,6 +345,7 @@ void MainWindow::refreshModuleCombos() {
 void MainWindow::refreshFloppyCombo() {
     m_controlBar->setFloppyCombo(m_floppyManager->bundledEntries(), m_floppyManager->instanceEntries(),
                                  m_floppyManager->selectedDiskName());
+    m_controlBar->setFloppySide(m_floppyManager->side());
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* event) {
@@ -435,6 +448,7 @@ void MainWindow::onFrameTick() {
 
     m_moduleManager->markDirtyAndSchedulePersist();
     m_floppyManager->markDirtyAndSchedulePersist();
+    m_controlBar->setFloppyMotorOn(m_floppyManager->motorOn());
     m_debugPanel->onFrameTick();
     m_plotterController->onFrameTick();
     if (m_plotterPaperInLayout) m_plotterPaper->onFrameTick();

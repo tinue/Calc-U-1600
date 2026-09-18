@@ -267,8 +267,9 @@ bool loadMachineBinary(PC1600Machine& machine, const PresetProgram& program, int
 // doc explains why the same dirs apply). Returns false with result->error
 // set on any problem.
 bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter, const std::string& floppy,
-                         const std::vector<std::string>& romDirs, const std::vector<std::string>& moduleDirs,
-                         const PC1600PresetLogFn& log, PC1600PresetLoadResult* result) {
+                         int floppySide, const std::vector<std::string>& romDirs,
+                         const std::vector<std::string>& moduleDirs, const PC1600PresetLogFn& log,
+                         PC1600PresetLoadResult* result) {
     if (plotter.empty()) return true;
 
     std::vector<uint8_t> diskImage;
@@ -292,6 +293,9 @@ bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter, con
                                           &result->ce150Attached, diskImagePtr)) {
         return false;
     }
+    // loadImage() (inside attachCE1600P()) always resets to side A --
+    // apply the preset's `,B` suffix, if any, after attach.
+    if (diskImagePtr && floppySide != 0) machine.ce1600fSetSide(floppySide);
     if (log) {
         log(plotter == "ce150" ? "plotter: CE-150 attached (LH5803 side)"
                                 : "plotter: " + plotter + " attached" +
@@ -378,7 +382,8 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
     // Plotter (`plotter:`) -- attach before the reset below, so the boot
     // ROM's peripheral scan sees it (mirrors real hardware: power off,
     // connect, power on).
-    if (!attachPresetPlotter(machine, preset.plotter, preset.floppy, romDirs, moduleDirs, log, &result))
+    if (!attachPresetPlotter(machine, preset.plotter, preset.floppy, preset.floppySide, romDirs, moduleDirs,
+                              log, &result))
         return result;
 
     // Machine is now fully armed (model/cards/plotter wired) but still

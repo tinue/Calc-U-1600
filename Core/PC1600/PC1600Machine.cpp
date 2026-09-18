@@ -151,6 +151,21 @@ void PC1600Machine::ce1600fClearDirty() {
     if (m_ce1600fCard) m_ce1600fCard->clearDirty();
 }
 
+int PC1600Machine::ce1600fSide() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_ce1600fCard ? m_ce1600fCard->side() : 0;
+}
+
+void PC1600Machine::ce1600fSetSide(int side) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_ce1600fCard) m_ce1600fCard->setSide(side);
+}
+
+bool PC1600Machine::ce1600fMotorOn() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_ce1600fCard && m_ce1600fCard->motorOn();
+}
+
 // ── CE-150 plotter (LH5803 side) ──────────────────────────────────────
 
 bool PC1600Machine::attachCE150(const uint8_t* rom, size_t romSize) {

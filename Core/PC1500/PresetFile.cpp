@@ -491,7 +491,8 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
     bool hasFirmware = false;
     std::string plotter;  // normalized `plotter:` value ("" / "ce1600p" / "ce150")
     bool hasPlotter = false;
-    std::string floppy;  // `floppy:` value, verbatim (a disk name, not normalized)
+    std::string floppy;  // `floppy:` value with any `,A`/`,B` suffix stripped
+    int floppySide = 0;  // 0 = A, 1 = B, parsed from that suffix
     bool hasFloppy = false;
 
     size_t idx = 0;
@@ -568,6 +569,21 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             if (!hasInline) { *error = "'floppy' requires a value"; return false; }
             hasFloppy = true;
             floppy = value;
+            // Strip an optional trailing `,A`/`,B` (case-insensitive) side
+            // selector -- e.g. `floppy: mydisk,B`.
+            const size_t comma = floppy.rfind(',');
+            if (comma != std::string::npos) {
+                std::string suffix = floppy.substr(comma + 1);
+                for (char& ch : suffix) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+                if (suffix == "A" || suffix == "B") {
+                    floppySide = (suffix == "B") ? 1 : 0;
+                    floppy = floppy.substr(0, comma);
+                } else {
+                    *error = "line " + std::to_string(line.lineNo) +
+                             ": 'floppy: " + value + "' has an invalid side suffix (expected ,A or ,B)";
+                    return false;
+                }
+            }
         } else if (key == "rom-modules") {
             *error = "'" + key + "' is not yet supported by this loader";
             return false;
@@ -614,6 +630,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             return false;
         }
         out->floppy = floppy;
+        out->floppySide = floppySide;
         return true;
     }
     // The remaining branches are PC-1500/1500A -- the per-slot blocks are

@@ -16,12 +16,12 @@
 // this class only owns which *disk image* is loaded once the floppy is
 // attached.
 //
-// Persistence is a raw `<name>.floppy.img` (64KB, byte-for-byte) plus a
-// small `<name>.floppy.yaml` metadata sidecar -- not the battery-card
-// splice-into-YAML-text mechanism (BatteryCardInstance.hpp): a disk image
-// carries no hand-written prose worth preserving that way, and hex-
-// dumping 64KB as YAML text would run about 4x the byte count for no
-// benefit. See AppPaths::sanitizedFloppyFileName()/floppyInstancePathFor().
+// Persistence is a raw `<name>.floppy.img` (128KB, both sides, byte-for-
+// byte) plus a small `<name>.floppy.yaml` metadata sidecar -- not the
+// battery-card splice-into-YAML-text mechanism (BatteryCardInstance.hpp):
+// a disk image carries no hand-written prose worth preserving that way,
+// and hex-dumping 128KB as YAML text would run about 4x the byte count for
+// no benefit. See AppPaths::sanitizedFloppyFileName()/floppyInstancePathFor().
 class FloppyDiskManager : public QObject {
     Q_OBJECT
 public:
@@ -42,6 +42,17 @@ public:
     void selectDisk(const QString& diskNameOrEmpty);
     QString selectedDiskName() const { return m_diskName; }
     bool hasInstanceFile() const { return !m_instanceFilePath.isEmpty(); }
+
+    // Side A/B -- the software analogue of ejecting and flipping the
+    // physical disk (CE1600FCard::setSide()'s own comment: this itself
+    // re-arms the drive's changed-disk latch, matching the user manual's
+    // "when the green lamp goes off, eject the disk, turn it over"
+    // instruction). 0 = A, 1 = B; toggleSide() flips between them.
+    int side() const;
+    void toggleSide();
+    // The "green lamp" -- true while the drive motor is spinning, so the
+    // control bar can show the user when it's safe to flip the disk.
+    bool motorOn() const;
 
     // Called whenever CE-1600P (and therefore the floppy, per the union
     // attach) transitions to attached -- pushes the currently selected

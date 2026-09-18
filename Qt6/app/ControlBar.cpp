@@ -120,10 +120,6 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     setRomPickerVisible(false); // PC-1500A is the default model (see m_modelCombo above)
 
     addSeparator(layout, this);
-    m_openPresetButton = new QPushButton(tr("Load Preset…"), this);
-    m_openPresetButton->setFocusPolicy(Qt::NoFocus);
-    layout->addWidget(m_openPresetButton);
-
     m_settingsButton = new QPushButton(tr("Settings…"), this);
     m_settingsButton->setFocusPolicy(Qt::NoFocus);
     layout->addWidget(m_settingsButton);
@@ -143,8 +139,10 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     setCe1600pVisible(false);
 
     // CE-1600F floppy disk picker -- attaches as a union with CE-1600P
-    // (PC1600Machine::attachCE1600P()), so this only ever shows/hides
-    // alongside the CE-1600P button, never independently.
+    // (PC1600Machine::attachCE1600P()). Always shown on a PC-1600 (see
+    // setFloppyVisible()'s comment) so the control bar doesn't jump around
+    // as the plotter attaches/detaches; setFloppyEnabled() grays the whole
+    // row out instead while the floppy isn't actually present.
     m_floppyLabel = new QLabel(tr("Disk:"), this);
     layout->addWidget(m_floppyLabel);
 
@@ -159,11 +157,31 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_floppySaveButton->setFocusPolicy(Qt::NoFocus);
     layout->addWidget(m_floppySaveButton);
 
+    // Side toggle -- the software analogue of ejecting and flipping the
+    // physical disk. Label shows "A"/"B" for whichever side currently
+    // faces the head; clicking flips it.
+    m_floppySideButton = new QPushButton(tr("A"), this);
+    m_floppySideButton->setFocusPolicy(Qt::NoFocus);
+    m_floppySideButton->setToolTip(tr("Eject and turn the disk over"));
+    layout->addWidget(m_floppySideButton);
+
+    // The "green lamp" -- drive-active indicator. A plain colored dot via
+    // stylesheet rather than an icon asset; red/gray reads fine at this
+    // size and needs no bundled resource.
+    m_floppyLampLabel = new QLabel(this);
+    m_floppyLampLabel->setFixedWidth(14);
+    m_floppyLampLabel->setAlignment(Qt::AlignCenter);
+    m_floppyLampLabel->setToolTip(tr("Drive active -- wait for this to go dark before turning the disk over"));
+    layout->addWidget(m_floppyLampLabel);
+    setFloppyMotorOn(false);
+
     connect(m_floppyCombo, &QComboBox::currentIndexChanged, this,
             [this](int index) { emit floppyDiskSelected(m_floppyCombo->itemData(index).toString()); });
     connect(m_floppySaveButton, &QPushButton::clicked, this, [this] { emit floppyNameAndSaveRequested(); });
+    connect(m_floppySideButton, &QPushButton::clicked, this, [this] { emit floppySideToggleRequested(); });
 
     setFloppyVisible(false);
+    setFloppyEnabled(false);
 
     connect(resetButton, &QPushButton::clicked, this, [this, resetButton] {
         emit resetClicked(resetButton->lastClickWasCmd());
@@ -174,7 +192,6 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     connect(m_romCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
         emit romRevisionSelected(static_cast<PC1500RomRevision>(m_romCombo->itemData(index).toInt()));
     });
-    connect(m_openPresetButton, &QPushButton::clicked, this, [this] { emit openPresetRequested(); });
     connect(m_settingsButton, &QPushButton::clicked, this, [this] { emit settingsRequested(); });
     // Buttons are checkable so their own click already toggled the visual
     // check state -- MainWindow will resync it (via setCe150State/
@@ -264,4 +281,22 @@ void ControlBar::setFloppyVisible(bool visible) {
     m_floppyLabel->setVisible(visible);
     m_floppyCombo->setVisible(visible);
     m_floppySaveButton->setVisible(visible);
+    m_floppySideButton->setVisible(visible);
+    m_floppyLampLabel->setVisible(visible);
+}
+
+void ControlBar::setFloppyEnabled(bool enabled) {
+    m_floppyCombo->setEnabled(enabled);
+    m_floppySaveButton->setEnabled(enabled);
+    m_floppySideButton->setEnabled(enabled);
+}
+
+void ControlBar::setFloppySide(int side) {
+    m_floppySideButton->setText(side ? tr("B") : tr("A"));
+}
+
+void ControlBar::setFloppyMotorOn(bool on) {
+    m_floppyLampLabel->setText(QStringLiteral("●"));  // filled circle
+    m_floppyLampLabel->setStyleSheet(on ? QStringLiteral("color: #2ecc40;")
+                                        : QStringLiteral("color: #888888;"));
 }
