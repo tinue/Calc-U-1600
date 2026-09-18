@@ -1,5 +1,7 @@
 # Changelog
 
+## [0.3.0] - work in progress
+
 ## [0.2.0] - 2026-09-18
 
 - **Platforms** Added a native Windows ARM64 build, alongside the
