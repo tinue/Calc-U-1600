@@ -21,6 +21,8 @@ obligations.
   scrolling.
 - **No way to latch Shift from the host keyboard** (tapping Shift doesn't
   produce a visible latched state in the UI).
+- **Cmd-C (Ctrl-C) doesn't work in the debug area** — copy shortcut isn't
+  reaching/being handled by the debug panel's text widget.
 - **CE-1600P / CE-150 plotter: pen colour can drift out of sync after
   OFF/ON.** Deliberately left as a known limitation. Set a colour
   (`COLOR 2`), power off/on, print again — the plotter draws in the
@@ -93,6 +95,13 @@ obligations.
 - CE-1600F: remaining peripheral support.
 - Research MODE 1 (LH-5803/PC-1500-compat mode): does it genuinely reuse
   the old ROM for things like `PRINT`?
+- Load a raw `.bin` (assembly) directly, without a SharpDataExchange
+  header. Pop up a dialog when disambiguation is needed: which slot when
+  more than one is available, and a start address when the header
+  (and thus the address) is missing.
+- Emulate the PC-1600F floppy drive.
+- Emulate the CE-158.
+- Allow screenshotting the display.
 
 ## Code cleanup backlog
 
