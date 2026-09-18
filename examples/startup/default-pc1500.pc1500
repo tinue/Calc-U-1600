@@ -8,3 +8,8 @@ plotter: ce150
 
 memory-expansion:
   - modulespec: CE-163F
+
+# Clear memory and go to RUN mode
+keys:
+  - type: NEW&112
+  - key: mode

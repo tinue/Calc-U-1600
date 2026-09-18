@@ -141,8 +141,8 @@ immediately — there's no separate Save/Cancel, just **Close**.
   applied whenever that model gets selected (on a model switch, and at
   startup). A model switch never carries modules over from the previous
   model, so this is how a model gets its standard setup — e.g.
-  `examples/default-pc1500.pc1500` (CE-150 + CE-163F) or
-  `examples/default-pc1600.pc1600` (CE-1600P + CE-1600M in Slot 1).
+  `examples/startup/default-pc1500.pc1500` (CE-150 + CE-163F) or
+  `examples/startup/default-pc1600.pc1600` (CE-1600P + CE-1600M in Slot 1).
   Reset to go back to a bare machine.
 - **Trace file save directory** and **maximum trace file size** — where
   CPU instruction traces are written (see the Debug panel's TRACE
