@@ -31,15 +31,13 @@ void addSeparator(QVBoxLayout* layout, QWidget* parent) {
 // One "<label>:" row plus a value line and a "Change…"/"Reset to Default"
 // button pair that writes through `set` and re-renders the value line via
 // `display` (the effective, already-defaulted text to show; called once up
-// front and again after each button). `startDir` supplies the folder the
-// file-picker opens on; `onChanged` runs after either button, for a row
-// that needs to do more than just refresh its own label (e.g. relinking a
-// live serial port).
-void addDirectoryRow(QVBoxLayout* layout, QWidget* parent, const QString& labelText,
-                      const QString& dialogTitle, const std::function<QString()>& startDir,
-                      const std::function<QString()>& display,
-                      const std::function<void(const QString&)>& set,
-                      const std::function<void()>& onChanged = {}) {
+// front and again after each button). `pick` runs the picker dialog and
+// returns the chosen path (empty = cancelled); `onChanged` runs after
+// either button, for a row that needs to do more than just refresh its own
+// label (e.g. relinking a live serial port).
+void addPathRow(QVBoxLayout* layout, QWidget* parent, const QString& labelText,
+                const std::function<QString()>& pick, const std::function<QString()>& display,
+                const std::function<void(const QString&)>& set, const std::function<void()>& onChanged = {}) {
     layout->addWidget(new QLabel(labelText, parent));
 
     auto* valueLabel = new QLabel(parent);
@@ -61,7 +59,7 @@ void addDirectoryRow(QVBoxLayout* layout, QWidget* parent, const QString& labelT
 
     auto refresh = [valueLabel, display] { valueLabel->setText(display()); };
     QObject::connect(changeButton, &QPushButton::clicked, parent, [=] {
-        const QString chosen = QFileDialog::getExistingDirectory(parent, dialogTitle, startDir());
+        const QString chosen = pick();
         if (!chosen.isEmpty()) {
             set(chosen);
             refresh();
@@ -73,6 +71,39 @@ void addDirectoryRow(QVBoxLayout* layout, QWidget* parent, const QString& labelT
         refresh();
         if (onChanged) onChanged();
     });
+}
+
+// addPathRow() for a directory; `startDir` supplies the folder the picker
+// opens on.
+void addDirectoryRow(QVBoxLayout* layout, QWidget* parent, const QString& labelText,
+                      const QString& dialogTitle, const std::function<QString()>& startDir,
+                      const std::function<QString()>& display,
+                      const std::function<void(const QString&)>& set,
+                      const std::function<void()>& onChanged = {}) {
+    addPathRow(
+        layout, parent, labelText,
+        [=] { return QFileDialog::getExistingDirectory(parent, dialogTitle, startDir()); }, display, set,
+        onChanged);
+}
+
+// One model's "default preset" row: `modelKey` is AppSettings::
+// defaultPresetPath()'s key, `extension` the preset suffix that model uses.
+void addDefaultPresetRow(QVBoxLayout* layout, QWidget* parent, const QString& labelText,
+                          const QString& modelKey, const QString& extension) {
+    addPathRow(
+        layout, parent, labelText,
+        [=] {
+            const QString current = AppSettings::defaultPresetPath(modelKey);
+            return QFileDialog::getOpenFileName(
+                parent, SettingsDialog::tr("Choose Default Preset"),
+                current.isEmpty() ? AppSettings::presetOpenDirOrHome() : current,
+                SettingsDialog::tr("Presets (*.%1);;All Files (*)").arg(extension));
+        },
+        [=] {
+            const QString path = AppSettings::defaultPresetPath(modelKey);
+            return path.isEmpty() ? SettingsDialog::tr("(none)") : path;
+        },
+        [=](const QString& path) { AppSettings::setDefaultPresetPath(modelKey, path); });
 }
 
 } // namespace
@@ -120,6 +151,16 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
             return dir.isEmpty() ? SettingsDialog::tr("(system default)") : dir;
         },
         [](const QString& dir) { AppSettings::setPresetOpenDir(dir); });
+
+    // Applied whenever that model gets selected (including at startup) --
+    // see MainWindow::applyDefaultPreset().
+    addSeparator(layout, this);
+    addDefaultPresetRow(layout, this, tr("PC-1500 default preset:"), QStringLiteral("PC1500"),
+                        QStringLiteral("pc1500"));
+    addDefaultPresetRow(layout, this, tr("PC-1500A default preset:"), QStringLiteral("PC1500A"),
+                        QStringLiteral("pc1500a"));
+    addDefaultPresetRow(layout, this, tr("PC-1600 default preset:"), QStringLiteral("PC1600"),
+                        QStringLiteral("pc1600"));
 
     addSeparator(layout, this);
     addDirectoryRow(

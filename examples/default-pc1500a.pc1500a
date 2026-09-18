@@ -1,0 +1,10 @@
+# Default startup setup for the PC-1500A -- set it under Settings >
+# "PC-1500A default preset" to have it applied whenever the PC-1500A is
+# selected: CE-150 plotter + an unnamed CE-163F in the expansion slot.
+
+model: PC-1500A
+
+plotter: ce150
+
+memory-expansion:
+  - modulespec: CE-163F

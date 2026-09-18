@@ -1,0 +1,11 @@
+# Default startup setup for the PC-1600 -- set it under Settings >
+# "PC-1600 default preset" to have it applied whenever the PC-1600 is
+# selected: CE-1600P plotter (with its CE-1600F floppy) + a CE-1600M in
+# Slot 1.
+
+model: PC-1600
+
+plotter: ce1600p
+
+memory-expansion-1:
+  - modulespec: CE-1600M

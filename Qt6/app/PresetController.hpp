@@ -2,6 +2,8 @@
 #include <QObject>
 #include <QString>
 
+#include "MachineController.hpp"  // Model
+
 class MachineController;
 class MemoryModuleManager;
 class FloppyDiskManager;
@@ -39,6 +41,12 @@ public:
     // user-facing message on failure (parse error, unsupported ROM
     // revision, a missing/rejected sibling file, etc).
     bool loadPreset(const QString& path, QString* error);
+
+    // A model's default preset (AppSettings::defaultPresetPath()): same as
+    // loadPreset(), but refuses -- touching nothing -- a preset that targets
+    // a different model than `model`, so a misconfigured default can't
+    // silently switch the user to another machine.
+    bool loadDefaultPreset(const QString& path, Model model, QString* error);
 
     // Loads a plain `.bas` listing directly into the *currently running*
     // machine -- no preset wrapper, no model/ROM/module rebuild (only a

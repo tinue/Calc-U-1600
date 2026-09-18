@@ -74,6 +74,9 @@ private:
     // only lambdas in the constructor).
     void applyModelSelection(Model model);
     void applyRomRevisionSelection(PC1500RomRevision revision);
+    // Loads `model`'s default preset (AppSettings::defaultPresetPath()), if
+    // one is set -- run whenever a model gets selected, including at startup.
+    void applyDefaultPreset(Model model);
 
     // Re-checks the Machine menu's model/ROM QActions to match `model`/
     // `revision` without themselves triggering another applyModelSelection/

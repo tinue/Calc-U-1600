@@ -47,15 +47,6 @@ CardHost MemoryModuleManager::hostForModel(int slot, Model model) {
     return model == Model::PC1500A ? CardHost::PC1500A : CardHost::PC1500;
 }
 
-bool MemoryModuleManager::moduleCompatible(int slot, Model model, const QString& moduleName) const {
-    const CardHost host = hostForModel(slot, model);
-    for (const auto& e : bundledEntries(host))
-        if (e.moduleName == moduleName) return true;
-    for (const auto& e : instanceEntries(host))
-        if (e.moduleName == moduleName) return true;
-    return false;
-}
-
 QVector<MemoryModuleManager::ModuleEntry> MemoryModuleManager::bundledEntries(CardHost host) const {
     return entriesFor(AppPaths::bundledResourcesDir(), host);
 }
@@ -285,14 +276,9 @@ void MemoryModuleManager::flushPendingPersist() {
     }
 }
 
-void MemoryModuleManager::onModelChanged(Model model) {
-    if (!m_slots[0].moduleName.isEmpty() && !moduleCompatible(1, model, m_slots[0].moduleName)) {
-        if (m_slots[0].persistPending) writeInstance(1);
-        m_slots[0] = SlotState{};
+void MemoryModuleManager::onModelChanged() {
+    for (int i = 0; i < 2; ++i) {
+        if (m_slots[i].persistPending) writeInstance(i + 1);
+        m_slots[i] = SlotState{};
     }
-
-    if (model == Model::PC1600) return;
-    if (m_slots[1].moduleName.isEmpty() && !m_slots[1].persistPending) return;
-    if (m_slots[1].persistPending) writeInstance(2);
-    m_slots[1] = SlotState{};
 }

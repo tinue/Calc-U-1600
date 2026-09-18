@@ -36,6 +36,16 @@ namespace {
 // ~60 Hz. Shared by the frame timer's own period and by the turbo
 // fast-forward budget below, so the two stay in lockstep if this changes.
 constexpr int kFrameIntervalMs = 16;
+
+// AppSettings::defaultPresetPath()'s per-model key.
+QString modelSettingsKey(Model model) {
+    switch (model) {
+        case Model::PC1500: return QStringLiteral("PC1500");
+        case Model::PC1500A: return QStringLiteral("PC1500A");
+        case Model::PC1600: return QStringLiteral("PC1600");
+    }
+    return QString();
+}
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
@@ -231,6 +241,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     resize(AppSettings::windowSize());
     setFocus();
+
+    // Starting up selects the startup model too -- apply its default preset
+    // once the event loop runs, so the window is already up while a preset
+    // with long `wait:` steps plays out.
+    QTimer::singleShot(0, this, [this] { applyDefaultPreset(m_controller->currentModel()); });
 }
 
 MainWindow::~MainWindow() = default;
@@ -521,7 +536,7 @@ void MainWindow::buildMenuBar() {
 void MainWindow::applyModelSelection(Model model) {
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
-    m_moduleManager->onModelChanged(model);
+    m_moduleManager->onModelChanged();
     m_controller->switchModel(model); // rebuilds the machine -- any live plotter attachment is already gone
     m_plotterController->resetOnModelSwitch();
     m_faceplate->setModel(model);
@@ -531,6 +546,16 @@ void MainWindow::applyModelSelection(Model model) {
     syncMachineMenuFromModel(model);
     syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
     refreshModuleCombos();
+    applyDefaultPreset(model);
+}
+
+void MainWindow::applyDefaultPreset(Model model) {
+    const QString path = AppSettings::defaultPresetPath(modelSettingsKey(model));
+    if (path.isEmpty()) return;
+    runSynchronousLoad(
+        tr("Default Preset"),
+        [this, path, model](QString* error) { return m_presetController->loadDefaultPreset(path, model, error); },
+        [this] { onPresetArmed(); });
 }
 
 void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {

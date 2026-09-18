@@ -54,6 +54,22 @@ inline QString presetOpenDirOrHome() {
     return dir.isEmpty() ? QDir::homePath() : dir;
 }
 
+// Key: "preset/default/<model>" -- `modelKey` is "PC1500", "PC1500A" or
+// "PC1600" (the same strings startupModelPreference() stores). The preset
+// file applied whenever that model gets selected; empty/absent means none
+// (the model just boots bare).
+inline QString defaultPresetPath(const QString& modelKey) {
+    return backingStore().value(QStringLiteral("preset/default/") + modelKey, QString()).toString();
+}
+
+inline void setDefaultPresetPath(const QString& modelKey, const QString& path) {
+    QSettings s = backingStore();
+    if (path.isEmpty())
+        s.remove(QStringLiteral("preset/default/") + modelKey);
+    else
+        s.setValue(QStringLiteral("preset/default/") + modelKey, path);
+}
+
 // Key: "trace/dirOverride" -- empty/absent means "write TRACE.bin under
 // AppPaths::instanceDir()" (DebugPanel's default), matching
 // instanceDirOverride()'s own empty-means-default convention.

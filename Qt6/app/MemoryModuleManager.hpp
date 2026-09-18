@@ -79,16 +79,12 @@ public:
     void markDirtyAndSchedulePersist();  // called once per frame tick
     void flushPendingPersist();          // called before select/model-switch/quit
 
-    // Reacts to a model switch: clears slot 1's selection if the module
-    // it names isn't compatible with `model` (e.g. a PC-1600-only module
-    // like CE-1600M can't follow a switch to PC-1500/1500A) so
-    // attachAllToFreshMachine() finds an empty slot instead of failing to
-    // attach and surfacing an error dialog -- a plain model switch falls
-    // back to "no card", it doesn't error. Also clears slot 2's state
-    // whenever the new model isn't PC-1600 (there is no slot 2 outside
-    // PC-1600). Called BEFORE MachineController::switchModel(), so
-    // `model` is the target, not yet the controller's current model.
-    void onModelChanged(Model model);
+    // Reacts to a model switch: nothing carries over from the previous
+    // model, so both slots are cleared (after saving any pending battery-
+    // card write) -- the new model starts empty, or with whatever its
+    // default preset (AppSettings::defaultPresetPath()) attaches. Called
+    // BEFORE MachineController::switchModel().
+    void onModelChanged();
 
     // Which CardHost a slot resolves to under `model` -- shared with
     // MainWindow::refreshModuleCombos() so the slot/model -> host mapping
@@ -112,7 +108,6 @@ private:
     QTimer* m_debounceTimer = nullptr;  // single-shot, 500ms, restarted while dirty
 
     CardHost hostFor(int slot) const;
-    bool moduleCompatible(int slot, Model model, const QString& moduleName) const;
     bool currentSlotImage(int slot, int* bankCount, std::vector<uint8_t>* image) const;
     void writeInstance(int slot);  // re-splice + rewrite slot's instance file
 

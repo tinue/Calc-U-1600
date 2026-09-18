@@ -172,6 +172,23 @@ bool PresetController::loadPreset(const QString& path, QString* error) {
     return true;
 }
 
+bool PresetController::loadDefaultPreset(const QString& path, Model model, QString* error) {
+    PresetFile preset;
+    std::string parseError;
+    if (!parsePresetFile(path.toStdString(), &preset, &parseError)) {
+        *error = QString::fromStdString(parseError);
+        return false;
+    }
+    const Model target = preset.isPC1600()                            ? Model::PC1600
+                         : preset.variant == PC1500Variant::PC1500A ? Model::PC1500A
+                                                                     : Model::PC1500;
+    if (target != model) {
+        *error = tr("The default preset \"%1\" is for a different model -- change it in Settings.").arg(path);
+        return false;
+    }
+    return loadPreset(path, error);
+}
+
 bool PresetController::loadBasicProgramLive(const QString& path, QString* error) {
     if (m_controller->currentModel() == Model::PC1600) {
         PC1600Machine* machine = m_controller->pc1600();
@@ -195,6 +212,10 @@ bool PresetController::loadPreset(const QString&, QString* error) {
     *error = tr("Preset loading isn't available in this build yet (it currently requires the macOS build -- "
                 "see Qt6/CMakeLists.txt).");
     return false;
+}
+
+bool PresetController::loadDefaultPreset(const QString& path, Model, QString* error) {
+    return loadPreset(path, error);
 }
 
 bool PresetController::loadBasicProgramLive(const QString&, QString* error) {
