@@ -15,7 +15,7 @@
 #
 # Usage: tools/fetch_sharpdx.sh
 # Env vars:
-#   SHARPDX_TAG       release tag to fetch (default: v0.1.5)
+#   SHARPDX_TAG       release tag to fetch (default: v0.2.0)
 #   SHARPDX_PLATFORM  override auto-detected platform: linux-x86_64,
 #                     linux-aarch64, or windows-x86_64 (there is no
 #                     windows-arm64 release yet -- see the MINGW*/MSYS*/
@@ -49,7 +49,7 @@ set -eu
 cd "$(dirname "$0")/.."
 REPO_ROOT=$(pwd)
 DST="$REPO_ROOT/Core/Basic/vendor/sharpdx"
-TAG=${SHARPDX_TAG:-v0.1.5}
+TAG=${SHARPDX_TAG:-v0.2.0}
 
 detect_platform() {
   os=$(uname -s)
@@ -128,6 +128,20 @@ case "$PLATFORM" in
       echo "fetch_sharpdx.sh: release $TAG has no native-libs-windows.txt (older release?) -- CMakeLists will fall back to its hardcoded list" >&2
       rm -f "$DST/native-libs-windows.txt"
     fi
+    # native-libs-windows.txt above can name a crate-vendored import lib
+    # (e.g. windows.0.52.0.lib) that isn't on the Windows SDK/MSVC-CRT
+    # default search path -- package.sh ships the actual file alongside
+    # sharpdx.lib for exactly that reason (see its own comment), under
+    # its own name, not sharpdx.dll's unrelated import lib. Vendor
+    # whatever's there; harmless no-op on an older release that has none.
+    for extra in "$STAGE"/lib/*.lib; do
+      [ -e "$extra" ] || continue
+      base=$(basename "$extra")
+      [ "$base" = "sharpdx.lib" ] && continue
+      [ "$base" = "sharpdx.dll.lib" ] && continue
+      cp "$extra" "$DST/$base"
+      echo "fetch_sharpdx.sh: vendored extra native lib $base"
+    done
     ;;
   linux-*)
     cp "$STAGE/lib/libsharpdx.a" "$DST/libsharpdx-linux.a"

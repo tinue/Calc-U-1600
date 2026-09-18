@@ -47,7 +47,7 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake ninja-build patchelf \
             qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev \
-            qt6-gtk-platformtheme qt6ct
+            qt6-gtk-platformtheme qt6ct libudev-dev
 
       - name: Fetch ROMs
         shell: bash
@@ -204,7 +204,7 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake ninja-build patchelf \
             qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev \
-            qt6-gtk-platformtheme qt6ct
+            qt6-gtk-platformtheme qt6ct libudev-dev
 
       - name: Fetch ROMs
         shell: bash

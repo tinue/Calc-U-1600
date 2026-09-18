@@ -55,5 +55,5 @@ roms/*.bin
 # (macOS, committed, refreshed via tools/refresh_sharpdx.sh), these are
 # meant to stay a local/CI-only build artifact, never committed.
 /Core/Basic/vendor/sharpdx/libsharpdx-linux.a
-/Core/Basic/vendor/sharpdx/sharpdx.lib
+/Core/Basic/vendor/sharpdx/*.lib
 /Core/Basic/vendor/sharpdx/native-libs-windows.txt

@@ -178,7 +178,23 @@ target_link_libraries(CalcU1600Qt PRIVATE Qt6::Widgets)
 if(EXISTS ${SHARPDX_LIB})
   # See the CORE_SOURCES SHARPDX_LIB block above.
   target_link_libraries(CalcU1600Qt PRIVATE ${SHARPDX_LIB})
+  if(UNIX AND NOT APPLE)
+    # sharpdx's Linux serial-port backend needs libudev; unlike Windows'
+    # system import libs (below), this one really is always on the
+    # system's own default linker search path once libudev-dev is
+    # installed (see build.yml), so no vendoring is needed here -- just
+    # the link.
+    target_link_libraries(CalcU1600Qt PRIVATE udev)
+  endif()
   if(WIN32)
+    # Some of sharpdx's Windows dependencies (a transitive older
+    # windows-sys pulled in by its serial-port backend) link against a
+    # crate-vendored import lib like windows.0.52.0.lib that isn't part
+    # of the Windows SDK/MSVC-CRT default search path -- SharpDataExchangeRust's
+    # package.sh vendors the actual file alongside sharpdx.lib for
+    # exactly this reason (see its own comment), so just add that
+    # directory to the link path; harmless if no such file was shipped.
+    target_link_directories(CalcU1600Qt PRIVATE ${CORE_ROOT}/Basic/vendor/sharpdx)
     # `cargo build` links the Windows system import libs Rust's std needs
     # (sockets, CSPRNG seeding, futex-based sync, ...) into sde.exe
     # automatically -- consuming the raw sharpdx.lib straight from CMake
