@@ -27,7 +27,8 @@
 //     (also used by the ROM's CNCTDRV drive-presence probe: write then
 //     read back).
 //   base+2 (0x7A/0x72) -- motor/status. Write bit7=1 starts the motor.
-//     Read: bit7/bit0=busy (file offset 0x4e4/0x685 poll these clearing),
+//     Read: bit7/bit0=busy (file offset 0x4e4/0x685 poll these clearing;
+//     genuinely timed, not instant -- see advance()/kStepAccessTStates),
 //     bit1=ready, bit6=changed-disk (see markDiskChanged()'s comment).
 //   base+3 (0x7B/0x73) -- data, one byte per access at an
 //     auto-incrementing offset into the selected 512-byte sector, within
@@ -53,7 +54,37 @@ public:
     static constexpr size_t kSideSize = kSectorSize * kSectorCount;  // 65536
     static constexpr size_t kImageSize = kSideSize * 2;              // 131072, both sides
 
+    // Must track PC1600Machine::kTStateHz -- can't include PC1600Machine.hpp
+    // here (it includes this header). Real FDU-250 timing, from the
+    // Service Manual's own spec sheet (§1 "Access time"/"Motor startup
+    // time"): 0.5s to spin up, 80ms per step + 50ms settling per access.
+    // Modeled as a single "busy" countdown advance() ticks down in
+    // SC7852 T-states, driving the same base+0 bit7 ("engine not
+    // started")/base+2 bit0+bit7 (busy) the ROM already polls -- see
+    // readRegister()'s comments. This is the "green lamp" duration a real
+    // user would watch for before ejecting/flipping the disk.
+    static constexpr uint32_t kTStateHz = 3580000;
+    static constexpr uint32_t kMotorStartupTStates = kTStateHz / 2;              // 0.5s
+    static constexpr uint32_t kStepAccessTStates = (kTStateHz * 13) / 100;       // 80ms step + 50ms settling
+
     CE1600FCard() { insertBlankDisk(); }
+
+    /// Called once per emulated SC7852 instruction (PC1600Machine::step()'s
+    /// `cost`) so the motor-startup/step-access busy windows above tick
+    /// down in real emulated time rather than completing instantly.
+    void advance(uint32_t tStates) {
+        if (m_motorStartRemaining > 0) {
+            m_motorStartRemaining = (tStates >= m_motorStartRemaining) ? 0 : m_motorStartRemaining - tStates;
+        }
+        if (m_busyRemaining > 0) {
+            if (tStates >= m_busyRemaining) {
+                m_busyRemaining = 0;
+                m_busy = false;
+            } else {
+                m_busyRemaining -= tStates;
+            }
+        }
+    }
 
     /// Zero-fills the disk image (an unformatted blank floppy), resets to
     /// side A, and bumps the revision -- the "auto-insert a blank disk"
@@ -151,7 +182,10 @@ private:
         switch (regOffset(address)) {
             case 0: {  // command/status
                 uint8_t status = 0;
-                if (!m_motorOn) status |= 0x80;  // engine not started
+                // "Engine not started": true while the motor is off, or
+                // while it's on but still within its kMotorStartupTStates
+                // spin-up window (see advance()).
+                if (!m_motorOn || m_motorStartRemaining > 0) status |= 0x80;
                 if (!m_writeProtect) status |= 0x40;
                 status |= 0x08;  // disk always present (auto-inserted blank)
                 return status;
@@ -180,19 +214,38 @@ private:
             case 0:  // command/status
                 m_cmdReg = value;
                 m_byteOffset = 0;
-                m_busy = false;  // this emulation completes commands instantly
+                // Real access time (Service Manual §1: 80ms/step + 50ms
+                // settling) -- see advance(). Every command (read/write/
+                // format/step) busies the drive for this window rather
+                // than completing instantly.
+                m_busy = true;
+                m_busyRemaining = kStepAccessTStates;
                 if (value == 0xA0) formatDisk();
-                // 0x20 is the step-pulse command (confirmed by disassembly,
-                // file offset 0x94a/0x94c) -- a real drive's DSKCHG latch
-                // clears the instant it sees a step, so this does too.
-                if (value == 0x20) m_diskChanged = false;
+                // Confirmed by register-level tracing (not just static
+                // disassembly): the very first command DSKINIT issues is
+                // 0x01, and the *next* thing it does is poll base+2 --
+                // whose bit6 (changed-disk) leaks into that poll's own
+                // accumulator (via `srl a`) and gets tested by the poll's
+                // caller as a "media changed, abort" condition, unless
+                // it's already clear. So the latch clears on *any* command
+                // write, not just the 0x20 step pulse an earlier draft of
+                // this file assumed -- real hardware's DSKCHG typically
+                // clears on any drive-select/command access, not
+                // specifically a step.
+                m_diskChanged = false;
                 break;
             case 1:
                 m_sectorReg = value;
                 m_byteOffset = 0;
                 break;
             case 2:  // motor/status
+                if ((value & 0x80) != 0 && !m_motorOn) {
+                    // Off -> on transition: real spin-up time, per the
+                    // Service Manual's "Motor startup time: 0.5 second".
+                    m_motorStartRemaining = kMotorStartupTStates;
+                }
                 m_motorOn = (value & 0x80) != 0;
+                if (!m_motorOn) m_motorStartRemaining = 0;
                 break;
             case 3:
                 writeDataByte(value);
@@ -236,6 +289,8 @@ private:
         m_byteOffset = 0;
         m_motorOn = false;
         m_busy = false;
+        m_motorStartRemaining = 0;
+        m_busyRemaining = 0;
     }
 
     std::array<uint8_t, kImageSize> m_image{};
@@ -245,6 +300,8 @@ private:
     int m_side = 0;  // 0 = A, 1 = B
     bool m_motorOn = false;
     bool m_busy = false;
+    uint32_t m_motorStartRemaining = 0;  // T-states left in motor spin-up
+    uint32_t m_busyRemaining = 0;        // T-states left in a command's access time
     bool m_writeProtect = false;
     bool m_dirty = false;
     bool m_diskChanged = true;

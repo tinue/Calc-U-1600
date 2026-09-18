@@ -52,13 +52,18 @@ void test_default_construction_is_blank_disk() {
 
 // Motor-start + status poll, mirroring the ROM's own sequence at bank-5
 // file offset 0x413 (write 0x81 to base+2) / 0x480 (poll base+0 bit7).
+// The Service Manual's own "Motor startup time: 0.5 second" spec is
+// modeled as a real timed busy window (advance()), not instant completion.
 void test_motor_start_clears_engine_not_started_bit() {
     CE1600FCard card;
     uint8_t status = readReg(card, 0x78);
     CHECK((status & 0x80) != 0);  // engine not started before motor-on
     writeReg(card, 0x7A, 0x81);   // base+2: bit7 = motor on
     status = readReg(card, 0x78);
-    CHECK((status & 0x80) == 0);  // engine started
+    CHECK((status & 0x80) != 0);  // still spinning up -- not instant
+    card.advance(CE1600FCard::kMotorStartupTStates);
+    status = readReg(card, 0x78);
+    CHECK((status & 0x80) == 0);  // engine started once the real 0.5s elapses
 }
 
 // Write a full sector via the command(0x60)/sector(0x79)/data(0x7B)
@@ -106,6 +111,7 @@ void test_format_command_zero_fills_selected_sector() {
 void test_port_0x81_reset_clears_motor_and_command_state() {
     CE1600FCard card;
     writeReg(card, 0x7A, 0x81);  // motor on
+    card.advance(CE1600FCard::kMotorStartupTStates);
     CHECK((readReg(card, 0x78) & 0x80) == 0);
 
     CHECK(card.respondsToWrite(ioPins(0x81, true), 0x00));  // bit0=0: reset asserted
@@ -149,6 +155,18 @@ void test_disk_changed_latch_starts_set_and_clears_on_step() {
     CHECK((readReg(card, 0x7A) & 0x40) != 0);
 }
 
+// Confirmed via register-level tracing against the real ROM: DSKINIT's
+// very first command to a freshly-changed drive is 0x01, not 0x20, and it
+// immediately polls base+2 -- if the changed-disk latch only cleared on
+// 0x20 (an earlier draft's unconfirmed guess), that poll would still see
+// it set and DSKINIT would abort. The latch must clear on any command.
+void test_disk_changed_latch_clears_on_any_command_not_just_step() {
+    CE1600FCard card;
+    CHECK((readReg(card, 0x7A) & 0x40) != 0);
+    writeReg(card, 0x78, 0x01);  // DSKINIT's first command, not a step
+    CHECK((readReg(card, 0x7A) & 0x40) == 0);
+}
+
 // setSide() is the software analogue of ejecting and flipping the disk --
 // it re-arms the changed-disk latch and switches which 64KB half of the
 // image sector/data access addresses, without disturbing the other side's
@@ -184,6 +202,24 @@ void test_set_side_switches_data_and_rearms_changed_latch() {
     CHECK(readReg(card, 0x7B) == 0xAA);  // back on side A, original byte intact
 }
 
+// Any command (read/write/format/step) busies the drive for a real
+// kStepAccessTStates window (Service Manual §1: 80ms/step + 50ms
+// settling) before base+2 bit0/bit7 clear -- confirmed load-bearing by
+// disassembly (file offset 0x4e4/0x685 poll these).
+void test_command_busies_the_drive_for_the_real_access_time() {
+    CE1600FCard card;
+    writeReg(card, 0x7A, 0x81);
+    card.advance(CE1600FCard::kMotorStartupTStates);
+
+    writeReg(card, 0x79, 0);
+    writeReg(card, 0x78, 0x40);  // read command
+    uint8_t status = readReg(card, 0x7A);
+    CHECK((status & 0x81) != 0);  // busy immediately after issuing the command
+    card.advance(CE1600FCard::kStepAccessTStates);
+    status = readReg(card, 0x7A);
+    CHECK((status & 0x81) == 0);  // ready once the real access time elapses
+}
+
 // motorOn() is the "green lamp" the GUI reads to tell the user when it's
 // safe to eject and flip the disk.
 void test_motor_on_reflects_motor_register_writes() {
@@ -217,8 +253,10 @@ int run_ce1600f_tests() {
     test_port_0x81_reset_clears_motor_and_command_state();
     test_load_image_and_insert_blank_manage_dirty_and_revision();
     test_disk_changed_latch_starts_set_and_clears_on_step();
+    test_disk_changed_latch_clears_on_any_command_not_just_step();
     test_set_side_switches_data_and_rearms_changed_latch();
     test_motor_on_reflects_motor_register_writes();
+    test_command_busies_the_drive_for_the_real_access_time();
     test_claims_only_its_own_ports();
 
     std::printf("ce1600f_tests: %d passed, %d failed\n", g_pass, g_fail);

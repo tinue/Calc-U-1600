@@ -268,6 +268,7 @@ int PC1600Machine::step() {
         // polls observe them in.
         m_z80Mem.uart().tick(cost);
         m_z80Mem.subCpu().tickByTStates(cost);
+        if (m_ce1600fCard) m_ce1600fCard->advance(static_cast<uint32_t>(cost));
         // The documented handoff is OUT (38H),A then HALT -- the write
         // sets the pending flag (PC1600Memory::writeIO), but the actual
         // switch only happens once the SC7852 has also reached HALT, so
