@@ -10,6 +10,9 @@ plotter: ce1600p
 memory-expansion-1:
   - modulespec: CE-1600M
 
+# The saved "Initialized" disk, side B facing the head.
+floppy: Initialized,B
+
 # Clear memory and go to RUN mode
 keys:
   - key: mode
