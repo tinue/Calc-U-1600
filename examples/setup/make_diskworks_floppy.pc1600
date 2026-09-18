@@ -1,0 +1,62 @@
+# PC-1600 Prepare a floppy for later use with DiskWorks. Load a few Basic programs
+# and store them to X: plus set-up the required CW.CFG file.
+# When done, save the floppy as "Progs"
+
+model: PC-1600
+plotter: ce1600p
+
+
+memory-expansion-1:
+  - modulespec: CE-1600M
+
+# Initialize the floppy
+keys:
+  - key: mode
+  - type: NEW0
+  - key: mode
+  - type: INIT"X:"
+  - key: enter
+
+# Load the programs, and save each one to X:
+program:
+  path: ../globus.bas
+  format: basic-binary
+keys:
+  - type: SAVE"X:GLOBUS.BAS"
+
+program:
+  path: ../biorhythmus_1600.bas
+  format: basic-binary
+keys:
+  - type: SAVE"X:BIO.BAS"
+
+#program:
+#  path: ../lissajou-1600.bas
+#  format: basic-binary
+#keys:
+#  - type: SAVE"X:LISSAJOU.BAS"
+#
+#program:
+#  path: ../ascii.bas
+#  format: basic-binary
+#keys:
+#  - type: SAVE"X:ASCII.BAS"
+#
+#program:
+#  path: ../setcom1600.bas
+#  format: basic-binary
+#keys:
+#  - type: SAVE"X:COMM.BAS"
+#
+## Setup the DW.CFG file on X:
+#keys:
+#  - type: MAXFILES=1
+#  - type: OPEN"X:DW.CFG" FOR OUTPUT AS #1
+#  - type: PRINT#1,"C \31\LOAD"+CHR$(&22)+"X:COMM.BAS"+CHR$(&22)
+#  - type: PRINT#1,"^"
+#  - type: CLOSE #1
+#
+## Some debug output at the end
+#keys:
+#  - type: DSKF"X:"
+#  - type: FILES"X:"
