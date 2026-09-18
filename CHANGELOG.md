@@ -2,10 +2,21 @@
 
 ## [0.2.0] - work in progress
 
+- **Platforms** Added a native Windows ARM64 build, alongside the
+  existing Windows x86_64, Linux, and macOS builds.
 - **Keyboard** PC-1500/1500A live typing is now buffered, so typing
   quickly no longer drops keystrokes. Cursor keys (Left/Right/Up/Down)
   still pass straight through, so the ROM's own auto-repeat still works
   when held.
+- **Startup** A missing or corrupted bundled ROM now shows a dialog
+  naming the file and where it looked, instead of silently crashing.
+- **Loading** Support loading segmented PC-1600 BASIC programs.
+- **Loading** File ▸ Load Preset… and File ▸ Load BASIC Program… no
+  longer ask for confirmation before resetting the machine — picking a
+  file loads and resets immediately.
+- **Windows installer** Fixed a "missing MSVCP140.dll" failure on a
+  clean machine by running the bundled Visual C++ redistributable
+  during install.
 
 ## [0.1.0] - 2026-09-15
 First public release. Calc-U-1600 is an emulator for the Sharp PC-1500,
