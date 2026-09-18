@@ -419,16 +419,17 @@ still worth understanding. They say what the code actually does now.
   attaches as a union with CE-1600P (there is no separate floppy
   attach/detach); persistence is a raw `<name>.floppy.img` + `.yaml`
   sidecar via `FloppyDiskManager`.
-- **Open bug**: `INIT"X:"` on a blank disk fails (BASIC ERROR 160) inside
-  FORMAT's own low-level seek/verify self-test, which depends on
-  incidental Z80 register reuse in the real ROM that this emulation
-  doesn't currently reproduce. Raw sector read/write via the IOCS
-  registers works correctly; only the *format-a-blank-disk* path is
-  affected. Full investigation, root-cause analysis, and next-step options:
-  `docs/PC1600-CE1600F-Format-Handoff.md`.
+- **Resolved**: `INIT"X:"` formats a blank disk (prompts "Set diskette
+  for X:", then formats on Enter); SAVE/LOAD/FILES/DSKF work end to end.
+  The controller model tracks head position, holds busy across data
+  transfers, and implements command 0x80 as READ ID -- see
+  `docs/PC1600-CE1600F-Format-Handoff.md` §0.
 - **Not modeled**: GCR (4/5) encoding (sector bytes are stored decoded,
   per the Service Manual's own note that this only matters at the
-  flux/bitstream level), the FDU-250's solenoid/cam seek mechanics, and
+  flux/bitstream level), the FDU-250's solenoid/cam seek mechanics,
+  per-track formatted/unformatted state (the image holds sector data only,
+  so every track answers READ ID with standard IDs -- an unformatted disk
+  is recognised at the filesystem level instead: `FILES` gives ERROR 161), and
   write-protect (`m_writeProtect` exists but nothing ever sets it true —
   the emulated drive is permanently writable).
 

@@ -7,6 +7,7 @@
 // Build & run: see tools/run_tests.sh
 
 #include <cstdio>
+#include <vector>
 
 #include "../Connector/CE1600FCard.hpp"
 
@@ -92,17 +93,98 @@ void test_write_then_read_sector_round_trip() {
     CHECK(image[3 * CE1600FCard::kSectorSize + 255] == 255);
 }
 
-// Format (0xA0) zero-fills just the selected sector, leaving others alone.
-void test_format_command_zero_fills_selected_sector() {
-    CE1600FCard card;
-    writeReg(card, 0x79, 5);
-    writeReg(card, 0x78, 0x60);
-    writeReg(card, 0x7B, 0xAA);  // dirty one byte of sector 5
+// Seeks to `track` the way the ROM does at bank-5 0x4933-0x494c: target
+// in DATA, then command 0x20, then waits out the mechanical busy window.
+void seekTo(CE1600FCard& card, uint8_t track) {
+    writeReg(card, 0x7B, track);
+    writeReg(card, 0x78, 0x20);
+    card.advance(CE1600FCard::kSettleTStates + CE1600FCard::kTracksPerSide * CE1600FCard::kStepTStates);
+}
 
-    writeReg(card, 0x79, 5);
-    writeReg(card, 0x78, 0xA0);  // format sector 5
+// Format track (0xA0), as at bank-5 0x4555-0x4586: eight 3-byte ID fields
+// (track, sector, 1) through DATA, then the track's data is laid down --
+// the current head track only, leaving the rest of the disk alone.
+void test_format_track_takes_eight_id_fields_and_clears_the_head_track() {
+    CE1600FCard card;
+    std::vector<uint8_t> image(CE1600FCard::kImageSize, 0x77);
+    CHECK(card.loadImage(image.data(), image.size()));
+    seekTo(card, 2);
+
+    writeReg(card, 0x78, 0xA0);
+    for (uint8_t sector = 0; sector < 8; ++sector) {
+        CHECK((readReg(card, 0x7A) & 0x83) == 0x83);  // busy + data request
+        writeReg(card, 0x7B, 2);
+        writeReg(card, 0x7B, sector);
+        writeReg(card, 0x7B, 1);
+    }
+    CHECK((readReg(card, 0x7A) & 0x83) == 0);  // done after the last ID byte
+
+    const auto after = card.imageForSave();
+    const size_t trackBytes = CE1600FCard::kSectorsPerTrack * CE1600FCard::kSectorSize;
+    CHECK(after[2 * trackBytes] == 0);
+    CHECK(after[3 * trackBytes - 1] == 0);
+    CHECK(after[2 * trackBytes - 1] == 0x77);  // track 1 untouched
+    CHECK(after[3 * trackBytes] == 0x77);      // track 3 untouched
+}
+
+// Seek (0x20, target in DATA) moves the head; read ID (0x80) then returns
+// the ID field (track, sector, size code) -- the seek-verify at bank-5
+// 0x4976-0x49a9 compares its first byte against the seek target. Busy
+// stays set while the three bytes are read and drops right after.
+void test_seek_then_read_id_returns_the_target_track() {
+    CE1600FCard card;
+    seekTo(card, 5);
+    CHECK(card.track() == 5);
+    CHECK((readReg(card, 0x7A) & 0x81) == 0);
+
+    writeReg(card, 0x78, 0x80);
+    CHECK((readReg(card, 0x7A) & 0x83) == 0x83);
+    CHECK(readReg(card, 0x7B) == 5);
+    CHECK((readReg(card, 0x7A) & 0x83) == 0x83);
+    CHECK(readReg(card, 0x7B) < CE1600FCard::kSectorsPerTrack);
+    CHECK((readReg(card, 0x7A) & 0x83) == 0x83);
+    CHECK(readReg(card, 0x7B) == 1);
+    CHECK((readReg(card, 0x7A) & 0xDF) == 0);  // idle, no error bits
+
+    writeReg(card, 0x78, 0x01);  // restore
+    card.advance(CE1600FCard::kSettleTStates + 5 * CE1600FCard::kStepTStates);
+    CHECK(card.track() == 0);
+    CHECK((readReg(card, 0x7A) & 0x81) == 0);
+}
+
+// The sector register selects 0-7 within the head's current track, so the
+// same sector number on different tracks addresses different image bytes.
+void test_sector_address_combines_head_track_and_sector_register() {
+    CE1600FCard card;
+    seekTo(card, 3);
+    writeReg(card, 0x79, 4);
+    writeReg(card, 0x78, 0x60);
+    writeReg(card, 0x7B, 0xAB);
     const auto image = card.imageForSave();
-    CHECK(image[5 * CE1600FCard::kSectorSize] == 0);
+    CHECK(image[(3 * CE1600FCard::kSectorsPerTrack + 4) * CE1600FCard::kSectorSize] == 0xAB);
+    CHECK(image[4 * CE1600FCard::kSectorSize] == 0);
+}
+
+// Outside a write transfer, DATA is only a latch (the seek target) -- it
+// must never land in the disk image.
+void test_data_writes_outside_a_transfer_do_not_touch_the_image() {
+    CE1600FCard card;
+    writeReg(card, 0x7B, 0x09);
+    CHECK(!card.isDirty());
+    CHECK(card.imageForSave()[0] == 0);
+    CHECK(readReg(card, 0x7B) == 0x09);
+}
+
+// A transfer the ROM abandons part-way (the verify bail-out at bank-5
+// 0x4909) still completes on its own once the sector has passed the head.
+void test_abandoned_transfer_times_out() {
+    CE1600FCard card;
+    writeReg(card, 0x79, 0);
+    writeReg(card, 0x78, 0x40);
+    readReg(card, 0x7B);
+    CHECK((readReg(card, 0x7A) & 0x81) == 0x81);
+    card.advance(CE1600FCard::kTransferIdleTStates);
+    CHECK((readReg(card, 0x7A) & 0x83) == 0);
 }
 
 // Port 0x81 bit0 write (active-low) resets latched command/motor state --
@@ -143,12 +225,12 @@ void test_load_image_and_insert_blank_manage_dirty_and_revision() {
 }
 
 // A freshly constructed/blanked/loaded card reports "disk changed" (base+2
-// bit6) until a step command (0x20) acknowledges it -- modeled on a real
+// bit6) until a seek command (0x20) acknowledges it -- modeled on a real
 // FDC's DSKCHG latch.
 void test_disk_changed_latch_starts_set_and_clears_on_step() {
     CE1600FCard card;
     CHECK((readReg(card, 0x7A) & 0x40) != 0);
-    writeReg(card, 0x78, 0x20);  // step command
+    writeReg(card, 0x78, 0x20);  // seek command
     CHECK((readReg(card, 0x7A) & 0x40) == 0);
 
     card.insertBlankDisk();
@@ -184,7 +266,7 @@ void test_set_side_switches_data_and_rearms_changed_latch() {
     card.setSide(1);
     CHECK(card.side() == 1);
     CHECK((readReg(card, 0x7A) & 0x40) != 0);  // flipping the disk re-arms it
-    writeReg(card, 0x78, 0x20);                // acknowledge again
+    seekTo(card, 0);                           // acknowledge again (DATA still holds 0xAA)
 
     writeReg(card, 0x79, 0);
     writeReg(card, 0x78, 0x60);
@@ -202,22 +284,33 @@ void test_set_side_switches_data_and_rearms_changed_latch() {
     CHECK(readReg(card, 0x7B) == 0xAA);  // back on side A, original byte intact
 }
 
-// Any command (read/write/format/step) busies the drive for a real
-// kStepAccessTStates window (Service Manual §1: 80ms/step + 50ms
-// settling) before base+2 bit0/bit7 clear -- confirmed load-bearing by
-// disassembly (file offset 0x4e4/0x685 poll these).
-void test_command_busies_the_drive_for_the_real_access_time() {
+// A transfer (here: read sector) holds busy for exactly as long as its
+// bytes are being moved -- the ROM's transfer loops (bank-5 0x4841) treat
+// busy dropping mid-transfer as an error -- and releases it right after
+// the last byte, well inside the ~9ms `sub_44e4` b=1 poll that follows.
+void test_transfer_holds_busy_until_the_last_byte() {
     CE1600FCard card;
-    writeReg(card, 0x7A, 0x81);
-    card.advance(CE1600FCard::kMotorStartupTStates);
-
     writeReg(card, 0x79, 0);
-    writeReg(card, 0x78, 0x40);  // read command
-    uint8_t status = readReg(card, 0x7A);
-    CHECK((status & 0x81) != 0);  // busy immediately after issuing the command
-    card.advance(CE1600FCard::kStepAccessTStates);
-    status = readReg(card, 0x7A);
-    CHECK((status & 0x81) == 0);  // ready once the real access time elapses
+    writeReg(card, 0x78, 0x40);
+    for (int i = 0; i < 512; ++i) {
+        CHECK((readReg(card, 0x7A) & 0x83) == 0x83);
+        readReg(card, 0x7B);
+        card.advance(100);  // a slow poll loop must not time the transfer out
+    }
+    CHECK((readReg(card, 0x7A) & 0x83) == 0);
+}
+
+// A seek busies the drive for the real mechanical time (Service Manual
+// §1: 80ms per track + 50ms settling) before base+2 bit0/bit7 clear.
+void test_seek_busies_the_drive_for_the_real_step_time() {
+    CE1600FCard card;
+    writeReg(card, 0x7B, 4);
+    writeReg(card, 0x78, 0x20);
+    CHECK((readReg(card, 0x7A) & 0x81) == 0x81);
+    card.advance(CE1600FCard::kSettleTStates + 3 * CE1600FCard::kStepTStates);
+    CHECK((readReg(card, 0x7A) & 0x81) == 0x81);  // four tracks, not three
+    card.advance(CE1600FCard::kStepTStates);
+    CHECK((readReg(card, 0x7A) & 0x81) == 0);
 }
 
 // motorOn() is the "green lamp" the GUI reads to tell the user when it's
@@ -249,14 +342,19 @@ int run_ce1600f_tests() {
     test_default_construction_is_blank_disk();
     test_motor_start_clears_engine_not_started_bit();
     test_write_then_read_sector_round_trip();
-    test_format_command_zero_fills_selected_sector();
+    test_format_track_takes_eight_id_fields_and_clears_the_head_track();
+    test_seek_then_read_id_returns_the_target_track();
+    test_sector_address_combines_head_track_and_sector_register();
+    test_data_writes_outside_a_transfer_do_not_touch_the_image();
+    test_abandoned_transfer_times_out();
     test_port_0x81_reset_clears_motor_and_command_state();
     test_load_image_and_insert_blank_manage_dirty_and_revision();
     test_disk_changed_latch_starts_set_and_clears_on_step();
     test_disk_changed_latch_clears_on_any_command_not_just_step();
     test_set_side_switches_data_and_rearms_changed_latch();
     test_motor_on_reflects_motor_register_writes();
-    test_command_busies_the_drive_for_the_real_access_time();
+    test_transfer_holds_busy_until_the_last_byte();
+    test_seek_busies_the_drive_for_the_real_step_time();
     test_claims_only_its_own_ports();
 
     std::printf("ce1600f_tests: %d passed, %d failed\n", g_pass, g_fail);

@@ -1,11 +1,79 @@
 # CE-1600F floppy — FORMAT self-test handoff
 
-*Written 2026-09-18. Status: open — `INIT"X:"` still fails (BASIC ERROR 160)
-on a blank disk. Everything else about the CE-1600F emulation (attach,
-register protocol, persistence, GUI, presets) is implemented, tested, and
-committed on `dev-0.3.0`. This document is for whoever picks up the one
-remaining piece — likely with a different technical approach than the one
-tried here (see "What to try differently" at the end).*
+*Written 2026-09-18. **Status: RESOLVED** (same day) -- see §0. §§1-5 are
+the original investigation, kept for history; §2's "register reuse"
+conclusion and §5's options are superseded by §0.*
+
+## 0. Resolution
+
+`INIT"X:"` now formats a blank disk, and SAVE / LOAD / FILES / DSKF work
+on it (verified headless: format → `SAVE"X:HELLO"` → `NEW` →
+`LOAD"X:HELLO"` → `LIST`; `DSKF"X:"` = 61952). The problem was the card's
+register model, not ROM quirks. Bank-5 Z80 addresses below.
+
+**What 0x492d really does.** It's the seek-with-verify primitive used by
+the generic sector read/write paths (callers 0x4759, 0x47c7, 0x4a17). Its
+twin 0x4931 is seek-without-verify, and FORMAT uses that one (0x4598).
+The `c` tested at 0x4973 is *not* a leftover port address: `pop bc` at
+0x4972 restores the value pushed at 0x4933, i.e. the entry flag (0xFF =
+verify, 0x00 = no verify). So `inc c; ret nz` just means "return here
+unless verifying". On the verify path:
+
+- command 0x80 is **READ ID**. It streams the ID field of the next sector
+  (track, sector, size code), the same three bytes FORMAT writes per sector
+  at 0x4569-0x4583 (`h`, `l`, `d=1`);
+- `pop af` at 0x49a7 gets back the pushed `bc`, so `a` = the seek target
+  track. `cp b` checks it against the first ID byte, i.e. "did the head
+  land on the right track?";
+- on a match it jumps to 0x4950 with the target/flags pair pushed. The
+  next `pop bc` puts the flags byte in `c`, which is never 0xFF after a
+  `cp` that matched, so `inc c; ret nz` always returns success.
+
+**The real bugs in `CE1600FCard`:**
+
+1. **Fixed 130 ms busy on every command.** In every transfer loop
+   (0x4841 read, 0x48a5 write, 0x455f format, 0x4980 read ID), busy
+   (base+2 bit0) must stay *set* while bytes move, with bit1 as the
+   per-byte data request. Busy dropping mid-transfer counts as an error
+   (0x4881 / 0x49b0). After the last byte it must clear within the
+   `sub_44e4` b=1 poll (~9 ms), or the ROM times out, pulses the FDC reset
+   (port 0x81 via 0x4375) and fails. A fixed timer can't meet both
+   constraints, which explains the "shorter delay is worse" observation.
+   Transfers now hold busy until their last byte (20 ms idle timeout for
+   abandoned transfers). Seeks take 50 ms + 80 ms per track.
+2. **No head position.** The ROM puts the sector (0-7) in base+1 and gets
+   the track from a seek (0x20 with the target in DATA; 0x01 = restore to
+   track 0). The card indexed sectors 0-127 straight from base+1, so every
+   track aliased onto track 0.
+3. **Every DATA write went into the disk image**, including the seek
+   target byte written at 0x493a.
+4. **0xA0 is format *track*.** It takes 8 × 3 ID bytes through DATA; it
+   doesn't clear a single sector.
+
+**Two red herrings the original trace missed:**
+
+- **Error 160 is stale.** The boot-time drive scan reads the blank
+  disk's boot sector and FAT and leaves 160 in F89B before anything is
+  typed. Checking F89B after `INIT` without clearing it first proves
+  nothing.
+- **`INIT"X:"` prompts "Set diskette for X:" and waits for a key.** The
+  repro preset (`type` + `wait`) never pressed Enter, so the format never
+  started. A working preset:
+
+  ```yaml
+  model: PC-1600
+  plotter: ce1600p
+  keys:
+    - type: INIT"X:"
+    - wait: 1
+    - key: enter
+    - wait: 30
+  ```
+
+Whatever is in the second half of the FAT sector after a SAVE is leftover
+RAM: the ROM writes the FAT from a 512-byte buffer, and only bytes 0-122
+mean anything. The ROM also leaves the FAT copy (sector 2) alone on SAVE.
+Both are ROM behavior, not emulator bugs.
 
 ## 1. What's implemented and working
 
