@@ -142,6 +142,29 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     layout->addWidget(m_ce1600pButton);
     setCe1600pVisible(false);
 
+    // CE-1600F floppy disk picker -- attaches as a union with CE-1600P
+    // (PC1600Machine::attachCE1600P()), so this only ever shows/hides
+    // alongside the CE-1600P button, never independently.
+    m_floppyLabel = new QLabel(tr("Disk:"), this);
+    layout->addWidget(m_floppyLabel);
+
+    m_floppyCombo = new QComboBox(this);
+    m_floppyCombo->setFocusPolicy(Qt::NoFocus);
+    m_floppyCombo->setMinimumContentsLength(12);
+    layout->addWidget(m_floppyCombo);
+
+    m_floppySaveButton = new QPushButton(this);
+    m_floppySaveButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    m_floppySaveButton->setToolTip(tr("Name & Save"));
+    m_floppySaveButton->setFocusPolicy(Qt::NoFocus);
+    layout->addWidget(m_floppySaveButton);
+
+    connect(m_floppyCombo, &QComboBox::currentIndexChanged, this,
+            [this](int index) { emit floppyDiskSelected(m_floppyCombo->itemData(index).toString()); });
+    connect(m_floppySaveButton, &QPushButton::clicked, this, [this] { emit floppyNameAndSaveRequested(); });
+
+    setFloppyVisible(false);
+
     connect(resetButton, &QPushButton::clicked, this, [this, resetButton] {
         emit resetClicked(resetButton->lastClickWasCmd());
     });
@@ -220,4 +243,25 @@ void ControlBar::setCe1600pState(bool attached, bool enabled) {
 
 void ControlBar::setCe1600pVisible(bool visible) {
     m_ce1600pButton->setVisible(visible);
+}
+
+void ControlBar::setFloppyCombo(const QVector<FloppyDiskManager::DiskEntry>& bundled,
+                                const QVector<FloppyDiskManager::DiskEntry>& instances,
+                                const QString& selectedOrEmpty) {
+    const QSignalBlocker blocker(m_floppyCombo);
+    m_floppyCombo->clear();
+    m_floppyCombo->addItem(tr("–blank–"), QString());
+    for (const auto& e : bundled) m_floppyCombo->addItem(e.diskName, e.diskName);
+    if (!instances.isEmpty()) {
+        m_floppyCombo->insertSeparator(m_floppyCombo->count());
+        for (const auto& e : instances) m_floppyCombo->addItem(e.diskName, e.diskName);
+    }
+    const int idx = m_floppyCombo->findData(selectedOrEmpty);
+    m_floppyCombo->setCurrentIndex(idx >= 0 ? idx : 0);
+}
+
+void ControlBar::setFloppyVisible(bool visible) {
+    m_floppyLabel->setVisible(visible);
+    m_floppyCombo->setVisible(visible);
+    m_floppySaveButton->setVisible(visible);
 }

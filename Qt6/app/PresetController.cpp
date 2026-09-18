@@ -1,13 +1,14 @@
 #include "PresetController.hpp"
 
 PresetController::PresetController(MachineController* controller, MemoryModuleManager* moduleManager,
-                                     QObject* parent)
-    : QObject(parent), m_controller(controller), m_moduleManager(moduleManager) {}
+                                     FloppyDiskManager* floppyManager, QObject* parent)
+    : QObject(parent), m_controller(controller), m_moduleManager(moduleManager), m_floppyManager(floppyManager) {}
 
 #ifdef CALCU1600_PRESET_LOADER_AVAILABLE
 
 #include "MachineController.hpp"
 #include "MemoryModuleManager.hpp"
+#include "FloppyDiskManager.hpp"
 #include "AppPaths.hpp"
 
 #include <QDateTime>
@@ -118,6 +119,8 @@ bool PresetController::loadPreset(const QString& path, QString* error) {
                                                 QString::fromStdString(armedSoFar.slot1ResolvedPath));
             m_moduleManager->syncFromPresetLoad(2, QString::fromStdString(armedSoFar.slot2ModuleLabel),
                                                 QString::fromStdString(armedSoFar.slot2ResolvedPath));
+            m_floppyManager->syncFromPresetLoad(QString::fromStdString(armedSoFar.floppyImageLabel),
+                                                QString::fromStdString(armedSoFar.floppyResolvedPath));
             emit armed();
         };
         const PC1600PresetLoadResult result =
@@ -134,6 +137,8 @@ bool PresetController::loadPreset(const QString& path, QString* error) {
                                             QString::fromStdString(result.slot1ResolvedPath));
         m_moduleManager->syncFromPresetLoad(2, QString::fromStdString(result.slot2ModuleLabel),
                                             QString::fromStdString(result.slot2ResolvedPath));
+        m_floppyManager->syncFromPresetLoad(QString::fromStdString(result.floppyImageLabel),
+                                            QString::fromStdString(result.floppyResolvedPath));
         if (!result.ok) {
             *error = QString::fromStdString(result.error);
             return false;

@@ -53,6 +53,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/pc1600_slot_module_tests.cpp \
   Core/tests/pc1600_preset_tests.cpp \
   Core/tests/ce1600p_tests.cpp \
+  Core/tests/ce1600f_tests.cpp \
   Core/tests/ce150_tests.cpp \
   Core/tests/pc1600_ce150_tests.cpp \
   Core/tests/basic_binary_image_tests.cpp \

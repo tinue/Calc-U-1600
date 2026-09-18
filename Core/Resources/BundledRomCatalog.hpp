@@ -138,9 +138,14 @@ inline bool attachCE150(Machine& machine, const std::vector<std::string>& dirs, 
     return true;
 }
 
-// Attaches the CE-1600P plotter to a PC-1600.
+// Attaches the CE-1600P plotter (and, per its union attach, the CE-1600F
+// floppy -- PC1600Machine::attachCE1600P()) to a PC-1600. `diskImage`, if
+// non-null, must be exactly CE1600FCard::kImageSize bytes -- the caller
+// (attachPresetPlotter() in PC1600PresetLoader.cpp) has already resolved
+// and read a preset's `floppy:` name into it; a null/absent `diskImage`
+// leaves the auto-inserted blank disk in place.
 inline bool attachCE1600P(PC1600Machine& machine, const std::vector<std::string>& dirs,
-                          std::string* error) {
+                          std::string* error, const std::vector<uint8_t>* diskImage = nullptr) {
     std::string path1, path2;
     std::vector<uint8_t> rom1, rom2;
     if (!resolveBundledRomPath(dirs, "PC1600-P1-B4-CE1600P.bin", &path1, error) ||
@@ -150,8 +155,10 @@ inline bool attachCE1600P(PC1600Machine& machine, const std::vector<std::string>
         if (error && error->empty()) *error = "could not read the CE-1600P ROM";
         return false;
     }
-    if (!machine.attachCE1600P(rom1.data(), rom1.size(), rom2.data(), rom2.size())) {
-        if (error) *error = "CE-1600P attach failed -- ROM size/shape rejected";
+    const uint8_t* diskData = diskImage ? diskImage->data() : nullptr;
+    const size_t diskSize = diskImage ? diskImage->size() : 0;
+    if (!machine.attachCE1600P(rom1.data(), rom1.size(), rom2.data(), rom2.size(), diskData, diskSize)) {
+        if (error) *error = "CE-1600P attach failed -- ROM/disk-image size/shape rejected";
         return false;
     }
     return true;
@@ -160,16 +167,18 @@ inline bool attachCE1600P(PC1600Machine& machine, const std::vector<std::string>
 // Attaches the plotter named by `plotterName` ("ce150"/"ce1600p"/"" for
 // none) to a PC-1600 -- the shape a preset's `plotter:` field or the GUI's
 // two toggle buttons both want. Returns true and does nothing for "".
+// `diskImage` is only consulted for "ce1600p" (see attachCE1600P() above).
 inline bool attachPlotterByName(PC1600Machine& machine, const std::string& plotterName,
                                 const std::vector<std::string>& dirs, std::string* error,
-                                bool* outCe150Attached = nullptr) {
+                                bool* outCe150Attached = nullptr,
+                                const std::vector<uint8_t>* diskImage = nullptr) {
     if (plotterName.empty()) return true;
     if (plotterName == "ce150") {
         if (!attachCE150(machine, dirs, error)) return false;
         if (outCe150Attached) *outCe150Attached = true;
         return true;
     }
-    if (plotterName == "ce1600p") return attachCE1600P(machine, dirs, error);
+    if (plotterName == "ce1600p") return attachCE1600P(machine, dirs, error, diskImage);
     if (error) *error = "plotter: '" + plotterName + "' is not a known plotter";
     return false;
 }

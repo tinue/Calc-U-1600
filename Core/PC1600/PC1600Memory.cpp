@@ -281,11 +281,12 @@ uint8_t PC1600Memory::readIO(uint8_t port) {
 uint8_t PC1600Memory::readIOImpl(uint8_t port) {
 #endif
     if (port >= 0x50 && port <= 0x5B) return m_display.readIO(port);
-    // CE-1600P (60-pin system bus): ports 0x80-0x8F. Only 0x81 is claimed
-    // today (pen-at-home status); open bus (0xFF) when unattached or when
-    // no card on the bus claims a given port, same convention as the rest
-    // of this function.
-    if (port >= 0x80 && port <= 0x8F) {
+    // CE-1600P/CE-1600F (60-pin system bus): ports 0x70-0x8F -- 0x70-0x7F
+    // (CE1600FCard: command/sector/motor/data registers) and 0x80-0x8F
+    // (CE1600PCard: 0x81 pen-at-home status today). Open bus (0xFF) when
+    // unattached or when no card on the bus claims a given port, same
+    // convention as the rest of this function.
+    if (port >= 0x70 && port <= 0x8F) {
         uint8_t v;
         return m_ce1600pBus.readIO(port, v) ? v : 0xFF;
     }
@@ -339,9 +340,10 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
     pc1600probe::onIoWrite(port, value);
 #endif
     if (port >= 0x50 && port <= 0x5B) { m_display.writeIO(port, value); return; }
-    // CE-1600P (60-pin system bus): ports 0x80-0x8F (0x82 Z-motor, 0x83
-    // X/Y-motor today; see CE1600PCard). No-op when unattached.
-    if (port >= 0x80 && port <= 0x8F) { m_ce1600pBus.writeIO(port, value); return; }
+    // CE-1600P/CE-1600F (60-pin system bus): ports 0x70-0x8F -- 0x70-0x7F
+    // (CE1600FCard registers) and 0x80-0x8F (0x81 FD reset, 0x82 Z-motor,
+    // 0x83 X/Y-motor; see CE1600PCard/CE1600FCard). No-op when unattached.
+    if (port >= 0x70 && port <= 0x8F) { m_ce1600pBus.writeIO(port, value); return; }
     // Slot-2 I/O range (28-2FH, PC-1600 TRM §9): a module whose bank latch
     // triggers on a port write (CE-1601M: OUT (28H) sampling the data bus)
     // sees it here -- the card now owns that decode. The mainboard's own

@@ -20,6 +20,7 @@ class DebugPanel;
 class PlotterController;
 class PlotterPaperWidget;
 class MemoryModuleManager;
+class FloppyDiskManager;
 class PresetController;
 
 // Top-level window: FaceplateWidget (stretch) over ControlBar (fixed) over
@@ -52,6 +53,7 @@ protected:
 private:
     std::unique_ptr<MachineController> m_controller;
     std::unique_ptr<MemoryModuleManager> m_moduleManager;
+    std::unique_ptr<FloppyDiskManager> m_floppyManager;
     std::unique_ptr<PresetController> m_presetController;
     std::unique_ptr<PlotterController> m_plotterController;
     FaceplateWidget* m_faceplate = nullptr;
@@ -98,6 +100,7 @@ private:
     QAction* m_aboutAction = nullptr;
 
     void refreshModuleCombos();
+    void refreshFloppyCombo();
 
     // Shows/hides the PC-1600-only control-bar widgets (slot 2, CE-1600P
     // toggle) to match the current model. Called after every model switch

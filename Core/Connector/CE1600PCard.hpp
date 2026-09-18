@@ -23,8 +23,11 @@
 //     emulation and are left unclaimed -- open bus there is
 //     indistinguishable from "no key pressed," which is always the
 //     correct answer with no on-screen plotter keypad.
-//   - Ports 0x70-0x7F (CE-1600F floppy pass-through) are deliberately left
-//     unclaimed -- out of scope for this emulation.
+//   - Ports 0x70-0x7F (CE-1600F floppy) and the write side of port 0x81
+//     (FD reset) are claimed by a separate CE1600FCard, chained onto the
+//     same PC1600SystemBus -- CE-1600F/P attach as a union
+//     (PC1600Machine::attachCE1600P()), so the two cards are always
+//     present together.
 class CE1600PCard : public PC1600ExpansionCard {
 public:
     static constexpr size_t kRomHalfSize = 0x4000;

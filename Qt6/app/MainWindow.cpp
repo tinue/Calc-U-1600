@@ -5,6 +5,7 @@
 #include "DebugPanel.hpp"
 #include "MachineController.hpp"
 #include "MemoryModuleManager.hpp"
+#include "FloppyDiskManager.hpp"
 #include "PC1500KeyboardMap.hpp"
 #include "PlotterController.hpp"
 #include "PlotterPaperWidget.hpp"
@@ -44,7 +45,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_controller = std::make_unique<MachineController>(this);
     m_moduleManager = std::make_unique<MemoryModuleManager>(m_controller.get(), this);
     m_controller->setModuleManager(m_moduleManager.get());
-    m_presetController = std::make_unique<PresetController>(m_controller.get(), m_moduleManager.get(), this);
+    m_floppyManager = std::make_unique<FloppyDiskManager>(m_controller.get(), this);
+    m_presetController = std::make_unique<PresetController>(m_controller.get(), m_moduleManager.get(),
+                                                             m_floppyManager.get(), this);
 
     // QMainWindow requires exactly one central widget -- everything that
     // used to be added straight into `this`'s own QVBoxLayout now lives in
@@ -154,6 +157,25 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     });
     connect(m_moduleManager.get(), &MemoryModuleManager::errorMessage, this,
             [this](const QString& text) { QMessageBox::warning(this, tr("Memory Module"), text); });
+    connect(m_controlBar, &ControlBar::floppyDiskSelected, this, [this](QString diskNameOrEmpty) {
+        m_floppyManager->selectDisk(diskNameOrEmpty);
+        refreshFloppyCombo();
+    });
+    connect(m_controlBar, &ControlBar::floppyNameAndSaveRequested, this, [this] {
+        bool ok = false;
+        const QString name = QInputDialog::getText(
+            this, tr("Name & Save"), tr("Disk name:"), QLineEdit::Normal,
+            m_floppyManager->hasInstanceFile() ? m_floppyManager->selectedDiskName() : QString(), &ok);
+        if (!ok) return;
+        QString error;
+        if (!m_floppyManager->nameAndSave(name, &error)) {
+            QMessageBox::warning(this, tr("Name & Save"), error);
+            return;
+        }
+        refreshFloppyCombo();
+    });
+    connect(m_floppyManager.get(), &FloppyDiskManager::errorMessage, this,
+            [this](const QString& text) { QMessageBox::warning(this, tr("Floppy Disk"), text); });
     connect(m_controlBar, &ControlBar::ce150ToggleRequested, this,
             [this] { m_plotterController->requestToggleCE150(); });
     connect(m_controlBar, &ControlBar::ce1600pToggleRequested, this,
@@ -212,6 +234,7 @@ MainWindow::~MainWindow() = default;
 void MainWindow::closeEvent(QCloseEvent* event) {
     AppSettings::setWindowSize(size());
     m_moduleManager->flushPendingPersist();
+    m_floppyManager->flushPendingPersist();
     QMainWindow::closeEvent(event);
 }
 
@@ -234,6 +257,7 @@ void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::functi
     // loader is mid-script.
     m_frameTimer->stop();
     m_moduleManager->flushPendingPersist();
+    m_floppyManager->flushPendingPersist();
     setCursor(Qt::WaitCursor);
     QString error;
     const bool ok = loadFn(&error);
@@ -252,6 +276,15 @@ void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
     m_controlBar->setCe150State(ce150Attached, !ce1600pAttached);
     m_controlBar->setCe1600pState(ce1600pAttached, !ce150Attached);
     const bool otherAttached = isCE150 ? ce1600pAttached : ce150Attached;
+    if (!isCE150) {
+        // CE-1600F attaches as a union with CE-1600P (PC1600Machine::
+        // attachCE1600P()) -- push the previously selected disk (or leave
+        // the freshly-inserted blank default) whenever the plotter/floppy
+        // pair (re)attaches, and hide/show the picker alongside it.
+        if (attached) m_floppyManager->attachToMachine();
+        m_controlBar->setFloppyVisible(attached);
+        refreshFloppyCombo();
+    }
     if (attached) {
         m_plotterPaper->setKind(isCE150 ? PlotterPaperWidget::Kind::CE150 : PlotterPaperWidget::Kind::CE1600P);
         if (!m_plotterPaperInLayout) { m_debugRowLayout->addWidget(m_plotterPaper, 1); m_plotterPaperInLayout = true; }
@@ -295,6 +328,11 @@ void MainWindow::refreshModuleCombos() {
         m_controlBar->setModuleCombos(slot, bundled, instance, m_moduleManager->selectedModuleName(slot));
         m_controlBar->setSlotBatteryBacked(slot, m_moduleManager->isSlotBatteryBacked(slot, bundled, instance));
     }
+}
+
+void MainWindow::refreshFloppyCombo() {
+    m_controlBar->setFloppyCombo(m_floppyManager->bundledEntries(), m_floppyManager->instanceEntries(),
+                                 m_floppyManager->selectedDiskName());
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* event) {
@@ -396,6 +434,7 @@ void MainWindow::onFrameTick() {
     m_faceplate->lcdWidget()->update();
 
     m_moduleManager->markDirtyAndSchedulePersist();
+    m_floppyManager->markDirtyAndSchedulePersist();
     m_debugPanel->onFrameTick();
     m_plotterController->onFrameTick();
     if (m_plotterPaperInLayout) m_plotterPaper->onFrameTick();
@@ -467,6 +506,7 @@ void MainWindow::buildMenuBar() {
 
 void MainWindow::applyModelSelection(Model model) {
     m_moduleManager->flushPendingPersist();
+    m_floppyManager->flushPendingPersist();
     m_moduleManager->onModelChanged(model);
     m_controller->switchModel(model); // rebuilds the machine -- any live plotter attachment is already gone
     m_plotterController->resetOnModelSwitch();
@@ -481,6 +521,7 @@ void MainWindow::applyModelSelection(Model model) {
 
 void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
     m_moduleManager->flushPendingPersist();
+    m_floppyManager->flushPendingPersist();
     m_controller->setPC1500RomRevision(revision); // rebuilds the machine
     m_controlBar->setRomRevision(revision);
     syncMachineMenuFromRomRevision(revision);

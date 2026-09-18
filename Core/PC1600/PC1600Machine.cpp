@@ -61,19 +61,29 @@ void PC1600Machine::seedClock(int year, int month, int day, int hour, int minute
 }
 
 bool PC1600Machine::attachCE1600P(const uint8_t* rom1, size_t rom1Size,
-                                   const uint8_t* rom2, size_t rom2Size) {
+                                   const uint8_t* rom2, size_t rom2Size,
+                                   const uint8_t* diskImage, size_t diskImageSize) {
     if (rom1Size != CE1600PCard::kRomHalfSize || rom2Size != CE1600PCard::kRomHalfSize)
         return false;
+    if (diskImage && diskImageSize != CE1600FCard::kImageSize) return false;
     auto card = std::make_unique<CE1600PCard>();
     if (!card->loadRom(rom1, rom1Size, rom2, rom2Size)) return false;
+    auto floppy = std::make_unique<CE1600FCard>();  // ctor auto-inserts a blank disk
+    if (diskImage) floppy->loadImage(diskImage, diskImageSize);
     detachCE1600P();
     detachCE150(); // one plotter on the bus at a time
     m_z80Mem.ce1600pBus().attach(card.get());
+    m_z80Mem.ce1600pBus().attach(floppy.get());
     m_ce1600pCard = std::move(card);
+    m_ce1600fCard = std::move(floppy);
     return true;
 }
 
 void PC1600Machine::detachCE1600P() {
+    if (m_ce1600fCard) {
+        m_z80Mem.ce1600pBus().detach(m_ce1600fCard.get());
+        m_ce1600fCard.reset();
+    }
     if (!m_ce1600pCard) return;
     m_z80Mem.ce1600pBus().detach(m_ce1600pCard.get());
     m_ce1600pCard.reset();
@@ -105,6 +115,40 @@ std::vector<std::string> PC1600Machine::drainCE1600PEvents() {
 void PC1600Machine::clearCE1600PPaper() {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_ce1600pCard) m_ce1600pCard->mechanism().clearPaper();
+}
+
+// ── CE-1600F floppy (union-attached with CE-1600P, above) ─────────────
+
+std::vector<uint8_t> PC1600Machine::ce1600fDiskImage() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_ce1600fCard) return {};
+    return m_ce1600fCard->imageForSave();
+}
+
+bool PC1600Machine::ce1600fDirty() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_ce1600fCard && m_ce1600fCard->isDirty();
+}
+
+uint64_t PC1600Machine::ce1600fRevision() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_ce1600fCard ? m_ce1600fCard->revision() : 0;
+}
+
+void PC1600Machine::ce1600fInsertBlank() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_ce1600fCard) m_ce1600fCard->insertBlankDisk();
+}
+
+bool PC1600Machine::ce1600fLoadImage(const uint8_t* data, size_t size) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_ce1600fCard) return false;
+    return m_ce1600fCard->loadImage(data, size);
+}
+
+void PC1600Machine::ce1600fClearDirty() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_ce1600fCard) m_ce1600fCard->clearDirty();
 }
 
 // ── CE-150 plotter (LH5803 side) ──────────────────────────────────────

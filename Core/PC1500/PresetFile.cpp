@@ -491,6 +491,8 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
     bool hasFirmware = false;
     std::string plotter;  // normalized `plotter:` value ("" / "ce1600p" / "ce150")
     bool hasPlotter = false;
+    std::string floppy;  // `floppy:` value, verbatim (a disk name, not normalized)
+    bool hasFloppy = false;
 
     size_t idx = 0;
     while (idx < lines.size()) {
@@ -562,6 +564,10 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
                          ": 'plotter: " + value + "' is not a known plotter (expected ce1600p or ce150)";
                 return false;
             }
+        } else if (key == "floppy") {
+            if (!hasInline) { *error = "'floppy' requires a value"; return false; }
+            hasFloppy = true;
+            floppy = value;
         } else if (key == "rom-modules") {
             *error = "'" + key + "' is not yet supported by this loader";
             return false;
@@ -603,6 +609,11 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             }
         }
         out->plotter = plotter;  // already validated/normalized above
+        if (hasFloppy && plotter != "ce1600p") {
+            *error = "'floppy:' requires 'plotter: ce1600p' (the CE-1600F attaches as a union with it)";
+            return false;
+        }
+        out->floppy = floppy;
         return true;
     }
     // The remaining branches are PC-1500/1500A -- the per-slot blocks are
@@ -618,6 +629,10 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
                      "binary' block pokes the whole file at 'address:')";
             return false;
         }
+    }
+    if (hasFloppy) {
+        *error = "'floppy:' is only valid for a PC-1600 preset (the CE-1600F is a PC-1600 device)";
+        return false;
     }
     if (hasPlotter) {
         // The PC-1500 family takes the CE-150 (via the 60-pin bus); the

@@ -120,9 +120,9 @@ obligations.
   header. Pop up a dialog when disambiguation is needed: which slot when
   more than one is available, and a start address when the header
   (and thus the address) is missing.
-- Emulate the PC-1600F floppy drive.
 - Emulate the CE-158.
 - Allow screenshotting the display.
+- For Basic/Preset load path setting: Allow "last used" in addition to a fixed path.
 
 ## Code cleanup backlog
 

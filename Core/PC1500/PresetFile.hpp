@@ -207,6 +207,17 @@ struct PresetFile {
     //    device.
     std::string plotter;
 
+    // PC-1600 only: `floppy: <name>` names a previously-saved CE-1600F
+    // disk image (a `<name>.floppy.img` under the bundled or user instance
+    // directory -- see AppPaths::sanitizedFloppyFileName()) to load into
+    // the floppy at attach time, instead of the default blank disk.
+    // `""` (key absent) = auto-inserted blank, matching the GUI's own
+    // default. Only valid alongside `plotter: ce1600p` (attaching the
+    // CE-1600P always also attaches the CE-1600F, per their union
+    // attach/detach -- PC1600Machine::attachCE1600P()); `floppy:` without
+    // `plotter: ce1600p` is a parse error. See Core/PC1600/PC1600PresetLoader.cpp.
+    std::string floppy;
+
     // Two `- ...:` alternatives to `- module:` in the same one-item block,
     // both naming a docs/Memory-Card-Definition-Format.md definition for
     // the general-purpose software-defined module. Exactly one of

@@ -1,6 +1,8 @@
 #pragma once
 #include <QString>
+#include <cstdint>
 #include <string>
+#include <vector>
 
 // Path resolution for bundled resources and the memory-module feature --
 // the one place that knows where bundled resources (*.card.yaml templates
@@ -39,8 +41,19 @@ QString sanitizedInstanceFileName(const QString& instanceName);
 // The full path a fresh save under `instanceName` should write to.
 QString instancePathFor(const QString& instanceName);
 
+// Same as sanitizedInstanceFileName()/instancePathFor(), but for CE-1600F
+// floppy-disk images: "<name>.floppy.img" instead of "<name>.card.yaml" --
+// a raw 64KB binary, not a splice-into-YAML-text instance (see
+// CE1600FCard.hpp/FloppyDiskManager's own comments for why: a disk image
+// carries no hand-written prose worth preserving via the card-instance
+// splice mechanism, and hex-dumping 64KB as YAML text would run ~4x the
+// byte count for no benefit).
+QString sanitizedFloppyFileName(const QString& diskName);
+QString floppyInstancePathFor(const QString& diskName);
+
 // Atomic write via QSaveFile (writes to a temp file beside `path` and
 // renames on commit).
 bool atomicWriteFile(const QString& path, const std::string& text);
+bool atomicWriteBinaryFile(const QString& path, const std::vector<uint8_t>& bytes);
 
 }  // namespace AppPaths

@@ -3,6 +3,7 @@
 #include <QVector>
 #include "MachineController.hpp"
 #include "MemoryModuleManager.hpp"
+#include "FloppyDiskManager.hpp"
 
 class QComboBox;
 class QLabel;
@@ -43,6 +44,15 @@ public:
     void setCe1600pState(bool attached, bool enabled);
     void setCe1600pVisible(bool visible);
 
+    // CE-1600F floppy disk picker -- same combo+save-button shape as a
+    // memory slot (setModuleCombos/setSlotBatteryBacked above), but always
+    // "battery-backed" (a floppy disk is always the kind of thing you can
+    // save) and visible only while the CE-1600P (and therefore the
+    // floppy, per the union attach) is attached.
+    void setFloppyCombo(const QVector<FloppyDiskManager::DiskEntry>& bundled,
+                        const QVector<FloppyDiskManager::DiskEntry>& instances, const QString& selectedOrEmpty);
+    void setFloppyVisible(bool visible);
+
 signals:
     void modelSelected(Model model);
     void romRevisionSelected(PC1500RomRevision revision);
@@ -53,6 +63,8 @@ signals:
     void openPresetRequested();
     void ce150ToggleRequested();
     void ce1600pToggleRequested();
+    void floppyDiskSelected(QString diskNameOrEmpty); // "" => blank disk
+    void floppyNameAndSaveRequested();
 
 private:
     QComboBox* m_modelCombo = nullptr;
@@ -62,6 +74,9 @@ private:
     QPushButton* m_settingsButton = nullptr;
     QPushButton* m_ce150Button = nullptr;
     QPushButton* m_ce1600pButton = nullptr;
+    QLabel* m_floppyLabel = nullptr;
+    QComboBox* m_floppyCombo = nullptr;
+    QPushButton* m_floppySaveButton = nullptr;
 
     struct SlotWidgets {
         QLabel* label = nullptr;           // "1:" / "2:", hidden together with the slot

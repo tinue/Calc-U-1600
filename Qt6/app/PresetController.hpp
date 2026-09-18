@@ -4,6 +4,7 @@
 
 class MachineController;
 class MemoryModuleManager;
+class FloppyDiskManager;
 
 // Orchestrates opening a preset file end to end (Core/PC1500/
 // PresetFile.hpp, PC1500PresetLoader.cpp / PC1600PresetLoader.cpp): parses
@@ -27,7 +28,8 @@ class MemoryModuleManager;
 class PresetController : public QObject {
     Q_OBJECT
 public:
-    PresetController(MachineController* controller, MemoryModuleManager* moduleManager, QObject* parent = nullptr);
+    PresetController(MachineController* controller, MemoryModuleManager* moduleManager,
+                     FloppyDiskManager* floppyManager, QObject* parent = nullptr);
 
     // Loads the preset at `path`. On success (or a failure partway through
     // the preset's own keys:/program: steps -- see PresetLoadResult's
@@ -64,4 +66,5 @@ signals:
 private:
     MachineController* m_controller;       // not owned
     MemoryModuleManager* m_moduleManager;  // not owned
+    FloppyDiskManager* m_floppyManager;    // not owned
 };
