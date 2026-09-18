@@ -62,6 +62,7 @@ private:
     QWidget* m_debugRow = nullptr;
     QHBoxLayout* m_debugRowLayout = nullptr;
     QTimer* m_frameTimer = nullptr;
+    bool m_turboActive = false; // press-and-hold on the LCD: run unthrottled
 
     void buildMenuBar();
 

@@ -18,6 +18,9 @@
   It loads into whatever BASIC program area is currently live, so you can
   prepare the machine yourself first (fit a memory card, run `NEW`,
   attach a plotter) exactly as you would on real hardware.
+- **Display** Press and hold anywhere on the LCD to fast-forward the
+  emulation at full, unthrottled speed; release to return to normal
+  speed.
 - **Windows installer** Fixed a "missing MSVCP140.dll" failure on a
   clean machine by running the bundled Visual C++ redistributable
   during install.

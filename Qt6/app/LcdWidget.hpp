@@ -9,6 +9,11 @@
 // positioned as fractions of the panel's own width/height. Blanks entirely
 // while the frame reports !poweredOn rather than freeze-framing the last
 // image.
+//
+// Press-and-hold anywhere on this widget to fast-forward: emits
+// turboRequested(true) on press, turboRequested(false) on release (Qt
+// implicitly grabs the mouse for the widget that received the press, so the
+// release still reaches us even if the pointer drifted off first).
 class LcdWidget : public QWidget {
     Q_OBJECT
 public:
@@ -17,8 +22,13 @@ public:
     void setModel(Model model);
     void setFrame(const DisplayFrame& frame);
 
+signals:
+    void turboRequested(bool active);
+
 protected:
     void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
     Model m_model = Model::PC1500A;

@@ -3,6 +3,7 @@
 #include <QPainter>
 #include <QFont>
 #include <QFontDatabase>
+#include <QMouseEvent>
 #include <algorithm>
 
 namespace {
@@ -94,6 +95,16 @@ bool LcdWidget::flag(const char* name) const {
         if (label == name) return on;
     }
     return false;
+}
+
+void LcdWidget::mousePressEvent(QMouseEvent* event) {
+    emit turboRequested(true);
+    event->accept();
+}
+
+void LcdWidget::mouseReleaseEvent(QMouseEvent* event) {
+    emit turboRequested(false);
+    event->accept();
 }
 
 void LcdWidget::paintEvent(QPaintEvent*) {

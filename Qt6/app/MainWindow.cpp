@@ -28,6 +28,7 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QKeySequence>
+#include <chrono>
 #include <functional>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
@@ -175,6 +176,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             m_controller->releaseKey(key);
         }
     });
+    connect(m_faceplate->lcdWidget(), &LcdWidget::turboRequested, this,
+            [this](bool active) { m_turboActive = active; });
 
     m_frameTimer = new QTimer(this);
     m_frameTimer->setTimerType(Qt::PreciseTimer);
@@ -371,7 +374,19 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event) {
 
 void MainWindow::onFrameTick() {
     const std::uint64_t cyclesPerFrame = static_cast<std::uint64_t>(m_controller->clockHz() / 60.0);
-    m_controller->advance(cyclesPerFrame);
+    if (m_turboActive) {
+        // Press-and-hold on the LCD: run unthrottled, i.e. as many emulated
+        // cycles as the host can produce within this tick's wall-clock
+        // budget, instead of the usual real-time-paced amount. The display
+        // still only repaints once per tick (below), so this reads as a
+        // fast-forward rather than a smoother/faster-refreshing picture.
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(14);
+        do {
+            m_controller->advance(cyclesPerFrame);
+        } while (std::chrono::steady_clock::now() < deadline);
+    } else {
+        m_controller->advance(cyclesPerFrame);
+    }
 
     const DisplayFrame frame = m_controller->currentDisplay();
     m_faceplate->lcdWidget()->setFrame(frame);
