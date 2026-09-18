@@ -412,6 +412,12 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
     for (const PresetSection& section : preset.sections) {
         sectionNo++;
         if (section.kind == PresetSection::Kind::Program) {
+            // A preceding `type:` step returns right after its ENTER, so a
+            // command it started (e.g. a SAVE) may still be running -- let it
+            // finish before this section pokes a program into memory
+            // underneath it.
+            constexpr uint64_t kProgramIdleCap = static_cast<uint64_t>(kTStateHz) * 3600;  // 1 h emulated
+            waitUntilBasicIdle(machine, kProgramIdleCap);
             const PresetProgram& program = section.program;
             if (program.format == PresetProgram::Format::BasicBinary) {
                 basic::BasicProgramSource src =

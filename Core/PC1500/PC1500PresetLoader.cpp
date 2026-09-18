@@ -34,6 +34,7 @@ constexpr uint64_t kCyclesPerFrame = static_cast<uint64_t>(kCpuHz / kFramesPerSe
 // idle loop.
 constexpr uint64_t kBootSettleCycles = static_cast<uint64_t>(kCpuHz * 2);
 constexpr uint64_t kIdleCap = static_cast<uint64_t>(kCpuHz * 5);
+constexpr uint64_t kProgramIdleCap = static_cast<uint64_t>(kCpuHz * 3600);  // 1 h emulated
 
 // The ROM's typed-input line buffer (same base/length tools/pc1500_cli.cpp
 // reads for its "Display input-line text" dump) -- lets each preset step be
@@ -279,7 +280,11 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
             continue;
         }
 
-        // Kind::Program
+        // Kind::Program. A preceding `type:` step returns right after its
+        // ENTER, so a command it started (e.g. a SAVE) may still be running
+        // -- let it finish before this section types or pokes a program
+        // into memory underneath it.
+        waitUntilBasicIdle(machine, kProgramIdleCap);
         const PresetProgram& program = section.program;
         if (program.format == PresetProgram::Format::BasicText) {
             if (log) {
