@@ -1,6 +1,6 @@
 # PC-1600 emulator core — known limitations
 
-*Last updated 2026-09-13.*
+*Last updated 2026-09-18.*
 
 A catalogue of the deliberate shortcuts, "not modelled" scope notes,
 `TODO(trace)` markers, and unconfirmed assumptions in the emulator core
@@ -397,9 +397,9 @@ still worth understanding. They say what the code actually does now.
 
 ## Peripherals with no model at all
 
-- **CE-1600P** (plotter / floppy drive / Ni-Cd pack) — shown in the debug
-  address-map as `PeripheralRom` but has no backing store; page-B banks
-  4/5 read open bus. `PC1600Machine.hpp:238`, `PC1600Memory.hpp:54`
+- **CE-1600P Ni-Cd pack / battery voltage** — no model (see PC-1600
+  sub-CPU section above). The plotter mechanism and its floppy drive are
+  now modeled; see the next section.
 - **CE-150 / CE-158 ROM windows** (`0x8000-0xBFFF` on the LH5803 side,
   `Y2` on the PC-1500 side) — open bus, no module. `PC1500Memory.hpp:35`,
   `LH5803SharedMemory.hpp:30`
@@ -407,6 +407,30 @@ still worth understanding. They say what the code actually does now.
   `SystemBus.hpp:27`
 - **Buzzer / piezo / sound** — out of scope on both machines.
   `PC1500Memory.hpp:52`
+
+## CE-1600P plotter / CE-1600F floppy
+
+`Core/Connector/CE1600PCard.hpp`, `Core/Connector/CE1600FCard.hpp`
+
+- **Implemented**: page-B banks 4/5 ROM window, plotter motor-phase ports
+  (0x81-0x83), and the CE-1600F's full register protocol (ports
+  0x70-0x7F) — command/sector/motor-status/data registers, disk-changed
+  latch, two-sided media, real motor-startup/access timing. CE-1600F
+  attaches as a union with CE-1600P (there is no separate floppy
+  attach/detach); persistence is a raw `<name>.floppy.img` + `.yaml`
+  sidecar via `FloppyDiskManager`.
+- **Open bug**: `INIT"X:"` on a blank disk fails (BASIC ERROR 160) inside
+  FORMAT's own low-level seek/verify self-test, which depends on
+  incidental Z80 register reuse in the real ROM that this emulation
+  doesn't currently reproduce. Raw sector read/write via the IOCS
+  registers works correctly; only the *format-a-blank-disk* path is
+  affected. Full investigation, root-cause analysis, and next-step options:
+  `docs/PC1600-CE1600F-Format-Handoff.md`.
+- **Not modeled**: GCR (4/5) encoding (sector bytes are stored decoded,
+  per the Service Manual's own note that this only matters at the
+  flux/bitstream level), the FDU-250's solenoid/cam seek mechanics, and
+  write-protect (`m_writeProtect` exists but nothing ever sets it true —
+  the emulated drive is permanently writable).
 
 ---
 
