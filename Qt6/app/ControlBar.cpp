@@ -151,12 +151,6 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_floppyCombo->setMinimumContentsLength(12);
     layout->addWidget(m_floppyCombo);
 
-    m_floppySaveButton = new QPushButton(this);
-    m_floppySaveButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
-    m_floppySaveButton->setToolTip(tr("Name & Save"));
-    m_floppySaveButton->setFocusPolicy(Qt::NoFocus);
-    layout->addWidget(m_floppySaveButton);
-
     // Side toggle -- the software analogue of ejecting and flipping the
     // physical disk. Label shows "A"/"B" for whichever side currently
     // faces the head; clicking flips it.
@@ -164,6 +158,12 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_floppySideButton->setFocusPolicy(Qt::NoFocus);
     m_floppySideButton->setToolTip(tr("Eject and turn the disk over"));
     layout->addWidget(m_floppySideButton);
+
+    m_floppySaveButton = new QPushButton(this);
+    m_floppySaveButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    m_floppySaveButton->setToolTip(tr("Name & Save"));
+    m_floppySaveButton->setFocusPolicy(Qt::NoFocus);
+    layout->addWidget(m_floppySaveButton);
 
     // The "green lamp" -- drive-active indicator. A plain colored dot via
     // stylesheet rather than an icon asset; red/gray reads fine at this
