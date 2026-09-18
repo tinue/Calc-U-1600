@@ -526,7 +526,7 @@ gh run download "$RUN_ID" -D "$WORK/artifacts"
 ZIPDIR="$WORK/assets"
 mkdir -p "$ZIPDIR"
 ASSET_COUNT=0
-for name in Calc-U-1600-linux-x86_64 Calc-U-1600-linux-aarch64 Calc-U-1600-mac-aarch64 Calc-U-1600-windows-x86_64; do
+for name in Calc-U-1600-linux-x86_64 Calc-U-1600-linux-aarch64 Calc-U-1600-mac-aarch64 Calc-U-1600-windows-x86_64 Calc-U-1600-windows-arm64; do
     dir="$WORK/artifacts/$name"
     if [ ! -d "$dir" ]; then
         if [ "$name" = "Calc-U-1600-linux-aarch64" ]; then
@@ -551,6 +551,9 @@ for name in Calc-U-1600-linux-x86_64 Calc-U-1600-linux-aarch64 Calc-U-1600-mac-a
         Calc-U-1600-windows-x86_64)
             asset="Calc-U-1600-windows-x86_64.exe"
             cp "$dir/Calc-U-1600-Setup.exe" "$ZIPDIR/$asset" ;;
+        Calc-U-1600-windows-arm64)
+            asset="Calc-U-1600-windows-arm64.exe"
+            cp "$dir/Calc-U-1600-Setup-arm64.exe" "$ZIPDIR/$asset" ;;
     esac
     ASSET_COUNT=$((ASSET_COUNT + 1))
     echo "  packaged $asset"
