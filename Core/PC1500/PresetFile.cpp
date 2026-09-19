@@ -1,7 +1,6 @@
 #include "PresetFile.hpp"
 
 #include "PC1500Keyboard.hpp"
-#include "../Connector/SlotModuleFactory.hpp"
 
 #include <cctype>
 #include <cerrno>
@@ -247,27 +246,10 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
     return true;
 }
 
-// "'a', 'b' and 'c'" -- renders an accepted-module set for an error
-// message, so the prose can't drift from the set actually checked.
-std::string quotedList(std::initializer_list<const char*> names) {
-    std::string s;
-    size_t i = 0, n = names.size();
-    for (const char* name : names) {
-        if (i > 0) s += (i + 1 == n) ? " and " : ", ";
-        s += "'";
-        s += name;
-        s += "'";
-        i++;
-    }
-    return s;
-}
-
 // A `memory-expansion*:` block -- a one-item list, nothing else (no
 // address:/banks:/etc.; a second item or an extra field is a hard parse
 // error, matching this parser's all-or-nothing philosophy). The item is
 // one of:
-//   * `- module: <name>`         -- a built-in card, `name` in `allowed`,
-//                                   written to `*target`.
 //   * `- modulespecfile: <path>` -- a software-defined-module definition
 //                                   FILE, resolved relative to `presetDir`
 //                                   and written to `*specFileTarget`.
@@ -277,10 +259,8 @@ std::string quotedList(std::initializer_list<const char*> names) {
 //                                   resolve against its module directory.
 // `blockLabel` names the block in error text.
 bool parseModuleListBlock(const std::vector<RawLine>& lines, size_t& idx, const char* blockLabel,
-                          std::initializer_list<const char*> allowed,
-                          const std::filesystem::path& presetDir, std::string* target,
-                          std::string* specFileTarget, std::string* specNameTarget,
-                          std::string* error) {
+                          const std::filesystem::path& presetDir, std::string* specFileTarget,
+                          std::string* specNameTarget, std::string* error) {
     if (idx >= lines.size() || lines[idx].indent == 0) {
         *error = "line " + std::to_string(idx < lines.size() ? lines[idx].lineNo : lines.back().lineNo) +
                  ": '" + blockLabel + ":' requires an indented list";
@@ -292,7 +272,7 @@ bool parseModuleListBlock(const std::vector<RawLine>& lines, size_t& idx, const 
         const RawLine& line = lines[idx];
         if (line.content.size() < 2 || line.content[0] != '-' || line.content[1] != ' ') {
             *error = "line " + std::to_string(line.lineNo) +
-                     ": expected '- module: <name>' or '- modulespec: <path>' list item";
+                     ": expected '- modulespec: <module-name>' or '- modulespecfile: <path>' list item";
             return false;
         }
         itemCount++;
@@ -304,25 +284,18 @@ bool parseModuleListBlock(const std::vector<RawLine>& lines, size_t& idx, const 
         std::string key, value;
         bool hasInline;
         if (!splitKeyValue(line.content.substr(2), &key, &value, &hasInline) || !hasInline ||
-            (key != "module" && key != "modulespec" && key != "modulespecfile")) {
+            (key != "modulespec" && key != "modulespecfile")) {
             *error = "line " + std::to_string(line.lineNo) +
-                     ": expected 'module: <name>', 'modulespec: <module-name>' or "
-                     "'modulespecfile: <path>'";
+                     ": expected 'modulespec: <module-name>' or 'modulespecfile: <path>'" +
+                     (key == "module" ? " (the built-in 'module:' names are gone -- use e.g. "
+                                        "'modulespec: CE-155')"
+                                      : "");
             return false;
         }
         if (key == "modulespecfile") {
             *specFileTarget = resolvePath(presetDir, value);
-        } else if (key == "modulespec") {
-            *specNameTarget = value;
         } else {
-            bool ok = false;
-            for (const char* a : allowed) if (value == a) { ok = true; break; }
-            if (!ok) {
-                *error = "line " + std::to_string(line.lineNo) + ": unsupported " + blockLabel + " module '" + value +
-                         "' (only " + quotedList(allowed) + " are supported by this loader)";
-                return false;
-            }
-            *target = value;
+            *specNameTarget = value;
         }
         idx++;
         if (idx < lines.size() && lines[idx].indent > itemIndent) {
@@ -558,22 +531,17 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             return false;
         } else if (key == "memory-expansion") {
             if (hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'memory-expansion:' takes a list, not an inline value"; return false; }
-            if (!parseModuleListBlock(lines, idx, "memory-expansion",
-                                      {"ce155", "ce1638plus", "ce163f"}, presetDir,
-                                      &out->memoryExpansionModule,
+            if (!parseModuleListBlock(lines, idx, "memory-expansion", presetDir,
                                       &out->memoryExpansionModuleSpecFile,
                                       &out->memoryExpansionModuleSpecName, error))
                 return false;
         } else if (key == "memory-expansion-1" || key == "memory-expansion-2") {
             if (hasInline) { *error = "line " + std::to_string(line.lineNo) + ": '" + key + ":' takes a list, not an inline value"; return false; }
             const bool slot1 = (key == "memory-expansion-1");
-            std::string* target = slot1 ? &out->slot1Module : &out->slot2Module;
             std::string* specFileTarget = slot1 ? &out->slot1ModuleSpecFile : &out->slot2ModuleSpecFile;
             std::string* specNameTarget = slot1 ? &out->slot1ModuleSpecName : &out->slot2ModuleSpecName;
-            // kSlotModuleNames is the factory's own accepted set, so the
-            // parser can't drift from what makeSlotModuleCard() can build.
-            if (!parseModuleListBlock(lines, idx, key.c_str(), kSlotModuleNames, presetDir, target,
-                                      specFileTarget, specNameTarget, error))
+            if (!parseModuleListBlock(lines, idx, key.c_str(), presetDir, specFileTarget,
+                                      specNameTarget, error))
                 return false;
         } else if (key == "plotter") {
             if (!hasInline) { *error = "'plotter' requires a value"; return false; }
@@ -629,7 +597,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             *error = "'firmware:' is not valid for a PC-1600 preset (the ROM set is fixed)";
             return false;
         }
-        if (!out->memoryExpansionModule.empty()) {
+        if (!out->memoryExpansionModuleSpecFile.empty() || !out->memoryExpansionModuleSpecName.empty()) {
             *error = "use 'memory-expansion-1:' / 'memory-expansion-2:' for a PC-1600 preset, not 'memory-expansion:'";
             return false;
         }
@@ -659,7 +627,8 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
     }
     // The remaining branches are PC-1500/1500A -- the per-slot blocks are
     // PC-1600 only.
-    if (!out->slot1Module.empty() || !out->slot2Module.empty()) {
+    if (!out->slot1ModuleSpecFile.empty() || !out->slot1ModuleSpecName.empty() ||
+        !out->slot2ModuleSpecFile.empty() || !out->slot2ModuleSpecName.empty()) {
         *error = "'memory-expansion-1:' / 'memory-expansion-2:' are only valid for a PC-1600 preset";
         return false;
     }

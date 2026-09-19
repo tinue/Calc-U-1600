@@ -15,9 +15,8 @@
 //
 // With no card attached, every signal reads "not present" -- identical to
 // the plain open-bus behavior. Concrete cards implement the ExpansionCard
-// interface and attach here: the table-driven SoftwareDefinedCard plus the
-// hand-written prototypes (CE155Card, PlainRamCard, CE1638PlusCard,
-// CE163FCard), wired by PC1500PresetLoader.
+// interface and attach here: the table-driven SoftwareDefinedCard, built
+// from a .card.yaml definition and wired by PC1500PresetLoader.
 class ExpansionConnector {
 public:
     explicit ExpansionConnector(PC1500Variant variant) : m_variant(variant) {}
@@ -36,7 +35,7 @@ public:
 
     /// `direct` = true when the write comes from PC1500Memory::poke() (the
     /// host/debug/preset-loader path); forwarded to the card via
-    /// PinState::direct so a lock-gating card (CE163FCard flash) can let it
+    /// PinState::direct so a lock-gating card (CE-163F flash) can let it
     /// bypass its runtime write protocol.
     bool write(uint16_t addr, bool pu, bool pv, uint8_t value, bool direct = false) {
         if (!m_card) return false;

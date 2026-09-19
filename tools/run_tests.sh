@@ -40,7 +40,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/lh5801_tests.cpp \
   Core/tests/connector_tests.cpp \
   Core/tests/ce155_tests.cpp \
-  Core/tests/ce1638plus_tests.cpp \
+  Core/tests/ce1638_tests.cpp \
   Core/tests/ce163f_tests.cpp \
   Core/tests/memory_card_tests.cpp \
   Core/tests/battery_card_instance_tests.cpp \

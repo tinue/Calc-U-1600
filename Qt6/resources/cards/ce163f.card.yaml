@@ -2,12 +2,9 @@
 # 8 FLASH banks (Microchip SST39SF010A).
 #
 # The real module, expressed through the general software-defined system
-# now that it supports Flash content + `by-bank` split content
-# (Memory-Card-Definition-Spec.md §5) -- Core/Connector/CE163FCard.hpp
-# remains the hand-written prototype this was ported from (per its own doc
-# comment, "the concrete reference for every Flash field", recovered from
-# a real CE163F firmware disassembly:
-# ~/Development/sharp/pc1500/CE-163X/CE-163F/update-selfpatch.asm).
+# (Flash content + `by-bank` split content, Memory-Card-Definition-Spec.md
+# §5). Every Flash field was recovered from a real CE163F firmware
+# disassembly: ~/Development/sharp/pc1500/CE-163X/CE-163F/update-selfpatch.asm.
 #
 # One banked 16 KB window at Y0 (&0000-&3FFF), 16 banks, 256 KB total, same
 # trigger-based mechanism as CE-163/CE-1638: a write strobe on physical
@@ -29,16 +26,15 @@
 # as the real firmware's unlock cycle interleaves writes to the module's
 # bank-select port with the flash-address writes.
 #
-# Power-up fill differs by bank kind, purely as an analysis aid (matches
-# CE163FCard::kFlashInitFill): RAM banks fill 0xFF (this project's SRAM
-# convention); FLASH banks fill 0xAA, so a memory dump can tell
+# Power-up fill differs by bank kind, purely as an analysis aid: RAM banks
+# fill 0x00 (CMOS RAM after a power loss); FLASH banks fill 0xAA, so a memory dump can tell
 # "never-touched flash" apart from both an erased sector (0xFF) and
 # freshly powered-up RAM.
 #
 # PC-1600 slot / Slot-1 caveat: same as ce1638.card.yaml -- see that
 # file's doc comment and MinorIssues.md.
 #
-# Deliberately not modeled (same scope CE163FCard.hpp stops at): DQ6/DQ7
+# Deliberately not modeled: DQ6/DQ7
 # toggle-bit status polling, software-ID/autoselect, and simulated
 # program/erase timing -- none of it is exercised by the real firmware.
 

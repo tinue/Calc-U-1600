@@ -320,9 +320,10 @@ This same sub-model is reused, unmodified, in two other places:
     (Microchip SST39SF010A: bank 8 reserved for the module's own
     management firmware, banks 9–F user-writable), all 16 banks selected
     by the same trigger-based latch on pin 18 sampling `A0`–`A3` (§6). A
-    hardcoded connector-layer prototype (`Core/Connector/CE163FCard.hpp`)
-    implemented this ahead of the general-purpose software-defined module
-    this spec describes — that implementation (unlock addresses,
+    hardcoded connector-layer prototype (`CE163FCard`, since removed in
+    favour of `ce163f.card.yaml`) implemented this ahead of the
+    general-purpose software-defined module this spec describes — that
+    implementation (unlock addresses,
     program/erase state machine, the bank-latch/command-decoder
     independence above) was the concrete reference for every Flash field
     named above, recovered from a real CE163F firmware disassembly, and

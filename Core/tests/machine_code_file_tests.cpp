@@ -18,6 +18,7 @@
 #include "../PC1600/PC1600MachineCodeLoader.hpp"
 #include "../PC1600/PC1600BasicTyper.hpp"
 #include "../PC1600/PC1600Machine.hpp"
+#include "TestCards.hpp"
 #include "TestRoms.hpp"
 
 namespace {
@@ -268,7 +269,7 @@ void test_pc1600_writer() {
 
     // Slot 1: nothing attached -> refused; with 32 KB RAM -> lands at image offset $00C5.
     CHECK(!loadPC1600MachineCode(m, 1, 0x80C5, kCode.data(), kCode.size(), &err));
-    CHECK(m.memory().attachSlot1(0x8000));
+    m.memory().attachSlot1Card(plainRamCard(0x8000));
     CHECK(loadPC1600MachineCode(m, 1, 0x80C5, kCode.data(), kCode.size(), &err));
     std::vector<uint8_t> image = m.debugSlotImage(1);
     CHECK(image.size() >= 0xC5 + 5);
@@ -303,7 +304,7 @@ void test_pc1600_basic_areas() {
     }
     {
         PC1600Machine m;
-        CHECK(m.memory().attachSlot1(0x8000));  // 32 KB RAM module in slot 1, folded into S0 at boot
+        m.memory().attachSlot1Card(plainRamCard(0x8000));  // 32 KB RAM module in slot 1, folded into S0 at boot
         CHECK(bootPC1600(m));
         auto areas = pc1600BasicAreas(m);
         CHECK(areas.size() >= 2);

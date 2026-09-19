@@ -10,6 +10,7 @@
 
 #include "../PC1600/PC1600Bank.hpp"
 #include "../PC1600/PC1600Memory.hpp"
+#include "TestCards.hpp"
 
 namespace {
 
@@ -32,19 +33,10 @@ void test_unattached_slots_are_open_bus() {
     CHECK(mem.read(0x8000) == 0xFF); // still open bus, write ignored
 }
 
-void test_attach_rejects_invalid_sizes() {
-    PC1600Bank bank;
-    PC1600Memory mem(bank);
-    CHECK(!mem.attachSlot1(0));
-    CHECK(!mem.attachSlot1(100)); // not a multiple of kBankSize
-    CHECK(!mem.attachSlot1(3 * PC1600Memory::kBankSize)); // too large (> 2 banks)
-    CHECK(!mem.slot1Attached());
-}
-
 void test_slot1_16k_readwrite_and_powerup_fill() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
-    CHECK(mem.attachSlot1(PC1600Memory::kBankSize));
+    mem.attachSlot1Card(plainRamCard(PC1600Memory::kBankSize));
     CHECK(mem.slot1Attached());
     bank.writePort31(0x00); // pageCBank() == 0
     CHECK(mem.read(0x8000) == 0x00); // powers up 0x00
@@ -61,7 +53,7 @@ void test_slot1_16k_readwrite_and_powerup_fill() {
 void test_slot1_32k_two_banks() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
-    CHECK(mem.attachSlot1(2 * PC1600Memory::kBankSize));
+    mem.attachSlot1Card(plainRamCard(2 * PC1600Memory::kBankSize));
     bank.writePort31(0x00); // bank 0
     mem.write(0x8000, 0xAA);
     bank.writePort31(0x10); // bank 1 (bits 4-6)
@@ -79,7 +71,7 @@ void test_slot2_plain_card_aliases_across_vertical_banks() {
     // module really does on hardware.
     PC1600Bank bank;
     PC1600Memory mem(bank);
-    CHECK(mem.attachSlot2(PC1600Memory::kBankSize));
+    mem.attachSlot2Card(plainRamCard(PC1600Memory::kBankSize));
     bank.writePort31(static_cast<uint8_t>(2 << 4)); // pageCBank() == 2 (Slot 2)
     bank.writePort28(0);
     mem.write(0x8000, 0x55);
@@ -95,7 +87,7 @@ void test_slot2_plain_card_aliases_across_vertical_banks() {
 void test_detach_reverts_to_open_bus() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
-    mem.attachSlot1(PC1600Memory::kBankSize);
+    mem.attachSlot1Card(plainRamCard(PC1600Memory::kBankSize));
     bank.writePort31(0x00);
     mem.write(0x8000, 0x11);
     mem.detachSlot1();
@@ -107,7 +99,6 @@ void test_detach_reverts_to_open_bus() {
 
 int run_pc1600_slot_ram_tests() {
     test_unattached_slots_are_open_bus();
-    test_attach_rejects_invalid_sizes();
     test_slot1_16k_readwrite_and_powerup_fill();
     test_slot1_32k_two_banks();
     test_slot2_plain_card_aliases_across_vertical_banks();

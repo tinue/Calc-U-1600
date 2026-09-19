@@ -144,7 +144,7 @@ bool PC1500Memory::debugSlotResponds(uint16_t addr) const {
 void PC1500Memory::poke(uint16_t addr, uint8_t value) {
     // Same address decode as writeME0(), but flagged `direct` on the
     // connector path: this is the host/debug/preset-loader write, not a
-    // guest-CPU store, so a card that gates runtime writes (CE163FCard's
+    // guest-CPU store, so a card that gates runtime writes (the CE-163F's
     // flash banks need a JEDEC unlock sequence) lets it through
     // unconditionally. The preset loader has no concept of a bank or a lock
     // -- it just pokes the currently-selected bank -- which is exactly the

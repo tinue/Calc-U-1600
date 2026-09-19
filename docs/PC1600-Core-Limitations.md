@@ -340,9 +340,8 @@ still worth understanding. They say what the code actually does now.
 `Core/Connector/`
 
 - **40-pin `ExpansionConnector` (PC-1500 side)**: concrete cards attach
-  through it — the `SoftwareDefinedCard` plus the prototype cards
-  (`CE155Card`, `PlainRamCard`, `CE1638PlusCard`, `CE163FCard`), wired by
-  `PC1500PresetLoader`. Still open: `TODO(slot-identity)` — the GUI can't
+  through it — the `SoftwareDefinedCard`, built from a `.card.yaml`
+  definition and wired by `PC1500PresetLoader`. Still open: `TODO(slot-identity)` — the GUI can't
   yet read the attached module's name from the slot itself.
   `ExpansionCard.hpp:104`
 - **60-pin `SystemBus`: CMTIN / CMTOUT (cassette FSK audio), WEX / W1
@@ -354,13 +353,7 @@ still worth understanding. They say what the code actually does now.
   pinout is identical between PC-1500 and PC-1500A, so all S1-S4 route
   unconditionally on both. Worth confirming against a second TRM scan.
   `SystemBus.hpp:33`
-- **`CE163FCard` / `CE155Card` / `CE1638PlusCard` are hardcoded prototype
-  cards** kept alongside the general `SoftwareDefinedCard`; they are
-  pending duplication as `.card.yaml` and deletion (after which
-  `SoftwareDefinedCard` is the only implementer and slot-identity can be
-  read from the slot). `CE163FCard.hpp:10`, `SoftwareDefinedCard.hpp:14`,
-  `TODO(slot-identity)` in `Core/Connector/ExpansionCard.hpp`
-- **CE-1638+ / CE-163F only work in Slot 2 on a PC-1600, not Slot 1.**
+- **CE-1638 / CE-163F only work in Slot 2 on a PC-1600, not Slot 1.**
   Both cards decode a banked Y0 window from pin 4; on a PC-1600 they act
   as a plain unbanked 16K module (the boot ROM sizes them as +16384 and
   BASIC RAM base drops `C0C5H` → `80C5H`), which is exactly what happens
@@ -374,11 +367,10 @@ still worth understanding. They say what the code actually does now.
 - **CE163F flash: DQ7/DQ6 toggle-bit status polling and
   software-ID / autoselect (`0x90`) deliberately not modelled** — erase
   and program complete instantaneously, so the firmware's poll loops exit
-  naturally. `CE163FCard.hpp:88`
+  naturally. `SoftwareDefinedCard::flashWrite()`
 - **No disk persistence** — flash banks (and every other module's storage)
   are volatile, like the rest of this project's module storage. Battery
   backup is on the roadmap but deferred until peripherals exist.
-  `CE163FCard.hpp:88`
 - **`MemoryCardDefinition` v1 scope**: Regular content, with Unbanked or
   **trigger-based** Banked latches (the CE-1601M / CE163F path — this
   works). Still rejected by the definition loader: split (by-bank)

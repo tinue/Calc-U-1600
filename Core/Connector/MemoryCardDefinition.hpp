@@ -55,9 +55,9 @@ enum class ContentKind { Regular, Flash };
 
 // A JEDEC-style unlock/program/erase protocol for a Flash content range --
 // "chip/firmware properties, not something the loader infers" (spec §5), so
-// every field is required at parse time, no defaults. Modeled directly on
-// Core/Connector/CE163FCard.hpp's flash state machine (its own doc comment
-// is the reference for every field here).
+// every field is required at parse time, no defaults. Modeled on the
+// CE-163F's flash chip (Qt6/resources/cards/ce163f.card.yaml and
+// SoftwareDefinedCard::flashWrite() document every field).
 struct FlashProtocol {
     struct AddrData {
         uint32_t address = 0;

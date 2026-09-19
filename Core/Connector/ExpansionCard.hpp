@@ -46,7 +46,7 @@ struct PinState {
 
     // True when this write originates from a host poke() -- the
     // debug/preset-loader path -- rather than a guest-CPU store. A card that
-    // gates runtime writes (e.g. CE163FCard's flash banks, which otherwise
+    // gates runtime writes (e.g. the CE-163F's flash banks, which otherwise
     // need a JEDEC unlock sequence) treats a direct write as an
     // unconditional array write. Always false for reads and for guest-CPU
     // writes.
@@ -91,7 +91,7 @@ public:
     /// card in this project so far) sits on whatever its trigger-pin latch
     /// last sampled -- which stays bank 0 for the whole life of a PC-1600
     /// Slot 2 card, since that bay's pin 18 carries K2, not the S3 strobe
-    /// (see CE1638PlusCard's class comment). Showing it there is more of a
+    /// (see ce1638.card.yaml's Slot 1 caveat). Showing it there is more of a
     /// curiosity than a useful number, but it is the module's real state.
     virtual int debugCurrentBank() const { return -1; }
 

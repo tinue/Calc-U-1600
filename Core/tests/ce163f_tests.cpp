@@ -1,7 +1,7 @@
-// Headless C++ tests for the CE-163F 16-bank module (8 RAM + 8 FLASH banks)
-// -- Core/Connector/CE163FCard.hpp -- and its preset-loader hook
-// (PresetFile::memoryExpansionModule == "ce163f"). Same no-framework,
-// assert-and-tally style as ce1638plus_tests.cpp.
+// Headless C++ tests for the CE-163F 16-bank module (8 RAM + 8 FLASH banks),
+// run against the bundled definition Qt6/resources/cards/ce163f.card.yaml
+// (SoftwareDefinedCard) -- the flash quirks the real CE-163F firmware relies
+// on. Same no-framework, assert-and-tally style as the other Core tests.
 //
 // Build & run: see tools/run_tests.sh
 
@@ -9,10 +9,8 @@
 #include <cstdio>
 #include <string>
 
-#include "../Connector/CE163FCard.hpp"
 #include "../PC1500/PC1500Machine.hpp"
-#include "../PC1500/PresetFile.hpp"
-#include "PresetTestSupport.hpp"
+#include "TestCards.hpp"
 
 namespace {
 
@@ -23,6 +21,18 @@ int g_fail = 0;
     if (cond) { g_pass++; } \
     else { g_fail++; std::fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } \
 } while (0)
+
+std::unique_ptr<SoftwareDefinedCard> ce163f() { return bundledCard("ce163f.card.yaml", CardHost::PC1500A); }
+
+// Declares `card` (a fresh CE-163F). The definition ships in the repo, so a
+// missing or unloadable one fails the test.
+#define CE163F_OR_SKIP(card)                                                              \
+    auto card##Owned = ce163f();                                                          \
+    if (!card##Owned) {                                                                   \
+        g_fail++; std::fprintf(stderr, "FAIL %s: Qt6/resources/cards/ce163f.card.yaml missing or unloadable\n", __func__); \
+        return;                                                                           \
+    }                                                                                     \
+    SoftwareDefinedCard& card = *card##Owned
 
 PinState win(uint16_t addr) { // a plain access into the pin-4 (Y0) bank window
     PinState p;
@@ -39,14 +49,14 @@ PinState trigger(uint16_t lowNibble) { // bank-latch strobe on physical pin 18
 }
 
 // Drive the JEDEC byte-program sequence as guest-CPU writes (direct=false).
-void flashProgram(CE163FCard& card, uint16_t addr, uint8_t data) {
+void flashProgram(SoftwareDefinedCard& card, uint16_t addr, uint8_t data) {
     card.respondsToWrite(win(0x1555), 0xAA);
     card.respondsToWrite(win(0x2AAA), 0x55);
     card.respondsToWrite(win(0x1555), 0xA0);
     card.respondsToWrite(win(addr), data);
 }
 
-void flashSectorErase(CE163FCard& card, uint16_t sectorAddr) {
+void flashSectorErase(SoftwareDefinedCard& card, uint16_t sectorAddr) {
     card.respondsToWrite(win(0x1555), 0xAA);
     card.respondsToWrite(win(0x2AAA), 0x55);
     card.respondsToWrite(win(0x1555), 0x80);
@@ -55,21 +65,22 @@ void flashSectorErase(CE163FCard& card, uint16_t sectorAddr) {
     card.respondsToWrite(win(sectorAddr), 0x30);
 }
 
-uint8_t readWin(CE163FCard& card, uint16_t addr) {
+uint8_t readWin(SoftwareDefinedCard& card, uint16_t addr) {
     uint8_t v = 0;
     card.respondsToRead(win(addr), v);
     return v;
 }
 
 void test_ce163f_16_banks_no_mod_wrap() {
-    CE163FCard card;
+    CE163F_OR_SKIP(card);
 
     CHECK(card.currentBank() == 0);
 
-    // Low nibble 0xD latches bank 13 -- NOT bank 5 (no CE1638Plus-style
-    // mod-8 wrap; this module has 16 real banks).
+    // Low nibble 0xD latches bank 13 -- NOT bank 5 (no mod-8 wrap; this
+    // module has 16 real banks).
     card.respondsToWrite(trigger(0xD), 0x00);
     CHECK(card.currentBank() == 13);
+    const uint8_t bank13 = readWin(card, 0x0000); // whatever the definition loads there
 
     // Bank 5 (RAM) and bank 13 are distinct 16KB regions.
     card.respondsToWrite(trigger(0x5), 0x00);
@@ -77,21 +88,11 @@ void test_ce163f_16_banks_no_mod_wrap() {
     card.respondsToWrite(win(0x0000), 0x22);
     CHECK(readWin(card, 0x0000) == 0x22);
     card.respondsToWrite(trigger(0xD), 0x00);
-    CHECK(readWin(card, 0x0000) == 0xAA); // bank 13 (flash) still at its init pattern
-}
-
-void test_ce163f_init_pattern_ram_vs_flash() {
-    CE163FCard card;
-    for (int b = 0; b < 16; b++) {
-        card.respondsToWrite(trigger(uint16_t(b)), 0x00);
-        uint8_t expected = (b < 8) ? 0x00 : 0xAA; // RAM powers up 0x00, flash 0xAA
-        CHECK(readWin(card, 0x0000) == expected);
-        CHECK(readWin(card, 0x3FFF) == expected);
-    }
+    CHECK(readWin(card, 0x0000) == bank13); // bank 13 (flash) untouched
 }
 
 void test_ce163f_ram_banks_freely_writable() {
-    CE163FCard card;
+    CE163F_OR_SKIP(card);
     for (int b = 0; b <= 7; b++) {
         card.respondsToWrite(trigger(uint16_t(b)), 0x00);
         CHECK(card.currentBank() == b);
@@ -103,20 +104,18 @@ void test_ce163f_ram_banks_freely_writable() {
 }
 
 void test_ce163f_flash_bank_locked_by_default() {
-    CE163FCard card;
+    CE163F_OR_SKIP(card);
     card.respondsToWrite(trigger(0x9), 0x00); // bank 9 == flash
     CHECK(card.currentBank() == 9);
 
-    // Flash banks power up with the 0xAA analysis pattern, not 0xFF.
-    CHECK(readWin(card, 0x0100) == 0xAA);
-
     // A bare guest-CPU store does nothing to a flash bank.
+    const uint8_t before = readWin(card, 0x0100);
     CHECK(card.respondsToWrite(win(0x0100), 0x5A)); // still "claimed"
-    CHECK(readWin(card, 0x0100) == 0xAA);
+    CHECK(readWin(card, 0x0100) == before);
 }
 
 void test_ce163f_flash_program_and_and_semantics() {
-    CE163FCard card;
+    CE163F_OR_SKIP(card);
     card.respondsToWrite(trigger(0x9), 0x00);
 
     // Programming can only clear bits, so a byte must be erased (0xFF)
@@ -139,7 +138,7 @@ void test_ce163f_flash_program_and_and_semantics() {
 // on this: its `STA (DE) / CPA (DE) / JR NZ` verify poll would spin forever
 // if the 0xF0 byte were swallowed as a reset instead of programmed.
 void test_ce163f_program_data_byte_0xF0_is_not_a_reset() {
-    CE163FCard card;
+    CE163F_OR_SKIP(card);
     card.respondsToWrite(trigger(0x9), 0x00);
 
     flashSectorErase(card, 0x0100);   // cell -> 0xFF
@@ -159,7 +158,7 @@ void test_ce163f_program_data_byte_0xF0_is_not_a_reset() {
 }
 
 void test_ce163f_low_11_bit_command_decode() {
-    CE163FCard card;
+    CE163F_OR_SKIP(card);
     card.respondsToWrite(trigger(0xA), 0x00); // bank 10 == flash
     flashSectorErase(card, 0x0200);
 
@@ -173,7 +172,7 @@ void test_ce163f_low_11_bit_command_decode() {
 }
 
 void test_ce163f_sector_erase() {
-    CE163FCard card;
+    CE163F_OR_SKIP(card);
     card.respondsToWrite(trigger(0xB), 0x00); // bank 11 == flash
 
     flashSectorErase(card, 0x0100); // sector 0 (&0000-&0FFF)
@@ -190,7 +189,7 @@ void test_ce163f_sector_erase() {
 }
 
 void test_ce163f_chip_erase_flash_only() {
-    CE163FCard card;
+    CE163F_OR_SKIP(card);
 
     // Dirty a RAM bank and two flash banks.
     card.respondsToWrite(trigger(0x0), 0x00);
@@ -219,22 +218,24 @@ void test_ce163f_chip_erase_flash_only() {
 }
 
 void test_ce163f_broken_sequence_resets() {
-    CE163FCard card;
+    CE163F_OR_SKIP(card);
     card.respondsToWrite(trigger(0x9), 0x00);
+
+    const uint8_t before = readWin(card, 0x0100);
 
     // Stray write mid-sequence aborts it cleanly.
     card.respondsToWrite(win(0x1555), 0xAA);
     card.respondsToWrite(win(0x1555), 0x00); // not (0x2AA,0x55) -> back to Idle
     CHECK(card.flashIdle());
     card.respondsToWrite(win(0x0100), 0x42); // bare write -- inert
-    CHECK(readWin(card, 0x0100) == 0xAA);
+    CHECK(readWin(card, 0x0100) == before);
 
     // A wrong middle cycle leaves memory unchanged...
     card.respondsToWrite(win(0x1555), 0xAA);
     card.respondsToWrite(win(0x2AAA), 0x54); // wrong data
     card.respondsToWrite(win(0x1555), 0xA0);
     card.respondsToWrite(win(0x0100), 0x42);
-    CHECK(readWin(card, 0x0100) == 0xAA);
+    CHECK(readWin(card, 0x0100) == before);
 
     // ...and a clean erase + program right after still works.
     flashSectorErase(card, 0x0100);
@@ -246,7 +247,7 @@ void test_ce163f_trigger_is_pin_18() {
     // The bank latch is physical pin 18 only -- whatever the host calls it
     // (S3 on a PC-1500, S5 on a PC-1500A). A strobe on any other pin does
     // not latch a bank.
-    CE163FCard card;
+    CE163F_OR_SKIP(card);
     PinState t;
     t.address = 0x6803;
     t.pin[18] = true;
@@ -262,19 +263,20 @@ void test_ce163f_trigger_is_pin_18() {
 
 void test_ce163f_end_to_end_via_machine_and_poke_bypass() {
     PC1500Machine pc1500(PC1500Variant::PC1500);
-    pc1500.attachExpansionCard(std::make_unique<CE163FCard>());
+    auto card = ce163f();
+    if (!card) { g_fail++; std::fprintf(stderr, "FAIL %s: ce163f.card.yaml missing\n", __func__); return; }
+    pc1500.attachExpansionCard(std::move(card));
 
     // RAM bank 2 via guest-CPU writes.
     pc1500.memory().writeME0(0x5802, 0x00); // strobe: S3, low nibble 2
     pc1500.memory().writeME0(0x0100, 0xAA);
     CHECK(pc1500.memory().readME0(0x0100) == 0xAA);
 
-    // Flash bank 9: powers up 0xAA, and a guest-CPU store is inert without
-    // an unlock...
+    // Flash bank 9: a guest-CPU store is inert without an unlock...
     pc1500.memory().writeME0(0x5809, 0x00); // strobe: low nibble 9
-    CHECK(pc1500.memory().readME0(0x0101) == 0xAA);
+    const uint8_t before = pc1500.memory().readME0(0x0101);
     pc1500.memory().writeME0(0x0101, 0x43);
-    CHECK(pc1500.memory().readME0(0x0101) == 0xAA);
+    CHECK(pc1500.memory().readME0(0x0101) == before);
 
     // ...but poke() (the preset-loader / debug path) writes it directly
     // (sector 3, clear of the JEDEC erase below).
@@ -306,7 +308,9 @@ void test_ce163f_end_to_end_via_machine_and_poke_bypass() {
 // `CPA (DE) / JR NZ` verify loop spins forever.
 void test_ce163f_interleaved_bank_strobes_during_unlock() {
     PC1500Machine pc(PC1500Variant::PC1500A);
-    pc.attachExpansionCard(std::make_unique<CE163FCard>());
+    auto card = ce163f();
+    if (!card) { g_fail++; std::fprintf(stderr, "FAIL %s: ce163f.card.yaml missing\n", __func__); return; }
+    pc.attachExpansionCard(std::move(card));
     auto& m = pc.memory();
     auto unlock = [&] {                       // LOADER_HELPER_3
         m.writeME0(0x6809, 0xAA); m.writeME0(0x1555, 0xAA);
@@ -332,27 +336,10 @@ void test_ce163f_interleaved_bank_strobes_during_unlock() {
     CHECK(m.readME0(0x0000) == 0x48); // byte took -> verify loop would exit
 }
 
-bool parsePresetString(const std::string& yaml, PresetFile* out, std::string* error) {
-    return ::parsePresetString(yaml, "/tmp/ce163f_tests_scratch.pc1500", out, error);
-}
-
-void test_preset_parser_accepts_ce163f() {
-    PresetFile preset;
-    std::string error;
-    CHECK(parsePresetString(
-        "model: PC-1500A\n"
-        "firmware: roms/PC-1500_A04.ROM\n"
-        "memory-expansion:\n"
-        "  - module: ce163f\n",
-        &preset, &error));
-    CHECK(preset.memoryExpansionModule == "ce163f");
-}
-
 } // namespace
 
 int run_ce163f_tests() {
     test_ce163f_16_banks_no_mod_wrap();
-    test_ce163f_init_pattern_ram_vs_flash();
     test_ce163f_ram_banks_freely_writable();
     test_ce163f_flash_bank_locked_by_default();
     test_ce163f_flash_program_and_and_semantics();
@@ -364,7 +351,6 @@ int run_ce163f_tests() {
     test_ce163f_trigger_is_pin_18();
     test_ce163f_interleaved_bank_strobes_during_unlock();
     test_ce163f_end_to_end_via_machine_and_poke_bypass();
-    test_preset_parser_accepts_ce163f();
 
     std::printf("ce163f_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

@@ -1227,14 +1227,11 @@ void test_boot_smoke_real_rom() {
 // folded into this file's single test-runner executable/exit code per
 // tools/run_tests.sh's existing single-binary convention.
 int run_connector_tests();
-// Defined in ce155_tests.cpp (CE-155 proof-of-concept card) -- same
+// Defined in ce155_tests.cpp / ce1638_tests.cpp / ce163f_tests.cpp (the
+// bundled CE-155, CE-1638 and CE-163F module definitions) -- same
 // single-binary convention.
 int run_ce155_tests();
-// Defined in ce1638plus_tests.cpp (CE-1638+ proof-of-concept card) -- same
-// single-binary convention.
-int run_ce1638plus_tests();
-// Defined in ce163f_tests.cpp (CE-163F 8 RAM + 8 FLASH bank card) -- same
-// single-binary convention.
+int run_ce1638_tests();
 int run_ce163f_tests();
 // Defined in memory_card_tests.cpp (universal software-defined module) --
 // same single-binary convention.
@@ -1282,7 +1279,7 @@ int run_pc1600_keyboard_display_tests();
 // Defined in pc1600_slot_ram_tests.cpp (PC1600Memory Slot 1/2 RAM
 // attachment) -- same single-binary convention.
 int run_pc1600_slot_ram_tests();
-// Defined in pc1600_slot_module_tests.cpp -- a real card (CE155Card)
+// Defined in pc1600_slot_module_tests.cpp -- real module definitions
 // plugged into a PC-1600 memory-slot connector, end to end.
 int run_pc1600_slot_module_tests();
 // Defined in pc1600_preset_tests.cpp -- the `model: PC-1600` preset
@@ -1381,7 +1378,7 @@ int main() {
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     int connectorFailures = run_connector_tests();
     int ce155Failures = run_ce155_tests();
-    int ce1638plusFailures = run_ce1638plus_tests();
+    int ce1638Failures = run_ce1638_tests();
     int ce163fFailures = run_ce163f_tests();
     int memoryCardFailures = run_memory_card_tests();
     int batteryCardInstanceFailures = run_battery_card_instance_tests();
@@ -1413,7 +1410,7 @@ int main() {
     int keyPasteFailures = run_key_paste_tests();
     int lcdScreenshotFailures = run_lcd_screenshot_tests();
     int machineCodeFileFailures = run_machine_code_file_tests();
-    return (g_fail == 0 && machineCodeFileFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && basicBinaryImageFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && pc1600MachineImageFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638plusFailures == 0 &&
+    return (g_fail == 0 && machineCodeFileFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && basicBinaryImageFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && pc1600MachineImageFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638Failures == 0 &&
             ce163fFailures == 0 && memoryCardFailures == 0 && batteryCardInstanceFailures == 0 &&
             presetFailures == 0 &&
             basicTyperFailures == 0 && pc1600BasicTyperFailures == 0 &&

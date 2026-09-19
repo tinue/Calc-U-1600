@@ -9,9 +9,7 @@
 //     model resolution -- see the 3-part structure note below) ───────────
 //
 // A hand-rolled parser for this project's `.pc1500` YAML preset format.
-// Deliberately scoped: no rom-modules/check support (see
-// PresetFile::memoryExpansionModule for what memory-expansion support
-// does exist).
+// Deliberately scoped: no rom-modules/check support.
 //
 // PRESET LOADING IS THREE PARTS:
 //   1. this file -- parsePresetFile() opens the file, parses it, and
@@ -27,12 +25,10 @@
 //      family loader) lives in EmulatorViewModel.loadPreset, the one place
 //      both machine wrappers coexist.
 //
-// `memory-expansion:` accepts exactly one module -- `- module: ce155`,
-// `- module: ce1638plus`, or `- module: ce163f` -- as throwaway proofs of
-// concept for the Phase 4 connector layer (see
-// PresetFile::memoryExpansionModule and applyPC1500Preset()); a PC-1600
-// preset instead uses `memory-expansion-1:` / `memory-expansion-2:` (see
-// slot1Module/slot2Module). Every other module name, extra field, or
+// `memory-expansion:` accepts exactly one module, named by definition
+// (`- modulespec: <module-name>` / `- modulespecfile: <path>`, see
+// PresetFile::memoryExpansionModuleSpecName); a PC-1600 preset instead uses
+// `memory-expansion-1:` / `memory-expansion-2:`. Every other extra field, or
 // `rom-modules:`/`check` step remains rejected. `PC-1500`, `PC-1500A` and
 // `PC-1600` models are accepted (see PresetFile::isPC1600 / variant). Not general
 // YAML: flat `key: value` top-level mappings, `- key: value` sequence
@@ -186,22 +182,6 @@ struct PresetFile {
     // and the fork note at the top of this file. Applied in this exact
     // order by PC1500PresetLoader.cpp's applyPC1500Preset().
     std::vector<PresetSection> sections;
-    // `memory-expansion:` -- empty if the preset had no memory-expansion
-    // block, otherwise the declared module's name: `"ce155"`,
-    // `"ce1638plus"`, or `"ce163f"`, the only three this loader accepts
-    // (throwaway proofs of concept for the Phase 4 connector layer, not the
-    // general Phase 7 software-defined module -- see PC1500PresetLoader.cpp's
-    // applyPC1500Preset()). `rom-modules:` remains unsupported/rejected.
-    std::string memoryExpansionModule;
-
-    // PC-1600 only (`memory-expansion-1:` / `memory-expansion-2:`) -- the
-    // module plugged into each 40-pin memory-slot connector, one of the
-    // names in Core/Connector/SlotModuleFactory.hpp's `kSlotModuleNames`
-    // (`"ce155"`, `"ram16"`, `"ram32"`, `"ce1638plus"`, `"ce163f"`), or
-    // empty for an empty slot. See Core/PC1600/PC1600PresetLoader.cpp.
-    std::string slot1Module;
-    std::string slot2Module;
-
     // The pen-plotter/printer on the 60-pin system bus. `""` (key absent)
     // = none. Normalized to lower case; `plotter: none`/`off` -> `""`.
     //
@@ -234,12 +214,12 @@ struct PresetFile {
     // suffix. Meaningless when `floppy` is empty (no disk).
     int floppySide = 0;
 
-    // Two `- ...:` alternatives to `- module:` in the same one-item block,
-    // both naming a docs/Memory-Card-Definition-Format.md definition for
-    // the general-purpose software-defined module. Exactly one of
-    // `<...>Module` / `<...>ModuleSpecFile` / `<...>ModuleSpecName` is set
-    // per block; all empty for a block that used `- module:` or for no
-    // memory-expansion block at all. The loader (PC1500PresetLoader /
+    // The module in `memory-expansion:` (PC-1500/1500A) or in
+    // `memory-expansion-1:` / `memory-expansion-2:` (the PC-1600's two
+    // memory slots): a one-item block naming a
+    // docs/Memory-Card-Definition-Format.md definition in one of two ways.
+    // At most one of `<...>ModuleSpecFile` / `<...>ModuleSpecName` is set
+    // per block; both empty for no block (an empty slot). The loader (PC1500PresetLoader /
     // PC1600PresetLoader) turns whichever is set into a card via
     // Core/Connector/SoftwareDefinedCard.hpp's makeSoftwareDefinedCard().
     //

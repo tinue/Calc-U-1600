@@ -14,12 +14,11 @@
 //
 // The one general-purpose module, configured per-target via a table: an
 // ExpansionCard whose behaviour comes entirely from a parsed
-// MemoryCardDefinition (docs/Memory-Card-Definition-Format.md). It
-// generalises the hardcoded prototypes -- CE155Card::regionOffset,
-// PlainRamCard::offset, CE163FCard's bank latch.
+// MemoryCardDefinition (docs/Memory-Card-Definition-Format.md) -- every
+// memory module in this project is one of these, built from a .card.yaml.
 //
-// v1: Regular or Flash content (Flash's command decoder ported from
-// CE163FCard.hpp), single-kind or `by-bank`-split; Unbanked or
+// v1: Regular or Flash content (a JEDEC-style flash command decoder, see
+// flashWrite()), single-kind or `by-bank`-split; Unbanked or
 // trigger-based Banked. The definition loader still rejects rom/line-based
 // before a card is built.
 
@@ -92,7 +91,7 @@ public:
             const RegionContent& c = r.contentForBank(r.banked ? uint32_t(st.bank) : 0);
             if (c.kind == ContentKind::Flash) {
                 if (pins.direct) {
-                    st.backing[off] = value;  // poke/preset loader: unconditional, like CE163FCard
+                    st.backing[off] = value;  // poke/preset loader: unconditional
                     return true;
                 }
                 // off = bank*bankSize + windowOffset (see locate()) -- the flash command
@@ -111,6 +110,9 @@ public:
     // Test-only introspection.
     int currentBank(size_t region = 0) const {
         return region < m_regions.size() ? m_regions[region].bank : 0;
+    }
+    bool flashIdle(size_t region = 0) const {
+        return region < m_regions.size() && m_regions[region].flash == FlashDecoderState::Idle;
     }
     const MemoryCardDefinition& definition() const { return m_def; }
 
@@ -171,7 +173,7 @@ public:
     }
 
 private:
-    // Mirrors CE163FCard::FlashState -- one flash command decoder per
+    // One flash command decoder per
     // region (the "chip" sitting behind the region's bank/window latch,
     // independent of it -- see flashWrite()'s doc comment).
     enum class FlashDecoderState {
@@ -247,10 +249,23 @@ private:
         return false;
     }
 
-    // Ported from CE163FCard::flashWrite -- see that class's doc comment
-    // for the full rationale (JEDEC-style unlock cycle, NOR program-only-
-    // clears-bits semantics, glitch recovery, the reset-command exception
-    // during ProgramArmed). `windowOffset` is the write's address relative
+    // The flash chip's command decoder (JEDEC style, as on the CE-163F's
+    // SST39SF010A; addresses after `command-address-mask`):
+    //
+    //   (0x555,0xAA) (0x2AA,0x55) (0x555,0xA0) (addr,data)   byte program
+    //   (0x555,0xAA) (0x2AA,0x55) (0x555,0x80)
+    //     (0x555,0xAA) (0x2AA,0x55) (0x555,0x10)             chip erase
+    //     (0x555,0xAA) (0x2AA,0x55) (sectorAddr,0x30)        sector erase
+    //   (anywhere,0xF0)                                       reset to read
+    //
+    // NOR semantics: a program can only clear bits (array &= data); an erase
+    // sets the affected bytes back to 0xFF. A write that doesn't match the
+    // expected next step resets the decoder to Idle -- how real hardware
+    // recovers from a glitched sequence. Erase and program complete
+    // instantly (no DQ6/DQ7 status polling), so a read always returns the
+    // array byte and firmware poll loops exit at once.
+    //
+    // `windowOffset` is the write's address relative
     // to the *current bank's* window (0..bankSize-1) -- never the region's
     // bank-latch trigger, which respondsToWrite() step 1 already handled
     // and returned from without touching `st.flash`: the command decoder
@@ -269,8 +284,9 @@ private:
         // it is awaiting a command. In ProgramArmed the chip is mid byte-load
         // cycle: the next write is the data + address, taken verbatim with no
         // command decode, so a data byte that happens to equal resetCommand
-        // must still be programmed (see CE163FCard.hpp for the firmware bug
-        // this avoids).
+        // must still be programmed. The CE-163F firmware relies on this: its
+        // `STA (DE) / CPA (DE) / JR NZ` verify poll would spin forever if a
+        // 0xF0 data byte were swallowed as a reset.
         if (data == p.resetCommand && st.flash != FlashDecoderState::ProgramArmed) {
             st.flash = FlashDecoderState::Idle;
             return;

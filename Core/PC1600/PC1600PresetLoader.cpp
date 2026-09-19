@@ -11,7 +11,6 @@
 
 #include "../Connector/FloppyImageFile.hpp"
 #include "../Connector/MemoryCardCatalog.hpp"
-#include "../Connector/SlotModuleFactory.hpp"
 #include "../Connector/SoftwareDefinedCard.hpp"
 #include "../Resources/BundledRomCatalog.hpp"
 #include "../HostClock.hpp"
@@ -296,8 +295,7 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
         ~TraceCloser() { if (m.cpuTraceActive()) m.endCpuTrace(); }
     } traceCloser{machine};
 
-    auto plug = [&](const std::string& name, const std::string& specFile,
-                    const std::string& specName, int slot) -> bool {
+    auto plug = [&](const std::string& specFile, const std::string& specName, int slot) -> bool {
         std::unique_ptr<ExpansionCard> card;
         std::string label;      // human-readable, for the log line
         std::string guiLabel;   // the module-name / built-in name for the GUI button
@@ -318,14 +316,6 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
             }
             label = "modulespec " + specPath;
             resolvedPath = specPath;
-        } else if (!name.empty()) {
-            card = makeSlotModuleCard(name);
-            if (!card) { // parser already vetted the name, but stay defensive
-                result.error = "unknown slot " + std::to_string(slot) + " module '" + name + "'";
-                return false;
-            }
-            label = name;
-            guiLabel = name;
         } else {
             return true;  // empty slot
         }
@@ -341,9 +331,9 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
         if (log) log("slot " + std::to_string(slot) + ": " + label + " attached");
         return true;
     };
-    if (!plug(preset.slot1Module, preset.slot1ModuleSpecFile, preset.slot1ModuleSpecName, 1))
+    if (!plug(preset.slot1ModuleSpecFile, preset.slot1ModuleSpecName, 1))
         return result;
-    if (!plug(preset.slot2Module, preset.slot2ModuleSpecFile, preset.slot2ModuleSpecName, 2))
+    if (!plug(preset.slot2ModuleSpecFile, preset.slot2ModuleSpecName, 2))
         return result;
 
     // Plotter (`plotter:`) -- attach before the reset below, so the boot

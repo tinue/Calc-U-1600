@@ -287,8 +287,9 @@ public:
 
     /// Plugs a card into Slot 1 / Slot 2 -- the connector-level path, taking
     /// ownership of the card (mirrors PC1500Machine::attachExpansionCard).
-    /// The same card object (CE155Card, PlainRamCard, ...) plugs in
-    /// pin-for-pin; the MemorySlotConnector drives the PC-1600 bay's pins.
+    /// Any card (a SoftwareDefinedCard built from a .card.yaml definition)
+    /// plugs in pin-for-pin; the MemorySlotConnector drives the PC-1600
+    /// bay's pins.
     void attachSlot1Card(std::unique_ptr<ExpansionCard> card) {
         m_slot1Card = std::move(card);
         m_slot1Conn.attach(m_slot1Card.get());
@@ -298,14 +299,6 @@ public:
         m_slot2Conn.attach(m_slot2Card.get());
     }
 
-    /// Convenience for the GUI/preset "generic RAM module of size N" case:
-    /// builds a PlainRamCard and plugs it into the slot. `sizeBytes` must be
-    /// a positive multiple of kBankSize (16384) up to 2*kBankSize (32768,
-    /// the largest a single Port-31H page-C bank field can select between:
-    /// bank values 0/1 for Slot 1, 2/3 for Slot 2) -- returns false and
-    /// leaves the slot unchanged otherwise. RAM powers up 0xFF.
-    bool attachSlot1(size_t sizeBytes);
-    bool attachSlot2(size_t sizeBytes);
     void detachSlot1() { m_slot1Conn.detach(); m_slot1Card.reset(); }
     void detachSlot2() { m_slot2Conn.detach(); m_slot2Card.reset(); }
     bool slot1Attached() const { return m_slot1Conn.attachedCard() != nullptr; }

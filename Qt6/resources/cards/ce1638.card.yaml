@@ -1,9 +1,6 @@
 # CE-1638 -- 128 KB banked SRAM module for the PC-1500 family.
 #
-# The real Sharp-compatible module (unlike Core/Connector/CE1638PlusCard.hpp,
-# a throwaway "+" test card with two invented unbanked side regions that
-# don't exist on real hardware -- see that file's own doc comment). One
-# banked 16 KB window at Y0 (&0000-&3FFF), 8 banks, 128 KB total, same
+# The real Sharp-compatible module. One banked 16 KB window at Y0 (&0000-&3FFF), 8 banks, 128 KB total, same
 # trigger-based mechanism as CE-163 (Memory-Card-Definition-Spec.md §6): a
 # write strobe on physical pin 18 (S3 on the PC-1500, S5 on the PC-1500A)
 # latches a bank number sampled from the *address* lines of that same
@@ -22,8 +19,7 @@
 # the bank window's `span`/low-address-bits offsetting handles that for
 # free -- no per-host branch needed.
 #
-# Slot 1 caveat (same root cause CE1638PlusCard.hpp's doc comment records
-# for the throwaway card): pin 18 carries S3 there, which the PC-1600
+# Slot 1 caveat: pin 18 carries S3 there, which the PC-1600
 # mainboard pulses on every &B000-&B7FF write, so the boot ROM's
 # RAM-sizing scan keeps tripping the bank latch and the module doesn't
 # size in as expected. Use *Slot 2*, where pins 16-18 carry the dormant

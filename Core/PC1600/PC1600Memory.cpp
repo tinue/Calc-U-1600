@@ -2,7 +2,6 @@
 
 #include <cstring>
 
-#include "../Connector/PlainRamCard.hpp"
 #ifdef PC1600_POWER_PROBE
 #include "PC1600PowerProbe.hpp" // throw-away OFF-key trace instrumentation
 #endif
@@ -34,24 +33,6 @@ bool PC1600Memory::loadBank6Rom(const uint8_t* data, size_t size) {
     if (size != kBankSize) return false;
     std::memcpy(m_bank6Rom.data(), data, kBankSize);
     m_bank6Loaded = true;
-    return true;
-}
-
-namespace {
-bool isValidSlotSize(size_t sizeBytes) {
-    return sizeBytes > 0 && sizeBytes % PC1600Memory::kBankSize == 0 &&
-           sizeBytes <= 2 * PC1600Memory::kBankSize;
-}
-} // namespace
-
-bool PC1600Memory::attachSlot1(size_t sizeBytes) {
-    if (!isValidSlotSize(sizeBytes)) return false;
-    attachSlot1Card(std::make_unique<PlainRamCard>(sizeBytes));
-    return true;
-}
-bool PC1600Memory::attachSlot2(size_t sizeBytes) {
-    if (!isValidSlotSize(sizeBytes)) return false;
-    attachSlot2Card(std::make_unique<PlainRamCard>(sizeBytes));
     return true;
 }
 

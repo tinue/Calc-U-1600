@@ -9,8 +9,8 @@
 #include <cstdio>
 #include <vector>
 
-#include "../Connector/CE1638PlusCard.hpp"
 #include "../PC1600/PC1600Machine.hpp"
+#include "TestCards.hpp"
 
 namespace {
 
@@ -279,13 +279,13 @@ void test_debug_slot_image_returns_the_whole_card_backing_store() {
     CHECK(m.debugSlotImage(2).empty());
 
     // A banked card: 8 x 16 KB, contiguous, powered up 0x00.
-    m.memory().attachSlot1Card(std::make_unique<CE1638PlusCard>());
+    m.memory().attachSlot1Card(bundledCard("ce1638.card.yaml", CardHost::PC1600Slot1));
     std::vector<uint8_t> img = m.debugSlotImage(1);
     CHECK(img.size() == 8u * 0x4000);
     CHECK(img[0] == 0x00 && img.back() == 0x00);
 
     // Plain 32 KB RAM in Slot 2 -> a 32 KB image.
-    CHECK(m.memory().attachSlot2(2 * PC1600Memory::kBankSize));
+    m.memory().attachSlot2Card(plainRamCard(2 * PC1600Memory::kBankSize));
     CHECK(m.debugSlotImage(2).size() == 2u * 0x4000);
 }
 
@@ -303,7 +303,7 @@ void test_debug_write_internal_ram_and_slot_image_land_directly() {
     // Slot image: an empty slot rejects; an attached plain-RAM card takes
     // the write into its backing (visible via debugSlotImage()).
     CHECK(!m.debugWriteSlotImage(1, 0, block, 3));
-    CHECK(m.memory().attachSlot1(2 * PC1600Memory::kBankSize));
+    m.memory().attachSlot1Card(plainRamCard(2 * PC1600Memory::kBankSize));
     CHECK(m.debugWriteSlotImage(1, 0x4000, block, 3));   // start of the high 16 KB half
     auto img = m.debugSlotImage(1);
     CHECK(img.size() == 2u * 0x4000);
@@ -330,7 +330,7 @@ void test_debug_bank_state_reports_registers_and_card_bank() {
     m.bank().writePort3C(0x24);  // SLOT1MAP b2 set, SLOT2MAP b5:4 = 10 -> mode 1
 
     // A banked card in Slot 1; its own latch starts at bank 0.
-    m.memory().attachSlot1Card(std::make_unique<CE1638PlusCard>());
+    m.memory().attachSlot1Card(bundledCard("ce1638.card.yaml", CardHost::PC1600Slot1));
 
     s = m.debugBankState();
     CHECK(s.port31 == 0x5A);
@@ -373,7 +373,7 @@ void test_debug_bank_state_resolves_the_live_address_map() {
 
     // Now page C selects bank 1 AND a Slot 2 card is present: the mode-1
     // redirect goes live and steals page C for Slot 2.
-    m.memory().attachSlot2Card(std::make_unique<CE1638PlusCard>());
+    m.memory().attachSlot2Card(bundledCard("ce1638.card.yaml", CardHost::PC1600Slot2));
     m.bank().writePort31(0x10);          // page C field = 1
     s = m.debugBankState();
     CHECK(s.target[2] == PT::Slot2);

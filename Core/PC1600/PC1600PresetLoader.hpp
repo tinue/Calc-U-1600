@@ -84,7 +84,7 @@ using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& arm
 /// specific to locate -- the caller loads it, unlike the PC-1500 loader
 /// which resolves a single ROM path itself).
 ///
-/// Steps, in order: plug `preset.slot1Module` / `preset.slot2Module` into
+/// Steps, in order: plug the preset's `memory-expansion-1:` / `-2:` modules into
 /// the two memory-slot connectors (before reset, so the boot ROM's own
 /// memory sizing sees them); ALL RESET; run past the boot sequence (fixed
 /// settle + a BUSY-symbol idle poll); then walk `preset.sections` in file

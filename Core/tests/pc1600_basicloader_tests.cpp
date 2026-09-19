@@ -15,6 +15,7 @@
 #include "../PC1600/PC1600BasicLoader.hpp"
 #include "../PC1600/PC1600BasicTyper.hpp"
 #include "../PC1600/PC1600Machine.hpp"
+#include "TestCards.hpp"
 #include "TestRoms.hpp"
 
 namespace {
@@ -44,7 +45,9 @@ bool bootIntoProNew0(PC1600Machine& m) {
 // before the boot so the boot ROM folds it into the S0 user area -- NEW0
 // then relocates the BASIC program into the module window ($F865 -> $00C5).
 bool bootIntoProNew0Slot1Ram(PC1600Machine& m, size_t sizeBytes) {
-    if (!m.memory().attachSlot1(sizeBytes)) return false;
+    auto ram = plainRamCard(sizeBytes);
+    if (!ram) return false;
+    m.memory().attachSlot1Card(std::move(ram));
     if (!bootPC1600(m)) return false;
     tapKey(m, "mode");  // RUN -> PRO
     waitIdle(m, static_cast<uint64_t>(PC1600Machine::kTStateHz));

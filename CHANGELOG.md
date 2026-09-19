@@ -2,6 +2,10 @@
 
 ## [0.4.0] - work in progress
 
+- **Presets** The built-in `- module: <name>` form (`ce155`, `ram16`,
+  `ram32`, `ce1638plus`, `ce163f`) is gone -- name a module by its
+  definition instead, e.g. `- modulespec: CE-155`. Every memory module
+  now comes from a `.card.yaml` definition.
 - **RAM** Powers up as zeros instead of &FF -- internal RAM and fresh
   memory modules, matching how CMOS RAM comes back after a power loss.
   Flash memory still starts erased (&FF). On the PC-1500/1500A, Reset now

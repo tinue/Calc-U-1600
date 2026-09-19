@@ -19,16 +19,15 @@
 #include <memory>
 #include <string>
 
-#include "../Connector/CE155Card.hpp"
 #include "../Connector/MemoryCardCatalog.hpp"
 #include "../Connector/MemoryCardDefinition.hpp"
-#include "../Connector/PlainRamCard.hpp"
 #include "../Connector/SoftwareDefinedCard.hpp"
 #include "../PC1500/PresetFile.hpp"
 #include "../PC1600/PC1600Machine.hpp"
 #include "../PC1600/PC1600PresetLoader.hpp"
 #include "../Yaml.hpp"
 #include "PresetTestSupport.hpp"
+#include "TestCards.hpp"
 
 namespace {
 
@@ -602,7 +601,7 @@ void test_ce163f_card_yaml_if_present() {
     // offset 0x0200 sits in that dump's untouched ($0120: FF...) tail, so it
     // still reads the erased-flash fill. Needs the real firmware's unlock
     // addresses (&1555/&2AAA), which the low-11-bit command-address-mask
-    // reduces to the same &555/&2AA CE163FCard.hpp uses.
+    // reduces to &555/&2AA.
     selectBank(9);
     CHECK(read(0x0200) == 0xFF);
     write(0x1555, 0xAA);
@@ -651,60 +650,6 @@ void test_superram_card_yaml_if_present() {
     CHECK(sd->respondsToRead(w, v) && v == 0xFF);  // bank 0 untouched
 }
 
-// ── behaviour vs the hand-written prototypes ────────────────────────────
-
-void test_ce155_matches_hardcoded_card() {
-    auto sd = buildCard(kCe155Yaml, CardHost::PC1500);
-    CHECK(sd != nullptr);
-    if (!sd) return;
-    CE155Card ref;
-    int mism = 0;
-    for (uint32_t addr = 0x3000; addr <= 0x6000; ++addr) {
-        for (int ps = 0; ps < 5; ++ps) {
-            PinState p;
-            p.address = static_cast<uint16_t>(addr);
-            if (ps == 1) p.pin[4] = true;
-            if (ps == 2) p.pin[16] = true;
-            if (ps == 3) p.pin[17] = true;
-            if (ps == 4) p.pin[18] = true;
-            PinState pw = p;
-            pw.forWrite = true;
-            uint8_t val = static_cast<uint8_t>(addr ^ (ps * 37));
-            if (sd->respondsToWrite(pw, val) != ref.respondsToWrite(pw, val)) mism++;
-            uint8_t a = 0, b = 0;
-            bool ra = sd->respondsToRead(p, a);
-            bool rb = ref.respondsToRead(p, b);
-            if (ra != rb || (ra && a != b)) mism++;
-        }
-    }
-    CHECK(mism == 0);
-}
-
-void test_ce1600m_matches_plain_ram_card() {
-    auto sd = buildCard(kCe1600mYaml, CardHost::PC1600Slot1);
-    CHECK(sd != nullptr);
-    if (!sd) return;
-    PlainRamCard ref(0x8000);
-    int mism = 0;
-    for (uint32_t addr = 0x8000; addr <= 0xBFFF; addr += 3) {
-        for (int pv = 0; pv < 2; ++pv) {
-            PinState p;
-            p.address = static_cast<uint16_t>(addr);
-            p.pin[4] = true;
-            p.pin[5] = (pv == 1);
-            PinState pw = p;
-            pw.forWrite = true;
-            uint8_t val = static_cast<uint8_t>(addr * 5 + pv);
-            if (sd->respondsToWrite(pw, val) != ref.respondsToWrite(pw, val)) mism++;
-            uint8_t a = 0, b = 0;
-            bool ra = sd->respondsToRead(p, a);
-            bool rb = ref.respondsToRead(p, b);
-            if (ra != rb || (ra && a != b)) mism++;
-        }
-    }
-    CHECK(mism == 0);
-}
-
 // ── debugImageWrite(): the write side of debugImage() ──────────────────
 //
 // The PC-1600 fast BASIC loader scatters a tokenised program straight into
@@ -748,16 +693,18 @@ void test_debug_image_write_roundtrip() {
         CHECK(sd->debugImage() == before);
     }
 
-    // PlainRamCard.
-    PlainRamCard ram(0x8000);
+    // A second definition (plain 32 KB RAM, built inline).
+    auto ram = plainRamCard(0x8000);
+    CHECK(ram != nullptr);
+    if (!ram) return;
     uint8_t bytes[4] = {1, 2, 3, 4};
-    CHECK(ram.debugImageWrite(0x10, bytes, 4));
-    CHECK(ram.debugImage()[0x11] == 2);
-    CHECK(!ram.debugImageWrite(0x7FFE, bytes, 4));
-    CHECK(ram.debugImage()[0x11] == 2);  // unchanged by the failed write
+    CHECK(ram->debugImageWrite(0x10, bytes, 4));
+    CHECK(ram->debugImage()[0x11] == 2);
+    CHECK(!ram->debugImageWrite(0x7FFE, bytes, 4));
+    CHECK(ram->debugImage()[0x11] == 2);  // unchanged by the failed write
 
     // Base ExpansionCard default: no writable backing.
-    CHECK(!ram.ExpansionCard::debugImageWrite(0, bytes, 4));
+    CHECK(!ram->ExpansionCard::debugImageWrite(0, bytes, 4));
 }
 
 // ── CE-1601M trigger-based banking ─────────────────────────────────────
@@ -1288,7 +1235,6 @@ void test_preset_parses_modulespec() {
                             "memory-expansion:\n"
                             "  - modulespecfile: /abs/path/foo.card.yaml\n",
                             "/tmp/memory_card_tests_scratch.pc1500", &preset, &err));
-    CHECK(preset.memoryExpansionModule.empty());
     CHECK(preset.memoryExpansionModuleSpecFile == "/abs/path/foo.card.yaml");
     CHECK(preset.memoryExpansionModuleSpecName.empty());
 
@@ -1298,7 +1244,6 @@ void test_preset_parses_modulespec() {
                             "  - modulespecfile: cards/x.card.yaml\n",
                             "/tmp/memory_card_tests_scratch.pc1600", &p2, &err));
     CHECK(p2.slot2ModuleSpecFile == "/tmp/cards/x.card.yaml");  // relative to the scratch dir
-    CHECK(p2.slot2Module.empty());
 
     // `modulespec:` -- a bundled module-name, stored verbatim (unresolved).
     PresetFile p3;
@@ -1308,15 +1253,14 @@ void test_preset_parses_modulespec() {
                             "/tmp/memory_card_tests_scratch3.pc1600", &p3, &err));
     CHECK(p3.slot1ModuleSpecName == "CE-155");
     CHECK(p3.slot1ModuleSpecFile.empty());
-    CHECK(p3.slot1Module.empty());
 }
 
-void test_preset_rejects_module_and_modulespec_second_item() {
+void test_preset_rejects_second_modulespec_item() {
     PresetFile preset;
     std::string err;
     CHECK(!parsePresetString("model: PC-1600\n"
                              "memory-expansion-1:\n"
-                             "  - module: ce155\n"
+                             "  - modulespec: CE-155\n"
                              "  - modulespec: CE-155\n",
                              "/tmp/memory_card_tests_scratch2.pc1600", &preset, &err));
 }
@@ -1461,7 +1405,7 @@ void test_slot2map_remap_no_card_is_inert() {
 void test_slot1map_remap() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
-    CHECK(mem.attachSlot1(0x8000)); // 32K unbanked: bank 0 = alpha, bank 1 = beta
+    mem.attachSlot1Card(plainRamCard(0x8000)); // 32K unbanked: bank 0 = alpha, bank 1 = beta
 
     // Reference bytes via the ordinary (SLOT1MAP=0) route.
     mem.writeIO(0x3C, 0x00);
@@ -1509,8 +1453,8 @@ void test_slot1map_remap_no_card_is_inert() {
 void test_slot1map_slot2map_collision_last_call_wins() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
-    CHECK(mem.attachSlot1(0x8000));
-    CHECK(mem.attachSlot2(0x8000));
+    mem.attachSlot1Card(plainRamCard(0x8000));
+    mem.attachSlot2Card(plainRamCard(0x8000));
 
     // Reference bytes: Slot 1's beta half, Slot 2's low half.
     mem.writeIO(0x3C, 0x00);
@@ -1711,8 +1655,6 @@ int run_memory_card_tests() {
 
     test_compat_gate_inline();
     test_compat_gate_via_file_if_present();
-    test_ce155_matches_hardcoded_card();
-    test_ce1600m_matches_plain_ram_card();
     test_debug_image_write_roundtrip();
     test_ce1601m_trigger_banking_direct();
     test_debug_bank_count();
@@ -1734,7 +1676,7 @@ int run_memory_card_tests() {
     test_reject_initial_content_missing_bank_on_banked_region();
 
     test_preset_parses_modulespec();
-    test_preset_rejects_module_and_modulespec_second_item();
+    test_preset_rejects_second_modulespec_item();
     test_ce1601m_end_to_end_through_pc1600();
     test_ce1601m_slot2map_remap();
     test_slot2map_remap_no_card_is_inert();

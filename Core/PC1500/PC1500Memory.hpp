@@ -82,7 +82,7 @@ public:
     // Debug/test access: same address decode as readME0/writeME0 (open-bus
     // ranges read 0xFF, ROM ignores writes), just callable from a const
     // context (peek) or without implying bus semantics (poke). poke() also
-    // bypasses a card's runtime write-gating (e.g. CE163FCard's flash-bank
+    // bypasses a card's runtime write-gating (e.g. the CE-163F's flash-bank
     // JEDEC unlock protocol) -- it's the host/debug/preset-loader path, and
     // an unconditional write is the right semantics there.
     uint8_t peek(uint16_t addr) const;

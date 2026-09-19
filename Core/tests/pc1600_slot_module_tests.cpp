@@ -1,8 +1,9 @@
-// Headless C++ tests for a real expansion card plugged into a PC-1600
-// 40-pin memory-slot connector (Core/Connector/MemorySlotConnector.hpp),
-// end to end through PC1600Machine. The card object is the *same*
-// CE155Card / PlainRamCard the PC-1500 side uses -- it wires in pin-for-pin
-// and the connector drives the PC-1600 bay's pins. Same no-framework,
+// Headless C++ tests for real module definitions (the bundled
+// Qt6/resources/cards/*.card.yaml, as SoftwareDefinedCard) plugged into a
+// PC-1600 40-pin memory-slot connector (Core/Connector/MemorySlotConnector.hpp),
+// end to end through PC1600Machine. The card is the *same* definition the
+// PC-1500 side uses -- it wires in pin-for-pin and the connector drives the
+// PC-1600 bay's pins. Same no-framework,
 // assert-and-tally style as lh5801_tests.cpp.
 //
 // Build & run: see tools/run_tests.sh
@@ -14,11 +15,8 @@
 #include <memory>
 #include <vector>
 
-#include "../Connector/CE155Card.hpp"
-#include "../Connector/CE1638PlusCard.hpp"
-#include "../Connector/CE163FCard.hpp"
-#include "../Connector/PlainRamCard.hpp"
 #include "../PC1600/PC1600Machine.hpp"
+#include "TestCards.hpp"
 #include "TestRoms.hpp"
 
 namespace {
@@ -31,8 +29,14 @@ int g_fail = 0;
     else { g_fail++; std::fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } \
 } while (0)
 
-// Loads the confirmed PC-1600 ROM set into `m`. Returns false (test skipped)
-// if the images aren't at their repo-root path.
+// A bundled module definition. They ship in the repo, so a missing or
+// unloadable one is a test failure, not a SKIP.
+std::unique_ptr<SoftwareDefinedCard> card(const char* file, CardHost host) {
+    auto c = bundledCard(file, host);
+    CHECK(c != nullptr);
+    return c;
+}
+
 // Select which page-C (8000-BFFF) bank the SC7852 sees: value 0/1 -> Slot 1,
 // 2/3 -> Slot 2 (Port 31H bits 4-6).
 void selectPageCBank(PC1600Machine& m, uint8_t bank) {
@@ -40,8 +44,10 @@ void selectPageCBank(PC1600Machine& m, uint8_t bank) {
 }
 
 void test_ce155_in_slot1_both_cpu_views() {
+    auto ce155 = card("ce155.card.yaml", CardHost::PC1600Slot1);
+    if (!ce155) return;
     PC1600Machine m;
-    m.attachSlot1Card(std::make_unique<CE155Card>());
+    m.attachSlot1Card(std::move(ce155));
     CHECK(m.slot1Attached());
 
     selectPageCBank(m, 0); // Slot 1, bank 0 -> RAM2# asserted at 8000-BFFF
@@ -91,7 +97,7 @@ void test_ce155_in_slot1_both_cpu_views() {
 
 void test_plain_ram_card_via_attach_slot_card() {
     PC1600Machine m;
-    m.attachSlot1Card(std::make_unique<PlainRamCard>(0x8000)); // 32KB, two banks
+    m.attachSlot1Card(plainRamCard(0x8000)); // 32KB, two banks
     CHECK(m.slot1Attached());
 
     selectPageCBank(m, 0); // Slot 1 bank 0 -> low 16KB half (PVOUT = 0)
@@ -117,10 +123,10 @@ void test_plain_ram_card_via_attach_slot_card() {
 void test_slot2_plain_card_ignores_vertical_bank_through_connector() {
     // The connector selects Slot 2 regardless of the Port 28H vertical bank
     // (the vertical bank is the card's own business -- a CE-1601M-class
-    // card latches it from OUT (28H)). A PlainRamCard does not decode
+    // card latches it from OUT (28H)). A plain RAM card does not decode
     // Port 28H, so it aliases across vertical banks.
     PC1600Machine m;
-    m.attachSlot2Card(std::make_unique<PlainRamCard>(0x4000)); // 16KB in Slot 2
+    m.attachSlot2Card(plainRamCard(0x4000)); // 16KB in Slot 2
     CHECK(m.slot2Attached());
 
     m.memory().writeIO(0x31, uint8_t(2 << 4)); // page-C bank 2 -> Slot 2
@@ -146,7 +152,9 @@ void test_boot_with_ce155_in_slot1_is_stable() {
         std::fprintf(stderr, "SKIP test_boot_with_ce155_in_slot1_is_stable: PC-1600 ROM images not found\n");
         return;
     }
-    m.attachSlot1Card(std::make_unique<CE155Card>());
+    auto ce155 = card("ce155.card.yaml", CardHost::PC1600Slot1);
+    if (!ce155) return;
+    m.attachSlot1Card(std::move(ce155));
     m.allReset();
     // Past the boot sequence -- same bar as tools/pc1600_cli.cpp's own
     // "converges to a stable PC set" (~2M T-states).
@@ -171,7 +179,7 @@ void test_ce155_contributes_full_8k_to_mem() {
     auto boot = [](bool withCard) -> std::unique_ptr<PC1600Machine> {
         auto m = std::make_unique<PC1600Machine>();
         if (!loadPC1600Roms(*m)) return nullptr;
-        if (withCard) m->attachSlot1Card(std::make_unique<CE155Card>());
+        if (withCard) m->attachSlot1Card(card("ce155.card.yaml", CardHost::PC1600Slot1));
         m->allReset();
         m->runCycles(PC1600Machine::kTStateHz * 4);
         return m;
@@ -190,16 +198,17 @@ void test_ce155_contributes_full_8k_to_mem() {
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m1, 0xF89D)) == 8192);
 }
 
-// The CE-1638+ proof-of-concept card plugged into a PC-1600 Slot 1: the
-// same object the PC-1500 `memory-expansion:` path builds, wired in
-// pin-for-pin. Its pin-4 chip select covers &8000-&BFFF here (not a
+// The CE-1638 plugged into a PC-1600 Slot 1: the same definition the
+// PC-1500 `memory-expansion:` path builds, wired in pin-for-pin. Its pin-4 chip select covers &8000-&BFFF here (not a
 // PC-1500's &0000-&3FFF Y0), so the card's banked-window index is masked to
 // the 16KB bank size -- &8000 and &BFFF must land at opposite ends of one
 // bank, not alias. Bank switching is the pin-18 write strobe (PC-1600 Slot
-// 1 S3), bank number from address bits A0-A3 of the strobing write.
-void test_ce1638plus_in_slot1_banked_window() {
+// 1 S3), bank number from address bits A0-A2 of the strobing write.
+void test_ce1638_in_slot1_banked_window() {
+    auto ce1638 = card("ce1638.card.yaml", CardHost::PC1600Slot1);
+    if (!ce1638) return;
     PC1600Machine m;
-    m.attachSlot1Card(std::make_unique<CE1638PlusCard>());
+    m.attachSlot1Card(std::move(ce1638));
     CHECK(m.slot1Attached());
 
     selectPageCBank(m, 0); // Slot 1, bank 0 -> RAM2# asserted at 8000-BFFF
@@ -211,7 +220,7 @@ void test_ce1638plus_in_slot1_banked_window() {
     CHECK(m.memory().read(0x8000) == 0xAA);
     CHECK(m.memory().read(0xBFFF) == 0x77);
 
-    // Strobe pin 18 (any write into &B000-&B7FF): A0-A3 = 5 -> bank 5.
+    // Strobe pin 18 (any write into &B000-&B7FF): A0-A2 = 5 -> bank 5.
     m.memory().write(0xB005, 0x00);
     CHECK(m.memory().read(0x8000) == 0x00); // bank 5, powered-up, own contents
     m.memory().write(0x8000, 0xBB);
@@ -226,7 +235,7 @@ void test_ce1638plus_in_slot1_banked_window() {
     CHECK(m.memory().read(0x8000) == 0xFF); // slot reverts to open bus
 }
 
-// The CE-163F proof-of-concept (8 RAM banks + 8 FLASH banks) in a PC-1600
+// The CE-163F (8 RAM banks + 8 FLASH banks) in a PC-1600
 // Slot 1: RAM banks are plain R/W, a FLASH bank ignores a bare CPU store
 // but takes the JEDEC unlock + byte-program sequence, and a host poke()
 // (direct write) bypasses the lock. The unlock command addresses match on
@@ -234,8 +243,10 @@ void test_ce1638plus_in_slot1_banked_window() {
 // slot hit the same 0x555/0x2AA the firmware uses at &1555/&2AAA on a
 // PC-1500.
 void test_ce163f_in_slot1_ram_and_flash_protocol() {
+    auto ce163f = card("ce163f.card.yaml", CardHost::PC1600Slot1);
+    if (!ce163f) return;
     PC1600Machine m;
-    m.attachSlot1Card(std::make_unique<CE163FCard>());
+    m.attachSlot1Card(std::move(ce163f));
     CHECK(m.slot1Attached());
     selectPageCBank(m, 0);
 
@@ -244,33 +255,33 @@ void test_ce163f_in_slot1_ram_and_flash_protocol() {
     m.memory().write(0x8000, 0x5A);
     CHECK(m.memory().read(0x8000) == 0x5A);
 
-    // Bank 10 (FLASH, 0xAA power-up fill): a bare store does nothing.
+    // Bank 10 (FLASH): a bare store does nothing.
     m.memory().write(0xB00A, 0x00); // strobe -> bank 0x0A
-    CHECK(m.memory().read(0x8000) == 0xAA);
+    const uint8_t before = m.memory().read(0x8000);
     m.memory().write(0x8000, 0x11);
-    CHECK(m.memory().read(0x8000) == 0xAA); // no unlock -> array untouched
+    CHECK(m.memory().read(0x8000) == before); // no unlock -> array untouched
 
     // JEDEC unlock + byte-program, addressed through the slot window.
     m.memory().write(0x9555, 0xAA); // (0x555, 0xAA)
     m.memory().write(0xAAAA, 0x55); // (0x2AA, 0x55)
     m.memory().write(0x9555, 0xA0); // (0x555, 0xA0) -> program armed
-    m.memory().write(0x8010, 0x00); // program &0010 in bank 0x0A: 0xAA & 0x00
+    m.memory().write(0x8010, 0x00); // program &0010 in bank 0x0A: anything & 0x00
     CHECK(m.memory().read(0x8010) == 0x00);
-    CHECK(m.memory().read(0x8000) == 0xAA); // untouched byte still erased-state
+    CHECK(m.memory().read(0x8000) == before); // the neighbouring byte is untouched
 
     // Host poke() bypasses the lock even on a flash bank.
     m.memory().poke(0x8000, 0x33);
     CHECK(m.memory().read(0x8000) == 0x33);
 }
 
-// On a real PC-1600 the CE-1638+ / CE-163F trigger-latch modules behave as
+// On a real PC-1600 the CE-1638 / CE-163F trigger-latch modules behave as
 // a plain unbanked 16K expansion, and they go in Slot 2 -- where pins
 // 16-18 are the dormant K0-K2 lines, so the pin-18 bank strobe never fires
 // and bank 0 (RAM) is presented across the whole &8000-&BFFF window. The
 // boot ROM must credit that as +16384: BASIC RAM base drops C0C5H -> 80C5H
 // (stock - 0x4000), every RAM-base/size work-area pointer moving by 16384.
 // (In Slot 1 the same card gets nothing, because S3 on pin 18 trips the
-// bank latch throughout the boot RAM-sizing scan -- see the card headers.)
+// bank latch throughout the boot RAM-sizing scan.)
 void test_trigger_latch_modules_in_slot2_contribute_full_16k() {
     auto boot = [](std::unique_ptr<ExpansionCard> card) -> std::unique_ptr<PC1600Machine> {
         auto m = std::make_unique<PC1600Machine>();
@@ -284,14 +295,17 @@ void test_trigger_latch_modules_in_slot2_contribute_full_16k() {
         return uint16_t(m.memory().read(a) | (m.memory().read(uint16_t(a + 1)) << 8));
     };
     auto m0 = boot(nullptr);
-    auto m1 = boot(std::make_unique<CE1638PlusCard>());
-    auto m2 = boot(std::make_unique<CE163FCard>());
+    auto c1 = card("ce1638.card.yaml", CardHost::PC1600Slot2);
+    auto c2 = card("ce163f.card.yaml", CardHost::PC1600Slot2);
+    if (!c1 || !c2) return;
+    auto m1 = boot(std::move(c1));
+    auto m2 = boot(std::move(c2));
     if (!m0 || !m1 || !m2) {
         std::fprintf(stderr, "SKIP test_trigger_latch_modules_in_slot2_contribute_full_16k: PC-1600 ROM images not found\n");
         return;
     }
     CHECK(rd16(*m0, 0xF5CF) == 0xC0C5);
-    CHECK(rd16(*m1, 0xF5CF) == 0x80C5); // CE-1638+: stock - 16384
+    CHECK(rd16(*m1, 0xF5CF) == 0x80C5); // CE-1638:  stock - 16384
     CHECK(rd16(*m2, 0xF5CF) == 0x80C5); // CE-163F:  stock - 16384
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m1, 0xF89D)) == 16384);
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m2, 0xF89D)) == 16384);
@@ -303,7 +317,7 @@ int run_pc1600_slot_module_tests() {
     test_ce155_in_slot1_both_cpu_views();
     test_plain_ram_card_via_attach_slot_card();
     test_slot2_plain_card_ignores_vertical_bank_through_connector();
-    test_ce1638plus_in_slot1_banked_window();
+    test_ce1638_in_slot1_banked_window();
     test_ce163f_in_slot1_ram_and_flash_protocol();
     test_trigger_latch_modules_in_slot2_contribute_full_16k();
     test_boot_with_ce155_in_slot1_is_stable();

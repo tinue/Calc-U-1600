@@ -269,12 +269,9 @@ public:
 
     // ── Memory-slot connectors ───────────────────────────────────────
     // A card plugs in pin-for-pin; MemorySlotConnector drives the PC-1600
-    // bay's pins (see Core/Connector/MemorySlotConnector.hpp). The size-
-    // based helpers build a generic PlainRamCard.
+    // bay's pins (see Core/Connector/MemorySlotConnector.hpp).
     void attachSlot1Card(std::unique_ptr<ExpansionCard> card) { m_z80Mem.attachSlot1Card(std::move(card)); }
     void attachSlot2Card(std::unique_ptr<ExpansionCard> card) { m_z80Mem.attachSlot2Card(std::move(card)); }
-    bool attachSlot1(size_t sizeBytes) { return m_z80Mem.attachSlot1(sizeBytes); }
-    bool attachSlot2(size_t sizeBytes) { return m_z80Mem.attachSlot2(sizeBytes); }
     void detachSlot1() { m_z80Mem.detachSlot1(); }
     void detachSlot2() { m_z80Mem.detachSlot2(); }
     bool slot1Attached() const { return m_z80Mem.slot1Attached(); }
