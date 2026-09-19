@@ -18,9 +18,6 @@ keys:
   - key: mode
   - type: NEW0
   - key: mode
-# Initialize the floppy:
-  - type: INIT"X:"
-  - key: enter
 # Initialize and partition the memory card
   - type: INIT"S2:","F"
   - type: INIT"S2:","M"
