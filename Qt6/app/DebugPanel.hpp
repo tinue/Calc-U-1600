@@ -42,6 +42,14 @@ public:
     // enabled.
     void onFrameTick();
 
+    // Text selected (with the mouse) in the output area, "" if none.
+    // `outputSelectionChanged` fires when that changes -- Edit > Copy then
+    // copies it instead of the screen.
+    QString selectedOutputText() const;
+
+signals:
+    void outputSelectionChanged(bool hasSelection);
+
 protected:
     // Re-applies theme-aware chrome colors when the system light/dark
     // appearance changes (QEvent::PaletteChange/ApplicationPaletteChange) --

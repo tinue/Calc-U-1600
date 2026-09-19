@@ -45,7 +45,6 @@ calculator's own faceplate has, left to right:
   and the PC-1600 has no revision choice at all): A01, A03, or A04.
 - **Open Preset…** — load a `.pc1500`/`.pc1500a`/`.pc1600` scenario file;
   see [Preset files](#preset-files).
-- **Settings…** — see [Settings](#settings).
 - **CE-150 / CE-1600P** — plotter attach/detach toggles; see
   [Memory modules & plotter](#memory-modules--plotter).
 
@@ -76,6 +75,10 @@ user-remappable). The practical mapping:
   documented hardware correspondence: **Scroll Lock** → `RSV`, **Home** →
   `RCL`, **End** → `SML`, **Page Up** → Shift+Left, **Page Down** →
   Shift+Right.
+- Keys held with **Cmd or Ctrl** (macOS), or with **Ctrl, Alt or the
+  Windows key** (Windows/Linux), never reach the calculator — those are
+  shortcuts. **Option** (macOS) and **AltGr** (Windows/Linux) still type
+  the characters they produce.
 
 The on-screen faceplate shows the calculator's actual physical key
 layout (which differs between the PC-1500 and PC-1600) for reference —
@@ -128,7 +131,8 @@ directory** (default `~/Calc-U-1600`).
 
 ## Settings
 
-Opens from the **Settings…** button. Every control here writes through
+Opens from **Calc-U-1600 ▸ Settings…** (Cmd-,) on macOS, or
+**Edit ▸ Settings…** (Ctrl-,) on Windows/Linux. Every control here writes through
 immediately — there's no separate Save/Cancel, just **Close**.
 
 - **Startup device** — which model to boot into next time the app

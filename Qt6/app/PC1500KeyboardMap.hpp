@@ -31,12 +31,14 @@ struct ResolvedKey {
 // `key`/`modifiers`/`text` are taken as plain values (not QKeyEvent*) so
 // this stays a small, dependency-free, directly testable function.
 //
-// Deliberately runs with NO modifier guard: real app/system shortcuts are
-// intercepted by the OS/Qt shortcut layer before ever reaching here, and
-// guarding "any Ctrl" here would also break AltGr composition (Linux/
-// Windows report AltGr as simultaneous Ctrl+Alt), which matters for
-// Swiss/German/French keyboard layouts. Anything that doesn't match a
-// case below falls through to nullopt via the matchers themselves.
+// Command modifiers never type: a key held with Cmd or Ctrl (macOS), or
+// with Ctrl, Alt or the Windows/Super key (Linux/Windows), resolves to
+// nullopt -- so a shortcut that no action claims (or one that reached us
+// anyway) can't put a character on the display. Character-producing
+// modifiers still type: Option on macOS, and AltGr on Linux/Windows
+// (Windows reports it as Ctrl+Alt together, so that pair is let through).
+// Anything else that doesn't match a case below falls through to nullopt
+// via the matchers themselves.
 std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
                                     const QString& text, bool isPC1600);
 

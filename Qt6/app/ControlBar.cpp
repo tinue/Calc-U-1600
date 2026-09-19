@@ -12,7 +12,7 @@
 
 namespace {
 
-// A thin vertical rule between control-bar groups (reset | settings |
+// A thin vertical rule between control-bar groups (reset |
 // model/ROM pickers | module slots | plotter toggles) so same-looking
 // widgets in adjacent groups -- most notably the two slots' identical save-
 // icon buttons -- read as belonging to different groups instead of mushing
@@ -89,11 +89,6 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     layout->addWidget(m_resetButton);
 
     addSeparator(layout, this);
-    m_settingsButton = new QPushButton(tr("Settings…"), this);
-    m_settingsButton->setFocusPolicy(Qt::NoFocus);
-    layout->addWidget(m_settingsButton);
-
-    addSeparator(layout, this);
     m_modelCombo = new QComboBox(this);
     m_modelCombo->addItem(tr("PC-1500"), static_cast<int>(Model::PC1500));
     m_modelCombo->addItem(tr("PC-1500A"), static_cast<int>(Model::PC1500A));
@@ -143,7 +138,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     }
     setSlot2Visible(false);
 
-    // Left group is ordered most-common-first (Reset, Settings, model, slots)
+    // Left group is ordered most-common-first (Reset, model, slots)
     // so model-dependent widgets (ROM picker, slot 2) only change its tail
     // and switching models doesn't shift the rest; the plotter/floppy group
     // below is pinned to the right edge.
@@ -219,7 +214,6 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     connect(m_romCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
         emit romRevisionSelected(static_cast<PC1500RomRevision>(m_romCombo->itemData(index).toInt()));
     });
-    connect(m_settingsButton, &QPushButton::clicked, this, [this] { emit settingsRequested(); });
     // Buttons are checkable so their own click already toggled the visual
     // check state -- MainWindow will resync it (via setCe150State/
     // setCe1600pState) once PlotterController confirms the actual result,

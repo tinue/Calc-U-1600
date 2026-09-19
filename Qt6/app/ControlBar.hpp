@@ -9,7 +9,7 @@ class QComboBox;
 class QLabel;
 class QPushButton;
 
-// Reset + model picker + per-slot memory-module pickers + Settings,
+// Reset + model picker + per-slot memory-module pickers,
 // directly under the faceplate.
 class ControlBar : public QWidget {
     Q_OBJECT
@@ -67,7 +67,6 @@ signals:
     void resetClicked(bool allReset); // allReset == Cmd-click
     void moduleSelected(int slot, QString moduleNameOrEmpty); // "" => -empty-
     void nameAndSaveRequested(int slot);
-    void settingsRequested();
     void ce150ToggleRequested();
     void ce1600pToggleRequested();
     void floppyDiskSelected(QString diskNameOrEmpty); // "" => no disk
@@ -78,7 +77,6 @@ private:
     QComboBox* m_modelCombo = nullptr;
     QComboBox* m_romCombo = nullptr;
     QPushButton* m_resetButton = nullptr;
-    QPushButton* m_settingsButton = nullptr;
     QPushButton* m_ce150Button = nullptr;
     QPushButton* m_ce1600pButton = nullptr;
     QLabel* m_floppyLabel = nullptr;

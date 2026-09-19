@@ -128,7 +128,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         SettingsDialog dialog(m_controller.get(), this);
         dialog.exec();
     };
-    connect(m_controlBar, &ControlBar::settingsRequested, this, openSettingsDialog);
     connect(m_presetController.get(), &PresetController::armed, this, &MainWindow::onPresetArmed);
     auto openPresetDialog = [this] {
         const QString path = QFileDialog::getOpenFileName(this, tr("Load Preset"),
@@ -150,8 +149,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             // underlying machine either way.
             [this] { onPresetArmed(); });
     };
-    // File/Help menu actions reuse the exact same handlers as their
-    // ControlBar equivalents -- see buildMenuBar()'s own doc comment.
+    // Menu actions built in buildMenuBar() -- see its own doc comment.
     connect(m_openPresetAction, &QAction::triggered, this, openPresetDialog);
     connect(m_settingsAction, &QAction::triggered, this, openSettingsDialog);
     connect(m_aboutAction, &QAction::triggered, this, [this] {
@@ -650,16 +648,12 @@ void MainWindow::onFrameTick() {
 }
 
 void MainWindow::buildMenuBar() {
-    // File: one-shot actions ControlBar's own buttons also expose --
-    // openPresetAction/settingsAction/aboutAction are connected by the
-    // constructor, right alongside the ControlBar signal they duplicate, so
-    // both use the exact same handler closure.
+    // File: one-shot actions -- openPresetAction/settingsAction/aboutAction
+    // are connected by the constructor, next to their handler closures.
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
     m_openPresetAction = fileMenu->addAction(tr("Load Preset…"));
     m_loadBasicProgramAction = fileMenu->addAction(tr("Load BASIC Program…"));
     m_loadMachineCodeAction = fileMenu->addAction(tr("Load Machine Code…"));
-    fileMenu->addSeparator();
-    m_settingsAction = fileMenu->addAction(tr("Settings…"));
     fileMenu->addSeparator();
     QAction* quitAction = fileMenu->addAction(tr("Quit"));
     quitAction->setMenuRole(QAction::QuitRole);
@@ -669,10 +663,22 @@ void MainWindow::buildMenuBar() {
     // Edit: Cmd-C / Cmd-V (Ctrl on other platforms). A focused text field
     // (e.g. the debug panel's) still gets its own copy/paste first -- Qt
     // lets a widget claim standard shortcuts via ShortcutOverride.
+    // Copy is Copy Screen, or -- while text is selected in the debug
+    // panel's output (which never takes focus) -- Copy Log Selection.
     QMenu* editMenu = menuBar()->addMenu(tr("&Edit"));
-    QAction* copyScreenAction = editMenu->addAction(tr("Copy Screen"));
-    copyScreenAction->setShortcut(QKeySequence::Copy);
-    connect(copyScreenAction, &QAction::triggered, this, &MainWindow::copyScreenToClipboard);
+    QAction* copyAction = editMenu->addAction(tr("Copy Screen"));
+    copyAction->setShortcut(QKeySequence::Copy);
+    connect(copyAction, &QAction::triggered, this, [this] {
+        const QString selection = m_debugPanel->selectedOutputText();
+        if (selection.isEmpty()) {
+            copyScreenToClipboard();
+        } else {
+            QGuiApplication::clipboard()->setText(selection);
+        }
+    });
+    connect(m_debugPanel, &DebugPanel::outputSelectionChanged, copyAction, [copyAction, this](bool hasSelection) {
+        copyAction->setText(hasSelection ? tr("Copy Log Selection") : tr("Copy Screen"));
+    });
     m_pasteAction = editMenu->addAction(tr("Paste Text"));
     m_pasteAction->setShortcut(QKeySequence::Paste);
     connect(m_pasteAction, &QAction::triggered, this, &MainWindow::pasteClipboardText);
@@ -682,6 +688,15 @@ void MainWindow::buildMenuBar() {
     };
     connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, refreshPasteEnabled);
     refreshPasteEnabled();
+    // Settings: the platform's usual place -- the application menu on macOS
+    // (PreferencesRole moves it there, as "Settings…" with Cmd-,), the end
+    // of the Edit menu elsewhere.
+    editMenu->addSeparator();
+    m_settingsAction = editMenu->addAction(tr("Settings…"));
+    m_settingsAction->setMenuRole(QAction::PreferencesRole);
+    m_settingsAction->setShortcut(QKeySequence::Preferences);
+    if (m_settingsAction->shortcut().isEmpty())
+        m_settingsAction->setShortcut(QKeySequence(Qt::ControlModifier | Qt::Key_Comma));
 
     // Machine: duplicates ControlBar's model/ROM pickers (checkable, exclusive
     // per group) plus Reset/Reset All, which today only reachable via

@@ -88,6 +88,7 @@ DebugPanel::DebugPanel(MachineController* controller, QWidget* parent)
     // keyboard typing for the calculator) -- same convention as
     // ControlBar's widgets.
     m_output->setFocusPolicy(Qt::NoFocus);
+    connect(m_output, &QPlainTextEdit::copyAvailable, this, &DebugPanel::outputSelectionChanged);
     QFont monoFont("Menlo");
     monoFont.setStyleHint(QFont::Monospace);
     monoFont.setPointSize(11);
@@ -148,6 +149,11 @@ DebugPanel::DebugPanel(MachineController* controller, QWidget* parent)
     connect(m_logButton, &QToolButton::clicked, this, &DebugPanel::toggleDebugLevel);
 
     applyChrome();
+}
+
+QString DebugPanel::selectedOutputText() const {
+    // QTextCursor uses U+2029 as the paragraph separator.
+    return m_output->textCursor().selectedText().replace(QChar::ParagraphSeparator, QLatin1Char('\n'));
 }
 
 DebugPanel::~DebugPanel() {
