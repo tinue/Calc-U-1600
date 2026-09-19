@@ -36,6 +36,7 @@ on:
 
 jobs:
   linux-x86_64:
+    if: false # TEMP: windows-arm64-only trial run
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -189,6 +190,7 @@ jobs:
           if-no-files-found: error
 
   linux-aarch64:
+    if: false # TEMP: windows-arm64-only trial run
     # GitHub-hosted Linux arm64 runners aren't available on every plan/repo
     # visibility combination -- don't fail the whole workflow if this one
     # can't be scheduled or the runner label isn't available.
@@ -294,6 +296,7 @@ jobs:
           if-no-files-found: error
 
   mac-aarch64:
+    if: false # TEMP: windows-arm64-only trial run
     runs-on: macos-14 # Apple Silicon (arm64) hosted runner
     steps:
       - uses: actions/checkout@v5
@@ -421,6 +424,7 @@ jobs:
           if-no-files-found: error
 
   windows-x86_64:
+    if: false # TEMP: windows-arm64-only trial run
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
