@@ -108,6 +108,9 @@ void test_ce155_end_to_end_via_machine() {
     CE155_OR_SKIP(card, CardHost::PC1500);
     PC1500Machine pc1500(PC1500Variant::PC1500);
     pc1500.attachExpansionCard(std::move(card));
+    // The slot reports which module sits in it (the definition's module-name).
+    CHECK(pc1500.expansionConnector().attachedCard() &&
+          pc1500.expansionConnector().attachedCard()->moduleName() == "CE-155");
     pc1500.memory().writeME0(0x4800, 0x77);
     CHECK(pc1500.memory().readME0(0x4800) == 0x77);
     pc1500.memory().writeME0(0x3800, 0x66);

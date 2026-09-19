@@ -96,8 +96,7 @@ void MemoryModuleManager::attachOneSlot(int slotIndex, CardHost host, AttachFn a
     std::string path, err;
     if (resolveModuleSpecByName({bundledDir.toStdString(), instDir.toStdString()}, st.moduleName.toStdString(),
                                 &path, &err)) {
-        std::string moduleName;
-        auto card = makeSoftwareDefinedCard(path, host, &err, &moduleName);
+        auto card = makeSoftwareDefinedCard(path, host, &err);
         if (card) {
             const QString resolvedPath = QString::fromStdString(path);
             st.instanceFilePath = AppPaths::isUnderDir(resolvedPath, instDir) ? resolvedPath : QString();
@@ -133,10 +132,18 @@ void MemoryModuleManager::attachAllToFreshMachine() {
     }
 }
 
-void MemoryModuleManager::syncFromPresetLoad(int slot, const QString& labelOrEmpty,
-                                             const QString& resolvedPathOrEmpty) {
+QString MemoryModuleManager::attachedModuleName(int slot) const {
+    if (auto* m1500 = m_controller->pc1500()) {
+        const ExpansionCard* card = slot == 1 ? m1500->expansionConnector().attachedCard() : nullptr;
+        return card ? QString::fromStdString(card->moduleName()) : QString();
+    }
+    if (auto* m1600 = m_controller->pc1600()) return QString::fromStdString(m1600->memory().slotModuleName(slot));
+    return QString();
+}
+
+void MemoryModuleManager::syncFromPresetLoad(int slot, const QString& resolvedPathOrEmpty) {
     const int idx = slot - 1;
-    m_slots[idx].moduleName = labelOrEmpty;
+    m_slots[idx].moduleName = attachedModuleName(slot);
     m_slots[idx].instanceFilePath =
         AppPaths::isUnderDir(resolvedPathOrEmpty, AppPaths::instanceDir()) ? resolvedPathOrEmpty : QString();
     m_slots[idx].persistPending = false;

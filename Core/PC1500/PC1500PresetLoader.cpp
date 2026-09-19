@@ -222,7 +222,7 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
             if (log) log("modulespec load FAILED: " + err);
             return result;
         }
-        auto card = makeSoftwareDefinedCard(specPath, host, &err, &result.expansionModuleLabel);
+        auto card = makeSoftwareDefinedCard(specPath, host, &err);
         if (!card) {
             result.error = "memory-expansion modulespec: " + err;
             if (log) log("modulespec load FAILED: " + err);

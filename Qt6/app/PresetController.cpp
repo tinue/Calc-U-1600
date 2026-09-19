@@ -215,10 +215,8 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
         // powered off.
         m_controller->finishPresetLoad(Model::PC1600);
         const auto onArmed = [this](const PC1600PresetLoadResult& armedSoFar) {
-            m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(armedSoFar.slot1ModuleLabel),
-                                                QString::fromStdString(armedSoFar.slot1ResolvedPath));
-            m_moduleManager->syncFromPresetLoad(2, QString::fromStdString(armedSoFar.slot2ModuleLabel),
-                                                QString::fromStdString(armedSoFar.slot2ResolvedPath));
+            m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(armedSoFar.slot1ResolvedPath));
+            m_moduleManager->syncFromPresetLoad(2, QString::fromStdString(armedSoFar.slot2ResolvedPath));
             m_floppyManager->syncFromPresetLoad(QString::fromStdString(armedSoFar.floppyImageLabel),
                                                 QString::fromStdString(armedSoFar.floppyResolvedPath));
             emit armed();
@@ -233,10 +231,8 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
         // already swapped in a bare machine) still need reflecting into the
         // module manager instead of leaving it showing the previous load's
         // labels. A no-op duplicate of onArmed's own sync otherwise.
-        m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(result.slot1ModuleLabel),
-                                            QString::fromStdString(result.slot1ResolvedPath));
-        m_moduleManager->syncFromPresetLoad(2, QString::fromStdString(result.slot2ModuleLabel),
-                                            QString::fromStdString(result.slot2ResolvedPath));
+        m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(result.slot1ResolvedPath));
+        m_moduleManager->syncFromPresetLoad(2, QString::fromStdString(result.slot2ResolvedPath));
         m_floppyManager->syncFromPresetLoad(QString::fromStdString(result.floppyImageLabel),
                                             QString::fromStdString(result.floppyResolvedPath));
         if (!result.ok) {
@@ -253,9 +249,8 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
     // after -- see the matching comment in the PC-1600 branch above.
     m_controller->finishPresetLoad(model);
     const auto onArmed = [this](const PresetLoadResult& armedSoFar) {
-        m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(armedSoFar.expansionModuleLabel),
-                                            QString::fromStdString(armedSoFar.expansionModuleResolvedPath));
-        m_moduleManager->syncFromPresetLoad(2, QString());
+        m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(armedSoFar.expansionModuleResolvedPath));
+        m_moduleManager->syncFromPresetLoad(2);
         emit armed();
     };
     const PresetLoadResult result =
@@ -263,9 +258,8 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
                            [&machine] { seedClockFromHost(machine); }, romDirs, extraModuleDirs, onArmed);
     // Safety net for a preset that fails before ever arming -- see the
     // matching comment in the PC-1600 branch above.
-    m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(result.expansionModuleLabel),
-                                        QString::fromStdString(result.expansionModuleResolvedPath));
-    m_moduleManager->syncFromPresetLoad(2, QString());
+    m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(result.expansionModuleResolvedPath));
+    m_moduleManager->syncFromPresetLoad(2);
     if (!result.ok) {
         *error = QString::fromStdString(result.error);
         return false;

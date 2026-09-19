@@ -298,7 +298,6 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
     auto plug = [&](const std::string& specFile, const std::string& specName, int slot) -> bool {
         std::unique_ptr<ExpansionCard> card;
         std::string label;      // human-readable, for the log line
-        std::string guiLabel;   // the module-name / built-in name for the GUI button
         std::string resolvedPath;  // on-disk file, if any (modulespec/modulespecfile only)
         if (!specFile.empty() || !specName.empty()) {
             CardHost host = (slot == 1) ? CardHost::PC1600Slot1 : CardHost::PC1600Slot2;
@@ -309,23 +308,21 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
                 result.error = "slot " + std::to_string(slot) + " modulespec: " + err;
                 return false;
             }
-            card = makeSoftwareDefinedCard(specPath, host, &err, &guiLabel);
+            card = makeSoftwareDefinedCard(specPath, host, &err);
             if (!card) {
                 result.error = "slot " + std::to_string(slot) + " modulespec: " + err;
                 return false;
             }
-            label = "modulespec " + specPath;
+            label = card->moduleName() + " (" + specPath + ")";
             resolvedPath = specPath;
         } else {
             return true;  // empty slot
         }
         if (slot == 1) {
             machine.attachSlot1Card(std::move(card));
-            result.slot1ModuleLabel = guiLabel;
             result.slot1ResolvedPath = resolvedPath;
         } else {
             machine.attachSlot2Card(std::move(card));
-            result.slot2ModuleLabel = guiLabel;
             result.slot2ResolvedPath = resolvedPath;
         }
         if (log) log("slot " + std::to_string(slot) + ": " + label + " attached");

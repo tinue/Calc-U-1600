@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 // Shared card interface + pin-state type for the 40-pin connector family
@@ -122,14 +123,8 @@ public:
         return false;
     }
 
-    // TODO(slot-identity): add `virtual std::string moduleName() const` here
-    // so the GUI can read the attached module's name from the slot itself,
-    // instead of the preset loader reporting it via
-    // PresetLoadResult::expansionModuleLabel /
-    // PC1600PresetLoadResult::slotNModuleLabel and makeSoftwareDefinedCard()'s
-    // outModuleName param (all removable once this exists). Blocked on the
-    // hand-written prototype cards (CE155Card / PlainRamCard / CE1638PlusCard
-    // / CE163FCard) being duplicated as .card.yaml and deleted -- then
-    // SoftwareDefinedCard is the only implementer. See TODO.md, "Module
-    // identity should be read from the slot".
+    /// The module's name (a definition's `module-name:`, e.g. "CE-1600M"),
+    /// so the GUI can read what sits in a slot from the slot itself.
+    /// Empty for a card without one (test stubs).
+    virtual std::string moduleName() const { return {}; }
 };

@@ -116,6 +116,8 @@ public:
     }
     const MemoryCardDefinition& definition() const { return m_def; }
 
+    std::string moduleName() const override { return m_def.moduleName; }
+
     /// First banked region's current bank, for the GUI "Dump Mem" column
     /// label; -1 when no region banks (a purely unbanked definition).
     int debugCurrentBank() const override {
@@ -343,14 +345,11 @@ private:
 /// Build the universal card from a definition file for a specific target
 /// host. Returns nullptr and fills `error` on a read/parse failure or when
 /// the file's `compatible-hosts` does not list `targetHost`
-/// (Memory-Card-Definition-Spec.md §1/§2). On success, `outModuleName`
-/// (when non-null) receives the definition's `module-name:` -- the GUI
-/// uses it to label the control-bar slot button after a preset load,
-/// whichever `modulespec` / `modulespecfile` form named the file.
+/// (Memory-Card-Definition-Spec.md §1/§2). The card reports its
+/// `module-name:` via moduleName().
 inline std::unique_ptr<ExpansionCard> makeSoftwareDefinedCard(const std::string& specPath,
                                                               CardHost targetHost,
-                                                              std::string* error,
-                                                              std::string* outModuleName = nullptr) {
+                                                              std::string* error) {
     std::ifstream in(specPath, std::ios::binary);
     if (!in) {
         *error = "cannot open module spec '" + specPath + "'";
@@ -369,6 +368,5 @@ inline std::unique_ptr<ExpansionCard> makeSoftwareDefinedCard(const std::string&
                  ") is not compatible with " + cardHostToken(targetHost);
         return nullptr;
     }
-    if (outModuleName) *outModuleName = def.moduleName;
     return std::make_unique<SoftwareDefinedCard>(std::move(def));
 }

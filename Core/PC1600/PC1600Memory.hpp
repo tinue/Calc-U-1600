@@ -303,6 +303,12 @@ public:
     void detachSlot2() { m_slot2Conn.detach(); m_slot2Card.reset(); }
     bool slot1Attached() const { return m_slot1Conn.attachedCard() != nullptr; }
     bool slot2Attached() const { return m_slot2Conn.attachedCard() != nullptr; }
+    /// The module in Slot `slot` (1 or 2) by name (ExpansionCard::moduleName()),
+    /// "" for an empty slot.
+    std::string slotModuleName(int slot) const {
+        const ExpansionCard* c = (slot == 1 ? m_slot1Conn : m_slot2Conn).attachedCard();
+        return c ? c->moduleName() : std::string();
+    }
 
     /// The bank the card in Slot 1 / Slot 2 currently exposes through its
     /// banked window (ExpansionCard::debugCurrentBank()); -1 when the slot

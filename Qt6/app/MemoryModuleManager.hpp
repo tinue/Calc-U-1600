@@ -64,19 +64,18 @@ public:
     // module(s) directly (PC1500PresetLoader.cpp / PC1600PresetLoader.cpp
     // already did the live attach -- this only updates this manager's
     // display/bookkeeping state to match, exactly as attachOneSlot() would
-    // have. `labelOrEmpty` is PresetLoadResult::expansionModuleLabel
-    // (PC-1500) or slot1ModuleLabel/slot2ModuleLabel (PC-1600) -- empty
-    // means the preset left the slot unpopulated. `resolvedPathOrEmpty` is
+    // have. The module's name is read from the machine's slot itself
+    // (ExpansionCard::moduleName()) -- an empty slot clears the selection.
+    // `resolvedPathOrEmpty` is
     // the on-disk file a `modulespec:`/`modulespecfile:` reference resolved
     // to (PresetLoadResult::expansionModuleResolvedPath /
     // PC1600PresetLoadResult::slot1ResolvedPath/slot2ResolvedPath), empty
-    // for a built-in `- module: <name>` or an empty slot: when it names a
+    // for an empty slot: when it names a
     // file actually under AppPaths::instanceDir() (a real saved battery
     // instance, not a bundled read-only template), the slot becomes
     // autosave-eligible exactly as if the same instance had been picked
     // from the GUI dropdown (attachOneSlot()'s own instanceFilePath rule).
-    void syncFromPresetLoad(int slot, const QString& labelOrEmpty,
-                            const QString& resolvedPathOrEmpty = QString());
+    void syncFromPresetLoad(int slot, const QString& resolvedPathOrEmpty = QString());
 
     // "Name & Save" flow. A bundled name is always refused, whatever host it
     // targets (the bundled card would shadow the saved one on lookup).
@@ -127,6 +126,10 @@ private:
     // (best-effort re-splice; pass `error` as nullptr to fail silently).
     bool spliceCardImageInto(int slot, const QString& sourcePath, const QString& sourceModuleName,
                               const QString& targetName, std::string* spliced, QString* error);
+
+    // The name of the module in `slot` of the live machine, "" when empty.
+
+    QString attachedModuleName(int slot) const;
 
     template <typename AttachFn>
     void attachOneSlot(int slotIndex, CardHost host, AttachFn attach);

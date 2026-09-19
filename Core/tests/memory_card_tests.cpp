@@ -1275,10 +1275,10 @@ void test_ce1601m_end_to_end_through_pc1600() {
         PC1600PresetLoadResult r = applyPC1600Preset(m, preset, {}, ".", moduleDir);
         CHECK(r.ok);
         CHECK(m.slot2Attached());
-        // The loader reports the attached module's module-name for the GUI
-        // button, whichever spec form named it; slot 1 stays empty here.
-        CHECK(r.slot1ModuleLabel.empty());
-        CHECK(r.slot2ModuleLabel == "CE-1601M");
+        // The slot itself reports the attached module's module-name,
+        // whichever spec form named it; slot 1 stays empty here.
+        CHECK(m.memory().slotModuleName(1).empty());
+        CHECK(m.memory().slotModuleName(2) == "CE-1601M");
         m.memory().writeIO(0x31, static_cast<uint8_t>(2 << 4));  // page-C bank 2 -> Slot 2
         m.memory().writeIO(0x28, 0);
         m.memory().write(0x8000, 0xA1);
