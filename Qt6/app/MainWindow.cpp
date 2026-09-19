@@ -12,6 +12,7 @@
 #include "SettingsDialog.hpp"
 #include "AboutDialog.hpp"
 #include "PresetController.hpp"
+#include "AudioOutput.hpp"
 #include "AppSettings.hpp"
 
 #include <QHBoxLayout>
@@ -38,6 +39,8 @@ namespace {
 // ~60 Hz. Shared by the frame timer's own period and by the turbo
 // fast-forward budget below, so the two stay in lockstep if this changes.
 constexpr int kFrameIntervalMs = 16;
+// Most emulated time a single non-turbo tick may run -- see onFrameTick().
+constexpr double kMaxTickSeconds = 0.1;
 
 // runSynchronousLoad(): how often the blocked UI thread pumps its event
 // loop mid-load, and how long a load must run before the "Loading..."
@@ -216,9 +219,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_faceplate->lcdWidget(), &LcdWidget::turboRequested, this,
             [this](bool active) { m_turboActive = active; });
 
+    m_audio = new AudioOutput(this);
+
     m_frameTimer = new QTimer(this);
     m_frameTimer->setTimerType(Qt::PreciseTimer);
     connect(m_frameTimer, &QTimer::timeout, this, &MainWindow::onFrameTick);
+    restartPacing();
     m_frameTimer->start(kFrameIntervalMs);
 
     // MachineController's constructor already booted whatever model the
@@ -313,6 +319,9 @@ void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::functi
     popup.reset();
     unsetCursor();
     if (afterLoad) afterLoad();
+    // The load ran the machine flat out -- whatever it beeped is stale.
+    m_controller->discardAudio();
+    restartPacing();
     m_frameTimer->start(kFrameIntervalMs);
 
     if (!ok) {
@@ -459,8 +468,14 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event) {
     event->accept();
 }
 
+void MainWindow::restartPacing() {
+    m_paceClock.restart();
+    m_cycleCarry = 0.0;
+}
+
 void MainWindow::onFrameTick() {
-    const std::uint64_t cyclesPerFrame = static_cast<std::uint64_t>(m_controller->clockHz() / 60.0);
+    const double clockHz = m_controller->clockHz();
+    const std::uint64_t cyclesPerFrame = static_cast<std::uint64_t>(clockHz / 60.0);
     if (m_turboActive) {
         // Press-and-hold on the LCD: run unthrottled, i.e. as many emulated
         // cycles as the host can produce within this tick's wall-clock
@@ -476,9 +491,22 @@ void MainWindow::onFrameTick() {
             m_controller->advance(cyclesPerFrame);
             QCoreApplication::processEvents();
         } while (m_turboActive && std::chrono::steady_clock::now() < deadline);
+        restartPacing();
     } else {
-        m_controller->advance(cyclesPerFrame);
+        // Run exactly the wall-clock time since the last tick, carrying the
+        // fractional cycle, rather than a fixed clockHz/60 per 16 ms tick
+        // (which ran ~4% fast and jittered with the timer). Real-time
+        // emulated time is what keeps the buzzer audio from under- or
+        // overrunning the sound device. Capped so a stall (modal dialog,
+        // window drag) doesn't turn into a catch-up burst.
+        const double elapsedSeconds = static_cast<double>(m_paceClock.nsecsElapsed()) * 1e-9;
+        m_paceClock.restart();
+        const double cycles = std::min(m_cycleCarry + elapsedSeconds * clockHz, clockHz * kMaxTickSeconds);
+        const auto whole = static_cast<std::uint64_t>(cycles);
+        m_cycleCarry = cycles - static_cast<double>(whole);
+        m_controller->advance(whole);
     }
+    m_audio->pump(*m_controller, /*discard=*/m_turboActive);
 
     const DisplayFrame frame = m_controller->currentDisplay();
     m_faceplate->lcdWidget()->setFrame(frame);

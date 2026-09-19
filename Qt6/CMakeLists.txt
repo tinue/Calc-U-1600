@@ -14,7 +14,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC OFF)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
 qt_standard_project_setup()
 
 set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../Core)
@@ -162,6 +162,7 @@ qt_add_executable(CalcU1600Qt
   app/SettingsDialog.cpp
   app/AboutDialog.cpp
   app/PresetController.cpp
+  app/AudioOutput.cpp
   ${CORE_SOURCES}
   resources/calc-u-1600.qrc
 )
@@ -180,7 +181,7 @@ if(WIN32)
 endif()
 
 target_include_directories(CalcU1600Qt PRIVATE ${CORE_ROOT} app ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(CalcU1600Qt PRIVATE Qt6::Widgets)
+target_link_libraries(CalcU1600Qt PRIVATE Qt6::Widgets Qt6::Multimedia)
 
 if(EXISTS ${SHARPDX_LIB})
   # See the CORE_SOURCES SHARPDX_LIB block above.

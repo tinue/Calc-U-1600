@@ -261,6 +261,17 @@ void MachineController::advance(std::uint64_t cyclesBudget) {
     }
 }
 
+std::size_t MachineController::drainAudio(std::int16_t* out, std::size_t max) {
+    if (m_pc1600) return m_pc1600->drainAudio(out, max);
+    if (m_pc1500) return m_pc1500->drainAudio(out, max);
+    return 0;
+}
+
+void MachineController::discardAudio() {
+    if (m_pc1600) m_pc1600->discardAudio();
+    else if (m_pc1500) m_pc1500->discardAudio();
+}
+
 double MachineController::clockHz() const {
     if (m_pc1600) {
         return static_cast<double>(PC1600Machine::kTStateHz);

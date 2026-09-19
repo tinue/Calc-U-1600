@@ -1,5 +1,6 @@
 #pragma once
 #include <QMainWindow>
+#include <QElapsedTimer>
 #include <QHash>
 #include <QString>
 #include <functional>
@@ -22,6 +23,7 @@ class PlotterPaperWidget;
 class MemoryModuleManager;
 class FloppyDiskManager;
 class PresetController;
+class AudioOutput;
 
 // Top-level window: FaceplateWidget (stretch) over ControlBar (fixed) over
 // the debug row (fixed), all inside a central QWidget (QMainWindow requires
@@ -65,6 +67,13 @@ private:
     QHBoxLayout* m_debugRowLayout = nullptr;
     QTimer* m_frameTimer = nullptr;
     bool m_turboActive = false; // press-and-hold on the LCD: run unthrottled
+    AudioOutput* m_audio = nullptr;
+    // Real-time pacing for onFrameTick(): each tick runs exactly the
+    // emulated time that has passed on the wall clock since the previous
+    // one (restartPacing() rebases it whenever the frame timer (re)starts).
+    QElapsedTimer m_paceClock;
+    double m_cycleCarry = 0.0;
+    void restartPacing();
 
     void buildMenuBar();
 

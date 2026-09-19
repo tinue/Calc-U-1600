@@ -1,6 +1,7 @@
 #pragma once
 #include <QObject>
 #include <QString>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -128,6 +129,12 @@ public:
     void enqueueShiftedKey(const std::string& baseName);
 
     void advance(std::uint64_t cyclesBudget);
+
+    // Buzzer audio from whichever machine is active (mono int16 PCM at
+    // PiezoSampler::kDefaultSampleRate) -- see AudioOutput. drainAudio()
+    // returns how many samples it wrote into `out`; 0 with no machine.
+    std::size_t drainAudio(std::int16_t* out, std::size_t max);
+    void discardAudio();
     DisplayFrame currentDisplay() const;
 
     // Cycles-per-second of whichever machine is currently active --
