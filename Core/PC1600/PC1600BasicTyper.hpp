@@ -84,6 +84,13 @@ uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates);
 /// which hands off to the LH5803 to home the colour turret.
 void waitForKeyboardScanLoop(PC1600Machine& machine);
 
+/// Runs a machine that was just reset flat out through its boot until it
+/// waits at the prompt for keys: a fixed 2 s past the ROM's power-on
+/// sequence, then the BUSY tail (waitIdle, 5 s cap), then -- with a plotter
+/// attached -- the peripheral's power-on init (waitForKeyboardScanLoop).
+/// Used by the preset loader and by the GUI's Reset.
+void runBootToPrompt(PC1600Machine& machine);
+
 /// Types `line` character by character (a lowercase letter and the
 /// shifted punctuation / digit-row symbols each get a SHIFT-tap first),
 /// optionally tapping ENTER afterward, then a short settle. Returns false

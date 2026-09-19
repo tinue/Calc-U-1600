@@ -124,6 +124,23 @@ void waitForKeyboardScanLoop(PC1600Machine& machine) {
     }
 }
 
+void runBootToPrompt(PC1600Machine& machine) {
+    // Generous margin past the boot ROM's power-on sequence -- the ROM
+    // doesn't poll the keyboard until it settles into its post-boot idle
+    // loop (headless: ~2M T-states to a stable PC set, see
+    // tools/pc1600_cli.cpp) -- then a BUSY-symbol idle poll for the tail of
+    // a slower boot.
+    constexpr uint64_t kBootSettleTStates = PC1600Machine::kTStateHz * 2;
+    constexpr uint64_t kBootIdleCapTStates = PC1600Machine::kTStateHz * 5;
+    machine.runCycles(kBootSettleTStates);
+    waitIdle(machine, kBootIdleCapTStates);
+    // With a plotter attached the boot ROM only turns the LCD on and enters
+    // its keyboard-scan idle loop once the CE-1600P has finished its power-
+    // on init (on real hardware the LCD + indicator strip stay dark until
+    // then) -- that init raises no BUSY symbol. No-op without a plotter.
+    waitForKeyboardScanLoop(machine);
+}
+
 uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates) {
     // "The program has finished" == the SC7852 is back spinning in the BASIC
     // command loop, a very tight loop pinned to ~$92B3 (measured: at the

@@ -145,6 +145,17 @@ uint64_t waitIdle(PC1500Machine& machine, uint64_t maxCycles) {
     return consumed;
 }
 
+void runBootToPrompt(PC1500Machine& machine) {
+    // Generous margin past the ROM's own power-on RAM-check/boot sequence --
+    // keys sent immediately after reset are missed entirely, since the ROM
+    // doesn't start polling the keyboard until it settles into its post-boot
+    // idle loop.
+    constexpr uint64_t kBootSettleCycles = static_cast<uint64_t>(kCpuHz * 2);
+    constexpr uint64_t kBootIdleCap = static_cast<uint64_t>(kCpuHz * 5);
+    machine.runCycles(kBootSettleCycles);
+    waitIdle(machine, kBootIdleCap);
+}
+
 bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, std::string* error) {
     for (char c : line) {
         std::string name;

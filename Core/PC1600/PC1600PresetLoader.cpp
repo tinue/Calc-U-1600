@@ -30,14 +30,6 @@ namespace {
 constexpr uint64_t kTStateHz = PC1600Machine::kTStateHz;
 constexpr uint64_t kFrameTStates = kTStateHz / 60;
 
-// Generous margin past the boot ROM's power-on sequence before keys are
-// sent -- the ROM doesn't poll the keyboard until it settles into its
-// post-boot idle loop (headless: ~2M T-states to a stable PC set, see
-// tools/pc1600_cli.cpp). 2s at 3.58MHz, then a BUSY-symbol idle poll to
-// absorb the tail of a slower boot before the first keystroke.
-constexpr uint64_t kBootSettleTStates = kTStateHz * 2;
-constexpr uint64_t kBootIdleCapTStates = kTStateHz * 5;
-
 // ON (BREAK) hold/idle -- tapKey() (PC1600BasicTyper) drives the key
 // matrix, but ON isn't a matrix key, so this stays local.
 constexpr uint64_t kHoldTStates = kFrameTStates * 4;
@@ -369,17 +361,10 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
     // Full cold boot: the slot config just changed, so the IOCS work area
     // must be rebuilt from scratch (simple reset() would keep stale RAM).
     machine.allReset();
-    machine.runCycles(kBootSettleTStates);
-    waitIdle(machine, kBootIdleCapTStates);
-    // With a plotter attached the boot ROM only turns the LCD on and enters
-    // its keyboard-scan idle loop once the CE-1600P has finished its power-
-    // on init (on real hardware the LCD + indicator strip stay dark until
-    // then) -- that init raises no BUSY symbol, so without this the first
-    // scripted key/keystroke lands in a dead key-scan. No-op without a
-    // plotter. `waitForKeyboardScanLoop` also guards every typed line
-    // (PC1600BasicTyper) and every `key:` step (runKeyStep) for the same
-    // gap that reopens after each line's ENTER.
-    waitForKeyboardScanLoop(machine);
+    // Includes the plotter's power-on init -- `waitForKeyboardScanLoop`
+    // also guards every typed line (PC1600BasicTyper) and every `key:` step
+    // (runKeyStep) for the same gap that reopens after each line's ENTER.
+    runBootToPrompt(machine);
     if (log) log("reset + boot settle done" + stepTag(machine));
     if (onBooted) onBooted();
 

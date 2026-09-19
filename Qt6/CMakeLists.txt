@@ -89,10 +89,13 @@ set(CORE_SOURCES
   ${CORE_ROOT}/PC1600/PC1600MachineImage.cpp
   ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
+  # Reset's boot-to-prompt (runBootToPrompt) -- no libsharpdx dependency.
+  ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
+  ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
 )
 
 # Preset loading, entire (PresetFile.cpp, *PresetLoader.cpp,
-# *BasicTyper.cpp, *BasicLoader.cpp, Core/Basic/*), needs the vendored Rust
+# *BasicLoader.cpp, Core/Basic/*), needs the vendored Rust
 # `libsharpdx` static library (Core/Basic/vendor/sharpdx/) that
 # Core/Basic/BasicProgramSource.cpp tokenizes BASIC programs through --
 # rather than split the loader files themselves at a finer grain
@@ -125,10 +128,8 @@ endif()
 if(EXISTS ${SHARPDX_LIB})
   list(APPEND CORE_SOURCES
     ${CORE_ROOT}/PC1500/PresetFile.cpp
-    ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
     ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
     ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
-    ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
     ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
     ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
     ${CORE_ROOT}/Basic/BasicBinaryImage.cpp

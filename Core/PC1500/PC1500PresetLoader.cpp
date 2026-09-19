@@ -268,8 +268,7 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
     if (onArmed) onArmed(result);
 
     machine.reset();
-    machine.runCycles(kBootSettleCycles);
-    waitIdle(machine, kIdleCap);
+    runBootToPrompt(machine);
 
     // Connecting the CE-150 (like any memory-map change) makes the ROM do
     // a cold memory check on power-up and stop at the "NEW0? :CHECK"

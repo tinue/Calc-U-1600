@@ -97,8 +97,12 @@ public:
     void setPC1500RomRevision(PC1500RomRevision revision);
     PC1500RomRevision pc1500RomRevision() const { return m_pc1500RomRevision; }
 
-    void resetSimple();
-    void resetAll();
+    // Reset (`allReset` = ALL RESET on the PC-1600; the PC-1500 has one
+    // level), then run the boot flat out until the ROM waits at the prompt
+    // -- including a plotter's power-on init -- and set the clock from the
+    // host. Synchronous: the caller stops the frame timer around it (see
+    // PresetController::resetLive()).
+    void resetToPrompt(bool allReset);
 
     void pressKey(const std::string& name);
     void releaseKey(const std::string& name);

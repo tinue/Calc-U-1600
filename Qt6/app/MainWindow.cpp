@@ -106,13 +106,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     connect(m_controlBar, &ControlBar::modelSelected, this, &MainWindow::applyModelSelection);
     connect(m_controlBar, &ControlBar::romRevisionSelected, this, &MainWindow::applyRomRevisionSelection);
-    connect(m_controlBar, &ControlBar::resetClicked, this, [this](bool allReset) {
-        if (allReset) {
-            m_controller->resetAll();
-        } else {
-            m_controller->resetSimple();
-        }
-    });
+    connect(m_controlBar, &ControlBar::resetClicked, this, &MainWindow::resetMachine);
     connect(m_controlBar, &ControlBar::moduleSelected, this, [this](int slot, QString moduleNameOrEmpty) {
         m_moduleManager->selectModule(slot, moduleNameOrEmpty);
         m_controller->switchModel(m_controller->currentModel()); // rebuild -> re-attach
@@ -340,6 +334,14 @@ void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::functi
     if (!ok) {
         QMessageBox::warning(this, errorTitle, error);
     }
+}
+
+void MainWindow::resetMachine(bool allReset) {
+    // Boot flat out to the prompt (incl. a plotter's power-on init) instead
+    // of watching it in real time; the clock is set from the host after.
+    runSynchronousLoad(allReset ? tr("Reset All") : tr("Reset"), [this, allReset](QString* error) {
+        return m_presetController->resetLive(allReset, error);
+    });
 }
 
 void MainWindow::loadMachineCode() {
@@ -718,10 +720,10 @@ void MainWindow::buildMenuBar() {
     machineMenu->addSeparator();
     QAction* resetAction = machineMenu->addAction(tr("Reset"));
     resetAction->setShortcut(QKeySequence(Qt::ControlModifier | Qt::Key_R));
-    connect(resetAction, &QAction::triggered, this, [this] { m_controller->resetSimple(); });
+    connect(resetAction, &QAction::triggered, this, [this] { resetMachine(false); });
     QAction* resetAllAction = machineMenu->addAction(tr("Reset All"));
     resetAllAction->setShortcut(QKeySequence(Qt::ControlModifier | Qt::ShiftModifier | Qt::Key_R));
-    connect(resetAllAction, &QAction::triggered, this, [this] { m_controller->resetAll(); });
+    connect(resetAllAction, &QAction::triggered, this, [this] { resetMachine(true); });
 
     // Help
     QMenu* helpMenu = menuBar()->addMenu(tr("&Help"));

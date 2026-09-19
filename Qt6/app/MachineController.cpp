@@ -9,9 +9,11 @@
 
 #include <algorithm>
 
+#include "PC1500/PC1500BasicTyper.hpp"
 #include "PC1500/PC1500Machine.hpp"
 #include "PC1500/PC1500Screenshot.hpp"
 #include "PC1500/PC1500TypedInput.hpp"
+#include "PC1600/PC1600BasicTyper.hpp"
 #include "PC1600/PC1600Machine.hpp"
 #include "PC1600/PC1600Screenshot.hpp"
 #include "PC1600/PC1600TypedInput.hpp"
@@ -198,24 +200,23 @@ void MachineController::seedClockFromHost() {
     }
 }
 
-void MachineController::resetSimple() {
+void MachineController::resetToPrompt(bool allReset) {
     cancelPaste();
     if (m_pc1600) {
-        m_pc1600->reset();
-    } else if (m_pc1500) {
-        m_pc1500->reset();
-    }
-}
-
-void MachineController::resetAll() {
-    cancelPaste();
-    if (m_pc1600) {
-        m_pc1600->allReset();
-        seedClockFromHost();
+        if (allReset) {
+            m_pc1600->allReset();
+        } else {
+            m_pc1600->reset();
+        }
+        runBootToPrompt(*m_pc1600);
     } else if (m_pc1500) {
         // No distinct ALL RESET level exists for PC1500/1500A in Core.
         m_pc1500->reset();
+        runBootToPrompt(*m_pc1500);
     }
+    // After the boot, not before: it ran flat out through seconds of
+    // emulated time the clock would otherwise run ahead by.
+    seedClockFromHost();
 }
 
 void MachineController::pressKey(const std::string& name) {

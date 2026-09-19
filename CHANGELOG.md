@@ -2,6 +2,9 @@
 
 ## [0.4.0] - work in progress
 
+- **Reset** Reset and Reset All run the boot at full speed until the
+  prompt appears, including a plotter's power-on init (the CE-1600P pen
+  calibration), then set the clock from the computer's time.
 - **Paste** Edit > Paste Text (Cmd-V) types the clipboard's text into
   the machine, paced so no character is lost. Nothing is added or
   checked: a line break presses ENTER and waits for the line to finish,

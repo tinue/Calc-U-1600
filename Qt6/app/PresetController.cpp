@@ -1,13 +1,55 @@
 #include "PresetController.hpp"
 
+#include <functional>
+
 #include "PC1500/PC1500Machine.hpp"
 #include "PC1500/PC1500MachineCodeLoader.hpp"
 #include "PC1600/PC1600Machine.hpp"
 #include "PC1600/PC1600MachineCodeLoader.hpp"
 
+namespace {
+
+// Installs PresetController's yield hook on `machine` for the lifetime of
+// this object. ~10 ms of emulated time between calls: frequent enough for a
+// smooth UI at any emulation speed; the hook itself rate-limits by wall
+// clock. Templated over the two machine classes.
+template <typename Machine>
+class ScopedYieldHook {
+public:
+    ScopedYieldHook(Machine& machine, const std::function<void()>& hook, double clockHz)
+        : m_machine(machine), m_active(static_cast<bool>(hook)) {
+        if (m_active) m_machine.setYieldHook(hook, static_cast<uint64_t>(clockHz / 100));
+    }
+    ~ScopedYieldHook() {
+        if (m_active) m_machine.setYieldHook({}, 0);
+    }
+    ScopedYieldHook(const ScopedYieldHook&) = delete;
+    ScopedYieldHook& operator=(const ScopedYieldHook&) = delete;
+
+private:
+    Machine& m_machine;
+    bool m_active;
+};
+
+}  // namespace
+
 PresetController::PresetController(MachineController* controller, MemoryModuleManager* moduleManager,
                                      FloppyDiskManager* floppyManager, QObject* parent)
     : QObject(parent), m_controller(controller), m_moduleManager(moduleManager), m_floppyManager(floppyManager) {}
+
+bool PresetController::resetLive(bool allReset, QString* error) {
+    if (PC1600Machine* machine = m_controller->pc1600()) {
+        const ScopedYieldHook<PC1600Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
+        m_controller->resetToPrompt(allReset);
+    } else if (PC1500Machine* machine = m_controller->pc1500()) {
+        const ScopedYieldHook<PC1500Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
+        m_controller->resetToPrompt(allReset);
+    } else {
+        *error = tr("No machine is running.");
+        return false;
+    }
+    return true;
+}
 
 bool PresetController::loadMachineCodeLive(const MachineCodeLoadRequest& request, QString* error) {
     std::string err;
@@ -54,28 +96,6 @@ bool PresetController::loadMachineCodeLive(const MachineCodeLoadRequest& request
 #include "Basic/BasicProgramSource.hpp"
 
 namespace {
-
-// Installs PresetController's yield hook on `machine` for the lifetime of
-// this object. ~10 ms of emulated time between calls: frequent enough for a
-// smooth UI at any emulation speed; the hook itself rate-limits by wall
-// clock. Templated for the same reason as seedClockFromHost() below.
-template <typename Machine>
-class ScopedYieldHook {
-public:
-    ScopedYieldHook(Machine& machine, const std::function<void()>& hook, double clockHz)
-        : m_machine(machine), m_active(static_cast<bool>(hook)) {
-        if (m_active) m_machine.setYieldHook(hook, static_cast<uint64_t>(clockHz / 100));
-    }
-    ~ScopedYieldHook() {
-        if (m_active) m_machine.setYieldHook({}, 0);
-    }
-    ScopedYieldHook(const ScopedYieldHook&) = delete;
-    ScopedYieldHook& operator=(const ScopedYieldHook&) = delete;
-
-private:
-    Machine& m_machine;
-    bool m_active;
-};
 
 Model modelForPreset(const PresetFile& preset) {
     if (preset.isPC1600()) return Model::PC1600;

@@ -75,6 +75,12 @@ public:
     };
     bool loadMachineCodeLive(const MachineCodeLoadRequest& request, QString* error);
 
+    // The GUI's Reset / Reset All: MachineController::resetToPrompt() with
+    // the yield hook installed, so the flat-out boot keeps the window
+    // painting. Same caller contract as the loaders above. Works in every
+    // build.
+    bool resetLive(bool allReset, QString* error);
+
     // Callback installed on the target machine (PC1500Machine/
     // PC1600Machine::setYieldHook()) for the duration of each load above,
     // then removed again. Called on the calling thread roughly every few

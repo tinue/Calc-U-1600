@@ -153,6 +153,9 @@ private:
     // needed (MachineCodeLoadDialog), write it, then show the NEW that
     // protects it and the CALL that starts it. Never runs the code.
     void loadMachineCode();
+    // Reset / Reset All (control bar, Machine menu): see resetMachine() in
+    // MainWindow.cpp.
+    void resetMachine(bool allReset);
 
     // Qt::Key -> the logical calculator key name that was pressed for it,
     // so releaseEvent always releases exactly what pressEvent pressed even

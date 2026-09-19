@@ -35,6 +35,13 @@ class PC1500Machine;
 /// pressKey/releaseKey.
 void tapKey(PC1500Machine& machine, const std::string& name);
 
+/// Runs a machine that was just reset flat out through its boot (the ROM's
+/// power-on RAM check) until it waits at the prompt for keys: a fixed 2 s,
+/// then the BUSY tail (waitIdle, 5 s cap). Stops at whatever prompt the ROM
+/// shows -- including "NEW0? :CHECK" after a memory-map change. Used by the
+/// preset loader and by the GUI's Reset.
+void runBootToPrompt(PC1500Machine& machine);
+
 /// Steps the CPU forward, a frame at a time, until the display's BUSY
 /// indicator clears or `maxCycles` is exhausted (a safety cap, so a ROM
 /// that never goes idle can't hang the caller). Returns the number of
