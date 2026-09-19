@@ -6,7 +6,7 @@
 model: PC-1600
 
 plotter: ce1600p
-floppy: Blank
+floppy: Formatted
 
 memory-expansion-1:
   - modulespec: CE-1600M
