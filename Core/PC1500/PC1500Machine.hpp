@@ -137,6 +137,11 @@ public:
         m_memory.piezo().discard();
     }
     int audioSampleRate() const { return PiezoSampler::kDefaultSampleRate; }
+    /// Buzzer line level changes so far (PiezoSampler::edgeCount()).
+    uint64_t buzzerEdgeCount() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_memory.piezo().edgeCount();
+    }
 
     // Locked, UI-thread-safe debug reads so the App layer can log
     // Core-internal state (PC, and RAM bytes like the cursor-key dispatch

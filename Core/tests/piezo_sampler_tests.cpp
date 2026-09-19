@@ -191,6 +191,24 @@ void test_pc1500_beep() {
     CHECK(analyse(runAndCapture(m, "BEEP 1")).audibleSamples > 0);
 }
 
+// typeLine()'s post-Enter settle must not mistake the BEEP tone loop (a
+// small PC window high in ROM, like the idle prompt) for the prompt --
+// otherwise the next typed line lands mid-beep and is mangled.
+void test_pc1500_settle_waits_for_beep() {
+    PC1500Machine m;
+    if (!bootPC1500(m)) {
+        std::fprintf(stderr, "SKIP test_pc1500_settle_waits_for_beep: PC-1500 ROM image not found\n");
+        return;
+    }
+    std::string err;
+    CHECK(typeLine(m, "BEEP 2,100,300", /*pressEnter=*/true, &err));
+    const uint16_t pc = m.debugPC();
+    CHECK(pc >= 0xE200 && pc <= 0xE4FF); // back at the prompt loop, not E6xx
+    const uint64_t edges = m.buzzerEdgeCount();
+    m.runCycles(130000); // 0.1 s more: the beep is really over
+    CHECK(m.buzzerEdgeCount() == edges);
+}
+
 // ── ROM-gated: PC-1600 ──────────────────────────────────────────────────
 
 bool readRomFile(const char* path, std::vector<uint8_t>* out) {
@@ -283,6 +301,7 @@ int run_piezo_sampler_tests() {
     test_mid_sample_edge_is_averaged();
     test_overflow_keeps_newest();
     test_pc1500_beep();
+    test_pc1500_settle_waits_for_beep();
     test_pc1600_beep();
 
     std::printf("piezo_sampler_tests: %d passed, %d failed\n", g_pass, g_fail);

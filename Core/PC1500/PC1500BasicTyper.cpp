@@ -122,13 +122,19 @@ uint64_t settleUntilIdle(PC1500Machine& machine, uint64_t maxCycles) {
     int quiet = 0;
     while (quiet < kQuietWindowsNeeded && spent < maxCycles) {
         uint16_t lo = 0xFFFF, hi = 0;
+        const uint64_t edgesBefore = machine.buzzerEdgeCount();
         for (int i = 0; i < kWindowFrames; i++) {
             spent += machine.runCycles(kCyclesPerFrame);
             uint16_t pc = machine.debugPC();
             if (pc < lo) lo = pc;
             if (pc > hi) hi = pc;
         }
-        if (hi - lo < kMaxSpan && lo >= kIdleFloor) quiet++;
+        // A BEEP's tone loop (A04 E66Aff) is itself a small window high in
+        // ROM, so the PC test alone takes a sounding buzzer for the idle
+        // prompt and the next typed line lands mid-beep. A window in which
+        // the buzzer line toggled is never idle.
+        const bool beeping = machine.buzzerEdgeCount() != edgesBefore;
+        if (hi - lo < kMaxSpan && lo >= kIdleFloor && !beeping) quiet++;
         else quiet = 0;
     }
     return spent;

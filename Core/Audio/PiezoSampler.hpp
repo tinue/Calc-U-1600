@@ -34,8 +34,14 @@ public:
     int sampleRate() const { return m_sampleRate; }
 
     /// Current drive-line level. Takes effect from the next advance().
-    void setLevel(bool high) { m_level = high; }
+    void setLevel(bool high) {
+        if (high != m_level) ++m_edges;
+        m_level = high;
+    }
     bool level() const { return m_level; }
+    /// Level changes seen so far -- lets a caller tell "the ROM is sounding
+    /// the buzzer" apart from an idle loop without decoding any audio.
+    uint64_t edgeCount() const { return m_edges; }
 
     /// Credit `cycles` CPU cycles of elapsed emulated time at the current
     /// level, emitting every sample whose interval completes.
@@ -67,6 +73,7 @@ private:
     double m_hpCoeff;      // DC blocker pole: y = x - x1 + R*y1
 
     bool   m_level{false};
+    uint64_t m_edges{0};
     double m_phase{0.0};   // cycles into the current sample interval
     double m_area{0.0};    // cycles of that interval spent high
     double m_hpPrevIn{0.0};
