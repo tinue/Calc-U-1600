@@ -89,10 +89,10 @@ set(CORE_SOURCES
 # whole feature is gated on that library being present:
 #  - macOS: Core/Basic/vendor/sharpdx/libsharpdx.a is committed directly
 #    (refreshed via tools/refresh_sharpdx.sh from a local
-#    SharpDataExchangeRust checkout).
-#  - Linux/Windows: fetched at build time from a SharpDataExchangeRust
+#    SharpDataExchange checkout).
+#  - Linux/Windows: fetched at build time from a SharpDataExchange
 #    GitHub release via tools/fetch_sharpdx.sh (see
-#    .github/workflows/qt6-prototype.yml's "Fetch sharpdx" step) into
+#    .github/workflows/build.yml's "Fetch sharpdx" step) into
 #    libsharpdx-linux.a / sharpdx.lib respectively -- deliberately
 #    different filenames from the macOS binary so a fetch here can never
 #    collide with, or dirty the git status of, the committed one.
@@ -179,23 +179,11 @@ target_link_libraries(CalcU1600Qt PRIVATE Qt6::Widgets)
 if(EXISTS ${SHARPDX_LIB})
   # See the CORE_SOURCES SHARPDX_LIB block above.
   target_link_libraries(CalcU1600Qt PRIVATE ${SHARPDX_LIB})
-  if(UNIX AND NOT APPLE)
-    # sharpdx's Linux serial-port backend needs libudev; unlike Windows'
-    # system import libs (below), this one really is always on the
-    # system's own default linker search path once libudev-dev is
-    # installed (see build.yml), so no vendoring is needed here -- just
-    # the link.
-    target_link_libraries(CalcU1600Qt PRIVATE udev)
-  endif()
+  # The vendored/fetched libs are sharpdx's serial-free build (release
+  # archives since v0.2.1, and tools/refresh_sharpdx.sh), so there's no
+  # libudev (Linux), IOKit (macOS) or serialport import lib (Windows) to
+  # link -- only Rust std's own Windows system libs, below.
   if(WIN32)
-    # Some of sharpdx's Windows dependencies (a transitive older
-    # windows-sys pulled in by its serial-port backend) link against a
-    # crate-vendored import lib like windows.0.52.0.lib that isn't part
-    # of the Windows SDK/MSVC-CRT default search path -- SharpDataExchangeRust's
-    # package.sh vendors the actual file alongside sharpdx.lib for
-    # exactly this reason (see its own comment), so just add that
-    # directory to the link path; harmless if no such file was shipped.
-    target_link_directories(CalcU1600Qt PRIVATE ${CORE_ROOT}/Basic/vendor/sharpdx)
     # `cargo build` links the Windows system import libs Rust's std needs
     # (sockets, CSPRNG seeding, futex-based sync, ...) into sde.exe
     # automatically -- consuming the raw sharpdx.lib straight from CMake
@@ -203,14 +191,14 @@ if(EXISTS ${SHARPDX_LIB})
     # unresolved externals like __imp_freeaddrinfo (ws2_32). Rather than
     # hand-maintain a guessed list here (which silently drifts as
     # sharpdx's own dependencies change), prefer the authoritative list
-    # rustc itself reported for that exact build -- SharpDataExchangeRust's
+    # rustc itself reported for that exact build -- SharpDataExchange's
     # release packaging captures it via `rustc --print=native-static-libs`
     # into native-libs-windows.txt, and tools/fetch_sharpdx.sh vendors it
     # alongside sharpdx.lib when the release has one (see its own doc
-    # comment). Only fall back to a hardcoded guess for an older release
-    # (or a hand-placed sharpdx.lib) that predates this file existing.
+    # comment). Only fall back to a hardcoded guess for a hand-placed
+    # sharpdx.lib that came without this file.
     #
-    # On x86_64-pc-windows-msvc rustc's note is MSVC linker syntax --
+    # On *-pc-windows-msvc rustc's note is MSVC linker syntax --
     # space-separated bare `name.lib` filenames and the occasional
     # `/defaultlib:x` flag -- NOT the `-lname` GCC form, so this is passed
     # to the linker as raw link options (target_link_options), not treated
@@ -243,7 +231,7 @@ if(APPLE)
   set_source_files_properties(${APP_ICON_FILE} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
   target_sources(CalcU1600Qt PRIVATE ${APP_ICON_FILE})
   # Explicit bundle identifier (same ch.erzberger.* namespace as
-  # SharpDataExchangeRust's ch.erzberger.SharpDataExchange) -- needed for
+  # SharpDataExchange's ch.erzberger.SharpDataExchange) -- needed for
   # stable codesigning/notarization identity across CI runs, rather than
   # whatever default CMake would otherwise synthesize.
   set_target_properties(CalcU1600Qt PROPERTIES

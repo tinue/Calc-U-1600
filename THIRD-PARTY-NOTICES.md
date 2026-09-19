@@ -26,7 +26,7 @@ exact Qt version installed for that build in the GitHub Actions run log
 ## Other bundled components
 
 See `Core/Basic/vendor/sharpdx/` for `libsharpdx`, vendored from the
-sibling SharpDataExchangeRust project (own license terms; not part of
+sibling SharpDataExchange project (own license terms; not part of
 this project's GPLv3 source).
 
 ROM images under `roms/` are third-party copyrighted firmware belonging

@@ -3,7 +3,7 @@
 # Release script for Calc-U-1600.
 #
 # Unlike a local build, the actual cross-platform artifacts are produced by
-# .github/workflows/build.yml. Unlike SharpDataExchangeRust's release.yml,
+# .github/workflows/build.yml. Unlike SharpDataExchange's release.yml,
 # that workflow is NOT triggered by pushing a tag -- it is workflow_dispatch
 # only, with no release-publishing job of its own. This script's job is to
 # run the local checks, push the tag, TRIGGER build.yml itself against that

@@ -10,18 +10,18 @@ The `macos` job in [`workflows/build.yml`](workflows/build.yml):
 4. Packages it into a `.dmg` (with an `/Applications` symlink for drag-install), signs,
    notarizes, and staples the `.dmg` too.
 
-Same Apple Developer ID / Team ID (`7Q3QN9AV9J`) as SharpDataExchangeRust -- see that
+Same Apple Developer ID / Team ID (`7Q3QN9AV9J`) as SharpDataExchange -- see that
 repo's `.github/macos-signing.md` for the original cert/key setup. Bundle identifier
 here is `ch.erzberger.CalcU1600Qt` (set in `Qt6/CMakeLists.txt`).
 
-Unlike SharpDataExchangeRust, this workflow only uses the **Developer ID Application**
+Unlike SharpDataExchange, this workflow only uses the **Developer ID Application**
 cert -- a `.dmg` can be signed with it directly, no *Developer ID Installer* cert or
 `.pkg` needed. The `APPLE_CERT_INSTALLER_P12_BASE64` secret is still set (reused from
 the same six secrets) but currently unused here.
 
 ## Repo secrets
 
-Six secrets, same names/contents as SharpDataExchangeRust's:
+Six secrets, same names/contents as SharpDataExchange's:
 
 | Secret | Contents |
 |---|---|
@@ -34,7 +34,7 @@ Six secrets, same names/contents as SharpDataExchangeRust's:
 
 Since it's the same Apple Developer ID, these can be re-exported from the same Mac/
 Keychain that already has them (both cert private keys) rather than generating new
-certs -- see SharpDataExchangeRust's `.github/macos-signing.md` for the export steps.
+certs -- see SharpDataExchange's `.github/macos-signing.md` for the export steps.
 The App Store Connect API key (`.p8`) is a **one-time Apple download** -- if the
 original file is lost, generate a new key rather than trying to recover it.
 

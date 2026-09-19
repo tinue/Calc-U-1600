@@ -1,12 +1,12 @@
 #!/bin/sh
-# Downloads a prebuilt libsharpdx (+ header) from a SharpDataExchangeRust
+# Downloads a prebuilt libsharpdx (+ header) from a SharpDataExchange
 # GitHub release and vendors it under Core/Basic/vendor/sharpdx/, so BASIC
 # program loading (Core/Basic/BasicProgramSource.cpp, and everything that
 # depends on it -- see Qt6/CMakeLists.txt) can build on platforms other
 # than macOS without a local Rust toolchain.
 #
 # Counterpart to tools/refresh_sharpdx.sh, which instead builds from a
-# local SharpDataExchangeRust source checkout -- use that one on macOS if
+# local SharpDataExchange source checkout -- use that one on macOS if
 # you're developing sharpdx itself, or to refresh the committed macOS
 # binary. This script is for Linux/Windows, where there's no vendored
 # binary to refresh: it just downloads one. Unlike the macOS binary, the
@@ -15,23 +15,23 @@
 #
 # Usage: tools/fetch_sharpdx.sh
 # Env vars:
-#   SHARPDX_TAG       release tag to fetch (default: v0.2.0)
+#   SHARPDX_TAG       release tag to fetch (default: v0.2.1)
 #   SHARPDX_PLATFORM  override auto-detected platform: linux-x86_64,
-#                     linux-aarch64, or windows-x86_64 (there is no
-#                     windows-arm64 release yet -- see the MINGW*/MSYS*/
-#                     CYGWIN* branch below)
+#                     linux-aarch64, windows-x86_64, or windows-aarch64
+#                     (the release archive names' spelling)
 #
 # Writes:
 #   Core/Basic/vendor/sharpdx/sharpdx.h                 (header)
 #   Core/Basic/vendor/sharpdx/libsharpdx-linux.a        (Linux)
 #   Core/Basic/vendor/sharpdx/sharpdx.lib               (Windows)
-#   Core/Basic/vendor/sharpdx/native-libs-windows.txt   (Windows, if the
-#     release includes it -- see Qt6/CMakeLists.txt: the extra Windows
-#     system import libs (ws2_32, etc) Rust's std needs, straight from
-#     rustc's own --print=native-static-libs for that build, not a
-#     hand-maintained guess. Older releases (< the one that added this
-#     capture in package.sh) won't have the file; CMakeLists falls back to
-#     a hardcoded list in that case.)
+#   Core/Basic/vendor/sharpdx/native-libs-windows.txt   (Windows -- see
+#     Qt6/CMakeLists.txt: the Windows system import libs (ws2_32, etc)
+#     Rust's std needs, straight from rustc's own --print=native-static-libs
+#     for that build, not a hand-maintained guess.)
+#
+# Since v0.2.1 the release libs are built without sharpdx's serial
+# transport, so there's no libudev (Linux) or crate-vendored Windows
+# import lib (windows.0.52.0.lib) to link or vendor any more.
 #
 # The two library filenames are platform-specific on purpose, so a fetch
 # here can never collide with -- or dirty the git status of -- the
@@ -49,7 +49,7 @@ set -eu
 cd "$(dirname "$0")/.."
 REPO_ROOT=$(pwd)
 DST="$REPO_ROOT/Core/Basic/vendor/sharpdx"
-TAG=${SHARPDX_TAG:-v0.2.0}
+TAG=${SHARPDX_TAG:-v0.2.1}
 
 detect_platform() {
   os=$(uname -s)
@@ -65,14 +65,11 @@ detect_platform() {
     MINGW*|MSYS*|CYGWIN*)
       # Git Bash / MSYS on a Windows CI runner (`shell: bash` in Actions).
       # PROCESSOR_ARCHITECTURE reflects the *host* OS, not a cross-compile
-      # target -- fine for the native windows-x86_64 job, but the
-      # windows-arm64 job cross-compiles from an x86_64 host (see
-      # .github/workflows/build.yml), so it skips this script entirely
-      # rather than relying on detection here. This branch only exists for
-      # a genuinely native ARM64 Windows host/runner, and there's no
-      # windows-arm64 release to fetch yet either way.
+      # target -- both Windows jobs in .github/workflows/build.yml build
+      # natively (windows-arm64 on a windows-11-arm runner), so host ==
+      # target there. Cross-compiling? Set SHARPDX_PLATFORM explicitly.
       case "${PROCESSOR_ARCHITECTURE:-}${PROCESSOR_ARCHITEW6432:-}" in
-        *ARM64*) echo windows-arm64 ;;
+        *ARM64*) echo windows-aarch64 ;;
         *)       echo windows-x86_64 ;;
       esac
       ;;
@@ -86,18 +83,14 @@ detect_platform() {
 }
 
 PLATFORM=${SHARPDX_PLATFORM:-$(detect_platform)}
-if [ "$PLATFORM" = "windows-arm64" ]; then
-  echo "fetch_sharpdx.sh: no windows-arm64 SharpDataExchangeRust release yet -- skipping; CalcU1600Qt will build without preset/BASIC loading on this build" >&2
-  exit 0
-fi
 case "$PLATFORM" in
-  linux-x86_64|linux-aarch64) EXT=tar.gz ;;
-  windows-x86_64)             EXT=zip ;;
+  linux-x86_64|linux-aarch64)     EXT=tar.gz ;;
+  windows-x86_64|windows-aarch64) EXT=zip ;;
   *) echo "fetch_sharpdx.sh: unknown platform '$PLATFORM'" >&2; exit 1 ;;
 esac
 
 ARCHIVE="sharpdx-${PLATFORM}.${EXT}"
-URL="https://github.com/tinue/SharpDataExchangeRust/releases/download/${TAG}/${ARCHIVE}"
+URL="https://github.com/tinue/SharpDataExchange/releases/download/${TAG}/${ARCHIVE}"
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
@@ -120,28 +113,9 @@ mkdir -p "$DST"
 cp "$STAGE/include/sharpdx.h" "$DST/sharpdx.h"
 
 case "$PLATFORM" in
-  windows-x86_64)
+  windows-*)
     cp "$STAGE/lib/sharpdx.lib" "$DST/sharpdx.lib"
-    if [ -f "$STAGE/lib/native-libs-windows.txt" ]; then
-      cp "$STAGE/lib/native-libs-windows.txt" "$DST/native-libs-windows.txt"
-    else
-      echo "fetch_sharpdx.sh: release $TAG has no native-libs-windows.txt (older release?) -- CMakeLists will fall back to its hardcoded list" >&2
-      rm -f "$DST/native-libs-windows.txt"
-    fi
-    # native-libs-windows.txt above can name a crate-vendored import lib
-    # (e.g. windows.0.52.0.lib) that isn't on the Windows SDK/MSVC-CRT
-    # default search path -- package.sh ships the actual file alongside
-    # sharpdx.lib for exactly that reason (see its own comment), under
-    # its own name, not sharpdx.dll's unrelated import lib. Vendor
-    # whatever's there; harmless no-op on an older release that has none.
-    for extra in "$STAGE"/lib/*.lib; do
-      [ -e "$extra" ] || continue
-      base=$(basename "$extra")
-      [ "$base" = "sharpdx.lib" ] && continue
-      [ "$base" = "sharpdx.dll.lib" ] && continue
-      cp "$extra" "$DST/$base"
-      echo "fetch_sharpdx.sh: vendored extra native lib $base"
-    done
+    cp "$STAGE/lib/native-libs-windows.txt" "$DST/native-libs-windows.txt"
     ;;
   linux-*)
     cp "$STAGE/lib/libsharpdx.a" "$DST/libsharpdx-linux.a"

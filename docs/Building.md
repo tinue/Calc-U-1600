@@ -33,7 +33,7 @@ static library, `Core/Basic/vendor/sharpdx/`:
 
 - On **macOS** it's committed directly to the repo — nothing to do.
 - On **Linux/Windows** it's fetched at configure time by
-  `tools/fetch_sharpdx.sh` (see below) from a `SharpDataExchangeRust`
+  `tools/fetch_sharpdx.sh` (see below) from a `SharpDataExchange`
   GitHub release.
 
 This is a *soft* dependency: if the library isn't present, CMake skips
@@ -141,13 +141,14 @@ then package the staged folder with Inno Setup using
 — see the `windows-x86_64` job in `build.yml` for the exact staging
 layout. The installer is currently unsigned.
 
-CI also cross-compiles a native ARM64 build (`windows-arm64` job) from
-the same x86_64 runner, using Qt's `win64_msvc2022_arm64` target and
-`ilammy/msvc-dev-cmd`'s `amd64_arm64` cross toolchain, and passes
-`/DAPP_ARCH=arm64` to `ISCC.exe` so the `.iss` above produces an
-ARM64-only `Calc-U-1600-Setup-arm64.exe` instead. It skips BASIC preset
-loading (no `windows-arm64` SharpDataExchangeRust release exists yet —
-see `tools/fetch_sharpdx.sh`), otherwise identical to the x86_64 build.
+CI also builds a native ARM64 version (`windows-arm64` job) on a
+`windows-11-arm` runner, the same way as x86_64 but with Qt's
+`win64_msvc2022_arm64` kit, `ilammy/msvc-dev-cmd`'s `arm64` toolchain and
+the `windows-aarch64` sharpdx release. It passes `/DAPP_ARCH=arm64` to
+`ISCC.exe`, so the `.iss` above produces an ARM64-only
+`Calc-U-1600-Setup-arm64.exe` instead. To build it yourself on a Windows
+ARM64 machine, run the steps above from an ARM64 developer prompt
+(`vcvarsall.bat arm64`) with the ARM64 Qt kit.
 
 ## Running the tests
 

@@ -62,7 +62,7 @@ BasicBinaryImage parseBasicBinaryTransfer(const uint8_t* data, size_t len) {
         }
         // Trailer 0x0E..0x0F is the end-of-header marker. The reference doc
         // and the captured `.bbin` fixtures have it as `00 0F`; the
-        // SharpDataExchange / SharpDataExchangeRust `convert` toolchain
+        // SharpDataExchangeJava / SharpDataExchange `convert` toolchain
         // emits the byte-swapped `00 F0`. The bytes carry no payload
         // information (length is at 0x05..0x07), so accept either ordering.
         const bool trailerOk = (data[0x0E] == 0x00 && data[0x0F] == 0x0F) ||

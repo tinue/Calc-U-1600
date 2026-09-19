@@ -18,18 +18,17 @@ name: Build
 # Qt6/CMakeLists.txt's MACOSX_BUNDLE), then Developer-ID-signs the .app
 # (hardened runtime), notarizes + staples it, and packages it into a
 # signed/notarized/stapled .dmg -- same Developer ID/Team ID as
-# SharpDataExchangeRust, see .github/macos-signing.md for the repo
+# SharpDataExchange, see .github/macos-signing.md for the repo
 # secrets this needs and how to rotate them. The Windows jobs run
 # windeployqt so the staged folder is genuinely standalone-runnable (Qt
 # DLLs + MSVC runtime bundled alongside the .exe, since Windows has no
 # equivalent to Linux's "the system already has Qt installed" or macOS's
 # shared Homebrew prefix), then package that folder into an Inno Setup
 # installer (Start Menu shortcut, optional desktop icon, uninstaller)
-# via Qt6/resources/windows/calc-u-1600.iss. windows-arm64 cross-compiles
-# from an ordinary x86_64 windows-latest runner (no GitHub-hosted native
-# ARM64 Windows runner generally available yet) and skips vendoring
-# sharpdx (preset/BASIC loading), since no windows-arm64
-# SharpDataExchangeRust release exists -- see that job's own comments.
+# via Qt6/resources/windows/calc-u-1600.iss. windows-arm64 builds
+# natively on a windows-11-arm runner (free for public repos, like every
+# standard runner used here) with Qt's native ARM64 kit, and fetches
+# SharpDataExchange's sharpdx-windows-aarch64 release like the other jobs.
 on:
   # Manual trigger only (Actions tab, or `gh workflow run build.yml`).
   # The eventual plan is to trigger on pre-release tag creation instead.
@@ -47,14 +46,14 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake ninja-build patchelf \
             qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev \
-            qt6-gtk-platformtheme qt6ct libudev-dev
+            qt6-gtk-platformtheme qt6ct
 
       - name: Fetch ROMs
         shell: bash
         run: tools/fetch_roms.sh
 
       # Vendors Core/Basic/vendor/sharpdx/libsharpdx-linux.a from a
-      # SharpDataExchangeRust GitHub release (see tools/fetch_sharpdx.sh)
+      # SharpDataExchange GitHub release (see tools/fetch_sharpdx.sh)
       # so Qt6/CMakeLists.txt builds in preset/BASIC loading. Soft-fail: a
       # missing/unreachable release just means Calc-U-1600 builds without
       # that feature (see CMakeLists.txt's own SHARPDX_LIB EXISTS check),
@@ -204,7 +203,7 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake ninja-build patchelf \
             qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev \
-            qt6-gtk-platformtheme qt6ct libudev-dev
+            qt6-gtk-platformtheme qt6ct
 
       - name: Fetch ROMs
         shell: bash
@@ -328,7 +327,7 @@ jobs:
         run: $(brew --prefix qt)/bin/macdeployqt Qt6/build/Calc-U-1600.app
 
       # See ../macos-signing.md (same Developer ID, team 7Q3QN9AV9J, as
-      # SharpDataExchangeRust) for how these repo secrets were produced and
+      # SharpDataExchange) for how these repo secrets were produced and
       # how to rotate them.
       - name: Import signing certificate
         env:
@@ -495,58 +494,41 @@ jobs:
           if-no-files-found: error
 
   windows-arm64:
-    # No GitHub-hosted native ARM64 Windows runner is generally available
-    # yet, so this cross-compiles from an ordinary (x86_64) windows-latest
-    # runner: install-qt-action's win64_msvc2022_arm64 arch fetches
-    # ARM64-target Qt binaries (its qmake/tools stay x86_64, host-side),
-    # and msvc-dev-cmd's amd64_arm64 arch sets up the matching MSVC cross
-    # toolchain (cl.exe etc. also stay x86_64 host binaries, but emit
-    # ARM64 code) -- the standard way to build Qt-for-Windows-on-ARM.
-    runs-on: windows-latest
+    # Native ARM64 build: host == target, so this is the windows-x86_64
+    # job with ARM64 names -- Qt's native win64_msvc2022_arm64 kit (aqt
+    # host windows_arm64), msvc-dev-cmd's arm64 toolchain, and a plain
+    # windeployqt that deploys that kit's own ARM64 DLLs.
+    runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install Qt6 (MSVC, ARM64 target)
+      - name: Install Qt6 (MSVC, ARM64)
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.2' # keep in sync with the windows-x86_64 job above
-          host: 'windows'
+          host: 'windows_arm64'
           target: 'desktop'
-          # NOT 'win64_msvc2022_arm64' -- that string doesn't exist in
-          # aqt's package index (`aqt list-qt windows desktop --arch
-          # 6.8.2` was the way to confirm this after a CI failure:
-          # "packages ['qt_base'] were not found"). The real identifier
-          # is the "_cross_compiled" one below.
-          arch: 'win64_msvc2022_arm64_cross_compiled'
+          arch: 'win64_msvc2022_arm64'
 
-      - name: Set up MSVC dev environment (x86_64 host, ARM64 target)
+      - name: Set up MSVC dev environment (ARM64)
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: amd64_arm64
+          arch: arm64
 
       - name: Install Ninja
         uses: seanmiddleditch/gha-setup-ninja@v6
 
-      # `shell: bash` runs it via the Git Bash already on windows-latest
-      # runners -- tools/fetch_roms.sh is a POSIX sh script. ROMs aren't
-      # architecture-specific, so this is identical to the x86_64 job.
+      # ROMs aren't architecture-specific -- identical to the x86_64 job.
       - name: Fetch ROMs
         shell: bash
         run: tools/fetch_roms.sh
 
-      # Unlike the other jobs, sharpdx (preset/BASIC loading) is skipped
-      # here rather than fetched: there is no windows-arm64
-      # SharpDataExchangeRust release to vendor, and fetching the
-      # windows-x86_64 one would hand the ARM64-target linker a
-      # wrong-machine-type .lib (fails the build, not a soft-fail). See
-      # Qt6/CMakeLists.txt's EXISTS(SHARPDX_LIB) gating -- CalcU1600Qt
-      # still builds and runs fine without it, just with "Open Preset…"
-      # reporting the feature unavailable. Revisit once SharpDataExchangeRust
-      # ships an arm64 Windows release.
-      - name: Skip sharpdx (no windows-arm64 release yet)
+      # Detects the ARM64 host and fetches sharpdx-windows-aarch64.zip --
+      # see the linux-x86_64 job's identical step for what this does.
+      - name: Fetch sharpdx (preset loading)
         shell: bash
-        run: |
-          echo "skipping tools/fetch_sharpdx.sh -- no windows-arm64 SharpDataExchangeRust release"
+        continue-on-error: true
+        run: tools/fetch_sharpdx.sh
 
       - name: Configure
         run: cmake -S Qt6 -B Qt6/build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -561,29 +543,14 @@ jobs:
           Copy-Item Qt6/build/Calc-U-1600.exe Qt6/dist/
           # See the windows-x86_64 job's identical step for what this does.
           Copy-Item Qt6/build/resources Qt6/dist/resources -Recurse
-          # For this cross-compiled kit, windeployqt is a host-side (x64)
-          # tool that lives under QT_HOST_PATH's bin\ -- unlike the target
-          # kit's own bin\ (msvc2022_arm64\bin, which IS on PATH), it's
-          # not added to PATH automatically, so it must be invoked by full
-          # path here. Without --qtpaths, windeployqt resolves "which Qt"
-          # to deploy relative to its OWN location (the host x64 tree), so
-          # it silently bundled x64 Qt6*.dll/plugin DLLs next to a
-          # genuinely ARM64 Calc-U-1600.exe -- confirmed via a PE-header
-          # dump and the app failing on real ARM64 hardware with
-          # 0xc000007b (invalid image format). --qtpaths, pointed at the
-          # target kit's own qtpaths6.bat shim (present specifically for
-          # this cross-deploy scenario -- see its neighboring
-          # target_qt.conf), tells windeployqt to deploy from
-          # QT_ROOT_DIR (the ARM64 kit) instead.
-          & "$env:QT_HOST_PATH\bin\windeployqt.exe" --qtpaths "$env:QT_ROOT_DIR\bin\qtpaths6.bat" --release --compiler-runtime Qt6/dist/Calc-U-1600.exe
+          windeployqt --release --compiler-runtime Qt6/dist/Calc-U-1600.exe
 
-      # Verifies every staged .exe/.dll is genuinely ARM64 (not host x64) --
-      # see the --qtpaths comment above for why this was necessary. Fails
-      # the build if windeployqt (or anything else) regresses to bundling
-      # wrong-arch binaries again, rather than shipping a silently broken
-      # installer. vc_redist.arm64.exe is excluded: Microsoft's redist
-      # bootstrapper stubs are themselves x86 launchers by design,
-      # regardless of which runtime architecture they install.
+      # Verifies every staged .exe/.dll is genuinely ARM64 -- a guard from
+      # the earlier cross-compiled setup, where windeployqt silently
+      # bundled host x64 Qt DLLs next to an ARM64 .exe (0xc000007b on real
+      # hardware). Cheap, so kept. vc_redist.arm64.exe is excluded:
+      # Microsoft's redist bootstrapper stubs are themselves x86 launchers
+      # by design, regardless of which runtime architecture they install.
       - name: Verify staged binaries are ARM64
         shell: pwsh
         run: |

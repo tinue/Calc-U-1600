@@ -1,16 +1,18 @@
-# Vendored `libsharpdx` (SharpDataExchangeRust C ABI)
+# Vendored `libsharpdx` (SharpDataExchange C ABI)
 
 `libsharpdx.a` + `sharpdx.h` are the prebuilt static library and generated C
 header of the **`convert`**-verb tokenizer from
-[`SharpDataExchangeRust`](../../../../SharpDataExchangeRust) (crate `sharpdx`,
-version 0.1.4). Calc-U-1600 links it so a `program: format: basic-binary`
+[`SharpDataExchange`](../../../../SharpDataExchange) (crate `sharpdx`,
+version 0.2.1). Calc-U-1600 links it so a `program: format: basic-binary`
 preset section can point `path:` at a plain-text `.bas` listing and have it
 tokenized in-process at load time (see `Core/Basic/BasicProgramSource.cpp`).
 
 We vendor the built artifact rather than adding a Rust toolchain to the
 Calc-U-1600 build. Only `sde_tokenize` / `sde_detect` / `sde_last_error` /
 `sde_buf_free` are used; the library does no file I/O and never panics across
-the FFI boundary.
+the FFI boundary. It is built without sharpdx's `serial` feature
+(`--lib --no-default-features`), so it links no serial-port code or
+frameworks.
 
 ## Architecture
 
@@ -35,6 +37,6 @@ our own crate objects are built at 15.6 by `refresh_sharpdx.sh`.
 ## Refreshing
 
 Run `tools/refresh_sharpdx.sh` from the repo root after the sibling
-`SharpDataExchangeRust` checkout changes. It runs `cargo build --release`
-there and copies `target/release/libsharpdx.a` + `include/sharpdx.h` over
-these files. Commit the result.
+`SharpDataExchange` checkout changes. It runs
+`cargo build --release --lib --no-default-features` there and copies
+`target/release/libsharpdx.a` + `include/sharpdx.h` over these files. Commit the result.
