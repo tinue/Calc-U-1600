@@ -22,6 +22,12 @@ constexpr uint32_t kReserve = 0xC5;
 constexpr uint32_t kPc1600SlotBase = 0x8000;
 constexpr uint32_t kPc1600S0Base = 0xC000;
 constexpr uint32_t kPc1600WorkArea = 0xF000;  // F000-FFFF: BASIC/IOCS work area
+// Top of the work area (TRM §6.1 block E, German manual's work-area dump):
+// FF00-FF3F holds WAKE$(0)/WAKE$(1), FF40-FFFF is unused by the system but
+// reserved for the CE-1F01A bar-code reader software -- the de-facto home
+// of many small published PC-1600 routines.
+constexpr uint32_t kPc1600Wake = 0xFF00;
+constexpr uint32_t kPc1600FreeTop = 0xFF40;
 
 std::string hex(uint32_t v) {
     char b[16];
@@ -259,10 +265,18 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
     // `CALL #2,&80C5` runs code loaded at $80C5 in a slot 2 CE-1600M.
     a.callCommand = slot == Slot::S2 ? "CALL #2," + hex(entry) : "CALL " + hex(entry);
 
-    const std::string workAreaWarning =
-        slot == Slot::S0 && end > kPc1600WorkArea
-            ? " Warning: the code reaches into the &F000-&FFFF system work area and will be overwritten."
-            : "";
+    std::string workAreaWarning;
+    if (slot == Slot::S0 && end > kPc1600WorkArea) {
+        if (addr < kPc1600Wake)
+            workAreaWarning = " Warning: the code reaches into the system work area (&F000-&FEFF) and will be "
+                              "overwritten.";
+        else if (addr < kPc1600FreeTop)
+            workAreaWarning = " Warning: &FF00-&FF3F holds the WAKE$ strings -- a long WAKE$ and the code "
+                              "overwrite each other. Load it at &FF40 or higher.";
+        else
+            workAreaWarning = " &FF40-&FFFF is unused by the system but officially reserved for the CE-1F01A "
+                              "bar-code reader software, so don't use both.";
+    }
 
     // Which run of the BASIC program area (if any) the code lands in.
     int hit = -1;

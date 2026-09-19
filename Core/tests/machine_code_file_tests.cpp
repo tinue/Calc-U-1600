@@ -207,6 +207,15 @@ void test_advice_pc1600() {
     a = machinecode::advice(Target::PC1600, Slot::S0, 0xEFF0, 0x20, 0, 0, 0, stock);
     CHECK(a.newNote.find("work area") != std::string::npos);
 
+    // Top of the work area: WAKE$ storage, then the de-facto free FF40-FFFF.
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0xFF3A, 0xC2, 0, 0, 0, stock);
+    CHECK(a.newCommand.empty());
+    CHECK(a.newNote.find("WAKE$") != std::string::npos);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0xFF40, 0xBC, 0, 0, 0, stock);
+    CHECK(a.newCommand.empty());
+    CHECK(a.newNote.find("Warning") == std::string::npos);
+    CHECK(a.newNote.find("CE-1F01A") != std::string::npos);
+
     // Module in slot 1: BASIC starts there, so NEW "S0:" counts from $8000.
     a = machinecode::advice(Target::PC1600, Slot::S1, 0x80C5, 0x40, 0x80D0, 0, 0, slot1First);
     CHECK(a.newCommand == "NEW \"S0:\",&105");
