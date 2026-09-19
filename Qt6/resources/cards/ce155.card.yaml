@@ -39,7 +39,7 @@ regions:
     content:
       kind: regular
       writable: true
-      power-up-fill: 0xFF
+      power-up-fill: 0x00
     addressing:
       any-of:
         # Y0 enable + the on-module decoder testing A11=A12=A13=1.

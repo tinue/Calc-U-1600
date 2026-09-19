@@ -22,9 +22,9 @@ bool LH5803Memory::loadROMFile(const std::string& path) {
 }
 
 void LH5803Memory::reset() {
-    // RAM powers up reading as 0xFF, not 0 -- the real-hardware SRAM
-    // convention used across the PC-1500/1500A/1600 family.
-    m_internalRam.fill(0xFF);
+    // RAM powers up as 0x00 -- CMOS RAM without supply comes back (mostly)
+    // zero, the convention used across the PC-1500/1500A/1600 family.
+    m_internalRam.fill(0x00);
 }
 
 uint8_t LH5803Memory::readME0(uint16_t addr) {

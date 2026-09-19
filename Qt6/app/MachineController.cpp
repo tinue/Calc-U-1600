@@ -210,8 +210,11 @@ void MachineController::resetToPrompt(bool allReset) {
         }
         runBootToPrompt(*m_pc1600);
     } else if (m_pc1500) {
-        // No distinct ALL RESET level exists for PC1500/1500A in Core.
-        m_pc1500->reset();
+        if (allReset) {
+            m_pc1500->allReset();
+        } else {
+            m_pc1500->reset();
+        }
         runBootToPrompt(*m_pc1500);
     }
     // After the boot, not before: it ran flat out through seconds of

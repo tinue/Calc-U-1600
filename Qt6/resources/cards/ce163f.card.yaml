@@ -68,7 +68,7 @@ regions:
         - banks: "0-7"
           kind: regular
           writable: true
-          power-up-fill: 0xFF
+          power-up-fill: 0x00
         - banks: "8-15"
           kind: flash
           power-up-fill: 0xAA

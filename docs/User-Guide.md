@@ -45,8 +45,9 @@ calculator's own faceplate has, left to right:
 **Reset** is in the **Machine** menu: **Reset** (Cmd-R / Ctrl-R) is a
 normal reset (memory and BASIC program untouched, same as the real
 hardware's reset button); **Reset All** (Cmd-Shift-R / Ctrl-Shift-R) is
-the PC-1600's deeper ALL RESET level (on the PC-1500/1500A, which have no
-distinct ALL RESET, it's the same as Reset). Both run the boot at full
+the PC-1600's deeper ALL RESET level; on the PC-1500/1500A, which have no
+ALL RESET of their own, it clears all RAM to zero first, like taking the
+batteries out. Both run the boot at full
 speed until the prompt appears, then set the clock from the computer.
 
 ## The calculator & keyboard
@@ -210,7 +211,7 @@ regions:
     content:
       kind: regular
       writable: true
-      power-up-fill: 0xFF
+      power-up-fill: 0x00
     addressing:
       any-of:
         - chip-select: Y0

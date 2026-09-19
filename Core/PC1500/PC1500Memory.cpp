@@ -23,10 +23,16 @@ PC1500Memory::PC1500Memory(PC1500Variant variant)
     : m_variant(variant),
       m_userRamSize(variant == PC1500Variant::PC1500A ? kUserRamSizeA : kUserRamSizePlain),
       m_systemRamAddrMask(variant == PC1500Variant::PC1500A ? 0x7FF : 0x3FF) {
-    m_rom.fill(0xFF);
-    m_userRam.fill(0xFF);
-    m_displayRam.fill(0xFF);
-    m_systemRam.fill(0xFF);
+    m_rom.fill(0xFF);  // open until a ROM is loaded
+    // Power-up: CMOS RAM that has lost its supply comes back (mostly) zero
+    // on real hardware, not 0xFF -- modelled as all 0x00.
+    clearRam();
+}
+
+void PC1500Memory::clearRam() {
+    m_userRam.fill(0x00);
+    m_displayRam.fill(0x00);
+    m_systemRam.fill(0x00);
 }
 
 bool PC1500Memory::loadROM(const uint8_t* data, size_t size) {
@@ -46,16 +52,9 @@ bool PC1500Memory::loadROMFile(const std::string& path) {
 }
 
 void PC1500Memory::reset() {
-    // RAM powers up reading as 0xFF, not 0 -- confirmed real hardware
-    // behavior. A real CPU RESET line doesn't actually clear RAM at all
-    // (only CPU registers) -- this reset() fills to the same fixed,
-    // deterministic state every time purely so headless tests get
-    // reproducible cold-boot behavior, which is what "reset()" is used
-    // for throughout this project's test suite; it isn't meant to model
-    // the RESET pin's real electrical scope.
-    m_userRam.fill(0xFF);
-    m_displayRam.fill(0xFF);
-    m_systemRam.fill(0xFF);
+    // A real RESET leaves RAM alone -- the BASIC program, variables and
+    // system area survive it, and the ROM's own start-up code decides what
+    // to keep. Clearing RAM is clearRam()'s job (power-up, ALL RESET).
     m_dda = m_opa = m_ddb = m_opb = 0;
     m_opc = 0;
     m_piezo.setLevel(false);

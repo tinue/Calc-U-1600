@@ -36,7 +36,7 @@ regions:
     content:
       kind: regular
       writable: true
-      power-up-fill: 0xFF
+      power-up-fill: 0x00
     addressing:
       any-of:
         # PVOUT low -> module's low 16 KB half.

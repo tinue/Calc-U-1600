@@ -25,7 +25,7 @@ class PlainRamCard : public ExpansionCard {
 public:
     static constexpr size_t kHalfBank = 0x4000; // 16KB
 
-    explicit PlainRamCard(size_t sizeBytes) : m_ram(sizeBytes, 0xFF) {}
+    explicit PlainRamCard(size_t sizeBytes) : m_ram(sizeBytes, 0x00) {}
 
     size_t size() const { return m_ram.size(); }
     std::vector<uint8_t> debugImage() const override { return m_ram; }
@@ -51,7 +51,7 @@ public:
     }
 
 private:
-    std::vector<uint8_t> m_ram; // powers up 0xFF
+    std::vector<uint8_t> m_ram; // powers up 0x00 (CMOS RAM after a power loss)
 
     // A huge value when pin 4 isn't asserted, so the size check rejects it.
     size_t offset(const PinState& p) const {

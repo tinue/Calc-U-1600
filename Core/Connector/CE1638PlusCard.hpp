@@ -57,9 +57,10 @@
 class CE1638PlusCard : public ExpansionCard {
 public:
     CE1638PlusCard() {
-        for (auto& bank : m_banks) bank.fill(0xFF);
-        m_unbanked[0].fill(0xFF);
-        m_unbanked[1].fill(0xFF);
+        // CMOS RAM powers up (mostly) zero.
+        for (auto& bank : m_banks) bank.fill(0x00);
+        m_unbanked[0].fill(0x00);
+        m_unbanked[1].fill(0x00);
     }
 
     bool respondsToRead(const PinState& pins, uint8_t& outValue) const override {

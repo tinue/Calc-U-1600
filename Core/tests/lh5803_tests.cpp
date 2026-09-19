@@ -94,7 +94,7 @@ void test_reset_clears_ram_not_rom() {
     mem.loadROM(rom.data(), rom.size());
     mem.poke(0x4000, 0xAB);
     mem.reset();
-    CHECK(mem.peek(0x4000) == 0xFF); // RAM powers up 0xFF, see .cpp comment
+    CHECK(mem.peek(0x4000) == 0x00); // RAM powers up 0x00, see .cpp comment
     CHECK(mem.peek(0xC000) == 0x42); // ROM untouched
 }
 

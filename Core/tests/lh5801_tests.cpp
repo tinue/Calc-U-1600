@@ -906,6 +906,22 @@ void test_on_key_press_sets_break_flag() {
     CHECK((machine.memory().readME1(0xF00B) & 0x02) != 0);
 }
 
+// RAM powers up 0x00 (CMOS RAM after a power loss); the reset button keeps
+// RAM (a real RESET only resets the CPU/chips), Reset All clears it.
+void test_pc1500_ram_powerup_reset_and_all_reset() {
+    PC1500Machine machine;
+    CHECK(machine.memory().peek(0x40C5) == 0x00);  // user RAM
+    CHECK(machine.memory().peek(0x7800) == 0x00);  // system RAM
+    machine.memory().poke(0x40C5, 0x5A);
+    machine.memory().poke(0x7800, 0xA5);
+    machine.reset();
+    CHECK(machine.memory().peek(0x40C5) == 0x5A);
+    CHECK(machine.memory().peek(0x7800) == 0xA5);
+    machine.allReset();
+    CHECK(machine.memory().peek(0x40C5) == 0x00);
+    CHECK(machine.memory().peek(0x7800) == 0x00);
+}
+
 // AUTO POWER OFF / the OFF key park the CPU in a genuine HLT with the
 // timer stopped (TM==0), matching real hardware cutting the clock --
 // LH5801::tickTimer() is then a no-op (see its own doc comment), so the
@@ -1343,6 +1359,7 @@ int main() {
     test_io_chip_keyboard_wiring_through_memory();
     test_rtc_tp_rate_and_gating();
     test_rtc_if_does_not_clear_on_read();
+    test_pc1500_ram_powerup_reset_and_all_reset();
     test_rtc_opb_and_if_never_disagree_within_one_poll();
     test_rtc_calendar_seed_and_read();
     test_preset_syncclock_reseeds_rtc();

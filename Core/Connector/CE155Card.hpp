@@ -27,7 +27,7 @@
 // wrong.
 class CE155Card : public ExpansionCard {
 public:
-    CE155Card() { m_ram.fill(0xFF); }
+    CE155Card() { m_ram.fill(0x00); }  // CMOS RAM powers up (mostly) zero
 
     bool respondsToRead(const PinState& pins, uint8_t& outValue) const override {
         int off = regionOffset(pins);

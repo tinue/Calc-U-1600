@@ -521,9 +521,9 @@ Distinct from D1 (addressing) and D2 (content kind) is *what's inside* a
 region or bank-range at load time:
 
 - A **Regular, writable** range typically starts as whatever the real
-  chip's power-up state is (per this project's own established
-  convention — `PC1500Memory`'s RAM arrays power up as `0xFF`, not zero,
-  matching real SRAM) — the definition
+  chip's power-up state is (per this project's own convention — RAM
+  powers up as `0x00`: CMOS RAM that has lost its supply comes back
+  mostly zero on real hardware, not `0xFF`) — the definition
   file should be able to declare this per range rather than assume the
   emulator's global default is always right for every module (a
   battery-backed module that's been "used" already, for instance, isn't

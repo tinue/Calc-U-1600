@@ -47,7 +47,7 @@ void test_slot1_16k_readwrite_and_powerup_fill() {
     CHECK(mem.attachSlot1(PC1600Memory::kBankSize));
     CHECK(mem.slot1Attached());
     bank.writePort31(0x00); // pageCBank() == 0
-    CHECK(mem.read(0x8000) == 0xFF); // powers up 0xFF
+    CHECK(mem.read(0x8000) == 0x00); // powers up 0x00
     mem.write(0x8000, 0x11);
     CHECK(mem.read(0x8000) == 0x11);
     mem.write(0xBFFF, 0x22);

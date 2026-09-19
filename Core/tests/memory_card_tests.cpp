@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <fstream>
 #include <memory>
@@ -544,7 +545,7 @@ void test_ce1638_card_yaml_if_present() {
 
     sel.address = 0;
     sd->respondsToWrite(sel, 0);
-    CHECK(sd->respondsToRead(w, v) && v == 0xFF);  // bank 0 untouched
+    CHECK(sd->respondsToRead(w, v) && v == 0x00);  // bank 0 untouched (default fill)
 }
 
 void test_ce163f_card_yaml_if_present() {
@@ -1671,7 +1672,25 @@ void test_resolve_modulespec_multi_dir() {
 
 }  // namespace
 
+// Without `power-up-fill`, regular RAM powers up 0x00 (CMOS RAM after a
+// power loss) and flash powers up erased (0xFF).
+void test_power_up_fill_defaults_per_kind() {
+    std::string yaml = kFlashByBankYaml;
+    for (const char* line : {", power-up-fill: 0xFF", "          power-up-fill: 0xAA\n"}) {
+        const size_t at = yaml.find(line);
+        CHECK(at != std::string::npos);
+        if (at != std::string::npos) yaml.erase(at, std::strlen(line));
+    }
+    MemoryCardDefinition def;
+    std::string err;
+    CHECK(parseMemoryCardDefinition(yaml, &def, &err));
+    if (def.regions.size() != 1) return;
+    CHECK(def.regions[0].contentForBank(0).powerUpFill == 0x00);
+    CHECK(def.regions[0].contentForBank(2).powerUpFill == 0xFF);
+}
+
 int run_memory_card_tests() {
+    test_power_up_fill_defaults_per_kind();
     test_yaml_block_map_and_scalars();
     test_yaml_hex_ints();
     test_yaml_block_and_flow_sequences();

@@ -50,7 +50,12 @@ public:
     PC1500Variant variant() const { return m_memory.variant(); }
 
     bool loadROMFile(const std::string& path);
+    /// The reset button: CPU and chips reset, RAM kept.
     void reset();
+    /// Reset with all RAM cleared to 0x00 first (Machine > Reset All). The
+    /// PC-1500 has no separate ALL RESET line; this models pulling the
+    /// batteries, like PC1600Machine::allReset().
+    void allReset();
 
     /// Seed the uPD1990AC real-time clock from a host date/time so BASIC's
     /// TIME reads back something sensible instead of 00000. `month` is

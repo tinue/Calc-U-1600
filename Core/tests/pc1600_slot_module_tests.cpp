@@ -124,7 +124,7 @@ void test_plain_ram_card_via_attach_slot_card() {
     CHECK(m.memory().read(0xBFFF) == 0x22);
 
     selectPageCBank(m, 1); // Slot 1 bank 1 -> high 16KB half (PVOUT = 1)
-    CHECK(m.memory().read(0x8000) == 0xFF); // distinct region, still powered-up
+    CHECK(m.memory().read(0x8000) == 0x00); // distinct region, still powered-up
     m.memory().write(0x8000, 0xEE);
     CHECK(m.memory().read(0x8000) == 0xEE);
 
@@ -236,7 +236,7 @@ void test_ce1638plus_in_slot1_banked_window() {
 
     // Strobe pin 18 (any write into &B000-&B7FF): A0-A3 = 5 -> bank 5.
     m.memory().write(0xB005, 0x00);
-    CHECK(m.memory().read(0x8000) == 0xFF); // bank 5, powered-up, own contents
+    CHECK(m.memory().read(0x8000) == 0x00); // bank 5, powered-up, own contents
     m.memory().write(0x8000, 0xBB);
     CHECK(m.memory().read(0x8000) == 0xBB);
 

@@ -278,11 +278,11 @@ void test_debug_slot_image_returns_the_whole_card_backing_store() {
     CHECK(m.debugSlotImage(1).empty()); // empty slot -> empty image
     CHECK(m.debugSlotImage(2).empty());
 
-    // A banked card: 8 x 16 KB, contiguous, powered up 0xFF.
+    // A banked card: 8 x 16 KB, contiguous, powered up 0x00.
     m.memory().attachSlot1Card(std::make_unique<CE1638PlusCard>());
     std::vector<uint8_t> img = m.debugSlotImage(1);
     CHECK(img.size() == 8u * 0x4000);
-    CHECK(img[0] == 0xFF && img.back() == 0xFF);
+    CHECK(img[0] == 0x00 && img.back() == 0x00);
 
     // Plain 32 KB RAM in Slot 2 -> a 32 KB image.
     CHECK(m.memory().attachSlot2(2 * PC1600Memory::kBankSize));
@@ -309,7 +309,7 @@ void test_debug_write_internal_ram_and_slot_image_land_directly() {
     CHECK(img.size() == 2u * 0x4000);
     CHECK(img[0x4000] == 0x11 && img[0x4002] == 0x33);
     CHECK(!m.debugWriteSlotImage(1, 0x7FFF, block, 3));  // past the 32 KB end -> nothing
-    CHECK(m.debugSlotImage(1)[0x7FFF] == 0xFF);
+    CHECK(m.debugSlotImage(1)[0x7FFF] == 0x00);
 }
 
 void test_debug_bank_state_reports_registers_and_card_bank() {

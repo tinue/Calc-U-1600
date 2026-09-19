@@ -83,7 +83,9 @@ struct FlashProtocol {
 struct RegionContent {
     ContentKind kind = ContentKind::Regular;
     bool writable = true;
-    uint8_t powerUpFill = 0xFF;
+    // Regular RAM powers up 0x00 (CMOS RAM after a power loss); the flash
+    // parser sets 0xFF (erased) unless the file says otherwise.
+    uint8_t powerUpFill = 0x00;
     bool hasWriteProtect = false;
     bool writeProtectDefaultProtected = false;
     bool writeProtectPersisted = false;
@@ -565,6 +567,7 @@ inline bool parseContent(const YamlNode& node, RegionContent* out, std::string* 
             return false;
         out->kind = ContentKind::Flash;
         out->writable = false;  // meaningless here -- gated by the command decoder, not this flag
+        out->powerUpFill = 0xFF;  // erased, unless `power-up-fill` below says otherwise
         if (const YamlNode* pf = body->find("power-up-fill")) {
             long v = 0;
             if (!getInt(*pf, "power-up-fill", &v, error)) return false;

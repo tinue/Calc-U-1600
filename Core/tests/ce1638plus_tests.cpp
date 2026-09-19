@@ -64,7 +64,7 @@ void test_ce1638plus_banking() {
     CHECK(card.currentBank() == 5);
 
     // Bank 5 is a distinct 16KB region from bank 0: untouched, default fill.
-    CHECK(card.respondsToRead(makePins(0x0000, /*y0=*/true), v) && v == 0xFF);
+    CHECK(card.respondsToRead(makePins(0x0000, /*y0=*/true), v) && v == 0x00);
     CHECK(card.respondsToWrite(makePins(0x0000, /*y0=*/true), 0x33));
     CHECK(card.respondsToRead(makePins(0x0000, /*y0=*/true), v) && v == 0x33);
 

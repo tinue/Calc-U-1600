@@ -84,7 +84,7 @@ void test_ce163f_init_pattern_ram_vs_flash() {
     CE163FCard card;
     for (int b = 0; b < 16; b++) {
         card.respondsToWrite(trigger(uint16_t(b)), 0x00);
-        uint8_t expected = (b < 8) ? 0xFF : 0xAA; // flash banks power up 0xAA
+        uint8_t expected = (b < 8) ? 0x00 : 0xAA; // RAM powers up 0x00, flash 0xAA
         CHECK(readWin(card, 0x0000) == expected);
         CHECK(readWin(card, 0x3FFF) == expected);
     }

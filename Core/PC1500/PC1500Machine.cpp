@@ -21,6 +21,14 @@ void PC1500Machine::reset() {
     if (m_ce150Card) m_ce150Card->reset();
 }
 
+void PC1500Machine::allReset() {
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_memory.clearRam();
+    }
+    reset();
+}
+
 bool PC1500Machine::attachCE150(const uint8_t* rom, size_t romSize) {
     if (romSize != Ce150Card::kRomSize) return false;
     auto card = std::make_unique<Ce150Card>();

@@ -44,7 +44,7 @@ regions:
     content:
       kind: regular
       writable: true
-      power-up-fill: 0xFF
+      power-up-fill: 0x00
     # Region-level "is this a banked access at all" -- a pure gate, no
     # span/maps-to. The whole enable is Y0; the real slice mapping lives
     # in bank-window.

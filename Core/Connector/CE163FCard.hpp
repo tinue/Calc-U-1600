@@ -58,7 +58,7 @@
 // 3-instr poll loop, all regs frozen).
 //
 // Power-up fill differs by bank kind, purely as an analysis aid: RAM banks
-// (0-7) fill 0xFF (this project's SRAM power-up convention); FLASH banks
+// (0-7) fill 0x00 (this project's RAM power-up convention); FLASH banks
 // (8-F) fill 0xAA (kFlashInitFill). A real erased flash cell is 0xFF, so
 // this makes "never-touched flash" visually distinct from both an erased
 // sector and freshly powered-up RAM in a memory dump.
@@ -96,7 +96,7 @@ class CE163FCard : public ExpansionCard {
 public:
     CE163FCard() {
         for (int b = 0; b < kBankCount; b++)
-            m_banks[size_t(b)].fill(isFlashBank(b) ? kFlashInitFill : uint8_t(0xFF));
+            m_banks[size_t(b)].fill(isFlashBank(b) ? kFlashInitFill : uint8_t(0x00));
     }
 
     bool respondsToRead(const PinState& pins, uint8_t& outValue) const override {

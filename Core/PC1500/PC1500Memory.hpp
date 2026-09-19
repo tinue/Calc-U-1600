@@ -67,7 +67,8 @@ public:
     bool loadROM(const uint8_t* data, size_t size);
     bool loadROMFile(const std::string& path);
 
-    void reset(); // clears RAM only; ROM/keyboard state is untouched
+    void reset();     // chip-side reset (PIO, RTC, I/O); RAM, ROM and keyboard state untouched
+    void clearRam();  // all RAM (user, display, system) to 0x00 -- power-up / ALL RESET
 
     // LH5801Bus
     uint8_t readME0(uint16_t addr) override;

@@ -2,6 +2,11 @@
 
 ## [0.4.0] - work in progress
 
+- **RAM** Powers up as zeros instead of &FF -- internal RAM and fresh
+  memory modules, matching how CMOS RAM comes back after a power loss.
+  Flash memory still starts erased (&FF). On the PC-1500/1500A, Reset now
+  keeps RAM (the BASIC program survives, like the real reset button) and
+  Reset All clears it.
 - **Settings** moved from the control bar to the menu bar: the
   application menu on macOS (Cmd-,), Edit > Settings… (Ctrl-,) elsewhere.
   The control bar's Reset button is gone too: Machine > Reset (Cmd-R)

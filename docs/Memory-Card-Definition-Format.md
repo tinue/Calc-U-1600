@@ -138,7 +138,7 @@ content: rom            # bare string form: regular | rom | flash (defaults for 
 content:
   kind: regular
   writable: true              # false = wired read-only (not a togglable switch)
-  power-up-fill: 0xFF         # per-range power-up byte; default 0xFF (SRAM convention, spec §8)
+  power-up-fill: 0x00         # per-range power-up byte; default 0x00 (CMOS RAM after a power loss, spec §8)
   write-protect:              # optional runtime-togglable protect (CE-159); omit if absent
     default: unprotected      # unprotected | protected — state on load (spec §8)
     persisted: false          # false = always resets to `default` on load; true = part of card state
@@ -147,7 +147,7 @@ content:
 ```yaml
 content:
   kind: flash
-  power-up-fill: 0xFF         # applies only where `initial-content` leaves gaps
+  power-up-fill: 0xFF         # default 0xFF (erased); applies only where `initial-content` leaves gaps
   protocol:                   # chip/firmware properties, not inferred (spec §5)
     unlock-sequence:
       - { address: 0x5555, data: 0xAA }
@@ -181,7 +181,7 @@ bytes come from `initial-content` (§6), which is mandatory for ROM.
 ```yaml
 content:
   by-bank:
-    - { banks: "0-7",  kind: regular, power-up-fill: 0xFF }
+    - { banks: "0-7",  kind: regular, power-up-fill: 0x00 }
     - { banks: "8-15", kind: flash, protocol: { ... } }
 ```
 
