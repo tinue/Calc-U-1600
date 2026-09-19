@@ -417,8 +417,8 @@ still worth understanding. They say what the code actually does now.
   0x70-0x7F) — command/sector/motor-status/data registers, disk-changed
   latch, two-sided media, real motor-startup/access timing. CE-1600F
   attaches as a union with CE-1600P (there is no separate floppy
-  attach/detach); persistence is a raw `<name>.floppy.img` + `.yaml`
-  sidecar via `FloppyDiskManager`.
+  attach/detach); persistence is a versioned `<name>.floppy.yaml`
+  (`Connector/FloppyImageFile.hpp`) via `FloppyDiskManager`.
 - **Resolved**: `INIT"X:"` formats a blank disk (prompts "Set diskette
   for X:", then formats on Enter); SAVE/LOAD/FILES/DSKF work end to end.
   The controller model tracks head position, holds busy across data

@@ -9,10 +9,16 @@
   double-sided (64 KB per side); a control-bar button flips the disk to
   the other side, a green lamp shows when the drive motor runs, and
   drive timing follows the Service Manual.
-- **Floppy disk** Disks are handled like battery-backed memory cards: a
-  blank disk is inserted by default, and the control bar lets you pick a
+- **Floppy disk** Disks are handled like battery-backed memory cards: an
+  empty disk is inserted by default, and the control bar lets you pick a
   saved disk or save the current one. Presets can insert a saved disk
-  with the new `floppy: <name>` key (`,A`/`,B` picks the side).
+  with the new `floppy: <name>` key (`,A`/`,B` picks the side). Disks are
+  saved as versioned `<name>.floppy.yaml` files in the save folder and
+  found by the name inside them, built-in disks first; `.floppy.img`
+  files from 0.3.0 pre-releases are no longer read.
+- **Memory cards** Name & Save refuses a built-in card name, and the
+  picker hides a saved card that a built-in one of the same name would
+  shadow.
 - **Presets** Settings has a default preset per model (PC-1500,
   PC-1500A, PC-1600), applied at startup and whenever that model is
   selected. Ready-made ones are in `examples/startup/`; the PC-1600 one
