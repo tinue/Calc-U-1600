@@ -2,37 +2,23 @@
 
 ## [0.3.0] - work in progress
 
-- **Floppy disk** Added the CE-1600F pocket floppy drive for the
-  PC-1600. It comes with the CE-1600P plotter/printer (no separate
+- **PC-1600F** Added the CE-1600F pocket floppy drive for the
+  PC-1600. It attaches with the CE-1600P plotter/printer (no separate
   switch) and works like the real one: `INIT"X:"` formats a blank disk,
   and `SAVE`, `LOAD`, `FILES` and `DSKF` work on it. Disks are
   double-sided (64 KB per side); a control-bar button flips the disk to
   the other side, a green lamp shows when the drive motor runs, and
   drive timing follows the Service Manual.
-- **Floppy disk** Disks are handled like battery-backed memory cards: the
-  drive starts empty ("–empty–"; the ROM reports ERROR 160), two built-in
-  disks can be inserted ("Formatted", ready to use, and "Blank",
-  unformatted for `INIT"X:"`), and the control bar
-  lets you pick a saved disk or save the current one. Presets can insert
-  a saved disk with the new `floppy: <name>` key (`,A`/`,B` picks the side). Disks are
-  saved as versioned `<name>.floppy.yaml` files in the save folder and
-  found by the name inside them, built-in disks first; `.floppy.img`
-  files from 0.3.0 pre-releases are no longer read.
-- **Memory cards** Name & Save refuses a built-in card name, and the
-  picker hides a saved card that a built-in one of the same name would
-  shadow.
+- **Floppy disk** Two templates are available: A formatted floppy,
+  and a blank one. Select one in the drop down to insert into the
+  drive. Any changes you make on these templates are in-memory only.
+  If you want to persist, click the "save" button and give the floppy
+  a name.
 - **Presets** Settings has a default preset per model (PC-1500,
   PC-1500A, PC-1600), applied at startup and whenever that model is
   selected. Ready-made ones are in `examples/startup/`; the PC-1600 one
-  adds a CE-1600M and CE-1601M, formats the floppy, sets up the RAM
+  adds a CE-1600M and CE-1601M, mounts a floppy, sets up the RAM
   disk and COM1.
-- **Presets** Switching models now clears both memory slots, so no
-  module carries over from the previous model.
-- **Presets** New `examples/setup/make_diskworks_floppy.pc1600` prepares
-  a DiskWorks program floppy.
-- **Presets** A `program:` section now waits for BASIC to finish the
-  previous command (e.g. a `SAVE` started by `type:`) before loading, so
-  it no longer overwrites a program that's still being saved.
 - **Loading** Long preset loads show a "Loading…" popup and the window
   keeps updating, instead of freezing.
 - **Settings** The Settings dialog is reorganized into titled sections
@@ -40,10 +26,6 @@
 - **Control bar** Common controls (Reset, Settings, model/ROM, memory
   slots) stay left-aligned, so switching models no longer shifts them.
   The redundant "Load Preset…" button is gone; use the File menu.
-- **Serial port** Fixed a double slash in the serial-port link path
-  when the chosen folder ends in `/`.
-- **Windows installer** The installer now shows the correct version
-  (it always said 0.1.0).
 - **Build** Windows ARM64 is now built natively and gains BASIC preset
   loading; BASIC tokenizer updated to SharpDataExchange 0.2.1.
 
