@@ -153,7 +153,7 @@ void addDefaultPresetRow(QGridLayout* grid, int row, QWidget* parent, SectionGri
     spec.pick = [parent, modelKey, extension] {
         const QString current = AppSettings::defaultPresetPath(modelKey);
         return QFileDialog::getOpenFileName(parent, SettingsDialog::tr("Choose Default Preset"),
-                                            current.isEmpty() ? AppSettings::presetOpenDirOrHome() : current,
+                                            current.isEmpty() ? AppSettings::presetOpenStartDir() : current,
                                             SettingsDialog::tr("Presets (*.%1);;All Files (*)").arg(extension));
     };
     spec.display = [modelKey] { return AppSettings::defaultPresetPath(modelKey); };
@@ -193,9 +193,14 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
 
     {
         PathRowSpec spec = directorySpec(this, tr("Samples folder:"), tr("Choose Samples Folder"),
-                                         [] { return AppSettings::presetOpenDirOrHome(); });
-        spec.resetToolTip = tr("Revert to the system default");
-        spec.display = [] { return AppSettings::presetOpenDirOrHome(); };
+                                         [] { return AppSettings::presetOpenStartDir(); });
+        // Reset (and no settings file at all) means "<last used>": the load
+        // dialogs start wherever a sample was last picked from.
+        spec.resetToolTip = tr("Start in the folder a sample was last loaded from");
+        spec.display = [] {
+            const QString dir = AppSettings::presetOpenDir();
+            return dir.isEmpty() ? tr("<last used>") : dir;
+        };
         spec.isOverridden = [] { return !AppSettings::presetOpenDir().isEmpty(); };
         spec.set = [](const QString& dir) { AppSettings::setPresetOpenDir(dir); };
         addPathRow(general, 1, this, sections, spec);

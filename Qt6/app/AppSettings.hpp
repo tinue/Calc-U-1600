@@ -1,5 +1,6 @@
 #pragma once
 #include <QDir>
+#include <QFileInfo>
 #include <QSettings>
 #include <QSize>
 #include <QString>
@@ -27,14 +28,13 @@ inline void setInstanceDirOverride(const QString& dir) {
         s.setValue(QStringLiteral("storage/instanceDirOverride"), dir);
 }
 
-// Key: "preset/openDir" -- the folder both the "Load Preset…" and "Load
-// BASIC Program…" file dialogs start in (labeled "Default samples folder"
-// in Settings, since preset files and bare .bas listings both live there
-// in practice). Unlike instanceDirOverride, this has no environment-
-// derived default at all: empty/absent just means "let QFileDialog pick"
-// (its own last-visited-directory recall). A configured value here is
-// fixed (set via Settings), not auto-updated by each Open -- picking a
-// file elsewhere doesn't silently change it.
+// Key: "preset/openDir" -- a fixed folder both the "Load Preset…" and
+// "Load BASIC Program…" file dialogs start in (labeled "Samples folder" in
+// Settings, since preset files and bare .bas listings both live there in
+// practice). A configured value is fixed (set via Settings), not auto-
+// updated by each Open. Empty/absent -- the default, and what Settings'
+// Reset restores -- means "<last used>": the dialogs start in
+// presetLastOpenDir() instead.
 inline QString presetOpenDir() {
     return backingStore().value(QStringLiteral("preset/openDir"), QString()).toString();
 }
@@ -47,10 +47,23 @@ inline void setPresetOpenDir(const QString& dir) {
         s.setValue(QStringLiteral("preset/openDir"), dir);
 }
 
-// presetOpenDir(), or the user's home directory when unset -- the start
-// directory every "Load Preset…"/"Load BASIC Program…" file dialog uses.
-inline QString presetOpenDirOrHome() {
-    const QString dir = presetOpenDir();
+// Key: "preset/lastOpenDir" -- the folder of the file last picked in a
+// "Load Preset…"/"Load BASIC Program…" dialog. Recorded on every pick
+// (rememberPresetOpenFile()), but only used while presetOpenDir() is unset.
+inline QString presetLastOpenDir() {
+    return backingStore().value(QStringLiteral("preset/lastOpenDir"), QString()).toString();
+}
+
+inline void rememberPresetOpenFile(const QString& filePath) {
+    backingStore().setValue(QStringLiteral("preset/lastOpenDir"), QFileInfo(filePath).absolutePath());
+}
+
+// The start directory every "Load Preset…"/"Load BASIC Program…" file
+// dialog uses: the fixed presetOpenDir() if set, else the last-used
+// folder, else the user's home directory.
+inline QString presetOpenStartDir() {
+    QString dir = presetOpenDir();
+    if (dir.isEmpty()) dir = presetLastOpenDir();
     return dir.isEmpty() ? QDir::homePath() : dir;
 }
 
