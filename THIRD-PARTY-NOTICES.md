@@ -34,6 +34,11 @@ to Sharp Corporation. They are **not** covered by this project's GPLv3
 license -- see [LICENSE](LICENSE) for Calc-U-1600's own code, and treat
 `roms/` as a separate, unlicensed-by-us inclusion.
 
+The same applies to ROM content bundled inside memory-module definitions
+under `Qt6/resources/cards/` — currently `ce502b.card.yaml`, Sharp's
+CE-502B Statistics module, from Jeff Birt's dump
+(https://github.com/Jeff-Birt/PC-1500_ROM_Modules).
+
 `examples/dwx.bin` is the PC-1600 DiskWorks v2 program by Christian Becker
 (KiKiSoft, 1993) -- see [github.com/hzprky/DiskWorks](https://github.com/hzprky/DiskWorks)
 and `examples/DiskWorks.pc1600`. Bundled with the author's permission; not

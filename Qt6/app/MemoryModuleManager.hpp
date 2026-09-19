@@ -31,6 +31,7 @@ public:
     struct ModuleEntry {
         QString moduleName;
         bool battery = false;
+        bool rom = false;  // a ROM module -- listed in its own picker section
     };
 
     // Catalogue queries for ControlBar's combo-box population, filtered

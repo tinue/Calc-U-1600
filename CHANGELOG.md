@@ -2,6 +2,10 @@
 
 ## [0.4.0] - work in progress
 
+- **ROM modules** Memory modules can now be ROM (`content: rom` in a
+  card definition: read-only, bytes carried in the file). First one:
+  Sharp's **CE-502B** Statistics module for the PC-1500/1500A. ROM
+  modules have their own section at the bottom of the slot picker.
 - **Presets** The built-in `- module: <name>` form (`ce155`, `ram16`,
   `ram32`, `ce1638plus`, `ce163f`) is gone -- name a module by its
   definition instead, e.g. `- modulespec: CE-155`. Every memory module

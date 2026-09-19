@@ -24,15 +24,18 @@ QFrame* addSeparator(QHBoxLayout* layout, QWidget* parent) {
 }
 
 // Shared by the memory-slot and floppy pickers: "–empty–", the bundled
-// names, then (after a separator) the user's saved ones.
+// names, then (after a separator) the user's saved ones, then (after
+// another) the ROM modules -- memory slots only.
 void fillPicker(QComboBox* combo, const QStringList& bundled, const QStringList& saved,
-                const QString& selectedOrEmpty) {
+                const QString& selectedOrEmpty, const QStringList& roms = {}) {
     const QSignalBlocker blocker(combo);
     combo->clear();
     combo->addItem(ControlBar::tr("–empty–"), QString());
     for (const auto& name : bundled) combo->addItem(name, name);
     if (!saved.isEmpty()) combo->insertSeparator(combo->count());
     for (const auto& name : saved) combo->addItem(name, name);
+    if (!roms.isEmpty()) combo->insertSeparator(combo->count());
+    for (const auto& name : roms) combo->addItem(name, name);
     const int idx = combo->findData(selectedOrEmpty);
     combo->setCurrentIndex(idx >= 0 ? idx : 0);
 }
@@ -201,8 +204,10 @@ void ControlBar::setRomPickerVisible(bool visible) {
 void ControlBar::setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& bundled,
                                   const QVector<MemoryModuleManager::ModuleEntry>& instances,
                                   const QString& selectedOrEmpty) {
+    QStringList ram, roms;
+    for (const auto& e : bundled) (e.rom ? roms : ram) << e.moduleName;
     const auto name = [](const MemoryModuleManager::ModuleEntry& e) { return e.moduleName; };
-    fillPicker(m_slot[slot - 1].combo, namesOf(bundled, name), namesOf(instances, name), selectedOrEmpty);
+    fillPicker(m_slot[slot - 1].combo, ram, namesOf(instances, name), selectedOrEmpty, roms);
 }
 
 // Enables rather than shows/hides the button, so the control bar doesn't

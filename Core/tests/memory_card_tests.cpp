@@ -403,10 +403,12 @@ void test_reject_tiling_gap_and_overlap() {
 
 void test_reject_rom_flash_bybank_linebased() {
     std::string err;
+    // A ROM range with no initial-content has no bytes at all.
     CHECK(rejects(std::string(kMinPrefix) +
                       "  - name: r\n    capacity: 0x800\n    banking: none\n    content: rom\n"
                       "    addressing: { chip-select: Y0, span: 0x800 }\n",
                   &err));
+    CHECK(err.find("initial-content") != std::string::npos);
     CHECK(rejects(std::string(kMinPrefix) +
                       "  - name: r\n    capacity: 0x800\n    banking: none\n    content: flash\n"
                       "    addressing: { chip-select: Y0, span: 0x800 }\n",
@@ -648,6 +650,74 @@ void test_superram_card_yaml_if_present() {
 
     sd->respondsToWrite(sel, 0);
     CHECK(sd->respondsToRead(w, v) && v == 0xFF);  // bank 0 untouched
+}
+
+// ── `rom` content ────────────────────────────────────────────────────
+
+// A 16-byte ROM on Y0; `bytes` is its initial-content (plain hex).
+std::string romYaml(const std::string& bytes) {
+    return std::string(kMinPrefix) +
+           "  - name: r\n    capacity: 0x10\n    banking: none\n    content: rom\n"
+           "    addressing: { chip-select: Y0, span: 0x10 }\n"
+           "    initial-content:\n      blocks:\n        - offset: 0\n          encoding: hex\n"
+           "          bytes: \"" + bytes + "\"\n";
+}
+
+void test_rom_reads_and_ignores_every_write() {
+    auto card = buildCard(romYaml("55 00 00 C5 40 00 00 FF 01 02 03 04 05 06 07 08").c_str(), CardHost::PC1500);
+    CHECK(card != nullptr);
+    if (!card) return;
+    CHECK(card->definition().isRom());
+    PinState p;
+    p.pin[4] = true;
+    p.address = 0x0003;
+    uint8_t v = 0;
+    CHECK(card->respondsToRead(p, v) && v == 0xC5);
+
+    // Guest-CPU store: claimed (not open bus), but the ROM keeps its byte.
+    PinState w = p;
+    w.forWrite = true;
+    CHECK(card->respondsToWrite(w, 0x11));
+    CHECK(card->respondsToRead(p, v) && v == 0xC5);
+    // A host poke can't write a mask ROM either.
+    w.direct = true;
+    CHECK(card->respondsToWrite(w, 0x22));
+    CHECK(card->respondsToRead(p, v) && v == 0xC5);
+    // Nor can the debug/program-loader backing-store path.
+    const uint8_t b = 0x33;
+    CHECK(!card->debugImageWrite(0x0003, &b, 1));
+    CHECK(card->debugImage()[3] == 0xC5);
+}
+
+void test_rom_needs_every_byte_covered() {
+    std::string err;
+    CHECK(rejects(romYaml("55 00 00 C5 40 00 00 FF"), &err));  // 8 of 16 bytes
+    CHECK(err.find("0x8") != std::string::npos);
+}
+
+// ROM and RAM banks in one region: the ROM banks stay read-only, the RAM
+// bank takes writes, and the card isn't a ROM module as a whole.
+void test_rom_by_bank_mixed_with_regular() {
+    const std::string yaml = std::string(kMinPrefix) +
+        "  - name: r\n"
+        "    banking:\n"
+        "      latch: { type: trigger-based, trigger: { pin: 18 }, sampled-lines: [A0], source-domain: address }\n"
+        "      bank-count: 2\n      bank-size: 0x10\n"
+        "      bank-window: { chip-select: Y0, span: 0x10 }\n"
+        "    content:\n      by-bank:\n"
+        "        - { banks: \"0\", kind: rom }\n"
+        "        - { banks: \"1\", kind: regular }\n"
+        "    addressing: { chip-select: Y0 }\n"
+        "    initial-content:\n      blocks:\n        - bank: 0\n          offset: 0\n          encoding: hex\n"
+        "          bytes: \"A0 A1 A2 A3 A4 A5 A6 A7 A8 A9 AA AB AC AD AE AF\"\n";
+    auto card = buildCard(yaml.c_str(), CardHost::PC1500);
+    CHECK(card != nullptr);
+    if (!card) return;
+    CHECK(!card->definition().isRom());
+    const uint8_t b = 0x5A;
+    CHECK(!card->debugImageWrite(0x0002, &b, 1));  // bank 0: ROM
+    CHECK(card->debugImageWrite(0x0012, &b, 1));   // bank 1: RAM
+    CHECK(card->debugImage()[0x02] == 0xA2 && card->debugImage()[0x12] == 0x5A);
 }
 
 // ── debugImageWrite(): the write side of debugImage() ──────────────────
@@ -1650,6 +1720,9 @@ int run_memory_card_tests() {
     test_reject_terminology_not_in_hosts();
     test_reject_tiling_gap_and_overlap();
     test_reject_rom_flash_bybank_linebased();
+    test_rom_reads_and_ignores_every_write();
+    test_rom_needs_every_byte_covered();
+    test_rom_by_bank_mixed_with_regular();
     test_reject_bybank_shapes();
     test_reject_unbanked_without_capacity();
 

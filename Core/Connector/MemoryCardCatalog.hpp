@@ -26,6 +26,7 @@ struct MemoryCardCatalogEntry {
     std::vector<CardHost> compatibleHosts;
     std::string filePath;
     bool battery = false;
+    bool rom = false;  // MemoryCardDefinition::isRom()
 
     bool compatibleWith(CardHost h) const {
         return std::find(compatibleHosts.begin(), compatibleHosts.end(), h) != compatibleHosts.end();
@@ -44,7 +45,7 @@ inline std::vector<MemoryCardCatalogEntry> scanMemoryCardDirectory(const std::st
         [](const std::string& text, const std::string& path, MemoryCardCatalogEntry* out, std::string* err) {
             MemoryCardDefinition def;
             if (!parseMemoryCardDefinition(text, &def, err)) return false;
-            *out = {def.moduleName, def.compatibleHosts, path, def.battery};
+            *out = {def.moduleName, def.compatibleHosts, path, def.battery, def.isRom()};
             return true;
         },
         [](const MemoryCardCatalogEntry& e) { return e.moduleName; }, error);

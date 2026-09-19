@@ -89,6 +89,9 @@ public:
             if (!locate(st, pins, &off)) continue;
             const Region& r = *st.def;
             const RegionContent& c = r.contentForBank(r.banked ? uint32_t(st.bank) : 0);
+            // A mask ROM takes no write from anyone -- not even a host poke.
+            // Claimed, so the bus doesn't fall through to open bus.
+            if (c.kind == ContentKind::Rom) return true;
             if (c.kind == ContentKind::Flash) {
                 if (pins.direct) {
                     st.backing[off] = value;  // poke/preset loader: unconditional
@@ -157,6 +160,7 @@ public:
         size_t total = 0;
         for (const RegionState& st : m_regions) total += st.backing.size();
         if (off > total || n > total - off) return false;
+        if (touchesRom(off, n)) return false;  // ROM is read-only for this path too
         size_t base = 0;
         for (RegionState& st : m_regions) {
             const size_t regEnd = base + st.backing.size();
@@ -175,6 +179,24 @@ public:
     }
 
 private:
+    // Whether [off, off+n) of the concatenated backing (debugImage()'s
+    // address space) touches a byte of a `rom` range.
+    bool touchesRom(size_t off, size_t n) const {
+        size_t base = 0;
+        for (const RegionState& st : m_regions) {
+            const Region& r = *st.def;
+            const size_t regEnd = base + st.backing.size();
+            const size_t lo = std::max(off, base), hi = std::min(off + n, regEnd);
+            if (lo < hi) {
+                const size_t bankSize = r.banked ? r.banking.bankSize : st.backing.size();
+                for (size_t b = (lo - base) / bankSize; b <= (hi - 1 - base) / bankSize; ++b)
+                    if (r.contentForBank(static_cast<uint32_t>(b)).kind == ContentKind::Rom) return true;
+            }
+            base = regEnd;
+        }
+        return false;
+    }
+
     // One flash command decoder per
     // region (the "chip" sitting behind the region's bank/window latch,
     // independent of it -- see flashWrite()'s doc comment).

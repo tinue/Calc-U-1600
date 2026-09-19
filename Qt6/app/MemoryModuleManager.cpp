@@ -22,7 +22,7 @@ QVector<MemoryModuleManager::ModuleEntry> entriesFor(const QString& dir, CardHos
     const auto entries = scanMemoryCardDirectory(dir.toStdString(), &err);
     for (const auto& e : entries) {
         if (!e.compatibleWith(host)) continue;
-        out.push_back({QString::fromStdString(e.moduleName), e.battery});
+        out.push_back({QString::fromStdString(e.moduleName), e.battery, e.rom});
     }
     return out;
 }
