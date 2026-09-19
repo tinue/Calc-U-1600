@@ -14,6 +14,7 @@
 class PC1500Machine;
 class PC1600Machine;
 class MemoryModuleManager;
+class FloppyDiskManager;
 class PtySerialLink;
 
 namespace MachineControllerNS {
@@ -142,6 +143,10 @@ public:
     // switchModel() simply skips the attach callback -- harmless, since
     // no module is selected yet at cold start.
     void setModuleManager(MemoryModuleManager* mgr) { m_moduleManager = mgr; }
+    // The CE-1600F comes and goes with the CE-1600P: attachCE1600P() puts
+    // the selected disk in, and anything that removes the drive
+    // (detachCE1600P(), a PC-1600 attachCE150()) autosaves it first.
+    void setFloppyManager(FloppyDiskManager* mgr) { m_floppyManager = mgr; }
 
     // Raw access for MemoryModuleManager to call the two different attach
     // APIs and read live card state -- kept as thin pass-throughs rather
@@ -248,6 +253,8 @@ private:
     std::unique_ptr<PC1500Machine> m_pc1500;
     std::unique_ptr<PC1600Machine> m_pc1600;
     MemoryModuleManager* m_moduleManager = nullptr; // not owned
+    FloppyDiskManager* m_floppyManager = nullptr;   // not owned
+    void flushFloppyBeforeDetach();
 
     // Lazily created the first time a PC1600Machine exists, then kept alive
     // for the rest of the app's life (see attachSerialLink()) -- a stable

@@ -57,8 +57,8 @@ public:
     bool motorOn() const;
 
     // Loads the currently selected disk into a just-attached CE1600FCard
-    // (or leaves the drive empty for "–empty–"). PlotterController calls
-    // this as part of its CE-1600P attach, before announcing it -- the GUI
+    // (or leaves the drive empty for "–empty–"). MachineController::
+    // attachCE1600P() calls this as part of the attach -- the GUI
     // counterpart of the preset loader loading its `floppy:` at attach.
     void insertSelectedDisk();
 
@@ -70,8 +70,6 @@ public:
 
     // "Name & Save" flow, mirroring MemoryModuleManager's. A bundled name
     // is always refused (the bundled disk would shadow the saved one).
-    bool isBundledName(const QString& diskName) const;
-    bool nameCollides(const QString& diskName) const;
     bool nameAndSave(const QString& diskName, QString* error);
 
     void markDirtyAndSchedulePersist();  // called once per frame tick
@@ -81,6 +79,8 @@ signals:
     void errorMessage(const QString& text);
 
 private:
+    bool nameCollides(const QString& diskName) const;
+
     MachineController* m_controller;  // not owned
 
     QString m_diskName;         // empty = no disk in the drive

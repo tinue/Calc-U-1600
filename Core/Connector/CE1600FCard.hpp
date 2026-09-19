@@ -109,7 +109,7 @@ public:
     /// Inserts a zero-filled (unformatted) disk, side A up.
     void insertBlankDisk() {
         m_image.fill(0);
-        onNewDisk();
+        onDiskChange(true);
     }
 
     /// Removes the disk: base+0 bit3 (disk-in-drive) reads 0, which the
@@ -117,11 +117,7 @@ public:
     /// turn into "no disk" (ERROR 160). Also a disk-change event.
     void ejectDisk() {
         m_image.fill(0);
-        m_diskPresent = false;
-        m_side = 0;
-        markDiskChanged();
-        ++m_revision;
-        resetLatchedState();
+        onDiskChange(false);
     }
 
     bool hasDisk() const { return m_diskPresent; }
@@ -131,7 +127,7 @@ public:
     bool loadImage(const uint8_t* data, size_t size) {
         if (size != kImageSize) return false;
         std::memcpy(m_image.data(), data, kImageSize);
-        onNewDisk();
+        onDiskChange(true);
         return true;
     }
 
@@ -402,10 +398,10 @@ private:
         ++m_revision;
     }
 
-    // Shared tail of insertBlankDisk()/loadImage(): a new disk goes in
-    // side A up, with the changed-disk latch armed.
-    void onNewDisk() {
-        m_diskPresent = true;
+    // Shared tail of insertBlankDisk()/loadImage()/ejectDisk(): a disk goes
+    // in side A up (or comes out), with the changed-disk latch armed.
+    void onDiskChange(bool present) {
+        m_diskPresent = present;
         m_side = 0;
         markDiskChanged();
         ++m_revision;

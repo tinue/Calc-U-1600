@@ -54,24 +54,15 @@ private:
 };
 
 // Shared by the memory-slot and floppy pickers: "–empty–", the bundled
-// names, then (after a separator) the user's saved ones. A saved entry that
-// shares a bundled name is left out -- lookup is bundled-first, so picking
-// it would load the bundled one anyway.
+// names, then (after a separator) the user's saved ones.
 void fillPicker(QComboBox* combo, const QStringList& bundled, const QStringList& saved,
                 const QString& selectedOrEmpty) {
     const QSignalBlocker blocker(combo);
     combo->clear();
     combo->addItem(ControlBar::tr("–empty–"), QString());
     for (const auto& name : bundled) combo->addItem(name, name);
-    bool separated = false;
-    for (const auto& name : saved) {
-        if (bundled.contains(name)) continue;
-        if (!separated) {
-            combo->insertSeparator(combo->count());
-            separated = true;
-        }
-        combo->addItem(name, name);
-    }
+    if (!saved.isEmpty()) combo->insertSeparator(combo->count());
+    for (const auto& name : saved) combo->addItem(name, name);
     const int idx = combo->findData(selectedOrEmpty);
     combo->setCurrentIndex(idx >= 0 ? idx : 0);
 }

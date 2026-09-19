@@ -66,7 +66,7 @@ bool PC1600Machine::attachCE1600P(const uint8_t* rom1, size_t rom1Size,
         return false;
     auto card = std::make_unique<CE1600PCard>();
     if (!card->loadRom(rom1, rom1Size, rom2, rom2Size)) return false;
-    auto floppy = std::make_unique<CE1600FCard>();  // ctor auto-inserts a blank disk
+    auto floppy = std::make_unique<CE1600FCard>();  // drive starts empty
     detachCE1600P();
     detachCE150(); // one plotter on the bus at a time
     m_z80Mem.ce1600pBus().attach(card.get());

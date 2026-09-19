@@ -1,5 +1,6 @@
 #pragma once
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QTimer>
 #include <QVector>
@@ -79,8 +80,6 @@ public:
 
     // "Name & Save" flow. A bundled name is always refused, whatever host it
     // targets (the bundled card would shadow the saved one on lookup).
-    bool isBundledName(const QString& instanceName) const;
-    bool nameCollides(const QString& instanceName) const;
     bool nameAndSave(int slot, const QString& instanceName, QString* error);
 
     void markDirtyAndSchedulePersist();  // called once per frame tick
@@ -103,6 +102,9 @@ signals:
     void errorMessage(const QString& text);
 
 private:
+    QSet<QString> bundledNames() const;  // every bundled card's module-name, all hosts
+    bool nameCollides(const QString& instanceName) const;
+
     MachineController* m_controller;  // not owned
 
     struct SlotState {

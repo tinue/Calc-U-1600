@@ -3,6 +3,8 @@
 
 #include <QFile>
 
+#include <algorithm>
+
 #include "Connector/CE1600FCard.hpp"
 #include "Connector/FloppyImageFile.hpp"
 #include "PC1600/PC1600Machine.hpp"
@@ -35,8 +37,15 @@ QVector<FloppyDiskManager::DiskEntry> FloppyDiskManager::bundledEntries() const 
     return entriesFor(AppPaths::bundledResourcesDir());
 }
 
+// Leaves out saved disks that share a bundled disk's name: lookup is
+// bundled-first, so they could never be loaded.
 QVector<FloppyDiskManager::DiskEntry> FloppyDiskManager::instanceEntries() const {
-    return entriesFor(AppPaths::instanceDir());
+    QVector<DiskEntry> out = entriesFor(AppPaths::instanceDir());
+    const QVector<DiskEntry> bundled = bundledEntries();
+    out.erase(std::remove_if(out.begin(), out.end(),
+                             [&](const DiskEntry& e) { return containsName(bundled, e.diskName); }),
+              out.end());
+    return out;
 }
 
 void FloppyDiskManager::selectDisk(const QString& diskNameOrEmpty) {
@@ -85,12 +94,9 @@ void FloppyDiskManager::syncFromPresetLoad(const QString& labelOrEmpty, const QS
     if (auto* m1600 = m_controller->pc1600()) m_lastSeenRevision = m1600->ce1600fRevision();
 }
 
-bool FloppyDiskManager::isBundledName(const QString& diskName) const {
-    return containsName(bundledEntries(), diskName);
-}
-
 bool FloppyDiskManager::nameCollides(const QString& diskName) const {
-    return containsName(instanceEntries(), diskName) || QFile::exists(AppPaths::floppyInstancePathFor(diskName));
+    return containsName(entriesFor(AppPaths::instanceDir()), diskName) ||
+           QFile::exists(AppPaths::floppyInstancePathFor(diskName));
 }
 
 bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
@@ -116,7 +122,7 @@ bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
         *error = tr("Name cannot contain '\"'.");
         return false;
     }
-    if (isBundledName(name)) {
+    if (containsName(bundledEntries(), name)) {
         *error = tr("\"%1\" is a built-in disk name. Choose a different name.").arg(name);
         return false;
     }

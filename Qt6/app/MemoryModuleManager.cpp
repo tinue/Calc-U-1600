@@ -4,6 +4,9 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QSet>
+
+#include <algorithm>
 
 #include "Connector/BatteryCardInstance.hpp"
 #include "Connector/MemoryCardCatalog.hpp"
@@ -44,8 +47,15 @@ QVector<MemoryModuleManager::ModuleEntry> MemoryModuleManager::bundledEntries(Ca
     return entriesFor(AppPaths::bundledResourcesDir(), host);
 }
 
+// Leaves out saved cards that share a bundled card's name (any host):
+// lookup is bundled-first, so they could never be loaded.
 QVector<MemoryModuleManager::ModuleEntry> MemoryModuleManager::instanceEntries(CardHost host) const {
-    return entriesFor(AppPaths::instanceDir(), host);
+    QVector<ModuleEntry> out = entriesFor(AppPaths::instanceDir(), host);
+    const QSet<QString> bundled = bundledNames();
+    out.erase(std::remove_if(out.begin(), out.end(),
+                             [&](const ModuleEntry& e) { return bundled.contains(e.moduleName); }),
+              out.end());
+    return out;
 }
 
 void MemoryModuleManager::selectModule(int slot, const QString& moduleNameOrEmpty) {
@@ -159,11 +169,11 @@ bool MemoryModuleManager::currentSlotImage(int slot, int* bankCount, std::vector
     return false;
 }
 
-bool MemoryModuleManager::isBundledName(const QString& instanceName) const {
-    const auto entries = scanMemoryCardDirectory(AppPaths::bundledResourcesDir().toStdString(), nullptr);
-    for (const auto& e : entries)
-        if (QString::fromStdString(e.moduleName) == instanceName) return true;
-    return false;
+QSet<QString> MemoryModuleManager::bundledNames() const {
+    QSet<QString> names;
+    for (const auto& e : scanMemoryCardDirectory(AppPaths::bundledResourcesDir().toStdString(), nullptr))
+        names.insert(QString::fromStdString(e.moduleName));
+    return names;
 }
 
 bool MemoryModuleManager::nameCollides(const QString& instanceName) const {
@@ -217,7 +227,11 @@ bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QSt
         *error = tr("\"%1\" is already saved; changes are saved automatically.").arg(st.moduleName);
         return false;
     }
-    if (isBundledName(name)) {
+    if (name.contains(QLatin1Char('"'))) {
+        *error = tr("Name cannot contain '\"'.");
+        return false;
+    }
+    if (bundledNames().contains(name)) {
         *error = tr("\"%1\" is a built-in card name. Choose a different name.").arg(name);
         return false;
     }
@@ -226,9 +240,9 @@ bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QSt
         return false;
     }
 
-    std::string p, err2;
+    std::string p;
     if (!resolveModuleSpecByName(AppPaths::bundledResourcesDir().toStdString(), st.moduleName.toStdString(), &p,
-                                 &err2)) {
+                                 nullptr)) {
         *error = tr("Couldn't find the source template for \"%1\".").arg(st.moduleName);
         return false;
     }

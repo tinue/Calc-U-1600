@@ -61,17 +61,19 @@ inline std::vector<std::string> formatAddressedHexLines(const std::vector<uint8_
             if (bytes[k] != first) { uniform = false; break; }
         }
         if (!uniform) {
-            std::string hex;
-            char tmp[4];
-            for (size_t k = i; k < rowEnd; ++k) {
-                std::snprintf(tmp, sizeof(tmp), "%02X ", bytes[k]);
-                hex += tmp;
-                if (k - i == 7) hex += " ";
-            }
-            while (!hex.empty() && hex.back() == ' ') hex.pop_back();
+            // Hand-rolled hex (not snprintf per byte): a whole floppy side is
+            // 4096 rows, rewritten on every autosave.
+            static const char kHex[] = "0123456789ABCDEF";
             char line[16];
             std::snprintf(line, sizeof(line), "$%04X: ", static_cast<unsigned>(i));
-            lines.push_back(std::string(line) + hex);
+            std::string text(line);
+            text.reserve(text.size() + 3 * 16 + 1);
+            for (size_t k = i; k < rowEnd; ++k) {
+                if (k != i) text += (k - i == 8) ? "  " : " ";
+                text += kHex[bytes[k] >> 4];
+                text += kHex[bytes[k] & 0x0F];
+            }
+            lines.push_back(std::move(text));
             i = rowEnd;
             continue;
         }

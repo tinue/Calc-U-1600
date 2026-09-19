@@ -54,6 +54,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_moduleManager = std::make_unique<MemoryModuleManager>(m_controller.get(), this);
     m_controller->setModuleManager(m_moduleManager.get());
     m_floppyManager = std::make_unique<FloppyDiskManager>(m_controller.get(), this);
+    m_controller->setFloppyManager(m_floppyManager.get());
     m_presetController = std::make_unique<PresetController>(m_controller.get(), m_moduleManager.get(),
                                                              m_floppyManager.get(), this);
 
@@ -65,7 +66,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_controlBar = new ControlBar(central);
     m_debugPanel = new DebugPanel(m_controller.get(), central);
     m_debugPanel->setModuleManager(m_moduleManager.get());
-    m_plotterController = std::make_unique<PlotterController>(m_controller.get(), m_floppyManager.get(), this);
+    m_plotterController = std::make_unique<PlotterController>(m_controller.get(), this);
     m_plotterPaper = new PlotterPaperWidget(m_controller.get(), central);
     m_plotterPaper->hide(); // added to m_debugRowLayout only once a plotter attaches
 

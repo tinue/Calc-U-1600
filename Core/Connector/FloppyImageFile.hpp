@@ -1,17 +1,13 @@
 #pragma once
-#include <algorithm>
 #include <cstdint>
-#include <filesystem>
-#include <fstream>
-#include <sstream>
 #include <string>
-#include <system_error>
 #include <vector>
 
 #include "../Yaml.hpp"
 #include "BatteryCardInstance.hpp"   // formatAddressedHexLines, currentIso8601Timestamp
 #include "CE1600FCard.hpp"
 #include "MemoryCardDefinition.hpp"  // mcd_detail::parseAddressedHex
+#include "NamedFileCatalog.hpp"
 
 // ── CE-1600F floppy-disk file (`<name>.floppy.yaml`) ───────────────────
 //
@@ -37,10 +33,10 @@
 // know rather than guessing. The file is always written whole (no splice /
 // comment preservation, unlike BatteryCardInstance.hpp's card instances).
 //
-// Directory lookup mirrors MemoryCardCatalog.hpp: the caller passes the
-// search directories (bundled first, then the user's save folder), and a
-// name resolves to the first directory holding exactly one file that
-// declares it.
+// Directory lookup is NamedFileCatalog.hpp's, shared with memory cards: the
+// caller passes the search directories (bundled first, then the user's save
+// folder), and a name resolves to the first directory holding exactly one
+// file that declares it.
 
 constexpr const char* kFloppyFileSuffix = ".floppy.yaml";
 constexpr long kFloppyFormatVersion = 1;
@@ -54,21 +50,6 @@ namespace floppy_detail {
 
 constexpr const char* kFormatTag = "ce1600f-floppy";
 constexpr const char* kSideKeys[2] = {"a", "b"};
-
-inline bool hasFloppySuffix(const std::string& fileName) {
-    const std::string suffix = kFloppyFileSuffix;
-    return fileName.size() > suffix.size() &&
-           fileName.compare(fileName.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
-
-inline bool readTextFile(const std::string& path, std::string* out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    std::stringstream ss;
-    ss << in.rdbuf();
-    *out = ss.str();
-    return true;
-}
 
 // Checks `format`/`format-version` and reads `disk-name` from a parsed file.
 inline bool readHeader(const YamlNode& root, std::string* diskName, std::string* error) {
@@ -115,6 +96,7 @@ inline bool readHeader(const YamlNode& root, std::string* diskName, std::string*
 // reader does no escape processing), so it must not contain '"' or a newline.
 inline std::string formatFloppyFile(const std::string& diskName, const std::vector<uint8_t>& image) {
     std::string out;
+    out.reserve(4096);
     out += "# Calc-U-1600 CE-1600F floppy disk image\n";
     out += std::string("format: ") + floppy_detail::kFormatTag + "\n";
     out += "format-version: " + std::to_string(kFloppyFormatVersion) + "\n";
@@ -127,7 +109,11 @@ inline std::string formatFloppyFile(const std::string& diskName, const std::vect
         out += std::string("  ") + floppy_detail::kSideKeys[side] + ":\n";
         out += "    encoding: addressed-hex\n";
         out += "    bytes: |\n";
-        for (const auto& line : formatAddressedHexLines(bytes)) out += "      " + line + "\n";
+        for (const auto& line : formatAddressedHexLines(bytes)) {
+            out += "      ";
+            out += line;
+            out += '\n';
+        }
     }
     return out;
 }
@@ -176,7 +162,7 @@ inline bool parseFloppyFile(const std::string& text, FloppyFile* out, std::strin
 
 inline bool readFloppyFile(const std::string& path, FloppyFile* out, std::string* error) {
     std::string text;
-    if (!floppy_detail::readTextFile(path, &text)) {
+    if (!named_file_detail::readTextFile(path, &text)) {
         *error = "cannot read '" + path + "'";
         return false;
     }
@@ -192,81 +178,28 @@ struct FloppyCatalogEntry {
     std::string filePath;
 };
 
-// Every "*.floppy.yaml" in `dir` (non-recursive), sorted by disk name. Only
-// the header is validated (the hex isn't decoded). A bad file is skipped
-// with "<filename>: <error>" appended to `*error`; a missing directory
-// yields an empty list and sets `*error` -- same contract as
-// scanMemoryCardDirectory().
+// Every "*.floppy.yaml" in `dir` (non-recursive), sorted by disk name --
+// scanNamedFiles()'s contract. Only the header (the text before the
+// top-level `sides:` key) is parsed, so a large disk costs no hex decoding.
 inline std::vector<FloppyCatalogEntry> scanFloppyDirectory(const std::string& dir, std::string* error) {
-    std::vector<FloppyCatalogEntry> out;
-    auto appendErr = [&](const std::string& msg) {
-        if (!error) return;
-        if (!error->empty()) *error += "\n";
-        *error += msg;
-    };
-
-    std::error_code ec;
-    std::filesystem::directory_iterator it(dir, ec);
-    const std::filesystem::directory_iterator end;
-    if (ec) {
-        if (error) *error = "cannot read floppy directory '" + dir + "': " + ec.message();
-        return out;
-    }
-    for (; it != end; it.increment(ec)) {
-        if (ec) {
-            appendErr("directory walk stopped: " + ec.message());
-            break;
-        }
-        const std::filesystem::path& p = it->path();
-        const std::string name = p.filename().string();
-        if (!floppy_detail::hasFloppySuffix(name)) continue;
-
-        std::string text, parseErr, diskName;
-        YamlNode root;
-        if (!floppy_detail::readTextFile(p.string(), &text)) {
-            appendErr(name + ": cannot open");
-            continue;
-        }
-        if (!parseYaml(text, &root, &parseErr) || !floppy_detail::readHeader(root, &diskName, &parseErr)) {
-            appendErr(name + ": " + parseErr);
-            continue;
-        }
-        out.push_back({diskName, p.string()});
-    }
-    std::sort(out.begin(), out.end(),
-              [](const FloppyCatalogEntry& a, const FloppyCatalogEntry& b) { return a.diskName < b.diskName; });
-    return out;
+    return scanNamedFiles<FloppyCatalogEntry>(
+        dir, kFloppyFileSuffix, "disk",
+        [](const std::string& text, const std::string& path, FloppyCatalogEntry* out, std::string* err) {
+            const size_t sides = text.find("\nsides:");
+            YamlNode root;
+            if (!parseYaml(text.substr(0, sides), &root, err) ||
+                !floppy_detail::readHeader(root, &out->diskName, err))
+                return false;
+            out->filePath = path;
+            return true;
+        },
+        [](const FloppyCatalogEntry& e) { return e.diskName; }, error);
 }
 
-// Resolves `diskName` against `dirs` in order: the first directory holding
-// exactly one file that declares it wins; two in the same directory is an
-// error. Missing directories and empty strings are skipped. Same semantics
-// as resolveModuleSpecByName(dirs, ...).
+// Resolves `diskName` against `dirs` in order (bundled first, then the save
+// folder) -- resolveNamedFile()'s rules, the same as memory cards.
 inline bool resolveFloppyByName(const std::vector<std::string>& dirs, const std::string& diskName,
                                 std::string* outPath, std::string* error) {
-    std::string where;
-    for (const auto& dir : dirs) {
-        if (dir.empty()) continue;
-        if (!where.empty()) where += ", ";
-        where += "'" + dir + "'";
-        const auto entries = scanFloppyDirectory(dir, nullptr);
-        const FloppyCatalogEntry* hit = nullptr;
-        for (const auto& e : entries) {
-            if (e.diskName != diskName) continue;
-            if (hit) {
-                if (error)
-                    *error = "disk name '" + diskName + "' is declared by more than one file in '" + dir +
-                             "' (" + hit->filePath + ", " + e.filePath + ")";
-                return false;
-            }
-            hit = &e;
-        }
-        if (hit) {
-            if (outPath) *outPath = hit->filePath;
-            return true;
-        }
-    }
-    if (error)
-        *error = "no floppy disk named '" + diskName + "' in " + (where.empty() ? "any directory" : where);
-    return false;
+    return resolveNamedFile(dirs, diskName, "disk", scanFloppyDirectory,
+                            [](const FloppyCatalogEntry& e) { return e.diskName; }, outPath, error);
 }

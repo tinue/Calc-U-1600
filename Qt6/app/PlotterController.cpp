@@ -1,10 +1,8 @@
 #include "PlotterController.hpp"
-#include "FloppyDiskManager.hpp"
 #include "MachineController.hpp"
 
-PlotterController::PlotterController(MachineController* controller, FloppyDiskManager* floppyManager,
-                                     QObject* parent)
-    : QObject(parent), m_controller(controller), m_floppyManager(floppyManager) {}
+PlotterController::PlotterController(MachineController* controller, QObject* parent)
+    : QObject(parent), m_controller(controller) {}
 
 void PlotterController::requestToggleCE150() { beginToggle(Pending::ToggleCE150); }
 void PlotterController::requestToggleCE1600P() { beginToggle(Pending::ToggleCE1600P); }
@@ -66,11 +64,8 @@ void PlotterController::toggleAttachment(bool (MachineController::*isAttached)()
     const bool wasOtherAttached = (m_controller->*isOtherAttached)();
     if ((m_controller->*isAttached)()) {
         (m_controller->*detach)();
-    } else if ((m_controller->*attach)() && attach == &MachineController::attachCE1600P) {
-        // The CE-1600F comes with the CE-1600P (union attach): insert the
-        // selected disk now, while the machine is still off, before
-        // announcing the attach.
-        m_floppyManager->insertSelectedDisk();
+    } else {
+        (m_controller->*attach)();
     }
     emit (this->*changedSignal)((m_controller->*isAttached)());
     if (wasOtherAttached && !(m_controller->*isOtherAttached)()) emit (this->*otherChangedSignal)(false);
@@ -82,8 +77,6 @@ void PlotterController::performAttachToggle() {
                           &MachineController::detachCE150, &PlotterController::ce150AttachedChanged,
                           &MachineController::ce1600pAttached, &PlotterController::ce1600pAttachedChanged);
     } else if (m_pending == Pending::ToggleCE1600P) {
-        // Detaching the CE-1600P removes the drive: autosave its disk first.
-        if (m_controller->ce1600pAttached()) m_floppyManager->flushPendingPersist();
         toggleAttachment(&MachineController::ce1600pAttached, &MachineController::attachCE1600P,
                           &MachineController::detachCE1600P, &PlotterController::ce1600pAttachedChanged,
                           &MachineController::ce150Attached, &PlotterController::ce150AttachedChanged);
