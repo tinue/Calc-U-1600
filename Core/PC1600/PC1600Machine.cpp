@@ -343,9 +343,28 @@ uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {
         // window m_rtcAccum's LH5803 branch (see step()) exists to cover.
         const uint64_t cycles = static_cast<uint64_t>(
             c > 0 ? c : (z80Owns ? SC7852::kHaltTickCycles : LH5801::kHaltTickCycles));
-        consumed += toTStates(cycles, z80Owns);
+        const uint64_t tstates = toTStates(cycles, z80Owns);
+        consumed += tstates;
+        // See setYieldHook(). step() takes m_mutex per call, so it isn't
+        // held here.
+        if (m_yieldHook) {
+            if (tstates >= m_yieldCountdown) {
+                m_yieldCountdown = m_yieldInterval;
+                const std::function<void()> hook = m_yieldHook;
+                hook();
+            } else {
+                m_yieldCountdown -= tstates;
+            }
+        }
     }
     return consumed;
+}
+
+void PC1600Machine::setYieldHook(std::function<void()> hook, uint64_t intervalTStates) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_yieldHook = std::move(hook);
+    m_yieldInterval = intervalTStates;
+    m_yieldCountdown = intervalTStates;
 }
 
 void PC1600Machine::pressKey(const std::string& name) {

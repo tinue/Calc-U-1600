@@ -102,10 +102,33 @@ int PC1500Machine::step() {
     return c;
 }
 
-uint64_t PC1500Machine::runCycles(uint64_t maxCycles) {
+void PC1500Machine::setYieldHook(std::function<void()> hook, uint64_t intervalCycles) {
     std::lock_guard<std::mutex> lock(m_mutex);
+    m_yieldHook = std::move(hook);
+    m_yieldInterval = intervalCycles;
+    m_yieldCountdown = intervalCycles;
+}
+
+uint64_t PC1500Machine::runCycles(uint64_t maxCycles) {
+    std::unique_lock<std::mutex> lock(m_mutex);
     uint64_t consumed = 0;
+    uint64_t yieldAccounted = 0;
     while (consumed < maxCycles) {
+        // See setYieldHook(). Checked at the top of the loop so the halted
+        // branch's `continue` below is covered too; the hook runs unlocked.
+        if (m_yieldHook) {
+            const uint64_t ran = consumed - yieldAccounted;
+            yieldAccounted = consumed;
+            if (ran >= m_yieldCountdown) {
+                m_yieldCountdown = m_yieldInterval;
+                const std::function<void()> hook = m_yieldHook;
+                lock.unlock();
+                hook();
+                lock.lock();
+            } else {
+                m_yieldCountdown -= ran;
+            }
+        }
         int c = m_cpu.step();
         m_memory.updatePUPV(m_cpu.pu(), m_cpu.pv());
         if (c == 0) {

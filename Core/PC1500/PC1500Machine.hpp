@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -68,6 +69,16 @@ public:
     /// breakpoint stops execution first. Returns the number of cycles
     /// actually consumed.
     uint64_t runCycles(uint64_t maxCycles);
+
+    /// Optional host callback invoked from inside runCycles() roughly every
+    /// `intervalCycles` of emulated time (counted across calls, so many
+    /// short runCycles() calls still add up). Lets a UI thread that drives
+    /// a long synchronous preset/program load keep its event loop alive
+    /// (repaint, show a progress popup) without the loaders knowing about
+    /// it. Called with m_mutex NOT held, so the hook may safely read the
+    /// display snapshot. The hook must not drive the machine itself. An
+    /// empty function (the default) removes it.
+    void setYieldHook(std::function<void()> hook, uint64_t intervalCycles);
 
     // Named-key vocabulary used by preset scripts and the BASIC typer. Unknown
     // names (including "on" -- see class doc comment) are silently ignored,
@@ -245,6 +256,11 @@ private:
     std::unique_ptr<ExpansionCard> m_attachedExpansionCard; // see attachExpansionCard()
     std::unique_ptr<Ce150Card> m_ce150Card;                 // see attachCE150()
     mutable std::mutex m_mutex;
+
+    // See setYieldHook(). m_yieldCountdown only runs down while a hook is set.
+    std::function<void()> m_yieldHook;
+    uint64_t m_yieldInterval = 0;
+    uint64_t m_yieldCountdown = 0;
 
     // ── Headless CPU-trace file -- see beginCpuTrace() ───────────────────
     std::unique_ptr<PC1500TraceFile> m_traceFile;

@@ -1,6 +1,7 @@
 #pragma once
 #include <QObject>
 #include <QString>
+#include <functional>
 
 #include "MachineController.hpp"  // Model
 
@@ -15,11 +16,11 @@ class FloppyDiskManager;
 // finishPresetLoad), applies it, then syncs MemoryModuleManager's slot
 // bookkeeping to match what the preset itself attached.
 //
-// Runs synchronously on the calling (UI) thread -- there's no threading
-// infrastructure here, so a preset with long `wait:` steps will visibly
-// freeze the window for its duration. MainWindow stops the frame timer
-// around the call so it can't reenter the machine mid-load; that's the
-// whole mitigation for now.
+// Runs synchronously on the calling (UI) thread. MainWindow stops the frame
+// timer around the call so it can't reenter the machine mid-load, and
+// installs a yield hook (setYieldHook()) that the machine calls
+// periodically from inside its run loop, so the window keeps repainting
+// and can show a "Loading..." popup instead of freezing.
 //
 // Only meaningful when CALCU1600_PRESET_LOADER_AVAILABLE is defined
 // (macOS for now -- see Qt6/CMakeLists.txt's CORE_SOURCES if(APPLE) block:
@@ -59,6 +60,12 @@ public:
     // first). Resets the machine and destroys the current program (NEW0).
     bool loadBasicProgramLive(const QString& path, QString* error);
 
+    // Callback installed on the target machine (PC1500Machine/
+    // PC1600Machine::setYieldHook()) for the duration of each load above,
+    // then removed again. Called on the calling thread roughly every few
+    // ms of emulated time; it must not drive the machine. Empty = none.
+    void setYieldHook(std::function<void()> hook) { m_yieldHook = std::move(hook); }
+
 signals:
     // Fired exactly once per loadPreset() call that gets far enough to
     // attach the preset's model/cards/plotter, right before the machine
@@ -75,4 +82,5 @@ private:
     MachineController* m_controller;       // not owned
     MemoryModuleManager* m_moduleManager;  // not owned
     FloppyDiskManager* m_floppyManager;    // not owned
+    std::function<void()> m_yieldHook;
 };

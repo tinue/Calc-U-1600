@@ -36,6 +36,32 @@ namespace {
 // power-on default (1/1/00:00), not "now". Templated so one definition
 // covers both PC1500Machine::seedClock and PC1600Machine::seedClock
 // (same signature, no shared base).
+// Installs PresetController's yield hook on `machine` for the lifetime of
+// this object. ~10 ms of emulated time between calls: frequent enough for a
+// smooth UI at any emulation speed; the hook itself rate-limits by wall
+// clock. Templated for the same reason as seedClockFromHost() below.
+template <typename Machine>
+class ScopedYieldHook {
+public:
+    ScopedYieldHook(Machine& machine, const std::function<void()>& hook, uint64_t cyclesPerSecond)
+        : m_machine(machine), m_active(static_cast<bool>(hook)) {
+        if (m_active) m_machine.setYieldHook(hook, cyclesPerSecond / 100);
+    }
+    ~ScopedYieldHook() {
+        if (m_active) m_machine.setYieldHook({}, 0);
+    }
+    ScopedYieldHook(const ScopedYieldHook&) = delete;
+    ScopedYieldHook& operator=(const ScopedYieldHook&) = delete;
+
+private:
+    Machine& m_machine;
+    bool m_active;
+};
+
+// LH5801 clock (1.3 MHz); PC-1600 counts SC7852 T-states instead
+// (PC1600Machine::kTStateHz).
+constexpr uint64_t kPC1500CyclesPerSecond = 1300000;
+
 template <typename Machine>
 void seedClockFromHost(Machine& machine) {
     const QDateTime now = QDateTime::currentDateTime();
@@ -108,6 +134,7 @@ bool PresetController::loadPreset(const QString& path, QString* error) {
 
     if (preset.isPC1600()) {
         PC1600Machine& machine = m_controller->resetBareForPresetPC1600();
+        const ScopedYieldHook<PC1600Machine> yieldHook(machine, m_yieldHook, PC1600Machine::kTStateHz);
         // Announce the model switch before applyPC1600Preset() even runs,
         // not after -- MainWindow's `armed()` handler (below) needs
         // MachineController::currentModel() to already read PC-1600 so it
@@ -147,6 +174,7 @@ bool PresetController::loadPreset(const QString& path, QString* error) {
     }
 
     PC1500Machine& machine = m_controller->resetBareForPresetPC1500(preset.variant);
+    const ScopedYieldHook<PC1500Machine> yieldHook(machine, m_yieldHook, kPC1500CyclesPerSecond);
     const Model model = (preset.variant == PC1500Variant::PC1500A) ? Model::PC1500A : Model::PC1500;
     // Announce the model switch before applyPC1500Preset() even runs, not
     // after -- see the matching comment in the PC-1600 branch above.
@@ -196,6 +224,7 @@ bool PresetController::loadBasicProgramLive(const QString& path, QString* error)
             *error = tr("No PC-1600 machine is running.");
             return false;
         }
+        const ScopedYieldHook<PC1600Machine> yieldHook(*machine, m_yieldHook, PC1600Machine::kTStateHz);
         return loadBasicProgramLivePC1600(*machine, path.toStdString(), error);
     }
     PC1500Machine* machine = m_controller->pc1500();
@@ -203,6 +232,7 @@ bool PresetController::loadBasicProgramLive(const QString& path, QString* error)
         *error = tr("No PC-1500 machine is running.");
         return false;
     }
+    const ScopedYieldHook<PC1500Machine> yieldHook(*machine, m_yieldHook, kPC1500CyclesPerSecond);
     return loadBasicProgramLivePC1500(*machine, path.toStdString(), error);
 }
 

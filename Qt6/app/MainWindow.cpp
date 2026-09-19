@@ -17,6 +17,8 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QTimer>
+#include <QElapsedTimer>
+#include <QProgressDialog>
 #include <QKeyEvent>
 #include <QCloseEvent>
 #include <QInputDialog>
@@ -36,6 +38,12 @@ namespace {
 // ~60 Hz. Shared by the frame timer's own period and by the turbo
 // fast-forward budget below, so the two stay in lockstep if this changes.
 constexpr int kFrameIntervalMs = 16;
+
+// runSynchronousLoad(): how often the blocked UI thread pumps its event
+// loop mid-load, and how long a load must run before the "Loading..."
+// popup appears (short loads finish without flashing it).
+constexpr int kLoadPumpIntervalMs = 30;
+constexpr int kLoadPopupDelayMs = 500;
 
 // AppSettings::defaultPresetPath()'s per-model key.
 QString modelSettingsKey(Model model) {
@@ -284,8 +292,38 @@ void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::functi
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     setCursor(Qt::WaitCursor);
+
+    // The load itself blocks this thread, so pump the event loop from the
+    // machine's yield hook (see PresetController::setYieldHook()): keeps the
+    // window painting (no beachball) and, once the load has run long enough
+    // to be noticeable, shows a "Loading..." popup. User input stays
+    // excluded -- nothing may touch the machine until the load returns.
+    QElapsedTimer sinceStart;
+    QElapsedTimer sincePump;
+    sinceStart.start();
+    sincePump.start();
+    std::unique_ptr<QProgressDialog> popup;
+    m_presetController->setYieldHook([&] {
+        if (sincePump.elapsed() < kLoadPumpIntervalMs) return;
+        sincePump.restart();
+        if (!popup && sinceStart.elapsed() >= kLoadPopupDelayMs) {
+            popup = std::make_unique<QProgressDialog>(tr("Loading…"), QString(), 0, 0, this);
+            popup->setWindowTitle(errorTitle);
+            popup->setWindowModality(Qt::WindowModal);
+            popup->setMinimumDuration(0);
+            popup->show();
+        }
+        // Let the LCD follow along too (the frame timer that normally
+        // refreshes it is stopped for the load).
+        m_faceplate->lcdWidget()->setFrame(m_controller->currentDisplay());
+        m_faceplate->lcdWidget()->update();
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    });
+
     QString error;
     const bool ok = loadFn(&error);
+    m_presetController->setYieldHook({});
+    popup.reset();
     unsetCursor();
     if (afterLoad) afterLoad();
     m_frameTimer->start(kFrameIntervalMs);
