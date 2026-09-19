@@ -9,12 +9,46 @@ plotter: ce1600p
 
 memory-expansion-1:
   - modulespec: CE-1600M
+memory-expansion-2:
+  - modulespec: CE-1601M
 
-# The saved "Initialized" disk, side B facing the head.
-floppy: Initialized,B
-
-# Clear memory and go to RUN mode
+# NEW after reset
 keys:
   - key: mode
   - type: NEW0
   - key: mode
+# Initialize the floppy:
+  - type: INIT"X:"
+  - key: enter
+# Initialize and partition the memory card
+  - type: INIT"S2:","F"
+  - type: INIT"S2:","M"
+# Setup the com port for 9600, no flow control:
+  - type: SETCOM "COM1:",9600,8,N,1,N,N
+  - type: OUTSTAT "COM1:"
+  - type: SNDSTAT "COM1:",28
+  - type: RCVSTAT "COM1:",28
+  - type: INIT "COM1:",8192
+# Reserve Area II for LOAD and SAVE
+  - key: shift
+  - key: mode
+  - type: NEW
+  - key: rsv
+  - type: '"SAVE LOAD"'
+  - key: f1
+  - type: SAVE"COM1:"@
+  - key: f2
+  - type: LOAD"COM1:"@
+  - key: mode
+  - key: rsv
+  - key: rsv
+# Collect some information:
+  - type: M=MEM
+  - type: S=DSKF"S2:"
+  - type: X=DSKF"X:"
+# Clear the display
+  - key: shift
+  - key: cl
+# Print the information
+  - type: PRINT"Memory:  ";M;"           Diskette:";X;"           Slot2:   ";S
+  - key: enter
