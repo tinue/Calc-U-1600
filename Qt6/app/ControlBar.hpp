@@ -32,7 +32,7 @@ public:
     void setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& bundled,
                          const QVector<MemoryModuleManager::ModuleEntry>& instances,
                          const QString& selectedOrEmpty);
-    void setSlotBatteryBacked(int slot, bool battery); // enables/disables the save button
+    void setSlotSaveEnabled(int slot, bool enabled);   // Name & Save offered (unsaved battery card)
     void setSlot2Visible(bool visible);                // PC1600 vs PC1500/1500A
 
     // Plotter toggle buttons -- checked state reflects live attachment,
@@ -45,7 +45,7 @@ public:
     void setCe1600pVisible(bool visible);
 
     // CE-1600F floppy disk picker -- same combo+save-button shape as a
-    // memory slot (setModuleCombos/setSlotBatteryBacked above). Always
+    // memory slot (setModuleCombos/setSlotSaveEnabled above). Always
     // shown on a PC-1600 (setFloppyVisible) so the control bar doesn't
     // jump around as the CE-1600P attaches/detaches -- setFloppyEnabled
     // grays the row out instead while the floppy (which attaches as a
@@ -54,6 +54,7 @@ public:
                         const QVector<FloppyDiskManager::DiskEntry>& instances, const QString& selectedOrEmpty);
     void setFloppyVisible(bool visible);   // PC-1600 vs PC-1500/1500A
     void setFloppyEnabled(bool enabled);   // CE-1600P attached vs not
+    void setFloppySaveEnabled(bool enabled); // Name & Save offered (unsaved disk in the drive)
     // "A"/"B" -- the side currently facing the head (CE1600FCard::side()).
     void setFloppySide(int side);
     // The "green lamp": true while the drive motor is spinning -- the user

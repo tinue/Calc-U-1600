@@ -108,6 +108,10 @@ bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
         *error = tr("There's no disk in the drive.");
         return false;
     }
+    if (hasInstanceFile()) {
+        *error = tr("\"%1\" is already saved; changes are saved automatically.").arg(m_diskName);
+        return false;
+    }
     if (name.contains(QLatin1Char('"'))) {
         *error = tr("Name cannot contain '\"'.");
         return false;
@@ -116,7 +120,7 @@ bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
         *error = tr("\"%1\" is a built-in disk name. Choose a different name.").arg(name);
         return false;
     }
-    if (name != m_diskName && nameCollides(name)) {
+    if (nameCollides(name)) {
         *error = tr("A disk named \"%1\" already exists. Choose a different name.").arg(name);
         return false;
     }
@@ -152,6 +156,11 @@ void FloppyDiskManager::markDirtyAndSchedulePersist() {
     m_persistPending = true;
     if (m_debounceTimer->isActive()) return;  // already pending -- coalesce
     m_debounceTimer->start(500);
+}
+
+bool FloppyDiskManager::canNameAndSave() const {
+    auto* m1600 = m_controller->pc1600();
+    return m1600 && m1600->ce1600fHasDisk() && !hasInstanceFile();
 }
 
 int FloppyDiskManager::side() const {

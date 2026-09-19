@@ -104,11 +104,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         refreshModuleCombos();
     });
     connect(m_controlBar, &ControlBar::nameAndSaveRequested, this, [this](int slot) {
-        const bool prefillCurrent = m_moduleManager->slotHasInstanceFile(slot);
         bool ok = false;
-        const QString name = QInputDialog::getText(
-            this, tr("Name & Save"), tr("Instance name:"), QLineEdit::Normal,
-            prefillCurrent ? m_moduleManager->selectedModuleName(slot) : QString(), &ok);
+        const QString name = QInputDialog::getText(this, tr("Name & Save"), tr("Instance name:"),
+                                                   QLineEdit::Normal, QString(), &ok);
         if (!ok) return;
         QString error;
         if (!m_moduleManager->nameAndSave(slot, name, &error)) {
@@ -174,9 +172,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     });
     connect(m_controlBar, &ControlBar::floppyNameAndSaveRequested, this, [this] {
         bool ok = false;
-        const QString name = QInputDialog::getText(
-            this, tr("Name & Save"), tr("Disk name:"), QLineEdit::Normal,
-            m_floppyManager->hasInstanceFile() ? m_floppyManager->selectedDiskName() : QString(), &ok);
+        const QString name = QInputDialog::getText(this, tr("Name & Save"), tr("Disk name:"),
+                                                   QLineEdit::Normal, QString(), &ok);
         if (!ok) return;
         QString error;
         if (!m_floppyManager->nameAndSave(name, &error)) {
@@ -377,7 +374,7 @@ void MainWindow::refreshModuleCombos() {
         const auto bundled = m_moduleManager->bundledEntries(host);
         const auto instance = m_moduleManager->instanceEntries(host);
         m_controlBar->setModuleCombos(slot, bundled, instance, m_moduleManager->selectedModuleName(slot));
-        m_controlBar->setSlotBatteryBacked(slot, m_moduleManager->isSlotBatteryBacked(slot, bundled, instance));
+        m_controlBar->setSlotSaveEnabled(slot, m_moduleManager->canNameAndSave(slot, bundled, instance));
     }
 }
 
@@ -385,6 +382,7 @@ void MainWindow::refreshFloppyCombo() {
     m_controlBar->setFloppyCombo(m_floppyManager->bundledEntries(), m_floppyManager->instanceEntries(),
                                  m_floppyManager->selectedDiskName());
     m_controlBar->setFloppySide(m_floppyManager->side());
+    m_controlBar->setFloppySaveEnabled(m_floppyManager->canNameAndSave());
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* event) {

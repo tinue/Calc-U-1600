@@ -213,25 +213,26 @@ bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QSt
         *error = tr("No module attached.");
         return false;
     }
+    if (!st.instanceFilePath.isEmpty()) {
+        *error = tr("\"%1\" is already saved; changes are saved automatically.").arg(st.moduleName);
+        return false;
+    }
     if (isBundledName(name)) {
         *error = tr("\"%1\" is a built-in card name. Choose a different name.").arg(name);
         return false;
     }
-    if (name != st.moduleName && nameCollides(name)) {
+    if (nameCollides(name)) {
         *error = tr("A card named \"%1\" already exists. Choose a different name.").arg(name);
         return false;
     }
 
-    QString sourcePath = st.instanceFilePath;
-    if (sourcePath.isEmpty()) {
-        std::string p, err2;
-        if (!resolveModuleSpecByName(AppPaths::bundledResourcesDir().toStdString(), st.moduleName.toStdString(),
-                                     &p, &err2)) {
-            *error = tr("Couldn't find the source template for \"%1\".").arg(st.moduleName);
-            return false;
-        }
-        sourcePath = QString::fromStdString(p);
+    std::string p, err2;
+    if (!resolveModuleSpecByName(AppPaths::bundledResourcesDir().toStdString(), st.moduleName.toStdString(), &p,
+                                 &err2)) {
+        *error = tr("Couldn't find the source template for \"%1\".").arg(st.moduleName);
+        return false;
     }
+    const QString sourcePath = QString::fromStdString(p);
 
     std::string spliced;
     if (!spliceCardImageInto(slot, sourcePath, st.moduleName, name, &spliced, error)) return false;

@@ -49,6 +49,11 @@ public:
     bool isSlotBatteryBacked(int slot, const QVector<ModuleEntry>& bundled,
                               const QVector<ModuleEntry>& instance) const;
     bool slotHasInstanceFile(int slot) const;  // whether autosave-eligible now
+    // Name & Save is offered only for a battery card that isn't saved yet (a
+    // bundled one); a saved card is kept up to date by autosave instead.
+    bool canNameAndSave(int slot, const QVector<ModuleEntry>& bundled, const QVector<ModuleEntry>& instance) const {
+        return isSlotBatteryBacked(slot, bundled, instance) && !slotHasInstanceFile(slot);
+    }
 
     // Called by MachineController::switchModel() right after the new
     // machine + ROMs are constructed, BEFORE its reset()/allReset().

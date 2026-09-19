@@ -139,7 +139,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
         saveButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
         saveButton->setToolTip(tr("Name & Save"));
         saveButton->setFocusPolicy(Qt::NoFocus);
-        saveButton->setEnabled(false);  // always shown; see setSlotBatteryBacked()
+        saveButton->setEnabled(false);  // always shown; see setSlotSaveEnabled()
         m_slot[i].saveButton = saveButton;
         layout->addWidget(saveButton);
 
@@ -217,6 +217,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
 
     setFloppyVisible(false);
     setFloppyEnabled(false);
+    setFloppySaveEnabled(false);
 
     connect(resetButton, &QPushButton::clicked, this, [this, resetButton] {
         emit resetClicked(resetButton->lastClickWasCmd());
@@ -260,8 +261,8 @@ void ControlBar::setModuleCombos(int slot, const QVector<MemoryModuleManager::Mo
 
 // Enables rather than shows/hides the button, so the control bar doesn't
 // shift as modules change.
-void ControlBar::setSlotBatteryBacked(int slot, bool battery) {
-    m_slot[slot - 1].saveButton->setEnabled(battery);
+void ControlBar::setSlotSaveEnabled(int slot, bool enabled) {
+    m_slot[slot - 1].saveButton->setEnabled(enabled);
 }
 
 void ControlBar::setSlot2Visible(bool visible) {
@@ -304,8 +305,11 @@ void ControlBar::setFloppyVisible(bool visible) {
 
 void ControlBar::setFloppyEnabled(bool enabled) {
     m_floppyCombo->setEnabled(enabled);
-    m_floppySaveButton->setEnabled(enabled);
     m_floppySideButton->setEnabled(enabled);
+}
+
+void ControlBar::setFloppySaveEnabled(bool enabled) {
+    m_floppySaveButton->setEnabled(enabled);
 }
 
 void ControlBar::setFloppySide(int side) {

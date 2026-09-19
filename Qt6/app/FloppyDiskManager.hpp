@@ -41,6 +41,9 @@ public:
     void selectDisk(const QString& diskNameOrEmpty);
     QString selectedDiskName() const { return m_diskName; }
     bool hasInstanceFile() const { return !m_instanceFilePath.isEmpty(); }
+    // Name & Save is offered only for a disk that isn't saved yet (a bundled
+    // one); a saved disk is kept up to date by autosave instead.
+    bool canNameAndSave() const;
 
     // Side A/B -- the software analogue of ejecting and flipping the
     // physical disk (CE1600FCard::setSide()'s own comment: this itself
