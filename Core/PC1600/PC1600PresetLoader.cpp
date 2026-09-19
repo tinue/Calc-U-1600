@@ -20,6 +20,7 @@
 #include "PC1600Keyboard.hpp"
 #include "PC1600Machine.hpp"
 #include "PC1600MachineImage.hpp"
+#include "PC1600Screenshot.hpp"
 
 namespace {
 
@@ -513,6 +514,19 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
                     }
                     machine.beginCpuTrace(fh, TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL);
                     if (log) log("  trace: started -> " + path);
+                    break;
+                }
+                case PresetStep::Kind::Screenshot: {
+                    // PNG of the graphics area, as it stands right now, into
+                    // the trace directory (same image as the GUI's Copy Screen).
+                    const std::string path = traceDir + "/" + step.text;
+                    std::string writeError;
+                    if (!writeLcdScreenshotPng(pc1600LcdBitmap(machine), kPC1600ScreenMm, path, &writeError)) {
+                        result.error = "screenshot: " + writeError;
+                        if (log) log("  screenshot: FAILED: " + writeError);
+                        return result;
+                    }
+                    if (log) log("  screenshot: -> " + path);
                     break;
                 }
             }

@@ -30,6 +30,8 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/PC1600/PC1600ProgramPlacement.cpp \
   Core/PC1600/PC1600MachineImage.cpp \
   Core/PC1600/PC1600PresetLoader.cpp \
+  Core/Display/LcdScreenshot.cpp \
+  Core/KeyPaste.cpp \
   Core/Basic/BasicBinaryImage.cpp \
   Core/Basic/BasicProgramSource.cpp \
   Core/tests/lh5801_tests.cpp \
@@ -64,6 +66,9 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/pc1600_machine_image_tests.cpp \
   Core/tests/basic_program_source_tests.cpp \
   Core/tests/piezo_sampler_tests.cpp \
+  Core/tests/key_paste_tests.cpp \
+  Core/tests/lcd_screenshot_tests.cpp \
   Core/Basic/vendor/sharpdx/libsharpdx.a \
+  -lz \
   -o /tmp/lh5801_tests
 /tmp/lh5801_tests

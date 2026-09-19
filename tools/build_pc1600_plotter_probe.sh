@@ -35,5 +35,6 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/PC1600/PC1600BasicTyper.cpp \
   Core/PC1600/PC1600MachineImage.cpp \
   Core/PC1600/PC1600PresetLoader.cpp \
+  Core/Display/LcdScreenshot.cpp \
   tools/pc1600_plotter_probe.cpp \
   -o headless/pc1600_plotter_probe

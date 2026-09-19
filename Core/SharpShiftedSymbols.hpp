@@ -9,9 +9,9 @@
 //
 // This is the single C++ source of truth for that table. Callers add
 // their own machine-specific extras:
-//   * Core/PC1500/PC1500BasicTyper.cpp also routes a-z here (SHIFT tap =
+//   * Core/PC1500/PC1500TypedInput.hpp also routes a-z here (SHIFT tap =
 //     lowercase on the PC-1500's single-legend letter keys).
-//   * Core/PC1600/PC1600PresetLoader.cpp also maps the PC-1600 digit-row
+//   * Core/PC1600/PC1600TypedInput.hpp also maps the PC-1600 digit-row
 //     second legends (' [ ] ` { } \ ~ _ |), which the PC-1500 lacks.
 //
 // The Swift GUI keeps its own copy (Calc-U-1600/PC1500KeyboardMap.swift's

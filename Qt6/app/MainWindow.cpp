@@ -14,6 +14,7 @@
 #include "PresetController.hpp"
 #include "AudioOutput.hpp"
 #include "AppSettings.hpp"
+#include "MacClipboardImage.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -32,7 +33,12 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QKeySequence>
+#include <QClipboard>
+#include <QGuiApplication>
+#include <QImage>
+#include <QMimeData>
 #include <chrono>
+#include <cstring>
 #include <functional>
 
 namespace {
@@ -412,6 +418,12 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
         return;
     }
 
+    // A real machine keystroke aborts a paste still typing -- an easy way
+    // out of a long one, and it keeps the two from fighting over the key
+    // matrix. (Checked after resolve() so bare modifiers -- the Cmd of a
+    // second Cmd-V, Cmd-Tab -- don't count.)
+    if (m_controller->pasteActive()) m_controller->cancelPaste();
+
     // A real held press/release, tracked for the matching .up event --
     // used for any key that bypasses the live-typing queue.
     auto trackAndPress = [this, event](const std::string& baseKey) {
@@ -450,6 +462,35 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
         m_controller->enqueueKey(resolved->baseKey);
     }
     event->accept();
+}
+
+void MainWindow::copyScreenToClipboard() {
+    const GrayImage screen = m_controller->currentScreenImage();
+    if (screen.width <= 0 || screen.height <= 0) return;
+    QImage image(screen.width, screen.height, QImage::Format_Grayscale8);
+    for (int y = 0; y < screen.height; ++y) {
+        std::memcpy(image.scanLine(y), screen.pixels.data() + static_cast<std::size_t>(y) * screen.width,
+                    static_cast<std::size_t>(screen.width));
+    }
+    const int dotsPerMeter = static_cast<int>(screen.pixelsPerMeter());
+    image.setDotsPerMeterX(dotsPerMeter);
+    image.setDotsPerMeterY(dotsPerMeter);
+
+#ifdef Q_OS_MACOS
+    // Qt's QClipboard::setImage() drops the physical size on macOS (see
+    // MacClipboardImage.h) -- go through Cocoa so a paste lands at the
+    // real display's size.
+    const double widthPt = screen.width * 72.0 / screen.dpi;
+    const double heightPt = screen.height * 72.0 / screen.dpi;
+    if (macSetClipboardImage(image, widthPt, heightPt)) return;
+#endif
+    QGuiApplication::clipboard()->setImage(image);
+}
+
+void MainWindow::pasteClipboardText() {
+    const QMimeData* mime = QGuiApplication::clipboard()->mimeData();
+    if (!mime || !mime->hasText()) return; // images etc. are ignored
+    m_controller->pasteText(mime->text().toStdString());
 }
 
 void MainWindow::keyReleaseEvent(QKeyEvent* event) {
@@ -535,6 +576,23 @@ void MainWindow::buildMenuBar() {
     quitAction->setMenuRole(QAction::QuitRole);
     quitAction->setShortcut(QKeySequence::Quit);
     connect(quitAction, &QAction::triggered, this, &QWidget::close);
+
+    // Edit: Cmd-C / Cmd-V (Ctrl on other platforms). A focused text field
+    // (e.g. the debug panel's) still gets its own copy/paste first -- Qt
+    // lets a widget claim standard shortcuts via ShortcutOverride.
+    QMenu* editMenu = menuBar()->addMenu(tr("&Edit"));
+    QAction* copyScreenAction = editMenu->addAction(tr("Copy Screen"));
+    copyScreenAction->setShortcut(QKeySequence::Copy);
+    connect(copyScreenAction, &QAction::triggered, this, &MainWindow::copyScreenToClipboard);
+    m_pasteAction = editMenu->addAction(tr("Paste Text"));
+    m_pasteAction->setShortcut(QKeySequence::Paste);
+    connect(m_pasteAction, &QAction::triggered, this, &MainWindow::pasteClipboardText);
+    auto refreshPasteEnabled = [this] {
+        const QMimeData* mime = QGuiApplication::clipboard()->mimeData();
+        m_pasteAction->setEnabled(mime && mime->hasText());
+    };
+    connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, refreshPasteEnabled);
+    refreshPasteEnabled();
 
     // Machine: duplicates ControlBar's model/ROM pickers (checkable, exclusive
     // per group) plus Reset/Reset All, which today only reachable via

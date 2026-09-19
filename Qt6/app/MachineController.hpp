@@ -9,6 +9,8 @@
 #include <vector>
 
 #include "Connector/AlpsPlotterMechanism.hpp"
+#include "Display/LcdScreenshot.hpp"
+#include "KeyPaste.hpp"
 #include "PC1500/PC1500Variant.hpp"
 #include "TraceTypes.hpp"
 
@@ -127,6 +129,23 @@ public:
     // wall-clock QTimer chain, which can interleave incorrectly under
     // fast typing.
     void enqueueShiftedKey(const std::string& baseName);
+
+    // Edit > Paste Text: types `text` (UTF-8) into the active machine at the
+    // ROM's own keystroke cadence -- see Core/KeyPaste.hpp. Nothing is
+    // added or validated; unmappable characters are skipped; a line break
+    // is ENTER (a single trailing one is dropped). Appends to a paste still
+    // in progress. Driven from advance(), so it pauses/turbos with the
+    // emulation. Any machine swap or reset cancels it.
+    void pasteText(const std::string& text);
+    bool pasteActive() const { return m_paste.active(); }
+    // Drops the rest of the paste, releasing a key it holds down.
+    void cancelPaste();
+
+    // Edit > Copy Screen: the active display's dot matrix as a physically
+    // sized greyscale image (Core/Display/LcdScreenshot.hpp) -- the same
+    // pixels a preset's `- screenshot:` step writes. Empty (0x0) with no
+    // machine.
+    GrayImage currentScreenImage() const;
 
     void advance(std::uint64_t cyclesBudget);
 
@@ -259,6 +278,10 @@ private:
     PC1500RomRevision m_pc1500RomRevision = PC1500RomRevision::A04;
     std::unique_ptr<PC1500Machine> m_pc1500;
     std::unique_ptr<PC1600Machine> m_pc1600;
+    KeyPasteFeeder m_paste;
+    std::uint64_t m_pasteFrameCycles = 0; // cycles run since the paste feeder's last frame boundary
+    void runActive(std::uint64_t cycles);
+    void pasteOnFrame();
     MemoryModuleManager* m_moduleManager = nullptr; // not owned
     FloppyDiskManager* m_floppyManager = nullptr;   // not owned
     void flushFloppyBeforeDetach();

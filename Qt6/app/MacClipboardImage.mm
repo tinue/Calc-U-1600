@@ -40,5 +40,11 @@ bool macSetClipboardImage(const QImage& source, double widthPt, double heightPt)
 
     NSPasteboard* pasteboard = [NSPasteboard generalPasteboard];
     [pasteboard clearContents];
-    return [pasteboard writeObjects:@[nsImage]] == YES;
+    if ([pasteboard writeObjects:@[nsImage]] != YES) return false;
+    // Also offer a real PNG (public.png) alongside the NSImage's TIFF, for
+    // consumers that only take PNG. The rep's point size gives it the
+    // physical resolution (pHYs). Best-effort: the NSImage is already there.
+    NSData* png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+    if (png) [pasteboard setData:png forType:NSPasteboardTypePNG];
+    return true;
 }

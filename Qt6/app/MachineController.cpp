@@ -7,8 +7,14 @@
 #include <QMessageBox>
 #include <QTimer>
 
+#include <algorithm>
+
 #include "PC1500/PC1500Machine.hpp"
+#include "PC1500/PC1500Screenshot.hpp"
+#include "PC1500/PC1500TypedInput.hpp"
 #include "PC1600/PC1600Machine.hpp"
+#include "PC1600/PC1600Screenshot.hpp"
+#include "PC1600/PC1600TypedInput.hpp"
 #include "PC1600/PtySerialLink.hpp"
 #include "Resources/BundledRomCatalog.hpp"
 #include "AppPaths.hpp"
@@ -72,6 +78,7 @@ MachineController::~MachineController() = default;
 
 void MachineController::switchModel(Model model) {
     m_model = model;
+    m_paste.cancel({}); // the machine it was typing into is going away
     m_pc1500.reset();
     m_pc1600.reset();
 
@@ -130,6 +137,7 @@ void MachineController::loadPC1600RomSet(PC1600Machine& machine) {
 }
 
 PC1500Machine& MachineController::resetBareForPresetPC1500(PC1500Variant variant) {
+    m_paste.cancel({});
     m_pc1500.reset();
     m_pc1600.reset();
     m_pc1500 = std::make_unique<PC1500Machine>(variant);
@@ -137,6 +145,7 @@ PC1500Machine& MachineController::resetBareForPresetPC1500(PC1500Variant variant
 }
 
 PC1600Machine& MachineController::resetBareForPresetPC1600() {
+    m_paste.cancel({});
     m_pc1500.reset();
     m_pc1600.reset();
     m_pc1600 = std::make_unique<PC1600Machine>();
@@ -190,6 +199,7 @@ void MachineController::seedClockFromHost() {
 }
 
 void MachineController::resetSimple() {
+    cancelPaste();
     if (m_pc1600) {
         m_pc1600->reset();
     } else if (m_pc1500) {
@@ -198,6 +208,7 @@ void MachineController::resetSimple() {
 }
 
 void MachineController::resetAll() {
+    cancelPaste();
     if (m_pc1600) {
         m_pc1600->allReset();
         seedClockFromHost();
@@ -253,12 +264,59 @@ void MachineController::enqueueShiftedKey(const std::string& baseName) {
     enqueueKey(baseName);
 }
 
-void MachineController::advance(std::uint64_t cyclesBudget) {
+void MachineController::pasteText(const std::string& text) {
+    if (!m_pc1500 && !m_pc1600) return;
+    if (!m_paste.active()) m_pasteFrameCycles = 0;
     if (m_pc1600) {
-        m_pc1600->runCycles(cyclesBudget);
-    } else if (m_pc1500) {
-        m_pc1500->runCycles(cyclesBudget);
+        m_paste.setPacing(pc1600PastePacing());
+        m_paste.append(buildPasteSteps(text, pc1600ResolveTypedChar));
+    } else {
+        m_paste.setPacing(pc1500PastePacing());
+        m_paste.append(buildPasteSteps(text, pc1500ResolveTypedChar));
     }
+}
+
+void MachineController::cancelPaste() {
+    m_paste.cancel([this](const std::string& key) { releaseKey(key); });
+}
+
+GrayImage MachineController::currentScreenImage() const {
+    if (m_pc1600) return renderLcdImage(pc1600LcdBitmap(*m_pc1600), kPC1600ScreenMm);
+    if (m_pc1500) return renderLcdImage(pc1500LcdBitmap(*m_pc1500), kPC1500ScreenMm);
+    return GrayImage{};
+}
+
+void MachineController::runActive(std::uint64_t cycles) {
+    if (m_pc1600) {
+        m_pc1600->runCycles(cycles);
+    } else if (m_pc1500) {
+        m_pc1500->runCycles(cycles);
+    }
+}
+
+void MachineController::pasteOnFrame() {
+    const bool atPrompt = m_pc1600 ? pc1600AtBasicPrompt(*m_pc1600)
+                                   : (m_pc1500 && pc1500AtBasicPrompt(*m_pc1500));
+    m_paste.onFrame([this](const std::string& key) { pressKey(key); },
+                    [this](const std::string& key) { releaseKey(key); }, atPrompt);
+}
+
+void MachineController::advance(std::uint64_t cyclesBudget) {
+    // While a paste is typing, run in 60 Hz emulated frames and let the
+    // feeder act at each frame boundary (its cadence is counted in frames,
+    // so it holds under wall-clock pacing and turbo alike).
+    const auto frameCycles = static_cast<std::uint64_t>(clockHz() / 60.0);
+    while (m_paste.active() && cyclesBudget > 0 && frameCycles > 0) {
+        const std::uint64_t chunk = std::min(cyclesBudget, frameCycles - m_pasteFrameCycles);
+        runActive(chunk);
+        cyclesBudget -= chunk;
+        m_pasteFrameCycles += chunk;
+        if (m_pasteFrameCycles >= frameCycles) {
+            m_pasteFrameCycles = 0;
+            pasteOnFrame();
+        }
+    }
+    if (cyclesBudget > 0) runActive(cyclesBudget);
 }
 
 std::size_t MachineController::drainAudio(std::int16_t* out, std::size_t max) {

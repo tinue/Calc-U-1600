@@ -37,7 +37,7 @@
 // `PC-1600` models are accepted (see PresetFile::isPC1600 / variant). Not general
 // YAML: flat `key: value` top-level mappings, `- key: value` sequence
 // items (one verb per step, no further nesting), and one `text: |` block
-// scalar. Step verbs: `key:`, `type:`, `wait:`, and `trace:`. `- wait: N`
+// scalar. Step verbs: `key:`, `type:`, `wait:`, `trace:`, and `screenshot:`. `- wait: N`
 // runs N seconds of emulated time; `- wait:` with no value blocks until the
 // ROM's keyboard idle loop re-engages -- i.e. until a long-running program
 // or plot has finished (a generous safety cap still applies). `trace:` is
@@ -47,7 +47,11 @@
 // starting a new one first closes the open one), `- trace: off` stops it,
 // and any trace still open when the preset finishes is closed
 // automatically. The filename must not contain a path separator. See
-// PC1500PresetLoader.cpp's applyPC1500Preset(). A value may be `"double"` or `'single'`-quoted -- stripped and
+// PC1500PresetLoader.cpp's applyPC1500Preset(). `- screenshot: name.png`
+// writes a PNG of the LCD dot matrix at that point in the script into the
+// same trace directory (overwriting; same no-path-separator rule) -- the
+// image Edit > Copy Screen puts on the clipboard, see
+// Core/Display/LcdScreenshot.hpp. A value may be `"double"` or `'single'`-quoted -- stripped and
 // passed through verbatim (see PresetFile.cpp's unquote()), kept for
 // preset files with quoted values that predate this fork. Tabs, flow
 // style, multiple documents, and inline `#` comments are all
@@ -63,12 +67,13 @@
 // not recognized at all -- both become a single, repeatable `keys:` block
 // name.
 struct PresetStep {
-    enum class Kind { Key, Type, Wait, Trace };
+    enum class Kind { Key, Type, Wait, Trace, Screenshot };
     Kind kind = Kind::Key;
     // key name (Key), program text (Type), or -- for Trace -- the trace
     // output filename to start capturing to, or "" to stop the current
     // capture (`- trace: off`). See PC1500PresetLoader.cpp's `trace:`
     // handling; a port of Calc-U-59's `KEYSTROKES:` `Trace:` directive.
+    // For Screenshot, the PNG filename.
     std::string text;
     // (Wait) seconds of emulated time to run. A negative value is the
     // sentinel for a parameterless `- wait:` step: "run until the ROM's

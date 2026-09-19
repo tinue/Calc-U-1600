@@ -19,6 +19,7 @@
 #include "PC1500BasicLoader.hpp"
 #include "PC1500BasicTyper.hpp"
 #include "PC1500Machine.hpp"
+#include "PC1500Screenshot.hpp"
 
 namespace {
 
@@ -145,6 +146,19 @@ bool runSteps(PC1500Machine& machine, const std::vector<PresetStep>& steps, std:
                 }
                 machine.beginCpuTrace(fh, TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL);
                 if (log) log("  trace: started -> " + path);
+                break;
+            }
+            case PresetStep::Kind::Screenshot: {
+                // PNG of the dot matrix, as it stands right now, into the
+                // trace directory (same image as the GUI's Copy Screen).
+                const std::string path = traceDir + "/" + step.text;
+                std::string writeError;
+                if (!writeLcdScreenshotPng(pc1500LcdBitmap(machine), kPC1500ScreenMm, path, &writeError)) {
+                    if (error) *error = "screenshot: " + writeError;
+                    if (log) log("  screenshot: FAILED: " + writeError);
+                    return false;
+                }
+                if (log) log("  screenshot: -> " + path);
                 break;
             }
         }

@@ -102,6 +102,9 @@ using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& arm
 ///     `traceDir` (`- trace: name.bin` starts, `- trace: off` stops; an
 ///     open trace is auto-closed when the preset finishes). Both CPUs'
 ///     rings are captured into one file, tagged by cpuId.
+///   - `screenshot:` -- `- screenshot: name.png` writes a PNG of the LCD
+///     graphics area (no status strip; Core/Display/LcdScreenshot.hpp,
+///     89 x 18 mm at 600 DPI) into `traceDir`, overwriting.
 ///
 /// A `program:` block is one of:
 ///   - `format: basic-text` / `format: basic-binary` -- a BASIC program.
@@ -129,8 +132,8 @@ using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& arm
 /// `traceDir` is where a `- trace: name.bin` step writes -- WHERE trace
 /// files live is environment-specific, not the preset's concern (the CLI
 /// passes ".", the GUI passes `AppSettings.traceDirectory()`). The
-/// preset's filename is appended verbatim. A preset with no `trace:` step
-/// never touches it.
+/// preset's filename is appended verbatim. `screenshot:` writes there
+/// too. A preset with neither step never touches it.
 ///
 /// `moduleDir` is the directory searched first for a
 /// `- modulespec: <module-name>` slot reference (a bundled/standard module

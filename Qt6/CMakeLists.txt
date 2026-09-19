@@ -81,6 +81,8 @@ set(CORE_SOURCES
   ${CORE_ROOT}/PC1600/PC1600Display.cpp
   ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp
+  ${CORE_ROOT}/Display/LcdScreenshot.cpp
+  ${CORE_ROOT}/KeyPaste.cpp
 )
 
 # Preset loading, entire (PresetFile.cpp, *PresetLoader.cpp,

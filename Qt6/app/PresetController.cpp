@@ -10,6 +10,7 @@ PresetController::PresetController(MachineController* controller, MemoryModuleMa
 #include "MemoryModuleManager.hpp"
 #include "FloppyDiskManager.hpp"
 #include "AppPaths.hpp"
+#include "AppSettings.hpp"
 
 #include <QDateTime>
 #include <QDebug>
@@ -146,11 +147,12 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
     const std::vector<std::string> romDirs = {bundledDir};
     const std::string moduleDir = bundledDir;
     const std::vector<std::string> extraModuleDirs = {AppPaths::instanceDir().toStdString()};
-    // No dedicated trace-directory setting exists yet (the debug area is
-    // the last item on this prototype's feature-parity roadmap) -- reuse
-    // the instance directory, which is always present and writable, as a
-    // reasonable default a `- trace:` step can write into meanwhile.
-    const std::string traceDir = AppPaths::instanceDir().toStdString();
+    // `- trace:` and `- screenshot:` steps write into the Settings trace
+    // directory, falling back to the instance directory (always present and
+    // writable) -- the same resolution DebugPanel's trace capture uses.
+    const QString traceDirSetting = AppSettings::traceDirOverride();
+    const std::string traceDir =
+        (traceDirSetting.isEmpty() ? AppPaths::instanceDir() : traceDirSetting).toStdString();
     const auto logSink = [](const std::string& line) {
         qDebug().noquote() << "[preset]" << QString::fromStdString(line);
     };

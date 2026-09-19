@@ -14,7 +14,8 @@
 // NSBitmapImageRep carries every source pixel (so print quality is
 // unaffected), but the NSImage's/rep's own `size` is set to the true
 // physical dimensions in points, which is what AppKit consumers (Preview,
-// the print system) actually read to determine physical size.
+// the print system) actually read to determine physical size. A PNG
+// flavour (public.png) of the same bitmap is put on the pasteboard too.
 //
 // Returns false (nothing written) if `source` is empty/invalid -- caller
 // should fall back to Qt's own clipboard path in that case.

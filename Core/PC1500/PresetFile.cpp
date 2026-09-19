@@ -210,6 +210,21 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
             } else {
                 step.text = value;
             }
+        } else if (verb == "screenshot") {
+            // PNG of the LCD dot matrix into the trace directory -- like
+            // `trace:`, WHERE it lands is the loader's concern, so the
+            // filename must not carry a path.
+            step.kind = PresetStep::Kind::Screenshot;
+            if (value.empty()) {
+                *error = "line " + std::to_string(line.lineNo) + ": 'screenshot' needs a filename";
+                return false;
+            }
+            if (value.find('/') != std::string::npos || value.find('\\') != std::string::npos) {
+                *error = "line " + std::to_string(line.lineNo) + ": 'screenshot' filename '" + value +
+                         "' must not contain a path separator";
+                return false;
+            }
+            step.text = value;
         } else if (verb == "check") {
             *error = "line " + std::to_string(line.lineNo) + ": 'check' steps are not yet supported by this loader";
             return false;

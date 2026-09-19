@@ -77,6 +77,13 @@ private:
 
     void buildMenuBar();
 
+    // Edit menu: Copy Screen puts a PNG of the LCD dot matrix (physical
+    // size, no annunciators) on the clipboard; Paste Text types the
+    // clipboard's text into the machine (MachineController::pasteText()).
+    void copyScreenToClipboard();
+    void pasteClipboardText();
+    QAction* m_pasteAction = nullptr;
+
     // Shared by both ControlBar's combo-box signal and the Machine menu's
     // QActions, so either source of a model/ROM-revision change drives the
     // exact same rebuild + resync path (previously these were ControlBar-

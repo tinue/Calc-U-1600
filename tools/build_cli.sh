@@ -15,6 +15,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/PC1500/PC1500BasicTyper.cpp \
   Core/PC1500/PC1500BasicLoader.cpp \
   Core/PC1500/PC1500PresetLoader.cpp \
+  Core/Display/LcdScreenshot.cpp \
   Core/Basic/BasicBinaryImage.cpp \
   Core/Basic/BasicProgramSource.cpp \
   Core/PC1500/PC1500TraceFile.cpp \

@@ -84,7 +84,10 @@ using PresetArmedFn = std::function<void(const PresetLoadResult& armedSoFar)>;
 /// "." (cwd, same convention as its `roms/`), the GUI passes
 /// `AppSettings.traceDirectory()`. The preset's filename is appended to
 /// it verbatim (the parser has already rejected a path separator in it).
-/// A preset with no `trace:` step never touches `traceDir`.
+/// A `- screenshot: name.png` step writes a PNG of the LCD dot matrix
+/// (Core/Display/LcdScreenshot.hpp, 104 x 5 mm at 600 DPI) into the same
+/// directory, overwriting. A preset with neither step never touches
+/// `traceDir`.
 ///
 /// `moduleDir` is the directory searched first for a
 /// `- modulespec: <module-name>` memory-expansion reference (a

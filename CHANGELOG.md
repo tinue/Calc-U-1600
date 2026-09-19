@@ -2,6 +2,18 @@
 
 ## [0.4.0] - work in progress
 
+- **Paste** Edit > Paste Text (Cmd-V) types the clipboard's text into
+  the machine, paced so no character is lost. Nothing is added or
+  checked: a line break presses ENTER and waits for the line to finish,
+  a trailing line break is dropped, and characters without a key are
+  skipped. Pressing a machine key stops a paste in progress.
+- **Copy** Edit > Copy Screen (Cmd-C) puts a PNG of the display on the
+  clipboard: dot matrix only (no status indicators), black on white, at
+  the real display's size (PC-1600 89 x 18 mm, PC-1500 104 x 5 mm).
+- **Presets** New `- screenshot: <file.png>` step writes the same image
+  into the trace directory. `trace:` and `screenshot:` now honour the
+  trace directory set in Settings.
+
 ## [0.3.0] - 2026-09-19
 
 - **PC-1600F** Added the CE-1600F pocket floppy drive for the
