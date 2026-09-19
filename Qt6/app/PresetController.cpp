@@ -1,8 +1,36 @@
 #include "PresetController.hpp"
 
+#include "PC1500/PC1500Machine.hpp"
+#include "PC1500/PC1500MachineCodeLoader.hpp"
+#include "PC1600/PC1600Machine.hpp"
+#include "PC1600/PC1600MachineCodeLoader.hpp"
+
 PresetController::PresetController(MachineController* controller, MemoryModuleManager* moduleManager,
                                      FloppyDiskManager* floppyManager, QObject* parent)
     : QObject(parent), m_controller(controller), m_moduleManager(moduleManager), m_floppyManager(floppyManager) {}
+
+bool PresetController::loadMachineCodeLive(const MachineCodeLoadRequest& request, QString* error) {
+    std::string err;
+    bool ok = false;
+    if (m_controller->currentModel() == Model::PC1600) {
+        PC1600Machine* machine = m_controller->pc1600();
+        if (!machine) {
+            *error = tr("No PC-1600 machine is running.");
+            return false;
+        }
+        ok = loadPC1600MachineCode(*machine, request.slot, request.addr, request.payload.data(),
+                                   request.payload.size(), &err);
+    } else {
+        PC1500Machine* machine = m_controller->pc1500();
+        if (!machine) {
+            *error = tr("No PC-1500 machine is running.");
+            return false;
+        }
+        ok = loadPC1500MachineCode(*machine, request.addr, request.payload.data(), request.payload.size(), &err);
+    }
+    if (!ok) *error = QString::fromStdString(err);
+    return ok;
+}
 
 #ifdef CALCU1600_PRESET_LOADER_AVAILABLE
 

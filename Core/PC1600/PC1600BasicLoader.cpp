@@ -4,6 +4,7 @@
 
 #include "../Basic/BasicBinaryImage.hpp"
 #include "PC1600Machine.hpp"
+#include "PC1600MachineCodeLoader.hpp"
 #include "PC1600ProgramPlacement.hpp"
 
 namespace {
@@ -38,21 +39,6 @@ bool writePlacementSegment(PC1600Machine& machine, const pc1600::PlacementWrite&
     return (w.kind == pc1600::ProgramSegment::Kind::InternalRam)
                ? machine.debugWriteInternalRam(w.backingOffset, src, w.length)
                : machine.debugWriteSlotImage(w.slot, w.backingOffset, src, w.length);
-}
-
-pc1600::SlotGeometry slotGeometry(PC1600Machine& machine, int slot) {
-    pc1600::SlotGeometry g;
-    std::vector<uint8_t> img = machine.debugSlotImage(slot);
-    g.present = !img.empty();
-    g.imageSize = static_cast<uint32_t>(img.size());
-    // The BASIC program area only ever occupies bank 0 of the module (a
-    // vertically banked CE-1601M rests at Port 28H = 0). For a banked card
-    // that is debugImage().size() / bankCount; for an unbanked one it is
-    // the whole image.
-    PC1600Machine::DebugBankState bs = machine.debugBankState();
-    int bankCount = (slot == 2) ? bs.slot2CardBankCount : bs.slot1CardBankCount;
-    g.bankSize = (bankCount > 0) ? g.imageSize / static_cast<uint32_t>(bankCount) : g.imageSize;
-    return g;
 }
 
 }  // namespace
@@ -110,8 +96,8 @@ PC1600BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
 
     pc1600::PlacementInput in;
     in.peek = [&machine](uint16_t a) { return machine.debugPeek(a); };
-    in.slot1 = slotGeometry(machine, 1);
-    in.slot2 = slotGeometry(machine, 2);
+    in.slot1 = pc1600SlotGeometry(machine, 1);
+    in.slot2 = pc1600SlotGeometry(machine, 2);
 
     pc1600::PlacementResult plan = pc1600::planS0Placement(in, payload.size());
     if (!plan.ok) return fail(plan.error);

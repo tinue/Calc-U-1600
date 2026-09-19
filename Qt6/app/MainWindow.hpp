@@ -115,6 +115,7 @@ private:
     // constructor state (m_presetController, m_frameTimer, ...).
     QAction* m_openPresetAction = nullptr;
     QAction* m_loadBasicProgramAction = nullptr;
+    QAction* m_loadMachineCodeAction = nullptr;
     QAction* m_settingsAction = nullptr;
     QAction* m_aboutAction = nullptr;
 
@@ -146,6 +147,12 @@ private:
     // via a warning dialog titled `errorTitle` on failure.
     void runSynchronousLoad(const QString& errorTitle, const std::function<bool(QString*)>& loadFn,
                              const std::function<void()>& afterLoad = {});
+
+    // File > Load Machine Code…: pick a .bin (Settings' Assembly folder),
+    // recognise its header, ask for a start address / PC-1600 slot only when
+    // needed (MachineCodeLoadDialog), write it, then show the NEW that
+    // protects it and the CALL that starts it. Never runs the code.
+    void loadMachineCode();
 
     // Qt::Key -> the logical calculator key name that was pressed for it,
     // so releaseEvent always releases exactly what pressEvent pressed even

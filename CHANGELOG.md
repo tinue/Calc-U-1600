@@ -21,10 +21,18 @@
   every `key:` and `type:` step (over 3 minutes for a short preset); it
   now continues as soon as the machine is ready for keys.
 - **Settings** Separate start folders for the open dialogs: Samples
-  (Load Preset), Basic (Load BASIC Program) and Assembly (for upcoming
-  machine-code loading). Each defaults to `<last used>` -- the dialog
+  (Load Preset), Basic (Load BASIC Program) and Assembly (Load Machine
+  Code). Each defaults to `<last used>` -- the dialog
   opens in the folder a file was last loaded from. Choosing a folder
   fixes it; Reset returns to `<last used>`.
+- **Machine code** File > Load Machine Code… loads a `.bin` into the
+  running machine: with a CE-158 (PC-1500) or PC-1600 header, or raw.
+  It asks only what the file doesn't say -- the start address for a raw
+  file, the slot when a PC-1600 file fits both S1 and S2. Afterwards it
+  shows the `NEW` that keeps BASIC from overwriting the code (worked out
+  from where BASIC's program area actually starts, e.g. in a RAM module)
+  and the `CALL` that starts it. The code is never run automatically. A
+  CE-158 file on a PC-1600 (LH5803 side) is not supported yet.
 
 ## [0.3.0] - 2026-09-19
 

@@ -32,7 +32,7 @@ inline void setInstanceDirOverride(const QString& dir) {
 // shown as its own row in Settings:
 //   Samples  -- "Load Preset…" (and Settings' default-preset pickers)
 //   Basic    -- "Load BASIC Program…" (.bas listings)
-//   Assembly -- machine-code sources; no dialog uses it yet
+//   Assembly -- "Load Machine Code…" (.bin files)
 enum class OpenFolder { Samples, Basic, Assembly };
 
 // Key group per folder. Samples keeps the original "preset/" keys so a

@@ -48,6 +48,10 @@ struct ProgramSegment {
     int adtblBank = 0;    // ADTBL global bank 0..3 (SlotModule only)
     uint16_t base = 0;
     uint16_t top = 0;
+    // Start of the window this segment lives in ($C000 internal RAM, the
+    // module's window base otherwise), before segment 0 is moved up to
+    // BASPRG_ST -- where a `NEW "S0:",<size>` reserve counts from.
+    uint16_t windowBase = 0;
     // Backing-store offset of `base`: into debugSlotImage(slot) for a
     // SlotModule, or (base - $C000) into internal RAM.
     uint32_t backingBase = 0;

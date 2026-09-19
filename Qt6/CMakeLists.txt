@@ -83,11 +83,16 @@ set(CORE_SOURCES
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
   ${CORE_ROOT}/KeyPaste.cpp
+  # "Load Machine Code…" -- no libsharpdx dependency, so always built.
+  ${CORE_ROOT}/MachineCodeFile.cpp
+  ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
+  ${CORE_ROOT}/PC1600/PC1600MachineImage.cpp
+  ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
+  ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
 )
 
 # Preset loading, entire (PresetFile.cpp, *PresetLoader.cpp,
-# *BasicTyper.cpp, *BasicLoader.cpp, PC1600ProgramPlacement.cpp,
-# PC1600MachineImage.cpp, Core/Basic/*), needs the vendored Rust
+# *BasicTyper.cpp, *BasicLoader.cpp, Core/Basic/*), needs the vendored Rust
 # `libsharpdx` static library (Core/Basic/vendor/sharpdx/) that
 # Core/Basic/BasicProgramSource.cpp tokenizes BASIC programs through --
 # rather than split the loader files themselves at a finer grain
@@ -125,8 +130,6 @@ if(EXISTS ${SHARPDX_LIB})
     ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
     ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
     ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
-    ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
-    ${CORE_ROOT}/PC1600/PC1600MachineImage.cpp
     ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
     ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
     ${CORE_ROOT}/Basic/BasicProgramSource.cpp
@@ -162,6 +165,7 @@ qt_add_executable(CalcU1600Qt
   app/MemoryModuleManager.cpp
   app/FloppyDiskManager.cpp
   app/SettingsDialog.cpp
+  app/MachineCodeLoadDialog.cpp
   app/AboutDialog.cpp
   app/PresetController.cpp
   app/AudioOutput.cpp

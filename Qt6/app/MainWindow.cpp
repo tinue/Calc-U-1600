@@ -11,10 +11,14 @@
 #include "PlotterPaperWidget.hpp"
 #include "SettingsDialog.hpp"
 #include "AboutDialog.hpp"
+#include "MachineCodeLoadDialog.hpp"
 #include "PresetController.hpp"
 #include "AudioOutput.hpp"
 #include "AppSettings.hpp"
 #include "MacClipboardImage.h"
+#include "PC1500/PC1500Machine.hpp"
+#include "PC1600/PC1600Machine.hpp"
+#include "PC1600/PC1600MachineCodeLoader.hpp"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -26,6 +30,7 @@
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QFile>
 #include <QFileDialog>
 #include <QCoreApplication>
 #include <QMenuBar>
@@ -171,6 +176,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             return m_presetController->loadBasicProgramLive(path, error);
         });
     });
+    connect(m_loadMachineCodeAction, &QAction::triggered, this, &MainWindow::loadMachineCode);
     connect(m_moduleManager.get(), &MemoryModuleManager::errorMessage, this,
             [this](const QString& text) { QMessageBox::warning(this, tr("Memory Module"), text); });
     connect(m_controlBar, &ControlBar::floppyDiskSelected, this, [this](QString diskNameOrEmpty) {
@@ -334,6 +340,87 @@ void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::functi
     if (!ok) {
         QMessageBox::warning(this, errorTitle, error);
     }
+}
+
+void MainWindow::loadMachineCode() {
+    const QString title = tr("Load Machine Code");
+    const QString path = QFileDialog::getOpenFileName(this, title,
+                                                      AppSettings::openStartDir(AppSettings::OpenFolder::Assembly),
+                                                      tr("Machine Code (*.bin);;All Files (*)"));
+    if (path.isEmpty()) return;
+    AppSettings::rememberOpenFile(AppSettings::OpenFolder::Assembly, path);
+
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::warning(this, title, tr("Could not read %1: %2").arg(path, file.errorString()));
+        return;
+    }
+    const QByteArray raw = file.readAll();
+    const machinecode::File code =
+        machinecode::readFile(std::vector<uint8_t>(raw.begin(), raw.end()));
+
+    const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
+    const machinecode::Target target = isPC1600 ? machinecode::Target::PC1600 : machinecode::Target::PC1500;
+    PC1600Machine* pc1600 = isPC1600 ? m_controller->pc1600() : nullptr;
+    const bool slot1 = pc1600 && pc1600->slot1Attached();
+    const bool slot2 = pc1600 && pc1600->slot2Attached();
+    const machinecode::Plan plan = machinecode::plan(target, code, slot1, slot2);
+    if (!plan.error.empty()) {
+        QMessageBox::warning(this, title, QString::fromStdString(plan.error));
+        return;
+    }
+
+    PresetController::MachineCodeLoadRequest request;
+    request.payload = code.payload;
+    request.addr = code.loadAddr;
+    machinecode::Slot slot = plan.slotChoices.empty() ? machinecode::Slot::S0 : plan.slotChoices.front();
+    if (plan.needsAddress || plan.slotChoices.size() > 1) {
+        MachineCodeLoadDialog dialog(this, target, code.payload.size(), plan.needsAddress, code.loadAddr,
+                                     plan.slotChoices, slot1, slot2);
+        if (dialog.exec() != QDialog::Accepted) return;
+        request.addr = dialog.address();
+        slot = dialog.slot();
+    }
+    request.slot = static_cast<int>(slot);
+
+    bool loaded = false;
+    runSynchronousLoad(title, [this, &request, &loaded](QString* error) {
+        loaded = m_presetController->loadMachineCodeLive(request, error);
+        return loaded;
+    });
+    if (!loaded) return;
+
+    // The advice: NEW that keeps BASIC off the code, CALL that starts it.
+    uint32_t ramStart = 0, ramEnd = 0;
+    if (!isPC1600) {
+        if (PC1500Machine* pc1500 = m_controller->pc1500()) {
+            ramStart = static_cast<uint32_t>(pc1500->debugPeek(0x7863)) << 8;  // RAM_ST page
+            ramEnd = static_cast<uint32_t>(pc1500->debugPeek(0x7864)) << 8;    // RAM_END page
+        }
+    }
+    const size_t len = request.payload.size();
+    std::vector<machinecode::BasicArea> basicAreas;
+    if (isPC1600 && m_controller->pc1600()) basicAreas = pc1600BasicAreas(*m_controller->pc1600());
+    const machinecode::Advice advice =
+        machinecode::advice(target, slot, request.addr, len, code.autorunAddr, ramStart, ramEnd, basicAreas);
+
+    auto hex = [](uint32_t v) { return QStringLiteral("&") + QString::number(v, 16).toUpper(); };
+    QString where = tr("Loaded %1 bytes at %2–%3").arg(len).arg(hex(request.addr), hex(request.addr + len - 1));
+    if (isPC1600) where += tr(" (%1)").arg(QString::fromLatin1(machinecode::slotName(slot)));
+    QString html = QStringLiteral("<p>%1.</p>").arg(where.toHtmlEscaped());
+    html += QStringLiteral("<p>%1<br>").arg(tr("Keep BASIC from overwriting it:").toHtmlEscaped());
+    if (!advice.newCommand.empty())
+        html += QStringLiteral("<b><tt>%1</tt></b><br>").arg(QString::fromStdString(advice.newCommand).toHtmlEscaped());
+    html += QStringLiteral("<small>%1</small></p>").arg(QString::fromStdString(advice.newNote).toHtmlEscaped());
+    html += QStringLiteral("<p>%1<br><b><tt>%2</tt></b><br><small>%3</small></p>")
+                .arg(tr("Start it:").toHtmlEscaped(),
+                     QString::fromStdString(advice.callCommand).toHtmlEscaped(),
+                     QString::fromStdString(advice.callNote).toHtmlEscaped());
+
+    QMessageBox box(QMessageBox::Information, tr("Machine Code Loaded"), html, QMessageBox::Ok, this);
+    box.setTextFormat(Qt::RichText);
+    box.setTextInteractionFlags(Qt::TextSelectableByMouse);
+    box.exec();
 }
 
 void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
@@ -570,6 +657,7 @@ void MainWindow::buildMenuBar() {
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
     m_openPresetAction = fileMenu->addAction(tr("Load Preset…"));
     m_loadBasicProgramAction = fileMenu->addAction(tr("Load BASIC Program…"));
+    m_loadMachineCodeAction = fileMenu->addAction(tr("Load Machine Code…"));
     fileMenu->addSeparator();
     m_settingsAction = fileMenu->addAction(tr("Settings…"));
     fileMenu->addSeparator();

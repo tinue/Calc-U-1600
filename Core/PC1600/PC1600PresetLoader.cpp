@@ -21,6 +21,7 @@
 #include "PC1600BasicTyper.hpp"
 #include "PC1600Keyboard.hpp"
 #include "PC1600Machine.hpp"
+#include "PC1600MachineCodeLoader.hpp"
 #include "PC1600MachineImage.hpp"
 #include "PC1600Screenshot.hpp"
 
@@ -197,36 +198,13 @@ bool loadMachineBinary(PC1600Machine& machine, const PresetProgram& program, int
         return false;
     }
 
-    bool wrote = false;
-    const char* slotName = "S0";
-    if (program.slot == PresetProgram::Slot::S0) {
-        if (loadAddr < 0xC000 || static_cast<uint64_t>(loadAddr) + length > 0x10000) {
-            char b[192];
-            std::snprintf(b, sizeof(b),
-                          "%sload $%04X + %u bytes is outside the S0 internal-RAM window "
-                          "($C000-$FFFF)",
-                          tag.c_str(), loadAddr, length);
-            *error = b;
-            return false;
-        }
-        wrote = machine.debugWriteInternalRam(loadAddr - 0xC000, payload, length);
-    } else {
-        int slot = (program.slot == PresetProgram::Slot::S1) ? 1 : 2;
-        slotName = (slot == 1) ? "S1" : "S2";
-        if (loadAddr < 0x8000 || static_cast<uint64_t>(loadAddr) + length > 0xC000) {
-            char b[224];
-            std::snprintf(b, sizeof(b),
-                          "%sload $%04X + %u bytes does not fit the %s memory-slot window "
-                          "($8000-$BFFF) -- use slot: S0 or split the image",
-                          tag.c_str(), loadAddr, length, slotName);
-            *error = b;
-            return false;
-        }
-        wrote = machine.debugWriteSlotImage(slot, loadAddr - 0x8000, payload, length);
-    }
-    if (!wrote) {
-        *error = tag + "backing-store write failed for slot " + slotName +
-                 " (empty slot, or a module with no writable RAM)";
+    const int slot = program.slot == PresetProgram::Slot::S1   ? 1
+                     : program.slot == PresetProgram::Slot::S2 ? 2
+                                                               : 0;
+    const char* slotName = slot == 1 ? "S1" : slot == 2 ? "S2" : "S0";
+    std::string writeError;
+    if (!loadPC1600MachineCode(machine, slot, loadAddr, payload, length, &writeError)) {
+        *error = tag + writeError;
         return false;
     }
 

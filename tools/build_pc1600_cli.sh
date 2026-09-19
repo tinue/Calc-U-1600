@@ -24,6 +24,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/PC1600/PC1600BasicLoader.cpp \
   Core/PC1600/PC1600ProgramPlacement.cpp \
   Core/PC1600/PC1600MachineImage.cpp \
+  Core/PC1600/PC1600MachineCodeLoader.cpp \
   Core/PC1600/PC1600PresetLoader.cpp \
   Core/Display/LcdScreenshot.cpp \
   Core/Basic/BasicBinaryImage.cpp \

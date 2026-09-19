@@ -1,7 +1,9 @@
 #pragma once
 #include <QObject>
 #include <QString>
+#include <cstdint>
 #include <functional>
+#include <vector>
 
 #include "MachineController.hpp"  // Model
 
@@ -60,6 +62,18 @@ public:
     // thread, same caller contract as loadPreset() (stop the frame timer
     // first). Resets the machine and destroys the current program (NEW0).
     bool loadBasicProgramLive(const QString& path, QString* error);
+
+    // Writes a machine-code block (File > Load Machine Code…) into the
+    // *currently running* machine -- no reset, no BASIC involvement, just
+    // the bytes. `slot` is PC-1600 only: 0 = S0, 1 / 2 = memory slots. Same
+    // caller contract as the loaders above (stop the frame timer first).
+    // Doesn't need libsharpdx, so it works in every build.
+    struct MachineCodeLoadRequest {
+        std::vector<uint8_t> payload;
+        uint32_t addr = 0;
+        int slot = 0;
+    };
+    bool loadMachineCodeLive(const MachineCodeLoadRequest& request, QString* error);
 
     // Callback installed on the target machine (PC1500Machine/
     // PC1600Machine::setYieldHook()) for the duration of each load above,
