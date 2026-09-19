@@ -67,6 +67,7 @@ set(CORE_SOURCES
   ${CORE_ROOT}/CPU/SC7852/SC7852.cpp
   ${CORE_ROOT}/CPU/LH5803/LH5803Memory.cpp
   ${CORE_ROOT}/CPU/LH5803/LH5803SharedMemory.cpp
+  ${CORE_ROOT}/Audio/PiezoSampler.cpp
   ${CORE_ROOT}/PC1500/PC1500Memory.cpp
   ${CORE_ROOT}/PC1500/PC1500Machine.cpp
   ${CORE_ROOT}/PC1500/PC1500Keyboard.cpp

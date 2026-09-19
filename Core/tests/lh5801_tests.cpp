@@ -1204,6 +1204,9 @@ int run_presetloader_trace_tests();
 // Defined in pc1600_basictyper_tests.cpp (PC1600BasicTyper's scripted
 // keystroke typing) -- same single-binary convention.
 int run_pc1600_basictyper_tests();
+// Defined in piezo_sampler_tests.cpp (buzzer audio) -- same single-binary
+// convention.
+int run_piezo_sampler_tests();
 // Defined in pc1600_bank_tests.cpp (PC1600Bank/PC1600Memory bank-switching
 // truth tables) -- same single-binary convention.
 int run_pc1600_bank_tests();
@@ -1347,7 +1350,8 @@ int main() {
     int basicProgramSourceFailures = run_basic_program_source_tests();
     int pc1600ProgramPlacementFailures = run_pc1600_program_placement_tests();
     int pc1600MachineImageFailures = run_pc1600_machine_image_tests();
-    return (g_fail == 0 && basicBinaryImageFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && pc1600MachineImageFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638plusFailures == 0 &&
+    int piezoSamplerFailures = run_piezo_sampler_tests();
+    return (g_fail == 0 && piezoSamplerFailures == 0 && basicBinaryImageFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && pc1600MachineImageFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638plusFailures == 0 &&
             ce163fFailures == 0 && memoryCardFailures == 0 && batteryCardInstanceFailures == 0 &&
             presetFailures == 0 &&
             basicTyperFailures == 0 && pc1600BasicTyperFailures == 0 &&

@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 
+#include "../Audio/PiezoSampler.hpp"
 #include "../CPU/SC7852/SC7852.hpp"
 #include "../Connector/ExpansionCard.hpp"
 #include "../Connector/MemorySlotConnector.hpp"
@@ -104,8 +105,8 @@
 // 1CH-1FH (LH5810-style DDA/DDB/OPA/OPB, keyboard strobes -- see
 // PC1600Keyboard), Port 1BH (IF register, ON/BREAK latch), Port 37H (read:
 // keyboard sense via PC1600Keyboard::scan(); write: bit4 gates the LCD's
-// CK0 clock, see PC1600Display), and Port 50H-5BH (forwarded to
-// PC1600Display). Every other port reads open bus (0xFF) and ignores
+// CK0 clock, see PC1600Display), Port 18H (OPC -- buzzer drive, see
+// m_opc), and Port 50H-5BH (forwarded to PC1600Display). Every other port reads open bus (0xFF) and ignores
 // writes -- this class has no opinion on the rest of the I/O map (UART,
 // timer/RTC, etc. all remain out of scope).
 class PC1600Memory : public SC7852Bus {
@@ -173,6 +174,9 @@ public:
     const PC1600SubCpu&   subCpu() const { return m_subCpu; }
     TC8576F&             uart() { return m_uart; }
     const TC8576F&       uart() const { return m_uart; }
+    /// Buzzer drive line as PCM, in SC-7852 T-states -- advanced by
+    /// PC1600Machine::step() on both CPUs' branches. See m_opc.
+    PiezoSampler&        piezo() { return m_piezo; }
 
     /// Sets/clears the ON key's live state (not part of the scan matrix --
     /// see PC1600Keyboard's class comment). A press transition sets IF
@@ -440,6 +444,17 @@ private:
     // here). The PB6 strobe (CTRL/KBII/BS) *does* consult DDB.6: it is
     // asserted only while PB6 is an output driven low -- see readIO(0x37).
     uint8_t m_dda{0}, m_opa{0}, m_ddb{0}, m_opb{0};
+    // OPC (18H), the PC-port output buffer. The BEEP loop (P1-B3 5EC5)
+    // toggles bit 7 with `IN A,(18H)` / OR 80H or AND 7FH / `OUT (18H),A`,
+    // and bit 6 gates the buzzer: the firmware clears it for BEEP OFF
+    // (5EFE, F86B bit 0) and sets it again for BEEP ON (5F31, OR C0H). This
+    // matches Systemhandbuch Appendix 6 ("b7 buzzer line, b6 buzzer on").
+    // Per TRM 7.5 the same line also carries cassette-record output (SD0),
+    // so a future cassette model shares this latch. It has to be readable
+    // because the ROM does read-modify-write on it.
+    uint8_t m_opc{0};
+    // TRM 7.5: SC-7852 T-states at 3.58 MHz (PC1600Machine::kTStateHz).
+    PiezoSampler m_piezo{3580000.0};
     // Live PB *pin* levels for the bits driven from outside the CPU, kept
     // apart from the m_opb output latch above and merged in on a read of
     // 1FH (see readIO()). Only PB5 (the sub-CPU's 64Hz timer square wave,

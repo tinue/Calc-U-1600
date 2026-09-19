@@ -58,6 +58,7 @@ void PC1500Memory::reset() {
     m_systemRam.fill(0xFF);
     m_dda = m_opa = m_ddb = m_opb = 0;
     m_opc = 0;
+    m_piezo.setLevel(false);
     m_if = 0;
     m_rtc = Upd1990ac{}; // fresh chip state -- TP un-configured until the ROM issues a rate-select, same as real power-on
     m_ioScratchRegs.fill(0);
@@ -219,6 +220,8 @@ void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
                 m_rtc.setControlPins((value & 0x01) != 0, (value & 0x02) != 0,
                                       (value & 0x04) != 0, (value & 0x08) != 0,
                                       (value & 0x10) != 0, (value & 0x20) != 0);
+                // PC6 drives the piezo buzzer; the BEEP loop toggles it.
+                m_piezo.setLevel((value & 0x40) != 0);
                 return;
             case 0xB: m_if = value; return;
             default: m_ioScratchRegs[addr & 0xF] = value; return; // serial/etc: not modeled, but not discarded either

@@ -90,6 +90,7 @@ int PC1500Machine::step() {
     // real time keeps passing even while the CPU is halted.
     uint32_t rtcCycles = static_cast<uint32_t>(c > 0 ? c : LH5801::kHaltTickCycles);
     m_memory.advanceRtc(rtcCycles);
+    m_memory.advancePiezo(rtcCycles); // buzzer time, same clock as the RTC
     // PU/PV (SPU/RPU/SPV/RPV) never touch the bus themselves, so pushing
     // their post-instruction state here is sufficient for the next bus
     // access to see it -- see PC1500Memory::updatePUPV()'s own doc comment.
@@ -150,12 +151,14 @@ uint64_t PC1500Machine::runCycles(uint64_t maxCycles) {
                 // regardless (design doc: "the RTC keeps advancing while
                 // powered off").
                 m_memory.advanceRtc(static_cast<uint32_t>(LH5801::kHaltTickCycles));
+                m_memory.advancePiezo(static_cast<uint32_t>(LH5801::kHaltTickCycles)); // buzzer time, same clock as the RTC
                 advanceKeyQueue(static_cast<uint32_t>(LH5801::kHaltTickCycles));
                 consumed += static_cast<uint64_t>(LH5801::kHaltTickCycles);
                 continue;
             }
         }
         m_memory.advanceRtc(static_cast<uint32_t>(c));
+        m_memory.advancePiezo(static_cast<uint32_t>(c)); // buzzer time, same clock as the RTC
         advanceKeyQueue(static_cast<uint32_t>(c));
         if (m_ce150Card) m_ce150Card->tick(static_cast<uint32_t>(c)); // no-op today; see step()
         consumed += static_cast<uint64_t>(c);

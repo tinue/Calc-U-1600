@@ -13,6 +13,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/PC1500/PresetFile.cpp \
   Core/PC1500/PC1500Keyboard.cpp \
   Core/PC1500/PC1500TraceFile.cpp \
+  Core/Audio/PiezoSampler.cpp \
   Core/PC1600/PC1600Memory.cpp \
   Core/PC1600/PC1600SubCpu.cpp \
   Core/PC1600/TC8576F.cpp \

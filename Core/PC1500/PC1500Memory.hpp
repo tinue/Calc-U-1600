@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 
+#include "../Audio/PiezoSampler.hpp"
 #include "../CPU/LH5801/LH5801.hpp"
 #include "PC1500Keyboard.hpp"
 #include "PC1500Variant.hpp"
@@ -47,9 +48,10 @@ class SystemBus;
 // (PB3's "must read high" ROM dispatch gotcha, PB7's ON-key readback), and
 // the uPD1990AC real-time clock bit-banged via OPC/PC0-PC5 (see
 // Upd1990ac.hpp) — WAIT/BEEP's timing depends on its TP output, latched
-// into IF bit 1 (0xB). Serial transfer and the buzzer (OPC/PC6) remain out
-// of scope — no stock boot-to-idle or BASIC-editing behavior depends on
-// them. Any ME1
+// into IF bit 1 (0xB). The buzzer is PC6 (OPC bit 6): the ROM's BEEP loop
+// (A04 E655ff) toggles it directly, and every write is forwarded to
+// m_piezo (see PiezoSampler.hpp) so the sound comes from that square wave
+// itself. Serial transfer remains out of scope. Any ME1
 // address outside the I/O-chip's decode window still mirrors ME0, the
 // same conservative Phase 1 placeholder as before (nothing else is
 // documented as living there) — flagged for revisit once Phase 4's
@@ -130,6 +132,11 @@ public:
     /// why this Core drives it from cycles rather than real wall-clock
     /// time.
     void advanceRtc(uint32_t cycles) { m_rtc.advance(cycles); }
+
+    /// The buzzer line (PC6) as PCM -- advanced alongside the RTC, i.e.
+    /// once per instruction (and per halted/off tick) by PC1500Machine.
+    void advancePiezo(uint32_t cycles) { m_piezo.advance(cycles); }
+    PiezoSampler& piezo() { return m_piezo; }
 
     /// Seed the uPD1990AC's calendar from the host clock (see
     /// PC1500Machine::seedClock). month is 1-12, dow 0-6 (Sunday=0), the
@@ -225,6 +232,7 @@ private:
                         // (which looks like the "obvious" flag-register convention)
                         // is actually what breaks BREAK.
     Upd1990ac m_rtc;
+    PiezoSampler m_piezo{1300000.0}; // LH5801 clock; buzzer driven from OPC bit 6 (PC6)
 
     // F/G/MSK (registers 0x7,0x9,0xA) and the two unused register-select
     // codes (0x0-0x3): stored as plain read/write bytes, defaulting to

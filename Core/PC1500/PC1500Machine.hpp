@@ -125,6 +125,19 @@ public:
         return m_cpu.displayOn() && !m_cpu.poweredOff();
     }
 
+    /// Buzzer audio (mono int16 PCM at audioSampleRate()), produced from
+    /// the PC6 drive line as emulated time advances -- see PiezoSampler.
+    /// drainAudio() moves up to `max` of the oldest samples into `out`.
+    size_t drainAudio(int16_t* out, size_t max) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_memory.piezo().drain(out, max);
+    }
+    void discardAudio() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_memory.piezo().discard();
+    }
+    int audioSampleRate() const { return PiezoSampler::kDefaultSampleRate; }
+
     // Locked, UI-thread-safe debug reads so the App layer can log
     // Core-internal state (PC, and RAM bytes like the cursor-key dispatch
     // gate at 0x7B0EH, or the BREAK_LINE pointer at 0x78AEH/0x78AFH) right

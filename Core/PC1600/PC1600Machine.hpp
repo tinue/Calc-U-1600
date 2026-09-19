@@ -253,6 +253,20 @@ public:
     /// PC1600DisplaySnapshot's own doc comment).
     PC1600DisplaySnapshot displaySnapshot() const;
 
+    /// Buzzer audio (mono int16 PCM at audioSampleRate()) produced from the
+    /// OPC 18H drive line as emulated time advances. See PiezoSampler and
+    /// PC1600Memory::m_opc. drainAudio() moves up to `max` of the oldest
+    /// samples into `out`. Both take m_mutex.
+    size_t drainAudio(int16_t* out, size_t max) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_z80Mem.piezo().drain(out, max);
+    }
+    void discardAudio() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_z80Mem.piezo().discard();
+    }
+    int audioSampleRate() const { return PiezoSampler::kDefaultSampleRate; }
+
     // ── Memory-slot connectors ───────────────────────────────────────
     // A card plugs in pin-for-pin; MemorySlotConnector drives the PC-1600
     // bay's pins (see Core/Connector/MemorySlotConnector.hpp). The size-

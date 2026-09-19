@@ -300,6 +300,7 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
         // this port's write side. The timer ISR reads it at PC1600-P1-B3.bin
         // 4102H/4112H to decide which pending causes are unmasked.
         case 0x35: return m_intMask;
+        case 0x18: return m_opc;
         case 0x1B: return m_if;
         case 0x1C: return m_dda;
         case 0x1D: return m_ddb;
@@ -370,6 +371,12 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
         case 0x35: m_intMask = value; return;
         case 0x39: m_im2VectorLow = value; if (m_cpu) m_cpu->setIM2VectorByte(value); return;
         case 0x38: if (m_arbiter) m_arbiter->requestSwitchFromSC7852(); return;
+        case 0x18:
+            // Buzzer: bit 6 = enable (BEEP ON/OFF), bit 7 = the square
+            // wave the BEEP loop toggles. See m_opc.
+            m_opc = value;
+            m_piezo.setLevel((value & 0xC0) == 0xC0);
+            return;
         case 0x1B: m_if = value; return;
         case 0x1C: m_dda = value; return;
         case 0x1D: m_ddb = value; return;
