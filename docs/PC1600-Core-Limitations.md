@@ -341,9 +341,8 @@ still worth understanding. They say what the code actually does now.
 
 - **40-pin `ExpansionConnector` (PC-1500 side)**: concrete cards attach
   through it — the `SoftwareDefinedCard`, built from a `.card.yaml`
-  definition and wired by `PC1500PresetLoader`. Still open: `TODO(slot-identity)` — the GUI can't
-  yet read the attached module's name from the slot itself.
-  `ExpansionCard.hpp:104`
+  definition and wired by `PC1500PresetLoader`. The GUI reads the
+  attached module's name from the slot (`ExpansionCard::moduleName()`).
 - **60-pin `SystemBus`: CMTIN / CMTOUT (cassette FSK audio), WEX / W1
   (external WAIT), INT, BFO / φOS** are named-but-unwired placeholder pins
   — "genuinely analog, out of scope until cassette support is built".
