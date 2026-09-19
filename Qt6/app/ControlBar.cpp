@@ -139,7 +139,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
         saveButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
         saveButton->setToolTip(tr("Name & Save"));
         saveButton->setFocusPolicy(Qt::NoFocus);
-        saveButton->setVisible(false);
+        saveButton->setEnabled(false);  // always shown; see setSlotBatteryBacked()
         m_slot[i].saveButton = saveButton;
         layout->addWidget(saveButton);
 
@@ -258,18 +258,17 @@ void ControlBar::setModuleCombos(int slot, const QVector<MemoryModuleManager::Mo
     fillPicker(m_slot[slot - 1].combo, namesOf(bundled, name), namesOf(instances, name), selectedOrEmpty);
 }
 
+// Enables rather than shows/hides the button, so the control bar doesn't
+// shift as modules change.
 void ControlBar::setSlotBatteryBacked(int slot, bool battery) {
-    m_slot[slot - 1].saveButton->setVisible(battery);
+    m_slot[slot - 1].saveButton->setEnabled(battery);
 }
 
 void ControlBar::setSlot2Visible(bool visible) {
     m_slot[1].label->setVisible(visible);
     m_slot[1].combo->setVisible(visible);
     if (m_slot2Separator) m_slot2Separator->setVisible(visible);
-    if (!visible) m_slot[1].saveButton->setVisible(false);
-    // When becoming visible again, MainWindow re-syncs the save button's
-    // state via setSlotBatteryBacked() right after re-populating the
-    // combo, so no visibility is set here in that direction.
+    m_slot[1].saveButton->setVisible(visible);
 }
 
 void ControlBar::setCe150State(bool attached, bool enabled) {

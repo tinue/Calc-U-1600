@@ -32,7 +32,7 @@ public:
     void setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& bundled,
                          const QVector<MemoryModuleManager::ModuleEntry>& instances,
                          const QString& selectedOrEmpty);
-    void setSlotBatteryBacked(int slot, bool battery); // shows/hides the save button
+    void setSlotBatteryBacked(int slot, bool battery); // enables/disables the save button
     void setSlot2Visible(bool visible);                // PC1600 vs PC1500/1500A
 
     // Plotter toggle buttons -- checked state reflects live attachment,
