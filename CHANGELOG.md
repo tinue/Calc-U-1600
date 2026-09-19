@@ -16,6 +16,10 @@
 - **Presets** New `- syncclock:` step sets the calculator's clock to the
   host's current date and time. A preset load runs at full speed, which
   leaves the clock ahead; put `- syncclock:` last to correct it.
+- **Presets** PC-1600 presets with a plotter (CE-1600P or CE-150) load
+  much faster. The loader waited the full 15 s safety timeout before
+  every `key:` and `type:` step (over 3 minutes for a short preset); it
+  now continues as soon as the machine is ready for keys.
 
 ## [0.3.0] - 2026-09-19
 

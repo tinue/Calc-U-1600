@@ -99,8 +99,15 @@ void waitForKeyboardScanLoop(PC1600Machine& machine) {
     // the first scripted keystroke would otherwise land in a dead scan.
     if (!machine.ce1600pAttached() && !machine.ce150Attached()) return;
 
+    //
+    // "Ready" per frame: CK0 (the LCD clock) is on, and the SC7852 is either
+    // in the BASIC command loop (pc1600AtBasicPrompt) or has read the key
+    // matrix (port 37H) at least once this frame. The idle loop polls 37H
+    // only ~0-1 times per frame, so the command-loop PC is the primary
+    // signal; the scan read covers key: steps taken outside it (RSV mode,
+    // INPUT, ...). An earlier ">= 3 scans per frame" test never held and
+    // ran every call into the cap.
     constexpr int kActiveFramesNeeded = 15;                           // held ~0.25 s
-    constexpr uint64_t kMinScansPerFrame = 3;                         // a real matrix sweep, not one stray read
     constexpr uint64_t kCap = static_cast<uint64_t>(kTStateHz * 15);  // safety only
 
     uint64_t spent = 0;
@@ -109,9 +116,10 @@ void waitForKeyboardScanLoop(PC1600Machine& machine) {
     while (active < kActiveFramesNeeded && spent < kCap) {
         spent += machine.runCycles(kFrameTStates);
         uint64_t nowScan = machine.keyboard().scanCount();
-        const bool polling = (nowScan - lastScan) >= kMinScansPerFrame;
+        const bool polling = nowScan != lastScan;
         lastScan = nowScan;
-        if (polling && machine.display().clockEnabled()) active++;
+        const bool ready = pc1600AtBasicPrompt(machine) || polling;
+        if (ready && machine.display().clockEnabled()) active++;
         else active = 0;
     }
 }
