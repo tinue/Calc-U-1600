@@ -176,8 +176,9 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_floppyLampLabel->setFixedWidth(14);
     m_floppyLampLabel->setAlignment(Qt::AlignCenter);
     m_floppyLampLabel->setToolTip(tr("Drive active -- wait for this to go dark before turning the disk over"));
+    m_floppyLampLabel->setText(QStringLiteral("●"));  // filled circle
     layout->addWidget(m_floppyLampLabel);
-    setFloppyMotorOn(false);
+    applyFloppyLampStyle();
 
     connect(m_floppyCombo, &QComboBox::currentIndexChanged, this,
             [this](int index) { emit floppyDiskSelected(m_floppyCombo->itemData(index).toString()); });
@@ -299,8 +300,15 @@ void ControlBar::setFloppySide(int side) {
     m_floppySideButton->setText(side ? tr("B") : tr("A"));
 }
 
+// Polled every frame tick -- only restyle on an actual change, since
+// setStyleSheet() re-polishes the label.
 void ControlBar::setFloppyMotorOn(bool on) {
-    m_floppyLampLabel->setText(QStringLiteral("●"));  // filled circle
-    m_floppyLampLabel->setStyleSheet(on ? QStringLiteral("color: #2ecc40;")
-                                        : QStringLiteral("color: #888888;"));
+    if (on == m_floppyMotorOn) return;
+    m_floppyMotorOn = on;
+    applyFloppyLampStyle();
+}
+
+void ControlBar::applyFloppyLampStyle() {
+    m_floppyLampLabel->setStyleSheet(m_floppyMotorOn ? QStringLiteral("color: #2ecc40;")
+                                                     : QStringLiteral("color: #888888;"));
 }

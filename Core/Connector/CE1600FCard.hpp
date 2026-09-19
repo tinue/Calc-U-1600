@@ -68,8 +68,8 @@ public:
     static constexpr size_t kSideSize = kSectorSize * kSectorCount;  // 65536
     static constexpr size_t kImageSize = kSideSize * 2;              // 131072, both sides
 
-    // Must track PC1600Machine::kTStateHz -- can't include PC1600Machine.hpp
-    // here (it includes this header). Real FDU-250 timing, from the
+    // Mirrors PC1600Machine::kTStateHz (static_assert'd there -- this
+    // header can't include PC1600Machine.hpp, which includes it). Real FDU-250 timing, from the
     // Service Manual's own spec sheet (§1 "Access time"/"Motor startup
     // time"): 0.5s to spin up, 80ms per step + 50ms settling per seek.
     // Seeks tick down in SC7852 T-states (advance()), driving the same
@@ -111,11 +111,7 @@ public:
     /// default.
     void insertBlankDisk() {
         m_image.fill(0);
-        m_dirty = false;
-        m_side = 0;
-        markDiskChanged();
-        ++m_revision;
-        resetLatchedState();
+        onNewDisk();
     }
 
     /// `data` must be exactly kImageSize bytes (both sides). Resets to
@@ -123,11 +119,7 @@ public:
     bool loadImage(const uint8_t* data, size_t size) {
         if (size != kImageSize) return false;
         std::memcpy(m_image.data(), data, kImageSize);
-        m_dirty = false;
-        m_side = 0;
-        markDiskChanged();
-        ++m_revision;
-        resetLatchedState();
+        onNewDisk();
         return true;
     }
 
@@ -135,8 +127,6 @@ public:
         return std::vector<uint8_t>(m_image.begin(), m_image.end());
     }
 
-    bool isDirty() const { return m_dirty; }
-    void clearDirty() { m_dirty = false; }
     uint64_t revision() const { return m_revision; }
 
     /// 0 = side A, 1 = side B. Selecting a *different* side is itself a
@@ -219,7 +209,7 @@ private:
                 // while it's on but still within its kMotorStartupTStates
                 // spin-up window (see advance()).
                 if (!m_motorOn || m_motorStartRemaining > 0) status |= 0x80;
-                if (!m_writeProtect) status |= 0x40;
+                status |= 0x40;  // never write-protected
                 status |= 0x08;  // disk always present (auto-inserted blank)
                 return status;
             }
@@ -265,7 +255,6 @@ private:
     }
 
     void issueCommand(uint8_t command) {
-        m_cmdReg = command;
         m_status = 0;
         m_xfer = Xfer::None;
         m_byteOffset = 0;
@@ -379,7 +368,6 @@ private:
         switch (m_xfer) {
             case Xfer::WriteSector:
                 m_image[sectorBase() + m_byteOffset] = value;
-                m_dirty = true;
                 ++m_revision;
                 break;
             case Xfer::FormatTrack:
@@ -397,12 +385,19 @@ private:
         const size_t base = static_cast<size_t>(m_side) * kSideSize +
                             static_cast<size_t>(m_track) * kSectorsPerTrack * kSectorSize;
         std::memset(m_image.data() + base, 0, kSectorsPerTrack * kSectorSize);
-        m_dirty = true;
         ++m_revision;
     }
 
+    // Shared tail of insertBlankDisk()/loadImage(): a new disk goes in
+    // side A up, with the changed-disk latch armed.
+    void onNewDisk() {
+        m_side = 0;
+        markDiskChanged();
+        ++m_revision;
+        resetLatchedState();
+    }
+
     void resetLatchedState() {
-        m_cmdReg = 0;
         m_sectorReg = 0;
         m_dataReg = 0;
         m_motorOn = false;
@@ -412,15 +407,12 @@ private:
     }
 
     std::array<uint8_t, kImageSize> m_image{};
-    uint8_t m_cmdReg = 0;
     uint8_t m_sectorReg = 0;
     uint8_t m_dataReg = 0;   // DATA latch outside transfers (the seek target)
     int m_track = 0;         // head position, 0..kTracksPerSide-1
     int m_side = 0;          // 0 = A, 1 = B
     bool m_motorOn = false;
     uint32_t m_motorStartRemaining = 0;  // T-states left in motor spin-up
-    bool m_writeProtect = false;
-    bool m_dirty = false;
     bool m_diskChanged = true;
     uint64_t m_revision = 0;
     // Command/transfer state. Mutable because reading DATA during a read

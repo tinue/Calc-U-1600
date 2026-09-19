@@ -8,6 +8,7 @@
 class MachineController;
 class MemoryModuleManager;
 class FloppyDiskManager;
+struct PresetFile;
 
 // Orchestrates opening a preset file end to end (Core/PC1500/
 // PresetFile.hpp, PC1500PresetLoader.cpp / PC1600PresetLoader.cpp): parses
@@ -79,6 +80,9 @@ signals:
     void armed();
 
 private:
+    // Shared tail of loadPreset()/loadDefaultPreset() once the file parsed.
+    bool runPreset(const PresetFile& preset, QString* error);
+
     MachineController* m_controller;       // not owned
     MemoryModuleManager* m_moduleManager;  // not owned
     FloppyDiskManager* m_floppyManager;    // not owned

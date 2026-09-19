@@ -261,16 +261,13 @@ set_target_properties(CalcU1600Qt PROPERTIES OUTPUT_NAME "Calc-U-1600")
 # on disk) ----
 set(CARD_RESOURCES_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources/cards)
 file(GLOB CARD_YAML_FILES ${CARD_RESOURCES_SRC_DIR}/*.card.yaml)
-# CE-1600F floppy-disk templates: a raw *.floppy.img (binary) plus a small
-# *.floppy.yaml metadata sidecar per disk -- see AppPaths::
-# sanitizedFloppyFileName()/FloppyDiskManager's own comments for why these
-# are a separate, simpler format from the *.card.yaml battery-card
-# instances above.
+# CE-1600F floppy-disk templates: raw 128KB *.floppy.img images -- see
+# FloppyDiskManager.hpp for why these are a separate, simpler format from
+# the *.card.yaml battery-card instances above.
 file(GLOB FLOPPY_IMAGE_FILES ${CARD_RESOURCES_SRC_DIR}/*.floppy.img)
-file(GLOB FLOPPY_YAML_FILES ${CARD_RESOURCES_SRC_DIR}/*.floppy.yaml)
 set(ROM_RESOURCES_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../roms)
 file(GLOB BUNDLED_ROM_FILES ${ROM_RESOURCES_SRC_DIR}/*.ROM ${ROM_RESOURCES_SRC_DIR}/*.bin)
-set(BUNDLED_RESOURCE_FILES ${CARD_YAML_FILES} ${FLOPPY_IMAGE_FILES} ${FLOPPY_YAML_FILES} ${BUNDLED_ROM_FILES})
+set(BUNDLED_RESOURCE_FILES ${CARD_YAML_FILES} ${FLOPPY_IMAGE_FILES} ${BUNDLED_ROM_FILES})
 
 if(APPLE)
   # Inside the .app bundle: Contents/Resources -- AppPaths::

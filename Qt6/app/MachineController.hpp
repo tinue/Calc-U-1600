@@ -21,6 +21,18 @@ enum class Model { PC1500, PC1500A, PC1600 };
 }
 using MachineControllerNS::Model;
 
+// The per-model settings key ("PC1500"/"PC1500A"/"PC1600") shared by
+// AppSettings::startupModelPreference() and defaultPresetPath(); lowercased,
+// it's also that model's preset file extension.
+inline QString modelSettingsKey(Model model) {
+    switch (model) {
+        case Model::PC1500: return QStringLiteral("PC1500");
+        case Model::PC1500A: return QStringLiteral("PC1500A");
+        case Model::PC1600: return QStringLiteral("PC1600");
+    }
+    return QString();
+}
+
 // One flat, model-agnostic frame the UI paints from -- deliberately wider
 // than either Core display type (PC1500Display's 156x7 + 14 named status
 // bits vs PC1600DisplaySnapshot's 156x32 + 17-entry status array) so

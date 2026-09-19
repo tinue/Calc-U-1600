@@ -85,6 +85,8 @@ private:
     QPushButton* m_floppySaveButton = nullptr;
     QPushButton* m_floppySideButton = nullptr;
     QLabel* m_floppyLampLabel = nullptr;
+    bool m_floppyMotorOn = false;
+    void applyFloppyLampStyle();
 
     struct SlotWidgets {
         QLabel* label = nullptr;           // "1:" / "2:", hidden together with the slot

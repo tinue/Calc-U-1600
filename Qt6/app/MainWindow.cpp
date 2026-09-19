@@ -44,16 +44,6 @@ constexpr int kFrameIntervalMs = 16;
 // popup appears (short loads finish without flashing it).
 constexpr int kLoadPumpIntervalMs = 30;
 constexpr int kLoadPopupDelayMs = 500;
-
-// AppSettings::defaultPresetPath()'s per-model key.
-QString modelSettingsKey(Model model) {
-    switch (model) {
-        case Model::PC1500: return QStringLiteral("PC1500");
-        case Model::PC1500A: return QStringLiteral("PC1500A");
-        case Model::PC1600: return QStringLiteral("PC1600");
-    }
-    return QString();
-}
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
@@ -177,7 +167,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_controlBar, &ControlBar::floppyDiskSelected, this, [this](QString diskNameOrEmpty) {
         m_floppyManager->selectDisk(diskNameOrEmpty);
         refreshFloppyCombo();
-        m_controlBar->setFloppySide(m_floppyManager->side());
     });
     connect(m_controlBar, &ControlBar::floppySideToggleRequested, this, [this] {
         m_floppyManager->toggleSide();
@@ -347,7 +336,6 @@ void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
         // stays visible either way -- see syncControlBarForModel()).
         if (attached && !m_syncingFromPreset) m_floppyManager->attachToMachine();
         m_controlBar->setFloppyEnabled(attached);
-        m_controlBar->setFloppySide(m_floppyManager->side());
         refreshFloppyCombo();
     }
     if (attached) {

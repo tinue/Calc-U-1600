@@ -30,9 +30,9 @@ const char* pc1500RomVariantName(PC1500RomRevision revision) {
 // a pinned model, or ("last", the default) whatever was last switched to.
 Model initialModel() {
     const QString pref = AppSettings::startupModelPreference();
-    if (pref == QLatin1String("PC1500")) return Model::PC1500;
-    if (pref == QLatin1String("PC1500A")) return Model::PC1500A;
-    if (pref == QLatin1String("PC1600")) return Model::PC1600;
+    for (Model m : {Model::PC1500, Model::PC1500A, Model::PC1600}) {
+        if (pref == modelSettingsKey(m)) return m;
+    }
     return static_cast<Model>(AppSettings::lastUsedModel());
 }
 

@@ -17,11 +17,11 @@
 // attached.
 //
 // Persistence is a raw `<name>.floppy.img` (128KB, both sides, byte-for-
-// byte) plus a small `<name>.floppy.yaml` metadata sidecar -- not the
-// battery-card splice-into-YAML-text mechanism (BatteryCardInstance.hpp):
-// a disk image carries no hand-written prose worth preserving that way,
-// and hex-dumping 128KB as YAML text would run about 4x the byte count for
-// no benefit. See AppPaths::sanitizedFloppyFileName()/floppyInstancePathFor().
+// byte) -- not the battery-card splice-into-YAML-text mechanism
+// (BatteryCardInstance.hpp): a disk image carries no hand-written prose
+// worth preserving that way, and hex-dumping 128KB as YAML text would run
+// about 4x the byte count for no benefit. See AppPaths::
+// floppyInstancePathFor().
 class FloppyDiskManager : public QObject {
     Q_OBJECT
 public:
@@ -76,7 +76,6 @@ public:
     void flushPendingPersist();          // called before select/model-switch/quit
 
 signals:
-    void diskChanged();
     void errorMessage(const QString& text);
 
 private:
@@ -87,7 +86,12 @@ private:
     bool m_persistPending = false;
     uint64_t m_lastSeenRevision = 0;
 
-    QTimer* m_debounceTimer = nullptr;  // single-shot, 500ms, restarted while dirty
+    // Single-shot, 500ms. Not restarted by further writes, so a long disk
+    // operation still autosaves every 500ms (same as MemoryModuleManager).
+    QTimer* m_debounceTimer = nullptr;
 
+    // Resolves and loads m_diskName into the card; false (after reporting
+    // any error) if it's empty or couldn't be loaded.
+    bool loadSelectedDisk(PC1600Machine* m1600);
     void writeInstance();  // rewrite m_instanceFilePath from the live image
 };

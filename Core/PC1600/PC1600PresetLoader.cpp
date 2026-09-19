@@ -261,8 +261,8 @@ bool loadMachineBinary(PC1600Machine& machine, const PresetProgram& program, int
 // Attach the plotter the preset's `plotter:` asks for, before the cold
 // boot below so the boot ROM detects it -- and, if `floppy:` named a saved
 // CE-1600F disk image, resolve and load it into the union-attached
-// CE1600FCard at the same time (see BundledRomCatalog.hpp's attachCE1600P()
-// comment). `moduleDirs` is the same bundled-then-instance-directory list
+// CE1600FCard (read and size-checked before attaching, so a bad image
+// leaves no plotter behind). `moduleDirs` is the same bundled-then-instance-directory list
 // `- modulespec:` resolution already searches (PresetFile.hpp's `floppy:`
 // doc explains why the same dirs apply). Returns false with result->error
 // set on any problem.
@@ -273,29 +273,32 @@ bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter, con
     if (plotter.empty()) return true;
 
     std::vector<uint8_t> diskImage;
-    const std::vector<uint8_t>* diskImagePtr = nullptr;
     if (!floppy.empty()) {
         std::string path;
-        if (!BundledRoms::resolveBundledRomPath(moduleDirs, floppy + ".floppy.img", &path, &result->error)) {
+        if (!BundledRoms::resolveBundledRomPath(moduleDirs, floppy + ".floppy.img", &path, nullptr)) {
             result->error = "floppy: '" + floppy + "' not found";
             return false;
         }
-        if (!BundledRoms::detail::readWholeFile(path, &diskImage)) {
+        if (!readWholeFile(path, &diskImage)) {
             result->error = "floppy: couldn't read '" + path + "'";
+            return false;
+        }
+        if (diskImage.size() != CE1600FCard::kImageSize) {
+            result->error = "floppy: '" + path + "' isn't a " + std::to_string(CE1600FCard::kImageSize) +
+                            "-byte CE-1600F image";
             return false;
         }
         result->floppyImageLabel = floppy;
         result->floppyResolvedPath = path;
-        diskImagePtr = &diskImage;
     }
 
-    if (!BundledRoms::attachPlotterByName(machine, plotter, romDirs, &result->error,
-                                          &result->ce150Attached, diskImagePtr)) {
+    if (!BundledRoms::attachPlotterByName(machine, plotter, romDirs, &result->error, &result->ce150Attached)) {
         return false;
     }
-    // loadImage() (inside attachCE1600P()) always resets to side A --
-    // apply the preset's `,B` suffix, if any, after attach.
-    if (diskImagePtr && floppySide != 0) machine.ce1600fSetSide(floppySide);
+    if (!floppy.empty()) {
+        machine.ce1600fLoadImage(diskImage.data(), diskImage.size());  // resets to side A
+        if (floppySide != 0) machine.ce1600fSetSide(floppySide);
+    }
     if (log) {
         log(plotter == "ce150" ? "plotter: CE-150 attached (LH5803 side)"
                                 : "plotter: " + plotter + " attached" +

@@ -26,16 +26,6 @@ PresetController::PresetController(MachineController* controller, MemoryModuleMa
 
 namespace {
 
-// Seeds `machine`'s RTC from the host's wall-clock time -- must run via
-// PresetBootedFn (right after reset/allReset settles, before any of the
-// preset's own keys:/program: steps), NOT after applyPreset() returns:
-// MachineController::finishPresetLoad()'s own seedClockFromHost() call
-// runs too late for this -- a preset step that saves a file (e.g. `FILES
-// "S2:"` after a `SAVE`) stamps it with whatever the RTC held at that
-// moment, which without this would still be the machine's un-seeded
-// power-on default (1/1/00:00), not "now". Templated so one definition
-// covers both PC1500Machine::seedClock and PC1600Machine::seedClock
-// (same signature, no shared base).
 // Installs PresetController's yield hook on `machine` for the lifetime of
 // this object. ~10 ms of emulated time between calls: frequent enough for a
 // smooth UI at any emulation speed; the hook itself rate-limits by wall
@@ -43,9 +33,9 @@ namespace {
 template <typename Machine>
 class ScopedYieldHook {
 public:
-    ScopedYieldHook(Machine& machine, const std::function<void()>& hook, uint64_t cyclesPerSecond)
+    ScopedYieldHook(Machine& machine, const std::function<void()>& hook, double clockHz)
         : m_machine(machine), m_active(static_cast<bool>(hook)) {
-        if (m_active) m_machine.setYieldHook(hook, cyclesPerSecond / 100);
+        if (m_active) m_machine.setYieldHook(hook, static_cast<uint64_t>(clockHz / 100));
     }
     ~ScopedYieldHook() {
         if (m_active) m_machine.setYieldHook({}, 0);
@@ -58,10 +48,21 @@ private:
     bool m_active;
 };
 
-// LH5801 clock (1.3 MHz); PC-1600 counts SC7852 T-states instead
-// (PC1600Machine::kTStateHz).
-constexpr uint64_t kPC1500CyclesPerSecond = 1300000;
+Model modelForPreset(const PresetFile& preset) {
+    if (preset.isPC1600()) return Model::PC1600;
+    return preset.variant == PC1500Variant::PC1500A ? Model::PC1500A : Model::PC1500;
+}
 
+// Seeds `machine`'s RTC from the host's wall-clock time -- must run via
+// PresetBootedFn (right after reset/allReset settles, before any of the
+// preset's own keys:/program: steps), NOT after applyPreset() returns:
+// MachineController::finishPresetLoad()'s own seedClockFromHost() call
+// runs too late for this -- a preset step that saves a file (e.g. `FILES
+// "S2:"` after a `SAVE`) stamps it with whatever the RTC held at that
+// moment, which without this would still be the machine's un-seeded
+// power-on default (1/1/00:00), not "now". Templated so one definition
+// covers both PC1500Machine::seedClock and PC1600Machine::seedClock
+// (same signature, no shared base).
 template <typename Machine>
 void seedClockFromHost(Machine& machine) {
     const QDateTime now = QDateTime::currentDateTime();
@@ -106,13 +107,35 @@ bool loadBasicProgramLivePC1600(PC1600Machine& machine, const std::string& path,
 
 }  // namespace
 
-bool PresetController::loadPreset(const QString& path, QString* error) {
-    PresetFile preset;
+namespace {
+
+bool parsePreset(const QString& path, PresetFile* preset, QString* error) {
     std::string parseError;
-    if (!parsePresetFile(path.toStdString(), &preset, &parseError)) {
+    if (!parsePresetFile(path.toStdString(), preset, &parseError)) {
         *error = QString::fromStdString(parseError);
         return false;
     }
+    return true;
+}
+
+}  // namespace
+
+bool PresetController::loadPreset(const QString& path, QString* error) {
+    PresetFile preset;
+    return parsePreset(path, &preset, error) && runPreset(preset, error);
+}
+
+bool PresetController::loadDefaultPreset(const QString& path, Model model, QString* error) {
+    PresetFile preset;
+    if (!parsePreset(path, &preset, error)) return false;
+    if (modelForPreset(preset) != model) {
+        *error = tr("The default preset \"%1\" is for a different model -- change it in Settings.").arg(path);
+        return false;
+    }
+    return runPreset(preset, error);
+}
+
+bool PresetController::runPreset(const PresetFile& preset, QString* error) {
 
     // Bundled catalog first, then the user's writable instance directory --
     // the same order MemoryModuleManager's own attachOneSlot() uses, so a
@@ -134,7 +157,7 @@ bool PresetController::loadPreset(const QString& path, QString* error) {
 
     if (preset.isPC1600()) {
         PC1600Machine& machine = m_controller->resetBareForPresetPC1600();
-        const ScopedYieldHook<PC1600Machine> yieldHook(machine, m_yieldHook, PC1600Machine::kTStateHz);
+        const ScopedYieldHook<PC1600Machine> yieldHook(machine, m_yieldHook, m_controller->clockHz());
         // Announce the model switch before applyPC1600Preset() even runs,
         // not after -- MainWindow's `armed()` handler (below) needs
         // MachineController::currentModel() to already read PC-1600 so it
@@ -174,8 +197,8 @@ bool PresetController::loadPreset(const QString& path, QString* error) {
     }
 
     PC1500Machine& machine = m_controller->resetBareForPresetPC1500(preset.variant);
-    const ScopedYieldHook<PC1500Machine> yieldHook(machine, m_yieldHook, kPC1500CyclesPerSecond);
-    const Model model = (preset.variant == PC1500Variant::PC1500A) ? Model::PC1500A : Model::PC1500;
+    const ScopedYieldHook<PC1500Machine> yieldHook(machine, m_yieldHook, m_controller->clockHz());
+    const Model model = modelForPreset(preset);
     // Announce the model switch before applyPC1500Preset() even runs, not
     // after -- see the matching comment in the PC-1600 branch above.
     m_controller->finishPresetLoad(model);
@@ -200,23 +223,6 @@ bool PresetController::loadPreset(const QString& path, QString* error) {
     return true;
 }
 
-bool PresetController::loadDefaultPreset(const QString& path, Model model, QString* error) {
-    PresetFile preset;
-    std::string parseError;
-    if (!parsePresetFile(path.toStdString(), &preset, &parseError)) {
-        *error = QString::fromStdString(parseError);
-        return false;
-    }
-    const Model target = preset.isPC1600()                            ? Model::PC1600
-                         : preset.variant == PC1500Variant::PC1500A ? Model::PC1500A
-                                                                     : Model::PC1500;
-    if (target != model) {
-        *error = tr("The default preset \"%1\" is for a different model -- change it in Settings.").arg(path);
-        return false;
-    }
-    return loadPreset(path, error);
-}
-
 bool PresetController::loadBasicProgramLive(const QString& path, QString* error) {
     if (m_controller->currentModel() == Model::PC1600) {
         PC1600Machine* machine = m_controller->pc1600();
@@ -224,7 +230,7 @@ bool PresetController::loadBasicProgramLive(const QString& path, QString* error)
             *error = tr("No PC-1600 machine is running.");
             return false;
         }
-        const ScopedYieldHook<PC1600Machine> yieldHook(*machine, m_yieldHook, PC1600Machine::kTStateHz);
+        const ScopedYieldHook<PC1600Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
         return loadBasicProgramLivePC1600(*machine, path.toStdString(), error);
     }
     PC1500Machine* machine = m_controller->pc1500();
@@ -232,7 +238,7 @@ bool PresetController::loadBasicProgramLive(const QString& path, QString* error)
         *error = tr("No PC-1500 machine is running.");
         return false;
     }
-    const ScopedYieldHook<PC1500Machine> yieldHook(*machine, m_yieldHook, kPC1500CyclesPerSecond);
+    const ScopedYieldHook<PC1500Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
     return loadBasicProgramLivePC1500(*machine, path.toStdString(), error);
 }
 

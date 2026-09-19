@@ -24,13 +24,6 @@ QVector<MemoryModuleManager::ModuleEntry> entriesFor(const QString& dir, CardHos
     return out;
 }
 
-bool pathIsUnderDir(const QString& path, const QString& dir) {
-    if (path.isEmpty() || dir.isEmpty()) return false;
-    const QString a = QFileInfo(path).canonicalFilePath();
-    const QString b = QFileInfo(dir).canonicalFilePath();
-    return !a.isEmpty() && !b.isEmpty() && a.startsWith(b);
-}
-
 }  // namespace
 
 MemoryModuleManager::MemoryModuleManager(MachineController* controller, QObject* parent)
@@ -97,7 +90,7 @@ void MemoryModuleManager::attachOneSlot(int slotIndex, CardHost host, AttachFn a
         auto card = makeSoftwareDefinedCard(path, host, &err, &moduleName);
         if (card) {
             const QString resolvedPath = QString::fromStdString(path);
-            st.instanceFilePath = pathIsUnderDir(resolvedPath, instDir) ? resolvedPath : QString();
+            st.instanceFilePath = AppPaths::isUnderDir(resolvedPath, instDir) ? resolvedPath : QString();
             attach(std::move(card));
             return;
         }
@@ -135,7 +128,7 @@ void MemoryModuleManager::syncFromPresetLoad(int slot, const QString& labelOrEmp
     const int idx = slot - 1;
     m_slots[idx].moduleName = labelOrEmpty;
     m_slots[idx].instanceFilePath =
-        pathIsUnderDir(resolvedPathOrEmpty, AppPaths::instanceDir()) ? resolvedPathOrEmpty : QString();
+        AppPaths::isUnderDir(resolvedPathOrEmpty, AppPaths::instanceDir()) ? resolvedPathOrEmpty : QString();
     m_slots[idx].persistPending = false;
     emit moduleChanged(slot);
 }

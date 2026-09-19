@@ -42,14 +42,14 @@ QString sanitizedInstanceFileName(const QString& instanceName);
 QString instancePathFor(const QString& instanceName);
 
 // Same as sanitizedInstanceFileName()/instancePathFor(), but for CE-1600F
-// floppy-disk images: "<name>.floppy.img" instead of "<name>.card.yaml" --
-// a raw 64KB binary, not a splice-into-YAML-text instance (see
-// CE1600FCard.hpp/FloppyDiskManager's own comments for why: a disk image
-// carries no hand-written prose worth preserving via the card-instance
-// splice mechanism, and hex-dumping 64KB as YAML text would run ~4x the
-// byte count for no benefit).
+// floppy-disk images: "<name>.floppy.img" (a raw 128KB binary -- see
+// FloppyDiskManager.hpp) instead of "<name>.card.yaml".
 QString sanitizedFloppyFileName(const QString& diskName);
 QString floppyInstancePathFor(const QString& diskName);
+
+// True if `path` resolves to somewhere inside `dir` (both canonicalized;
+// false if either doesn't exist).
+bool isUnderDir(const QString& path, const QString& dir);
 
 // Atomic write via QSaveFile (writes to a temp file beside `path` and
 // renames on commit).

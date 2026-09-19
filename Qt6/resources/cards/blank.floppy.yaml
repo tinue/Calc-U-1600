@@ -1,7 +1,0 @@
-# Bundled blank CE-1600F floppy-disk template -- an unformatted 64KB
-# image (all zero bytes), the "auto-insert a blank disk" default when the
-# CE-1600P/F is attached with no other disk selected. Not a `.card.yaml`
-# memory-card definition: FloppyDiskManager/AppPaths treat `.floppy.img`/
-# `.floppy.yaml` as their own, simpler pair (see AppPaths::
-# sanitizedFloppyFileName()'s comment for why).
-name: "blank"

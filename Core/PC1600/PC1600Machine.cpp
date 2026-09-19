@@ -61,15 +61,12 @@ void PC1600Machine::seedClock(int year, int month, int day, int hour, int minute
 }
 
 bool PC1600Machine::attachCE1600P(const uint8_t* rom1, size_t rom1Size,
-                                   const uint8_t* rom2, size_t rom2Size,
-                                   const uint8_t* diskImage, size_t diskImageSize) {
+                                   const uint8_t* rom2, size_t rom2Size) {
     if (rom1Size != CE1600PCard::kRomHalfSize || rom2Size != CE1600PCard::kRomHalfSize)
         return false;
-    if (diskImage && diskImageSize != CE1600FCard::kImageSize) return false;
     auto card = std::make_unique<CE1600PCard>();
     if (!card->loadRom(rom1, rom1Size, rom2, rom2Size)) return false;
     auto floppy = std::make_unique<CE1600FCard>();  // ctor auto-inserts a blank disk
-    if (diskImage) floppy->loadImage(diskImage, diskImageSize);
     detachCE1600P();
     detachCE150(); // one plotter on the bus at a time
     m_z80Mem.ce1600pBus().attach(card.get());
@@ -125,11 +122,6 @@ std::vector<uint8_t> PC1600Machine::ce1600fDiskImage() const {
     return m_ce1600fCard->imageForSave();
 }
 
-bool PC1600Machine::ce1600fDirty() const {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_ce1600fCard && m_ce1600fCard->isDirty();
-}
-
 uint64_t PC1600Machine::ce1600fRevision() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_ce1600fCard ? m_ce1600fCard->revision() : 0;
@@ -144,11 +136,6 @@ bool PC1600Machine::ce1600fLoadImage(const uint8_t* data, size_t size) {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (!m_ce1600fCard) return false;
     return m_ce1600fCard->loadImage(data, size);
-}
-
-void PC1600Machine::ce1600fClearDirty() {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_ce1600fCard) m_ce1600fCard->clearDirty();
 }
 
 int PC1600Machine::ce1600fSide() const {
@@ -350,8 +337,7 @@ uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {
         if (m_yieldHook) {
             if (tstates >= m_yieldCountdown) {
                 m_yieldCountdown = m_yieldInterval;
-                const std::function<void()> hook = m_yieldHook;
-                hook();
+                m_yieldHook();
             } else {
                 m_yieldCountdown -= tstates;
             }

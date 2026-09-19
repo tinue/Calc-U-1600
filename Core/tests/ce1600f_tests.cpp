@@ -43,7 +43,6 @@ void writeReg(CE1600FCard& card, uint8_t port, uint8_t value) {
 // the "always a blank disk if nothing else is specified" requirement.
 void test_default_construction_is_blank_disk() {
     CE1600FCard card;
-    CHECK(!card.isDirty());
     const auto image = card.imageForSave();
     CHECK(image.size() == CE1600FCard::kImageSize);
     bool allZero = true;
@@ -77,7 +76,6 @@ void test_write_then_read_sector_round_trip() {
     writeReg(card, 0x79, 3);     // select sector 3
     writeReg(card, 0x78, 0x60);  // command: write sector
     for (int i = 0; i < 512; ++i) writeReg(card, 0x7B, static_cast<uint8_t>(i & 0xFF));
-    CHECK(card.isDirty());
     CHECK(card.revision() > revBefore);
 
     writeReg(card, 0x79, 3);
@@ -169,8 +167,9 @@ void test_sector_address_combines_head_track_and_sector_register() {
 // must never land in the disk image.
 void test_data_writes_outside_a_transfer_do_not_touch_the_image() {
     CE1600FCard card;
+    const uint64_t revBefore = card.revision();
     writeReg(card, 0x7B, 0x09);
-    CHECK(!card.isDirty());
+    CHECK(card.revision() == revBefore);
     CHECK(card.imageForSave()[0] == 0);
     CHECK(readReg(card, 0x7B) == 0x09);
 }
@@ -200,25 +199,19 @@ void test_port_0x81_reset_clears_motor_and_command_state() {
     CHECK((readReg(card, 0x78) & 0x80) != 0);  // engine not started again
 }
 
-// loadImage()/insertBlankDisk() clear the dirty flag and bump the
-// revision -- the dirty/autosave-eligible contract FloppyDiskManager will
-// poll on each frame tick.
-void test_load_image_and_insert_blank_manage_dirty_and_revision() {
+// loadImage()/insertBlankDisk() bump the revision -- the change counter
+// FloppyDiskManager polls on each frame tick to decide on autosave.
+void test_load_image_and_insert_blank_bump_revision() {
     CE1600FCard card;
-    writeReg(card, 0x79, 0);
-    writeReg(card, 0x78, 0x60);
-    writeReg(card, 0x7B, 0x42);
-    CHECK(card.isDirty());
-
     std::vector<uint8_t> image(CE1600FCard::kImageSize, 0x77);
-    const uint64_t revBefore = card.revision();
+    uint64_t revBefore = card.revision();
     CHECK(card.loadImage(image.data(), image.size()));
-    CHECK(!card.isDirty());
     CHECK(card.revision() > revBefore);
     CHECK(card.imageForSave()[0] == 0x77);
 
+    revBefore = card.revision();
     card.insertBlankDisk();
-    CHECK(!card.isDirty());
+    CHECK(card.revision() > revBefore);
     CHECK(card.imageForSave()[0] == 0);
 
     CHECK(!card.loadImage(image.data(), image.size() - 1));  // wrong size rejected
@@ -348,7 +341,7 @@ int run_ce1600f_tests() {
     test_data_writes_outside_a_transfer_do_not_touch_the_image();
     test_abandoned_transfer_times_out();
     test_port_0x81_reset_clears_motor_and_command_state();
-    test_load_image_and_insert_blank_manage_dirty_and_revision();
+    test_load_image_and_insert_blank_bump_revision();
     test_disk_changed_latch_starts_set_and_clears_on_step();
     test_disk_changed_latch_clears_on_any_command_not_just_step();
     test_set_side_switches_data_and_rearms_changed_latch();

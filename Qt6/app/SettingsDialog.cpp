@@ -141,7 +141,9 @@ PathRowSpec directorySpec(QWidget* parent, const QString& label, const QString& 
 // One model's "default preset" row: `modelKey` is AppSettings::
 // defaultPresetPath()'s key, `extension` the preset suffix that model uses.
 void addDefaultPresetRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids& sections, const QString& label,
-                         const QString& modelKey, const QString& extension) {
+                         Model model) {
+    const QString modelKey = modelSettingsKey(model);
+    const QString extension = modelKey.toLower();
     PathRowSpec spec;
     spec.label = label;
     spec.pickText = SettingsDialog::tr("Choose…");
@@ -204,12 +206,9 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     // see MainWindow::applyDefaultPreset().
     QGridLayout* presets =
         addSection(layout, this, sections, tr("Default presets (loaded when the model is selected)"));
-    addDefaultPresetRow(presets, 0, this, sections, tr("PC-1500:"), QStringLiteral("PC1500"),
-                        QStringLiteral("pc1500"));
-    addDefaultPresetRow(presets, 1, this, sections, tr("PC-1500A:"), QStringLiteral("PC1500A"),
-                        QStringLiteral("pc1500a"));
-    addDefaultPresetRow(presets, 2, this, sections, tr("PC-1600:"), QStringLiteral("PC1600"),
-                        QStringLiteral("pc1600"));
+    addDefaultPresetRow(presets, 0, this, sections, tr("PC-1500:"), Model::PC1500);
+    addDefaultPresetRow(presets, 1, this, sections, tr("PC-1500A:"), Model::PC1500A);
+    addDefaultPresetRow(presets, 2, this, sections, tr("PC-1600:"), Model::PC1600);
 
     // ── Storage ──────────────────────────────────────────────────────────
     QGridLayout* storage = addSection(layout, this, sections, tr("Storage"));

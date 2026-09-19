@@ -15,7 +15,7 @@ constexpr auto kFloppySuffix = ".floppy.img";
 QVector<FloppyDiskManager::DiskEntry> entriesFor(const QString& dir) {
     QVector<FloppyDiskManager::DiskEntry> out;
     QDir d(dir);
-    for (const QFileInfo& fi : d.entryInfoList({QStringLiteral("*.floppy.img")}, QDir::Files, QDir::Name)) {
+    for (const QFileInfo& fi : d.entryInfoList({QLatin1Char('*') + QLatin1String(kFloppySuffix)}, QDir::Files, QDir::Name)) {
         QString name = fi.fileName();
         name.chop(static_cast<int>(qstrlen(kFloppySuffix)));
         out.push_back({name});
@@ -23,25 +23,18 @@ QVector<FloppyDiskManager::DiskEntry> entriesFor(const QString& dir) {
     return out;
 }
 
-bool pathIsUnderDir(const QString& path, const QString& dir) {
-    if (path.isEmpty() || dir.isEmpty()) return false;
-    const QString a = QFileInfo(path).canonicalFilePath();
-    const QString b = QFileInfo(dir).canonicalFilePath();
-    return !a.isEmpty() && !b.isEmpty() && a.startsWith(b);
-}
-
 // Finds `<diskName>.floppy.img` in the instance dir first, then the
 // bundled dir (an instance shadows a bundled template of the same name --
 // same precedence MemoryModuleManager gives instance cards).
 bool resolveDiskPath(const QString& diskName, QString* outPath, bool* outIsInstance) {
-    const QString fileName = FloppyDiskManager::DiskEntry{diskName}.diskName + QString::fromLatin1(kFloppySuffix);
-    const QString instPath = QDir(AppPaths::instanceDir()).filePath(fileName);
+    const QString instPath = AppPaths::floppyInstancePathFor(diskName);
     if (QFile::exists(instPath)) {
         *outPath = instPath;
         *outIsInstance = true;
         return true;
     }
-    const QString bundledPath = QDir(AppPaths::bundledResourcesDir()).filePath(fileName);
+    const QString bundledPath =
+        QDir(AppPaths::bundledResourcesDir()).filePath(AppPaths::sanitizedFloppyFileName(diskName));
     if (QFile::exists(bundledPath)) {
         *outPath = bundledPath;
         *outIsInstance = false;
@@ -76,28 +69,26 @@ void FloppyDiskManager::selectDisk(const QString& diskNameOrEmpty) {
     auto* m1600 = m_controller->pc1600();
     if (!m1600 || !m1600->ce1600fAttached()) return;
 
-    if (m_diskName.isEmpty()) {
+    if (!loadSelectedDisk(m1600)) {
+        m_diskName.clear();
         m1600->ce1600fInsertBlank();
-        m_lastSeenRevision = m1600->ce1600fRevision();
-        return;
     }
+    m_lastSeenRevision = m1600->ce1600fRevision();
+}
+
+bool FloppyDiskManager::loadSelectedDisk(PC1600Machine* m1600) {
+    if (m_diskName.isEmpty()) return false;  // blank disk requested
 
     QString path;
     bool isInstance = false;
     if (!resolveDiskPath(m_diskName, &path, &isInstance)) {
         emit errorMessage(tr("Couldn't find the floppy disk \"%1\".").arg(m_diskName));
-        m_diskName.clear();
-        m1600->ce1600fInsertBlank();
-        m_lastSeenRevision = m1600->ce1600fRevision();
-        return;
+        return false;
     }
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
         emit errorMessage(tr("Couldn't read \"%1\".").arg(path));
-        m_diskName.clear();
-        m1600->ce1600fInsertBlank();
-        m_lastSeenRevision = m1600->ce1600fRevision();
-        return;
+        return false;
     }
     const QByteArray bytes = f.readAll();
     const auto data = reinterpret_cast<const uint8_t*>(bytes.constData());
@@ -105,12 +96,10 @@ void FloppyDiskManager::selectDisk(const QString& diskNameOrEmpty) {
         emit errorMessage(tr("\"%1\" isn't a valid CE-1600F floppy image (expected %2 bytes).")
                                .arg(m_diskName)
                                .arg(CE1600FCard::kImageSize));
-        m_diskName.clear();
-        m1600->ce1600fInsertBlank();
-    } else if (isInstance) {
-        m_instanceFilePath = path;
+        return false;
     }
-    m_lastSeenRevision = m1600->ce1600fRevision();
+    if (isInstance) m_instanceFilePath = path;
+    return true;
 }
 
 void FloppyDiskManager::attachToMachine() {
@@ -127,15 +116,13 @@ void FloppyDiskManager::attachToMachine() {
 
 void FloppyDiskManager::syncFromPresetLoad(const QString& labelOrEmpty, const QString& resolvedPathOrEmpty) {
     m_diskName = labelOrEmpty;
-    m_instanceFilePath = pathIsUnderDir(resolvedPathOrEmpty, AppPaths::instanceDir()) ? resolvedPathOrEmpty : QString();
+    m_instanceFilePath = AppPaths::isUnderDir(resolvedPathOrEmpty, AppPaths::instanceDir()) ? resolvedPathOrEmpty : QString();
     m_persistPending = false;
     if (auto* m1600 = m_controller->pc1600()) m_lastSeenRevision = m1600->ce1600fRevision();
-    emit diskChanged();
 }
 
 bool FloppyDiskManager::nameCollides(const QString& diskName) const {
-    const QString instPath = QDir(AppPaths::instanceDir()).filePath(diskName + QString::fromLatin1(kFloppySuffix));
-    return QFile::exists(instPath);
+    return QFile::exists(AppPaths::floppyInstancePathFor(diskName));
 }
 
 bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
@@ -155,7 +142,7 @@ bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
     }
 
     const auto image = m1600->ce1600fDiskImage();
-    const QString newPath = QDir(AppPaths::instanceDir()).filePath(name + QString::fromLatin1(kFloppySuffix));
+    const QString newPath = AppPaths::floppyInstancePathFor(name);
     if (!AppPaths::atomicWriteBinaryFile(newPath, image)) {
         *error = tr("Couldn't write \"%1\".").arg(newPath);
         return false;
@@ -164,9 +151,7 @@ bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
     m_diskName = name;
     m_instanceFilePath = newPath;
     m_persistPending = false;
-    m1600->ce1600fClearDirty();
     m_lastSeenRevision = m1600->ce1600fRevision();
-    emit diskChanged();
     return true;
 }
 
@@ -175,7 +160,7 @@ void FloppyDiskManager::writeInstance() {
     auto* m1600 = m_controller->pc1600();
     if (!m1600 || !m1600->ce1600fAttached()) return;
     const auto image = m1600->ce1600fDiskImage();
-    if (AppPaths::atomicWriteBinaryFile(m_instanceFilePath, image)) m1600->ce1600fClearDirty();
+    AppPaths::atomicWriteBinaryFile(m_instanceFilePath, image);
 }
 
 void FloppyDiskManager::markDirtyAndSchedulePersist() {

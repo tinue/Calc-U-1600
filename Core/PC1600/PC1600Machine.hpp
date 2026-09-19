@@ -90,6 +90,7 @@ public:
     // than restating it: the timer periods below, runCycles()'s budget, and
     // (via `paceHz` on the Bridge wrapper) the GUI's batch pacing.
     static constexpr uint32_t kTStateHz = 3580000;
+    static_assert(CE1600FCard::kTStateHz == kTStateHz, "CE1600FCard times seeks in SC7852 T-states");
     static constexpr uint32_t kLH5803Hz = 1300000;
 
     /// Converts a cycle count returned by whichever CPU owned the bus into
@@ -112,14 +113,14 @@ public:
     uint64_t runCycles(uint64_t maxCycles);
 
     /// Optional host callback invoked from inside runCycles() roughly every
-    /// `intervalCycles` T-states of emulated time (counted across calls, so many
+    /// `intervalTStates` T-states of emulated time (counted across calls, so many
     /// short runCycles() calls still add up). Lets a UI thread that drives
     /// a long synchronous preset/program load keep its event loop alive
     /// (repaint, show a progress popup) without the loaders knowing about
     /// it. Called with m_mutex NOT held, so the hook may safely read the
     /// display snapshot. The hook must not drive the machine itself. An
     /// empty function (the default) removes it.
-    void setYieldHook(std::function<void()> hook, uint64_t intervalCycles);
+    void setYieldHook(std::function<void()> hook, uint64_t intervalTStates);
 
     // ── ROM loading ────────────────────────────────────────────────────
     bool loadBank0(const uint8_t* lower, size_t lowerSize, const uint8_t* upper, size_t upperSize) {
@@ -141,14 +142,12 @@ public:
     // The CE-1600F floppy docks onto the CE-1600P and cannot run
     // standalone (its driver lives in the CE-1600P's own bank-5 ROM), so
     // the two attach/detach as a union: `attachCE1600P` always also builds
-    // a `CE1600FCard` (auto-inserting a blank disk unless `diskImage` is
-    // given) and chains it onto the same bus; `detachCE1600P` tears down
+    // a `CE1600FCard` (auto-inserting a blank disk) and chains it onto the same bus; `detachCE1600P` tears down
     // both together. There is no separate floppy attach/detach entry
     // point -- only disk *image* selection (`ce1600fLoadImage` etc.) is
     // independent of attach/detach.
     bool attachCE1600P(const uint8_t* rom1, size_t rom1Size,
-                        const uint8_t* rom2, size_t rom2Size,
-                        const uint8_t* diskImage = nullptr, size_t diskImageSize = 0);
+                        const uint8_t* rom2, size_t rom2Size);
     void detachCE1600P();
     bool ce1600pAttached() const { return m_ce1600pCard != nullptr; }
     /// Unlocked direct access -- headless/tests only, same convention as
@@ -171,16 +170,14 @@ public:
     // ── CE-1600F floppy (attached as a union with CE-1600P, above) ──────
     //
     // All GUI-safe (take m_mutex, mirroring the plotter accessors above --
-    // CE1600FCard's image/dirty/revision state is written from inside
+    // CE1600FCard's image/revision state is written from inside
     // step() on every data-register access, same race as the plotter
     // mechanism). No-op/empty-returning when no floppy is attached.
     bool ce1600fAttached() const { return m_ce1600fCard != nullptr; }
     std::vector<uint8_t> ce1600fDiskImage() const;
-    bool ce1600fDirty() const;
     uint64_t ce1600fRevision() const;
     void ce1600fInsertBlank();
     bool ce1600fLoadImage(const uint8_t* data, size_t size);  // live hot-swap, no power-cycle needed
-    void ce1600fClearDirty();
     /// 0 = side A, 1 = side B -- the software analogue of ejecting and
     /// flipping the physical disk (CE1600FCard::setSide()'s own comment).
     /// A no-op when no floppy is attached.
