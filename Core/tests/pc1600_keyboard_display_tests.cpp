@@ -7,12 +7,17 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <fstream>
+#include <iterator>
+#include <string>
+#include <vector>
 
 #include "../PC1600/PC1600Bank.hpp"
 #include "../PC1600/PC1600Display.hpp"
 #include "../PC1600/PC1600Keyboard.hpp"
 #include "../PC1600/PC1600Memory.hpp"
 #include "../PC1600/PC1600StatusLine.hpp"
+#include "../SharpShiftedSymbols.hpp"
 
 namespace {
 
@@ -725,6 +730,38 @@ void test_memory_clock_enable_via_port37_write() {
 
 } // namespace
 
+// The GUI/typer's PC-1600 digit-row SHIFT table must agree with the ROM's
+// own SHIFT-code table (SFTCDT, bank 6 @ 953FH, indexed by key code - 08H;
+// PC-1600-Keyboard.md §7). Regression: '_' used to map to SHIFT + 9, but
+// SFTCDT puts it on "." and leaves 9 unshifted.
+void test_digit_row_shift_table_matches_rom_sftcdt() {
+    std::ifstream in("roms/PC1600-P2-B6.bin", std::ios::binary);
+    if (!in) {
+        std::fprintf(stderr, "SKIP test_digit_row_shift_table_matches_rom_sftcdt: roms/PC1600-P2-B6.bin not found\n");
+        return;
+    }
+    const std::vector<unsigned char> rom((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const size_t kSftcdt = 0x953F - 0x8000; // bank 6 is mapped at 8000H
+    CHECK(rom.size() == 0x4000);
+    if (rom.size() != 0x4000) return;
+
+    int checked = 0;
+    for (int c = 0x20; c < 0x7F; ++c) {
+        std::string base;
+        if (!pc1600DigitRowShiftedBaseKey(static_cast<char>(c), &base)) continue;
+        const int code = base == "space" ? 0x20 : static_cast<unsigned char>(base[0]);
+        const bool matches = rom[kSftcdt + static_cast<size_t>(code - 0x08)] == c;
+        if (!matches) std::fprintf(stderr, "  SFTCDT mismatch: '%c' mapped to SHIFT + %s\n", c, base.c_str());
+        CHECK(matches);
+        ++checked;
+    }
+    CHECK(checked == 11);
+
+    std::string base;
+    CHECK(pc1600DigitRowShiftedBaseKey('_', &base) && base == ".");
+    CHECK(rom[kSftcdt + ('9' - 0x08)] == '9'); // SHIFT + 9 has no second legend
+}
+
 int run_pc1600_keyboard_display_tests() {
     test_keyboard_name_lookup();
     test_keyboard_scan_single_strobe();
@@ -759,6 +796,7 @@ int run_pc1600_keyboard_display_tests() {
     test_pb3_reads_high_for_the_alternate_charset_gate();
     test_memory_display_wiring_via_io();
     test_memory_clock_enable_via_port37_write();
+    test_digit_row_shift_table_matches_rom_sftcdt();
 
     std::printf("pc1600_keyboard_display_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

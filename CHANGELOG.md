@@ -2,6 +2,13 @@
 
 ## [0.4.0] - work in progress
 
+- **Keyboard** Fixed a key getting stuck down and freezing the
+  calculator (Reset didn't help). This happened when a host key that
+  needs Shift (e.g. Shift-3 for `*` on a Swiss keyboard) was released
+  after Shift. A key held while the window loses focus is now let go too,
+  and Reset / Reset All release every key.
+- **Keyboard** PC-1600: `_` is now typed as SHIFT + `.`, as on the real
+  keyboard -- it used to come out as `9`.
 - **ROM modules** Memory modules can now be ROM (`content: rom` in a
   card definition: read-only, bytes carried in the file). First one:
   Sharp's **CE-502B** Statistics module for the PC-1500/1500A. ROM

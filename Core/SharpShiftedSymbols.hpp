@@ -12,7 +12,8 @@
 //   * Core/PC1500/PC1500TypedInput.hpp also routes a-z here (SHIFT tap =
 //     lowercase on the PC-1500's single-legend letter keys).
 //   * Core/PC1600/PC1600TypedInput.hpp also maps the PC-1600 digit-row
-//     second legends (' [ ] ` { } \ ~ _ |), which the PC-1500 lacks.
+//     second legends (' [ ] ` { } \ ~ |) plus SHIFT + . = _, which the
+//     PC-1500 lacks.
 //
 // The Swift GUI keeps its own copy (Calc-U-1600/PC1500KeyboardMap.swift's
 // shiftedCharacterBaseKeyName) -- a different layer/language; keep the two
@@ -43,6 +44,11 @@ inline bool sharpShiftedSymbolBaseKey(char c, std::string* base) {
 // Core/PC1600/PC1600BasicTyper.cpp (preset `type:` steps) and the Qt6 GUI's
 // interactive keyboard without pulling in PC1600BasicTyper.cpp's optional
 // (sharpdx-gated) build unit.
+//
+// Checked against the ROM's SHIFT-code table (SFTCDT, bank 6 @ 953FH,
+// indexed by key code - 08H; see PC-1600-Keyboard.md §7): 1-8 and 0 carry
+// these second legends, 9 has none (SHIFT + 9 stays 9), and _ is on the
+// "." key -- the one entry here that isn't on the digit row.
 inline bool pc1600DigitRowShiftedBaseKey(char c, std::string* base) {
     switch (c) {
         case '^':  *base = "space"; return true;  // caret == SHIFT + SPACE (per real hardware)
@@ -54,7 +60,7 @@ inline bool pc1600DigitRowShiftedBaseKey(char c, std::string* base) {
         case '}':  *base = "6"; return true;
         case '\\': *base = "7"; return true;
         case '~':  *base = "8"; return true;
-        case '_':  *base = "9"; return true;
+        case '_':  *base = "."; return true;  // SFTCDT: . (2EH) -> _ (5FH)
         case '|':  *base = "0"; return true;  // hardware glyph is a broken vertical bar
         default: return false;
     }
