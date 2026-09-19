@@ -7,9 +7,13 @@
 // Build & run: see tools/run_tests.sh
 
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <string>
 #include <vector>
 
 #include "../Connector/CE1600FCard.hpp"
+#include "../Connector/FloppyImageFile.hpp"
 
 namespace {
 
@@ -329,6 +333,120 @@ void test_claims_only_its_own_ports() {
     CHECK(!card.respondsToRead(ioPins(0x90, false), v));
 }
 
+// ── FloppyImageFile.hpp: the versioned `.floppy.yaml` disk format ──────
+
+std::vector<uint8_t> patternedImage() {
+    std::vector<uint8_t> image(CE1600FCard::kImageSize, 0);
+    uint32_t x = 12345;
+    for (size_t i = 0; i < CE1600FCard::kSideSize; i += 3) {  // side A: noise; side B: blank
+        x = x * 1103515245u + 12345u;
+        image[i] = static_cast<uint8_t>(x >> 16);
+    }
+    return image;
+}
+
+size_t countLines(const std::string& s) {
+    size_t n = 0;
+    for (char c : s) n += (c == '\n');
+    return n;
+}
+
+void test_floppy_file_round_trips_both_sides() {
+    const auto image = patternedImage();
+    const std::string text = formatFloppyFile("My Disk", image);
+    CHECK(text.find("format-version: 1\n") != std::string::npos);
+    FloppyFile f;
+    std::string err;
+    CHECK(parseFloppyFile(text, &f, &err));
+    CHECK(f.diskName == "My Disk");
+    CHECK(f.image == image);
+}
+
+void test_floppy_file_blank_disk_is_compact() {
+    const std::vector<uint8_t> blank(CE1600FCard::kImageSize, 0);
+    const std::string text = formatFloppyFile("Empty", blank);
+    CHECK(text.find("      $0000: 00...\n") != std::string::npos);
+    CHECK(countLines(text) < 20);
+}
+
+void test_floppy_file_rejects_missing_or_unknown_version() {
+    const std::string good = formatFloppyFile("V", std::vector<uint8_t>(CE1600FCard::kImageSize, 0));
+    FloppyFile f;
+    std::string err;
+
+    std::string v2 = good;
+    v2.replace(v2.find("format-version: 1"), 17, "format-version: 2");
+    CHECK(!parseFloppyFile(v2, &f, &err));
+    CHECK(err.find("format-version 2") != std::string::npos);
+
+    std::string noVersion = good;
+    noVersion.erase(noVersion.find("format-version: 1\n"), 18);
+    err.clear();
+    CHECK(!parseFloppyFile(noVersion, &f, &err));
+    CHECK(err.find("format-version") != std::string::npos);
+
+    std::string wrongFormat = good;
+    wrongFormat.replace(wrongFormat.find("ce1600f-floppy"), 14, "something-else");
+    CHECK(!parseFloppyFile(wrongFormat, &f, &err));
+}
+
+void test_floppy_file_rejects_wrong_side_size() {
+    const std::string good = formatFloppyFile("S", std::vector<uint8_t>(CE1600FCard::kImageSize, 0));
+    // Side B cut short: one explicit 16-byte row instead of a run to $10000.
+    std::string shortSide = good;
+    const size_t b = shortSide.find("  b:");
+    const size_t run = shortSide.find("$0000: 00...", b);
+    shortSide.replace(run, 12, "$0000: 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00");
+    FloppyFile f;
+    std::string err;
+    CHECK(!parseFloppyFile(shortSide, &f, &err));
+    CHECK(err.find("side 'b'") != std::string::npos);
+
+    std::string noB = good.substr(0, b);
+    CHECK(!parseFloppyFile(noB, &f, &err));
+}
+
+void writeText(const std::filesystem::path& p, const std::string& text) {
+    std::ofstream(p, std::ios::binary) << text;
+}
+
+void test_floppy_directory_resolution_prefers_first_dir() {
+    namespace fs = std::filesystem;
+    const fs::path root = fs::temp_directory_path() / "calcu_floppy_resolve_test";
+    fs::remove_all(root);
+    fs::create_directories(root / "bundled");
+    fs::create_directories(root / "saves");
+    const std::vector<uint8_t> blank(CE1600FCard::kImageSize, 0);
+    writeText(root / "bundled" / "fmt.floppy.yaml", formatFloppyFile("Formatted", blank));
+    writeText(root / "saves" / "other-file-name.floppy.yaml", formatFloppyFile("Formatted", blank));
+    writeText(root / "saves" / "mine.floppy.yaml", formatFloppyFile("Mine", blank));
+    writeText(root / "saves" / "broken.floppy.yaml", "not: a floppy\n");
+    writeText(root / "saves" / "ignored.card.yaml", "module-name: x\n");
+
+    std::string err;
+    const auto saves = scanFloppyDirectory((root / "saves").string(), &err);
+    CHECK(saves.size() == 2);  // broken + non-floppy skipped
+    CHECK(err.find("broken.floppy.yaml") != std::string::npos);
+    CHECK(saves.size() == 2 && saves[0].diskName == "Formatted" && saves[1].diskName == "Mine");
+
+    const std::vector<std::string> dirs = {(root / "bundled").string(), (root / "saves").string()};
+    std::string path;
+    CHECK(resolveFloppyByName(dirs, "Formatted", &path, &err));
+    CHECK(path == (root / "bundled" / "fmt.floppy.yaml").string());  // bundled wins
+    CHECK(resolveFloppyByName(dirs, "Mine", &path, &err));
+    CHECK(path == (root / "saves" / "mine.floppy.yaml").string());
+    CHECK(!resolveFloppyByName(dirs, "Nope", &path, &err));
+
+    writeText(root / "saves" / "dup.floppy.yaml", formatFloppyFile("Mine", blank));
+    CHECK(!resolveFloppyByName(dirs, "Mine", &path, &err));
+    CHECK(err.find("more than one") != std::string::npos);
+
+    FloppyFile f;
+    CHECK(readFloppyFile((root / "bundled" / "fmt.floppy.yaml").string(), &f, &err));
+    CHECK(f.image == blank);
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 int run_ce1600f_tests() {
@@ -349,6 +467,11 @@ int run_ce1600f_tests() {
     test_transfer_holds_busy_until_the_last_byte();
     test_seek_busies_the_drive_for_the_real_step_time();
     test_claims_only_its_own_ports();
+    test_floppy_file_round_trips_both_sides();
+    test_floppy_file_blank_disk_is_compact();
+    test_floppy_file_rejects_missing_or_unknown_version();
+    test_floppy_file_rejects_wrong_side_size();
+    test_floppy_directory_resolution_prefers_first_dir();
 
     std::printf("ce1600f_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
