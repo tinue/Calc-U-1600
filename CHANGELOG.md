@@ -2,6 +2,43 @@
 
 ## [0.3.0] - work in progress
 
+- **Floppy disk** Added the CE-1600F pocket floppy drive for the
+  PC-1600. It comes with the CE-1600P plotter/printer (no separate
+  switch) and works like the real one: `INIT"X:"` formats a blank disk,
+  and `SAVE`, `LOAD`, `FILES` and `DSKF` work on it. Disks are
+  double-sided (64 KB per side); a control-bar button flips the disk to
+  the other side, a green lamp shows when the drive motor runs, and
+  drive timing follows the Service Manual.
+- **Floppy disk** Disks are handled like battery-backed memory cards: a
+  blank disk is inserted by default, and the control bar lets you pick a
+  saved disk or save the current one. Presets can insert a saved disk
+  with the new `floppy: <name>` key (`,A`/`,B` picks the side).
+- **Presets** Settings has a default preset per model (PC-1500,
+  PC-1500A, PC-1600), applied at startup and whenever that model is
+  selected. Ready-made ones are in `examples/startup/`; the PC-1600 one
+  adds a CE-1600M and CE-1601M, formats the floppy, sets up the RAM
+  disk and COM1.
+- **Presets** Switching models now clears both memory slots, so no
+  module carries over from the previous model.
+- **Presets** New `examples/setup/make_diskworks_floppy.pc1600` prepares
+  a DiskWorks program floppy.
+- **Presets** A `program:` section now waits for BASIC to finish the
+  previous command (e.g. a `SAVE` started by `type:`) before loading, so
+  it no longer overwrites a program that's still being saved.
+- **Loading** Long preset loads show a "Loading…" popup and the window
+  keeps updating, instead of freezing.
+- **Settings** The Settings dialog is reorganized into titled sections
+  (General, Default presets, Storage, Tracing, Serial port).
+- **Control bar** Common controls (Reset, Settings, model/ROM, memory
+  slots) stay left-aligned, so switching models no longer shifts them.
+  The redundant "Load Preset…" button is gone; use the File menu.
+- **Serial port** Fixed a double slash in the serial-port link path
+  when the chosen folder ends in `/`.
+- **Windows installer** The installer now shows the correct version
+  (it always said 0.1.0).
+- **Build** Windows ARM64 is now built natively and gains BASIC preset
+  loading; BASIC tokenizer updated to SharpDataExchange 0.2.1.
+
 ## [0.2.0] - 2026-09-18
 
 - **Platforms** Added a native Windows ARM64 build, alongside the
