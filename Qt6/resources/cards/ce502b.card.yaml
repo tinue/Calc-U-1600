@@ -6,7 +6,7 @@
 # convention, per Jeff Birt's dump notes):
 #   &0000-&0007  ROM header: 55 (marker) 00 (ROM top, high byte)
 #                00 C5 (top of the BASIC program) 40 (size: 16 KB)
-#                00 00 FF (FF = LIST not allowed)
+#                00 00 FF (FF = LIST allowed)
 #   &0008-&00C4  reserve area: the DEF-key labels HG BD PD ND WD ED CD STD
 #                FD MLR and their key strings
 #   &00C5-       the tokenized BASIC program
