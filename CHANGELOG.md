@@ -4,6 +4,8 @@
 
 - **Settings** moved from the control bar to the menu bar: the
   application menu on macOS (Cmd-,), Edit > Settings… (Ctrl-,) elsewhere.
+  The control bar's Reset button is gone too: Machine > Reset (Cmd-R)
+  and Reset All (Cmd-Shift-R).
 - **Keyboard** Keys held with Cmd/Ctrl (macOS) or Ctrl/Alt/Windows key
   (Windows/Linux) no longer type on the calculator -- e.g. Cmd-C no
   longer puts a "C" on the display. Option and AltGr still type.

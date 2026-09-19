@@ -29,12 +29,6 @@ Launch the app and it boots straight to BASIC on a PC-1500A (the default
 model) — no separate "power on" step. The control bar above the
 calculator's own faceplate has, left to right:
 
-- **Reset** — press the calculator's own reset. A plain click is a
-  normal reset (memory and BASIC program untouched, same as the real
-  hardware's reset button). Cmd-click performs an "ALL RESET" — on the
-  PC-1600 this is the deeper reset level that also re-seeds the clock;
-  the PC-1500/1500A have no distinct ALL RESET, so Cmd-click there is the
-  same as a plain click.
 - **Slot 1 / Slot 2** — the memory module pickers; see
   [Memory modules & plotter](#memory-modules--plotter) below. Slot 2 only
   appears for the PC-1600, which has two expansion slots.
@@ -47,6 +41,13 @@ calculator's own faceplate has, left to right:
   see [Preset files](#preset-files).
 - **CE-150 / CE-1600P** — plotter attach/detach toggles; see
   [Memory modules & plotter](#memory-modules--plotter).
+
+**Reset** is in the **Machine** menu: **Reset** (Cmd-R / Ctrl-R) is a
+normal reset (memory and BASIC program untouched, same as the real
+hardware's reset button); **Reset All** (Cmd-Shift-R / Ctrl-Shift-R) is
+the PC-1600's deeper ALL RESET level (on the PC-1500/1500A, which have no
+distinct ALL RESET, it's the same as Reset). Both run the boot at full
+speed until the prompt appears, then set the clock from the computer.
 
 ## The calculator & keyboard
 

@@ -106,7 +106,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     connect(m_controlBar, &ControlBar::modelSelected, this, &MainWindow::applyModelSelection);
     connect(m_controlBar, &ControlBar::romRevisionSelected, this, &MainWindow::applyRomRevisionSelection);
-    connect(m_controlBar, &ControlBar::resetClicked, this, &MainWindow::resetMachine);
     connect(m_controlBar, &ControlBar::moduleSelected, this, [this](int slot, QString moduleNameOrEmpty) {
         m_moduleManager->selectModule(slot, moduleNameOrEmpty);
         m_controller->switchModel(m_controller->currentModel()); // rebuild -> re-attach
@@ -699,8 +698,7 @@ void MainWindow::buildMenuBar() {
         m_settingsAction->setShortcut(QKeySequence(Qt::ControlModifier | Qt::Key_Comma));
 
     // Machine: duplicates ControlBar's model/ROM pickers (checkable, exclusive
-    // per group) plus Reset/Reset All, which today only reachable via
-    // ControlBar's Reset button and its Cmd-click "reset all" gesture.
+    // per group) plus Reset/Reset All -- the only place Reset lives.
     QMenu* machineMenu = menuBar()->addMenu(tr("&Machine"));
 
     QMenu* modelMenu = machineMenu->addMenu(tr("Model"));

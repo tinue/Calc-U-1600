@@ -6,14 +6,12 @@
 #include <QPushButton>
 #include <QHBoxLayout>
 #include <QGuiApplication>
-#include <QMouseEvent>
 #include <QSignalBlocker>
 #include <QStyle>
 
 namespace {
 
-// A thin vertical rule between control-bar groups (reset |
-// model/ROM pickers | module slots | plotter toggles) so same-looking
+// A thin vertical rule between control-bar groups (model/ROM pickers | module slots | plotter toggles) so same-looking
 // widgets in adjacent groups -- most notably the two slots' identical save-
 // icon buttons -- read as belonging to different groups instead of mushing
 // into one undifferentiated row.
@@ -24,34 +22,6 @@ QFrame* addSeparator(QHBoxLayout* layout, QWidget* parent) {
     layout->addWidget(line);
     return line;
 }
-
-// Qt on macOS reports the physical Cmd key as Qt::ControlModifier (it
-// swaps Ctrl/Cmd by default to match platform convention, per Qt's own
-// docs on QKeyEvent/keyboardModifiers). Named/isolated here so the one-line
-// fix is obvious if that assumption turns out wrong on a given Qt/macOS
-// combination.
-bool isCmdHeld(Qt::KeyboardModifiers mods) {
-    return mods.testFlag(Qt::ControlModifier);
-}
-
-// Small QPushButton subclass so the Reset button can tell a plain click
-// from a Cmd-click.
-class ResetButton : public QPushButton {
-public:
-    using QPushButton::QPushButton;
-
-protected:
-    void mousePressEvent(QMouseEvent* event) override {
-        m_cmdHeld = isCmdHeld(event->modifiers());
-        QPushButton::mousePressEvent(event);
-    }
-
-public:
-    bool lastClickWasCmd() const { return m_cmdHeld; }
-
-private:
-    bool m_cmdHeld = false;
-};
 
 // Shared by the memory-slot and floppy pickers: "–empty–", the bundled
 // names, then (after a separator) the user's saved ones.
@@ -79,16 +49,10 @@ QStringList namesOf(const QVector<Entry>& entries, NameOf nameOf) {
 ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     auto* layout = new QHBoxLayout(this);
 
-    auto* resetButton = new ResetButton(tr("Reset"), this);
-    m_resetButton = resetButton;
-    // Never take keyboard focus from MainWindow (which owns physical-
-    // keyboard typing) -- Qt's default focus policy for a button/combo box
-    // varies by platform style, so this is set explicitly rather than left
-    // to that default. Still fully mouse-clickable either way.
-    m_resetButton->setFocusPolicy(Qt::NoFocus);
-    layout->addWidget(m_resetButton);
-
-    addSeparator(layout, this);
+    // Every widget here is NoFocus: never take keyboard focus from
+    // MainWindow (which owns physical-keyboard typing) -- Qt's default focus
+    // policy for a button/combo box varies by platform style, so it is set
+    // explicitly. Still fully mouse-clickable either way.
     m_modelCombo = new QComboBox(this);
     m_modelCombo->addItem(tr("PC-1500"), static_cast<int>(Model::PC1500));
     m_modelCombo->addItem(tr("PC-1500A"), static_cast<int>(Model::PC1500A));
@@ -138,7 +102,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     }
     setSlot2Visible(false);
 
-    // Left group is ordered most-common-first (Reset, model, slots)
+    // Left group is ordered most-common-first (model, slots)
     // so model-dependent widgets (ROM picker, slot 2) only change its tail
     // and switching models doesn't shift the rest; the plotter/floppy group
     // below is pinned to the right edge.
@@ -205,9 +169,6 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     setFloppyEnabled(false);
     setFloppySaveEnabled(false);
 
-    connect(resetButton, &QPushButton::clicked, this, [this, resetButton] {
-        emit resetClicked(resetButton->lastClickWasCmd());
-    });
     connect(m_modelCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
         emit modelSelected(static_cast<Model>(m_modelCombo->itemData(index).toInt()));
     });
