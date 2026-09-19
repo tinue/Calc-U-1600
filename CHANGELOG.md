@@ -1,5 +1,7 @@
 # Changelog
 
+## [0.4.0] - work in progress
+
 ## [0.3.0] - 2026-09-19
 
 - **PC-1600F** Added the CE-1600F pocket floppy drive for the
