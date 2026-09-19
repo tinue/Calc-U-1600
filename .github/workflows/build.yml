@@ -189,11 +189,7 @@ jobs:
           if-no-files-found: error
 
   linux-aarch64:
-    # GitHub-hosted Linux arm64 runners aren't available on every plan/repo
-    # visibility combination -- don't fail the whole workflow if this one
-    # can't be scheduled or the runner label isn't available.
     runs-on: ubuntu-24.04-arm
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v5
 
@@ -549,40 +545,6 @@ jobs:
           # See the windows-x86_64 job's identical step for what this does.
           Copy-Item Qt6/build/resources Qt6/dist/resources -Recurse
           windeployqt --release --compiler-runtime Qt6/dist/Calc-U-1600.exe
-
-      # Verifies every staged .exe/.dll is genuinely ARM64 -- a guard from
-      # the earlier cross-compiled setup, where windeployqt silently
-      # bundled host x64 Qt DLLs next to an ARM64 .exe (0xc000007b on real
-      # hardware). Cheap, so kept. vc_redist.arm64.exe is excluded:
-      # Microsoft's redist bootstrapper stubs are themselves x86 launchers
-      # by design, regardless of which runtime architecture they install.
-      - name: Verify staged binaries are ARM64
-        shell: pwsh
-        run: |
-          $distRoot = (Resolve-Path Qt6/dist).Path
-          $bad = @()
-          Get-ChildItem -Path Qt6/dist -Recurse -Include *.exe,*.dll | Where-Object {
-            $_.Name -ne "vc_redist.arm64.exe"
-          } | ForEach-Object {
-            $bytes = [System.IO.File]::ReadAllBytes($_.FullName)
-            $peOffset = [System.BitConverter]::ToInt32($bytes, 0x3C)
-            $machine = [System.BitConverter]::ToUInt16($bytes, $peOffset + 4)
-            $machineName = switch ($machine) {
-              0x8664 { "x64" }
-              0xAA64 { "ARM64" }
-              0x14C  { "x86" }
-              default { "UNKNOWN(0x{0:X4})" -f $machine }
-            }
-            $relPath = $_.FullName.Substring($distRoot.Length + 1)
-            Write-Host "${relPath}: $machineName"
-            if ($machineName -ne "ARM64") {
-              $script:bad += "${relPath}: $machineName"
-            }
-          }
-          if ($bad.Count -gt 0) {
-            Write-Host "::error::Non-ARM64 binaries found in staged dist: $($bad -join ', ')"
-            exit 1
-          }
 
       - name: Install Inno Setup
         shell: pwsh

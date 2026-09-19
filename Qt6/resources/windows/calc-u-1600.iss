@@ -12,9 +12,13 @@
   #define APP_ARCH "x64"
 #endif
 
+; APP_VERSION comes from Qt6/CMakeLists.txt's APP_VERSION, written into the
+; build dir at configure time -- so configure (cmake) before running ISCC.
+#include "..\..\build\generated\Version.iss"
+
 [Setup]
 AppName=Calc-U-1600
-AppVersion=0.1.0
+AppVersion={#APP_VERSION}
 DefaultDirName={autopf}\Calc-U-1600
 DefaultGroupName=Calc-U-1600
 UninstallDisplayIcon={app}\Calc-U-1600.exe

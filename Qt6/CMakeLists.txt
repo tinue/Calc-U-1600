@@ -22,7 +22,8 @@ set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../Core)
 # ---- App version / build id (About dialog, macOS bundle Info.plist) ----
 # Single source of truth for the version number -- both the generated
 # Version.h below and the MACOSX_BUNDLE_*VERSION* properties further down
-# reference this instead of each hardcoding "0.1.0" separately.
+# reference this instead of each hardcoding "0.1.0" separately, as does
+# the Windows installer (generated Version.iss below).
 set(APP_VERSION "0.3.0")
 
 # git describe gives a short, human-meaningful build id (tag or short hash,
@@ -51,6 +52,10 @@ message(STATUS "Calc-U-1600 version ${APP_VERSION} build ${APP_BUILD_ID}")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/app/Version.h.in
                ${CMAKE_CURRENT_BINARY_DIR}/generated/Version.h @ONLY)
+# Same version for the Windows installer: resources/windows/calc-u-1600.iss
+# #includes this from the build dir for its AppVersion.
+file(CONFIGURE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/generated/Version.iss
+     CONTENT "#define APP_VERSION \"@APP_VERSION@\"\n" @ONLY)
 
 # Trimmed from tools/build_cli.sh / tools/build_pc1600_cli.sh's own source
 # lists. Core/Connector/* is header-only (no .cpp files exist there at
