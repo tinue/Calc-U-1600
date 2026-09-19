@@ -10,8 +10,9 @@
   the other side, a green lamp shows when the drive motor runs, and
   drive timing follows the Service Manual.
 - **Floppy disk** Disks are handled like battery-backed memory cards: the
-  drive starts empty ("–empty–"; the ROM reports ERROR 160), a bundled
-  ready-formatted "Formatted" disk can be inserted, and the control bar
+  drive starts empty ("–empty–"; the ROM reports ERROR 160), two built-in
+  disks can be inserted ("Formatted", ready to use, and "Blank",
+  unformatted for `INIT"X:"`), and the control bar
   lets you pick a saved disk or save the current one. Presets can insert
   a saved disk with the new `floppy: <name>` key (`,A`/`,B` picks the side). Disks are
   saved as versioned `<name>.floppy.yaml` files in the save folder and

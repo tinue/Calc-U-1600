@@ -1,0 +1,14 @@
+# Calc-U-1600 CE-1600F floppy disk image
+format: ce1600f-floppy
+format-version: 1
+disk-name: "Blank"
+saved: 2026-09-19T10:36:00Z
+sides:
+  a:
+    encoding: addressed-hex
+    bytes: |
+      $0000: 00...
+  b:
+    encoding: addressed-hex
+    bytes: |
+      $0000: 00...
