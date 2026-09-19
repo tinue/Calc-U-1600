@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.0] - work in progress
+## [0.3.0] - 2026-09-19
 
 - **PC-1600F** Added the CE-1600F pocket floppy drive for the
   PC-1600. It attaches with the CE-1600P plotter/printer (no separate
