@@ -64,10 +64,12 @@ detect_platform() {
       ;;
     MINGW*|MSYS*|CYGWIN*)
       # Git Bash / MSYS on a Windows CI runner (`shell: bash` in Actions).
-      # PROCESSOR_ARCHITECTURE reflects the *host* OS, not a cross-compile
-      # target -- both Windows jobs in .github/workflows/build.yml build
-      # natively (windows-arm64 on a windows-11-arm runner), so host ==
-      # target there. Cross-compiling? Set SHARPDX_PLATFORM explicitly.
+      # PROCESSOR_ARCHITECTURE is what the *shell process* sees, not the
+      # build target: an x64 Git Bash under emulation on Windows ARM64
+      # (as on GitHub's windows-11-arm image) reports AMD64. So the
+      # windows-arm64 job in .github/workflows/build.yml sets
+      # SHARPDX_PLATFORM=windows-aarch64 explicitly; do the same when
+      # cross-compiling.
       case "${PROCESSOR_ARCHITECTURE:-}${PROCESSOR_ARCHITEW6432:-}" in
         *ARM64*) echo windows-aarch64 ;;
         *)       echo windows-x86_64 ;;

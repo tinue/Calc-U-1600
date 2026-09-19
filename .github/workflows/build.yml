@@ -527,11 +527,16 @@ jobs:
         shell: bash
         run: tools/fetch_roms.sh
 
-      # Detects the ARM64 host and fetches sharpdx-windows-aarch64.zip --
-      # see the linux-x86_64 job's identical step for what this does.
+      # See the linux-x86_64 job's identical step for what this does.
+      # The platform is set explicitly: the runner image's Git Bash is an
+      # x64 build running under emulation, so it reports
+      # PROCESSOR_ARCHITECTURE=AMD64 and auto-detection would fetch the
+      # x86_64 lib (LNK2019 on every sde_* symbol).
       - name: Fetch sharpdx (preset loading)
         shell: bash
         continue-on-error: true
+        env:
+          SHARPDX_PLATFORM: windows-aarch64
         run: tools/fetch_sharpdx.sh
 
       - name: Configure
