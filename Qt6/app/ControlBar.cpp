@@ -53,6 +53,36 @@ private:
     bool m_cmdHeld = false;
 };
 
+// Shared by the memory-slot and floppy pickers: "–empty–", the bundled
+// names, then (after a separator) the user's saved ones. A saved entry that
+// shares a bundled name is left out -- lookup is bundled-first, so picking
+// it would load the bundled one anyway.
+void fillPicker(QComboBox* combo, const QStringList& bundled, const QStringList& saved,
+                const QString& selectedOrEmpty) {
+    const QSignalBlocker blocker(combo);
+    combo->clear();
+    combo->addItem(ControlBar::tr("–empty–"), QString());
+    for (const auto& name : bundled) combo->addItem(name, name);
+    bool separated = false;
+    for (const auto& name : saved) {
+        if (bundled.contains(name)) continue;
+        if (!separated) {
+            combo->insertSeparator(combo->count());
+            separated = true;
+        }
+        combo->addItem(name, name);
+    }
+    const int idx = combo->findData(selectedOrEmpty);
+    combo->setCurrentIndex(idx >= 0 ? idx : 0);
+}
+
+template <typename Entry, typename NameOf>
+QStringList namesOf(const QVector<Entry>& entries, NameOf nameOf) {
+    QStringList out;
+    for (const auto& e : entries) out << nameOf(e);
+    return out;
+}
+
 } // namespace
 
 ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
@@ -224,17 +254,8 @@ void ControlBar::setRomPickerVisible(bool visible) {
 void ControlBar::setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& bundled,
                                   const QVector<MemoryModuleManager::ModuleEntry>& instances,
                                   const QString& selectedOrEmpty) {
-    QComboBox* combo = m_slot[slot - 1].combo;
-    const QSignalBlocker blocker(combo);
-    combo->clear();
-    combo->addItem(tr("–empty–"), QString());
-    for (const auto& e : bundled) combo->addItem(e.moduleName, e.moduleName);
-    if (!instances.isEmpty()) {
-        combo->insertSeparator(combo->count());
-        for (const auto& e : instances) combo->addItem(e.moduleName, e.moduleName);
-    }
-    const int idx = combo->findData(selectedOrEmpty);
-    combo->setCurrentIndex(idx >= 0 ? idx : 0);
+    const auto name = [](const MemoryModuleManager::ModuleEntry& e) { return e.moduleName; };
+    fillPicker(m_slot[slot - 1].combo, namesOf(bundled, name), namesOf(instances, name), selectedOrEmpty);
 }
 
 void ControlBar::setSlotBatteryBacked(int slot, bool battery) {
@@ -270,16 +291,8 @@ void ControlBar::setCe1600pVisible(bool visible) {
 void ControlBar::setFloppyCombo(const QVector<FloppyDiskManager::DiskEntry>& bundled,
                                 const QVector<FloppyDiskManager::DiskEntry>& instances,
                                 const QString& selectedOrEmpty) {
-    const QSignalBlocker blocker(m_floppyCombo);
-    m_floppyCombo->clear();
-    m_floppyCombo->addItem(tr("–blank–"), QString());
-    for (const auto& e : bundled) m_floppyCombo->addItem(e.diskName, e.diskName);
-    if (!instances.isEmpty()) {
-        m_floppyCombo->insertSeparator(m_floppyCombo->count());
-        for (const auto& e : instances) m_floppyCombo->addItem(e.diskName, e.diskName);
-    }
-    const int idx = m_floppyCombo->findData(selectedOrEmpty);
-    m_floppyCombo->setCurrentIndex(idx >= 0 ? idx : 0);
+    const auto name = [](const FloppyDiskManager::DiskEntry& e) { return e.diskName; };
+    fillPicker(m_floppyCombo, namesOf(bundled, name), namesOf(instances, name), selectedOrEmpty);
 }
 
 void ControlBar::setFloppyVisible(bool visible) {

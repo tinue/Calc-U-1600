@@ -2,6 +2,7 @@
 #include <QObject>
 
 class MachineController;
+class FloppyDiskManager;
 
 // Owns the plotter attach/detach power-cycle sequence: real CE-150/CE-1600P
 // hardware requires the calculator to be powered off, connected, then
@@ -19,7 +20,9 @@ class MachineController;
 class PlotterController : public QObject {
     Q_OBJECT
 public:
-    explicit PlotterController(MachineController* controller, QObject* parent = nullptr);
+    // `floppyManager` puts the selected disk into the CE-1600F whenever the
+    // CE-1600P (and with it the floppy) attaches.
+    PlotterController(MachineController* controller, FloppyDiskManager* floppyManager, QObject* parent = nullptr);
 
     void requestToggleCE150();
     void requestToggleCE1600P();
@@ -55,6 +58,7 @@ private:
     enum class Pending { None, ToggleCE150, ToggleCE1600P };
 
     MachineController* m_controller; // not owned
+    FloppyDiskManager* m_floppyManager; // not owned
     Step m_step = Step::Idle;
     Pending m_pending = Pending::None;
     int m_frameCounter = 0;

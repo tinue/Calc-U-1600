@@ -207,9 +207,9 @@ struct PresetFile {
     //    device.
     std::string plotter;
 
-    // PC-1600 only: `floppy: <name>` names a previously-saved CE-1600F
-    // disk image (a `<name>.floppy.img` under the bundled or user instance
-    // directory -- see AppPaths::sanitizedFloppyFileName()) to load into
+    // PC-1600 only: `floppy: <name>` names a saved CE-1600F disk by its
+    // `disk-name` (a `*.floppy.yaml` in the bundled or the user's save
+    // directory, bundled first -- see Connector/FloppyImageFile.hpp) to load into
     // the floppy at attach time, instead of the default blank disk. An
     // optional `,A` or `,B` suffix (`floppy: mydisk,B`) selects which side
     // is facing the head once loaded (CE1600FCard::setSide()'s own

@@ -1,8 +1,6 @@
 #pragma once
 #include <QString>
-#include <cstdint>
 #include <string>
-#include <vector>
 
 // Path resolution for bundled resources and the memory-module feature --
 // the one place that knows where bundled resources (*.card.yaml templates
@@ -42,8 +40,8 @@ QString sanitizedInstanceFileName(const QString& instanceName);
 QString instancePathFor(const QString& instanceName);
 
 // Same as sanitizedInstanceFileName()/instancePathFor(), but for CE-1600F
-// floppy-disk images: "<name>.floppy.img" (a raw 128KB binary -- see
-// FloppyDiskManager.hpp) instead of "<name>.card.yaml".
+// floppy disks: "<name>.floppy.yaml" (Connector/FloppyImageFile.hpp)
+// instead of "<name>.card.yaml".
 QString sanitizedFloppyFileName(const QString& diskName);
 QString floppyInstancePathFor(const QString& diskName);
 
@@ -54,6 +52,5 @@ bool isUnderDir(const QString& path, const QString& dir);
 // Atomic write via QSaveFile (writes to a temp file beside `path` and
 // renames on commit).
 bool atomicWriteFile(const QString& path, const std::string& text);
-bool atomicWriteBinaryFile(const QString& path, const std::vector<uint8_t>& bytes);
 
 }  // namespace AppPaths

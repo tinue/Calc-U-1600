@@ -61,10 +61,6 @@ private:
     DebugPanel* m_debugPanel = nullptr;
     PlotterPaperWidget* m_plotterPaper = nullptr; // added to m_debugRowLayout only while a plotter is attached
     bool m_plotterPaperInLayout = false;
-    // Set while onPresetArmed() resyncs the plotter state: the preset has
-    // already put its own disk (and side) into the CE-1600F, so
-    // onPlotterAttachedChanged() must not reload the disk file over it.
-    bool m_syncingFromPreset = false;
     QWidget* m_debugRow = nullptr;
     QHBoxLayout* m_debugRowLayout = nullptr;
     QTimer* m_frameTimer = nullptr;

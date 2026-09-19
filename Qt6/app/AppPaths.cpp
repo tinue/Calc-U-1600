@@ -57,7 +57,7 @@ QString sanitizedFloppyFileName(const QString& diskName) {
     s.replace('/', '-').replace(':', '-');
     s = s.simplified();
     if (s.isEmpty()) s = QStringLiteral("Untitled");
-    return s + QStringLiteral(".floppy.img");
+    return s + QStringLiteral(".floppy.yaml");
 }
 
 QString floppyInstancePathFor(const QString& diskName) {
@@ -75,13 +75,6 @@ bool atomicWriteFile(const QString& path, const std::string& text) {
     QSaveFile f(path);
     if (!f.open(QIODevice::WriteOnly)) return false;
     f.write(text.data(), static_cast<qint64>(text.size()));
-    return f.commit();
-}
-
-bool atomicWriteBinaryFile(const QString& path, const std::vector<uint8_t>& bytes) {
-    QSaveFile f(path);
-    if (!f.open(QIODevice::WriteOnly)) return false;
-    f.write(reinterpret_cast<const char*>(bytes.data()), static_cast<qint64>(bytes.size()));
     return f.commit();
 }
 

@@ -16,12 +16,11 @@
 // this class only owns which *disk image* is loaded once the floppy is
 // attached.
 //
-// Persistence is a raw `<name>.floppy.img` (128KB, both sides, byte-for-
-// byte) -- not the battery-card splice-into-YAML-text mechanism
-// (BatteryCardInstance.hpp): a disk image carries no hand-written prose
-// worth preserving that way, and hex-dumping 128KB as YAML text would run
-// about 4x the byte count for no benefit. See AppPaths::
-// floppyInstancePathFor().
+// Persistence is a versioned `<name>.floppy.yaml` (Connector/
+// FloppyImageFile.hpp), found by its `disk-name` -- bundled directory
+// first, then the user's save folder, the same order memory cards use. It
+// is always rewritten whole (no battery-card-style splice: a disk image
+// carries no hand-written prose worth preserving).
 class FloppyDiskManager : public QObject {
     Q_OBJECT
 public:
@@ -54,13 +53,11 @@ public:
     // control bar can show the user when it's safe to flip the disk.
     bool motorOn() const;
 
-    // Called whenever CE-1600P (and therefore the floppy, per the union
-    // attach) transitions to attached -- pushes the currently selected
-    // disk image (or leaves the freshly-inserted blank default, if none
-    // is selected) into the just-attached CE1600FCard. PlotterController
-    // itself only knows ROM bytes, not disk images, so MainWindow calls
-    // this right after PlotterController::ce1600pAttachedChanged(true).
-    void attachToMachine();
+    // Loads the currently selected disk (or the empty default, if none is
+    // selected) into a just-attached CE1600FCard. PlotterController calls
+    // this as part of its CE-1600P attach, before announcing it -- the GUI
+    // counterpart of the preset loader loading its `floppy:` at attach.
+    void insertSelectedDisk();
 
     // Mirrors MemoryModuleManager::syncFromPresetLoad() -- called by
     // PresetController after a preset's `floppy:` key resolved and loaded
@@ -68,7 +65,9 @@ public:
     // matches without re-attaching anything.
     void syncFromPresetLoad(const QString& labelOrEmpty, const QString& resolvedPathOrEmpty = QString());
 
-    // "Name & Save" flow, mirroring MemoryModuleManager's.
+    // "Name & Save" flow, mirroring MemoryModuleManager's. A bundled name
+    // is always refused (the bundled disk would shadow the saved one).
+    bool isBundledName(const QString& diskName) const;
     bool nameCollides(const QString& diskName) const;
     bool nameAndSave(const QString& diskName, QString* error);
 

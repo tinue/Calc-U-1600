@@ -65,7 +65,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_controlBar = new ControlBar(central);
     m_debugPanel = new DebugPanel(m_controller.get(), central);
     m_debugPanel->setModuleManager(m_moduleManager.get());
-    m_plotterController = std::make_unique<PlotterController>(m_controller.get(), this);
+    m_plotterController = std::make_unique<PlotterController>(m_controller.get(), m_floppyManager.get(), this);
     m_plotterPaper = new PlotterPaperWidget(m_controller.get(), central);
     m_plotterPaper->hide(); // added to m_debugRowLayout only once a plotter attaches
 
@@ -330,11 +330,9 @@ void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
     const bool otherAttached = isCE150 ? ce1600pAttached : ce150Attached;
     if (!isCE150) {
         // CE-1600F attaches as a union with CE-1600P (PC1600Machine::
-        // attachCE1600P()) -- push the previously selected disk (or leave
-        // the freshly-inserted blank default) whenever the plotter/floppy
-        // pair (re)attaches, and gray the picker in/out alongside it (it
-        // stays visible either way -- see syncControlBarForModel()).
-        if (attached && !m_syncingFromPreset) m_floppyManager->attachToMachine();
+        // attachCE1600P()); whoever attached it (PlotterController or a
+        // preset) already put its disk in. Gray the picker in/out alongside
+        // it (it stays visible either way -- see syncControlBarForModel()).
         m_controlBar->setFloppyEnabled(attached);
         refreshFloppyCombo();
     }
@@ -360,9 +358,7 @@ void MainWindow::onPresetArmed() {
     // The preset attached its plotter directly on the Core machine,
     // bypassing PlotterController/attachCE150()/attachCE1600P() entirely --
     // resync from the machine's actual state rather than assuming detached.
-    m_syncingFromPreset = true;
     m_plotterController->syncFromMachineState();
-    m_syncingFromPreset = false;
     // Force a repaint of the armed-but-off state now, before control
     // returns into Core's (possibly many-seconds-long) boot + preset
     // script -- otherwise nothing would reach the screen until the whole

@@ -159,6 +159,13 @@ bool MemoryModuleManager::currentSlotImage(int slot, int* bankCount, std::vector
     return false;
 }
 
+bool MemoryModuleManager::isBundledName(const QString& instanceName) const {
+    const auto entries = scanMemoryCardDirectory(AppPaths::bundledResourcesDir().toStdString(), nullptr);
+    for (const auto& e : entries)
+        if (QString::fromStdString(e.moduleName) == instanceName) return true;
+    return false;
+}
+
 bool MemoryModuleManager::nameCollides(const QString& instanceName) const {
     const QString path = AppPaths::instancePathFor(instanceName);
     if (QFile::exists(path)) return true;
@@ -204,6 +211,10 @@ bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QSt
     SlotState& st = m_slots[slot - 1];
     if (st.moduleName.isEmpty()) {
         *error = tr("No module attached.");
+        return false;
+    }
+    if (isBundledName(name)) {
+        *error = tr("\"%1\" is a built-in card name. Choose a different name.").arg(name);
         return false;
     }
     if (name != st.moduleName && nameCollides(name)) {

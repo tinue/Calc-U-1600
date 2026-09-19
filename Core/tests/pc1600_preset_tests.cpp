@@ -16,6 +16,7 @@
 #include <unistd.h> // mkdtemp
 
 #include "../Connector/CE1600FCard.hpp"
+#include "../Connector/FloppyImageFile.hpp"
 #include "../PC1600/PC1600Machine.hpp"
 #include "../PC1600/PC1600PresetLoader.hpp"
 #include "PresetTestSupport.hpp"
@@ -238,6 +239,10 @@ bool writeFile(const std::string& path, const std::vector<uint8_t>& bytes) {
     if (!out) return false;
     out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     return static_cast<bool>(out);
+}
+
+bool writeTextFile(const std::string& path, const std::string& text) {
+    return writeFile(path, std::vector<uint8_t>(text.begin(), text.end()));
 }
 
 // Functional: a `program: format: binary` block with a PC-1600 ML header
@@ -717,15 +722,15 @@ void test_loader_ce1600p_with_no_floppy_key_gets_blank_disk() {
     CHECK(allZero);
 }
 
-// Functional: `floppy: <name>` resolves `<name>.floppy.img` against
-// `moduleDir` and loads it into the union-attached CE1600FCard.
+// Functional: `floppy: <name>` resolves the `*.floppy.yaml` declaring that
+// disk-name in `moduleDir` and loads it into the union-attached CE1600FCard.
 void test_loader_floppy_key_loads_named_disk_image() {
     PresetFile p;
     std::string err;
     CHECK(parse("model: PC-1600\nplotter: ce1600p\nfloppy: mydisk\n", &p, &err));
 
     std::vector<uint8_t> diskImage(CE1600FCard::kImageSize, 0x5A);
-    CHECK(writeFile("/tmp/mydisk.floppy.img", diskImage));
+    CHECK(writeTextFile("/tmp/mydisk-file.floppy.yaml", formatFloppyFile("mydisk", diskImage)));
 
     PC1600Machine m;
     PC1600PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "/tmp", {}, {"roms"});
@@ -735,7 +740,7 @@ void test_loader_floppy_key_loads_named_disk_image() {
     }
     CHECK(m.ce1600fAttached());
     CHECK(r.floppyImageLabel == "mydisk");
-    CHECK(r.floppyResolvedPath == "/tmp/mydisk.floppy.img");
+    CHECK(r.floppyResolvedPath == "/tmp/mydisk-file.floppy.yaml");
     const auto image = m.ce1600fDiskImage();
     CHECK(image.size() == CE1600FCard::kImageSize);
     CHECK(image[0] == 0x5A);
@@ -751,7 +756,7 @@ void test_loader_floppy_key_side_suffix_selects_side_b() {
     CHECK(parse("model: PC-1600\nplotter: ce1600p\nfloppy: mydiskb,B\n", &p, &err));
 
     std::vector<uint8_t> diskImage(CE1600FCard::kImageSize, 0x33);
-    CHECK(writeFile("/tmp/mydiskb.floppy.img", diskImage));
+    CHECK(writeTextFile("/tmp/mydiskb.floppy.yaml", formatFloppyFile("mydiskb", diskImage)));
 
     PC1600Machine m;
     PC1600PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "/tmp", {}, {"roms"});
@@ -763,7 +768,7 @@ void test_loader_floppy_key_side_suffix_selects_side_b() {
     CHECK(m.ce1600fSide() == 1);
 }
 
-// A `floppy:` name that doesn't resolve to any `<name>.floppy.img` is a
+// A `floppy:` name that no `*.floppy.yaml` declares is a
 // clear error, not a crash or a silent blank disk.
 void test_loader_floppy_key_missing_file_is_an_error() {
     PresetFile p;

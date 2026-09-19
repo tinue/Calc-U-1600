@@ -72,7 +72,9 @@ public:
     void syncFromPresetLoad(int slot, const QString& labelOrEmpty,
                             const QString& resolvedPathOrEmpty = QString());
 
-    // "Name & Save" flow.
+    // "Name & Save" flow. A bundled name is always refused, whatever host it
+    // targets (the bundled card would shadow the saved one on lookup).
+    bool isBundledName(const QString& instanceName) const;
     bool nameCollides(const QString& instanceName) const;
     bool nameAndSave(int slot, const QString& instanceName, QString* error);
 

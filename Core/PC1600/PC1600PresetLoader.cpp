@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "../Connector/FloppyImageFile.hpp"
 #include "../Connector/MemoryCardCatalog.hpp"
 #include "../Connector/SlotModuleFactory.hpp"
 #include "../Connector/SoftwareDefinedCard.hpp"
@@ -260,11 +261,10 @@ bool loadMachineBinary(PC1600Machine& machine, const PresetProgram& program, int
 
 // Attach the plotter the preset's `plotter:` asks for, before the cold
 // boot below so the boot ROM detects it -- and, if `floppy:` named a saved
-// CE-1600F disk image, resolve and load it into the union-attached
-// CE1600FCard (read and size-checked before attaching, so a bad image
-// leaves no plotter behind). `moduleDirs` is the same bundled-then-instance-directory list
-// `- modulespec:` resolution already searches (PresetFile.hpp's `floppy:`
-// doc explains why the same dirs apply). Returns false with result->error
+// CE-1600F disk, resolve it by disk-name and load it into the union-attached
+// CE1600FCard (read and validated before attaching, so a bad file leaves no
+// plotter behind). `moduleDirs` is the same bundled-then-save-folder list
+// `- modulespec:` resolution searches. Returns false with result->error
 // set on any problem.
 bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter, const std::string& floppy,
                          int floppySide, const std::vector<std::string>& romDirs,
@@ -272,20 +272,11 @@ bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter, con
                          PC1600PresetLoadResult* result) {
     if (plotter.empty()) return true;
 
-    std::vector<uint8_t> diskImage;
+    FloppyFile disk;
     if (!floppy.empty()) {
-        std::string path;
-        if (!BundledRoms::resolveBundledRomPath(moduleDirs, floppy + ".floppy.img", &path, nullptr)) {
-            result->error = "floppy: '" + floppy + "' not found";
-            return false;
-        }
-        if (!readWholeFile(path, &diskImage)) {
-            result->error = "floppy: couldn't read '" + path + "'";
-            return false;
-        }
-        if (diskImage.size() != CE1600FCard::kImageSize) {
-            result->error = "floppy: '" + path + "' isn't a " + std::to_string(CE1600FCard::kImageSize) +
-                            "-byte CE-1600F image";
+        std::string path, err;
+        if (!resolveFloppyByName(moduleDirs, floppy, &path, &err) || !readFloppyFile(path, &disk, &err)) {
+            result->error = "floppy: " + err;
             return false;
         }
         result->floppyImageLabel = floppy;
@@ -296,7 +287,7 @@ bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter, con
         return false;
     }
     if (!floppy.empty()) {
-        machine.ce1600fLoadImage(diskImage.data(), diskImage.size());  // resets to side A
+        machine.ce1600fLoadImage(disk.image.data(), disk.image.size());  // resets to side A
         if (floppySide != 0) machine.ce1600fSetSide(floppySide);
     }
     if (log) {

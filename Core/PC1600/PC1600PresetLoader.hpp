@@ -59,7 +59,7 @@ struct PC1600PresetLoadResult {
     /// for the GUI (FloppyDiskManager::syncFromPresetLoad()) to resync its
     /// disk-picker combo without re-attaching anything.
     std::string floppyImageLabel;
-    /// The on-disk `<name>.floppy.img` file `floppyImageLabel` resolved
+    /// The on-disk `*.floppy.yaml` file `floppyImageLabel` resolved
     /// to, if any -- empty when `floppyImageLabel` is empty. Mirrors
     /// slot1ResolvedPath's shape/purpose (telling a bundled template apart
     /// from a real saved user instance).
