@@ -27,6 +27,7 @@
 #include "../PC1600/PC1600Machine.hpp"
 #include "../PC1600/PC1600PresetLoader.hpp"
 #include "PresetTestSupport.hpp"
+#include "TestRoms.hpp"
 
 namespace {
 
@@ -236,36 +237,13 @@ void test_z80_frame_shares_one_file_with_lh5801_frame() {
 }
 
 // ── PC-1600 `- trace:` step, end to end ────────────────────────────────
-bool readRomFile1600(const char* path, std::vector<uint8_t>* out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    *out = std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return !out->empty();
-}
-bool loadPC1600RomSet(PC1600Machine& m) {
-    std::vector<uint8_t> i0, ii0, iii3, r3b, iv6, r1500;
-    if (!readRomFile1600("roms/PC1600-P0-B0.bin", &i0) ||
-        !readRomFile1600("roms/PC1600-P1-B0.bin", &ii0) ||
-        !readRomFile1600("roms/PC1600-P1-B3.bin", &iii3) ||
-        !readRomFile1600("roms/PC1600-P1-B3B.bin", &r3b) ||
-        !readRomFile1600("roms/PC1600-P2-B6.bin", &iv6) ||
-        !readRomFile1600("roms/PC1600-LH5803-C000-FFFF.bin", &r1500)) {
-        return false;
-    }
-    return m.loadBank0(i0.data(), i0.size(), ii0.data(), ii0.size()) &&
-           m.loadBank3Rom(iii3.data(), iii3.size()) &&
-           m.loadBank3bRom(r3b.data(), r3b.size()) &&
-           m.loadBank6Rom(iv6.data(), iv6.size()) &&
-           m.loadLH5803Rom(r1500.data(), r1500.size());
-}
-
 // A PC-1600 preset that starts and stops a trace produces a complete
 // stream, and -- because both CPUs run during boot -- it carries BOTH a
 // 25-byte LH5803-shaped TRACE_EVENT (0x02) and a 29-byte SC7852-shaped
 // TRACE_EVENT_Z80 (0x04) in the one file.
 void test_pc1600_trace_step_produces_wellformed_file() {
     PC1600Machine machine;
-    if (!loadPC1600RomSet(machine)) {
+    if (!loadPC1600Roms(machine)) {
         std::fprintf(stderr, "SKIP test_pc1600_trace_step_produces_wellformed_file: PC-1600 ROM images not found\n");
         return;
     }
@@ -310,7 +288,7 @@ void test_pc1600_trace_step_produces_wellformed_file() {
 // by applyPC1600Preset()'s TraceCloser guard.
 void test_pc1600_trace_left_open_is_auto_closed() {
     PC1600Machine machine;
-    if (!loadPC1600RomSet(machine)) {
+    if (!loadPC1600Roms(machine)) {
         std::fprintf(stderr, "SKIP test_pc1600_trace_left_open_is_auto_closed: PC-1600 ROM images not found\n");
         return;
     }

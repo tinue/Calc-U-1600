@@ -19,6 +19,7 @@
 #include "../Connector/CE163FCard.hpp"
 #include "../Connector/PlainRamCard.hpp"
 #include "../PC1600/PC1600Machine.hpp"
+#include "TestRoms.hpp"
 
 namespace {
 
@@ -30,32 +31,8 @@ int g_fail = 0;
     else { g_fail++; std::fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } \
 } while (0)
 
-bool readRomFile(const char* path, std::vector<uint8_t>* out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    *out = std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return !out->empty();
-}
-
 // Loads the confirmed PC-1600 ROM set into `m`. Returns false (test skipped)
 // if the images aren't at their repo-root path.
-bool loadRomSet(PC1600Machine& m) {
-    std::vector<uint8_t> i0, ii0, iii3, r3b, iv6, r1500;
-    if (!readRomFile("roms/PC1600-P0-B0.bin", &i0) ||
-        !readRomFile("roms/PC1600-P1-B0.bin", &ii0) ||
-        !readRomFile("roms/PC1600-P1-B3.bin", &iii3) ||
-        !readRomFile("roms/PC1600-P1-B3B.bin", &r3b) ||
-        !readRomFile("roms/PC1600-P2-B6.bin", &iv6) ||
-        !readRomFile("roms/PC1600-LH5803-C000-FFFF.bin", &r1500)) {
-        return false;
-    }
-    return m.loadBank0(i0.data(), i0.size(), ii0.data(), ii0.size()) &&
-           m.loadBank3Rom(iii3.data(), iii3.size()) &&
-           m.loadBank3bRom(r3b.data(), r3b.size()) &&
-           m.loadBank6Rom(iv6.data(), iv6.size()) &&
-           m.loadLH5803Rom(r1500.data(), r1500.size());
-}
-
 // Select which page-C (8000-BFFF) bank the SC7852 sees: value 0/1 -> Slot 1,
 // 2/3 -> Slot 2 (Port 31H bits 4-6).
 void selectPageCBank(PC1600Machine& m, uint8_t bank) {
@@ -165,7 +142,7 @@ void test_slot2_plain_card_ignores_vertical_bank_through_connector() {
 // -- verified separately against the documented real-hardware figure.)
 void test_boot_with_ce155_in_slot1_is_stable() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_boot_with_ce155_in_slot1_is_stable: PC-1600 ROM images not found\n");
         return;
     }
@@ -193,7 +170,7 @@ void test_boot_with_ce155_in_slot1_is_stable() {
 void test_ce155_contributes_full_8k_to_mem() {
     auto boot = [](bool withCard) -> std::unique_ptr<PC1600Machine> {
         auto m = std::make_unique<PC1600Machine>();
-        if (!loadRomSet(*m)) return nullptr;
+        if (!loadPC1600Roms(*m)) return nullptr;
         if (withCard) m->attachSlot1Card(std::make_unique<CE155Card>());
         m->allReset();
         m->runCycles(PC1600Machine::kTStateHz * 4);
@@ -297,7 +274,7 @@ void test_ce163f_in_slot1_ram_and_flash_protocol() {
 void test_trigger_latch_modules_in_slot2_contribute_full_16k() {
     auto boot = [](std::unique_ptr<ExpansionCard> card) -> std::unique_ptr<PC1600Machine> {
         auto m = std::make_unique<PC1600Machine>();
-        if (!loadRomSet(*m)) return nullptr;
+        if (!loadPC1600Roms(*m)) return nullptr;
         if (card) m->attachSlot2Card(std::move(card));
         m->allReset();
         m->runCycles(PC1600Machine::kTStateHz * 4);

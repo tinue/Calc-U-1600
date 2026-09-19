@@ -132,15 +132,10 @@ touched, not proactively:
 - `PC1600LhsWindow`/`pc1600LhsWindow()`/`PC1600Bank::lhsRemapRow()` have
   no remaining callers outside their own test — either delete all three
   plus the test, or demote the remap table to a documentation comment.
-- `readRomFile` is duplicated three times across test files with three
-  different bodies; consolidate into `Core/tests/PresetTestSupport.hpp`.
 - `Qt6/app/PresetController.cpp`'s `loadPreset` inlines the PC-1600 case
   and leaves an implicit, unnamed PC-1500 path — extract two symmetric
   private methods and reduce `loadPreset` to peek-model → pick →
   commit-or-report.
-- `startPC1600()` blocks app startup on six sequential ROM reads; move
-  onto the background queue now that the loader's path accessors are
-  safe to call off the main thread.
 - Module identity should be read from the slot (`virtual moduleName()`
   on `ExpansionCard`), not reported ad hoc by each preset loader — see
   `TODO(slot-identity)` in `Core/Connector/ExpansionCard.hpp`. Precondition:

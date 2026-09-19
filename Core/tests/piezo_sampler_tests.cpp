@@ -23,6 +23,7 @@
 #include "../PC1500/PC1500Machine.hpp"
 #include "../PC1600/PC1600BasicTyper.hpp"
 #include "../PC1600/PC1600Machine.hpp"
+#include "TestRoms.hpp"
 
 namespace {
 
@@ -210,36 +211,6 @@ void test_pc1500_settle_waits_for_beep() {
 }
 
 // ── ROM-gated: PC-1600 ──────────────────────────────────────────────────
-
-bool readRomFile(const char* path, std::vector<uint8_t>* out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    *out = std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return !out->empty();
-}
-
-bool bootPC1600(PC1600Machine& m) {
-    std::vector<uint8_t> i0, ii0, iii3, r3b, iv6, r1500;
-    if (!readRomFile("roms/PC1600-P0-B0.bin", &i0) ||
-        !readRomFile("roms/PC1600-P1-B0.bin", &ii0) ||
-        !readRomFile("roms/PC1600-P1-B3.bin", &iii3) ||
-        !readRomFile("roms/PC1600-P1-B3B.bin", &r3b) ||
-        !readRomFile("roms/PC1600-P2-B6.bin", &iv6) ||
-        !readRomFile("roms/PC1600-LH5803-C000-FFFF.bin", &r1500)) {
-        return false;
-    }
-    if (!(m.loadBank0(i0.data(), i0.size(), ii0.data(), ii0.size()) &&
-          m.loadBank3Rom(iii3.data(), iii3.size()) &&
-          m.loadBank3bRom(r3b.data(), r3b.size()) &&
-          m.loadBank6Rom(iv6.data(), iv6.size()) &&
-          m.loadLH5803Rom(r1500.data(), r1500.size()))) {
-        return false;
-    }
-    m.allReset();
-    m.runCycles(static_cast<uint64_t>(PC1600Machine::kTStateHz) * 2);
-    waitIdle(m, static_cast<uint64_t>(PC1600Machine::kTStateHz) * 5);
-    return true;
-}
 
 std::vector<int16_t> runAndCapture(PC1600Machine& m, const std::string& line) {
     // Enter is tapped here rather than by typeLine(): typeLine() settles

@@ -18,6 +18,7 @@
 #include "../PC1600/PC1600MachineCodeLoader.hpp"
 #include "../PC1600/PC1600BasicTyper.hpp"
 #include "../PC1600/PC1600Machine.hpp"
+#include "TestRoms.hpp"
 
 namespace {
 
@@ -292,42 +293,18 @@ void test_pc1500_writer() {
     CHECK(!loadPC1500MachineCode(m, 0xFFFE, kCode.data(), kCode.size(), &err));
 }
 
-bool readFileBytes(const char* path, std::vector<uint8_t>* out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    *out = std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return !out->empty();
-}
-
-bool bootPC1600(PC1600Machine& m, size_t slot1Bytes) {
-    std::vector<uint8_t> i0, ii0, iii3, r3b, iv6, r1500;
-    if (!readFileBytes("roms/PC1600-P0-B0.bin", &i0) || !readFileBytes("roms/PC1600-P1-B0.bin", &ii0) ||
-        !readFileBytes("roms/PC1600-P1-B3.bin", &iii3) || !readFileBytes("roms/PC1600-P1-B3B.bin", &r3b) ||
-        !readFileBytes("roms/PC1600-P2-B6.bin", &iv6) ||
-        !readFileBytes("roms/PC1600-LH5803-C000-FFFF.bin", &r1500))
-        return false;
-    if (!m.loadBank0(i0.data(), i0.size(), ii0.data(), ii0.size()) || !m.loadBank3Rom(iii3.data(), iii3.size()) ||
-        !m.loadBank3bRom(r3b.data(), r3b.size()) || !m.loadBank6Rom(iv6.data(), iv6.size()) ||
-        !m.loadLH5803Rom(r1500.data(), r1500.size()))
-        return false;
-    if (slot1Bytes && !m.memory().attachSlot1(slot1Bytes)) return false;
-    m.allReset();
-    m.runCycles(static_cast<uint64_t>(PC1600Machine::kTStateHz) * 2);
-    waitIdle(m, static_cast<uint64_t>(PC1600Machine::kTStateHz) * 5);
-    return true;
-}
-
 void test_pc1600_basic_areas() {
     {
         PC1600Machine m;
-        CHECK(bootPC1600(m, 0));
+        CHECK(bootPC1600(m));
         auto areas = pc1600BasicAreas(m);
         CHECK(areas.size() == 1);
         if (!areas.empty()) CHECK(areas[0].slot == 0 && areas[0].windowBase == 0xC000);
     }
     {
         PC1600Machine m;
-        CHECK(bootPC1600(m, 0x8000));  // 32 KB RAM module in slot 1, folded into S0 at boot
+        CHECK(m.memory().attachSlot1(0x8000));  // 32 KB RAM module in slot 1, folded into S0 at boot
+        CHECK(bootPC1600(m));
         auto areas = pc1600BasicAreas(m);
         CHECK(areas.size() >= 2);
         if (areas.size() >= 2) {

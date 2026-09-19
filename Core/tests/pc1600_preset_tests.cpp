@@ -20,6 +20,7 @@
 #include "../PC1600/PC1600Machine.hpp"
 #include "../PC1600/PC1600PresetLoader.hpp"
 #include "PresetTestSupport.hpp"
+#include "TestRoms.hpp"
 
 namespace {
 
@@ -35,32 +36,8 @@ bool parse(const std::string& yaml, PresetFile* out, std::string* error) {
     return parsePresetString(yaml, "/tmp/pc1600_preset_tests_scratch.pc1600", out, error);
 }
 
-bool readRomFile(const char* path, std::vector<uint8_t>* out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    *out = std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return !out->empty();
-}
-
 // Loads the confirmed PC-1600 ROM set; returns false (test skipped) if the
 // images aren't at their repo-root path. Mirrors pc1600_slot_module_tests.
-bool loadRomSet(PC1600Machine& m) {
-    std::vector<uint8_t> i0, ii0, iii3, r3b, iv6, r1500;
-    if (!readRomFile("roms/PC1600-P0-B0.bin", &i0) ||
-        !readRomFile("roms/PC1600-P1-B0.bin", &ii0) ||
-        !readRomFile("roms/PC1600-P1-B3.bin", &iii3) ||
-        !readRomFile("roms/PC1600-P1-B3B.bin", &r3b) ||
-        !readRomFile("roms/PC1600-P2-B6.bin", &iv6) ||
-        !readRomFile("roms/PC1600-LH5803-C000-FFFF.bin", &r1500)) {
-        return false;
-    }
-    return m.loadBank0(i0.data(), i0.size(), ii0.data(), ii0.size()) &&
-           m.loadBank3Rom(iii3.data(), iii3.size()) &&
-           m.loadBank3bRom(r3b.data(), r3b.size()) &&
-           m.loadBank6Rom(iv6.data(), iv6.size()) &&
-           m.loadLH5803Rom(r1500.data(), r1500.size());
-}
-
 void test_parser_accepts_pc1600_with_slot_and_keys() {
     PresetFile p;
     std::string err;
@@ -250,7 +227,7 @@ bool writeTextFile(const std::string& path, const std::string& text) {
 // address.
 void test_loader_machine_binary_header() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_loader_machine_binary_header: PC-1600 ROM images not found\n");
         return;
     }
@@ -273,7 +250,7 @@ void test_loader_machine_binary_header() {
 // error naming `length:`; supplying `length:` overrides it.
 void test_loader_machine_binary_length_mismatch() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_loader_machine_binary_length_mismatch: PC-1600 ROM images not found\n");
         return;
     }
@@ -291,7 +268,7 @@ void test_loader_machine_binary_length_mismatch() {
 
     // Same file, explicit length: 4 -> loads all four bytes.
     PC1600Machine m2;
-    loadRomSet(m2);
+    loadPC1600Roms(m2);
     PresetFile p2;
     CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin +
                     "\n  length: 4\n",
@@ -305,7 +282,7 @@ void test_loader_machine_binary_length_mismatch() {
 // Functional: a headerless blob needs both `address:` and `length:`.
 void test_loader_machine_binary_headerless() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_loader_machine_binary_headerless: PC-1600 ROM images not found\n");
         return;
     }
@@ -321,7 +298,7 @@ void test_loader_machine_binary_headerless() {
     CHECK(r.error.find("required") != std::string::npos);
 
     PC1600Machine m2;
-    loadRomSet(m2);
+    loadPC1600Roms(m2);
     PresetFile p2;
     CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin +
                     "\n  address: 0xD200\n  length: 4\n",
@@ -337,7 +314,7 @@ void test_loader_machine_binary_headerless() {
 // completes cleanly.
 void test_loader_machine_binary_autorun() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_loader_machine_binary_autorun: PC-1600 ROM images not found\n");
         return;
     }
@@ -378,7 +355,7 @@ void test_parser_accepts_basic_text_program() {
 // program loads and only the over-length line is reported.
 void test_loader_reports_overlong_basic_line() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_loader_reports_overlong_basic_line: PC-1600 ROM images not found\n");
         return;
     }
@@ -502,7 +479,7 @@ void test_type_step_accepts_shifted_punctuation() {
 // (which would turn `INIT"S2:","M"` into `INITs2M`).
 void test_type_step_shifted_punctuation_reaches_input_buffer() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr,
                      "SKIP test_type_step_shifted_punctuation_reaches_input_buffer: PC-1600 ROM images not found\n");
         return;
@@ -535,7 +512,7 @@ void test_type_step_shifted_punctuation_reaches_input_buffer() {
 // uppercased the way the pre-typer raw-keystroke `type:` did.
 void test_type_step_is_case_sensitive() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_type_step_is_case_sensitive: PC-1600 ROM images not found\n");
         return;
     }
@@ -557,7 +534,7 @@ void test_type_step_is_case_sensitive() {
 // disassembly), but the load must complete cleanly with nothing rejected.
 void test_loader_applies_basic_text_program() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_loader_applies_basic_text_program: PC-1600 ROM images not found\n");
         return;
     }

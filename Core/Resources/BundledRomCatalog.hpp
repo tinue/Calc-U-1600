@@ -111,11 +111,15 @@ inline bool loadPC1600RomSet(PC1600Machine& machine, const std::vector<std::stri
             return false;
         }
     }
-    machine.loadBank0(romI.data(), romI.size(), romII.data(), romII.size());
-    machine.loadBank3Rom(romIII.data(), romIII.size());
-    machine.loadBank3bRom(rom3b.data(), rom3b.size());
-    machine.loadBank6Rom(romIV.data(), romIV.size());
-    machine.loadLH5803Rom(rom1500.data(), rom1500.size());
+    // Each loader rejects an image of the wrong size (e.g. a truncated file).
+    if (!(machine.loadBank0(romI.data(), romI.size(), romII.data(), romII.size()) &&
+          machine.loadBank3Rom(romIII.data(), romIII.size()) &&
+          machine.loadBank3bRom(rom3b.data(), rom3b.size()) &&
+          machine.loadBank6Rom(romIV.data(), romIV.size()) &&
+          machine.loadLH5803Rom(rom1500.data(), rom1500.size()))) {
+        if (error) *error = "a PC-1600 ROM image has the wrong size";
+        return false;
+    }
     return true;
 }
 
