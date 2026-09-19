@@ -13,6 +13,9 @@
 - **Presets** New `- screenshot: <file.png>` step writes the same image
   into the trace directory. `trace:` and `screenshot:` now honour the
   trace directory set in Settings.
+- **Presets** New `- syncclock:` step sets the calculator's clock to the
+  host's current date and time. A preset load runs at full speed, which
+  leaves the clock ahead; put `- syncclock:` last to correct it.
 
 ## [0.3.0] - 2026-09-19
 

@@ -247,6 +247,18 @@ void test_wait_parameterless_pc1600() {
     CHECK(nthWait(p, 0) < 0);
 }
 
+// `- syncclock:` takes no value; any value is rejected.
+void test_syncclock_step() {
+    PresetFile p;
+    std::string err;
+    CHECK(parse("model: PC-1600\nkeys:\n  - wait: 1\n  - syncclock:\n", &p, &err));
+    CHECK(!p.sections.empty() && p.sections[0].keys.size() == 2 &&
+          p.sections[0].keys[1].kind == PresetStep::Kind::SyncClock);
+    PresetFile bad;
+    CHECK(!parse("model: PC-1600\nkeys:\n  - syncclock: now\n", &bad, &err));
+    CHECK(err.find("syncclock") != std::string::npos);
+}
+
 // A negative explicit wait value is rejected (points at the parameterless form).
 void test_wait_step_rejects_negative_value() {
     PresetFile p;
@@ -325,6 +337,7 @@ int run_preset_tests() {
     test_trace_step_requires_a_value();
     test_wait_step_value_and_parameterless();
     test_wait_parameterless_pc1600();
+    test_syncclock_step();
     test_wait_step_rejects_negative_value();
     test_plotter_ce1600p_parses_and_normalizes();
     test_plotter_none_clears();

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <string>
 #include <utility>
 #include <vector>
@@ -13,6 +14,7 @@
 #include "../Connector/SlotModuleFactory.hpp"
 #include "../Connector/SoftwareDefinedCard.hpp"
 #include "../Resources/BundledRomCatalog.hpp"
+#include "../HostClock.hpp"
 #include "../TraceTypes.hpp"
 #include "../Basic/BasicProgramSource.hpp"
 #include "PC1600BasicLoader.hpp"
@@ -527,6 +529,13 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
                         return result;
                     }
                     if (log) log("  screenshot: -> " + path);
+                    break;
+                }
+                case PresetStep::Kind::SyncClock: {
+                    const std::tm t = seedClockFromHostTime(machine);
+                    char stamp[32];
+                    std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &t);
+                    if (log) log(std::string("  syncclock: -> ") + stamp);
                     break;
                 }
             }

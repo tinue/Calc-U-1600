@@ -4,9 +4,11 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <iterator>
 
+#include "../HostClock.hpp"
 #include "../TraceTypes.hpp"
 
 #include "../Connector/CE1638PlusCard.hpp"
@@ -159,6 +161,13 @@ bool runSteps(PC1500Machine& machine, const std::vector<PresetStep>& steps, std:
                     return false;
                 }
                 if (log) log("  screenshot: -> " + path);
+                break;
+            }
+            case PresetStep::Kind::SyncClock: {
+                const std::tm t = seedClockFromHostTime(machine);
+                char stamp[32];
+                std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &t);
+                if (log) log(std::string("  syncclock: -> ") + stamp);
                 break;
             }
         }

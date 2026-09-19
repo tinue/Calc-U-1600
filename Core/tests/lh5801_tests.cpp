@@ -14,6 +14,10 @@
 #include "../PC1500/PC1500Keyboard.hpp"
 #include "../PC1500/PC1500Machine.hpp"
 #include "../PC1500/PC1500Memory.hpp"
+#include "../PC1500/PC1500PresetLoader.hpp"
+#include "PresetTestSupport.hpp"
+
+#include <ctime>
 
 namespace {
 
@@ -785,6 +789,36 @@ void test_rtc_calendar_seed_and_read() {
     CHECK(rtcNibble(r, 36) == 9);                          // month (plain, not BCD)
 }
 
+// `- syncclock:` re-seeds the RTC from the host: after a 10-minute
+// emulated `- wait:` (the clock would otherwise be ~10 min ahead of the
+// boot seed), the calendar reads back the host's current time. ROM-gated.
+void test_preset_syncclock_reseeds_rtc() {
+    PresetFile preset;
+    std::string err;
+    CHECK(parsePresetString("model: PC-1500A\nkeys:\n  - wait: 600\n  - syncclock:\n",
+                            "/tmp/lh5801_tests_syncclock.pc1500a", &preset, &err));
+    PC1500Machine machine(PC1500Variant::PC1500A);
+    auto hostOnBoot = [&machine] {
+        machine.seedClock(2000, 1, 1, 0, 0, 0); // a clearly wrong clock to start from
+    };
+    const PresetLoadResult res = applyPC1500Preset(machine, preset, {}, ".", ".", hostOnBoot, {"roms"});
+    if (!res.ok) {
+        std::fprintf(stderr, "SKIP test_preset_syncclock_reseeds_rtc: %s\n", res.error.c_str());
+        return;
+    }
+    const std::time_t now = std::time(nullptr);
+    std::tm t{};
+    localtime_r(&now, &t);
+    const uint64_t r = rtcReadCalendar40(machine.memory());
+    auto bcd = [&](int shift) { return rtcNibble(r, shift + 4) * 10 + rtcNibble(r, shift); };
+    const int rtcMinutes = bcd(16) * 60 + bcd(8);
+    const int hostMinutes = t.tm_hour * 60 + t.tm_min;
+    CHECK(rtcNibble(r, 36) == t.tm_mon + 1);
+    CHECK(bcd(24) == t.tm_mday || t.tm_hour == 0);          // tolerate a midnight rollover
+    const int diff = (hostMinutes - rtcMinutes + 1440) % 1440;
+    CHECK(diff <= 1);                                         // not 10 minutes ahead
+}
+
 void test_rtc_calendar_set_via_shift_and_commit() {
     // TIME= path: shift 40 bits in, Time Set -> Register Hold to commit,
     // then a Time-Read round-trip must return exactly what was written.
@@ -1308,6 +1342,7 @@ int main() {
     test_rtc_if_does_not_clear_on_read();
     test_rtc_opb_and_if_never_disagree_within_one_poll();
     test_rtc_calendar_seed_and_read();
+    test_preset_syncclock_reseeds_rtc();
     test_rtc_calendar_set_via_shift_and_commit();
     test_rtc_calendar_advances_one_hz_with_bcd_and_month_carry();
     test_rtc_calendar_reset_is_deterministic();

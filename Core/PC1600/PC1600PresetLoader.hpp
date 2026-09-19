@@ -105,6 +105,9 @@ using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& arm
 ///   - `screenshot:` -- `- screenshot: name.png` writes a PNG of the LCD
 ///     graphics area (no status strip; Core/Display/LcdScreenshot.hpp,
 ///     89 x 18 mm at 600 DPI) into `traceDir`, overwriting.
+///   - `syncclock:` -- re-seeds the RTC from the host's local time
+///     (Core/HostClock.hpp). The load runs flat out and leaves the clock
+///     ahead of real time -- make it the last step.
 ///
 /// A `program:` block is one of:
 ///   - `format: basic-text` / `format: basic-binary` -- a BASIC program.

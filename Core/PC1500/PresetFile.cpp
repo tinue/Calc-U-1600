@@ -137,8 +137,9 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
             *error = "line " + std::to_string(line.lineNo) + ": malformed step (expected 'verb: value')";
             return false;
         }
-        // `- wait:` alone (no value) is valid -- see the wait branch below.
-        if (!hasInline && verb != "wait") {
+        // `- wait:` / `- syncclock:` alone (no value) are valid -- see their
+        // branches below.
+        if (!hasInline && verb != "wait" && verb != "syncclock") {
             *error = "line " + std::to_string(line.lineNo) + ": malformed step (expected 'verb: value')";
             return false;
         }
@@ -225,6 +226,14 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
                 return false;
             }
             step.text = value;
+        } else if (verb == "syncclock") {
+            // Re-seed the RTC from the host clock (see the loaders). Takes
+            // no value.
+            if (hasInline && !value.empty()) {
+                *error = "line " + std::to_string(line.lineNo) + ": 'syncclock' takes no value (write `- syncclock:`)";
+                return false;
+            }
+            step.kind = PresetStep::Kind::SyncClock;
         } else if (verb == "check") {
             *error = "line " + std::to_string(line.lineNo) + ": 'check' steps are not yet supported by this loader";
             return false;

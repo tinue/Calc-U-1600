@@ -89,6 +89,10 @@ using PresetArmedFn = std::function<void(const PresetLoadResult& armedSoFar)>;
 /// directory, overwriting. A preset with neither step never touches
 /// `traceDir`.
 ///
+/// A `- syncclock:` step re-seeds the RTC from the host's local time at
+/// that point (Core/HostClock.hpp). The load itself runs flat out, which
+/// leaves the clock ahead of real time -- make it the last step.
+///
 /// `moduleDir` is the directory searched first for a
 /// `- modulespec: <module-name>` memory-expansion reference (a
 /// bundled/standard module named by its `module-name:`), via
