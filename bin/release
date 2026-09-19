@@ -11,8 +11,13 @@
 #
 # Full release-cycle recipe ("release this version"):
 #
-#   bin/release            # 1. pre-release: finalize CHANGELOG date, push "vX.Y.Z-pre",
-#                           #    trigger build.yml, wait for it, publish a GitHub pre-release
+#   bin/release            # 0. (any number of times, optional) pre-release while work
+#                           #    continues: push "vX.Y.Z-pre", trigger build.yml, wait for
+#                           #    it, publish a GitHub pre-release. CHANGELOG stays open
+#                           #    ("- work in progress").
+#   bin/release --rc       # 1. release candidate: same as 0., but first closes the
+#                           #    CHANGELOG entry (stamps today's date) -- the build to
+#                           #    validate before releasing
 #   bin/release --release  # 2. only once step 1 is green: promote the pre-release to the
 #                           #    real "vX.Y.Z" release IN PLACE (same release object/assets,
 #                           #    no rebuild, no re-upload -- see its own section below)
@@ -26,16 +31,19 @@
 #
 # Individual modes:
 #
-#   1. Pre-release (push a disposable "vX.Y.Z-pre" tag, trigger build.yml
-#      against it, wait for the run, and publish/update a GitHub pre-release
-#      with its artifacts -- re-cut as often as you like while iterating):
-#        bin/release
+#   0./1. Pre-release / release candidate (push a disposable "vX.Y.Z-pre"
+#      tag, trigger build.yml against it, wait for the run, and publish/update
+#      a GitHub pre-release with its artifacts -- re-cut as often as you like
+#      while iterating):
+#        bin/release        # pre-release, CHANGELOG entry left open
+#        bin/release --rc   # release candidate, CHANGELOG entry closed
 #      Pre-conditions: not on main; no staged-but-uncommitted changes; branch is
 #      in sync with its remote; CHANGELOG.md has an entry for the current version.
-#      Also: if that CHANGELOG entry's header is still "- work in progress" (or
-#      missing a date), it is stamped with today's date, committed, and pushed
-#      before the tag goes out -- this only happens once; a real date is never
-#      overwritten by a later re-run.
+#      --rc only: if that CHANGELOG entry's header is still "- work in progress"
+#      (or missing a date), it is stamped with today's date, committed, and
+#      pushed before the tag goes out -- this only happens once; a real date is
+#      never overwritten by a later re-run. Plain bin/release never touches
+#      CHANGELOG.md, so more changes can follow.
 #
 #   2. Full release (fast-forward main, squash-commit this version's state
 #      onto it as one commit, tag "vX.Y.Z" there; RETARGET the "vX.Y.Z-pre"
@@ -44,7 +52,8 @@
 #      upload, matching how GitHub's own "promote to release" UI action
 #      works):
 #        bin/release --release
-#      Pre-conditions: not on main; working tree clean; a "vX.Y.Z-pre" GitHub
+#      Pre-conditions: not on main; working tree clean; the CHANGELOG entry
+#      is closed (dated -- i.e. `bin/release --rc` ran); a "vX.Y.Z-pre" GitHub
 #      pre-release exists with at least one asset attached; "main" already
 #      exists (it was bootstrapped once, by hand, when this repo went
 #      public -- see git log on main -- this script has never needed to
@@ -66,9 +75,6 @@
 # GitHub Actions matrix in build.yml is the only, authoritative build.
 #
 # Known, accepted quirks:
-#   - build.yml's linux-aarch64 job is `continue-on-error: true` -- a release
-#     can legitimately ship without that one artifact if the job fails/isn't
-#     scheduled; every other platform is required.
 #   - Because --release never rebuilds, the shipped binary's in-app About
 #     dialog (git-describe-derived APP_BUILD_ID) will still read "vX.Y.Z-pre",
 #     not "vX.Y.Z" -- expected, since promotion is asset-preserving.
@@ -114,6 +120,7 @@ PRE_TAG="v${VERSION}-pre"
 # ── Argument parsing ─────────────────────────────────────────────────────────────
 
 DO_RELEASE=false
+DO_RC=false
 DO_NEXT=false
 DRY_RUN=false
 NEXT_VERSION_OVERRIDE=""
@@ -121,6 +128,7 @@ NEXT_VERSION_OVERRIDE=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --release) DO_RELEASE=true; shift ;;
+        --rc)      DO_RC=true; shift ;;
         --next)    DO_NEXT=true; shift ;;
         --dry-run) DRY_RUN=true; shift ;;
         --version)
@@ -130,8 +138,10 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if $DO_RELEASE && $DO_NEXT; then
-    echo "Error: --release and --next are mutually exclusive."
+MODES=0
+for m in $DO_RELEASE $DO_RC $DO_NEXT; do $m && MODES=$((MODES + 1)); done
+if [ "$MODES" -gt 1 ]; then
+    echo "Error: --rc, --release and --next are mutually exclusive."
     exit 1
 fi
 if [ -n "$NEXT_VERSION_OVERRIDE" ] && ! $DO_NEXT; then
@@ -229,11 +239,17 @@ write_release_notes() {
     { printf '%s\n' "$notes"; echo ""; printf '%s\n' "$LINUX_APPIMAGE_NOTE"; } > "$out"
 }
 
+# True while $VERSION's CHANGELOG header is still open: "## [$VERSION] -
+# work in progress" or a bare "## [$VERSION]" (no date yet).
+changelog_entry_open() {
+    grep -qE "^## \[$VERSION\]( - work in progress)?\$" "$CHANGELOG"
+}
+
 # Replace "## [$VERSION] - work in progress" (or a bare "## [$VERSION]") with
 # today's date. A no-op if the header already carries a real date -- never
-# overwrites one.
+# overwrites one. Only --rc calls this.
 finalize_changelog_date() {
-    if ! grep -qE "^## \[$VERSION\]( - work in progress)?\$" "$CHANGELOG"; then
+    if ! changelog_entry_open; then
         return 0
     fi
     local today
@@ -320,7 +336,8 @@ if $DO_NEXT; then
     else
         echo "Done.  $NEXT_BRANCH is checked out and pushed, starting $NEXT_VERSION."
         echo "  $CHANGELOG's '## [$NEXT_VERSION] - work in progress' section is where new entries go;"
-        echo "  running 'bin/release' will replace 'work in progress' with the real date on the first pre-release."
+        echo "  'bin/release' publishes pre-releases and leaves it open; 'bin/release --rc' replaces"
+        echo "  'work in progress' with the real date when you're ready to release."
     fi
     exit 0
 fi
@@ -335,6 +352,12 @@ if $DO_RELEASE; then
 
     stash_unstaged_changes
     require_clean_index
+
+    if changelog_entry_open; then
+        echo "Error: $CHANGELOG's $VERSION entry is still open (not dated)."
+        echo "  Run 'bin/release --rc' first to close it and build a release candidate."
+        exit 1
+    fi
 
     # One round trip for both checks below -- gh's --jq is self-contained
     # (no system `jq` needed), so it can format both fields into one line.
@@ -426,7 +449,7 @@ if $DO_RELEASE; then
     exit 0
 fi
 
-# ── 1. Pre-release: trigger the build, wait, publish ────────────────────────────
+# ── 0./1. Pre-release / release candidate: trigger the build, wait, publish ──────
 
 if [ "$CURRENT_BRANCH" = "$MAIN_BRANCH" ]; then
     echo "Error: pre-release must run from a development branch, not '$MAIN_BRANCH'."
@@ -451,7 +474,9 @@ if [ -z "$(changelog_notes "$VERSION")" ]; then
     exit 1
 fi
 
-finalize_changelog_date
+if $DO_RC; then
+    finalize_changelog_date
+fi
 
 if [ "$(git rev-parse HEAD)" != "$(git rev-parse "$UPSTREAM")" ]; then
     AHEAD=$(git rev-list --count "${UPSTREAM}..HEAD")
@@ -468,7 +493,8 @@ echo "── Release notes for $PRE_TAG (from $CHANGELOG) ───────�
 changelog_notes "$VERSION"
 echo "──────────────────────────────────────────────────────────"
 echo ""
-read -p "Push tag '$PRE_TAG' at $(git rev-parse --short HEAD), trigger a build, and publish a pre-release? (yes/no) " -r
+if $DO_RC; then KIND="release candidate"; else KIND="pre-release (CHANGELOG entry stays open)"; fi
+read -p "Push tag '$PRE_TAG' at $(git rev-parse --short HEAD), trigger a build, and publish a $KIND? (yes/no) " -r
 if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
     echo "Aborted."
     exit 1
@@ -509,7 +535,7 @@ echo "Found run $RUN_ID — waiting for it to finish (all platforms build + pack
 if ! gh run watch "$RUN_ID" --exit-status; then
     echo "Error: CI run $RUN_ID for $PRE_TAG failed."
     echo "  View logs:   gh run view $RUN_ID --log-failed"
-    echo "  Fix the problem, then re-run 'bin/release' to re-cut $PRE_TAG."
+    echo "  Fix the problem, then re-run bin/release to re-cut $PRE_TAG."
     exit 1
 fi
 
@@ -521,18 +547,13 @@ gh run download "$RUN_ID" -D "$WORK/artifacts"
 # Each artifact is a single, complete, directly-runnable file (an .AppImage, a
 # signed/notarized/stapled .dmg, or a Windows installer .exe) -- copy+rename,
 # don't zip (zipping the .dmg would strip its notarization ticket staple).
-# linux-aarch64 is `continue-on-error: true` in build.yml -- tolerate it being
-# absent; every other platform is required.
+# Every platform is required.
 ZIPDIR="$WORK/assets"
 mkdir -p "$ZIPDIR"
 ASSET_COUNT=0
 for name in Calc-U-1600-linux-x86_64 Calc-U-1600-linux-aarch64 Calc-U-1600-mac-aarch64 Calc-U-1600-windows-x86_64 Calc-U-1600-windows-arm64; do
     dir="$WORK/artifacts/$name"
     if [ ! -d "$dir" ]; then
-        if [ "$name" = "Calc-U-1600-linux-aarch64" ]; then
-            echo "  no artifact '$name' (continue-on-error job, tolerated) -- skipping"
-            continue
-        fi
         echo "Error: expected artifact '$name' not found in run $RUN_ID."
         exit 1
     fi
