@@ -142,7 +142,7 @@ public:
     // The CE-1600F floppy docks onto the CE-1600P and cannot run
     // standalone (its driver lives in the CE-1600P's own bank-5 ROM), so
     // the two attach/detach as a union: `attachCE1600P` always also builds
-    // a `CE1600FCard` (auto-inserting a blank disk) and chains it onto the same bus; `detachCE1600P` tears down
+    // a `CE1600FCard` (empty drive -- no disk) and chains it onto the same bus; `detachCE1600P` tears down
     // both together. There is no separate floppy attach/detach entry
     // point -- only disk *image* selection (`ce1600fLoadImage` etc.) is
     // independent of attach/detach.
@@ -176,7 +176,8 @@ public:
     bool ce1600fAttached() const { return m_ce1600fCard != nullptr; }
     std::vector<uint8_t> ce1600fDiskImage() const;
     uint64_t ce1600fRevision() const;
-    void ce1600fInsertBlank();
+    void ce1600fEject();         // leaves the drive empty
+    bool ce1600fHasDisk() const;
     bool ce1600fLoadImage(const uint8_t* data, size_t size);  // live hot-swap, no power-cycle needed
     /// 0 = side A, 1 = side B -- the software analogue of ejecting and
     /// flipping the physical disk (CE1600FCard::setSide()'s own comment).

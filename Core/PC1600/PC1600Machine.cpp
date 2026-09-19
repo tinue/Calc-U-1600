@@ -127,9 +127,14 @@ uint64_t PC1600Machine::ce1600fRevision() const {
     return m_ce1600fCard ? m_ce1600fCard->revision() : 0;
 }
 
-void PC1600Machine::ce1600fInsertBlank() {
+void PC1600Machine::ce1600fEject() {
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_ce1600fCard) m_ce1600fCard->insertBlankDisk();
+    if (m_ce1600fCard) m_ce1600fCard->ejectDisk();
+}
+
+bool PC1600Machine::ce1600fHasDisk() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_ce1600fCard && m_ce1600fCard->hasDisk();
 }
 
 bool PC1600Machine::ce1600fLoadImage(const uint8_t* data, size_t size) {

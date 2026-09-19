@@ -69,7 +69,7 @@ signals:
     void settingsRequested();
     void ce150ToggleRequested();
     void ce1600pToggleRequested();
-    void floppyDiskSelected(QString diskNameOrEmpty); // "" => blank disk
+    void floppyDiskSelected(QString diskNameOrEmpty); // "" => no disk
     void floppyNameAndSaveRequested();
     void floppySideToggleRequested();
 

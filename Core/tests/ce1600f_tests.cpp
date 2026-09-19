@@ -43,15 +43,32 @@ void writeReg(CE1600FCard& card, uint8_t port, uint8_t value) {
     CHECK(card.respondsToWrite(ioPins(port, true), value));
 }
 
-// A freshly constructed card auto-inserts a blank (zero-filled) disk --
-// the "always a blank disk if nothing else is specified" requirement.
-void test_default_construction_is_blank_disk() {
+// A freshly constructed card has no disk: base+0 bit3 (disk-in-drive) is
+// clear, and a sector command finds nothing -- the ROM reports that as
+// ERROR 160. Inserting a disk sets bit3; ejecting clears it again.
+void test_default_construction_is_empty_drive() {
     CE1600FCard card;
+    CHECK(!card.hasDisk());
+    CHECK((readReg(card, 0x78) & 0x08) == 0);
+    writeReg(card, 0x79, 0);
+    writeReg(card, 0x78, 0x40);  // read sector
+    CHECK((readReg(card, 0x7A) & 0x10) != 0);  // record not found
+    CHECK((readReg(card, 0x7A) & 0x02) == 0);  // no data request
+
+    card.insertBlankDisk();
+    CHECK(card.hasDisk());
+    CHECK((readReg(card, 0x78) & 0x08) != 0);
     const auto image = card.imageForSave();
     CHECK(image.size() == CE1600FCard::kImageSize);
     bool allZero = true;
     for (uint8_t b : image) if (b != 0) { allZero = false; break; }
     CHECK(allZero);
+
+    const uint64_t rev = card.revision();
+    card.ejectDisk();
+    CHECK(!card.hasDisk());
+    CHECK((readReg(card, 0x78) & 0x08) == 0);
+    CHECK(card.revision() > rev);
 }
 
 // Motor-start + status poll, mirroring the ROM's own sequence at bank-5
@@ -60,6 +77,7 @@ void test_default_construction_is_blank_disk() {
 // modeled as a real timed busy window (advance()), not instant completion.
 void test_motor_start_clears_engine_not_started_bit() {
     CE1600FCard card;
+    card.insertBlankDisk();
     uint8_t status = readReg(card, 0x78);
     CHECK((status & 0x80) != 0);  // engine not started before motor-on
     writeReg(card, 0x7A, 0x81);   // base+2: bit7 = motor on
@@ -75,6 +93,7 @@ void test_motor_start_clears_engine_not_started_bit() {
 // base+0/+1/+3 addressing and the auto-incrementing byte offset.
 void test_write_then_read_sector_round_trip() {
     CE1600FCard card;
+    card.insertBlankDisk();
     const uint64_t revBefore = card.revision();
 
     writeReg(card, 0x79, 3);     // select sector 3
@@ -108,6 +127,7 @@ void seekTo(CE1600FCard& card, uint8_t track) {
 // the current head track only, leaving the rest of the disk alone.
 void test_format_track_takes_eight_id_fields_and_clears_the_head_track() {
     CE1600FCard card;
+    card.insertBlankDisk();
     std::vector<uint8_t> image(CE1600FCard::kImageSize, 0x77);
     CHECK(card.loadImage(image.data(), image.size()));
     seekTo(card, 2);
@@ -135,6 +155,7 @@ void test_format_track_takes_eight_id_fields_and_clears_the_head_track() {
 // stays set while the three bytes are read and drops right after.
 void test_seek_then_read_id_returns_the_target_track() {
     CE1600FCard card;
+    card.insertBlankDisk();
     seekTo(card, 5);
     CHECK(card.track() == 5);
     CHECK((readReg(card, 0x7A) & 0x81) == 0);
@@ -158,6 +179,7 @@ void test_seek_then_read_id_returns_the_target_track() {
 // same sector number on different tracks addresses different image bytes.
 void test_sector_address_combines_head_track_and_sector_register() {
     CE1600FCard card;
+    card.insertBlankDisk();
     seekTo(card, 3);
     writeReg(card, 0x79, 4);
     writeReg(card, 0x78, 0x60);
@@ -171,6 +193,7 @@ void test_sector_address_combines_head_track_and_sector_register() {
 // must never land in the disk image.
 void test_data_writes_outside_a_transfer_do_not_touch_the_image() {
     CE1600FCard card;
+    card.insertBlankDisk();
     const uint64_t revBefore = card.revision();
     writeReg(card, 0x7B, 0x09);
     CHECK(card.revision() == revBefore);
@@ -182,6 +205,7 @@ void test_data_writes_outside_a_transfer_do_not_touch_the_image() {
 // 0x4909) still completes on its own once the sector has passed the head.
 void test_abandoned_transfer_times_out() {
     CE1600FCard card;
+    card.insertBlankDisk();
     writeReg(card, 0x79, 0);
     writeReg(card, 0x78, 0x40);
     readReg(card, 0x7B);
@@ -195,6 +219,7 @@ void test_abandoned_transfer_times_out() {
 // must not collide with CE1600PCard's own (read-only) use of port 0x81.
 void test_port_0x81_reset_clears_motor_and_command_state() {
     CE1600FCard card;
+    card.insertBlankDisk();
     writeReg(card, 0x7A, 0x81);  // motor on
     card.advance(CE1600FCard::kMotorStartupTStates);
     CHECK((readReg(card, 0x78) & 0x80) == 0);
@@ -207,6 +232,7 @@ void test_port_0x81_reset_clears_motor_and_command_state() {
 // FloppyDiskManager polls on each frame tick to decide on autosave.
 void test_load_image_and_insert_blank_bump_revision() {
     CE1600FCard card;
+    card.insertBlankDisk();
     std::vector<uint8_t> image(CE1600FCard::kImageSize, 0x77);
     uint64_t revBefore = card.revision();
     CHECK(card.loadImage(image.data(), image.size()));
@@ -226,6 +252,7 @@ void test_load_image_and_insert_blank_bump_revision() {
 // FDC's DSKCHG latch.
 void test_disk_changed_latch_starts_set_and_clears_on_step() {
     CE1600FCard card;
+    card.insertBlankDisk();
     CHECK((readReg(card, 0x7A) & 0x40) != 0);
     writeReg(card, 0x78, 0x20);  // seek command
     CHECK((readReg(card, 0x7A) & 0x40) == 0);
@@ -241,6 +268,7 @@ void test_disk_changed_latch_starts_set_and_clears_on_step() {
 // it set and DSKINIT would abort. The latch must clear on any command.
 void test_disk_changed_latch_clears_on_any_command_not_just_step() {
     CE1600FCard card;
+    card.insertBlankDisk();
     CHECK((readReg(card, 0x7A) & 0x40) != 0);
     writeReg(card, 0x78, 0x01);  // DSKINIT's first command, not a step
     CHECK((readReg(card, 0x7A) & 0x40) == 0);
@@ -252,6 +280,7 @@ void test_disk_changed_latch_clears_on_any_command_not_just_step() {
 // contents.
 void test_set_side_switches_data_and_rearms_changed_latch() {
     CE1600FCard card;
+    card.insertBlankDisk();
     writeReg(card, 0x78, 0x20);  // acknowledge the initial changed-disk latch
     CHECK((readReg(card, 0x7A) & 0x40) == 0);
     CHECK(card.side() == 0);
@@ -287,6 +316,7 @@ void test_set_side_switches_data_and_rearms_changed_latch() {
 // the last byte, well inside the ~9ms `sub_44e4` b=1 poll that follows.
 void test_transfer_holds_busy_until_the_last_byte() {
     CE1600FCard card;
+    card.insertBlankDisk();
     writeReg(card, 0x79, 0);
     writeReg(card, 0x78, 0x40);
     for (int i = 0; i < 512; ++i) {
@@ -301,6 +331,7 @@ void test_transfer_holds_busy_until_the_last_byte() {
 // §1: 80ms per track + 50ms settling) before base+2 bit0/bit7 clear.
 void test_seek_busies_the_drive_for_the_real_step_time() {
     CE1600FCard card;
+    card.insertBlankDisk();
     writeReg(card, 0x7B, 4);
     writeReg(card, 0x78, 0x20);
     CHECK((readReg(card, 0x7A) & 0x81) == 0x81);
@@ -314,6 +345,7 @@ void test_seek_busies_the_drive_for_the_real_step_time() {
 // safe to eject and flip the disk.
 void test_motor_on_reflects_motor_register_writes() {
     CE1600FCard card;
+    card.insertBlankDisk();
     CHECK(!card.motorOn());
     writeReg(card, 0x7A, 0x81);
     CHECK(card.motorOn());
@@ -325,6 +357,7 @@ void test_motor_on_reflects_motor_register_writes() {
 // else (e.g. CE1600PCard's own 0x81 read, 0x82/0x83) must be left alone.
 void test_claims_only_its_own_ports() {
     CE1600FCard card;
+    card.insertBlankDisk();
     uint8_t v = 0;
     PC1600BusPins romPins;  // io=false: ROM window, not this card's concern
     CHECK(!card.respondsToRead(romPins, v));
@@ -450,7 +483,7 @@ void test_floppy_directory_resolution_prefers_first_dir() {
 }  // namespace
 
 int run_ce1600f_tests() {
-    test_default_construction_is_blank_disk();
+    test_default_construction_is_empty_drive();
     test_motor_start_clears_engine_not_started_bit();
     test_write_then_read_sector_round_trip();
     test_format_track_takes_eight_id_fields_and_clears_the_head_track();

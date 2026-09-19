@@ -53,8 +53,8 @@ struct PC1600PresetLoadResult {
     /// `machine.ce1600pAttached()` instead -- no result field for it yet.)
     bool ce150Attached = false;
     /// The preset's `floppy:` name, verbatim -- empty if the key was
-    /// absent (the CE-1600F still got the usual auto-inserted blank disk,
-    /// per its union attach with `plotter: ce1600p`; see
+    /// absent (the drive stays empty, per the CE-1600F's union attach
+    /// with `plotter: ce1600p`; see
     /// PC1600Machine::attachCE1600P()). Mirrors slot1ModuleLabel's shape,
     /// for the GUI (FloppyDiskManager::syncFromPresetLoad()) to resync its
     /// disk-picker combo without re-attaching anything.

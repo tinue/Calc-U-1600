@@ -210,20 +210,19 @@ struct PresetFile {
     // PC-1600 only: `floppy: <name>` names a saved CE-1600F disk by its
     // `disk-name` (a `*.floppy.yaml` in the bundled or the user's save
     // directory, bundled first -- see Connector/FloppyImageFile.hpp) to load into
-    // the floppy at attach time, instead of the default blank disk. An
+    // the floppy at attach time, instead of the default empty drive. An
     // optional `,A` or `,B` suffix (`floppy: mydisk,B`) selects which side
     // is facing the head once loaded (CE1600FCard::setSide()'s own
     // comment) -- stripped into `floppySide` below, so `floppy` itself is
-    // always just the bare disk name. `""` (key absent) = auto-inserted
-    // blank, matching the GUI's own default. Only valid alongside
+    // always just the bare disk name. `""` (key absent) = no disk in the
+    // drive, matching the GUI's "–empty–" default. Only valid alongside
     // `plotter: ce1600p` (attaching the CE-1600P always also attaches the
     // CE-1600F, per their union attach/detach --
     // PC1600Machine::attachCE1600P()); `floppy:` without `plotter:
     // ce1600p` is a parse error. See Core/PC1600/PC1600PresetLoader.cpp.
     std::string floppy;
     // 0 = side A (default), 1 = side B -- parsed from `floppy:`'s `,A`/`,B`
-    // suffix. Meaningless when `floppy` is empty (a freshly auto-inserted
-    // blank disk always starts on side A).
+    // suffix. Meaningless when `floppy` is empty (no disk).
     int floppySide = 0;
 
     // Two `- ...:` alternatives to `- module:` in the same one-item block,

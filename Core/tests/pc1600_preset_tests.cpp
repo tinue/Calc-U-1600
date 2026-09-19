@@ -699,9 +699,9 @@ void test_parser_accepts_floppy_side_suffix() {
     CHECK(err.find("side") != std::string::npos);
 }
 
-// Functional: attaching CE-1600P with no `floppy:` key gets the usual
-// auto-inserted blank (zero-filled) disk -- the union-attach default.
-void test_loader_ce1600p_with_no_floppy_key_gets_blank_disk() {
+// Functional: attaching CE-1600P with no `floppy:` key leaves the drive
+// empty -- the same "–empty–" default as the GUI.
+void test_loader_ce1600p_with_no_floppy_key_leaves_drive_empty() {
     PresetFile p;
     std::string err;
     CHECK(parse("model: PC-1600\nplotter: ce1600p\n", &p, &err));
@@ -709,17 +709,12 @@ void test_loader_ce1600p_with_no_floppy_key_gets_blank_disk() {
     PC1600Machine m;
     PC1600PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", ".", {}, {"roms"});
     if (!r.ok) {
-        std::fprintf(stderr, "SKIP test_loader_ce1600p_with_no_floppy_key_gets_blank_disk: %s\n", r.error.c_str());
+        std::fprintf(stderr, "SKIP test_loader_ce1600p_with_no_floppy_key_leaves_drive_empty: %s\n", r.error.c_str());
         return;
     }
     CHECK(m.ce1600fAttached());
     CHECK(r.floppyImageLabel.empty());
-    const auto image = m.ce1600fDiskImage();
-    CHECK(image.size() == CE1600FCard::kImageSize);
-    bool allZero = true;
-    for (uint8_t b : image)
-        if (b != 0) { allZero = false; break; }
-    CHECK(allZero);
+    CHECK(!m.ce1600fHasDisk());
 }
 
 // Functional: `floppy: <name>` resolves the `*.floppy.yaml` declaring that
@@ -813,7 +808,7 @@ int run_pc1600_preset_tests() {
     test_parser_rejects_floppy_on_pc1500();
     test_parser_accepts_floppy_with_ce1600p();
     test_parser_accepts_floppy_side_suffix();
-    test_loader_ce1600p_with_no_floppy_key_gets_blank_disk();
+    test_loader_ce1600p_with_no_floppy_key_leaves_drive_empty();
     test_loader_floppy_key_loads_named_disk_image();
     test_loader_floppy_key_side_suffix_selects_side_b();
     test_loader_floppy_key_missing_file_is_an_error();

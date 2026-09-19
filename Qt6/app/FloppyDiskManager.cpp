@@ -50,13 +50,13 @@ void FloppyDiskManager::selectDisk(const QString& diskNameOrEmpty) {
 
     if (!loadSelectedDisk(m1600)) {
         m_diskName.clear();
-        m1600->ce1600fInsertBlank();
+        m1600->ce1600fEject();
     }
     m_lastSeenRevision = m1600->ce1600fRevision();
 }
 
 bool FloppyDiskManager::loadSelectedDisk(PC1600Machine* m1600) {
-    if (m_diskName.isEmpty()) return false;  // blank disk requested
+    if (m_diskName.isEmpty()) return false;  // "–empty–": no disk
 
     // Bundled first, then the save folder -- the same order the preset
     // loader and MemoryModuleManager use.
@@ -102,6 +102,10 @@ bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
     auto* m1600 = m_controller->pc1600();
     if (!m1600 || !m1600->ce1600fAttached()) {
         *error = tr("No floppy attached.");
+        return false;
+    }
+    if (!m1600->ce1600fHasDisk()) {
+        *error = tr("There's no disk in the drive.");
         return false;
     }
     if (name.contains(QLatin1Char('"'))) {

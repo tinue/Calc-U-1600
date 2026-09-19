@@ -9,9 +9,10 @@
   double-sided (64 KB per side); a control-bar button flips the disk to
   the other side, a green lamp shows when the drive motor runs, and
   drive timing follows the Service Manual.
-- **Floppy disk** Disks are handled like battery-backed memory cards: an
-  empty disk is inserted by default, and the control bar lets you pick a
-  saved disk or save the current one. Presets can insert a saved disk
+- **Floppy disk** Disks are handled like battery-backed memory cards: the
+  drive starts empty ("–empty–"; the ROM reports ERROR 160), a bundled
+  unformatted "Blank" disk can be inserted and formatted with `INIT"X:"`,
+  and the control bar lets you pick a saved disk or save the current one. Presets can insert a saved disk
   with the new `floppy: <name>` key (`,A`/`,B` picks the side). Disks are
   saved as versioned `<name>.floppy.yaml` files in the save folder and
   found by the name inside them, built-in disks first; `.floppy.img`

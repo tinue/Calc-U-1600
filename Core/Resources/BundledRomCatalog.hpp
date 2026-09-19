@@ -139,7 +139,7 @@ inline bool attachCE150(Machine& machine, const std::vector<std::string>& dirs, 
 }
 
 // Attaches the CE-1600P plotter (and, per its union attach, the CE-1600F
-// floppy, with a blank disk -- PC1600Machine::attachCE1600P()) to a
+// floppy, with its drive empty -- PC1600Machine::attachCE1600P()) to a
 // PC-1600. Load a disk afterwards with PC1600Machine::ce1600fLoadImage().
 inline bool attachCE1600P(PC1600Machine& machine, const std::vector<std::string>& dirs,
                           std::string* error) {

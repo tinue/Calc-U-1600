@@ -34,7 +34,7 @@ public:
     QVector<DiskEntry> bundledEntries() const;
     QVector<DiskEntry> instanceEntries() const;
 
-    // Empty diskNameOrEmpty => blank disk. A live hot-swap (no power-cycle
+    // Empty diskNameOrEmpty => no disk (drive empty). A live hot-swap (no power-cycle
     // needed -- unlike memory-card slots, the floppy isn't sized/scanned
     // by the boot ROM at reset; a real drive lets you swap diskettes while
     // powered). No-op if no floppy is currently attached.
@@ -53,8 +53,8 @@ public:
     // control bar can show the user when it's safe to flip the disk.
     bool motorOn() const;
 
-    // Loads the currently selected disk (or the empty default, if none is
-    // selected) into a just-attached CE1600FCard. PlotterController calls
+    // Loads the currently selected disk into a just-attached CE1600FCard
+    // (or leaves the drive empty for "–empty–"). PlotterController calls
     // this as part of its CE-1600P attach, before announcing it -- the GUI
     // counterpart of the preset loader loading its `floppy:` at attach.
     void insertSelectedDisk();
@@ -80,7 +80,7 @@ signals:
 private:
     MachineController* m_controller;  // not owned
 
-    QString m_diskName;         // empty = blank disk
+    QString m_diskName;         // empty = no disk in the drive
     QString m_instanceFilePath; // empty unless resolved from the instance dir
     bool m_persistPending = false;
     uint64_t m_lastSeenRevision = 0;

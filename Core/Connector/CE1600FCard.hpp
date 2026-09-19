@@ -86,7 +86,7 @@ public:
     // own once the sector has passed under the head.
     static constexpr uint32_t kTransferIdleTStates = kTStateHz / 50;         // 20ms
 
-    CE1600FCard() { insertBlankDisk(); }
+    CE1600FCard() = default;  // drive starts empty -- see hasDisk()
 
     /// Called once per emulated SC7852 instruction (PC1600Machine::step()'s
     /// `cost`) so the motor-startup and seek busy windows above tick down
@@ -106,13 +106,25 @@ public:
         }
     }
 
-    /// Zero-fills the disk image (an unformatted blank floppy), resets to
-    /// side A, and bumps the revision -- the "auto-insert a blank disk"
-    /// default.
+    /// Inserts a zero-filled (unformatted) disk, side A up.
     void insertBlankDisk() {
         m_image.fill(0);
         onNewDisk();
     }
+
+    /// Removes the disk: base+0 bit3 (disk-in-drive) reads 0, which the
+    /// ROM's motor-start/restore/seek paths (bank-5 0x4423, 0x4495, 0x4941)
+    /// turn into "no disk" (ERROR 160). Also a disk-change event.
+    void ejectDisk() {
+        m_image.fill(0);
+        m_diskPresent = false;
+        m_side = 0;
+        markDiskChanged();
+        ++m_revision;
+        resetLatchedState();
+    }
+
+    bool hasDisk() const { return m_diskPresent; }
 
     /// `data` must be exactly kImageSize bytes (both sides). Resets to
     /// side A.
@@ -137,7 +149,7 @@ public:
     /// is a no-op (no spurious change event).
     void setSide(int side) {
         const int clamped = side != 0 ? 1 : 0;
-        if (clamped == m_side) return;
+        if (!m_diskPresent || clamped == m_side) return;
         m_side = clamped;
         markDiskChanged();
         ++m_revision;
@@ -210,7 +222,7 @@ private:
                 // spin-up window (see advance()).
                 if (!m_motorOn || m_motorStartRemaining > 0) status |= 0x80;
                 status |= 0x40;  // never write-protected
-                status |= 0x08;  // disk always present (auto-inserted blank)
+                if (m_diskPresent) status |= 0x08;  // disk in drive
                 return status;
             }
             case 1:
@@ -301,7 +313,9 @@ private:
     }
 
     void startTransfer(Xfer kind, size_t length) const {
-        if ((kind == Xfer::ReadSector || kind == Xfer::WriteSector) && m_sectorReg >= kSectorsPerTrack) {
+        // No disk: no ID field ever passes under the head.
+        if (!m_diskPresent ||
+            ((kind == Xfer::ReadSector || kind == Xfer::WriteSector) && m_sectorReg >= kSectorsPerTrack)) {
             m_status |= kStatusNotFound;
             finishCommand();
             return;
@@ -391,6 +405,7 @@ private:
     // Shared tail of insertBlankDisk()/loadImage(): a new disk goes in
     // side A up, with the changed-disk latch armed.
     void onNewDisk() {
+        m_diskPresent = true;
         m_side = 0;
         markDiskChanged();
         ++m_revision;
@@ -414,6 +429,7 @@ private:
     bool m_motorOn = false;
     uint32_t m_motorStartRemaining = 0;  // T-states left in motor spin-up
     bool m_diskChanged = true;
+    bool m_diskPresent = false;
     uint64_t m_revision = 0;
     // Command/transfer state. Mutable because reading DATA during a read
     // transfer advances it, and respondsToRead() is const.

@@ -4,6 +4,7 @@
 
 model: PC-1600
 plotter: ce1600p
+floppy: Blank
 
 
 memory-expansion-1:
