@@ -3,11 +3,12 @@
 
 class MachineController;
 
-// Minimal Settings dialog: shows the *effective* current battery-card
-// instance save directory and lets the user override or reset it.
-// QSettings-backed (see AppSettings.hpp); writes happen immediately on
-// each button click, so there's no separate OK/Cancel semantics -- just
-// one "Close" button.
+// Settings dialog: titled sections (General, Default presets, Storage,
+// Tracing, Serial port), one grid row per setting -- label, the *effective*
+// current value, and Change/Reset buttons (Reset is enabled only while a
+// user override is stored). QSettings-backed (see AppSettings.hpp); writes
+// happen immediately on each change, so there's no separate OK/Cancel
+// semantics -- just one "Close" button.
 class SettingsDialog : public QDialog {
     Q_OBJECT
 public:

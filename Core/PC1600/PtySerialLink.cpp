@@ -28,6 +28,9 @@ std::string makeStableSymlink(const std::string& target, const std::string& dir)
         base = support + "/Calc-U-1600";
     }
     ::mkdir(base.c_str(), 0755); // ignore EEXIST -- a user-granted folder already exists
+    // A folder given as "/private/tmp/" must not yield "/private/tmp//...".
+    while (base.size() > 1 && base.back() == '/') base.pop_back();
+    if (base == "/") base.clear();
     const std::string link = base + "/calcu1600.serial";
     ::unlink(link.c_str());
     if (::symlink(target.c_str(), link.c_str()) != 0) return "";

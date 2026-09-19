@@ -6,104 +6,158 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
-#include <QFrame>
-#include <QHBoxLayout>
+#include <QGridLayout>
+#include <QGroupBox>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <functional>
+#include <vector>
 
 namespace {
 
-// A thin horizontal rule between settings sections -- with every row's
-// label, value line, and buttons stacked in the same QVBoxLayout with no
-// grouping of their own, adjacent sections otherwise read as one
-// undifferentiated block.
-void addSeparator(QVBoxLayout* layout, QWidget* parent) {
-    auto* line = new QFrame(parent);
-    line->setFrameShape(QFrame::HLine);
-    line->setFrameShadow(QFrame::Sunken);
-    layout->addWidget(line);
+// Wide enough that typical absolute paths show in full on one line.
+constexpr int kMinimumDialogWidth = 960;
+
+// Grid columns shared by every section: label | value (stretches) | pick
+// button | reset/clear button.
+enum Column { kLabelColumn = 0, kValueColumn = 1, kPickColumn = 2, kResetColumn = 3 };
+
+// Collects every section's grid and row label so the label column can be
+// given one common width at the end (see alignLabelColumns()) -- without
+// that, each group box sizes its own label column and the value fields
+// start at a different x in every section.
+struct SectionGrids {
+    std::vector<QGridLayout*> grids;
+    std::vector<QLabel*> labels;
+};
+
+QGridLayout* addSection(QVBoxLayout* layout, QWidget* parent, SectionGrids& sections, const QString& title) {
+    auto* box = new QGroupBox(title, parent);
+    auto* grid = new QGridLayout(box);
+    grid->setColumnStretch(kValueColumn, 1);
+    layout->addWidget(box);
+    sections.grids.push_back(grid);
+    return grid;
 }
 
-// One "<label>:" row plus a value line and a "Change…"/"Reset to Default"
-// button pair that writes through `set` and re-renders the value line via
-// `display` (the effective, already-defaulted text to show; called once up
-// front and again after each button). `pick` runs the picker dialog and
-// returns the chosen path (empty = cancelled); `onChanged` runs after
-// either button, for a row that needs to do more than just refresh its own
-// label (e.g. relinking a live serial port).
-void addPathRow(QVBoxLayout* layout, QWidget* parent, const QString& labelText,
-                const std::function<QString()>& pick, const std::function<QString()>& display,
-                const std::function<void(const QString&)>& set, const std::function<void()>& onChanged = {}) {
-    layout->addWidget(new QLabel(labelText, parent));
+QLabel* addRowLabel(QGridLayout* grid, int row, QWidget* parent, SectionGrids& sections, const QString& text) {
+    auto* label = new QLabel(text, parent);
+    grid->addWidget(label, row, kLabelColumn, Qt::AlignRight | Qt::AlignVCenter);
+    sections.labels.push_back(label);
+    return label;
+}
 
-    auto* valueLabel = new QLabel(parent);
-    valueLabel->setWordWrap(true);
-    layout->addWidget(valueLabel);
-    valueLabel->setText(display());
+void alignLabelColumns(const SectionGrids& sections) {
+    int width = 0;
+    for (QLabel* label : sections.labels) width = std::max(width, label->sizeHint().width());
+    for (QGridLayout* grid : sections.grids) grid->setColumnMinimumWidth(kLabelColumn, width);
+}
 
-    auto* changeButton = new QPushButton(SettingsDialog::tr("Change…"), parent);
-    auto* resetButton = new QPushButton(SettingsDialog::tr("Reset to Default"), parent);
+QPushButton* makeRowButton(const QString& text, QWidget* parent) {
+    auto* button = new QPushButton(text, parent);
     // Without this, Qt/macOS auto-picks the first autoDefault push button
     // added to the dialog as its Return-triggered "default" button and
-    // renders it blue -- a styling that has nothing to do with keyboard
-    // focus (Tab moves focus, not this), and is misleading here since no
-    // row's Change/Reset is more "primary" than any other.
-    changeButton->setAutoDefault(false);
-    resetButton->setAutoDefault(false);
-    layout->addWidget(changeButton);
-    layout->addWidget(resetButton);
+    // renders it blue -- misleading here, since no row's buttons are more
+    // "primary" than any other's (and Close should be the default).
+    button->setAutoDefault(false);
+    return button;
+}
 
-    auto refresh = [valueLabel, display] { valueLabel->setText(display()); };
-    QObject::connect(changeButton, &QPushButton::clicked, parent, [=] {
-        const QString chosen = pick();
-        if (!chosen.isEmpty()) {
-            set(chosen);
-            refresh();
-            if (onChanged) onChanged();
-        }
-    });
-    QObject::connect(resetButton, &QPushButton::clicked, parent, [=] {
-        set(QString());
+// Everything one path row needs. `display` returns the effective path to
+// show (empty = show `placeholder` instead); `isOverridden` says whether a
+// user value is stored, which is what enables the reset/clear button.
+// `pick` runs the picker dialog and returns the chosen path (empty =
+// cancelled); `set` writes through to AppSettings (empty = back to
+// default); `onChanged` runs after either button, for a row that needs to
+// do more than refresh itself (e.g. relinking a live serial port).
+struct PathRowSpec {
+    QString label;
+    QString pickText = SettingsDialog::tr("Change…");
+    QString resetText = SettingsDialog::tr("Reset");
+    QString resetToolTip = SettingsDialog::tr("Revert to the default location");
+    QString placeholder;
+    std::function<QString()> pick;
+    std::function<QString()> display;
+    std::function<bool()> isOverridden;
+    std::function<void(const QString&)> set;
+    std::function<void()> onChanged;
+};
+
+// One row: right-aligned label, read-only single-line path field (scrolls
+// horizontally, selectable, full path in the tooltip), pick + reset buttons.
+void addPathRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids& sections, const PathRowSpec& spec) {
+    addRowLabel(grid, row, parent, sections, spec.label);
+
+    auto* field = new QLineEdit(parent);
+    field->setReadOnly(true);
+    field->setPlaceholderText(spec.placeholder);
+    grid->addWidget(field, row, kValueColumn);
+
+    auto* pickButton = makeRowButton(spec.pickText, parent);
+    auto* resetButton = makeRowButton(spec.resetText, parent);
+    resetButton->setToolTip(spec.resetToolTip);
+    grid->addWidget(pickButton, row, kPickColumn);
+    grid->addWidget(resetButton, row, kResetColumn);
+
+    auto refresh = [field, resetButton, spec] {
+        const QString text = spec.display();
+        field->setText(text);
+        field->setCursorPosition(0);
+        field->setToolTip(text);
+        resetButton->setEnabled(spec.isOverridden());
+    };
+    refresh();
+
+    QObject::connect(pickButton, &QPushButton::clicked, parent, [spec, refresh] {
+        const QString chosen = spec.pick();
+        if (chosen.isEmpty()) return;
+        spec.set(chosen);
         refresh();
-        if (onChanged) onChanged();
+        if (spec.onChanged) spec.onChanged();
+    });
+    QObject::connect(resetButton, &QPushButton::clicked, parent, [spec, refresh] {
+        spec.set(QString());
+        refresh();
+        if (spec.onChanged) spec.onChanged();
     });
 }
 
-// addPathRow() for a directory; `startDir` supplies the folder the picker
-// opens on.
-void addDirectoryRow(QVBoxLayout* layout, QWidget* parent, const QString& labelText,
-                      const QString& dialogTitle, const std::function<QString()>& startDir,
-                      const std::function<QString()>& display,
-                      const std::function<void(const QString&)>& set,
-                      const std::function<void()>& onChanged = {}) {
-    addPathRow(
-        layout, parent, labelText,
-        [=] { return QFileDialog::getExistingDirectory(parent, dialogTitle, startDir()); }, display, set,
-        onChanged);
+// A directory row: the picker opens on `startDir`.
+PathRowSpec directorySpec(QWidget* parent, const QString& label, const QString& dialogTitle,
+                          const std::function<QString()>& startDir) {
+    PathRowSpec spec;
+    spec.label = label;
+    spec.pick = [parent, dialogTitle, startDir] {
+        return QFileDialog::getExistingDirectory(parent, dialogTitle, startDir());
+    };
+    return spec;
 }
 
 // One model's "default preset" row: `modelKey` is AppSettings::
 // defaultPresetPath()'s key, `extension` the preset suffix that model uses.
-void addDefaultPresetRow(QVBoxLayout* layout, QWidget* parent, const QString& labelText,
-                          const QString& modelKey, const QString& extension) {
-    addPathRow(
-        layout, parent, labelText,
-        [=] {
-            const QString current = AppSettings::defaultPresetPath(modelKey);
-            return QFileDialog::getOpenFileName(
-                parent, SettingsDialog::tr("Choose Default Preset"),
-                current.isEmpty() ? AppSettings::presetOpenDirOrHome() : current,
-                SettingsDialog::tr("Presets (*.%1);;All Files (*)").arg(extension));
-        },
-        [=] {
-            const QString path = AppSettings::defaultPresetPath(modelKey);
-            return path.isEmpty() ? SettingsDialog::tr("(none)") : path;
-        },
-        [=](const QString& path) { AppSettings::setDefaultPresetPath(modelKey, path); });
+void addDefaultPresetRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids& sections, const QString& label,
+                         const QString& modelKey, const QString& extension) {
+    PathRowSpec spec;
+    spec.label = label;
+    spec.pickText = SettingsDialog::tr("Choose…");
+    spec.resetText = SettingsDialog::tr("Clear");
+    spec.resetToolTip = SettingsDialog::tr("Don't load a preset for this model");
+    spec.placeholder = SettingsDialog::tr("(none)");
+    spec.pick = [parent, modelKey, extension] {
+        const QString current = AppSettings::defaultPresetPath(modelKey);
+        return QFileDialog::getOpenFileName(parent, SettingsDialog::tr("Choose Default Preset"),
+                                            current.isEmpty() ? AppSettings::presetOpenDirOrHome() : current,
+                                            SettingsDialog::tr("Presets (*.%1);;All Files (*)").arg(extension));
+    };
+    spec.display = [modelKey] { return AppSettings::defaultPresetPath(modelKey); };
+    spec.isOverridden = [modelKey] { return !AppSettings::defaultPresetPath(modelKey).isEmpty(); };
+    spec.set = [modelKey](const QString& path) { AppSettings::setDefaultPresetPath(modelKey, path); };
+    addPathRow(grid, row, parent, sections, spec);
 }
 
 } // namespace
@@ -111,14 +165,15 @@ void addDefaultPresetRow(QVBoxLayout* layout, QWidget* parent, const QString& la
 SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     : QDialog(parent), m_controller(controller) {
     setWindowTitle(tr("Settings"));
+    setMinimumWidth(kMinimumDialogWidth);
 
     auto* layout = new QVBoxLayout(this);
+    SectionGrids sections;
 
-    auto* startupModelRow = new QWidget(this);
-    auto* startupModelLayout = new QHBoxLayout(startupModelRow);
-    startupModelLayout->setContentsMargins(0, 0, 0, 0);
-    startupModelLayout->addWidget(new QLabel(tr("Startup device:"), startupModelRow));
-    auto* startupModelCombo = new QComboBox(startupModelRow);
+    // ── General ──────────────────────────────────────────────────────────
+    QGridLayout* general = addSection(layout, this, sections, tr("General"));
+    addRowLabel(general, 0, this, sections, tr("Startup device:"));
+    auto* startupModelCombo = new QComboBox(this);
     // Data strings match AppSettings::startupModelPreference()'s stored
     // values directly -- "last" reuses whatever model was last switched to;
     // the plain PC-1500 always boots on ROM A04 regardless (not settable
@@ -129,94 +184,100 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     startupModelCombo->addItem(tr("PC-1600"), QStringLiteral("PC1600"));
     const int startupIdx = startupModelCombo->findData(AppSettings::startupModelPreference());
     startupModelCombo->setCurrentIndex(startupIdx >= 0 ? startupIdx : 0);
-    startupModelLayout->addWidget(startupModelCombo);
-    startupModelLayout->addStretch(1);
-    layout->addWidget(startupModelRow);
+    general->addWidget(startupModelCombo, 0, kValueColumn, Qt::AlignLeft);
     connect(startupModelCombo, &QComboBox::currentIndexChanged, this, [startupModelCombo](int index) {
         AppSettings::setStartupModelPreference(startupModelCombo->itemData(index).toString());
     });
 
-    addSeparator(layout, this);
-    addDirectoryRow(
-        layout, this, tr("Battery-card save directory:"), tr("Choose Save Directory"),
-        [] { return AppPaths::instanceDir(); }, [] { return AppPaths::instanceDir(); },
-        [](const QString& dir) { AppSettings::setInstanceDirOverride(dir); });
+    {
+        PathRowSpec spec = directorySpec(this, tr("Samples folder:"), tr("Choose Samples Folder"),
+                                         [] { return AppSettings::presetOpenDirOrHome(); });
+        spec.resetToolTip = tr("Revert to the system default");
+        spec.display = [] { return AppSettings::presetOpenDirOrHome(); };
+        spec.isOverridden = [] { return !AppSettings::presetOpenDir().isEmpty(); };
+        spec.set = [](const QString& dir) { AppSettings::setPresetOpenDir(dir); };
+        addPathRow(general, 1, this, sections, spec);
+    }
 
-    addSeparator(layout, this);
-    addDirectoryRow(
-        layout, this, tr("Default samples folder:"), tr("Choose Samples Folder"),
-        [] { return AppSettings::presetOpenDirOrHome(); },
-        [] {
-            const QString dir = AppSettings::presetOpenDir();
-            return dir.isEmpty() ? SettingsDialog::tr("(system default)") : dir;
-        },
-        [](const QString& dir) { AppSettings::setPresetOpenDir(dir); });
-
+    // ── Default presets ──────────────────────────────────────────────────
     // Applied whenever that model gets selected (including at startup) --
     // see MainWindow::applyDefaultPreset().
-    addSeparator(layout, this);
-    addDefaultPresetRow(layout, this, tr("PC-1500 default preset:"), QStringLiteral("PC1500"),
+    QGridLayout* presets =
+        addSection(layout, this, sections, tr("Default presets (loaded when the model is selected)"));
+    addDefaultPresetRow(presets, 0, this, sections, tr("PC-1500:"), QStringLiteral("PC1500"),
                         QStringLiteral("pc1500"));
-    addDefaultPresetRow(layout, this, tr("PC-1500A default preset:"), QStringLiteral("PC1500A"),
+    addDefaultPresetRow(presets, 1, this, sections, tr("PC-1500A:"), QStringLiteral("PC1500A"),
                         QStringLiteral("pc1500a"));
-    addDefaultPresetRow(layout, this, tr("PC-1600 default preset:"), QStringLiteral("PC1600"),
+    addDefaultPresetRow(presets, 2, this, sections, tr("PC-1600:"), QStringLiteral("PC1600"),
                         QStringLiteral("pc1600"));
 
-    addSeparator(layout, this);
-    addDirectoryRow(
-        layout, this, tr("Trace file save directory:"), tr("Choose Trace Directory"),
-        [] { return AppPaths::instanceDir(); },
-        [] {
+    // ── Storage ──────────────────────────────────────────────────────────
+    QGridLayout* storage = addSection(layout, this, sections, tr("Storage"));
+    {
+        PathRowSpec spec = directorySpec(this, tr("Battery-card saves:"), tr("Choose Save Directory"),
+                                         [] { return AppPaths::instanceDir(); });
+        spec.display = [] { return AppPaths::instanceDir(); };
+        spec.isOverridden = [] { return !AppSettings::instanceDirOverride().isEmpty(); };
+        spec.set = [](const QString& dir) { AppSettings::setInstanceDirOverride(dir); };
+        addPathRow(storage, 0, this, sections, spec);
+    }
+
+    // ── Tracing ──────────────────────────────────────────────────────────
+    QGridLayout* tracing = addSection(layout, this, sections, tr("Tracing"));
+    {
+        PathRowSpec spec = directorySpec(this, tr("Trace directory:"), tr("Choose Trace Directory"),
+                                         [] { return AppPaths::instanceDir(); });
+        spec.display = [] {
             const QString dir = AppSettings::traceDirOverride();
             return dir.isEmpty() ? AppPaths::instanceDir() : dir;
-        },
-        [](const QString& dir) { AppSettings::setTraceDirOverride(dir); });
-
-    addSeparator(layout, this);
-    auto* traceSizeRow = new QWidget(this);
-    auto* traceSizeLayout = new QHBoxLayout(traceSizeRow);
-    traceSizeLayout->setContentsMargins(0, 0, 0, 0);
-    traceSizeLayout->addWidget(new QLabel(tr("Maximum trace file size:"), traceSizeRow));
-    auto* traceSizeSpin = new QSpinBox(traceSizeRow);
+        };
+        spec.isOverridden = [] { return !AppSettings::traceDirOverride().isEmpty(); };
+        spec.set = [](const QString& dir) { AppSettings::setTraceDirOverride(dir); };
+        addPathRow(tracing, 0, this, sections, spec);
+    }
+    addRowLabel(tracing, 1, this, sections, tr("Maximum file size:"));
+    auto* traceSizeSpin = new QSpinBox(this);
     traceSizeSpin->setRange(1, 10000);
     traceSizeSpin->setSuffix(tr(" MB"));
     traceSizeSpin->setValue(AppSettings::traceMaxFileSizeMB());
-    traceSizeLayout->addWidget(traceSizeSpin);
-    traceSizeLayout->addStretch(1);
-    layout->addWidget(traceSizeRow);
+    tracing->addWidget(traceSizeSpin, 1, kValueColumn, Qt::AlignLeft);
     connect(traceSizeSpin, &QSpinBox::valueChanged, this, [](int mb) { AppSettings::setTraceMaxFileSizeMB(mb); });
 
 #ifndef Q_OS_WIN
+    // ── Serial port ──────────────────────────────────────────────────────
     // PtySerialLink is POSIX-only (macOS/Linux); on Windows it's an inert
     // stub, so this section is compiled out entirely rather than shown
     // disabled -- there is nothing for it to do there yet.
-    addSeparator(layout, this);
+    QGridLayout* serial = addSection(layout, this, sections, tr("Serial port (PC-1600)"));
     auto* serialStatusLabel = new QLabel(this);
+    serialStatusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     auto refreshSerialStatusLabel = [this, serialStatusLabel] {
         const QString status = m_controller ? m_controller->serialLinkStatus() : QString();
-        serialStatusLabel->setText(status.isEmpty() ? tr("(PC-1600 not active)")
-                                                     : tr("Connect a serial client to: %1").arg(status));
+        serialStatusLabel->setText(status.isEmpty() ? tr("(PC-1600 not active)") : status);
     };
-
-    addDirectoryRow(
-        layout, this, tr("Serial port symlink directory:"), tr("Choose Serial Port Directory"),
-        [] { return AppPaths::instanceDir(); },
-        [] {
+    {
+        PathRowSpec spec = directorySpec(this, tr("Symlink directory:"), tr("Choose Serial Port Directory"),
+                                         [] { return AppPaths::instanceDir(); });
+        spec.display = [] {
             const QString dir = AppSettings::serialLinkDirOverride();
             return dir.isEmpty() ? AppPaths::instanceDir() : dir;
-        },
-        [](const QString& dir) { AppSettings::setSerialLinkDirOverride(dir); },
-        [this, refreshSerialStatusLabel] {
+        };
+        spec.isOverridden = [] { return !AppSettings::serialLinkDirOverride().isEmpty(); };
+        spec.set = [](const QString& dir) { AppSettings::setSerialLinkDirOverride(dir); };
+        spec.onChanged = [this, refreshSerialStatusLabel] {
             if (m_controller) m_controller->refreshSerialLinkDirectory();
             refreshSerialStatusLabel();
-        });
-
-    serialStatusLabel->setWordWrap(true);
-    layout->addWidget(serialStatusLabel);
+        };
+        addPathRow(serial, 0, this, sections, spec);
+    }
+    addRowLabel(serial, 1, this, sections, tr("Connect client to:"));
+    serial->addWidget(serialStatusLabel, 1, kValueColumn, 1, 3);
     refreshSerialStatusLabel();
 #endif
 
-    addSeparator(layout, this);
+    alignLabelColumns(sections);
+
+    layout->addStretch(1);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
