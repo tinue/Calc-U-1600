@@ -132,10 +132,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_controlBar, &ControlBar::settingsRequested, this, openSettingsDialog);
     connect(m_presetController.get(), &PresetController::armed, this, &MainWindow::onPresetArmed);
     auto openPresetDialog = [this] {
-        const QString path = QFileDialog::getOpenFileName(this, tr("Load Preset"), AppSettings::presetOpenStartDir(),
+        const QString path = QFileDialog::getOpenFileName(this, tr("Load Preset"),
+                                                            AppSettings::openStartDir(AppSettings::OpenFolder::Samples),
                                                             tr("Presets (*.pc1500 *.pc1500a *.pc1600);;All Files (*)"));
         if (path.isEmpty()) return;
-        AppSettings::rememberPresetOpenFile(path);
+        AppSettings::rememberOpenFile(AppSettings::OpenFolder::Samples, path);
 
         runSynchronousLoad(
             tr("Load Preset"), [this, path](QString* error) { return m_presetController->loadPreset(path, error); },
@@ -159,15 +160,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         dialog.exec();
     });
     connect(m_loadBasicProgramAction, &QAction::triggered, this, [this] {
-        // Shares the "Samples folder" setting (fixed or <last used>) with
-        // Load Preset -- both preset files and bare .bas listings live in
-        // the same samples folder in practice, so one setting covers both
-        // pickers.
+        // Starts in Settings' "Basic folder" (fixed or <last used>).
         const QString path = QFileDialog::getOpenFileName(this, tr("Load BASIC Program"),
-                                                            AppSettings::presetOpenStartDir(),
+                                                            AppSettings::openStartDir(AppSettings::OpenFolder::Basic),
                                                             tr("BASIC Programs (*.bas);;All Files (*)"));
         if (path.isEmpty()) return;
-        AppSettings::rememberPresetOpenFile(path);
+        AppSettings::rememberOpenFile(AppSettings::OpenFolder::Basic, path);
 
         runSynchronousLoad(tr("Load BASIC Program"), [this, path](QString* error) {
             return m_presetController->loadBasicProgramLive(path, error);

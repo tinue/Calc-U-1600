@@ -20,9 +20,11 @@
   much faster. The loader waited the full 15 s safety timeout before
   every `key:` and `type:` step (over 3 minutes for a short preset); it
   now continues as soon as the machine is ready for keys.
-- **Settings** The Samples folder now defaults to `<last used>`: Load
-  Preset and Load BASIC Program open in the folder a file was last
-  loaded from. Choosing a folder fixes it; Reset returns to `<last used>`.
+- **Settings** Separate start folders for the open dialogs: Samples
+  (Load Preset), Basic (Load BASIC Program) and Assembly (for upcoming
+  machine-code loading). Each defaults to `<last used>` -- the dialog
+  opens in the folder a file was last loaded from. Choosing a folder
+  fixes it; Reset returns to `<last used>`.
 
 ## [0.3.0] - 2026-09-19
 
