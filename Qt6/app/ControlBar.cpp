@@ -12,8 +12,8 @@
 
 namespace {
 
-// A thin vertical rule between control-bar groups (reset | module slots |
-// model/ROM pickers | preset/settings | plotter toggles) so same-looking
+// A thin vertical rule between control-bar groups (reset | settings |
+// model/ROM pickers | module slots | plotter toggles) so same-looking
 // widgets in adjacent groups -- most notably the two slots' identical save-
 // icon buttons -- read as belonging to different groups instead of mushing
 // into one undifferentiated row.
@@ -67,7 +67,28 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_resetButton->setFocusPolicy(Qt::NoFocus);
     layout->addWidget(m_resetButton);
 
-    layout->addStretch();
+    addSeparator(layout, this);
+    m_settingsButton = new QPushButton(tr("Settings…"), this);
+    m_settingsButton->setFocusPolicy(Qt::NoFocus);
+    layout->addWidget(m_settingsButton);
+
+    addSeparator(layout, this);
+    m_modelCombo = new QComboBox(this);
+    m_modelCombo->addItem(tr("PC-1500"), static_cast<int>(Model::PC1500));
+    m_modelCombo->addItem(tr("PC-1500A"), static_cast<int>(Model::PC1500A));
+    m_modelCombo->addItem(tr("PC-1600"), static_cast<int>(Model::PC1600));
+    m_modelCombo->setCurrentIndex(1); // PC-1500A, matching MachineController's default
+    m_modelCombo->setFocusPolicy(Qt::NoFocus);
+    layout->addWidget(m_modelCombo);
+
+    m_romCombo = new QComboBox(this);
+    m_romCombo->addItem(tr("A01"), static_cast<int>(PC1500RomRevision::A01));
+    m_romCombo->addItem(tr("A03"), static_cast<int>(PC1500RomRevision::A03));
+    m_romCombo->addItem(tr("A04"), static_cast<int>(PC1500RomRevision::A04));
+    m_romCombo->setCurrentIndex(2); // A04, matching MachineController's default
+    m_romCombo->setFocusPolicy(Qt::NoFocus);
+    layout->addWidget(m_romCombo);
+    setRomPickerVisible(false); // PC-1500A is the default model (see m_modelCombo above)
 
     addSeparator(layout, this);
     for (int i = 0; i < 2; ++i) {
@@ -101,28 +122,11 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     }
     setSlot2Visible(false);
 
-    addSeparator(layout, this);
-    m_modelCombo = new QComboBox(this);
-    m_modelCombo->addItem(tr("PC-1500"), static_cast<int>(Model::PC1500));
-    m_modelCombo->addItem(tr("PC-1500A"), static_cast<int>(Model::PC1500A));
-    m_modelCombo->addItem(tr("PC-1600"), static_cast<int>(Model::PC1600));
-    m_modelCombo->setCurrentIndex(1); // PC-1500A, matching MachineController's default
-    m_modelCombo->setFocusPolicy(Qt::NoFocus);
-    layout->addWidget(m_modelCombo);
-
-    m_romCombo = new QComboBox(this);
-    m_romCombo->addItem(tr("A01"), static_cast<int>(PC1500RomRevision::A01));
-    m_romCombo->addItem(tr("A03"), static_cast<int>(PC1500RomRevision::A03));
-    m_romCombo->addItem(tr("A04"), static_cast<int>(PC1500RomRevision::A04));
-    m_romCombo->setCurrentIndex(2); // A04, matching MachineController's default
-    m_romCombo->setFocusPolicy(Qt::NoFocus);
-    layout->addWidget(m_romCombo);
-    setRomPickerVisible(false); // PC-1500A is the default model (see m_modelCombo above)
-
-    addSeparator(layout, this);
-    m_settingsButton = new QPushButton(tr("Settings…"), this);
-    m_settingsButton->setFocusPolicy(Qt::NoFocus);
-    layout->addWidget(m_settingsButton);
+    // Left group is ordered most-common-first (Reset, Settings, model, slots)
+    // so model-dependent widgets (ROM picker, slot 2) only change its tail
+    // and switching models doesn't shift the rest; the plotter/floppy group
+    // below is pinned to the right edge.
+    layout->addStretch();
 
     addSeparator(layout, this);
     m_ce150Button = new QPushButton(tr("CE-150"), this);
