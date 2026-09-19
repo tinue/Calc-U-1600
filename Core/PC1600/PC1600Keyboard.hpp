@@ -56,6 +56,10 @@ public:
 
     void setKeyState(Key key, bool pressed);
 
+    /// Lets go of every key in the matrix. Called on reset so a key the
+    /// host lost track of (its release never arrived) can't outlive it.
+    void releaseAll() { m_keys = {}; }
+
     /// Strobes the matrix: `opaDriveLines` is the KS0-KS7 column-select byte
     /// as written to OPA (port 1EH, active-low: bit n=0 selects KSn);
     /// `pb6Active` is OPB bit 6 (active-low: false/pulled-low = strobed --

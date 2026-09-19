@@ -906,6 +906,16 @@ void test_on_key_press_sets_break_flag() {
     CHECK((machine.memory().readME1(0xF00B) & 0x02) != 0);
 }
 
+// A key whose host release never arrived (the GUI lost track of it) must
+// not outlive a reset -- otherwise the machine stays wedged on it.
+void test_pc1500_reset_releases_held_keys() {
+    PC1500Machine machine;
+    machine.pressKey("*");
+    CHECK(machine.memory().keyboard().scan(0x00) != 0xFF);
+    machine.reset();
+    CHECK(machine.memory().keyboard().scan(0x00) == 0xFF);
+}
+
 // RAM powers up 0x00 (CMOS RAM after a power loss); the reset button keeps
 // RAM (a real RESET only resets the CPU/chips), Reset All clears it.
 void test_pc1500_ram_powerup_reset_and_all_reset() {
@@ -1375,6 +1385,7 @@ int main() {
     test_display_pixel_decode();
     test_display_status_icons();
     test_boot_smoke_real_rom();
+    test_pc1500_reset_releases_held_keys();
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     int connectorFailures = run_connector_tests();

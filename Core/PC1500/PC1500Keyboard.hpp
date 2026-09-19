@@ -52,6 +52,10 @@ public:
     void setKeyState(Key key, bool pressed);
     void setKeyState(int row, int col, bool pressed); // row=IN0-7, col=PA0-7
 
+    /// Lets go of every key in the matrix. Called on reset so a key the
+    /// host lost track of (its release never arrived) can't outlive it.
+    void releaseAll() { m_keys = {}; }
+
     /// Strobes the matrix: driveLines is the column-select byte as written
     /// to the LH5811's OPA register (active-low: bit c=0 selects column c).
     /// Returns the row-read byte, active-low the same way — bit r is 0 if

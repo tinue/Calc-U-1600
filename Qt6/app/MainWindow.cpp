@@ -32,6 +32,7 @@
 #include <QMessageBox>
 #include <QFile>
 #include <QFileDialog>
+#include <QApplication>
 #include <QCoreApplication>
 #include <QMenuBar>
 #include <QMenu>
@@ -220,6 +221,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             m_controller->releaseKey(key);
         }
     });
+    // A key held while focus moves to another widget (a combo box, a
+    // dialog) releases there, not here -- let go of it now instead.
+    connect(qApp, &QApplication::focusChanged, this, [this] { releaseHeldKeys(); });
     connect(m_faceplate->lcdWidget(), &LcdWidget::turboRequested, this,
             [this](bool active) { m_turboActive = active; });
 
@@ -486,6 +490,23 @@ void MainWindow::refreshFloppyCombo() {
     m_controlBar->setFloppySaveEnabled(m_floppyManager->canNameAndSave());
 }
 
+namespace {
+
+// The physical key behind a key event, stable between its press and its
+// release whatever the modifiers did in between (unlike QKeyEvent::key()).
+quint32 physicalKeyId(const QKeyEvent* event) {
+#ifdef Q_OS_MACOS
+    // nativeScanCode() carries nothing on macOS; the virtual key code is
+    // the physical key position (kVK_*), independent of the layout.
+    return event->nativeVirtualKey();
+#else
+    if (event->nativeScanCode() != 0) return event->nativeScanCode();
+    return static_cast<quint32>(event->key());
+#endif
+}
+
+} // namespace
+
 void MainWindow::keyPressEvent(QKeyEvent* event) {
     if (event->isAutoRepeat()) {
         // Qt delivers OS auto-repeat as repeated .down events -- without
@@ -513,7 +534,7 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
     // used for any key that bypasses the live-typing queue.
     auto trackAndPress = [this, event](const std::string& baseKey) {
         m_controller->pressKey(baseKey);
-        m_physicalKeysDown.insert(event->key(), baseKey);
+        m_physicalKeysDown.insert(physicalKeyId(event), baseKey);
     };
 
     if (isPC1600) {
@@ -584,7 +605,7 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event) {
         return;
     }
 
-    auto it = m_physicalKeysDown.find(event->key());
+    auto it = m_physicalKeysDown.find(physicalKeyId(event));
     if (it == m_physicalKeysDown.end()) {
         QWidget::keyReleaseEvent(event);
         return;
@@ -592,6 +613,16 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event) {
     m_controller->releaseKey(it.value());
     m_physicalKeysDown.erase(it);
     event->accept();
+}
+
+void MainWindow::changeEvent(QEvent* event) {
+    if (event->type() == QEvent::ActivationChange && !isActiveWindow()) releaseHeldKeys();
+    QMainWindow::changeEvent(event);
+}
+
+void MainWindow::releaseHeldKeys() {
+    for (const std::string& key : std::as_const(m_physicalKeysDown)) m_controller->releaseKey(key);
+    m_physicalKeysDown.clear();
 }
 
 void MainWindow::restartPacing() {

@@ -50,6 +50,7 @@ public:
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
+    void changeEvent(QEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
 
 private:
@@ -157,13 +158,20 @@ private:
     // MainWindow.cpp.
     void resetMachine(bool allReset);
 
-    // Qt::Key -> the logical calculator key name that was pressed for it,
-    // so releaseEvent always releases exactly what pressEvent pressed even
-    // with multiple physical keys held -- more robust than re-resolving on
-    // release, whose modifier state may have already changed (e.g. Shift
-    // released first). Shift-tap (needsShift) presses are never entered
-    // here since they're self-contained (see MachineController::tapShiftedKey).
-    QHash<int, std::string> m_physicalKeysDown;
+    // Physical host key (physicalKeyId()) -> the logical calculator key
+    // name that was pressed for it, so releaseEvent always releases exactly
+    // what pressEvent pressed even with multiple physical keys held.
+    // Keyed by the physical key, not Qt::Key: key() follows the modifier
+    // state, so on e.g. a Swiss layout Shift+3 presses as Key_Asterisk but,
+    // with Shift let go first, releases as Key_3 -- the release would miss
+    // and leave "*" held in the machine's matrix. Shift-tap (needsShift)
+    // presses are never entered here since they're self-contained (see
+    // MachineController::tapShiftedKey).
+    QHash<quint32, std::string> m_physicalKeysDown;
+    // Releases everything in m_physicalKeysDown. Used whenever the window
+    // stops receiving key events (deactivation, focus moving to another
+    // widget) -- the matching release would never reach us.
+    void releaseHeldKeys();
 
     void onFrameTick();
 };

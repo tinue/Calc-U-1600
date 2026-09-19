@@ -238,6 +238,21 @@ void test_simple_reset_keeps_internal_ram_all_reset_wipes_it() {
     CHECK(m.memory().read(0xF200) == 0x00);
 }
 
+// A key whose host release never arrived (the GUI lost track of it) must
+// not outlive a reset -- otherwise the machine stays wedged on it.
+void test_reset_releases_held_keys() {
+    PC1600Machine m;
+    m.pressKey("*");
+    m.pressKey("ctrl");
+    CHECK(m.keyboard().scan(0x00, true) != 0xFF);
+    m.reset();
+    CHECK(m.keyboard().scan(0x00, true) == 0xFF);
+
+    m.pressKey("*");
+    m.allReset();
+    CHECK(m.keyboard().scan(0x00, true) == 0xFF);
+}
+
 void test_reset_level_reported_to_boot_rom_via_request_5A() {
     PC1600Machine m;
     auto& bus = static_cast<SC7852Bus&>(m.memory());
@@ -506,6 +521,7 @@ void test_rtc_advances_while_lh5803_owns_the_bus() {
 
 int run_pc1600_machine_tests() {
     test_simple_reset_keeps_internal_ram_all_reset_wipes_it();
+    test_reset_releases_held_keys();
     test_reset_level_reported_to_boot_rom_via_request_5A();
     test_debug_peek_reads_internal_ram_through_current_banks();
     test_debug_copy_internal_ram_is_the_live_state();

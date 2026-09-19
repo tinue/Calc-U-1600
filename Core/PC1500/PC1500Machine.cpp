@@ -13,6 +13,7 @@ bool PC1500Machine::loadROMFile(const std::string& path) {
 void PC1500Machine::reset() {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_memory.reset();
+    m_memory.keyboard().releaseAll();
     m_cpu.reset();
     // A chip reset re-anchors an attached CE-150 (LH5810 latches cleared,
     // steppers/pen re-homed) but does NOT unplug it or wipe its paper --

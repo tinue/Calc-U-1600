@@ -13,6 +13,7 @@ PC1600Machine::PC1600Machine()
 void PC1600Machine::resetLocked() {
     m_bank.reset();
     m_z80Mem.reset();
+    m_z80Mem.keyboard().releaseAll();
     m_sc7852.reset();
     m_lh5803.reset();
     m_arbiter.reset();
