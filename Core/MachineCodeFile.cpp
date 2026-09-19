@@ -114,35 +114,60 @@ File readFile(const std::vector<uint8_t>& bytes) {
     return f;
 }
 
-std::vector<Slot> pc1600SlotsFor(uint32_t addr, size_t len, bool slot1Attached, bool slot2Attached,
-                                 std::string* why) {
-    std::vector<Slot> slots;
+bool pc1600TargetFor(uint32_t addr, size_t len, const std::vector<BasicArea>& basicAreas, Slot* slot,
+                     std::string* why) {
     const uint64_t end = static_cast<uint64_t>(addr) + len;  // one past the last byte
     if (addr >= kPc1600S0Base) {
         if (end > 0x10000) {
             if (why) *why = hex(addr) + " + " + std::to_string(len) + " bytes runs past &FFFF.";
-        } else {
-            slots.push_back(Slot::S0);
+            return false;
         }
-        return slots;
+        *slot = Slot::S0;
+        return true;
     }
-    if (addr >= kPc1600SlotBase) {
-        if (end > kPc1600S0Base) {
-            if (why)
-                *why = hex(addr) + " + " + std::to_string(len) +
-                       " bytes crosses &C000 -- a memory slot's window is &8000-&BFFF.";
-            return slots;
-        }
-        if (slot1Attached) slots.push_back(Slot::S1);
-        if (slot2Attached) slots.push_back(Slot::S2);
-        if (slots.empty() && why) *why = "&8000-&BFFF needs a memory module in slot 1 or 2, and both are empty.";
-        return slots;
+    if (addr < kPc1600SlotBase) {
+        if (why) *why = hex(addr) + " is ROM -- machine code goes into BASIC's program area, from " +
+                        hex(pc1600DefaultAddress(basicAreas)) + ".";
+        return false;
     }
-    if (why) *why = hex(addr) + " is ROM -- machine code goes to &8000-&BFFF (slot 1/2) or &C000-&FFFF (S0).";
-    return slots;
+    if (end > kPc1600S0Base) {
+        if (why)
+            *why = hex(addr) + " + " + std::to_string(len) +
+                   " bytes crosses &C000 -- a memory module's window is &8000-&BFFF.";
+        return false;
+    }
+    // $8000-$BFFF is part of BASIC's program area only when a RAM module
+    // is folded into it (extension memory, no module header) -- then that
+    // module is the area's first run. A program module or RAM disk isn't
+    // (a NEW "S1:"/"S2:" reserve there needs INIT "Sx:","P" first, which
+    // a preset can do).
+    if (basicAreas.empty()) {
+        if (why) *why = "BASIC's program area couldn't be read, so " + hex(addr) + " can't be placed.";
+        return false;
+    }
+    const BasicArea& first = basicAreas.front();
+    if (first.slot == 0) {
+        if (why)
+            *why = hex(addr) + " is in a memory module, which isn't part of BASIC's program area here -- that "
+                   "starts in internal RAM at " + hex(first.windowBase + kReserve) +
+                   ". To load code into a program module, use a preset (INIT\"Sx:\",\"P\", then "
+                   "NEW\"Sx:\",n and `format: binary`).";
+        return false;
+    }
+    if (addr < first.windowBase) {
+        if (why) *why = hex(addr) + " is below the slot " + std::to_string(first.slot) + " module, which starts at " +
+                        hex(first.windowBase) + ".";
+        return false;
+    }
+    *slot = first.slot == 1 ? Slot::S1 : Slot::S2;
+    return true;
 }
 
-Plan plan(Target target, const File& file, bool slot1Attached, bool slot2Attached) {
+uint32_t pc1600DefaultAddress(const std::vector<BasicArea>& basicAreas) {
+    return (basicAreas.empty() ? kPc1600S0Base : basicAreas.front().windowBase) + kReserve;
+}
+
+Plan plan(Target target, const File& file, const std::vector<BasicArea>& basicAreas) {
     Plan p;
     if (!file.ok) {
         p.error = file.error;
@@ -163,6 +188,7 @@ Plan plan(Target target, const File& file, bool slot1Attached, bool slot2Attache
     }
     if (file.header == File::Header::None) {
         p.needsAddress = true;
+        if (target == Target::PC1600) p.defaultAddr = pc1600DefaultAddress(basicAreas);
         return p;
     }
     if (target == Target::PC1500) {
@@ -177,8 +203,8 @@ Plan plan(Target target, const File& file, bool slot1Attached, bool slot2Attache
         return p;
     }
     std::string why;
-    p.slotChoices = pc1600SlotsFor(file.loadAddr, file.payload.size(), slot1Attached, slot2Attached, &why);
-    if (p.slotChoices.empty()) p.error = why;
+    if (!pc1600TargetFor(file.loadAddr, file.payload.size(), basicAreas, &p.slot, &why))
+        p.error = "The header's load address doesn't fit: " + why;
     return p;
 }
 

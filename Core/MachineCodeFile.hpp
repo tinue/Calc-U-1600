@@ -8,7 +8,8 @@
 //
 // Qt-free decision logic behind the dialog, kept here so it is unit-
 // testable: recognise the file (CE-158 header, PC-1600 header, or none),
-// decide what still has to be asked (start address, PC-1600 slot), and
+// decide what still has to be asked (the start address of a raw file) and
+// where PC-1600 code goes (always BASIC's program area, "S0"), and
 // work out the advice shown after loading (the NEW that protects the code,
 // the CALL that starts it). The writes themselves live in
 // PC1500MachineCodeLoader / PC1600MachineCodeLoader.
@@ -22,7 +23,9 @@ enum class Target { PC1500, PC1600 };  // PC1500 also covers the PC-1500A
 
 // PC-1600 load targets: S0 = internal RAM ($C000-$FFFF), S1/S2 = the two
 // memory slots ($8000-$BFFF window) -- the same windows as the preset
-// loader's `format: binary`.
+// loader's `format: binary`. "Load Machine Code…" only ever loads into
+// BASIC's program area (the one `NEW "S0:"` reserves in), so S1/S2 are
+// used only when a module is folded into that area as extension memory.
 enum class Slot { S0, S1, S2 };
 const char* slotName(Slot slot);
 
@@ -42,22 +45,6 @@ struct File {
 // headerless payload.
 File readFile(const std::vector<uint8_t>& bytes);
 
-// PC-1600 slots that can hold `len` bytes at `addr`: S0 for $C000-$FFFF,
-// the attached ones of S1/S2 for $8000-$BFFF. Empty => `why` explains.
-std::vector<Slot> pc1600SlotsFor(uint32_t addr, size_t len, bool slot1Attached, bool slot2Attached,
-                                 std::string* why);
-
-struct Plan {
-    std::string error;              // non-empty => refuse to load
-    bool needsAddress = false;      // headerless: ask for the start address
-    std::vector<Slot> slotChoices;  // PC-1600 with a header: the slots that fit (ask when > 1)
-};
-
-// What to do with `file` on the running `target`: model mismatch errors
-// (a CE-158 file on a PC-1600, a PC-1600 file on a PC-1500), whether an
-// address must be asked, and the fitting PC-1600 slots for a header address.
-Plan plan(Target target, const File& file, bool slot1Attached, bool slot2Attached);
-
 // One run of the PC-1600's live BASIC program area ("S0"), in the order the
 // ROM lays a program down (ADTBL order). With a RAM module fitted the area
 // starts in the module and ends in internal RAM; `NEW "S0:",<size>` always
@@ -68,6 +55,33 @@ struct BasicArea {
     uint32_t top = 0;          // last usable address (inclusive)
     uint32_t imageOffset = 0;  // module only: card-image offset of windowBase
 };
+
+// The PC-1600 target for `len` bytes at `addr`, always inside BASIC's
+// program area (`basicAreas`, see pc1600BasicAreas()): S0 for
+// $C000-$FFFF; for $8000-$BFFF the slot whose module is the area's first
+// run (a module typed as extension memory). False => `why` explains --
+// e.g. $8000-$BFFF with the area starting in internal RAM, which would
+// mean a program module or RAM disk: a job for a preset.
+bool pc1600TargetFor(uint32_t addr, size_t len, const std::vector<BasicArea>& basicAreas, Slot* slot,
+                     std::string* why);
+
+// Where headerless PC-1600 code goes by default: the start of the area
+// `NEW "S0:"` can reserve -- the first run's window base + &C5 (&C0C5 on a
+// bare machine, &80C5 with a RAM module folded in). &C0C5 if unknown.
+uint32_t pc1600DefaultAddress(const std::vector<BasicArea>& basicAreas);
+
+struct Plan {
+    std::string error;          // non-empty => refuse to load
+    bool needsAddress = false;  // headerless: ask for the start address
+    uint32_t defaultAddr = 0;   // headerless PC-1600: proposed start address (0 = none)
+    Slot slot = Slot::S0;       // PC-1600 with a header: where the code goes
+};
+
+// What to do with `file` on the running `target`: model mismatch errors
+// (a CE-158 file on a PC-1600, a PC-1600 file on a PC-1500), whether an
+// address must be asked, and (PC-1600) the target for a header address --
+// see pc1600TargetFor(). `basicAreas`: PC-1600 only.
+Plan plan(Target target, const File& file, const std::vector<BasicArea>& basicAreas);
 
 // Shown after a successful load.
 struct Advice {

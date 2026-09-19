@@ -27,11 +27,13 @@
   fixes it; Reset returns to `<last used>`.
 - **Machine code** File > Load Machine Code… loads a `.bin` into the
   running machine: with a CE-158 (PC-1500) or PC-1600 header, or raw.
-  It asks only what the file doesn't say -- the start address for a raw
-  file, the slot when a PC-1600 file fits both S1 and S2. Afterwards it
-  shows the `NEW` that keeps BASIC from overwriting the code (worked out
-  from where BASIC's program area actually starts, e.g. in a RAM module)
-  and the `CALL` that starts it. The code is never run automatically. A
+  It asks only for the start address of a raw file. On the PC-1600 the
+  code always goes into BASIC's program area (the one `NEW "S0:"`
+  reserves in), and a raw file's address defaults to its start: &C0C5,
+  or &80C5 when a RAM module is folded in as extension memory. Code
+  meant for a program module (`INIT"Sx:","P"`, `NEW"Sx:",n`) needs a
+  preset. Afterwards it shows the `NEW` that keeps BASIC from
+  overwriting the code and the `CALL` that starts it. The code is never run automatically. A
   CE-158 file on a PC-1600 (LH5803 side) is not supported yet.
 
 ## [0.3.0] - 2026-09-19

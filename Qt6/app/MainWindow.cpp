@@ -361,10 +361,11 @@ void MainWindow::loadMachineCode() {
 
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     const machinecode::Target target = isPC1600 ? machinecode::Target::PC1600 : machinecode::Target::PC1500;
-    PC1600Machine* pc1600 = isPC1600 ? m_controller->pc1600() : nullptr;
-    const bool slot1 = pc1600 && pc1600->slot1Attached();
-    const bool slot2 = pc1600 && pc1600->slot2Attached();
-    const machinecode::Plan plan = machinecode::plan(target, code, slot1, slot2);
+    // PC-1600 code always goes into BASIC's program area ("S0"); where that
+    // starts (internal RAM or a folded-in RAM module) decides the target.
+    std::vector<machinecode::BasicArea> basicAreas;
+    if (isPC1600 && m_controller->pc1600()) basicAreas = pc1600BasicAreas(*m_controller->pc1600());
+    const machinecode::Plan plan = machinecode::plan(target, code, basicAreas);
     if (!plan.error.empty()) {
         QMessageBox::warning(this, title, QString::fromStdString(plan.error));
         return;
@@ -373,10 +374,9 @@ void MainWindow::loadMachineCode() {
     PresetController::MachineCodeLoadRequest request;
     request.payload = code.payload;
     request.addr = code.loadAddr;
-    machinecode::Slot slot = plan.slotChoices.empty() ? machinecode::Slot::S0 : plan.slotChoices.front();
-    if (plan.needsAddress || plan.slotChoices.size() > 1) {
-        MachineCodeLoadDialog dialog(this, target, code.payload.size(), plan.needsAddress, code.loadAddr,
-                                     plan.slotChoices, slot1, slot2);
+    machinecode::Slot slot = plan.slot;
+    if (plan.needsAddress) {
+        MachineCodeLoadDialog dialog(this, target, code.payload.size(), plan.defaultAddr, basicAreas);
         if (dialog.exec() != QDialog::Accepted) return;
         request.addr = dialog.address();
         slot = dialog.slot();
@@ -399,8 +399,6 @@ void MainWindow::loadMachineCode() {
         }
     }
     const size_t len = request.payload.size();
-    std::vector<machinecode::BasicArea> basicAreas;
-    if (isPC1600 && m_controller->pc1600()) basicAreas = pc1600BasicAreas(*m_controller->pc1600());
     const machinecode::Advice advice =
         machinecode::advice(target, slot, request.addr, len, code.autorunAddr, ramStart, ramEnd, basicAreas);
 

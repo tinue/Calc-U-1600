@@ -114,42 +114,60 @@ void test_read_headerless() {
 
 // ── plan ─────────────────────────────────────────────────────────────────
 
+using machinecode::BasicArea;
+
+const std::vector<BasicArea> kStock = {{0, 0xC000, 0xEFFF, 0}};
+const std::vector<BasicArea> kSlot1First = {{1, 0x8000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
+const std::vector<BasicArea> kSlot2First = {{2, 0x8000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
+
 void test_plan_model_mismatch() {
     auto ce158 = machinecode::readFile(ce158File(kCode, 0x40C5, 0));
-    CHECK(!machinecode::plan(Target::PC1600, ce158, true, true).error.empty());
-    CHECK(machinecode::plan(Target::PC1500, ce158, false, false).error.empty());
+    CHECK(!machinecode::plan(Target::PC1600, ce158, kStock).error.empty());
+    CHECK(machinecode::plan(Target::PC1500, ce158, {}).error.empty());
 
     auto pc1600 = machinecode::readFile(pc1600File(kCode, 0xC0C5, 0));
-    CHECK(!machinecode::plan(Target::PC1500, pc1600, false, false).error.empty());
-    CHECK(machinecode::plan(Target::PC1600, pc1600, false, false).error.empty());
+    CHECK(!machinecode::plan(Target::PC1500, pc1600, {}).error.empty());
+    CHECK(machinecode::plan(Target::PC1600, pc1600, kStock).error.empty());
 }
 
 void test_plan_headerless_needs_address() {
     auto f = machinecode::readFile(kCode);
-    auto p1500 = machinecode::plan(Target::PC1500, f, false, false);
-    CHECK(p1500.error.empty() && p1500.needsAddress);
-    auto p1600 = machinecode::plan(Target::PC1600, f, true, true);
-    CHECK(p1600.error.empty() && p1600.needsAddress);
+    auto p1500 = machinecode::plan(Target::PC1500, f, {});
+    CHECK(p1500.error.empty() && p1500.needsAddress && p1500.defaultAddr == 0);
+
+    // PC-1600 default: the start of BASIC's program area, + &C5.
+    auto p1600 = machinecode::plan(Target::PC1600, f, kStock);
+    CHECK(p1600.error.empty() && p1600.needsAddress && p1600.defaultAddr == 0xC0C5);
+    CHECK(machinecode::plan(Target::PC1600, f, kSlot2First).defaultAddr == 0x80C5);
+    CHECK(machinecode::plan(Target::PC1600, f, {}).defaultAddr == 0xC0C5);
 }
 
-void test_plan_pc1600_slot_choices() {
+void test_plan_pc1600_target() {
+    // $C000-$FFFF always goes to internal RAM.
     auto s0 = machinecode::readFile(pc1600File(kCode, 0xC0C5, 0));
-    auto p = machinecode::plan(Target::PC1600, s0, true, true);
-    CHECK(p.slotChoices.size() == 1 && p.slotChoices[0] == Slot::S0);
+    auto p = machinecode::plan(Target::PC1600, s0, kSlot1First);
+    CHECK(p.error.empty() && p.slot == Slot::S0);
 
+    // $8000-$BFFF: only when a RAM module is the program area's first run.
     auto slot = machinecode::readFile(pc1600File(kCode, 0x80C5, 0));
-    CHECK(!machinecode::plan(Target::PC1600, slot, false, false).error.empty());
-    p = machinecode::plan(Target::PC1600, slot, false, true);
-    CHECK(p.slotChoices.size() == 1 && p.slotChoices[0] == Slot::S2);
-    p = machinecode::plan(Target::PC1600, slot, true, true);
-    CHECK(p.slotChoices.size() == 2 && p.slotChoices[0] == Slot::S1 && p.slotChoices[1] == Slot::S2);
+    p = machinecode::plan(Target::PC1600, slot, kStock);
+    CHECK(p.error.find("preset") != std::string::npos);
+    p = machinecode::plan(Target::PC1600, slot, kSlot1First);
+    CHECK(p.error.empty() && p.slot == Slot::S1);
+    p = machinecode::plan(Target::PC1600, slot, kSlot2First);
+    CHECK(p.error.empty() && p.slot == Slot::S2);
+    CHECK(!machinecode::plan(Target::PC1600, slot, {}).error.empty());
+
+    // An 8 KB module's window starts at $A000.
+    const std::vector<BasicArea> small = {{1, 0xA000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
+    CHECK(!machinecode::plan(Target::PC1600, slot, small).error.empty());
 
     auto rom = machinecode::readFile(pc1600File(kCode, 0x7000, 0));
-    CHECK(!machinecode::plan(Target::PC1600, rom, true, true).error.empty());
+    CHECK(!machinecode::plan(Target::PC1600, rom, kSlot1First).error.empty());
 
     // $BFFE + 5 bytes crosses into $C000.
     auto crossing = machinecode::readFile(pc1600File(kCode, 0xBFFE, 0));
-    CHECK(!machinecode::plan(Target::PC1600, crossing, true, true).error.empty());
+    CHECK(!machinecode::plan(Target::PC1600, crossing, kSlot1First).error.empty());
 }
 
 // ── advice ───────────────────────────────────────────────────────────────
@@ -173,10 +191,9 @@ void test_advice_pc1500() {
 }
 
 void test_advice_pc1600() {
-    using machinecode::BasicArea;
-    const std::vector<BasicArea> stock = {{0, 0xC000, 0xEFFF, 0}};
-    const std::vector<BasicArea> slot1First = {{1, 0x8000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
-    const std::vector<BasicArea> slot2First = {{2, 0x8000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
+    const auto& stock = kStock;
+    const auto& slot1First = kSlot1First;
+    const auto& slot2First = kSlot2First;
 
     // Stock: the S0 area starts in internal RAM.
     auto a = machinecode::advice(Target::PC1600, Slot::S0, 0xC0C5, 0x100, 0, 0, 0, stock);
@@ -323,7 +340,7 @@ int run_machine_code_file_tests() {
     test_read_headerless();
     test_plan_model_mismatch();
     test_plan_headerless_needs_address();
-    test_plan_pc1600_slot_choices();
+    test_plan_pc1600_target();
     test_advice_pc1500();
     test_advice_pc1600();
     test_parse_hex_address();
