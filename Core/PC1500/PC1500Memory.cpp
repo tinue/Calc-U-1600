@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "PC1500Memory.hpp"
 
 #include <cstdio>
@@ -24,15 +25,19 @@ PC1500Memory::PC1500Memory(PC1500Variant variant)
       m_userRamSize(variant == PC1500Variant::PC1500A ? kUserRamSizeA : kUserRamSizePlain),
       m_systemRamAddrMask(variant == PC1500Variant::PC1500A ? 0x7FF : 0x3FF) {
     m_rom.fill(0xFF);  // open until a ROM is loaded
-    // Power-up: CMOS RAM that has lost its supply comes back (mostly) zero
-    // on real hardware, not 0xFF -- modelled as all 0x00.
+    // Power-up: user CMOS RAM that has lost its supply comes back (mostly)
+    // zero on real hardware, not 0xFF -- modelled as all 0x00. The 1.5K at
+    // &7600-&7BFF (display RAM + the 1K system RAM) instead reads 0xFF after a
+    // power loss on a real PC-1500 (measured), so that window is filled 0xFF.
     clearRam();
 }
 
 void PC1500Memory::clearRam() {
     m_userRam.fill(0x00);
-    m_displayRam.fill(0x00);
+    m_displayRam.fill(0xFF);
     m_systemRam.fill(0x00);
+    // &7800-&7BFF; a PC-1500A's upper 1K (&7C00-&7FFF) is unmeasured, left 0.
+    std::fill_n(m_systemRam.begin(), 0x400, uint8_t{0xFF});
 }
 
 bool PC1500Memory::loadROM(const uint8_t* data, size_t size) {

@@ -916,12 +916,16 @@ void test_pc1500_reset_releases_held_keys() {
     CHECK(machine.memory().keyboard().scan(0x00) == 0xFF);
 }
 
-// RAM powers up 0x00 (CMOS RAM after a power loss); the reset button keeps
-// RAM (a real RESET only resets the CPU/chips), Reset All clears it.
+// User RAM powers up 0x00 (CMOS RAM after a power loss) but the 1.5K window
+// &7600-&7BFF powers up 0xFF (measured on a real PC-1500); the reset button
+// keeps RAM (a real RESET only resets the CPU/chips), Reset All clears it.
 void test_pc1500_ram_powerup_reset_and_all_reset() {
     PC1500Machine machine;
     CHECK(machine.memory().peek(0x40C5) == 0x00);  // user RAM
-    CHECK(machine.memory().peek(0x7800) == 0x00);  // system RAM
+    CHECK(machine.memory().peek(0x7800) == 0xFF);  // system RAM
+    CHECK(machine.memory().peek(0x79FF) == 0xFF);  // LOCK register
+    CHECK(machine.memory().peek(0x7600) == 0xFF);  // display RAM
+    CHECK(machine.memory().peek(0x7BFF) == 0xFF);
     machine.memory().poke(0x40C5, 0x5A);
     machine.memory().poke(0x7800, 0xA5);
     machine.reset();
@@ -929,7 +933,7 @@ void test_pc1500_ram_powerup_reset_and_all_reset() {
     CHECK(machine.memory().peek(0x7800) == 0xA5);
     machine.allReset();
     CHECK(machine.memory().peek(0x40C5) == 0x00);
-    CHECK(machine.memory().peek(0x7800) == 0x00);
+    CHECK(machine.memory().peek(0x7800) == 0xFF);
 }
 
 // AUTO POWER OFF / the OFF key park the CPU in a genuine HLT with the
