@@ -3,6 +3,7 @@
 #include <QString>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -122,6 +123,14 @@ public:
     // host. Synchronous: the caller stops the frame timer around it (see
     // PresetController::resetLive()).
     void resetToPrompt(bool allReset);
+
+    // The plotter attach/detach power cycle, flat out: OFF, wait for the
+    // emulated ROM to power down, `change()` (the instantaneous attach or
+    // detach), ON, boot to the prompt (incl. the plotter's power-on init),
+    // then re-inject the host clock the flat-out run pushed ahead. A machine
+    // that is already off just gets `change()`. Run with the yield hook
+    // installed (PresetController::powerCycleLive()).
+    void powerCycleAround(const std::function<void()>& change);
 
     void pressKey(const std::string& name);
     void releaseKey(const std::string& name);

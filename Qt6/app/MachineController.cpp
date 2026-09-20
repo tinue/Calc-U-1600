@@ -245,6 +245,40 @@ void MachineController::resetToPrompt(bool allReset) {
     seedClockFromHost();
 }
 
+namespace {
+
+// ~4 frames @60Hz: long enough for the ROM's key-scan loop to see the press.
+constexpr int kKeyHoldFrames = 4;
+// 3 s of emulated time: don't hang if the power-down path never completes.
+constexpr int kPowerOffTimeoutFrames = 180;
+
+}  // namespace
+
+void MachineController::powerCycleAround(const std::function<void()>& change) {
+    if (!isMachinePoweredOn()) {
+        change();  // already off: no synthetic power cycle needed
+        return;
+    }
+    cancelPaste();
+    const auto frame = static_cast<std::uint64_t>(clockHz() / 60);
+    auto cycle = [&](auto& machine) {
+        machine.pressKey("off");
+        machine.runCycles(frame * kKeyHoldFrames);
+        machine.releaseKey("off");
+        for (int i = 0; i < kPowerOffTimeoutFrames && isMachinePoweredOn(); ++i) machine.runCycles(frame);
+        change();
+        machine.setOnKeyPressed(true);
+        machine.runCycles(frame * kKeyHoldFrames);
+        machine.setOnKeyPressed(false);
+        runBootToPrompt(machine);
+    };
+    if (m_pc1600) cycle(*m_pc1600);
+    else if (m_pc1500) cycle(*m_pc1500);
+    // After the run, not before: it went flat out through seconds of emulated
+    // time the clock would otherwise run ahead by.
+    seedClockFromHost();
+}
+
 void MachineController::pressKey(const std::string& name) {
     if (m_pc1600) {
         m_pc1600->pressKey(name);

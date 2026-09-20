@@ -200,9 +200,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             [this] { m_plotterController->requestToggleCE150(); });
     connect(m_controlBar, &ControlBar::ce1600pToggleRequested, this,
             [this] { m_plotterController->requestToggleCE1600P(); });
-    connect(m_plotterController.get(), &PlotterController::busyChanged, this, [this](bool busy) {
-        m_controlBar->setCe150State(m_controller->ce150Attached(), !busy && !m_controller->ce1600pAttached());
-        m_controlBar->setCe1600pState(m_controller->ce1600pAttached(), !busy && !m_controller->ce150Attached());
+    m_plotterController->setPowerCycleRunner([this](const std::function<void()>& change) {
+        // Flat out, like Reset: the pin header's power-on rotation isn't worth
+        // watching, and the clock is re-injected afterwards.
+        runSynchronousLoad(tr("Plotter"), [this, &change](QString* error) {
+            return m_presetController->powerCycleLive(change, error);
+        });
     });
     connect(m_plotterController.get(), &PlotterController::ce150AttachedChanged, this,
             [this](bool attached) { onPlotterAttachedChanged(/*isCE150=*/true, attached); });
@@ -682,7 +685,6 @@ void MainWindow::onFrameTick() {
     m_floppyManager->markDirtyAndSchedulePersist();
     m_controlBar->setFloppyMotorOn(m_floppyManager->motorOn());
     m_debugPanel->onFrameTick();
-    m_plotterController->onFrameTick();
     if (m_plotterPaperInLayout) m_plotterPaper->onFrameTick();
 }
 

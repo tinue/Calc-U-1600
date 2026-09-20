@@ -80,6 +80,9 @@ public:
     // painting. Same caller contract as the loaders above. Works in every
     // build.
     bool resetLive(bool allReset, QString* error);
+    // MachineController::powerCycleAround() (plotter attach/detach) with the
+    // yield hook installed, like resetLive().
+    bool powerCycleLive(const std::function<void()>& change, QString* error);
 
     // Callback installed on the target machine (PC1500Machine/
     // PC1600Machine::setYieldHook()) for the duration of each load above,

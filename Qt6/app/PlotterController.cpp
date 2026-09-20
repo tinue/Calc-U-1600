@@ -8,48 +8,11 @@ void PlotterController::requestToggleCE150() { beginToggle(Pending::ToggleCE150)
 void PlotterController::requestToggleCE1600P() { beginToggle(Pending::ToggleCE1600P); }
 
 void PlotterController::beginToggle(Pending action) {
-    if (m_step != Step::Idle) return; // busy -- ignore, matching real hardware's "wait for it"
-
     m_pending = action;
-    if (!m_controller->isMachinePoweredOn()) {
-        // Already off: just toggle in place, no synthetic power-cycle needed.
-        performAttachToggle();
-        m_pending = Pending::None;
-        return;
-    }
-
-    m_controller->pressKey("off");
-    m_step = Step::HoldingOff;
-    m_frameCounter = 0;
-    emit busyChanged(true);
-}
-
-void PlotterController::onFrameTick() {
-    switch (m_step) {
-        case Step::Idle:
-            return;
-        case Step::HoldingOff:
-            if (++m_frameCounter < kKeyHoldFrames) return;
-            m_controller->releaseKey("off");
-            m_step = Step::WaitingPoweredOff;
-            m_frameCounter = 0;
-            return;
-        case Step::WaitingPoweredOff:
-            ++m_frameCounter;
-            if (m_controller->isMachinePoweredOn() && m_frameCounter < kPowerOffTimeoutFrames) return;
-            performAttachToggle();
-            m_controller->setOnKeyPressed(true);
-            m_step = Step::HoldingOn;
-            m_frameCounter = 0;
-            return;
-        case Step::HoldingOn:
-            if (++m_frameCounter < kKeyHoldFrames) return;
-            m_controller->setOnKeyPressed(false);
-            m_step = Step::Idle;
-            m_pending = Pending::None;
-            emit busyChanged(false);
-            return;
-    }
+    auto change = [this] { performAttachToggle(); };
+    if (m_powerCycleRunner) m_powerCycleRunner(change);
+    else change();
+    m_pending = Pending::None;
 }
 
 // Shared by both plotters: toggles this one's attachment, then -- since
@@ -89,10 +52,7 @@ void PlotterController::syncFromMachineState() {
 }
 
 void PlotterController::resetOnModelSwitch() {
-    m_step = Step::Idle;
     m_pending = Pending::None;
-    m_frameCounter = 0;
-    emit busyChanged(false);
     emit ce150AttachedChanged(false);
     emit ce1600pAttachedChanged(false);
 }

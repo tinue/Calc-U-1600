@@ -51,6 +51,20 @@ bool PresetController::resetLive(bool allReset, QString* error) {
     return true;
 }
 
+bool PresetController::powerCycleLive(const std::function<void()>& change, QString* error) {
+    if (PC1600Machine* machine = m_controller->pc1600()) {
+        const ScopedYieldHook<PC1600Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
+        m_controller->powerCycleAround(change);
+    } else if (PC1500Machine* machine = m_controller->pc1500()) {
+        const ScopedYieldHook<PC1500Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
+        m_controller->powerCycleAround(change);
+    } else {
+        *error = tr("No machine is running.");
+        return false;
+    }
+    return true;
+}
+
 bool PresetController::loadMachineCodeLive(const MachineCodeLoadRequest& request, QString* error) {
     std::string err;
     bool ok = false;
