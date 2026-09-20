@@ -803,7 +803,11 @@ void MainWindow::applyModelSelection(Model model) {
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     m_moduleManager->onModelChanged();
-    m_controller->switchModel(model); // rebuilds the machine -- any live plotter attachment is already gone
+    // A model switch is a fresh default machine: A04 / new ROM, no plotter, no
+    // modules (onModelChanged above), no floppy. A startup preset customises it.
+    m_controller->resetRomSelectionsToDefault();
+    m_controller->switchModel(model);
+    m_floppyManager->selectDisk(QString());
     m_plotterController->resetOnModelSwitch();
     m_faceplate->setModel(model);
     m_controlBar->setModel(model);

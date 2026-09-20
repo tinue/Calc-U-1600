@@ -89,6 +89,12 @@ public:
     explicit MachineController(QObject* parent = nullptr);
     ~MachineController();
 
+    // Back to the default ROMs (PC-1500 A04, PC-1600 new) without rebuilding;
+    // called before a model switch, which starts from a default machine.
+    void resetRomSelectionsToDefault() {
+        m_pc1500RomRevision = PC1500RomRevision::A04;
+        m_pc1600RomVersion = PC1600RomVersion::New;
+    }
     // keepPlotter: re-attach whichever plotter (CE-150 / CE-1600P) was attached
     // before the rebuild, ahead of the cold boot, so a rebuild (module, ROM or
     // model change) never detaches it as a side effect. Default false (model
