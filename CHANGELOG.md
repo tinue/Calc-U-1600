@@ -34,9 +34,11 @@
   longer puts a "C" on the display. Option and AltGr still type.
 - **Copy** With text selected in the debug panel's output, Edit > Copy
   (Cmd-C) copies that text instead of the screen.
-- **Reset** Reset and Reset All run the boot at full speed until the
-  prompt appears, including a plotter's power-on init (the CE-1600P pen
-  calibration), then set the clock from the computer's time.
+- **Reset** Every reset runs the boot at full speed until the prompt
+  appears, including a plotter's power-on init (the CE-1600P pen
+  calibration), then sets the clock from the computer's time: Reset and
+  Reset All, and also the reset that follows choosing a memory module, a
+  ROM or a model.
 - **Paste** Edit > Paste Text (Cmd-V) types the clipboard's text into
   the machine, paced so no character is lost. Nothing is added or
   checked: a line break presses ENTER and waits for the line to finish,

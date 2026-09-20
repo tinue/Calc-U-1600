@@ -112,8 +112,11 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
 
         attachSerialLink(*m_pc1600);
 
-        // App launch always does a full cold boot.
+        // Every rebuild is a full cold boot, run flat out to the prompt (incl.
+        // a plotter's power-on init); the clock is set from the host after,
+        // since the boot ran seconds of emulated time ahead of it.
         m_pc1600->allReset();
+        runBootToPrompt(*m_pc1600);
         seedClockFromHost();
     } else {
         const auto variant = (model == Model::PC1500A) ? PC1500Variant::PC1500A : PC1500Variant::PC1500;
@@ -133,8 +136,10 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
 
         // PC1500Machine has only one reset level.
         m_pc1500->reset();
+        runBootToPrompt(*m_pc1500);
         seedClockFromHost();
     }
+    discardAudio(); // whatever the flat-out boot beeped is stale
 
     AppSettings::setLastUsedModel(static_cast<int>(m_model));
     emit modelChanged(m_model);
