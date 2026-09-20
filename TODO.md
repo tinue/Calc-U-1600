@@ -92,6 +92,13 @@ obligations.
 - Research MODE 1 (LH-5803/PC-1500-compat mode): does it genuinely reuse
   the old ROM for things like `PRINT`?
 - Emulate the CE-158.
+- Allow saving a diskette or memory module into a preset after it has been
+  set up (e.g. formatted / populated in a session), so the preset carries
+  that media state.
+- Allow viewing a memory module's or diskette's binary file contents in the
+  debug area, without having to save them out first. For memory modules
+  this means the disk part (the RAM-disk filesystem), not the RAM-extension
+  part.
 
 ## Code cleanup backlog
 

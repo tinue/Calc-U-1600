@@ -1,0 +1,113 @@
+# PC-1600 Start the HP Calculator emulation
+#
+# CalCula v0.5, (c) 1993 KiKiSoft -- a machine-language RPN (HP-style)
+# calculator. CALCULAT.BIN carries a 16-byte PC-1600 header: load address
+# &D000, 1999 bytes of code, auto-run address &D003.
+#
+# ── User guide ─────────────────────────────────────────────────────────
+#
+# The display: the bottom row is the input line (prompt ":"); the three rows
+# above it show the top of the stack -- X (top) lowest, then Y, then Z. The
+# stack holds 25 values.
+#
+# Entering numbers: whatever you type is evaluated as a full BASIC numeric
+# expression (the ROM's EXPRESS routine), so "2*3+1" is fine. ENTER pushes
+# the result. ENTER on an empty input line DUPLICATES the top value, as on
+# an HP. "5 ENTER 7 ENTER +" gives 12.
+#
+# Operators act immediately -- no ENTER -- but only when the input line is
+# empty (with digits already typed, the character just becomes part of the
+# expression). Y is the second value, X the top; the result replaces both:
+#
+#     + - * /   Y op X            ^   Y to the power X
+#     &         Y AND X           !   Y OR X   (the ROM's AND / OR)
+#     %         does nothing
+#
+# Stack keys (empty input line):
+#
+#     <-   (left arrow)   negate X
+#     rocker (up/down)    swap X and Y
+#     RCL                 drop X
+#     CL                  clear the input line
+#     BS                  delete the last typed character (key code &05;
+#                         read from the code, not tried on the emulator)
+#
+# Exit: press MODE (key code &1F) -- back to the BASIC prompt.
+# Too few values on the stack: "Stapel zu klein!" ("stack too small").
+#
+# ── CC.CFG: keyboard macros ────────────────────────────────────────────
+#
+# At start-up the program opens the hard-coded file "S2:CC.CFG" (device "S2"
+# is fixed in the code) and reads it, up to about 1 KB, into &CC00. If the
+# file does not exist it stops with "152 Datei nicht gefunden!" -- so the
+# file must be there, even if empty; the preset below creates an empty one.
+# With an empty CC.CFG the lowercase letters simply do nothing.
+#
+# Each lowercase letter (SML lock + the letter) is a macro: its definition
+# is pushed into the keyboard buffer as if typed. Format of the file:
+#
+#     ^
+#     q ~*
+#     w 3~+
+#     ^
+#
+#   - it must start with "^", and a "^" also ends the file;
+#   - each line is <letter><one separator character><keystrokes>, ended by
+#     CR LF (the separator is skipped, so it can be a space);
+#   - "~" stands for ENTER;
+#   - "\nn\" inserts the key with decimal code nn (converted by the ROM's
+#     ASCBIN), e.g. "\31\" for MODE; "\\" is a literal backslash;
+#   - a "^" ends a definition too, so the power operator cannot be used
+#     inside a macro (read from the code, not tried).
+#
+# Verified on the emulator with that file poked into &CC00: "5", then
+# SML q gives 25 (duplicate, multiply); SML w then gives 28 (+3).
+#
+# ── How it was analysed ────────────────────────────────────────────────
+#
+# Disassembled with z80dasm (org &D000). The message table shows the file
+# name "CC      CFG" (8.3) at &D4EC, copied to &D7C3 and then into the file
+# control block at &F3C7; the device field comes from the 4 bytes at &D5A7,
+# "S2". Files are opened/read/closed through the ROM routine at &01DE
+# (C = &0F open, &14 read, &10 close). Error &98 (152) is the "not found"
+# text. The main loop is at &D00C: it reads a line with the editor at
+# &D15B and dispatches on the first character (table at &D01B..&D07A).
+# The stack is 8-byte BCD values from &F900 (X), &F908 (Y), ..., depth in
+# &D4E9; the arithmetic calls the ROM's math entries (&021A + &021D - &0220
+# * &0223 / &01F3 ^ &01F6 AND &01F9 OR). Key codes come from the ROM's
+# key-code table KYCDTB (romIV-6 @ &94FB): CL &18, RCL &19, <- &08,
+# rocker &09, MODE &1F, ENTER &0D. Macros: &D536 scans &CC00 for the
+# letter and &D54F copies the definition to the keyboard buffer (ROM
+# KBUFSET &016C).
+#
+# Testing note: to run the calculator without the file, load the code at
+# &D000 headerless and start it with CALL &D009 (skips the file loading at
+# &D003/&D0AE).
+
+model: PC-1600
+
+memory-expansion-1:
+  - modulespec: CE-1600M
+memory-expansion-2:
+  - modulespec: CE-1601M
+
+# Set the power-on title and format + split the CE-1601M as a RAM disk
+keys:
+  - type: TITLE
+  - type: INIT"S2:","F"
+  - type: INIT"S2:","M"
+  - key: mode
+  - type: NEW0
+  - key: mode
+
+# Setup an empty CC.CFG file on S2:
+keys:
+  - type: MAXFILES=1
+  - type: OPEN"S2:CC.CFG" FOR OUTPUT AS #1
+  - type: CLOSE #1
+
+# Load the program
+program:
+  path: CALCULAT.BIN
+  format: binary
+  slot: S0
