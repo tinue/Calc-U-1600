@@ -14,6 +14,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 -DPC1600_POWER_PROBE \
   Core/CPU/LH5803/LH5803Memory.cpp \
   Core/CPU/LH5803/LH5803SharedMemory.cpp \
   Core/PC1500/PC1500TraceFile.cpp \
+  Core/Audio/PiezoSampler.cpp \
   Core/PC1600/PC1600Memory.cpp \
   Core/PC1600/PC1600Keyboard.cpp \
   Core/PC1600/PC1600Display.cpp \

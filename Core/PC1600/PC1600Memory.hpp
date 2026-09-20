@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 
+#include "../Audio/PiezoSampler.hpp"
 #include "../CPU/SC7852/SC7852.hpp"
 #include "../Connector/ExpansionCard.hpp"
 #include "../Connector/MemorySlotConnector.hpp"
@@ -104,8 +105,8 @@
 // 1CH-1FH (LH5810-style DDA/DDB/OPA/OPB, keyboard strobes -- see
 // PC1600Keyboard), Port 1BH (IF register, ON/BREAK latch), Port 37H (read:
 // keyboard sense via PC1600Keyboard::scan(); write: bit4 gates the LCD's
-// CK0 clock, see PC1600Display), and Port 50H-5BH (forwarded to
-// PC1600Display). Every other port reads open bus (0xFF) and ignores
+// CK0 clock, see PC1600Display), Port 18H (OPC -- buzzer drive, see
+// m_opc), and Port 50H-5BH (forwarded to PC1600Display). Every other port reads open bus (0xFF) and ignores
 // writes -- this class has no opinion on the rest of the I/O map (UART,
 // timer/RTC, etc. all remain out of scope).
 class PC1600Memory : public SC7852Bus {
@@ -173,6 +174,9 @@ public:
     const PC1600SubCpu&   subCpu() const { return m_subCpu; }
     TC8576F&             uart() { return m_uart; }
     const TC8576F&       uart() const { return m_uart; }
+    /// Buzzer drive line as PCM, in SC-7852 T-states -- advanced by
+    /// PC1600Machine::step() on both CPUs' branches. See m_opc.
+    PiezoSampler&        piezo() { return m_piezo; }
 
     /// Sets/clears the ON key's live state (not part of the scan matrix --
     /// see PC1600Keyboard's class comment). A press transition sets IF
@@ -213,7 +217,7 @@ public:
     /// whatever the CPU last wrote to the port. Keeping the two apart
     /// means a plain `OUT (1FH),A` cannot forge an input pin's level, even
     /// though the ROM only ever touches OPB through a read-modify-write
-    /// (`PC1600-P1-B3.bin` 4887H/4896H) that happens to preserve bit 5
+    /// (`PC1600-P1-B3-new.bin` 4887H/4896H) that happens to preserve bit 5
     /// anyway, so a live headless trace shows the same duty cycle and edge
     /// count with or without the split (measured over 21.6M T-states:
     /// 50.78% high, 771 edges vs. 772 expected for 64 Hz).
@@ -233,7 +237,7 @@ public:
     /// distinct from `setTimer64Bit()`'s raw-level PB5 update above. A
     /// read of port 32H (`readIO()`) clears it, matching the observed
     /// real-ROM access pattern: the timer ISR's own dispatcher
-    /// (`PC1600-P1-B3.bin` 0x40FF `IN A,(32H)`) captures the cause byte once
+    /// (`PC1600-P1-B3-new.bin` 0x40FF `IN A,(32H)`) captures the cause byte once
     /// into a register and only ever reads that port again on a
     /// subsequent, later interrupt -- never re-reads it mid-dispatch, and
     /// never writes it -- so "read clears" is the only access pattern
@@ -262,17 +266,17 @@ public:
     void latchCommInterruptCause() { m_intCause |= 0x01; }
 
     /// Loads the always-resident system ROM: `lower` backs page A
-    /// (0000-3FFF, PC1600-P0-B0.bin) and `upper` backs page B bank 0
-    /// (4000-7FFF, PC1600-P1-B0.bin) — the same physical ROM device, loaded as
+    /// (0000-3FFF, PC1600-P0-B0-new.bin) and `upper` backs page B bank 0
+    /// (4000-7FFF, PC1600-P1-B0-new.bin) — the same physical ROM device, loaded as
     /// two 16KB halves since that's how the source images are split.
     /// Returns false (untouched) if either size isn't exactly kBankSize.
     bool loadBank0(const uint8_t* lower, size_t lowerSize,
                     const uint8_t* upper, size_t upperSize);
 
-    /// Page B bank 3 (PC1600-P1-B3.bin) / hidden bank 3b (PC1600-P1-B3B.bin).
+    /// Page B bank 3 (PC1600-P1-B3-new.bin) / hidden bank 3b (PC1600-P1-B3B-new.bin).
     bool loadBank3Rom(const uint8_t* data, size_t size);
     bool loadBank3bRom(const uint8_t* data, size_t size);
-    /// Page C bank 6 (PC1600-P2-B6.bin, display/timer/serial/char tables).
+    /// Page C bank 6 (PC1600-P2-B6-new.bin, display/timer/serial/char tables).
     bool loadBank6Rom(const uint8_t* data, size_t size);
 
     /// The 60-pin system bus (Page B banks 4/5 ROM window + I/O ports
@@ -283,8 +287,9 @@ public:
 
     /// Plugs a card into Slot 1 / Slot 2 -- the connector-level path, taking
     /// ownership of the card (mirrors PC1500Machine::attachExpansionCard).
-    /// The same card object (CE155Card, PlainRamCard, ...) plugs in
-    /// pin-for-pin; the MemorySlotConnector drives the PC-1600 bay's pins.
+    /// Any card (a SoftwareDefinedCard built from a .card.yaml definition)
+    /// plugs in pin-for-pin; the MemorySlotConnector drives the PC-1600
+    /// bay's pins.
     void attachSlot1Card(std::unique_ptr<ExpansionCard> card) {
         m_slot1Card = std::move(card);
         m_slot1Conn.attach(m_slot1Card.get());
@@ -294,18 +299,16 @@ public:
         m_slot2Conn.attach(m_slot2Card.get());
     }
 
-    /// Convenience for the GUI/preset "generic RAM module of size N" case:
-    /// builds a PlainRamCard and plugs it into the slot. `sizeBytes` must be
-    /// a positive multiple of kBankSize (16384) up to 2*kBankSize (32768,
-    /// the largest a single Port-31H page-C bank field can select between:
-    /// bank values 0/1 for Slot 1, 2/3 for Slot 2) -- returns false and
-    /// leaves the slot unchanged otherwise. RAM powers up 0xFF.
-    bool attachSlot1(size_t sizeBytes);
-    bool attachSlot2(size_t sizeBytes);
     void detachSlot1() { m_slot1Conn.detach(); m_slot1Card.reset(); }
     void detachSlot2() { m_slot2Conn.detach(); m_slot2Card.reset(); }
     bool slot1Attached() const { return m_slot1Conn.attachedCard() != nullptr; }
     bool slot2Attached() const { return m_slot2Conn.attachedCard() != nullptr; }
+    /// The module in Slot `slot` (1 or 2) by name (ExpansionCard::moduleName()),
+    /// "" for an empty slot.
+    std::string slotModuleName(int slot) const {
+        const ExpansionCard* c = (slot == 1 ? m_slot1Conn : m_slot2Conn).attachedCard();
+        return c ? c->moduleName() : std::string();
+    }
 
     /// The bank the card in Slot 1 / Slot 2 currently exposes through its
     /// banked window (ExpansionCard::debugCurrentBank()); -1 when the slot
@@ -440,6 +443,17 @@ private:
     // here). The PB6 strobe (CTRL/KBII/BS) *does* consult DDB.6: it is
     // asserted only while PB6 is an output driven low -- see readIO(0x37).
     uint8_t m_dda{0}, m_opa{0}, m_ddb{0}, m_opb{0};
+    // OPC (18H), the PC-port output buffer. The BEEP loop (P1-B3 5EC5)
+    // toggles bit 7 with `IN A,(18H)` / OR 80H or AND 7FH / `OUT (18H),A`,
+    // and bit 6 gates the buzzer: the firmware clears it for BEEP OFF
+    // (5EFE, F86B bit 0) and sets it again for BEEP ON (5F31, OR C0H). This
+    // matches Systemhandbuch Appendix 6 ("b7 buzzer line, b6 buzzer on").
+    // Per TRM 7.5 the same line also carries cassette-record output (SD0),
+    // so a future cassette model shares this latch. It has to be readable
+    // because the ROM does read-modify-write on it.
+    uint8_t m_opc{0};
+    // TRM 7.5: SC-7852 T-states at 3.58 MHz (PC1600Machine::kTStateHz).
+    PiezoSampler m_piezo{3580000.0};
     // Live PB *pin* levels for the bits driven from outside the CPU, kept
     // apart from the m_opb output latch above and merged in on a read of
     // 1FH (see readIO()). Only PB5 (the sub-CPU's 64Hz timer square wave,
@@ -456,10 +470,10 @@ private:
     /// and PB3 reads 1 forever after.
     ///
     /// This is not cosmetic: the boot ROM copies exactly this bit into the
-    /// alternate-charset enable flag. `PC1600-P0-B0.bin` 0512H does
+    /// alternate-charset enable flag. `PC1600-P0-B0-new.bin` 0512H does
     /// `LD HL,F1BCH / LD A,(HL) / AND 7FH / LD B,A / IN A,(1FH) /
     /// AND 08H / JR Z,+2 / SET 7,B / LD (HL),B` -- F1BCH bit 7 is PB3,
-    /// latched once at startup. The KBII key handler (`PC1600-P1-B0.bin` 6CC1H)
+    /// latched once at startup. The KBII key handler (`PC1600-P1-B0-new.bin` 6CC1H)
     /// then gates its whole toggle on that bit: `LD A,(F1BCH) / RLA /
     /// JR NC,...` skips the `LD A,L / XOR 80H / LD L,A` at 6CCBH that
     /// flips the KBII flag. With PB3 low, KBII would be inert -- the key
@@ -517,7 +531,7 @@ private:
     /// the firmware can make the Slot 2 RAM chip-select assert for a bank-1
     /// access *outside* the normal page-C window -- the "(S2:) at Bank 1"
     /// path (PC-1600-Memory-Bank-Switching.md Part 1; SLOT2MAP ROM routine
-    /// PC1600-P0-B0.bin 0A6DH). Modelled as an effective-address rewrite feeding
+    /// PC1600-P0-B0-new.bin 0A6DH). Modelled as an effective-address rewrite feeding
     /// the ordinary Slot 2 decode. Returns true when `addr` is currently so
     /// remapped, filling `*pvoutHigh` (false/true = low/high 16 KB half of
     /// the module's selected vertical bank) and `*offset` (0..0x3FFF within

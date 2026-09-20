@@ -1,13 +1,17 @@
 #pragma once
 #include <QObject>
 #include <QString>
+#include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "Connector/AlpsPlotterMechanism.hpp"
+#include "Display/LcdScreenshot.hpp"
+#include "KeyPaste.hpp"
 #include "PC1500/PC1500Variant.hpp"
 #include "TraceTypes.hpp"
 
@@ -19,8 +23,11 @@ class PtySerialLink;
 
 namespace MachineControllerNS {
 enum class Model { PC1500, PC1500A, PC1600 };
+// PC-1600 calculator ROM version: New = PEEK #(0,&7FFF) 4/5, Old = 130.
+enum class PC1600RomVersion { New, Old };
 }
 using MachineControllerNS::Model;
+using MachineControllerNS::PC1600RomVersion;
 
 // The per-model settings key ("PC1500"/"PC1500A"/"PC1600") shared by
 // AppSettings::startupModelPreference() and defaultPresetPath(); lowercased,
@@ -83,19 +90,47 @@ public:
     explicit MachineController(QObject* parent = nullptr);
     ~MachineController();
 
-    void switchModel(Model model);
+    // Back to the default ROMs (PC-1500 A04, PC-1600 new) without rebuilding;
+    // called before a model switch, which starts from a default machine.
+    void resetRomSelectionsToDefault() {
+        m_pc1500RomRevision = PC1500RomRevision::A04;
+        m_pc1600RomVersion = PC1600RomVersion::New;
+    }
+    // keepPlotter: re-attach whichever plotter (CE-150 / CE-1600P) was attached
+    // before the rebuild, ahead of the cold boot, so a rebuild (module, ROM or
+    // model change) never detaches it as a side effect. Default false (model
+    // switch, preset load: fresh machine, nothing attached).
+    void switchModel(Model model, bool keepPlotter = false);
     Model currentModel() const { return m_model; }
 
     // PC-1500 (plain) only -- PC-1500A is A04-only (see PC1500Variant.hpp)
-    // and PC-1600 has its own fixed ROM set, so this is a no-op change of
-    // m_pc1500RomRevision alone in those two cases (no rebuild), but a full
+    // and PC-1600 has its own version picker (below), so this is a no-op
+    // change of m_pc1500RomRevision alone in those two cases (no rebuild), but a full
     // switchModel()-style rebuild when a PC-1500 is (or becomes) active, so
     // the new ROM actually takes effect immediately.
     void setPC1500RomRevision(PC1500RomRevision revision);
     PC1500RomRevision pc1500RomRevision() const { return m_pc1500RomRevision; }
 
-    void resetSimple();
-    void resetAll();
+    // PC-1600 calculator ROM version (the CE-1600P peripheral ROM is
+    // independent of it). Rebuilds the machine when a PC-1600 is active;
+    // otherwise only remembers the choice for the next switch to PC-1600.
+    void setPC1600RomVersion(PC1600RomVersion version);
+    PC1600RomVersion pc1600RomVersion() const { return m_pc1600RomVersion; }
+
+    // Reset (`allReset` = ALL RESET on the PC-1600; the PC-1500 has one
+    // level), then run the boot flat out until the ROM waits at the prompt
+    // -- including a plotter's power-on init -- and set the clock from the
+    // host. Synchronous: the caller stops the frame timer around it (see
+    // PresetController::resetLive()).
+    void resetToPrompt(bool allReset);
+
+    // The plotter attach/detach power cycle, flat out: OFF, wait for the
+    // emulated ROM to power down, `change()` (the instantaneous attach or
+    // detach), ON, boot to the prompt (incl. the plotter's power-on init),
+    // then re-inject the host clock the flat-out run pushed ahead. A machine
+    // that is already off just gets `change()`. Run with the yield hook
+    // installed (PresetController::powerCycleLive()).
+    void powerCycleAround(const std::function<void()>& change);
 
     void pressKey(const std::string& name);
     void releaseKey(const std::string& name);
@@ -127,7 +162,30 @@ public:
     // fast typing.
     void enqueueShiftedKey(const std::string& baseName);
 
+    // Edit > Paste Text: types `text` (UTF-8) into the active machine at the
+    // ROM's own keystroke cadence -- see Core/KeyPaste.hpp. Nothing is
+    // added or validated; unmappable characters are skipped; a line break
+    // is ENTER (a single trailing one is dropped). Appends to a paste still
+    // in progress. Driven from advance(), so it pauses/turbos with the
+    // emulation. Any machine swap or reset cancels it.
+    void pasteText(const std::string& text);
+    bool pasteActive() const { return m_paste.active(); }
+    // Drops the rest of the paste, releasing a key it holds down.
+    void cancelPaste();
+
+    // Edit > Copy Screen: the active display's dot matrix as a physically
+    // sized greyscale image (Core/Display/LcdScreenshot.hpp) -- the same
+    // pixels a preset's `- screenshot:` step writes. Empty (0x0) with no
+    // machine.
+    GrayImage currentScreenImage() const;
+
     void advance(std::uint64_t cyclesBudget);
+
+    // Buzzer audio from whichever machine is active (mono int16 PCM at
+    // PiezoSampler::kDefaultSampleRate) -- see AudioOutput. drainAudio()
+    // returns how many samples it wrote into `out`; 0 with no machine.
+    std::size_t drainAudio(std::int16_t* out, std::size_t max);
+    void discardAudio();
     DisplayFrame currentDisplay() const;
 
     // Cycles-per-second of whichever machine is currently active --
@@ -174,11 +232,12 @@ public:
     // relative roms/ directory -- see its header comment).
     PC1500Machine& resetBareForPresetPC1500(PC1500Variant variant);
     // Replaces the live machine with a freshly constructed PC1600Machine
-    // with its fixed ROM set already loaded (same bytes/order as
+    // with the ROM set of `version` already loaded (remembered as the
+    // current version) (same bytes/order as
     // switchModel()'s PC-1600 branch) but no module attach or reset --
     // PC1600PresetLoader.cpp does both itself, driven by the preset's own
-    // slot1Module/slot2Module.
-    PC1600Machine& resetBareForPresetPC1600();
+    // memory-expansion-1:/-2: blocks.
+    PC1600Machine& resetBareForPresetPC1600(PC1600RomVersion version);
     // Call once the preset loader returns, success or failure alike: the
     // machine object was already swapped in by resetBareForPreset*()
     // above -- this just finalizes model/UI bookkeeping the same way
@@ -250,8 +309,13 @@ signals:
 private:
     Model m_model = Model::PC1500A;
     PC1500RomRevision m_pc1500RomRevision = PC1500RomRevision::A04;
+    PC1600RomVersion m_pc1600RomVersion = PC1600RomVersion::New;
     std::unique_ptr<PC1500Machine> m_pc1500;
     std::unique_ptr<PC1600Machine> m_pc1600;
+    KeyPasteFeeder m_paste;
+    std::uint64_t m_pasteFrameCycles = 0; // cycles run since the paste feeder's last frame boundary
+    void runActive(std::uint64_t cycles);
+    void pasteOnFrame();
     MemoryModuleManager* m_moduleManager = nullptr; // not owned
     FloppyDiskManager* m_floppyManager = nullptr;   // not owned
     void flushFloppyBeforeDetach();
@@ -266,7 +330,7 @@ private:
     // AppPaths::bundledResourcesDir(), the same directory the .card.yaml
     // catalog lives in.
     static std::vector<std::string> bundledRomDirs();
-    void loadPC1600RomSet(PC1600Machine& machine);
+    bool loadPC1600RomSet(PC1600Machine& machine, std::string* error);
     void seedClockFromHost();
     // AppSettings::serialLinkDirOverride(), falling back to AppPaths::instanceDir().
     static QString effectiveSerialLinkDir();

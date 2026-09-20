@@ -1,5 +1,6 @@
 #pragma once
 #include <QMainWindow>
+#include <QElapsedTimer>
 #include <QHash>
 #include <QString>
 #include <functional>
@@ -22,6 +23,7 @@ class PlotterPaperWidget;
 class MemoryModuleManager;
 class FloppyDiskManager;
 class PresetController;
+class AudioOutput;
 
 // Top-level window: FaceplateWidget (stretch) over ControlBar (fixed) over
 // the debug row (fixed), all inside a central QWidget (QMainWindow requires
@@ -48,6 +50,7 @@ public:
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
+    void changeEvent(QEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
 
 private:
@@ -65,8 +68,22 @@ private:
     QHBoxLayout* m_debugRowLayout = nullptr;
     QTimer* m_frameTimer = nullptr;
     bool m_turboActive = false; // press-and-hold on the LCD: run unthrottled
+    AudioOutput* m_audio = nullptr;
+    // Real-time pacing for onFrameTick(): each tick runs exactly the
+    // emulated time that has passed on the wall clock since the previous
+    // one (restartPacing() rebases it whenever the frame timer (re)starts).
+    QElapsedTimer m_paceClock;
+    double m_cycleCarry = 0.0;
+    void restartPacing();
 
     void buildMenuBar();
+
+    // Edit menu: Copy Screen puts a PNG of the LCD dot matrix (physical
+    // size, no annunciators) on the clipboard; Paste Text types the
+    // clipboard's text into the machine (MachineController::pasteText()).
+    void copyScreenToClipboard();
+    void pasteClipboardText();
+    QAction* m_pasteAction = nullptr;
 
     // Shared by both ControlBar's combo-box signal and the Machine menu's
     // QActions, so either source of a model/ROM-revision change drives the
@@ -74,6 +91,7 @@ private:
     // only lambdas in the constructor).
     void applyModelSelection(Model model);
     void applyRomRevisionSelection(PC1500RomRevision revision);
+    void applyPC1600RomVersionSelection(PC1600RomVersion version);
     // Loads `model`'s default preset (AppSettings::defaultPresetPath()), if
     // one is set -- run whenever a model gets selected, including at startup.
     void applyDefaultPreset(Model model);
@@ -86,9 +104,13 @@ private:
     // resyncs ControlBar (constructor, onPresetArmed()).
     void syncMachineMenuFromModel(Model model);
     void syncMachineMenuFromRomRevision(PC1500RomRevision revision);
+    void syncMachineMenuFromPC1600RomVersion(PC1600RomVersion version);
 
     QHash<Model, QAction*> m_modelActions;
     QHash<PC1500RomRevision, QAction*> m_romActions;
+    QHash<PC1600RomVersion, QAction*> m_rom1600Actions;
+    QActionGroup* m_rom1600ActionGroup = nullptr;
+    QAction* m_rom1600MenuAction = nullptr; // Machine > ROM Version submenu (PC-1600 only)
     QActionGroup* m_modelActionGroup = nullptr;
     QActionGroup* m_romActionGroup = nullptr;
     QAction* m_romMenuAction = nullptr; // Machine > ROM Revision submenu's own action, for show/hide
@@ -99,9 +121,11 @@ private:
     // constructor state (m_presetController, m_frameTimer, ...).
     QAction* m_openPresetAction = nullptr;
     QAction* m_loadBasicProgramAction = nullptr;
+    QAction* m_loadMachineCodeAction = nullptr;
     QAction* m_settingsAction = nullptr;
     QAction* m_aboutAction = nullptr;
 
+    void syncUiFromController();
     void refreshModuleCombos();
     void refreshFloppyCombo();
 
@@ -131,13 +155,29 @@ private:
     void runSynchronousLoad(const QString& errorTitle, const std::function<bool(QString*)>& loadFn,
                              const std::function<void()>& afterLoad = {});
 
-    // Qt::Key -> the logical calculator key name that was pressed for it,
-    // so releaseEvent always releases exactly what pressEvent pressed even
-    // with multiple physical keys held -- more robust than re-resolving on
-    // release, whose modifier state may have already changed (e.g. Shift
-    // released first). Shift-tap (needsShift) presses are never entered
-    // here since they're self-contained (see MachineController::tapShiftedKey).
-    QHash<int, std::string> m_physicalKeysDown;
+    // File > Load Machine Code…: pick a .bin (Settings' Assembly folder),
+    // recognise its header, ask for a start address / PC-1600 slot only when
+    // needed (MachineCodeLoadDialog), write it, then show the NEW that
+    // protects it and the CALL that starts it. Never runs the code.
+    void loadMachineCode();
+    // Reset / Reset All (control bar, Machine menu): see resetMachine() in
+    // MainWindow.cpp.
+    void resetMachine(bool allReset);
+
+    // Physical host key (physicalKeyId()) -> the logical calculator key
+    // name that was pressed for it, so releaseEvent always releases exactly
+    // what pressEvent pressed even with multiple physical keys held.
+    // Keyed by the physical key, not Qt::Key: key() follows the modifier
+    // state, so on e.g. a Swiss layout Shift+3 presses as Key_Asterisk but,
+    // with Shift let go first, releases as Key_3 -- the release would miss
+    // and leave "*" held in the machine's matrix. Shift-tap (needsShift)
+    // presses are never entered here since they're self-contained (see
+    // MachineController::tapShiftedKey).
+    QHash<quint32, std::string> m_physicalKeysDown;
+    // Releases everything in m_physicalKeysDown. Used whenever the window
+    // stops receiving key events (deactivation, focus moving to another
+    // widget) -- the matching release would never reach us.
+    void releaseHeldKeys();
 
     void onFrameTick();
 };

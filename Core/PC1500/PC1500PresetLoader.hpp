@@ -31,15 +31,9 @@ struct PresetLoadResult {
     bool ok = false;
     std::string error;
     std::vector<std::string> rejectedBasicLines; // from a basic-text program load, if any were rejected by the ROM
-    /// The expansion module the preset attached, for the GUI to label its
-    /// control-bar slot button with: a software-defined module's
-    /// `module-name:` (both `modulespec:` and `modulespecfile:` forms), or
-    /// a built-in `- module:` name verbatim. Empty when the preset
-    /// attached no module.
-    std::string expansionModuleLabel;
     /// The on-disk file a `modulespec:`/`modulespecfile:` reference
-    /// resolved to, if any -- empty for a built-in `- module: <name>` (not
-    /// file-backed) or no module. Lets the GUI tell a bundled read-only
+    /// resolved to, if any -- empty for no module. (Which module it is, the
+    /// GUI reads from the slot: ExpansionCard::moduleName().) Lets the GUI tell a bundled read-only
     /// template apart from a real saved battery-card instance (a file
     /// under the writable instance directory) so it can decide whether the
     /// attached module should autosave.
@@ -53,7 +47,7 @@ struct PresetLoadResult {
 /// Optional callback fired exactly once, right after `machine` has its ROM
 /// loaded and its expansion module/plotter (if any) attached, but *before*
 /// reset() -- i.e. `machine` is fully "armed" yet still powered off.
-/// `armedSoFar` is the in-progress result: `expansionModuleLabel`/
+/// `armedSoFar` is the in-progress result: `expansionModuleResolvedPath`/
 /// `ce150Attached` are already final at this point, so a GUI can use this
 /// to resync its slot selector and plotter-paper visibility and repaint the
 /// armed-but-off machine before the (possibly many-seconds-long) boot and
@@ -84,7 +78,14 @@ using PresetArmedFn = std::function<void(const PresetLoadResult& armedSoFar)>;
 /// "." (cwd, same convention as its `roms/`), the GUI passes
 /// `AppSettings.traceDirectory()`. The preset's filename is appended to
 /// it verbatim (the parser has already rejected a path separator in it).
-/// A preset with no `trace:` step never touches `traceDir`.
+/// A `- screenshot: name.png` step writes a PNG of the LCD dot matrix
+/// (Core/Display/LcdScreenshot.hpp, 104 x 5 mm at 600 DPI) into the same
+/// directory, overwriting. A preset with neither step never touches
+/// `traceDir`.
+///
+/// A `- syncclock:` step re-seeds the RTC from the host's local time at
+/// that point (Core/HostClock.hpp). The load itself runs flat out, which
+/// leaves the clock ahead of real time -- make it the last step.
 ///
 /// `moduleDir` is the directory searched first for a
 /// `- modulespec: <module-name>` memory-expansion reference (a

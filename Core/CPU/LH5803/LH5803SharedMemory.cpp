@@ -88,7 +88,7 @@ uint8_t LH5803SharedMemory::readME1(uint16_t addr) {
     // LH5803 on-chip LH5811-compat PIO, ME1 0xF000-0xF00F. Unconditional
     // (CPU-internal, present with or without a CE-150). Without this, an
     // ME1 read here falls through to readME0() and 0xF00B >= kRomBase
-    // returns a PC1600-LH5803-C000-FFFF.bin byte (0x27) -- bit 1 set -- so the CE-150 plot
+    // returns a PC1600-LH5803-C000-FFFF-new.bin byte (0x27) -- bit 1 set -- so the CE-150 plot
     // loop's `BII #(0xF00B),0x02` pacing poll takes the wrong arm and
     // LPRINT/TEST draw one glyph then unwind. IF (0xB) is software-only: no
     // clear-on-read (firmware clears bit 1 with `ani #(0xF00B),0xFD`), and

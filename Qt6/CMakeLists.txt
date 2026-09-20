@@ -14,7 +14,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC OFF)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
 qt_standard_project_setup()
 
 set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../Core)
@@ -24,7 +24,7 @@ set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../Core)
 # Version.h below and the MACOSX_BUNDLE_*VERSION* properties further down
 # reference this instead of each hardcoding "0.1.0" separately, as does
 # the Windows installer (generated Version.iss below).
-set(APP_VERSION "0.3.0")
+set(APP_VERSION "0.4.0")
 
 # git describe gives a short, human-meaningful build id (tag or short hash,
 # +"-dirty" if the tree has local changes) for bug reports. Falls back to
@@ -67,6 +67,7 @@ set(CORE_SOURCES
   ${CORE_ROOT}/CPU/SC7852/SC7852.cpp
   ${CORE_ROOT}/CPU/LH5803/LH5803Memory.cpp
   ${CORE_ROOT}/CPU/LH5803/LH5803SharedMemory.cpp
+  ${CORE_ROOT}/Audio/PiezoSampler.cpp
   ${CORE_ROOT}/PC1500/PC1500Memory.cpp
   ${CORE_ROOT}/PC1500/PC1500Machine.cpp
   ${CORE_ROOT}/PC1500/PC1500Keyboard.cpp
@@ -80,11 +81,21 @@ set(CORE_SOURCES
   ${CORE_ROOT}/PC1600/PC1600Display.cpp
   ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp
+  ${CORE_ROOT}/Display/LcdScreenshot.cpp
+  ${CORE_ROOT}/KeyPaste.cpp
+  # "Load Machine Code…" -- no libsharpdx dependency, so always built.
+  ${CORE_ROOT}/MachineCodeFile.cpp
+  ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
+  ${CORE_ROOT}/PC1600/PC1600MachineImage.cpp
+  ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
+  ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
+  # Reset's boot-to-prompt (runBootToPrompt) -- no libsharpdx dependency.
+  ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
+  ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
 )
 
 # Preset loading, entire (PresetFile.cpp, *PresetLoader.cpp,
-# *BasicTyper.cpp, *BasicLoader.cpp, PC1600ProgramPlacement.cpp,
-# PC1600MachineImage.cpp, Core/Basic/*), needs the vendored Rust
+# *BasicLoader.cpp, Core/Basic/*), needs the vendored Rust
 # `libsharpdx` static library (Core/Basic/vendor/sharpdx/) that
 # Core/Basic/BasicProgramSource.cpp tokenizes BASIC programs through --
 # rather than split the loader files themselves at a finer grain
@@ -117,13 +128,9 @@ endif()
 if(EXISTS ${SHARPDX_LIB})
   list(APPEND CORE_SOURCES
     ${CORE_ROOT}/PC1500/PresetFile.cpp
-    ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
     ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
     ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
-    ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
     ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
-    ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
-    ${CORE_ROOT}/PC1600/PC1600MachineImage.cpp
     ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
     ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
     ${CORE_ROOT}/Basic/BasicProgramSource.cpp
@@ -159,8 +166,10 @@ qt_add_executable(CalcU1600Qt
   app/MemoryModuleManager.cpp
   app/FloppyDiskManager.cpp
   app/SettingsDialog.cpp
+  app/MachineCodeLoadDialog.cpp
   app/AboutDialog.cpp
   app/PresetController.cpp
+  app/AudioOutput.cpp
   ${CORE_SOURCES}
   resources/calc-u-1600.qrc
 )
@@ -179,7 +188,7 @@ if(WIN32)
 endif()
 
 target_include_directories(CalcU1600Qt PRIVATE ${CORE_ROOT} app ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(CalcU1600Qt PRIVATE Qt6::Widgets)
+target_link_libraries(CalcU1600Qt PRIVATE Qt6::Widgets Qt6::Multimedia)
 
 if(EXISTS ${SHARPDX_LIB})
   # See the CORE_SOURCES SHARPDX_LIB block above.

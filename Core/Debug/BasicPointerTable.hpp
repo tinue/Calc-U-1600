@@ -22,6 +22,8 @@ extern const int kPC1500BasicPointerCount;
 // here (not a runtime search) since the table is fixed at compile time.
 extern const int kPC1500BasPrgEndIndex;
 extern const int kPC1500RamEndIndex;
+// The LOCK register: the dump appends "(unlocked)" to it when it reads $FF.
+extern const int kPC1500LockIndex;
 extern const int kPC1500BasicPointerMaxNameLength;
 
 struct PC1600PointerEntry {

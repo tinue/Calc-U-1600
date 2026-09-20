@@ -9,7 +9,7 @@ pocket computers, built as a Qt6 desktop app (macOS / Linux / Windows).
    download the package for your platform, along with
    `Calc-U-1600-examples.zip` — the sample presets and BASIC programs
    used below.
-2. Launch the app, open **Settings…**, and point **Default samples
+2. Launch the app, open **Settings…** (Cmd-, / Ctrl-,), and point **Default samples
    folder** at the unzipped `examples/` folder from step 1.
 3. Pick a model (PC-1500, PC-1500A, or PC-1600) from the control bar, and
    attach a memory module and/or a plotter if you'd like to try those.

@@ -13,6 +13,7 @@ cd "$(dirname "$0")/.."
 mkdir -p headless
 clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/CPU/LH5801/LH5801.cpp \
+  Core/Audio/PiezoSampler.cpp \
   Core/PC1500/PC1500Memory.cpp \
   Core/PC1500/PC1500Machine.cpp \
   Core/PC1500/PC1500Keyboard.cpp \
@@ -33,6 +34,15 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/PC1600/PC1600Machine.cpp \
   Core/PC1600/PC1600BasicTyper.cpp \
   Core/PC1600/PC1600MachineImage.cpp \
+  Core/PC1600/PC1600MachineCodeLoader.cpp \
   Core/PC1600/PC1600PresetLoader.cpp \
+  Core/Display/LcdScreenshot.cpp \
+  Core/Basic/BasicBinaryImage.cpp \
+  Core/Basic/BasicProgramSource.cpp \
+  Core/PC1500/PC1500BasicLoader.cpp \
+  Core/PC1600/PC1600BasicLoader.cpp \
+  Core/PC1600/PC1600ProgramPlacement.cpp \
+  Core/PC1500/PC1500MachineCodeLoader.cpp \
   tools/pc1600_plotter_probe.cpp \
+  Core/Basic/vendor/sharpdx/libsharpdx.a \
   -o headless/pc1600_plotter_probe

@@ -1,5 +1,98 @@
 # Changelog
 
+## [0.4.0] - 2026-09-20
+
+- **Keyboard** Fixed a key getting stuck down and freezing the
+  calculator (Reset didn't help). This happened when a host key that
+  needs Shift (e.g. Shift-3 for `*` on a Swiss keyboard) was released
+  after Shift. A key held while the window loses focus is now let go too,
+  and Reset / Reset All release every key.
+- **Keyboard** PC-1600: `_` is now typed as SHIFT + `.`, as on the real
+  keyboard -- it used to come out as `9`.
+- **ROM modules** Memory modules can now be ROM (`content: rom` in a
+  card definition: read-only, bytes carried in the file). First one:
+  Sharp's **CE-502B** Statistics module for the PC-1500/1500A. ROM
+  modules have their own section at the bottom of the slot picker.
+- **Presets** The built-in `- module: <name>` form (`ce155`, `ram16`,
+  `ram32`, `ce1638plus`, `ce163f`) is gone -- name a module by its
+  definition instead, e.g. `- modulespec: CE-155`. Every memory module
+  now comes from a `.card.yaml` definition.
+- **RAM** Powers up as zeros instead of &FF -- internal RAM and fresh
+  memory modules, matching how CMOS RAM comes back after a power loss.
+  Flash memory still starts erased (&FF). The exception is the PC-1500's
+  &7600-&7BFF (display RAM and system RAM), which reads &FF after a power
+  loss on the real machine and now does here too -- including the lock
+  register at &79FF. On the PC-1500/1500A, Reset now
+  keeps RAM (the BASIC program survives, like the real reset button) and
+  Reset All clears it.
+- **Settings** moved from the control bar to the menu bar: the
+  application menu on macOS (Cmd-,), Edit > Settings… (Ctrl-,) elsewhere.
+  The control bar's Reset button is gone too: Machine > Reset (Cmd-R)
+  and Reset All (Cmd-Shift-R).
+- **Keyboard** Keys held with Cmd/Ctrl (macOS) or Ctrl/Alt/Windows key
+  (Windows/Linux) no longer type on the calculator -- e.g. Cmd-C no
+  longer puts a "C" on the display. Option and AltGr still type.
+- **Copy** With text selected in the debug panel's output, Edit > Copy
+  (Cmd-C) copies that text instead of the screen.
+- **Reset** Every reset runs the boot at full speed until the prompt
+  appears, including a plotter's power-on init (the CE-1600P pen
+  calibration), then sets the clock from the computer's time: Reset and
+  Reset All, and also the reset that follows choosing a memory module, a
+  ROM or a model. On the PC-1600 with a plotter the boot now really runs
+  until the cursor appears; it used to stop early and finish in real time.
+- **Paste** Edit > Paste Text (Cmd-V) types the clipboard's text into
+  the machine, paced so no character is lost. Nothing is added or
+  checked: a line break presses ENTER and waits for the line to finish,
+  a trailing line break is dropped, and characters without a key are
+  skipped. Pressing a machine key stops a paste in progress.
+- **Copy** Edit > Copy Screen (Cmd-C) puts a PNG of the display on the
+  clipboard: dot matrix only (no status indicators), black on white, at
+  the real display's size (PC-1600 89 x 18 mm, PC-1500 104 x 5 mm).
+- **Presets** New `- screenshot: <file.png>` step writes the same image
+  into the trace directory. `trace:` and `screenshot:` now honour the
+  trace directory set in Settings.
+- **Presets** New `- syncclock:` step sets the calculator's clock to the
+  host's current date and time. A preset load runs at full speed, which
+  leaves the clock ahead; put `- syncclock:` last to correct it.
+- **Presets** PC-1600 presets with a plotter (CE-1600P or CE-150) load
+  much faster. The loader waited the full 15 s safety timeout before
+  every `key:` and `type:` step (over 3 minutes for a short preset); it
+  now continues as soon as the machine is ready for keys.
+- **Settings** Separate start folders for the open dialogs: Samples
+  (Load Preset), Basic (Load BASIC Program) and Assembly (Load Machine
+  Code). Each defaults to `<last used>` -- the dialog
+  opens in the folder a file was last loaded from. Choosing a folder
+  fixes it; Reset returns to `<last used>`.
+- **Machine code** File > Load Machine Code… loads a `.bin` into the
+  running machine: with a CE-158 (PC-1500) or PC-1600 header, or raw.
+  It asks only for the start address of a raw file. On the PC-1600 the
+  code always goes into BASIC's program area (the one `NEW "S0:"`
+  reserves in), and a raw file's address defaults to its start: &C0C5,
+  or &80C5 when a RAM module is folded in as extension memory. Code
+  meant for a program module (`INIT"Sx:","P"`, `NEW"Sx:",n`) needs a
+  preset. Afterwards it shows the `NEW` that keeps BASIC from
+  overwriting the code and the `CALL` that starts it. The code is never run automatically. A
+  CE-158 file on a PC-1600 (LH5803 side) is not supported yet.
+- **PC-1600** The calculator ROM version is selectable: the new ROM
+  (default) or the old one (Machine > ROM Version, or `firmware: new|old`
+  in a preset). If the old ROM can't be loaded, the app warns and uses
+  the new one.
+- **Plotters** Attaching or detaching a plotter now runs its OFF/ON
+  power cycle at full speed (like Reset), including the power-on
+  rotation of the pen header, and then sets the clock from the
+  computer's time.
+- **Control bar** Choosing a memory module or a ROM version no longer
+  detaches the plotter or changes any other selector; the rebuild that
+  applies it keeps the CE-150/CE-1600P you had (its paper starts blank).
+  Switching the model starts from a default machine instead: PC-1500
+  ROM A04 / PC-1600 new ROM, nothing attached, then the startup preset.
+- **Debug** The pointer dump shows the PC-1500 lock register (&79FF) as
+  locked or unlocked. The MODE key is ignored while it isn't &FF; `NEW0`
+  unlocks it, so the startup presets now begin with `NEW0`.
+- **Examples** Added CalCula, an RPN calculator program.
+- **Build** `tools/fetch_roms.sh` fetches the PC-1600 new and old ROM
+  sets and the CE-1600P ROMs from the updated PC-1600-ROM dumps.
+
 ## [0.3.0] - 2026-09-19
 
 - **PC-1600F** Added the CE-1600F pocket floppy drive for the

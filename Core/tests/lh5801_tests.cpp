@@ -14,6 +14,10 @@
 #include "../PC1500/PC1500Keyboard.hpp"
 #include "../PC1500/PC1500Machine.hpp"
 #include "../PC1500/PC1500Memory.hpp"
+#include "../PC1500/PC1500PresetLoader.hpp"
+#include "PresetTestSupport.hpp"
+
+#include <ctime>
 
 namespace {
 
@@ -785,6 +789,36 @@ void test_rtc_calendar_seed_and_read() {
     CHECK(rtcNibble(r, 36) == 9);                          // month (plain, not BCD)
 }
 
+// `- syncclock:` re-seeds the RTC from the host: after a 10-minute
+// emulated `- wait:` (the clock would otherwise be ~10 min ahead of the
+// boot seed), the calendar reads back the host's current time. ROM-gated.
+void test_preset_syncclock_reseeds_rtc() {
+    PresetFile preset;
+    std::string err;
+    CHECK(parsePresetString("model: PC-1500A\nkeys:\n  - wait: 600\n  - syncclock:\n",
+                            "/tmp/lh5801_tests_syncclock.pc1500a", &preset, &err));
+    PC1500Machine machine(PC1500Variant::PC1500A);
+    auto hostOnBoot = [&machine] {
+        machine.seedClock(2000, 1, 1, 0, 0, 0); // a clearly wrong clock to start from
+    };
+    const PresetLoadResult res = applyPC1500Preset(machine, preset, {}, ".", ".", hostOnBoot, {"roms"});
+    if (!res.ok) {
+        std::fprintf(stderr, "SKIP test_preset_syncclock_reseeds_rtc: %s\n", res.error.c_str());
+        return;
+    }
+    const std::time_t now = std::time(nullptr);
+    std::tm t{};
+    localtime_r(&now, &t);
+    const uint64_t r = rtcReadCalendar40(machine.memory());
+    auto bcd = [&](int shift) { return rtcNibble(r, shift + 4) * 10 + rtcNibble(r, shift); };
+    const int rtcMinutes = bcd(16) * 60 + bcd(8);
+    const int hostMinutes = t.tm_hour * 60 + t.tm_min;
+    CHECK(rtcNibble(r, 36) == t.tm_mon + 1);
+    CHECK(bcd(24) == t.tm_mday || t.tm_hour == 0);          // tolerate a midnight rollover
+    const int diff = (hostMinutes - rtcMinutes + 1440) % 1440;
+    CHECK(diff <= 1);                                         // not 10 minutes ahead
+}
+
 void test_rtc_calendar_set_via_shift_and_commit() {
     // TIME= path: shift 40 bits in, Time Set -> Register Hold to commit,
     // then a Time-Read round-trip must return exactly what was written.
@@ -870,6 +904,36 @@ void test_on_key_press_sets_break_flag() {
     machine.setOnKeyPressed(false);
     machine.setOnKeyPressed(true);
     CHECK((machine.memory().readME1(0xF00B) & 0x02) != 0);
+}
+
+// A key whose host release never arrived (the GUI lost track of it) must
+// not outlive a reset -- otherwise the machine stays wedged on it.
+void test_pc1500_reset_releases_held_keys() {
+    PC1500Machine machine;
+    machine.pressKey("*");
+    CHECK(machine.memory().keyboard().scan(0x00) != 0xFF);
+    machine.reset();
+    CHECK(machine.memory().keyboard().scan(0x00) == 0xFF);
+}
+
+// User RAM powers up 0x00 (CMOS RAM after a power loss) but the 1.5K window
+// &7600-&7BFF powers up 0xFF (measured on a real PC-1500); the reset button
+// keeps RAM (a real RESET only resets the CPU/chips), Reset All clears it.
+void test_pc1500_ram_powerup_reset_and_all_reset() {
+    PC1500Machine machine;
+    CHECK(machine.memory().peek(0x40C5) == 0x00);  // user RAM
+    CHECK(machine.memory().peek(0x7800) == 0xFF);  // system RAM
+    CHECK(machine.memory().peek(0x79FF) == 0xFF);  // LOCK register
+    CHECK(machine.memory().peek(0x7600) == 0xFF);  // display RAM
+    CHECK(machine.memory().peek(0x7BFF) == 0xFF);
+    machine.memory().poke(0x40C5, 0x5A);
+    machine.memory().poke(0x7800, 0xA5);
+    machine.reset();
+    CHECK(machine.memory().peek(0x40C5) == 0x5A);
+    CHECK(machine.memory().peek(0x7800) == 0xA5);
+    machine.allReset();
+    CHECK(machine.memory().peek(0x40C5) == 0x00);
+    CHECK(machine.memory().peek(0x7800) == 0xFF);
 }
 
 // AUTO POWER OFF / the OFF key park the CPU in a genuine HLT with the
@@ -1177,14 +1241,12 @@ void test_boot_smoke_real_rom() {
 // folded into this file's single test-runner executable/exit code per
 // tools/run_tests.sh's existing single-binary convention.
 int run_connector_tests();
-// Defined in ce155_tests.cpp (CE-155 proof-of-concept card) -- same
+// Defined in ce155_tests.cpp / ce1638_tests.cpp / ce163f_tests.cpp (the
+// bundled CE-155, CE-1638 and CE-163F module definitions) -- same
 // single-binary convention.
 int run_ce155_tests();
-// Defined in ce1638plus_tests.cpp (CE-1638+ proof-of-concept card) -- same
-// single-binary convention.
-int run_ce1638plus_tests();
-// Defined in ce163f_tests.cpp (CE-163F 8 RAM + 8 FLASH bank card) -- same
-// single-binary convention.
+int run_ce1638_tests();
+int run_ce502b_tests();
 int run_ce163f_tests();
 // Defined in memory_card_tests.cpp (universal software-defined module) --
 // same single-binary convention.
@@ -1204,6 +1266,9 @@ int run_presetloader_trace_tests();
 // Defined in pc1600_basictyper_tests.cpp (PC1600BasicTyper's scripted
 // keystroke typing) -- same single-binary convention.
 int run_pc1600_basictyper_tests();
+// Defined in piezo_sampler_tests.cpp (buzzer audio) -- same single-binary
+// convention.
+int run_piezo_sampler_tests();
 // Defined in pc1600_bank_tests.cpp (PC1600Bank/PC1600Memory bank-switching
 // truth tables) -- same single-binary convention.
 int run_pc1600_bank_tests();
@@ -1229,7 +1294,7 @@ int run_pc1600_keyboard_display_tests();
 // Defined in pc1600_slot_ram_tests.cpp (PC1600Memory Slot 1/2 RAM
 // attachment) -- same single-binary convention.
 int run_pc1600_slot_ram_tests();
-// Defined in pc1600_slot_module_tests.cpp -- a real card (CE155Card)
+// Defined in pc1600_slot_module_tests.cpp -- real module definitions
 // plugged into a PC-1600 memory-slot connector, end to end.
 int run_pc1600_slot_module_tests();
 // Defined in pc1600_preset_tests.cpp -- the `model: PC-1600` preset
@@ -1265,6 +1330,13 @@ int run_pc1600_program_placement_tests();
 // Defined in pc1600_machine_image_tests.cpp -- the 16-byte PC-1600
 // machine-language transfer-header parser (Core/PC1600/PC1600MachineImage).
 int run_pc1600_machine_image_tests();
+// Defined in key_paste_tests.cpp -- the GUI's clipboard-paste feeder.
+int run_key_paste_tests();
+// Defined in lcd_screenshot_tests.cpp -- LCD PNG render + `screenshot:` step.
+int run_lcd_screenshot_tests();
+// Defined in machine_code_file_tests.cpp -- "Load Machine Code…": header
+// recognition, load plan, NEW/CALL advice, and the two writers.
+int run_machine_code_file_tests();
 
 int main() {
     test_reset_vector();
@@ -1299,8 +1371,10 @@ int main() {
     test_io_chip_keyboard_wiring_through_memory();
     test_rtc_tp_rate_and_gating();
     test_rtc_if_does_not_clear_on_read();
+    test_pc1500_ram_powerup_reset_and_all_reset();
     test_rtc_opb_and_if_never_disagree_within_one_poll();
     test_rtc_calendar_seed_and_read();
+    test_preset_syncclock_reseeds_rtc();
     test_rtc_calendar_set_via_shift_and_commit();
     test_rtc_calendar_advances_one_hz_with_bcd_and_month_carry();
     test_rtc_calendar_reset_is_deterministic();
@@ -1315,11 +1389,13 @@ int main() {
     test_display_pixel_decode();
     test_display_status_icons();
     test_boot_smoke_real_rom();
+    test_pc1500_reset_releases_held_keys();
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     int connectorFailures = run_connector_tests();
     int ce155Failures = run_ce155_tests();
-    int ce1638plusFailures = run_ce1638plus_tests();
+    int ce1638Failures = run_ce1638_tests();
+    int ce502bFailures = run_ce502b_tests();
     int ce163fFailures = run_ce163f_tests();
     int memoryCardFailures = run_memory_card_tests();
     int batteryCardInstanceFailures = run_battery_card_instance_tests();
@@ -1347,7 +1423,11 @@ int main() {
     int basicProgramSourceFailures = run_basic_program_source_tests();
     int pc1600ProgramPlacementFailures = run_pc1600_program_placement_tests();
     int pc1600MachineImageFailures = run_pc1600_machine_image_tests();
-    return (g_fail == 0 && basicBinaryImageFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && pc1600MachineImageFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638plusFailures == 0 &&
+    int piezoSamplerFailures = run_piezo_sampler_tests();
+    int keyPasteFailures = run_key_paste_tests();
+    int lcdScreenshotFailures = run_lcd_screenshot_tests();
+    int machineCodeFileFailures = run_machine_code_file_tests();
+    return (g_fail == 0 && machineCodeFileFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && basicBinaryImageFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && pc1600MachineImageFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
             ce163fFailures == 0 && memoryCardFailures == 0 && batteryCardInstanceFailures == 0 &&
             presetFailures == 0 &&
             basicTyperFailures == 0 && pc1600BasicTyperFailures == 0 &&

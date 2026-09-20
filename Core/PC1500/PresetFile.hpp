@@ -9,9 +9,7 @@
 //     model resolution -- see the 3-part structure note below) ───────────
 //
 // A hand-rolled parser for this project's `.pc1500` YAML preset format.
-// Deliberately scoped: no rom-modules/check support (see
-// PresetFile::memoryExpansionModule for what memory-expansion support
-// does exist).
+// Deliberately scoped: no rom-modules/check support.
 //
 // PRESET LOADING IS THREE PARTS:
 //   1. this file -- parsePresetFile() opens the file, parses it, and
@@ -27,17 +25,16 @@
 //      family loader) lives in EmulatorViewModel.loadPreset, the one place
 //      both machine wrappers coexist.
 //
-// `memory-expansion:` accepts exactly one module -- `- module: ce155`,
-// `- module: ce1638plus`, or `- module: ce163f` -- as throwaway proofs of
-// concept for the Phase 4 connector layer (see
-// PresetFile::memoryExpansionModule and applyPC1500Preset()); a PC-1600
-// preset instead uses `memory-expansion-1:` / `memory-expansion-2:` (see
-// slot1Module/slot2Module). Every other module name, extra field, or
+// `memory-expansion:` accepts exactly one module, named by definition
+// (`- modulespec: <module-name>` / `- modulespecfile: <path>`, see
+// PresetFile::memoryExpansionModuleSpecName); a PC-1600 preset instead uses
+// `memory-expansion-1:` / `memory-expansion-2:`. Every other extra field, or
 // `rom-modules:`/`check` step remains rejected. `PC-1500`, `PC-1500A` and
 // `PC-1600` models are accepted (see PresetFile::isPC1600 / variant). Not general
 // YAML: flat `key: value` top-level mappings, `- key: value` sequence
 // items (one verb per step, no further nesting), and one `text: |` block
-// scalar. Step verbs: `key:`, `type:`, `wait:`, and `trace:`. `- wait: N`
+// scalar. Step verbs: `key:`, `type:`, `wait:`, `trace:`, `screenshot:`, and
+// `syncclock:`. `- wait: N`
 // runs N seconds of emulated time; `- wait:` with no value blocks until the
 // ROM's keyboard idle loop re-engages -- i.e. until a long-running program
 // or plot has finished (a generous safety cap still applies). `trace:` is
@@ -47,7 +44,14 @@
 // starting a new one first closes the open one), `- trace: off` stops it,
 // and any trace still open when the preset finishes is closed
 // automatically. The filename must not contain a path separator. See
-// PC1500PresetLoader.cpp's applyPC1500Preset(). A value may be `"double"` or `'single'`-quoted -- stripped and
+// PC1500PresetLoader.cpp's applyPC1500Preset(). `- screenshot: name.png`
+// writes a PNG of the LCD dot matrix at that point in the script into the
+// same trace directory (overwriting; same no-path-separator rule) -- the
+// image Edit > Copy Screen puts on the clipboard, see
+// Core/Display/LcdScreenshot.hpp. `- syncclock:` (no value) re-seeds the
+// machine's real-time clock from the host's current local time at that
+// point -- a preset load runs flat out, so put it last to undo the clock
+// running ahead during the load. A value may be `"double"` or `'single'`-quoted -- stripped and
 // passed through verbatim (see PresetFile.cpp's unquote()), kept for
 // preset files with quoted values that predate this fork. Tabs, flow
 // style, multiple documents, and inline `#` comments are all
@@ -63,12 +67,13 @@
 // not recognized at all -- both become a single, repeatable `keys:` block
 // name.
 struct PresetStep {
-    enum class Kind { Key, Type, Wait, Trace };
+    enum class Kind { Key, Type, Wait, Trace, Screenshot, SyncClock };
     Kind kind = Kind::Key;
     // key name (Key), program text (Type), or -- for Trace -- the trace
     // output filename to start capturing to, or "" to stop the current
     // capture (`- trace: off`). See PC1500PresetLoader.cpp's `trace:`
     // handling; a port of Calc-U-59's `KEYSTROKES:` `Trace:` directive.
+    // For Screenshot, the PNG filename.
     std::string text;
     // (Wait) seconds of emulated time to run. A negative value is the
     // sentinel for a parameterless `- wait:` step: "run until the ROM's
@@ -139,11 +144,11 @@ struct PresetFile {
     std::string model;
     /// True for `model: PC-1600` -- derived from `model` rather than stored
     /// alongside it, so the two can't disagree. The PC-1600 is a separate
-    /// machine (Core/PC1600/) with a fixed ROM set, its own two memory slots
-    /// (memory-expansion-1:/memory-expansion-2: below) and no BASIC/binary
-    /// program loading -- so a PC-1600 preset carries no `firmware:`, no
-    /// `program:` section, and no `memory-expansion:` (unsuffixed) block, and
-    /// `variant`/`romVariant` below are left at their defaults and unused.
+    /// machine (Core/PC1600/) with its own two memory slots
+    /// (memory-expansion-1:/memory-expansion-2: below); its `firmware:` is
+    /// `new` or `old` (calculator ROM version, default `new`; stored in
+    /// `romVariant`) and it takes no `memory-expansion:` (unsuffixed) block.
+    /// `variant` below is unused.
     /// Applied by Core/PC1600/PC1600PresetLoader.cpp, not applyPC1500Preset().
     bool isPC1600() const { return model == "PC-1600"; }
     // Parsed from `model:` -- PC1500Variant::PC1500A for "PC-1500A",
@@ -152,10 +157,11 @@ struct PresetFile {
     // constructed with this variant (variant is fixed at construction --
     // see PC1500Memory.hpp).
     PC1500Variant variant = PC1500Variant::PC1500A;
-    // Which ROM revision to run, always one of "A01"/"A03"/"A04" -- never
+    // PC-1600: "new" or "old" (calculator ROM version, default "new").
+    // PC-1500/1500A: which ROM revision to run, always one of "A01"/"A03"/"A04" -- never
     // a file path or a bare-model-dependent choice. There are only three
     // real options across all three machines (per the project owner):
-    // the PC-1600 has exactly one ROM (no choice at all), the PC-1500A
+    // the PC-1600 chooses "new"/"old" instead (see above), the PC-1500A
     // can only run A04, and the PC-1500 (non-A) is the only model that
     // actually chooses between A01/A03/A04. For "PC-1500A", this
     // resolves unconditionally to "A04" regardless of any `firmware:`
@@ -177,22 +183,6 @@ struct PresetFile {
     // and the fork note at the top of this file. Applied in this exact
     // order by PC1500PresetLoader.cpp's applyPC1500Preset().
     std::vector<PresetSection> sections;
-    // `memory-expansion:` -- empty if the preset had no memory-expansion
-    // block, otherwise the declared module's name: `"ce155"`,
-    // `"ce1638plus"`, or `"ce163f"`, the only three this loader accepts
-    // (throwaway proofs of concept for the Phase 4 connector layer, not the
-    // general Phase 7 software-defined module -- see PC1500PresetLoader.cpp's
-    // applyPC1500Preset()). `rom-modules:` remains unsupported/rejected.
-    std::string memoryExpansionModule;
-
-    // PC-1600 only (`memory-expansion-1:` / `memory-expansion-2:`) -- the
-    // module plugged into each 40-pin memory-slot connector, one of the
-    // names in Core/Connector/SlotModuleFactory.hpp's `kSlotModuleNames`
-    // (`"ce155"`, `"ram16"`, `"ram32"`, `"ce1638plus"`, `"ce163f"`), or
-    // empty for an empty slot. See Core/PC1600/PC1600PresetLoader.cpp.
-    std::string slot1Module;
-    std::string slot2Module;
-
     // The pen-plotter/printer on the 60-pin system bus. `""` (key absent)
     // = none. Normalized to lower case; `plotter: none`/`off` -> `""`.
     //
@@ -225,12 +215,12 @@ struct PresetFile {
     // suffix. Meaningless when `floppy` is empty (no disk).
     int floppySide = 0;
 
-    // Two `- ...:` alternatives to `- module:` in the same one-item block,
-    // both naming a docs/Memory-Card-Definition-Format.md definition for
-    // the general-purpose software-defined module. Exactly one of
-    // `<...>Module` / `<...>ModuleSpecFile` / `<...>ModuleSpecName` is set
-    // per block; all empty for a block that used `- module:` or for no
-    // memory-expansion block at all. The loader (PC1500PresetLoader /
+    // The module in `memory-expansion:` (PC-1500/1500A) or in
+    // `memory-expansion-1:` / `memory-expansion-2:` (the PC-1600's two
+    // memory slots): a one-item block naming a
+    // docs/Memory-Card-Definition-Format.md definition in one of two ways.
+    // At most one of `<...>ModuleSpecFile` / `<...>ModuleSpecName` is set
+    // per block; both empty for no block (an empty slot). The loader (PC1500PresetLoader /
     // PC1600PresetLoader) turns whichever is set into a card via
     // Core/Connector/SoftwareDefinedCard.hpp's makeSoftwareDefinedCard().
     //

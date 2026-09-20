@@ -76,46 +76,65 @@ inline bool loadPC1500Rom(PC1500Machine& machine, const std::string& romVariant,
                           const std::vector<std::string>& dirs, std::string* error) {
     std::string path;
     if (!resolveBundledRomPath(dirs, "PC-1500_" + romVariant + ".ROM", &path, error)) return false;
-    if (!machine.loadROMFile(path)) {
+    // Via the byte cache, like the PC-1600 set below: a rebuild is routine now
+    // (every module or ROM-revision pick makes one), so don't re-read on each.
+    std::vector<uint8_t> rom;
+    if (!detail::readWholeFileCached(path, &rom) || !machine.loadROM(rom.data(), rom.size())) {
         if (error) *error = "failed to load firmware ROM: " + path;
         return false;
     }
     return true;
 }
 
-// Loads the PC-1600's fixed six-file ROM set into `machine`. Always the
-// same six files -- a PC-1600 preset/model never chooses among revisions.
+// True for the two PC-1600 calculator ROM versions: "new" (PEEK #(0,&7FFF)
+// = 4 or 5) and "old" (= 130). See PresetFile::romVariant.
+inline bool isPC1600RomVersion(const std::string& version) {
+    return version == "new" || version == "old";
+}
+
+// Loads the PC-1600's six-file calculator ROM set of the given version
+// ("new"/"old") into `machine`. The CE-1600P peripheral ROMs are separate
+// (attachCE1600P) and independent of the version.
 inline bool loadPC1600RomSet(PC1600Machine& machine, const std::vector<std::string>& dirs,
-                             std::string* error) {
-    auto loadOne = [&](const char* filename, std::vector<uint8_t>* out) {
+                             const std::string& version, std::string* error) {
+    if (!isPC1600RomVersion(version)) {
+        if (error) *error = "unknown PC-1600 ROM version '" + version + "' (expected new or old)";
+        return false;
+    }
+    const std::string suffix = "-" + version + ".bin";
+    auto loadOne = [&](const std::string& base, std::vector<uint8_t>* out) {
         std::string path;
-        return resolveBundledRomPath(dirs, filename, &path, error) &&
+        return resolveBundledRomPath(dirs, base + suffix, &path, error) &&
                detail::readWholeFileCached(path, out);
     };
     std::vector<uint8_t> romI, romII, romIII, rom3b, romIV, rom1500;
     struct Entry {
-        const char* filename;
+        const char* base;
         std::vector<uint8_t>* out;
     };
     const Entry entries[] = {
-        {"PC1600-P0-B0.bin", &romI},
-        {"PC1600-P1-B0.bin", &romII},
-        {"PC1600-P1-B3.bin", &romIII},
-        {"PC1600-P1-B3B.bin", &rom3b},
-        {"PC1600-P2-B6.bin", &romIV},
-        {"PC1600-LH5803-C000-FFFF.bin", &rom1500},
+        {"PC1600-P0-B0", &romI},
+        {"PC1600-P1-B0", &romII},
+        {"PC1600-P1-B3", &romIII},
+        {"PC1600-P1-B3B", &rom3b},
+        {"PC1600-P2-B6", &romIV},
+        {"PC1600-LH5803-C000-FFFF", &rom1500},
     };
     for (const auto& entry : entries) {
-        if (!loadOne(entry.filename, entry.out)) {
+        if (!loadOne(entry.base, entry.out)) {
             if (error && error->empty()) *error = "failed to read the PC-1600 ROM set";
             return false;
         }
     }
-    machine.loadBank0(romI.data(), romI.size(), romII.data(), romII.size());
-    machine.loadBank3Rom(romIII.data(), romIII.size());
-    machine.loadBank3bRom(rom3b.data(), rom3b.size());
-    machine.loadBank6Rom(romIV.data(), romIV.size());
-    machine.loadLH5803Rom(rom1500.data(), rom1500.size());
+    // Each loader rejects an image of the wrong size (e.g. a truncated file).
+    if (!(machine.loadBank0(romI.data(), romI.size(), romII.data(), romII.size()) &&
+          machine.loadBank3Rom(romIII.data(), romIII.size()) &&
+          machine.loadBank3bRom(rom3b.data(), rom3b.size()) &&
+          machine.loadBank6Rom(romIV.data(), romIV.size()) &&
+          machine.loadLH5803Rom(rom1500.data(), rom1500.size()))) {
+        if (error) *error = "a PC-1600 " + version + " ROM image has the wrong size (a truncated dump?)";
+        return false;
+    }
     return true;
 }
 

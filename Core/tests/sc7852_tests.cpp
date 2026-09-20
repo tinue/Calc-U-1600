@@ -12,6 +12,7 @@
 #include "../CPU/SC7852/SC7852.hpp"
 #include "../PC1600/PC1600Bank.hpp"
 #include "../PC1600/PC1600Memory.hpp"
+#include "TestRoms.hpp"
 
 namespace {
 
@@ -444,22 +445,13 @@ void test_ddcb_bit_set_res_on_displacement() {
 
 // ── Boot smoke test: real ROM images, PC1600Bank/PC1600Memory as the bus ──
 
-bool readRomFile(const char* path, std::vector<uint8_t>* out) {
-    FILE* f = std::fopen(path, "rb");
-    if (!f) return false;
-    out->resize(16384);
-    size_t n = std::fread(out->data(), 1, 16384, f);
-    std::fclose(f);
-    return n == 16384;
-}
-
 void test_boot_smoke_real_rom() {
     std::vector<uint8_t> lower, upper, bank3, bank3b, bank6;
-    if (!readRomFile("roms/PC1600-P0-B0.bin", &lower) ||
-        !readRomFile("roms/PC1600-P1-B0.bin", &upper) ||
-        !readRomFile("roms/PC1600-P1-B3.bin", &bank3) ||
-        !readRomFile("roms/PC1600-P1-B3B.bin", &bank3b) ||
-        !readRomFile("roms/PC1600-P2-B6.bin", &bank6)) {
+    if (!readRomImage("roms/PC1600-P0-B0-new.bin", &lower) ||
+        !readRomImage("roms/PC1600-P1-B0-new.bin", &upper) ||
+        !readRomImage("roms/PC1600-P1-B3-new.bin", &bank3) ||
+        !readRomImage("roms/PC1600-P1-B3B-new.bin", &bank3b) ||
+        !readRomImage("roms/PC1600-P2-B6-new.bin", &bank6)) {
         std::fprintf(stderr, "SKIP test_boot_smoke_real_rom: one or more roms/PC1600-*.bin "
                               "files not found relative to cwd (run tests from the repo root)\n");
         return;
@@ -477,7 +469,7 @@ void test_boot_smoke_real_rom() {
 
     // Loads bank3/bank3b/bank6 in addition to bank0, with a 2M-step
     // warm-up: the boot ROM's own busy-wait on PC1600Display's "not busy"
-    // status (0x0807 in PC1600-P0-B0.bin) only clears once that status is
+    // status (0x0807 in PC1600-P0-B0-new.bin) only clears once that status is
     // reported accurately, letting real execution continue on into
     // bank3/bank6 code rather than parking in a tiny loop. Running this
     // test without those banks loaded produces open-bus wandering, not a

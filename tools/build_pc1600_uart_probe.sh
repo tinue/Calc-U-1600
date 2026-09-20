@@ -12,6 +12,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 -DPC1600_POWER_PROBE \
   Core/CPU/SC7852/SC7852.cpp \
   Core/CPU/LH5803/LH5803Memory.cpp \
   Core/CPU/LH5803/LH5803SharedMemory.cpp \
+  Core/Audio/PiezoSampler.cpp \
   Core/PC1600/PC1600Memory.cpp \
   Core/PC1600/PC1600Keyboard.cpp \
   Core/PC1600/PC1600Display.cpp \

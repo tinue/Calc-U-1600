@@ -9,39 +9,14 @@
 // ROM set is read from roms/ (same repo-root convention as tools/run_tests.sh).
 
 #include <cstdio>
-#include <fstream>
-#include <iterator>
 #include <string>
 #include <vector>
 
 #include "../Core/PC1600/PC1600Machine.hpp"
+#include "../Core/Resources/BundledRomCatalog.hpp"
 #include "../Core/PC1600/PC1600PresetLoader.hpp"
 #include "../Core/PC1500/PresetFile.hpp"
 
-namespace {
-bool readRomFile(const char* path, std::vector<uint8_t>* out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    *out = std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return !out->empty();
-}
-bool loadRomSet(PC1600Machine& m) {
-    std::vector<uint8_t> i0, ii0, iii3, r3b, iv6, r1500;
-    if (!readRomFile("roms/PC1600-P0-B0.bin", &i0) ||
-        !readRomFile("roms/PC1600-P1-B0.bin", &ii0) ||
-        !readRomFile("roms/PC1600-P1-B3.bin", &iii3) ||
-        !readRomFile("roms/PC1600-P1-B3B.bin", &r3b) ||
-        !readRomFile("roms/PC1600-P2-B6.bin", &iv6) ||
-        !readRomFile("roms/PC1600-LH5803-C000-FFFF.bin", &r1500)) {
-        return false;
-    }
-    return m.loadBank0(i0.data(), i0.size(), ii0.data(), ii0.size()) &&
-           m.loadBank3Rom(iii3.data(), iii3.size()) &&
-           m.loadBank3bRom(r3b.data(), r3b.size()) &&
-           m.loadBank6Rom(iv6.data(), iv6.size()) &&
-           m.loadLH5803Rom(r1500.data(), r1500.size());
-}
-} // namespace
 
 int main(int argc, char** argv) {
     if (argc < 2) {
@@ -55,8 +30,9 @@ int main(int argc, char** argv) {
         return 1;
     }
     PC1600Machine machine;
-    if (!loadRomSet(machine)) {
-        std::fprintf(stderr, "could not load roms/ ROM set (run from repo root)\n");
+    std::string romErr;
+    if (!BundledRoms::loadPC1600RomSet(machine, {"roms"}, "new", &romErr)) {
+        std::fprintf(stderr, "could not load roms/ ROM set (run from repo root): %s\n", romErr.c_str());
         return 1;
     }
     PC1600Machine* mp = &machine;
@@ -69,8 +45,7 @@ int main(int argc, char** argv) {
                     std::fprintf(stderr, "    <evt> %s\n", e.c_str());
             }
         },
-        ".", ".", {},
-        "roms/PC1600-P1-B4-CE1600P.bin", "roms/PC1600-P1-B5-CE1600P-OR-F.bin", "roms/CE-150.ROM");
+        ".", ".", {}, {"roms"});
     if (!res.ok) {
         std::fprintf(stderr, "preset apply failed: %s\n", res.error.c_str());
         return 1;

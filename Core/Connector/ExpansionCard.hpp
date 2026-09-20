@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 // Shared card interface + pin-state type for the 40-pin connector family
@@ -46,7 +47,7 @@ struct PinState {
 
     // True when this write originates from a host poke() -- the
     // debug/preset-loader path -- rather than a guest-CPU store. A card that
-    // gates runtime writes (e.g. CE163FCard's flash banks, which otherwise
+    // gates runtime writes (e.g. the CE-163F's flash banks, which otherwise
     // need a JEDEC unlock sequence) treats a direct write as an
     // unconditional array write. Always false for reads and for guest-CPU
     // writes.
@@ -91,7 +92,7 @@ public:
     /// card in this project so far) sits on whatever its trigger-pin latch
     /// last sampled -- which stays bank 0 for the whole life of a PC-1600
     /// Slot 2 card, since that bay's pin 18 carries K2, not the S3 strobe
-    /// (see CE1638PlusCard's class comment). Showing it there is more of a
+    /// (see ce1638.card.yaml's Slot 1 caveat). Showing it there is more of a
     /// curiosity than a useful number, but it is the module's real state.
     virtual int debugCurrentBank() const { return -1; }
 
@@ -122,14 +123,8 @@ public:
         return false;
     }
 
-    // TODO(slot-identity): add `virtual std::string moduleName() const` here
-    // so the GUI can read the attached module's name from the slot itself,
-    // instead of the preset loader reporting it via
-    // PresetLoadResult::expansionModuleLabel /
-    // PC1600PresetLoadResult::slotNModuleLabel and makeSoftwareDefinedCard()'s
-    // outModuleName param (all removable once this exists). Blocked on the
-    // hand-written prototype cards (CE155Card / PlainRamCard / CE1638PlusCard
-    // / CE163FCard) being duplicated as .card.yaml and deleted -- then
-    // SoftwareDefinedCard is the only implementer. See TODO.md, "Module
-    // identity should be read from the slot".
+    /// The module's name (a definition's `module-name:`, e.g. "CE-1600M"),
+    /// so the GUI can read what sits in a slot from the slot itself.
+    /// Empty for a card without one (test stubs).
+    virtual std::string moduleName() const { return {}; }
 };

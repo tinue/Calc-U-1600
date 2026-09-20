@@ -72,7 +72,7 @@ sub-region judgement (spec §1).
 | `content` | yes | Content spec (§4) — dimension D2. |
 | `banking` | yes | `none`, or a banking map (§5) — dimensions D3/D4. |
 | `capacity` | unbanked only | Backing-store size in bytes for the one copy of the region. Required when `banking: none`; omitted when banked (there it is `bank-count * bank-size`). |
-| `initial-content` | ROM: yes (not yet reachable — `rom` content is unsupported, §9) · Flash/Regular: optional | Byte content carried in the file (§6) — spec §5a. Allowed for any content kind, no restriction — a Regular (RAM) range can power up pre-loaded exactly like a Flash range's initial image. |
+| `initial-content` | ROM: yes (must cover every byte) · Flash/Regular: optional | Byte content carried in the file (§6) — spec §5a. Allowed for any content kind, no restriction — a Regular (RAM) range can power up pre-loaded exactly like a Flash range's initial image. |
 | `pc1600-module-class` | PC-1600 regions only | `program` \| `system` \| `ram-disk` \| `plain-ram-no-header` — authoring cross-check against the header bytes in `initial-content` (spec §7). Omit on PC-1500/1500A regions. |
 
 ---
@@ -138,7 +138,7 @@ content: rom            # bare string form: regular | rom | flash (defaults for 
 content:
   kind: regular
   writable: true              # false = wired read-only (not a togglable switch)
-  power-up-fill: 0xFF         # per-range power-up byte; default 0xFF (SRAM convention, spec §8)
+  power-up-fill: 0x00         # per-range power-up byte; default 0x00 (CMOS RAM after a power loss, spec §8)
   write-protect:              # optional runtime-togglable protect (CE-159); omit if absent
     default: unprotected      # unprotected | protected — state on load (spec §8)
     persisted: false          # false = always resets to `default` on load; true = part of card state
@@ -147,7 +147,7 @@ content:
 ```yaml
 content:
   kind: flash
-  power-up-fill: 0xFF         # applies only where `initial-content` leaves gaps
+  power-up-fill: 0xFF         # default 0xFF (erased); applies only where `initial-content` leaves gaps
   protocol:                   # chip/firmware properties, not inferred (spec §5)
     unlock-sequence:
       - { address: 0x5555, data: 0xAA }
@@ -181,7 +181,7 @@ bytes come from `initial-content` (§6), which is mandatory for ROM.
 ```yaml
 content:
   by-bank:
-    - { banks: "0-7",  kind: regular, power-up-fill: 0xFF }
+    - { banks: "0-7",  kind: regular, power-up-fill: 0x00 }
     - { banks: "8-15", kind: flash, protocol: { ... } }
 ```
 
@@ -314,6 +314,7 @@ threaded through the loader, which nothing else currently needs.
 | `Calc-U-1600/Resources/ce1601m.card.yaml` | CE-1601M, 64 KB | Trigger-based vertical banking — `trigger: { io-port: 0x28 }`, `source-domain: data` (the byte written by `OUT (28H)`); `bank-window` nesting the `PVOUT` half-select (spec §4/§9). |
 | `Calc-U-1600/Resources/superram.card.yaml` | superRAM, 512 KB | The CE-1601M mechanism with a 4-bit (`D0`–`D3`) `OUT (28H)` latch and all 16 × 32 KB vertical banks fitted; PC-1600 Slot 2 only (spec §6/§9's "maxed-out Slot 2" row). |
 | `Calc-U-1600/Resources/ce1638.card.yaml` | CE-1638, 128 KB | A single-kind banked region — trigger-based, address-domain, 8 banks sampling `A0`-`A2`; the real module `CE1638PlusCard.hpp`'s throwaway "+" test card is loosely modeled on. |
+| `Qt6/resources/cards/ce502b.card.yaml` | CE-502B, 16 KB ROM | `content: rom` with one `addressed-hex` block covering the whole region: a Sharp program module (ROM header at &0000, BASIC program from &00C5) on Y0. |
 | `Calc-U-1600/Resources/ce163f.card.yaml` | CE-163F, 256 KB | `content: by-bank:` (§4) splitting one 16-bank region into Regular (0-7) and Flash (8-15) content, and a `flash` `protocol:` block including `command-address-mask` for its real low-11-bit command decode quirk. |
 
 ---
@@ -379,10 +380,11 @@ slot, by `module-name`, and attaches the chosen one the same way.
 The parser reads the whole format and validates it, but the runtime card
 currently supports:
 
-- **Content:** Regular and Flash, single-kind or `by-bank`-split across a
-  banked region's banks (spec §5's split-content note). `rom` is still a
-  hard load error ("not supported in v1") — no confirmed module needs it
-  yet. `initial-content` is supported for Regular/Flash ranges via
+- **Content:** Regular, Flash and ROM, single-kind or `by-bank`-split
+  across a banked region's banks (spec §5's split-content note). A `rom`
+  range ignores every write — guest CPU, host poke and the debug/loader
+  backing-store path alike — and its `initial-content` must cover every
+  byte (`fill:` doesn't count). `initial-content` is supported via
   `encoding: addressed-hex | hex | base64` (§6); `encoding: file` is
   parsed but rejected ("not supported yet").
 - **Banking:** Unbanked, and **trigger-based** Banked (both a memory-write

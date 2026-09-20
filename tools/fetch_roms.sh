@@ -10,12 +10,14 @@
 #
 # Usage: tools/fetch_roms.sh
 #
-# Writes (13 files):
+# Writes (19 files):
 #   roms/PC-1500_A01.ROM, PC-1500_A03.ROM, PC-1500_A04.ROM
 #     -- from Jeff-Birt/Sharp_PC-1500_ROM_Disassembly (Original_ROMs/)
-#   roms/PC1600-*.bin (8 files)
-#     -- from tinue/PC-1600-ROM (dumps/, uppercase .BIN upstream, renamed
-#        lowercase .bin here to match this repo's existing convention)
+#   roms/PC1600-*-new.bin, PC1600-*-old.bin (6 + 6 files), plus the two
+#   CE-1600P pages roms/PC1600-P1-B4-CE1600P.bin, -P1-B5-CE1600P-OR-F.bin
+#     -- from tinue/PC-1600-ROM (dumps/new, dumps/old, dumps/peripherals;
+#        uppercase .BIN upstream, renamed lowercase .bin with a -new/-old
+#        suffix here)
 #   roms/CE-158.ROM
 #     -- from Jeff-Birt/Sharp_CE-158 (CE-158_ROM_ORIG.bin)
 #   roms/CE-150.ROM
@@ -71,18 +73,43 @@ fetch_if_needed "$PC1500_BASE/PC-1500_A01.ROM" "$ROMS_DIR/PC-1500_A01.ROM" fbc55
 fetch_if_needed "$PC1500_BASE/PC-1500_A03.ROM" "$ROMS_DIR/PC-1500_A03.ROM" 4bcf78a6d3d32e2a0349eb2d28987b8d
 fetch_if_needed "$PC1500_BASE/PC-1500_A04.ROM" "$ROMS_DIR/PC-1500_A04.ROM" 8ebec8b0ef358645df14807c31df7d06
 
-# ---- PC-1600 (tinue/PC-1600-ROM, dumps/) -- upstream files are
-# uppercase .BIN; renamed lowercase .bin here to match this repo's
-# existing filenames (Qt6/CMakeLists.txt globs *.bin, case-sensitive). ----
+# ---- PC-1600 (tinue/PC-1600-ROM) -- upstream files are uppercase .BIN in
+# dumps/new/ (current ROM), dumps/old/ (older ROM) and dumps/peripherals/
+# (CE-1600P). Renamed lowercase .bin here (Qt6/CMakeLists.txt globs *.bin,
+# case-sensitive) and the calculator ROMs get a -new/-old suffix so both
+# versions live side by side in the flat roms/ directory. ----
 PC1600_BASE="https://raw.githubusercontent.com/tinue/PC-1600-ROM/main/dumps"
-fetch_if_needed "$PC1600_BASE/PC1600-LH5803-C000-FFFF.BIN" "$ROMS_DIR/PC1600-LH5803-C000-FFFF.bin" 56168830b46d637b08529a74609bee3f
-fetch_if_needed "$PC1600_BASE/PC1600-P0-B0.BIN"            "$ROMS_DIR/PC1600-P0-B0.bin"            404bf6f2df489e09649167078acd9a25
-fetch_if_needed "$PC1600_BASE/PC1600-P1-B0.BIN"             "$ROMS_DIR/PC1600-P1-B0.bin"            bddbb8bbf0b2bd2d95038f67b8d002ac
-fetch_if_needed "$PC1600_BASE/PC1600-P1-B3.BIN"             "$ROMS_DIR/PC1600-P1-B3.bin"            6f6e1a9d46db7dc91d4322c93583ac81
-fetch_if_needed "$PC1600_BASE/PC1600-P1-B3B.BIN"            "$ROMS_DIR/PC1600-P1-B3B.bin"           2483319acf35da4e848e59ab954abf46
-fetch_if_needed "$PC1600_BASE/PC1600-P1-B4-CE1600P.BIN"     "$ROMS_DIR/PC1600-P1-B4-CE1600P.bin"    05548a8dda3e572d50d4bd281a650ea8
-fetch_if_needed "$PC1600_BASE/PC1600-P1-B5-CE1600P-OR-F.BIN" "$ROMS_DIR/PC1600-P1-B5-CE1600P-OR-F.bin" a675c6dbdf7dc4c10e8d96891e196f8f
-fetch_if_needed "$PC1600_BASE/PC1600-P2-B6.BIN"             "$ROMS_DIR/PC1600-P2-B6.bin"            86cb9036da284de2b04c7946d140a9fd
+
+# fetch_pc1600_calc VERSION BASENAME MD5
+fetch_pc1600_calc() {
+  fetch_if_needed "$PC1600_BASE/$1/$2.BIN" "$ROMS_DIR/$2-$1.bin" "$3"
+}
+
+# New ROM (PEEK #(0,&7FFF) = 4 or 5)
+fetch_pc1600_calc new PC1600-LH5803-C000-FFFF 56168830b46d637b08529a74609bee3f
+fetch_pc1600_calc new PC1600-P0-B0             404bf6f2df489e09649167078acd9a25
+fetch_pc1600_calc new PC1600-P1-B0             bddbb8bbf0b2bd2d95038f67b8d002ac
+fetch_pc1600_calc new PC1600-P1-B3             6f6e1a9d46db7dc91d4322c93583ac81
+fetch_pc1600_calc new PC1600-P1-B3B            2483319acf35da4e848e59ab954abf46
+fetch_pc1600_calc new PC1600-P2-B6             86cb9036da284de2b04c7946d140a9fd
+
+# Old ROM (PEEK #(0,&7FFF) = 130)
+fetch_pc1600_calc old PC1600-LH5803-C000-FFFF 6005b6420bd5e191e81a1562f3242ec9
+fetch_pc1600_calc old PC1600-P0-B0             5afcc22134e106bfd63b899febe9df7c
+fetch_pc1600_calc old PC1600-P1-B0             3bcb6b178f5967c7c8e32afe560a3e75
+fetch_pc1600_calc old PC1600-P1-B3             ded92d8280f8f83ce3498fb9cbfb9b3d
+fetch_pc1600_calc old PC1600-P1-B3B            2e8e075cac8f9696c5e833ceef130a4f
+fetch_pc1600_calc old PC1600-P2-B6             2c977fdd8c924c1492a2c23f67a20f23
+
+# CE-1600P peripheral ROMs (independent of the calculator ROM version)
+fetch_if_needed "$PC1600_BASE/peripherals/PC1600-P1-B4-CE1600P.BIN"      "$ROMS_DIR/PC1600-P1-B4-CE1600P.bin"      05548a8dda3e572d50d4bd281a650ea8
+fetch_if_needed "$PC1600_BASE/peripherals/PC1600-P1-B5-CE1600P-OR-F.BIN" "$ROMS_DIR/PC1600-P1-B5-CE1600P-OR-F.bin" a675c6dbdf7dc4c10e8d96891e196f8f
+
+# Obsolete unsuffixed names from before the new/old split: remove so a stale
+# copy can never mask a missing versioned file.
+for f in LH5803-C000-FFFF P0-B0 P1-B0 P1-B3 P1-B3B P2-B6; do
+  rm -f "$ROMS_DIR/PC1600-$f.bin"
+done
 
 # ---- CE-158 (Jeff-Birt/Sharp_CE-158) ----
 fetch_if_needed "https://raw.githubusercontent.com/Jeff-Birt/Sharp_CE-158/main/CE-158_ROM_ORIG.bin" "$ROMS_DIR/CE-158.ROM" aa952878fb29da4844791d95185649ca

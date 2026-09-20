@@ -24,7 +24,7 @@
 // *"Wenn entweder KBII oder S auf 1 gesetzt ist, so wird das S Symbol
 // angezeigt"* -- "if either KBII or S is set to 1, the S symbol is
 // shown". That describes what `SMBLSET` does with its *argument*, not the
-// panel's wiring: the firmware (PC1600-P2-B6.bin 822DH-8239H) masks bits 3 and
+// panel's wiring: the firmware (PC1600-P2-B6-new.bin 822DH-8239H) masks bits 3 and
 // 7 out of the caller's byte (`AND 77H`) and lights bit 3 -- S -- alone
 // (`OR 08H`) if either was set, so the byte reaching the glass can never
 // carry bit 7 with this ROM.

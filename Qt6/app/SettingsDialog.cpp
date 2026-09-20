@@ -138,6 +138,22 @@ PathRowSpec directorySpec(QWidget* parent, const QString& label, const QString& 
     return spec;
 }
 
+// One file-open start folder row (AppSettings::OpenFolder). Unset -- the
+// default, and what Reset restores -- shows "<last used>": that dialog
+// starts wherever a file was last picked from.
+void addOpenFolderRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids& sections, const QString& label,
+                      const QString& dialogTitle, AppSettings::OpenFolder folder) {
+    PathRowSpec spec = directorySpec(parent, label, dialogTitle, [folder] { return AppSettings::openStartDir(folder); });
+    spec.resetToolTip = SettingsDialog::tr("Start in the folder a file was last loaded from");
+    spec.display = [folder] {
+        const QString dir = AppSettings::openDir(folder);
+        return dir.isEmpty() ? SettingsDialog::tr("<last used>") : dir;
+    };
+    spec.isOverridden = [folder] { return !AppSettings::openDir(folder).isEmpty(); };
+    spec.set = [folder](const QString& dir) { AppSettings::setOpenDir(folder, dir); };
+    addPathRow(grid, row, parent, sections, spec);
+}
+
 // One model's "default preset" row: `modelKey` is AppSettings::
 // defaultPresetPath()'s key, `extension` the preset suffix that model uses.
 void addDefaultPresetRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids& sections, const QString& label,
@@ -153,7 +169,7 @@ void addDefaultPresetRow(QGridLayout* grid, int row, QWidget* parent, SectionGri
     spec.pick = [parent, modelKey, extension] {
         const QString current = AppSettings::defaultPresetPath(modelKey);
         return QFileDialog::getOpenFileName(parent, SettingsDialog::tr("Choose Default Preset"),
-                                            current.isEmpty() ? AppSettings::presetOpenDirOrHome() : current,
+                                            current.isEmpty() ? AppSettings::openStartDir(AppSettings::OpenFolder::Samples) : current,
                                             SettingsDialog::tr("Presets (*.%1);;All Files (*)").arg(extension));
     };
     spec.display = [modelKey] { return AppSettings::defaultPresetPath(modelKey); };
@@ -191,15 +207,12 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
         AppSettings::setStartupModelPreference(startupModelCombo->itemData(index).toString());
     });
 
-    {
-        PathRowSpec spec = directorySpec(this, tr("Samples folder:"), tr("Choose Samples Folder"),
-                                         [] { return AppSettings::presetOpenDirOrHome(); });
-        spec.resetToolTip = tr("Revert to the system default");
-        spec.display = [] { return AppSettings::presetOpenDirOrHome(); };
-        spec.isOverridden = [] { return !AppSettings::presetOpenDir().isEmpty(); };
-        spec.set = [](const QString& dir) { AppSettings::setPresetOpenDir(dir); };
-        addPathRow(general, 1, this, sections, spec);
-    }
+    addOpenFolderRow(general, 1, this, sections, tr("Samples folder:"), tr("Choose Samples Folder"),
+                     AppSettings::OpenFolder::Samples);
+    addOpenFolderRow(general, 2, this, sections, tr("Basic folder:"), tr("Choose Basic Folder"),
+                     AppSettings::OpenFolder::Basic);
+    addOpenFolderRow(general, 3, this, sections, tr("Assembly folder:"), tr("Choose Assembly Folder"),
+                     AppSettings::OpenFolder::Assembly);
 
     // ── Default presets ──────────────────────────────────────────────────
     // Applied whenever that model gets selected (including at startup) --

@@ -22,7 +22,7 @@
 //              LH5803 core boots standalone.
 //   8000-BFFF  CE-158 ROM (PVOUT=1) or CE-150 ROM (PVOUT=0) window --
 //              not backed with data, open bus.
-//   C000-FFFF  internal ROM (PC1600-LH5803-C000-FFFF.bin), fixed, loadable.
+//   C000-FFFF  internal ROM (PC1600-LH5803-C000-FFFF-new.bin), fixed, loadable.
 //
 // ME1 defaults to aliasing ME0 (LH5801Bus's own conservative default) --
 // the ME0/ME1-as-two-distinct-64KB-areas nuance is not modeled; see
@@ -31,7 +31,7 @@ class LH5803Memory : public LH5801Bus {
 public:
     LH5803Memory() = default;
 
-    /// Loads the 16KB internal ROM at C000-FFFF (PC1600-LH5803-C000-FFFF.bin). Returns
+    /// Loads the 16KB internal ROM at C000-FFFF (PC1600-LH5803-C000-FFFF-new.bin). Returns
     /// false (untouched) if `size` isn't exactly 16384 bytes.
     bool loadROM(const uint8_t* data, size_t size);
     bool loadROMFile(const std::string& path);

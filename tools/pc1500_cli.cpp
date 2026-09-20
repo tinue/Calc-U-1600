@@ -10,7 +10,7 @@
 //     halting execution.
 //
 // Usage: pc1500_cli <rom-file> [maxCycles]
-//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>]
+//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--wav <out.wav>]
 //
 // The --preset form parses and applies a `.pc1500` scenario file
 // (PresetFile.hpp/PC1500PresetLoader.hpp) instead of a bare ROM --
@@ -23,6 +23,9 @@
 // cwd-relative convention as `roms/`). Repeat it to add fallback
 // directories, searched in the order given after the first. A
 // `- modulespecfile: <path>` reference ignores it.
+//
+// --wav <out.wav> records the buzzer (PC6, see PiezoSampler.hpp) for the
+// whole run -- preset script included -- as 48 kHz mono 16-bit PCM.
 
 #include <array>
 #include <cstdio>
@@ -31,6 +34,7 @@
 #include <string>
 #include <vector>
 
+#include "../Core/Audio/WavFile.hpp"
 #include "../Core/PC1500/PC1500Machine.hpp"
 #include "../Core/PC1500/PresetFile.hpp"
 #include "../Core/PC1500/PC1500PresetLoader.hpp"
@@ -42,9 +46,14 @@ int main(int argc, char** argv) {
     std::vector<std::string> extraModuleDirs;  // 2nd+ `--modules-dir`, searched after `moduleDir`
     bool moduleDirSet = false;
     bool dumpBasic = false;
+    std::string wavPath;
     {
         std::vector<char*> kept;
         for (int i = 0; i < argc; ++i) {
+            if (std::strcmp(argv[i], "--wav") == 0 && i + 1 < argc) {
+                wavPath = argv[++i];
+                continue;
+            }
             if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
                 if (!moduleDirSet) { moduleDir = argv[++i]; moduleDirSet = true; }
                 else               { extraModuleDirs.push_back(argv[++i]); }
@@ -62,6 +71,7 @@ int main(int argc, char** argv) {
     if (argc < 2) {
         std::fprintf(stderr, "usage: %s <rom-file> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       %s --preset <preset-file.pc1500> [maxCycles]\n", argv[0]);
+        std::fprintf(stderr, "       options: --modules-dir <dir>  --dump-basic  --wav <out.wav>\n");
         return 1;
     }
 
@@ -95,6 +105,17 @@ int main(int argc, char** argv) {
     // the tail loop executes afterward. That script is usually the whole
     // point of a debug preset.
     machine.setTraceFlags(TRACE_PC | TRACE_REGS_LIGHT | TRACE_BREAKPOINTS);
+
+    // --wav: drain the buzzer audio as the run goes (the sampler only
+    // buffers ~1 s). The yield hook covers the preset script's own
+    // runCycles(); the tail loop below drains explicitly.
+    std::vector<int16_t> wav;
+    auto drainWav = [&] {
+        int16_t chunk[4096];
+        size_t n;
+        while ((n = machine.drainAudio(chunk, 4096)) > 0) wav.insert(wav.end(), chunk, chunk + n);
+    };
+    if (!wavPath.empty()) machine.setYieldHook(drainWav, 1300000 / 20);
 
     if (usingPreset) {
         std::string presetPath = argv[2];
@@ -148,6 +169,17 @@ int main(int argc, char** argv) {
         pcHistogram[pcBefore]++;
         consumed += static_cast<uint64_t>(c);
         steps++;
+        if (!wavPath.empty() && (steps & 0x3FFF) == 0) drainWav();
+    }
+    if (!wavPath.empty()) {
+        machine.setYieldHook({}, 0);
+        drainWav();
+        if (!writeWavMono16(wavPath, wav, machine.audioSampleRate())) {
+            std::fprintf(stderr, "failed to write '%s'\n", wavPath.c_str());
+            return 1;
+        }
+        std::printf("Wrote %zu samples (%.2f s) of buzzer audio to %s\n", wav.size(),
+                    static_cast<double>(wav.size()) / machine.audioSampleRate(), wavPath.c_str());
     }
 
     std::printf("Ran %llu instructions, %llu cycles\n", (unsigned long long)steps, (unsigned long long)consumed);

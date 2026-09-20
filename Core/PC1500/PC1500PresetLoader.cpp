@@ -4,14 +4,13 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <iterator>
 
+#include "../HostClock.hpp"
 #include "../TraceTypes.hpp"
 
-#include "../Connector/CE1638PlusCard.hpp"
-#include "../Connector/CE155Card.hpp"
-#include "../Connector/CE163FCard.hpp"
 #include "../Connector/MemoryCardCatalog.hpp"
 #include "../Connector/SoftwareDefinedCard.hpp"
 #include "../Resources/BundledRomCatalog.hpp"
@@ -19,6 +18,7 @@
 #include "PC1500BasicLoader.hpp"
 #include "PC1500BasicTyper.hpp"
 #include "PC1500Machine.hpp"
+#include "PC1500Screenshot.hpp"
 
 namespace {
 
@@ -147,6 +147,26 @@ bool runSteps(PC1500Machine& machine, const std::vector<PresetStep>& steps, std:
                 if (log) log("  trace: started -> " + path);
                 break;
             }
+            case PresetStep::Kind::Screenshot: {
+                // PNG of the dot matrix, as it stands right now, into the
+                // trace directory (same image as the GUI's Copy Screen).
+                const std::string path = traceDir + "/" + step.text;
+                std::string writeError;
+                if (!writeLcdScreenshotPng(pc1500LcdBitmap(machine), kPC1500ScreenMm, path, &writeError)) {
+                    if (error) *error = "screenshot: " + writeError;
+                    if (log) log("  screenshot: FAILED: " + writeError);
+                    return false;
+                }
+                if (log) log("  screenshot: -> " + path);
+                break;
+            }
+            case PresetStep::Kind::SyncClock: {
+                const std::tm t = seedClockFromHostTime(machine);
+                char stamp[32];
+                std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &t);
+                if (log) log(std::string("  syncclock: -> ") + stamp);
+                break;
+            }
         }
     }
     return true;
@@ -187,20 +207,8 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
     if (log) log("ROM loaded: revision " + preset.romVariant);
     // Attach before reset/boot-settle, not after -- a real module is
     // physically present before power-on, so the ROM's own boot-time
-    // memory sizing sees it too. Throwaway proof-of-concept cards for the
-    // Phase 4 connector layer (see PresetFile::memoryExpansionModule's doc
-    // comment) -- neither is the general Phase 7 software-defined module.
-    if (preset.memoryExpansionModule == "ce155") {
-        machine.attachExpansionCard(std::make_unique<CE155Card>());
-        result.expansionModuleLabel = "ce155";
-    } else if (preset.memoryExpansionModule == "ce1638plus") {
-        machine.attachExpansionCard(std::make_unique<CE1638PlusCard>());
-        result.expansionModuleLabel = "ce1638plus";
-    } else if (preset.memoryExpansionModule == "ce163f") {
-        machine.attachExpansionCard(std::make_unique<CE163FCard>());
-        result.expansionModuleLabel = "ce163f";
-    } else if (!preset.memoryExpansionModuleSpecFile.empty() ||
-               !preset.memoryExpansionModuleSpecName.empty()) {
+    // memory sizing sees it too.
+    if (!preset.memoryExpansionModuleSpecFile.empty() || !preset.memoryExpansionModuleSpecName.empty()) {
         CardHost host = (preset.variant == PC1500Variant::PC1500A) ? CardHost::PC1500A
                                                                    : CardHost::PC1500;
         std::string err;
@@ -214,7 +222,7 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
             if (log) log("modulespec load FAILED: " + err);
             return result;
         }
-        auto card = makeSoftwareDefinedCard(specPath, host, &err, &result.expansionModuleLabel);
+        auto card = makeSoftwareDefinedCard(specPath, host, &err);
         if (!card) {
             result.error = "memory-expansion modulespec: " + err;
             if (log) log("modulespec load FAILED: " + err);
@@ -224,8 +232,6 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
         result.expansionModuleResolvedPath = specPath;
         if (log) log("software-defined module attached: " + specPath);
     }
-    if (log && !preset.memoryExpansionModule.empty())
-        log("expansion module attached: " + preset.memoryExpansionModule);
 
     // The CE-150 plotter, attached before reset -- a real peripheral is
     // physically present at power-on, so the boot ROM's peripheral scan
@@ -245,8 +251,7 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
     if (onArmed) onArmed(result);
 
     machine.reset();
-    machine.runCycles(kBootSettleCycles);
-    waitIdle(machine, kIdleCap);
+    runBootToPrompt(machine);
 
     // Connecting the CE-150 (like any memory-map change) makes the ROM do
     // a cold memory check on power-up and stop at the "NEW0? :CHECK"

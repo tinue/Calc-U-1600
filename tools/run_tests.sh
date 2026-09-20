@@ -5,6 +5,7 @@ set -e
 cd "$(dirname "$0")/.."
 clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/CPU/LH5801/LH5801.cpp \
+  Core/Audio/PiezoSampler.cpp \
   Core/PC1500/PC1500Memory.cpp \
   Core/PC1500/PC1500Machine.cpp \
   Core/PC1500/PC1500Keyboard.cpp \
@@ -13,6 +14,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/PC1500/PresetFile.cpp \
   Core/PC1500/PC1500BasicTyper.cpp \
   Core/PC1500/PC1500BasicLoader.cpp \
+  Core/PC1500/PC1500MachineCodeLoader.cpp \
   Core/PC1500/PC1500PresetLoader.cpp \
   Core/PC1500/PC1500TraceFile.cpp \
   Core/PC1600/PC1600Memory.cpp \
@@ -28,13 +30,18 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/PC1600/PC1600BasicLoader.cpp \
   Core/PC1600/PC1600ProgramPlacement.cpp \
   Core/PC1600/PC1600MachineImage.cpp \
+  Core/PC1600/PC1600MachineCodeLoader.cpp \
   Core/PC1600/PC1600PresetLoader.cpp \
+  Core/Display/LcdScreenshot.cpp \
+  Core/KeyPaste.cpp \
+  Core/MachineCodeFile.cpp \
   Core/Basic/BasicBinaryImage.cpp \
   Core/Basic/BasicProgramSource.cpp \
   Core/tests/lh5801_tests.cpp \
   Core/tests/connector_tests.cpp \
   Core/tests/ce155_tests.cpp \
-  Core/tests/ce1638plus_tests.cpp \
+  Core/tests/ce1638_tests.cpp \
+  Core/tests/ce502b_tests.cpp \
   Core/tests/ce163f_tests.cpp \
   Core/tests/memory_card_tests.cpp \
   Core/tests/battery_card_instance_tests.cpp \
@@ -62,6 +69,11 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/pc1600_program_placement_tests.cpp \
   Core/tests/pc1600_machine_image_tests.cpp \
   Core/tests/basic_program_source_tests.cpp \
+  Core/tests/piezo_sampler_tests.cpp \
+  Core/tests/key_paste_tests.cpp \
+  Core/tests/lcd_screenshot_tests.cpp \
+  Core/tests/machine_code_file_tests.cpp \
   Core/Basic/vendor/sharpdx/libsharpdx.a \
+  -lz \
   -o /tmp/lh5801_tests
 /tmp/lh5801_tests

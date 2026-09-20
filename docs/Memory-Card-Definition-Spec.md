@@ -320,9 +320,10 @@ This same sub-model is reused, unmodified, in two other places:
     (Microchip SST39SF010A: bank 8 reserved for the module's own
     management firmware, banks 9–F user-writable), all 16 banks selected
     by the same trigger-based latch on pin 18 sampling `A0`–`A3` (§6). A
-    hardcoded connector-layer prototype (`Core/Connector/CE163FCard.hpp`)
-    implemented this ahead of the general-purpose software-defined module
-    this spec describes — that implementation (unlock addresses,
+    hardcoded connector-layer prototype (`CE163FCard`, since removed in
+    favour of `ce163f.card.yaml`) implemented this ahead of the
+    general-purpose software-defined module this spec describes — that
+    implementation (unlock addresses,
     program/erase state machine, the bank-latch/command-decoder
     independence above) was the concrete reference for every Flash field
     named above, recovered from a real CE163F firmware disassembly, and
@@ -521,9 +522,9 @@ Distinct from D1 (addressing) and D2 (content kind) is *what's inside* a
 region or bank-range at load time:
 
 - A **Regular, writable** range typically starts as whatever the real
-  chip's power-up state is (per this project's own established
-  convention — `PC1500Memory`'s RAM arrays power up as `0xFF`, not zero,
-  matching real SRAM) — the definition
+  chip's power-up state is (per this project's own convention — RAM
+  powers up as `0x00`: CMOS RAM that has lost its supply comes back
+  mostly zero on real hardware, not `0xFF`) — the definition
   file should be able to declare this per range rather than assume the
   emulator's global default is always right for every module (a
   battery-backed module that's been "used" already, for instance, isn't

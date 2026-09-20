@@ -20,6 +20,7 @@
 #include "../PC1600/PC1600Machine.hpp"
 #include "../PC1600/PC1600PresetLoader.hpp"
 #include "PresetTestSupport.hpp"
+#include "TestRoms.hpp"
 
 namespace {
 
@@ -35,46 +36,20 @@ bool parse(const std::string& yaml, PresetFile* out, std::string* error) {
     return parsePresetString(yaml, "/tmp/pc1600_preset_tests_scratch.pc1600", out, error);
 }
 
-bool readRomFile(const char* path, std::vector<uint8_t>* out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    *out = std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return !out->empty();
-}
-
-// Loads the confirmed PC-1600 ROM set; returns false (test skipped) if the
-// images aren't at their repo-root path. Mirrors pc1600_slot_module_tests.
-bool loadRomSet(PC1600Machine& m) {
-    std::vector<uint8_t> i0, ii0, iii3, r3b, iv6, r1500;
-    if (!readRomFile("roms/PC1600-P0-B0.bin", &i0) ||
-        !readRomFile("roms/PC1600-P1-B0.bin", &ii0) ||
-        !readRomFile("roms/PC1600-P1-B3.bin", &iii3) ||
-        !readRomFile("roms/PC1600-P1-B3B.bin", &r3b) ||
-        !readRomFile("roms/PC1600-P2-B6.bin", &iv6) ||
-        !readRomFile("roms/PC1600-LH5803-C000-FFFF.bin", &r1500)) {
-        return false;
-    }
-    return m.loadBank0(i0.data(), i0.size(), ii0.data(), ii0.size()) &&
-           m.loadBank3Rom(iii3.data(), iii3.size()) &&
-           m.loadBank3bRom(r3b.data(), r3b.size()) &&
-           m.loadBank6Rom(iv6.data(), iv6.size()) &&
-           m.loadLH5803Rom(r1500.data(), r1500.size());
-}
-
 void test_parser_accepts_pc1600_with_slot_and_keys() {
     PresetFile p;
     std::string err;
     CHECK(parse(
         "model: PC-1600\n"
         "memory-expansion-1:\n"
-        "  - module: ce155\n"
+        "  - modulespec: CE-155\n"
         "keys:\n"
         "  - type: MEM\n"
         "  - key: enter\n",
         &p, &err));
     CHECK(p.isPC1600());
-    CHECK(p.slot1Module == "ce155");
-    CHECK(p.slot2Module.empty());
+    CHECK(p.slot1ModuleSpecName == "CE-155");
+    CHECK(p.slot2ModuleSpecName.empty() && p.slot2ModuleSpecFile.empty());
     CHECK(p.sections.size() == 1);
     CHECK(p.sections[0].kind == PresetSection::Kind::Keys);
     CHECK(p.sections[0].keys.size() == 2);
@@ -92,18 +67,18 @@ void test_parser_rejects_multichar_key() {
     CHECK(err.find("MEM") != std::string::npos);
 }
 
-void test_parser_slot2_and_ram_modules() {
+void test_parser_both_slots() {
     PresetFile p;
     std::string err;
     CHECK(parse(
         "model: PC-1600\n"
         "memory-expansion-1:\n"
-        "  - module: ram32\n"
+        "  - modulespec: CE-1600M\n"
         "memory-expansion-2:\n"
-        "  - module: ram16\n",
+        "  - modulespec: CE-1601M\n",
         &p, &err));
-    CHECK(p.slot1Module == "ram32");
-    CHECK(p.slot2Module == "ram16");
+    CHECK(p.slot1ModuleSpecName == "CE-1600M");
+    CHECK(p.slot2ModuleSpecName == "CE-1601M");
 }
 
 void test_parser_rejects_cross_model_fields() {
@@ -113,7 +88,7 @@ void test_parser_rejects_cross_model_fields() {
     CHECK(!parse("model: PC-1600\nfirmware: A04\n", &p, &err));
     CHECK(!err.empty());
     // PC-1600 preset with the unsuffixed memory-expansion: block.
-    CHECK(!parse("model: PC-1600\nmemory-expansion:\n  - module: ce155\n", &p, &err));
+    CHECK(!parse("model: PC-1600\nmemory-expansion:\n  - modulespec: CE-155\n", &p, &err));
     // PC-1600 `format: binary` (machine-language) without a target slot --
     // rejected; a slot is mandatory (see test_parser_pc1600_machine_binary).
     // Fresh PresetFile: parsePresetFile() merges into *out rather than
@@ -123,22 +98,12 @@ void test_parser_rejects_cross_model_fields() {
     CHECK(!parse("model: PC-1600\nprogram:\n  format: binary\n  path: x.bin\n  address: 0x8000\n", &p, &err));
     CHECK(err.find("slot") != std::string::npos);
     // PC-1500 preset with a per-slot block.
-    CHECK(!parse("model: PC-1500A\nmemory-expansion-1:\n  - module: ce155\n", &p, &err));
-    // Unknown PC-1600 slot module (ce1620m is a real Sharp module name but
-    // not one this loader builds a card for).
-    CHECK(!parse("model: PC-1600\nmemory-expansion-1:\n  - module: ce1620m\n", &p, &err));
-}
-
-void test_parser_accepts_prototype_slot_modules() {
-    // The CE-1638+ / CE-163F connector-layer proof-of-concept cards plug
-    // into a PC-1600 memory slot pin-for-pin (SlotModuleFactory), same as
-    // the PC-1500 `memory-expansion:` path already accepts them.
-    PresetFile p;
-    std::string err;
-    CHECK(parse("model: PC-1600\nmemory-expansion-1:\n  - module: ce1638plus\n", &p, &err));
-    CHECK(p.slot1Module == "ce1638plus");
-    CHECK(parse("model: PC-1600\nmemory-expansion-2:\n  - module: ce163f\n", &p, &err));
-    CHECK(p.slot2Module == "ce163f");
+    p = PresetFile{};
+    CHECK(!parse("model: PC-1500A\nmemory-expansion-1:\n  - modulespec: CE-155\n", &p, &err));
+    // The built-in `- module: <name>` form is gone.
+    p = PresetFile{};
+    CHECK(!parse("model: PC-1600\nmemory-expansion-1:\n  - module: ce155\n", &p, &err));
+    CHECK(err.find("modulespec") != std::string::npos);
 }
 
 void test_parser_pc1600_machine_binary() {
@@ -250,7 +215,7 @@ bool writeTextFile(const std::string& path, const std::string& text) {
 // address.
 void test_loader_machine_binary_header() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_loader_machine_binary_header: PC-1600 ROM images not found\n");
         return;
     }
@@ -273,7 +238,7 @@ void test_loader_machine_binary_header() {
 // error naming `length:`; supplying `length:` overrides it.
 void test_loader_machine_binary_length_mismatch() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_loader_machine_binary_length_mismatch: PC-1600 ROM images not found\n");
         return;
     }
@@ -291,7 +256,7 @@ void test_loader_machine_binary_length_mismatch() {
 
     // Same file, explicit length: 4 -> loads all four bytes.
     PC1600Machine m2;
-    loadRomSet(m2);
+    loadPC1600Roms(m2);
     PresetFile p2;
     CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin +
                     "\n  length: 4\n",
@@ -305,7 +270,7 @@ void test_loader_machine_binary_length_mismatch() {
 // Functional: a headerless blob needs both `address:` and `length:`.
 void test_loader_machine_binary_headerless() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_loader_machine_binary_headerless: PC-1600 ROM images not found\n");
         return;
     }
@@ -321,7 +286,7 @@ void test_loader_machine_binary_headerless() {
     CHECK(r.error.find("required") != std::string::npos);
 
     PC1600Machine m2;
-    loadRomSet(m2);
+    loadPC1600Roms(m2);
     PresetFile p2;
     CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin +
                     "\n  address: 0xD200\n  length: 4\n",
@@ -337,7 +302,7 @@ void test_loader_machine_binary_headerless() {
 // completes cleanly.
 void test_loader_machine_binary_autorun() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_loader_machine_binary_autorun: PC-1600 ROM images not found\n");
         return;
     }
@@ -378,7 +343,7 @@ void test_parser_accepts_basic_text_program() {
 // program loads and only the over-length line is reported.
 void test_loader_reports_overlong_basic_line() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_loader_reports_overlong_basic_line: PC-1600 ROM images not found\n");
         return;
     }
@@ -412,7 +377,7 @@ void test_loader_applies_ce155_and_type_step() {
     CHECK(parse(
         "model: PC-1600\n"
         "memory-expansion-1:\n"
-        "  - module: ce155\n"
+        "  - modulespec: CE-155\n"
         "keys:\n"
         "  - type: MEM\n",
         &p, &err));
@@ -420,7 +385,7 @@ void test_loader_applies_ce155_and_type_step() {
     PC1600Machine m;
     // (No ROM set loaded -- the loader doesn't require it; boot-settle just
     // spins the CPU. Slot wiring + step replay is what we're checking.)
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PC1600PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "Qt6/resources/cards");
     CHECK(r.ok);
     CHECK(m.slot1Attached());
     CHECK(!m.slot2Attached());
@@ -502,7 +467,7 @@ void test_type_step_accepts_shifted_punctuation() {
 // (which would turn `INIT"S2:","M"` into `INITs2M`).
 void test_type_step_shifted_punctuation_reaches_input_buffer() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr,
                      "SKIP test_type_step_shifted_punctuation_reaches_input_buffer: PC-1600 ROM images not found\n");
         return;
@@ -535,7 +500,7 @@ void test_type_step_shifted_punctuation_reaches_input_buffer() {
 // uppercased the way the pre-typer raw-keystroke `type:` did.
 void test_type_step_is_case_sensitive() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_type_step_is_case_sensitive: PC-1600 ROM images not found\n");
         return;
     }
@@ -557,7 +522,7 @@ void test_type_step_is_case_sensitive() {
 // disassembly), but the load must complete cleanly with nothing rejected.
 void test_loader_applies_basic_text_program() {
     PC1600Machine m;
-    if (!loadRomSet(m)) {
+    if (!loadPC1600Roms(m)) {
         std::fprintf(stderr, "SKIP test_loader_applies_basic_text_program: PC-1600 ROM images not found\n");
         return;
     }
@@ -782,8 +747,7 @@ void test_loader_floppy_key_missing_file_is_an_error() {
 int run_pc1600_preset_tests() {
     test_parser_accepts_pc1600_with_slot_and_keys();
     test_parser_rejects_multichar_key();
-    test_parser_slot2_and_ram_modules();
-    test_parser_accepts_prototype_slot_modules();
+    test_parser_both_slots();
     test_parser_pc1600_machine_binary();
     test_parser_rejects_cross_model_fields();
     test_parser_accepts_basic_text_program();

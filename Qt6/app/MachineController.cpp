@@ -7,8 +7,16 @@
 #include <QMessageBox>
 #include <QTimer>
 
+#include <algorithm>
+
+#include "PC1500/PC1500BasicTyper.hpp"
 #include "PC1500/PC1500Machine.hpp"
+#include "PC1500/PC1500Screenshot.hpp"
+#include "PC1500/PC1500TypedInput.hpp"
+#include "PC1600/PC1600BasicTyper.hpp"
 #include "PC1600/PC1600Machine.hpp"
+#include "PC1600/PC1600Screenshot.hpp"
+#include "PC1600/PC1600TypedInput.hpp"
 #include "PC1600/PtySerialLink.hpp"
 #include "Resources/BundledRomCatalog.hpp"
 #include "AppPaths.hpp"
@@ -70,25 +78,40 @@ MachineController::MachineController(QObject* parent) : QObject(parent) {
 
 MachineController::~MachineController() = default;
 
-void MachineController::switchModel(Model model) {
+void MachineController::switchModel(Model model, bool keepPlotter) {
+    const bool restoreCE150 = keepPlotter && ce150Attached();
+    const bool restoreCE1600P = keepPlotter && ce1600pAttached();
+    flushFloppyBeforeDetach(); // the old machine (and its disk) is going away
     m_model = model;
+    m_paste.cancel({}); // the machine it was typing into is going away
     m_pc1500.reset();
     m_pc1600.reset();
 
     if (model == Model::PC1600) {
-        m_pc1600 = std::make_unique<PC1600Machine>();
-        loadPC1600RomSet(*m_pc1600);
+        std::string romErr;
+        for (;;) {
+            m_pc1600 = std::make_unique<PC1600Machine>();
+            if (loadPC1600RomSet(*m_pc1600, &romErr)) break;
+            // Only the old ROM set is optional (its dump may be missing or
+            // incomplete): warn, fall back to the new ROM and retry once --
+            // a new-ROM failure quits. reportMissingRomAndExit() is
+            // [[noreturn]], so the retry can't loop a third time.
+            if (m_pc1600RomVersion != PC1600RomVersion::Old) reportMissingRomAndExit(romErr);
+            QMessageBox::warning(nullptr, QObject::tr("Old ROM unavailable"),
+                                 QObject::tr("The old PC-1600 ROM could not be loaded:\n\n%1\n\n"
+                                             "Using the new ROM instead.")
+                                     .arg(QString::fromStdString(romErr)));
+            m_pc1600RomVersion = PC1600RomVersion::New;
+        }
 
         // Attach any currently-selected memory modules before the cold
         // boot -- a module's state must be visible on the very first ROM
         // check.
         if (m_moduleManager) m_moduleManager->attachAllToFreshMachine();
+        if (restoreCE150) attachCE150();
+        if (restoreCE1600P) attachCE1600P();
 
         attachSerialLink(*m_pc1600);
-
-        // App launch always does a full cold boot.
-        m_pc1600->allReset();
-        seedClockFromHost();
     } else {
         const auto variant = (model == Model::PC1500A) ? PC1500Variant::PC1500A : PC1500Variant::PC1500;
         // PC-1500A is A04-only (PC1500Variant.hpp) -- clamp regardless of
@@ -103,44 +126,56 @@ void MachineController::switchModel(Model model) {
         }
 
         if (m_moduleManager) m_moduleManager->attachAllToFreshMachine();
-
-        // PC1500Machine has only one reset level.
-        m_pc1500->reset();
-        seedClockFromHost();
+        if (restoreCE150) attachCE150();
     }
+
+    // Every rebuild is a full cold boot, run flat out to the prompt (incl. a
+    // plotter's power-on init), after which resetToPrompt() sets the clock
+    // from the host -- the boot ran seconds of emulated time ahead of it.
+    // PC1500Machine has only one reset level, so only the PC-1600 gets the
+    // ALL RESET; a freshly-constructed machine's RAM is cleared either way.
+    resetToPrompt(/*allReset=*/model == Model::PC1600);
+    discardAudio(); // whatever the flat-out boot beeped is stale
 
     AppSettings::setLastUsedModel(static_cast<int>(m_model));
     emit modelChanged(m_model);
 }
 
+void MachineController::setPC1600RomVersion(PC1600RomVersion version) {
+    m_pc1600RomVersion = version;
+    if (m_model == Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
+}
+
 void MachineController::setPC1500RomRevision(PC1500RomRevision revision) {
     m_pc1500RomRevision = revision;
-    if (m_model != Model::PC1600) switchModel(m_model); // rebuild with the new ROM
+    if (m_model != Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
 }
 
 std::vector<std::string> MachineController::bundledRomDirs() {
     return {AppPaths::bundledResourcesDir().toStdString()};
 }
 
-void MachineController::loadPC1600RomSet(PC1600Machine& machine) {
-    std::string err;
-    if (!BundledRoms::loadPC1600RomSet(machine, bundledRomDirs(), &err)) {
-        reportMissingRomAndExit(err);
-    }
+bool MachineController::loadPC1600RomSet(PC1600Machine& machine, std::string* error) {
+    const char* version = m_pc1600RomVersion == PC1600RomVersion::Old ? "old" : "new";
+    return BundledRoms::loadPC1600RomSet(machine, bundledRomDirs(), version, error);
 }
 
 PC1500Machine& MachineController::resetBareForPresetPC1500(PC1500Variant variant) {
+    m_paste.cancel({});
     m_pc1500.reset();
     m_pc1600.reset();
     m_pc1500 = std::make_unique<PC1500Machine>(variant);
     return *m_pc1500;
 }
 
-PC1600Machine& MachineController::resetBareForPresetPC1600() {
+PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion version) {
+    m_pc1600RomVersion = version;
+    m_paste.cancel({});
     m_pc1500.reset();
     m_pc1600.reset();
     m_pc1600 = std::make_unique<PC1600Machine>();
-    loadPC1600RomSet(*m_pc1600);
+    std::string romErr;
+    if (!loadPC1600RomSet(*m_pc1600, &romErr)) reportMissingRomAndExit(romErr);
     attachSerialLink(*m_pc1600);
     return *m_pc1600;
 }
@@ -189,22 +224,60 @@ void MachineController::seedClockFromHost() {
     }
 }
 
-void MachineController::resetSimple() {
+void MachineController::resetToPrompt(bool allReset) {
+    cancelPaste();
     if (m_pc1600) {
-        m_pc1600->reset();
+        if (allReset) {
+            m_pc1600->allReset();
+        } else {
+            m_pc1600->reset();
+        }
+        runBootToPrompt(*m_pc1600);
     } else if (m_pc1500) {
-        m_pc1500->reset();
+        if (allReset) {
+            m_pc1500->allReset();
+        } else {
+            m_pc1500->reset();
+        }
+        runBootToPrompt(*m_pc1500);
     }
+    // After the boot, not before: it ran flat out through seconds of
+    // emulated time the clock would otherwise run ahead by.
+    seedClockFromHost();
 }
 
-void MachineController::resetAll() {
-    if (m_pc1600) {
-        m_pc1600->allReset();
-        seedClockFromHost();
-    } else if (m_pc1500) {
-        // No distinct ALL RESET level exists for PC1500/1500A in Core.
-        m_pc1500->reset();
+namespace {
+
+// ~4 frames @60Hz: long enough for the ROM's key-scan loop to see the press.
+constexpr int kKeyHoldFrames = 4;
+// 3 s of emulated time: don't hang if the power-down path never completes.
+constexpr int kPowerOffTimeoutFrames = 180;
+
+}  // namespace
+
+void MachineController::powerCycleAround(const std::function<void()>& change) {
+    if (!isMachinePoweredOn()) {
+        change();  // already off: no synthetic power cycle needed
+        return;
     }
+    cancelPaste();
+    const auto frame = static_cast<std::uint64_t>(clockHz() / 60);
+    auto cycle = [&](auto& machine) {
+        machine.pressKey("off");
+        machine.runCycles(frame * kKeyHoldFrames);
+        machine.releaseKey("off");
+        for (int i = 0; i < kPowerOffTimeoutFrames && isMachinePoweredOn(); ++i) machine.runCycles(frame);
+        change();
+        machine.setOnKeyPressed(true);
+        machine.runCycles(frame * kKeyHoldFrames);
+        machine.setOnKeyPressed(false);
+        runBootToPrompt(machine);
+    };
+    if (m_pc1600) cycle(*m_pc1600);
+    else if (m_pc1500) cycle(*m_pc1500);
+    // After the run, not before: it went flat out through seconds of emulated
+    // time the clock would otherwise run ahead by.
+    seedClockFromHost();
 }
 
 void MachineController::pressKey(const std::string& name) {
@@ -253,12 +326,70 @@ void MachineController::enqueueShiftedKey(const std::string& baseName) {
     enqueueKey(baseName);
 }
 
-void MachineController::advance(std::uint64_t cyclesBudget) {
+void MachineController::pasteText(const std::string& text) {
+    if (!m_pc1500 && !m_pc1600) return;
+    if (!m_paste.active()) m_pasteFrameCycles = 0;
     if (m_pc1600) {
-        m_pc1600->runCycles(cyclesBudget);
-    } else if (m_pc1500) {
-        m_pc1500->runCycles(cyclesBudget);
+        m_paste.setPacing(pc1600PastePacing());
+        m_paste.append(buildPasteSteps(text, pc1600ResolveTypedChar));
+    } else {
+        m_paste.setPacing(pc1500PastePacing());
+        m_paste.append(buildPasteSteps(text, pc1500ResolveTypedChar));
     }
+}
+
+void MachineController::cancelPaste() {
+    m_paste.cancel([this](const std::string& key) { releaseKey(key); });
+}
+
+GrayImage MachineController::currentScreenImage() const {
+    if (m_pc1600) return renderLcdImage(pc1600LcdBitmap(*m_pc1600), kPC1600ScreenMm);
+    if (m_pc1500) return renderLcdImage(pc1500LcdBitmap(*m_pc1500), kPC1500ScreenMm);
+    return GrayImage{};
+}
+
+void MachineController::runActive(std::uint64_t cycles) {
+    if (m_pc1600) {
+        m_pc1600->runCycles(cycles);
+    } else if (m_pc1500) {
+        m_pc1500->runCycles(cycles);
+    }
+}
+
+void MachineController::pasteOnFrame() {
+    const bool atPrompt = m_pc1600 ? pc1600AtBasicPrompt(*m_pc1600)
+                                   : (m_pc1500 && pc1500AtBasicPrompt(*m_pc1500));
+    m_paste.onFrame([this](const std::string& key) { pressKey(key); },
+                    [this](const std::string& key) { releaseKey(key); }, atPrompt);
+}
+
+void MachineController::advance(std::uint64_t cyclesBudget) {
+    // While a paste is typing, run in 60 Hz emulated frames and let the
+    // feeder act at each frame boundary (its cadence is counted in frames,
+    // so it holds under wall-clock pacing and turbo alike).
+    const auto frameCycles = static_cast<std::uint64_t>(clockHz() / 60.0);
+    while (m_paste.active() && cyclesBudget > 0 && frameCycles > 0) {
+        const std::uint64_t chunk = std::min(cyclesBudget, frameCycles - m_pasteFrameCycles);
+        runActive(chunk);
+        cyclesBudget -= chunk;
+        m_pasteFrameCycles += chunk;
+        if (m_pasteFrameCycles >= frameCycles) {
+            m_pasteFrameCycles = 0;
+            pasteOnFrame();
+        }
+    }
+    if (cyclesBudget > 0) runActive(cyclesBudget);
+}
+
+std::size_t MachineController::drainAudio(std::int16_t* out, std::size_t max) {
+    if (m_pc1600) return m_pc1600->drainAudio(out, max);
+    if (m_pc1500) return m_pc1500->drainAudio(out, max);
+    return 0;
+}
+
+void MachineController::discardAudio() {
+    if (m_pc1600) m_pc1600->discardAudio();
+    else if (m_pc1500) m_pc1500->discardAudio();
 }
 
 double MachineController::clockHz() const {

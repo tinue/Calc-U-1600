@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds the headless PC-1600 CLI harness. Usage:
-#   tools/build_pc1600_cli.sh && ./headless/pc1600_cli roms/PC1600-P0-B0.bin roms/PC1600-P1-B0.bin
+#   tools/build_pc1600_cli.sh && ./headless/pc1600_cli roms/PC1600-P0-B0-new.bin roms/PC1600-P1-B0-new.bin
 #   tools/build_pc1600_cli.sh && ./headless/pc1600_cli --preset examples/foo.pc1600 --dump-basic
 set -e
 cd "$(dirname "$0")/.."
@@ -13,6 +13,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/PC1500/PresetFile.cpp \
   Core/PC1500/PC1500Keyboard.cpp \
   Core/PC1500/PC1500TraceFile.cpp \
+  Core/Audio/PiezoSampler.cpp \
   Core/PC1600/PC1600Memory.cpp \
   Core/PC1600/PC1600SubCpu.cpp \
   Core/PC1600/TC8576F.cpp \
@@ -23,7 +24,9 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/PC1600/PC1600BasicLoader.cpp \
   Core/PC1600/PC1600ProgramPlacement.cpp \
   Core/PC1600/PC1600MachineImage.cpp \
+  Core/PC1600/PC1600MachineCodeLoader.cpp \
   Core/PC1600/PC1600PresetLoader.cpp \
+  Core/Display/LcdScreenshot.cpp \
   Core/Basic/BasicBinaryImage.cpp \
   Core/Basic/BasicProgramSource.cpp \
   tools/pc1600_cli.cpp \

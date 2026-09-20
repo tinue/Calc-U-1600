@@ -70,10 +70,11 @@ uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates);
 
 /// Runs frames until the ROM's keyboard-scan idle loop is sweeping the key
 /// matrix again -- i.e. it has returned from boot / line tokenisation /
-/// peripheral work and will actually register the next keystroke. Watches
-/// `PC1600Keyboard::scanCount()` (races ahead once the loop runs) together
-/// with CK0, the LCD clock (on only once the machine is fully up). Cap-
-/// bounded so a stuck ROM can't hang the caller.
+/// peripheral work and will actually register the next keystroke: CK0, the
+/// LCD clock (on only once the machine is fully up), together with the
+/// SC7852 sitting in the BASIC command loop (`pc1600AtBasicPrompt`) or
+/// reading the key matrix (`PC1600Keyboard::scanCount()` advancing), held
+/// for ~0.25 s. Cap-bounded so a stuck ROM can't hang the caller.
 ///
 /// **No-op unless a plotter is attached** (CE-1600P *or* CE-150). Without
 /// one the ROM re-engages the loop fast enough that the existing BUSY /
@@ -82,6 +83,13 @@ uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates);
 /// the SC7852 side; the CE-150 opens it via the boot's plotter self-test,
 /// which hands off to the LH5803 to home the colour turret.
 void waitForKeyboardScanLoop(PC1600Machine& machine);
+
+/// Runs a machine that was just reset flat out through its boot until it
+/// waits at the prompt for keys: a fixed 2 s past the ROM's power-on
+/// sequence, then the BUSY tail (waitIdle, 5 s cap), then -- with a plotter
+/// attached -- the peripheral's power-on init (waitForKeyboardScanLoop).
+/// Used by the preset loader and by the GUI's Reset.
+void runBootToPrompt(PC1600Machine& machine);
 
 /// Types `line` character by character (a lowercase letter and the
 /// shifted punctuation / digit-row symbols each get a SHIFT-tap first),

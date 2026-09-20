@@ -1,7 +1,9 @@
 #pragma once
 #include <QObject>
 #include <QString>
+#include <cstdint>
 #include <functional>
+#include <vector>
 
 #include "MachineController.hpp"  // Model
 
@@ -61,6 +63,27 @@ public:
     // first). Resets the machine and destroys the current program (NEW0).
     bool loadBasicProgramLive(const QString& path, QString* error);
 
+    // Writes a machine-code block (File > Load Machine Code…) into the
+    // *currently running* machine -- no reset, no BASIC involvement, just
+    // the bytes. `slot` is PC-1600 only: 0 = S0, 1 / 2 = memory slots. Same
+    // caller contract as the loaders above (stop the frame timer first).
+    // Doesn't need libsharpdx, so it works in every build.
+    struct MachineCodeLoadRequest {
+        std::vector<uint8_t> payload;
+        uint32_t addr = 0;
+        int slot = 0;
+    };
+    bool loadMachineCodeLive(const MachineCodeLoadRequest& request, QString* error);
+
+    // The GUI's Reset / Reset All: MachineController::resetToPrompt() with
+    // the yield hook installed, so the flat-out boot keeps the window
+    // painting. Same caller contract as the loaders above. Works in every
+    // build.
+    bool resetLive(bool allReset, QString* error);
+    // MachineController::powerCycleAround() (plotter attach/detach) with the
+    // yield hook installed, like resetLive().
+    bool powerCycleLive(const std::function<void()>& change, QString* error);
+
     // Callback installed on the target machine (PC1500Machine/
     // PC1600Machine::setYieldHook()) for the duration of each load above,
     // then removed again. Called on the calling thread roughly every few
@@ -82,6 +105,11 @@ signals:
 private:
     // Shared tail of loadPreset()/loadDefaultPreset() once the file parsed.
     bool runPreset(const PresetFile& preset, QString* error);
+
+    // Runs `body` with the yield hook installed on whichever machine is
+    // active (the ScopedYieldHook template argument is the only thing the
+    // two branches differ in); false + `error` with no machine.
+    bool withYieldHook(const std::function<void()>& body, QString* error);
 
     MachineController* m_controller;       // not owned
     MemoryModuleManager* m_moduleManager;  // not owned

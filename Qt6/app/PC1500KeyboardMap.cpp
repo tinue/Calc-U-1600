@@ -59,8 +59,17 @@ std::optional<ResolvedKey> characterName(QChar c) {
 
 } // namespace
 
-std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers /*modifiers*/,
+std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
                                     const QString& text, bool isPC1600) {
+#ifdef Q_OS_MACOS
+    // Qt maps Cmd to ControlModifier and the Control key to MetaModifier.
+    if (modifiers & (Qt::ControlModifier | Qt::MetaModifier)) return std::nullopt;
+#else
+    if (modifiers & Qt::MetaModifier) return std::nullopt;
+    const bool ctrl = modifiers & Qt::ControlModifier;
+    const bool alt = modifiers & Qt::AltModifier;
+    if (ctrl != alt) return std::nullopt;  // Ctrl or Alt alone; both together = AltGr
+#endif
     if (key == Qt::Key_Backspace) {
         return plain(isPC1600 ? "bs" : "left");
     }

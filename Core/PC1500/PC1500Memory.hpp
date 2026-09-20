@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 
+#include "../Audio/PiezoSampler.hpp"
 #include "../CPU/LH5801/LH5801.hpp"
 #include "PC1500Keyboard.hpp"
 #include "PC1500Variant.hpp"
@@ -47,9 +48,10 @@ class SystemBus;
 // (PB3's "must read high" ROM dispatch gotcha, PB7's ON-key readback), and
 // the uPD1990AC real-time clock bit-banged via OPC/PC0-PC5 (see
 // Upd1990ac.hpp) — WAIT/BEEP's timing depends on its TP output, latched
-// into IF bit 1 (0xB). Serial transfer and the buzzer (OPC/PC6) remain out
-// of scope — no stock boot-to-idle or BASIC-editing behavior depends on
-// them. Any ME1
+// into IF bit 1 (0xB). The buzzer is PC6 (OPC bit 6): the ROM's BEEP loop
+// (A04 E655ff) toggles it directly, and every write is forwarded to
+// m_piezo (see PiezoSampler.hpp) so the sound comes from that square wave
+// itself. Serial transfer remains out of scope. Any ME1
 // address outside the I/O-chip's decode window still mirrors ME0, the
 // same conservative Phase 1 placeholder as before (nothing else is
 // documented as living there) — flagged for revisit once Phase 4's
@@ -65,7 +67,8 @@ public:
     bool loadROM(const uint8_t* data, size_t size);
     bool loadROMFile(const std::string& path);
 
-    void reset(); // clears RAM only; ROM/keyboard state is untouched
+    void reset();     // chip-side reset (PIO, RTC, I/O); RAM, ROM and keyboard state untouched
+    void clearRam();  // power-up / ALL RESET: user RAM 0x00, the &7600-&7BFF window 0xFF
 
     // LH5801Bus
     uint8_t readME0(uint16_t addr) override;
@@ -79,7 +82,7 @@ public:
     // Debug/test access: same address decode as readME0/writeME0 (open-bus
     // ranges read 0xFF, ROM ignores writes), just callable from a const
     // context (peek) or without implying bus semantics (poke). poke() also
-    // bypasses a card's runtime write-gating (e.g. CE163FCard's flash-bank
+    // bypasses a card's runtime write-gating (e.g. the CE-163F's flash-bank
     // JEDEC unlock protocol) -- it's the host/debug/preset-loader path, and
     // an unconditional write is the right semantics there.
     uint8_t peek(uint16_t addr) const;
@@ -131,6 +134,11 @@ public:
     /// time.
     void advanceRtc(uint32_t cycles) { m_rtc.advance(cycles); }
 
+    /// The buzzer line (PC6) as PCM -- advanced alongside the RTC, i.e.
+    /// once per instruction (and per halted/off tick) by PC1500Machine.
+    void advancePiezo(uint32_t cycles) { m_piezo.advance(cycles); }
+    PiezoSampler& piezo() { return m_piezo; }
+
     /// Seed the uPD1990AC's calendar from the host clock (see
     /// PC1500Machine::seedClock). month is 1-12, dow 0-6 (Sunday=0), the
     /// rest plain decimals. Deliberately kept out of reset() so the Core
@@ -178,6 +186,10 @@ private:
     static constexpr size_t   kSystemRamSize = 0x0800; // 2048B backing store (PC-1500A only uses it
                                                          // all; the plain PC-1500's TC5514 pair only
                                                          // decodes the first 1024B — see resolve())
+    // &7800-&7BFF: the part of system RAM inside the measured power-up 0xFF
+    // window (see clearRam()). Not derivable from m_systemRamAddrMask — the
+    // window is these 1024B on both models, PC-1500A's wider mask included.
+    static constexpr size_t   kSystemRamPowerUpFfSize = 0x0400;
     static constexpr uint16_t kRomBase = 0xC000;
     static constexpr size_t   kRomSize = 0x4000; // 16384B
 
@@ -225,6 +237,7 @@ private:
                         // (which looks like the "obvious" flag-register convention)
                         // is actually what breaks BREAK.
     Upd1990ac m_rtc;
+    PiezoSampler m_piezo{1300000.0}; // LH5801 clock; buzzer driven from OPC bit 6 (PC6)
 
     // F/G/MSK (registers 0x7,0x9,0xA) and the two unused register-select
     // codes (0x0-0x3): stored as plain read/write bytes, defaulting to

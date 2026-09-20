@@ -17,9 +17,9 @@
 // YAML parsing, schema validation, and terminology→pin resolution. Built
 // by parseMemoryCardDefinition(); consumed by SoftwareDefinedCard.
 //
-// v1 scope: Regular content only; Unbanked or trigger-based Banked. `rom`,
-// `flash`, `by-bank`, and `line-based` latches are parsed far enough to
-// report a clear "not supported in v1" error.
+// Scope: Regular, Flash and ROM content, single-kind or `by-bank`-split;
+// Unbanked or trigger-based Banked. `line-based` latches are parsed far
+// enough to report a clear "not supported in v1" error.
 
 enum class CardHost { PC1500, PC1500A, PC1600Slot1, PC1600Slot2 };
 
@@ -51,13 +51,15 @@ struct Addressing {
     std::vector<EnableGroup> groups;  // OR'd; first match wins
 };
 
-enum class ContentKind { Regular, Flash };
+// Rom: read-only forever (a mask ROM -- not even a host poke writes it);
+// every byte comes from `initial-content`, which must cover the whole range.
+enum class ContentKind { Regular, Flash, Rom };
 
 // A JEDEC-style unlock/program/erase protocol for a Flash content range --
 // "chip/firmware properties, not something the loader infers" (spec §5), so
-// every field is required at parse time, no defaults. Modeled directly on
-// Core/Connector/CE163FCard.hpp's flash state machine (its own doc comment
-// is the reference for every field here).
+// every field is required at parse time, no defaults. Modeled on the
+// CE-163F's flash chip (Qt6/resources/cards/ce163f.card.yaml and
+// SoftwareDefinedCard::flashWrite() document every field).
 struct FlashProtocol {
     struct AddrData {
         uint32_t address = 0;
@@ -83,7 +85,9 @@ struct FlashProtocol {
 struct RegionContent {
     ContentKind kind = ContentKind::Regular;
     bool writable = true;
-    uint8_t powerUpFill = 0xFF;
+    // Regular RAM powers up 0x00 (CMOS RAM after a power loss); the flash
+    // parser sets 0xFF (erased) unless the file says otherwise.
+    uint8_t powerUpFill = 0x00;
     bool hasWriteProtect = false;
     bool writeProtectDefaultProtected = false;
     bool writeProtectPersisted = false;
@@ -147,6 +151,18 @@ struct MemoryCardDefinition {
     // CE-1600M, CE-1601M, CE-1638) -- eligible for the app's name-and-save
     // persistence flow. Has no effect on region/content parsing.
     bool battery = false;
+
+    // A ROM module: every byte of every region is `rom` content (e.g. a
+    // CE-502B program module). The app lists these in their own section.
+    bool isRom() const {
+        if (regions.empty()) return false;
+        for (const Region& r : regions) {
+            const uint32_t banks = r.banked ? r.banking.bankCount : 1;
+            for (uint32_t b = 0; b < banks; ++b)
+                if (r.contentForBank(b).kind != ContentKind::Rom) return false;
+        }
+        return true;
+    }
 
     bool compatibleWith(CardHost h) const {
         for (CardHost c : compatibleHosts)
@@ -551,8 +567,12 @@ inline bool parseContent(const YamlNode& node, RegionContent* out, std::string* 
     }
 
     if (kind == "rom") {
-        *error = "line " + std::to_string(node.line) + ": 'rom' content is not supported in v1";
-        return false;
+        // No options: read-only is the whole point, and the bytes come from
+        // `initial-content` (coverage checked in parseRegion()).
+        if (body && !body->requireOnlyKeys({"kind", "banks"}, error)) return false;
+        out->kind = ContentKind::Rom;
+        out->writable = false;
+        return true;
     }
     if (kind == "flash") {
         if (!body || !body->has("protocol")) {
@@ -565,6 +585,7 @@ inline bool parseContent(const YamlNode& node, RegionContent* out, std::string* 
             return false;
         out->kind = ContentKind::Flash;
         out->writable = false;  // meaningless here -- gated by the command decoder, not this flag
+        out->powerUpFill = 0xFF;  // erased, unless `power-up-fill` below says otherwise
         if (const YamlNode* pf = body->find("power-up-fill")) {
             long v = 0;
             if (!getInt(*pf, "power-up-fill", &v, error)) return false;
@@ -1027,6 +1048,7 @@ inline bool parseAddressedHex(const std::string& text, uint32_t blockLength,
 // unsupported here means "not yet", not "never".
 inline bool parseInitialContent(const YamlNode& node, const Region& regionSoFar,
                                 std::unordered_map<uint32_t, std::vector<uint8_t>>* out,
+                                std::unordered_map<uint32_t, std::vector<bool>>* coveredOut,
                                 std::string* error) {
     if (!node.isMap() || !node.requireOnlyKeys({"fill", "blocks"}, error)) return false;
 
@@ -1047,7 +1069,7 @@ inline bool parseInitialContent(const YamlNode& node, const Region& regionSoFar,
 
     uint32_t bankCount = regionSoFar.banked ? regionSoFar.banking.bankCount : 1;
     uint32_t bankSize = regionSoFar.banked ? regionSoFar.banking.bankSize : regionSoFar.capacity;
-    std::unordered_map<uint32_t, std::vector<bool>> covered;  // per-bank coverage, for overlap checks
+    auto& covered = *coveredOut;  // per-bank coverage, for overlap checks and the ROM rule
 
     for (const auto& entry : blocksN->seq) {
         if (!entry.isMap() ||
@@ -1266,9 +1288,28 @@ inline bool parseRegion(const YamlNode& node, CardHost term, Region* out, std::s
 
     // initial-content is resolved last: it needs `out->banked`/`banking`/
     // `content`/`contentByBank` already in place for contentForBank().
+    std::unordered_map<uint32_t, std::vector<bool>> covered;
     if (initialContentN) {
-        if (!parseInitialContent(*initialContentN, *out, &out->initialContentByBank, error))
+        if (!parseInitialContent(*initialContentN, *out, &out->initialContentByBank, &covered, error))
             return false;
+    }
+
+    // A ROM range has no power-up state of its own: `initial-content` blocks
+    // must cover every byte of it (spec §5a). `fill:` doesn't count.
+    const uint32_t bankCount = out->banked ? out->banking.bankCount : 1;
+    const uint32_t bankSize = out->banked ? out->banking.bankSize : out->capacity;
+    for (uint32_t b = 0; b < bankCount; ++b) {
+        if (out->contentForBank(b).kind != ContentKind::Rom) continue;
+        auto it = covered.find(b);
+        uint32_t gap = 0;
+        if (it != covered.end())
+            while (gap < bankSize && it->second[gap]) ++gap;
+        if (gap < bankSize) {
+            *error = "line " + std::to_string(node.line) + ": 'rom' content needs initial-content covering " +
+                     "every byte -- " + (out->banked ? "bank " + std::to_string(b) + " " : std::string()) +
+                     "offset 0x" + hexStr(gap) + " is not covered";
+            return false;
+        }
     }
     return true;
 }

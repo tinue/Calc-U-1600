@@ -1,5 +1,6 @@
 #include "PC1500Memory.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <vector>
 
@@ -23,10 +24,23 @@ PC1500Memory::PC1500Memory(PC1500Variant variant)
     : m_variant(variant),
       m_userRamSize(variant == PC1500Variant::PC1500A ? kUserRamSizeA : kUserRamSizePlain),
       m_systemRamAddrMask(variant == PC1500Variant::PC1500A ? 0x7FF : 0x3FF) {
-    m_rom.fill(0xFF);
-    m_userRam.fill(0xFF);
+    m_rom.fill(0xFF);  // open until a ROM is loaded
+    // Power-up: user CMOS RAM that has lost its supply comes back (mostly)
+    // zero on real hardware, not 0xFF -- modelled as all 0x00. The 1.5K at
+    // &7600-&7BFF (display RAM + the 1K system RAM) instead reads 0xFF after a
+    // power loss on a real PC-1500 (measured), so that window is filled 0xFF.
+    clearRam();
+}
+
+void PC1500Memory::clearRam() {
+    m_userRam.fill(0x00);
+    // The measured 0xFF window is &7600-&7BFF: all of display RAM plus the low
+    // 1K of system RAM. A PC-1500A's upper 1K (&7C00-&7FFF) is unmeasured, so
+    // it stays 0x00; a plain PC-1500 never reaches it (it aliases the low 1K).
     m_displayRam.fill(0xFF);
-    m_systemRam.fill(0xFF);
+    const auto systemFfEnd = m_systemRam.begin() + kSystemRamPowerUpFfSize;
+    std::fill(m_systemRam.begin(), systemFfEnd, uint8_t{0xFF});
+    std::fill(systemFfEnd, m_systemRam.end(), uint8_t{0x00});
 }
 
 bool PC1500Memory::loadROM(const uint8_t* data, size_t size) {
@@ -46,18 +60,12 @@ bool PC1500Memory::loadROMFile(const std::string& path) {
 }
 
 void PC1500Memory::reset() {
-    // RAM powers up reading as 0xFF, not 0 -- confirmed real hardware
-    // behavior. A real CPU RESET line doesn't actually clear RAM at all
-    // (only CPU registers) -- this reset() fills to the same fixed,
-    // deterministic state every time purely so headless tests get
-    // reproducible cold-boot behavior, which is what "reset()" is used
-    // for throughout this project's test suite; it isn't meant to model
-    // the RESET pin's real electrical scope.
-    m_userRam.fill(0xFF);
-    m_displayRam.fill(0xFF);
-    m_systemRam.fill(0xFF);
+    // A real RESET leaves RAM alone -- the BASIC program, variables and
+    // system area survive it, and the ROM's own start-up code decides what
+    // to keep. Clearing RAM is clearRam()'s job (power-up, ALL RESET).
     m_dda = m_opa = m_ddb = m_opb = 0;
     m_opc = 0;
+    m_piezo.setLevel(false);
     m_if = 0;
     m_rtc = Upd1990ac{}; // fresh chip state -- TP un-configured until the ROM issues a rate-select, same as real power-on
     m_ioScratchRegs.fill(0);
@@ -144,7 +152,7 @@ bool PC1500Memory::debugSlotResponds(uint16_t addr) const {
 void PC1500Memory::poke(uint16_t addr, uint8_t value) {
     // Same address decode as writeME0(), but flagged `direct` on the
     // connector path: this is the host/debug/preset-loader write, not a
-    // guest-CPU store, so a card that gates runtime writes (CE163FCard's
+    // guest-CPU store, so a card that gates runtime writes (the CE-163F's
     // flash banks need a JEDEC unlock sequence) lets it through
     // unconditionally. The preset loader has no concept of a bank or a lock
     // -- it just pokes the currently-selected bank -- which is exactly the
@@ -219,6 +227,8 @@ void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
                 m_rtc.setControlPins((value & 0x01) != 0, (value & 0x02) != 0,
                                       (value & 0x04) != 0, (value & 0x08) != 0,
                                       (value & 0x10) != 0, (value & 0x20) != 0);
+                // PC6 drives the piezo buzzer; the BEEP loop toggles it.
+                m_piezo.setLevel((value & 0x40) != 0);
                 return;
             case 0xB: m_if = value; return;
             default: m_ioScratchRegs[addr & 0xF] = value; return; // serial/etc: not modeled, but not discarded either

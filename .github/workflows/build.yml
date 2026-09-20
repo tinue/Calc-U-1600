@@ -45,7 +45,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake ninja-build patchelf \
-            qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev \
+            qt6-base-dev qt6-base-dev-tools qt6-multimedia-dev qt6-wayland libgl1-mesa-dev \
             qt6-gtk-platformtheme qt6ct
 
       - name: Fetch ROMs
@@ -198,7 +198,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential cmake ninja-build patchelf \
-            qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev \
+            qt6-base-dev qt6-base-dev-tools qt6-multimedia-dev qt6-wayland libgl1-mesa-dev \
             qt6-gtk-platformtheme qt6ct
 
       - name: Fetch ROMs
@@ -428,6 +428,7 @@ jobs:
           host: 'windows'
           target: 'desktop'
           arch: 'win64_msvc2022_64'
+          modules: 'qtmultimedia' # QAudioSink for the buzzer (app/AudioOutput.cpp)
 
       - name: Set up MSVC dev environment
         uses: ilammy/msvc-dev-cmd@v1
@@ -505,6 +506,7 @@ jobs:
           host: 'windows_arm64'
           target: 'desktop'
           arch: 'win64_msvc2022_arm64'
+          modules: 'qtmultimedia' # QAudioSink for the buzzer (app/AudioOutput.cpp)
 
       - name: Set up MSVC dev environment (ARM64)
         uses: ilammy/msvc-dev-cmd@v1

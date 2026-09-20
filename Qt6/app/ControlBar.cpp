@@ -6,14 +6,12 @@
 #include <QPushButton>
 #include <QHBoxLayout>
 #include <QGuiApplication>
-#include <QMouseEvent>
 #include <QSignalBlocker>
 #include <QStyle>
 
 namespace {
 
-// A thin vertical rule between control-bar groups (reset | settings |
-// model/ROM pickers | module slots | plotter toggles) so same-looking
+// A thin vertical rule between control-bar groups (model/ROM pickers | module slots | plotter toggles) so same-looking
 // widgets in adjacent groups -- most notably the two slots' identical save-
 // icon buttons -- read as belonging to different groups instead of mushing
 // into one undifferentiated row.
@@ -25,44 +23,19 @@ QFrame* addSeparator(QHBoxLayout* layout, QWidget* parent) {
     return line;
 }
 
-// Qt on macOS reports the physical Cmd key as Qt::ControlModifier (it
-// swaps Ctrl/Cmd by default to match platform convention, per Qt's own
-// docs on QKeyEvent/keyboardModifiers). Named/isolated here so the one-line
-// fix is obvious if that assumption turns out wrong on a given Qt/macOS
-// combination.
-bool isCmdHeld(Qt::KeyboardModifiers mods) {
-    return mods.testFlag(Qt::ControlModifier);
-}
-
-// Small QPushButton subclass so the Reset button can tell a plain click
-// from a Cmd-click.
-class ResetButton : public QPushButton {
-public:
-    using QPushButton::QPushButton;
-
-protected:
-    void mousePressEvent(QMouseEvent* event) override {
-        m_cmdHeld = isCmdHeld(event->modifiers());
-        QPushButton::mousePressEvent(event);
-    }
-
-public:
-    bool lastClickWasCmd() const { return m_cmdHeld; }
-
-private:
-    bool m_cmdHeld = false;
-};
-
 // Shared by the memory-slot and floppy pickers: "–empty–", the bundled
-// names, then (after a separator) the user's saved ones.
+// names, then (after a separator) the user's saved ones, then (after
+// another) the ROM modules -- memory slots only.
 void fillPicker(QComboBox* combo, const QStringList& bundled, const QStringList& saved,
-                const QString& selectedOrEmpty) {
+                const QString& selectedOrEmpty, const QStringList& roms = {}) {
     const QSignalBlocker blocker(combo);
     combo->clear();
     combo->addItem(ControlBar::tr("–empty–"), QString());
     for (const auto& name : bundled) combo->addItem(name, name);
     if (!saved.isEmpty()) combo->insertSeparator(combo->count());
     for (const auto& name : saved) combo->addItem(name, name);
+    if (!roms.isEmpty()) combo->insertSeparator(combo->count());
+    for (const auto& name : roms) combo->addItem(name, name);
     const int idx = combo->findData(selectedOrEmpty);
     combo->setCurrentIndex(idx >= 0 ? idx : 0);
 }
@@ -79,21 +52,10 @@ QStringList namesOf(const QVector<Entry>& entries, NameOf nameOf) {
 ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     auto* layout = new QHBoxLayout(this);
 
-    auto* resetButton = new ResetButton(tr("Reset"), this);
-    m_resetButton = resetButton;
-    // Never take keyboard focus from MainWindow (which owns physical-
-    // keyboard typing) -- Qt's default focus policy for a button/combo box
-    // varies by platform style, so this is set explicitly rather than left
-    // to that default. Still fully mouse-clickable either way.
-    m_resetButton->setFocusPolicy(Qt::NoFocus);
-    layout->addWidget(m_resetButton);
-
-    addSeparator(layout, this);
-    m_settingsButton = new QPushButton(tr("Settings…"), this);
-    m_settingsButton->setFocusPolicy(Qt::NoFocus);
-    layout->addWidget(m_settingsButton);
-
-    addSeparator(layout, this);
+    // Every widget here is NoFocus: never take keyboard focus from
+    // MainWindow (which owns physical-keyboard typing) -- Qt's default focus
+    // policy for a button/combo box varies by platform style, so it is set
+    // explicitly. Still fully mouse-clickable either way.
     m_modelCombo = new QComboBox(this);
     m_modelCombo->addItem(tr("PC-1500"), static_cast<int>(Model::PC1500));
     m_modelCombo->addItem(tr("PC-1500A"), static_cast<int>(Model::PC1500A));
@@ -110,6 +72,14 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_romCombo->setFocusPolicy(Qt::NoFocus);
     layout->addWidget(m_romCombo);
     setRomPickerVisible(false); // PC-1500A is the default model (see m_modelCombo above)
+
+    m_rom1600Combo = new QComboBox(this);
+    m_rom1600Combo->addItem(tr("New ROM"), static_cast<int>(PC1600RomVersion::New));
+    m_rom1600Combo->addItem(tr("Old ROM"), static_cast<int>(PC1600RomVersion::Old));
+    m_rom1600Combo->setToolTip(tr("PC-1600 BASIC ROM version"));
+    m_rom1600Combo->setFocusPolicy(Qt::NoFocus);
+    layout->addWidget(m_rom1600Combo);
+    setPC1600RomPickerVisible(false);
 
     addSeparator(layout, this);
     for (int i = 0; i < 2; ++i) {
@@ -143,7 +113,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     }
     setSlot2Visible(false);
 
-    // Left group is ordered most-common-first (Reset, Settings, model, slots)
+    // Left group is ordered most-common-first (model, slots)
     // so model-dependent widgets (ROM picker, slot 2) only change its tail
     // and switching models doesn't shift the rest; the plotter/floppy group
     // below is pinned to the right edge.
@@ -210,16 +180,15 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     setFloppyEnabled(false);
     setFloppySaveEnabled(false);
 
-    connect(resetButton, &QPushButton::clicked, this, [this, resetButton] {
-        emit resetClicked(resetButton->lastClickWasCmd());
-    });
     connect(m_modelCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
         emit modelSelected(static_cast<Model>(m_modelCombo->itemData(index).toInt()));
     });
     connect(m_romCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
         emit romRevisionSelected(static_cast<PC1500RomRevision>(m_romCombo->itemData(index).toInt()));
     });
-    connect(m_settingsButton, &QPushButton::clicked, this, [this] { emit settingsRequested(); });
+    connect(m_rom1600Combo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        emit pc1600RomVersionSelected(static_cast<PC1600RomVersion>(m_rom1600Combo->itemData(index).toInt()));
+    });
     // Buttons are checkable so their own click already toggled the visual
     // check state -- MainWindow will resync it (via setCe150State/
     // setCe1600pState) once PlotterController confirms the actual result,
@@ -243,11 +212,23 @@ void ControlBar::setRomPickerVisible(bool visible) {
     m_romCombo->setVisible(visible);
 }
 
+void ControlBar::setPC1600RomVersion(PC1600RomVersion version) {
+    const QSignalBlocker blocker(m_rom1600Combo);
+    const int idx = m_rom1600Combo->findData(static_cast<int>(version));
+    m_rom1600Combo->setCurrentIndex(idx >= 0 ? idx : 0);
+}
+
+void ControlBar::setPC1600RomPickerVisible(bool visible) {
+    m_rom1600Combo->setVisible(visible);
+}
+
 void ControlBar::setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& bundled,
                                   const QVector<MemoryModuleManager::ModuleEntry>& instances,
                                   const QString& selectedOrEmpty) {
+    QStringList ram, roms;
+    for (const auto& e : bundled) (e.rom ? roms : ram) << e.moduleName;
     const auto name = [](const MemoryModuleManager::ModuleEntry& e) { return e.moduleName; };
-    fillPicker(m_slot[slot - 1].combo, namesOf(bundled, name), namesOf(instances, name), selectedOrEmpty);
+    fillPicker(m_slot[slot - 1].combo, ram, namesOf(instances, name), selectedOrEmpty, roms);
 }
 
 // Enables rather than shows/hides the button, so the control bar doesn't

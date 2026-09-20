@@ -6,6 +6,10 @@ PC1500Machine::PC1500Machine(PC1500Variant variant)
     m_memory.setSystemBus(&m_systemBus);
 }
 
+bool PC1500Machine::loadROM(const uint8_t* data, std::size_t size) {
+    return m_memory.loadROM(data, size);
+}
+
 bool PC1500Machine::loadROMFile(const std::string& path) {
     return m_memory.loadROMFile(path);
 }
@@ -13,12 +17,21 @@ bool PC1500Machine::loadROMFile(const std::string& path) {
 void PC1500Machine::reset() {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_memory.reset();
+    m_memory.keyboard().releaseAll();
     m_cpu.reset();
     // A chip reset re-anchors an attached CE-150 (LH5810 latches cleared,
     // steppers/pen re-homed) but does NOT unplug it or wipe its paper --
     // real ink stays on real paper. Mirrors the CE-1600P, whose card is
     // likewise left attached across PC1600Machine::reset().
     if (m_ce150Card) m_ce150Card->reset();
+}
+
+void PC1500Machine::allReset() {
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_memory.clearRam();
+    }
+    reset();
 }
 
 bool PC1500Machine::attachCE150(const uint8_t* rom, size_t romSize) {
@@ -90,6 +103,7 @@ int PC1500Machine::step() {
     // real time keeps passing even while the CPU is halted.
     uint32_t rtcCycles = static_cast<uint32_t>(c > 0 ? c : LH5801::kHaltTickCycles);
     m_memory.advanceRtc(rtcCycles);
+    m_memory.advancePiezo(rtcCycles); // buzzer time, same clock as the RTC
     // PU/PV (SPU/RPU/SPV/RPV) never touch the bus themselves, so pushing
     // their post-instruction state here is sufficient for the next bus
     // access to see it -- see PC1500Memory::updatePUPV()'s own doc comment.
@@ -150,12 +164,14 @@ uint64_t PC1500Machine::runCycles(uint64_t maxCycles) {
                 // regardless (design doc: "the RTC keeps advancing while
                 // powered off").
                 m_memory.advanceRtc(static_cast<uint32_t>(LH5801::kHaltTickCycles));
+                m_memory.advancePiezo(static_cast<uint32_t>(LH5801::kHaltTickCycles)); // buzzer time, same clock as the RTC
                 advanceKeyQueue(static_cast<uint32_t>(LH5801::kHaltTickCycles));
                 consumed += static_cast<uint64_t>(LH5801::kHaltTickCycles);
                 continue;
             }
         }
         m_memory.advanceRtc(static_cast<uint32_t>(c));
+        m_memory.advancePiezo(static_cast<uint32_t>(c)); // buzzer time, same clock as the RTC
         advanceKeyQueue(static_cast<uint32_t>(c));
         if (m_ce150Card) m_ce150Card->tick(static_cast<uint32_t>(c)); // no-op today; see step()
         consumed += static_cast<uint64_t>(c);

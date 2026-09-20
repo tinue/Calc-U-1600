@@ -3,9 +3,9 @@
 #include <cctype>
 #include <sstream>
 
-#include "../SharpShiftedSymbols.hpp"
 #include "PC1500Keyboard.hpp"
 #include "PC1500Machine.hpp"
+#include "PC1500TypedInput.hpp"
 
 namespace {
 
@@ -55,42 +55,6 @@ void settleUntilProgramPtrStable(PC1500Machine& machine) {
     }
 }
 
-// The PC-1500 keyboard has one physical key per letter, not separate
-// upper/lowercase keys -- a bare keypress always produces uppercase.
-// Lowercase is intercepted by shiftedCharBaseKey() below (checked before
-// this function in typeLine) via a SHIFT-tap, not here: this still
-// case-folds so a lowercase `c` resolves to the same physical key name as
-// its uppercase form. Maps to the same name vocabulary
-// PC1500Keyboard::keyFromName already accepts.
-bool charToKeyName(char c, std::string* outName) {
-    if (c == ' ') {
-        *outName = "space";
-    } else {
-        *outName = std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
-    }
-    return PC1500Keyboard::keyFromName(*outName) != PC1500Keyboard::Key::Unknown;
-}
-
-// Characters produced by SHIFT + a base key that isn't itself in
-// PC1500Keyboard's direct name vocabulary (confirmed by the project owner
-// against real hardware). "^" (space), Pi (down), and the square-root
-// glyph (up) are deliberately omitted -- typeLine operates on plain
-// `char`, and a BASIC program's typed source text has no legitimate use
-// for them.
-//
-// The punctuation table is shared with the PC-1600 loader in
-// Core/SharpShiftedSymbols.hpp. Lowercase letters are handled here (not
-// there): SHIFT is a one-shot latch on this hardware (see typeLine's own
-// doc comment), so a lowercase letter is just its uppercase base key with
-// a SHIFT tap first, like any other shifted symbol.
-bool shiftedCharBaseKey(char c, std::string* outBaseKeyName) {
-    if (c >= 'a' && c <= 'z') {
-        *outBaseKeyName = std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
-        return true;
-    }
-    return sharpShiftedSymbolBaseKey(c, outBaseKeyName);
-}
-
 } // namespace
 
 // Run cycles until the BASIC interpreter is back idling in its ROM command
@@ -122,13 +86,19 @@ uint64_t settleUntilIdle(PC1500Machine& machine, uint64_t maxCycles) {
     int quiet = 0;
     while (quiet < kQuietWindowsNeeded && spent < maxCycles) {
         uint16_t lo = 0xFFFF, hi = 0;
+        const uint64_t edgesBefore = machine.buzzerEdgeCount();
         for (int i = 0; i < kWindowFrames; i++) {
             spent += machine.runCycles(kCyclesPerFrame);
             uint16_t pc = machine.debugPC();
             if (pc < lo) lo = pc;
             if (pc > hi) hi = pc;
         }
-        if (hi - lo < kMaxSpan && lo >= kIdleFloor) quiet++;
+        // A BEEP's tone loop (A04 E66Aff) is itself a small window high in
+        // ROM, so the PC test alone takes a sounding buzzer for the idle
+        // prompt and the next typed line lands mid-beep. A window in which
+        // the buzzer line toggled is never idle.
+        const bool beeping = machine.buzzerEdgeCount() != edgesBefore;
+        if (hi - lo < kMaxSpan && lo >= kIdleFloor && !beeping) quiet++;
         else quiet = 0;
     }
     return spent;
@@ -147,16 +117,14 @@ uint64_t waitUntilBasicIdle(PC1500Machine& machine, uint64_t maxCycles) {
     // address directly. The ROM set is fixed, so the window is safe to
     // bake in; the hold is long enough that a between-statement dispatch
     // visit during a run doesn't count.
-    constexpr uint16_t kPromptLoopLo = 0xE200;
-    constexpr uint16_t kPromptLoopHi = 0xE4FF;
+    // The address window itself lives in pc1500AtBasicPrompt().
     constexpr int kFramesNeeded = 20;   // ~0.33 s continuously at the prompt
 
     uint64_t spent = 0;
     int inLoop = 0;
     while (inLoop < kFramesNeeded && spent < maxCycles) {
         spent += machine.runCycles(kCyclesPerFrame);
-        const uint16_t pc = machine.debugPC();
-        if (pc >= kPromptLoopLo && pc <= kPromptLoopHi) inLoop++;
+        if (pc1500AtBasicPrompt(machine)) inLoop++;
         else inLoop = 0;
     }
     return spent;
@@ -177,13 +145,26 @@ uint64_t waitIdle(PC1500Machine& machine, uint64_t maxCycles) {
     return consumed;
 }
 
+void runBootToPrompt(PC1500Machine& machine) {
+    // Generous margin past the ROM's own power-on RAM-check/boot sequence --
+    // keys sent immediately after reset are missed entirely, since the ROM
+    // doesn't start polling the keyboard until it settles into its post-boot
+    // idle loop.
+    constexpr uint64_t kBootSettleCycles = static_cast<uint64_t>(kCpuHz * 2);
+    constexpr uint64_t kBootIdleCap = static_cast<uint64_t>(kCpuHz * 5);
+    machine.runCycles(kBootSettleCycles);
+    waitIdle(machine, kBootIdleCap);
+}
+
 bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, std::string* error) {
     for (char c : line) {
         std::string name;
-        // shiftedCharBaseKey checked first (before charToKeyName, which
-        // case-folds) so lowercase letters take the shifted path instead
-        // of being silently typed as their unshifted uppercase key.
-        if (shiftedCharBaseKey(c, &name)) {
+        bool needsShift = false;
+        if (!pc1500ResolveTypedChar(c, &name, &needsShift)) {
+            if (error) *error = "no keyboard mapping for character '" + std::string(1, c) + "'";
+            return false;
+        }
+        if (needsShift) {
             // SHIFT is a one-shot latch, tapped immediately before the
             // base key -- not held, and (confirmed empirically: an
             // explicit un-latch tap before an unshifted character that
@@ -192,15 +173,8 @@ bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, 
             // latch is consumed by whatever key is pressed next and
             // doesn't need to be explicitly cleared afterward.
             tapKey(machine, "shift");
-            tapKey(machine, name);
-            continue;
         }
-        if (charToKeyName(c, &name)) {
-            tapKey(machine, name);
-            continue;
-        }
-        if (error) *error = "no keyboard mapping for character '" + std::string(1, c) + "'";
-        return false;
+        tapKey(machine, name);
     }
     if (pressEnter) {
         tapKey(machine, "enter");

@@ -40,7 +40,7 @@ regions:
     content:
       kind: regular
       writable: true
-      power-up-fill: 0xFF
+      power-up-fill: 0x00
     # Region-level "is this a banked access at all" -- a pure gate, no
     # span/maps-to. The module's whole enable is RAM1 (host-gated to the
     # 8000-BFFF window); the real slice mapping lives in bank-window.

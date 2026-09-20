@@ -25,7 +25,7 @@ void PC1600Display::writeCommand(Controller& c, uint8_t value) {
 uint8_t PC1600Display::readIO(uint8_t port) {
     // The boot ROM busy-waits on a status read from both controllers
     // before it will draw anything (`IN A,(59H)` / `IN A,(55H)` at
-    // 0x0807/0x080A in PC1600-P0-B0.bin). The busy bit (bit7) is always
+    // 0x0807/0x080A in PC1600-P0-B0-new.bin). The busy bit (bit7) is always
     // reported clear here -- this core has no controller-busy timing
     // model, so there's never a real reason to report busy -- which is
     // what lets that loop exit.

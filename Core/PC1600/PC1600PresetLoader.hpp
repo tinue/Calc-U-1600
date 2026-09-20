@@ -34,15 +34,9 @@ struct PC1600PresetLoadResult {
     /// because the machine wasn't in PRO mode). Non-empty implies
     /// `ok == false`. Mirrors PresetLoadResult::rejectedBasicLines.
     std::vector<std::string> rejectedBasicLines;
-    /// The module the preset plugged into each slot, for the GUI to label
-    /// its control-bar buttons with -- a software-defined module's
-    /// `module-name:` (both `modulespec:`/`modulespecfile:` forms) or a
-    /// built-in `- module:` name verbatim. Empty for an empty slot.
-    std::string slot1ModuleLabel;
-    std::string slot2ModuleLabel;
     /// The on-disk file a `modulespec:`/`modulespecfile:` reference
-    /// resolved to, if any -- empty for a built-in `- module: <name>` (not
-    /// file-backed) or an empty slot. Lets the GUI tell a bundled
+    /// resolved to, if any -- empty for an empty slot. (Which module it is,
+    /// the GUI reads from the slot: PC1600Memory::slotModuleName().) Lets the GUI tell a bundled
     /// read-only template apart from a real saved battery-card instance
     /// (a file under the writable instance directory) so it can decide
     /// whether the attached module should autosave.
@@ -55,7 +49,7 @@ struct PC1600PresetLoadResult {
     /// The preset's `floppy:` name, verbatim -- empty if the key was
     /// absent (the drive stays empty, per the CE-1600F's union attach
     /// with `plotter: ce1600p`; see
-    /// PC1600Machine::attachCE1600P()). Mirrors slot1ModuleLabel's shape,
+    /// PC1600Machine::attachCE1600P()). Mirrors slot1ResolvedPath's shape,
     /// for the GUI (FloppyDiskManager::syncFromPresetLoad()) to resync its
     /// disk-picker combo without re-attaching anything.
     std::string floppyImageLabel;
@@ -70,7 +64,7 @@ struct PC1600PresetLoadResult {
 /// slot-populated and the plotter (if any) attached, but *before* ALL
 /// RESET -- i.e. `machine` is fully "armed" (model, cards, plotter all
 /// wired) yet still powered off. `armedSoFar` is the in-progress result:
-/// `slot1ModuleLabel`/`slot2ModuleLabel`/`ce150Attached` are already final
+/// what is plugged into the slots and `ce150Attached` are already final
 /// at this point (nothing after boot changes what's plugged in), so a GUI
 /// can use this to resync its slot selectors and plotter-paper visibility
 /// and repaint the armed-but-off machine before the (possibly many-
@@ -84,7 +78,7 @@ using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& arm
 /// specific to locate -- the caller loads it, unlike the PC-1500 loader
 /// which resolves a single ROM path itself).
 ///
-/// Steps, in order: plug `preset.slot1Module` / `preset.slot2Module` into
+/// Steps, in order: plug the preset's `memory-expansion-1:` / `-2:` modules into
 /// the two memory-slot connectors (before reset, so the boot ROM's own
 /// memory sizing sees them); ALL RESET; run past the boot sequence (fixed
 /// settle + a BUSY-symbol idle poll); then walk `preset.sections` in file
@@ -102,6 +96,12 @@ using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& arm
 ///     `traceDir` (`- trace: name.bin` starts, `- trace: off` stops; an
 ///     open trace is auto-closed when the preset finishes). Both CPUs'
 ///     rings are captured into one file, tagged by cpuId.
+///   - `screenshot:` -- `- screenshot: name.png` writes a PNG of the LCD
+///     graphics area (no status strip; Core/Display/LcdScreenshot.hpp,
+///     89 x 18 mm at 600 DPI) into `traceDir`, overwriting.
+///   - `syncclock:` -- re-seeds the RTC from the host's local time
+///     (Core/HostClock.hpp). The load runs flat out and leaves the clock
+///     ahead of real time -- make it the last step.
 ///
 /// A `program:` block is one of:
 ///   - `format: basic-text` / `format: basic-binary` -- a BASIC program.
@@ -129,8 +129,8 @@ using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& arm
 /// `traceDir` is where a `- trace: name.bin` step writes -- WHERE trace
 /// files live is environment-specific, not the preset's concern (the CLI
 /// passes ".", the GUI passes `AppSettings.traceDirectory()`). The
-/// preset's filename is appended verbatim. A preset with no `trace:` step
-/// never touches it.
+/// preset's filename is appended verbatim. `screenshot:` writes there
+/// too. A preset with neither step never touches it.
 ///
 /// `moduleDir` is the directory searched first for a
 /// `- modulespec: <module-name>` slot reference (a bundled/standard module

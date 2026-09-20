@@ -4,35 +4,30 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "../Connector/FloppyImageFile.hpp"
 #include "../Connector/MemoryCardCatalog.hpp"
-#include "../Connector/SlotModuleFactory.hpp"
 #include "../Connector/SoftwareDefinedCard.hpp"
 #include "../Resources/BundledRomCatalog.hpp"
+#include "../HostClock.hpp"
 #include "../TraceTypes.hpp"
 #include "../Basic/BasicProgramSource.hpp"
 #include "PC1600BasicLoader.hpp"
 #include "PC1600BasicTyper.hpp"
 #include "PC1600Keyboard.hpp"
 #include "PC1600Machine.hpp"
+#include "PC1600MachineCodeLoader.hpp"
 #include "PC1600MachineImage.hpp"
+#include "PC1600Screenshot.hpp"
 
 namespace {
 
 constexpr uint64_t kTStateHz = PC1600Machine::kTStateHz;
 constexpr uint64_t kFrameTStates = kTStateHz / 60;
-
-// Generous margin past the boot ROM's power-on sequence before keys are
-// sent -- the ROM doesn't poll the keyboard until it settles into its
-// post-boot idle loop (headless: ~2M T-states to a stable PC set, see
-// tools/pc1600_cli.cpp). 2s at 3.58MHz, then a BUSY-symbol idle poll to
-// absorb the tail of a slower boot before the first keystroke.
-constexpr uint64_t kBootSettleTStates = kTStateHz * 2;
-constexpr uint64_t kBootIdleCapTStates = kTStateHz * 5;
 
 // ON (BREAK) hold/idle -- tapKey() (PC1600BasicTyper) drives the key
 // matrix, but ON isn't a matrix key, so this stays local.
@@ -194,36 +189,13 @@ bool loadMachineBinary(PC1600Machine& machine, const PresetProgram& program, int
         return false;
     }
 
-    bool wrote = false;
-    const char* slotName = "S0";
-    if (program.slot == PresetProgram::Slot::S0) {
-        if (loadAddr < 0xC000 || static_cast<uint64_t>(loadAddr) + length > 0x10000) {
-            char b[192];
-            std::snprintf(b, sizeof(b),
-                          "%sload $%04X + %u bytes is outside the S0 internal-RAM window "
-                          "($C000-$FFFF)",
-                          tag.c_str(), loadAddr, length);
-            *error = b;
-            return false;
-        }
-        wrote = machine.debugWriteInternalRam(loadAddr - 0xC000, payload, length);
-    } else {
-        int slot = (program.slot == PresetProgram::Slot::S1) ? 1 : 2;
-        slotName = (slot == 1) ? "S1" : "S2";
-        if (loadAddr < 0x8000 || static_cast<uint64_t>(loadAddr) + length > 0xC000) {
-            char b[224];
-            std::snprintf(b, sizeof(b),
-                          "%sload $%04X + %u bytes does not fit the %s memory-slot window "
-                          "($8000-$BFFF) -- use slot: S0 or split the image",
-                          tag.c_str(), loadAddr, length, slotName);
-            *error = b;
-            return false;
-        }
-        wrote = machine.debugWriteSlotImage(slot, loadAddr - 0x8000, payload, length);
-    }
-    if (!wrote) {
-        *error = tag + "backing-store write failed for slot " + slotName +
-                 " (empty slot, or a module with no writable RAM)";
+    const int slot = program.slot == PresetProgram::Slot::S1   ? 1
+                     : program.slot == PresetProgram::Slot::S2 ? 2
+                                                               : 0;
+    const char* slotName = slot == 1 ? "S1" : slot == 2 ? "S2" : "S0";
+    std::string writeError;
+    if (!loadPC1600MachineCode(machine, slot, loadAddr, payload, length, &writeError)) {
+        *error = tag + writeError;
         return false;
     }
 
@@ -323,11 +295,9 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
         ~TraceCloser() { if (m.cpuTraceActive()) m.endCpuTrace(); }
     } traceCloser{machine};
 
-    auto plug = [&](const std::string& name, const std::string& specFile,
-                    const std::string& specName, int slot) -> bool {
+    auto plug = [&](const std::string& specFile, const std::string& specName, int slot) -> bool {
         std::unique_ptr<ExpansionCard> card;
         std::string label;      // human-readable, for the log line
-        std::string guiLabel;   // the module-name / built-in name for the GUI button
         std::string resolvedPath;  // on-disk file, if any (modulespec/modulespecfile only)
         if (!specFile.empty() || !specName.empty()) {
             CardHost host = (slot == 1) ? CardHost::PC1600Slot1 : CardHost::PC1600Slot2;
@@ -338,39 +308,29 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
                 result.error = "slot " + std::to_string(slot) + " modulespec: " + err;
                 return false;
             }
-            card = makeSoftwareDefinedCard(specPath, host, &err, &guiLabel);
+            card = makeSoftwareDefinedCard(specPath, host, &err);
             if (!card) {
                 result.error = "slot " + std::to_string(slot) + " modulespec: " + err;
                 return false;
             }
-            label = "modulespec " + specPath;
+            label = card->moduleName() + " (" + specPath + ")";
             resolvedPath = specPath;
-        } else if (!name.empty()) {
-            card = makeSlotModuleCard(name);
-            if (!card) { // parser already vetted the name, but stay defensive
-                result.error = "unknown slot " + std::to_string(slot) + " module '" + name + "'";
-                return false;
-            }
-            label = name;
-            guiLabel = name;
         } else {
             return true;  // empty slot
         }
         if (slot == 1) {
             machine.attachSlot1Card(std::move(card));
-            result.slot1ModuleLabel = guiLabel;
             result.slot1ResolvedPath = resolvedPath;
         } else {
             machine.attachSlot2Card(std::move(card));
-            result.slot2ModuleLabel = guiLabel;
             result.slot2ResolvedPath = resolvedPath;
         }
         if (log) log("slot " + std::to_string(slot) + ": " + label + " attached");
         return true;
     };
-    if (!plug(preset.slot1Module, preset.slot1ModuleSpecFile, preset.slot1ModuleSpecName, 1))
+    if (!plug(preset.slot1ModuleSpecFile, preset.slot1ModuleSpecName, 1))
         return result;
-    if (!plug(preset.slot2Module, preset.slot2ModuleSpecFile, preset.slot2ModuleSpecName, 2))
+    if (!plug(preset.slot2ModuleSpecFile, preset.slot2ModuleSpecName, 2))
         return result;
 
     // Plotter (`plotter:`) -- attach before the reset below, so the boot
@@ -388,17 +348,10 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
     // Full cold boot: the slot config just changed, so the IOCS work area
     // must be rebuilt from scratch (simple reset() would keep stale RAM).
     machine.allReset();
-    machine.runCycles(kBootSettleTStates);
-    waitIdle(machine, kBootIdleCapTStates);
-    // With a plotter attached the boot ROM only turns the LCD on and enters
-    // its keyboard-scan idle loop once the CE-1600P has finished its power-
-    // on init (on real hardware the LCD + indicator strip stay dark until
-    // then) -- that init raises no BUSY symbol, so without this the first
-    // scripted key/keystroke lands in a dead key-scan. No-op without a
-    // plotter. `waitForKeyboardScanLoop` also guards every typed line
-    // (PC1600BasicTyper) and every `key:` step (runKeyStep) for the same
-    // gap that reopens after each line's ENTER.
-    waitForKeyboardScanLoop(machine);
+    // Includes the plotter's power-on init -- `waitForKeyboardScanLoop`
+    // also guards every typed line (PC1600BasicTyper) and every `key:` step
+    // (runKeyStep) for the same gap that reopens after each line's ENTER.
+    runBootToPrompt(machine);
     if (log) log("reset + boot settle done" + stepTag(machine));
     if (onBooted) onBooted();
 
@@ -513,6 +466,26 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
                     }
                     machine.beginCpuTrace(fh, TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL);
                     if (log) log("  trace: started -> " + path);
+                    break;
+                }
+                case PresetStep::Kind::Screenshot: {
+                    // PNG of the graphics area, as it stands right now, into
+                    // the trace directory (same image as the GUI's Copy Screen).
+                    const std::string path = traceDir + "/" + step.text;
+                    std::string writeError;
+                    if (!writeLcdScreenshotPng(pc1600LcdBitmap(machine), kPC1600ScreenMm, path, &writeError)) {
+                        result.error = "screenshot: " + writeError;
+                        if (log) log("  screenshot: FAILED: " + writeError);
+                        return result;
+                    }
+                    if (log) log("  screenshot: -> " + path);
+                    break;
+                }
+                case PresetStep::Kind::SyncClock: {
+                    const std::tm t = seedClockFromHostTime(machine);
+                    char stamp[32];
+                    std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &t);
+                    if (log) log(std::string("  syncclock: -> ") + stamp);
                     break;
                 }
             }

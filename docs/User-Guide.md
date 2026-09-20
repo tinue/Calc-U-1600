@@ -29,12 +29,6 @@ Launch the app and it boots straight to BASIC on a PC-1500A (the default
 model) — no separate "power on" step. The control bar above the
 calculator's own faceplate has, left to right:
 
-- **Reset** — press the calculator's own reset. A plain click is a
-  normal reset (memory and BASIC program untouched, same as the real
-  hardware's reset button). Cmd-click performs an "ALL RESET" — on the
-  PC-1600 this is the deeper reset level that also re-seeds the clock;
-  the PC-1500/1500A have no distinct ALL RESET, so Cmd-click there is the
-  same as a plain click.
 - **Slot 1 / Slot 2** — the memory module pickers; see
   [Memory modules & plotter](#memory-modules--plotter) below. Slot 2 only
   appears for the PC-1600, which has two expansion slots.
@@ -45,9 +39,16 @@ calculator's own faceplate has, left to right:
   and the PC-1600 has no revision choice at all): A01, A03, or A04.
 - **Open Preset…** — load a `.pc1500`/`.pc1500a`/`.pc1600` scenario file;
   see [Preset files](#preset-files).
-- **Settings…** — see [Settings](#settings).
 - **CE-150 / CE-1600P** — plotter attach/detach toggles; see
   [Memory modules & plotter](#memory-modules--plotter).
+
+**Reset** is in the **Machine** menu: **Reset** (Cmd-R / Ctrl-R) is a
+normal reset (memory and BASIC program untouched, same as the real
+hardware's reset button); **Reset All** (Cmd-Shift-R / Ctrl-Shift-R) is
+the PC-1600's deeper ALL RESET level; on the PC-1500/1500A, which have no
+ALL RESET of their own, it clears all RAM to zero first, like taking the
+batteries out. Both run the boot at full
+speed until the prompt appears, then set the clock from the computer.
 
 ## The calculator & keyboard
 
@@ -76,6 +77,10 @@ user-remappable). The practical mapping:
   documented hardware correspondence: **Scroll Lock** → `RSV`, **Home** →
   `RCL`, **End** → `SML`, **Page Up** → Shift+Left, **Page Down** →
   Shift+Right.
+- Keys held with **Cmd or Ctrl** (macOS), or with **Ctrl, Alt or the
+  Windows key** (Windows/Linux), never reach the calculator — those are
+  shortcuts. **Option** (macOS) and **AltGr** (Windows/Linux) still type
+  the characters they produce.
 
 The on-screen faceplate shows the calculator's actual physical key
 layout (which differs between the PC-1500 and PC-1600) for reference —
@@ -128,7 +133,8 @@ directory** (default `~/Calc-U-1600`).
 
 ## Settings
 
-Opens from the **Settings…** button. Every control here writes through
+Opens from **Calc-U-1600 ▸ Settings…** (Cmd-,) on macOS, or
+**Edit ▸ Settings…** (Ctrl-,) on Windows/Linux. Every control here writes through
 immediately — there's no separate Save/Cancel, just **Close**.
 
 - **Startup device** — which model to boot into next time the app
@@ -205,7 +211,7 @@ regions:
     content:
       kind: regular
       writable: true
-      power-up-fill: 0xFF
+      power-up-fill: 0x00
     addressing:
       any-of:
         - chip-select: Y0

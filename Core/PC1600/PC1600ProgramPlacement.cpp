@@ -162,6 +162,7 @@ PlacementResult buildPlacement(const PlacementInput& in, int firstIdx, int lastI
             s.slot = slot;
             s.adtblBank = bank;
             s.base = windowBase(g);
+            s.windowBase = s.base;
             s.top = kSlotWindowTop;
             s.backingBase = bankHalfOffset(g, bank);
             r.segments.push_back(s);
@@ -172,6 +173,7 @@ PlacementResult buildPlacement(const PlacementInput& in, int firstIdx, int lastI
         ProgramSegment s;
         s.kind = ProgramSegment::Kind::InternalRam;
         s.base = kInternalBase;
+        s.windowBase = kInternalBase;
         s.top = internalCeiling(in);
         s.backingBase = 0;
         r.segments.push_back(s);

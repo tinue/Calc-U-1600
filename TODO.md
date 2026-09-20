@@ -15,14 +15,11 @@ obligations.
   macOS/Qt even delivers a `Qt::Key_ScrollLock` event for the physical
   key (Mac keyboards have none; an external PC keyboard's key of that
   name may report differently or be intercepted before Qt sees it).
-- **Pixels on the dot-matrix display render as squares, not dots.**
 - **Minor display timing difference**: real LCD hardware is slower than
   the emulation, so a spurious character can briefly appear while
   scrolling.
 - **No way to latch Shift from the host keyboard** (tapping Shift doesn't
   produce a visible latched state in the UI).
-- **Cmd-C (Ctrl-C) doesn't work in the debug area** — copy shortcut isn't
-  reaching/being handled by the debug panel's text widget.
 - **CE-1600P / CE-150 plotter: pen colour can drift out of sync after
   OFF/ON.** Deliberately left as a known limitation. Set a colour
   (`COLOR 2`), power off/on, print again — the plotter draws in the
@@ -54,27 +51,6 @@ obligations.
   useful measurement: an LCD-free busy-loop benchmark (compute without
   drawing) in both modes, to separate CPU/pacing error from display
   timing.
-- **RAM power-up fill byte may be wrong (0xFF vs 0x00).** The codebase
-  currently fills RAM with `0xFF` at construction/reset and documents
-  this as "confirmed real hardware behavior"
-  (`Core/PC1500/PC1500Memory.cpp:26-29,48-58`,
-  `Core/CPU/LH5803/LH5803Memory.cpp:24-28`, generalized to the whole
-  PC-1500/1500A/1600 family), with the same default propagated into
-  `Core/Connector/CE163FCard.hpp` and the generic YAML memory-card
-  format's `powerUpFill` (`Core/Connector/MemoryCardDefinition.hpp:86`),
-  and cited in `docs/Memory-Card-Definition-Spec.md` /
-  `-Format.md` / `User-Guide.md`. A domain-expert check said real
-  hardware actually zeros RAM on startup, not `0xFF` — needs a proper
-  hardware verification pass. If `0x00` turns out to be correct, this is
-  a coordinated fix across those memory constructors/reset paths, the
-  card model, the generic card-definition default, ~a dozen test
-  assertions (e.g. `lh5803_tests.cpp:97`, `memory_card_tests.cpp:903`,
-  `pc1600_slot_ram_tests.cpp:50`), and the two spec/format docs — not
-  just a comment fix. Note in passing: open-bus/unmapped-address reads
-  and flash-erase-to-`0xFF` are a different mechanism and would be
-  unaffected either way; and `Core/PC1600/PC1600Memory.hpp:372,488`
-  already zero-inits the Z-80-side internal RAM bank, so the codebase is
-  already inconsistent with itself regardless of which byte is correct.
 - **`TIME`/the RTC advances at emulated-CPU rate, not wall-clock** — it
   races ahead when the emulator runs faster than real-time, since the
   clock is seeded once from the host and thereafter advanced only by
@@ -113,16 +89,16 @@ obligations.
 
 - What is the "second program memory" for BASIC programs on the PC-1600
   (relevant for ROM modules and battery-backed RAM modules)?
-- CE-1600F: remaining peripheral support.
 - Research MODE 1 (LH-5803/PC-1500-compat mode): does it genuinely reuse
   the old ROM for things like `PRINT`?
-- Load a raw `.bin` (assembly) directly, without a SharpDataExchange
-  header. Pop up a dialog when disambiguation is needed: which slot when
-  more than one is available, and a start address when the header
-  (and thus the address) is missing.
 - Emulate the CE-158.
-- Allow screenshotting the display.
-- For Basic/Preset load path setting: Allow "last used" in addition to a fixed path.
+- Allow saving a diskette or memory module into a preset after it has been
+  set up (e.g. formatted / populated in a session), so the preset carries
+  that media state.
+- Allow viewing a memory module's or diskette's binary file contents in the
+  debug area, without having to save them out first. For memory modules
+  this means the disk part (the RAM-disk filesystem), not the RAM-extension
+  part.
 
 ## Code cleanup backlog
 
@@ -132,22 +108,10 @@ touched, not proactively:
 - `PC1600LhsWindow`/`pc1600LhsWindow()`/`PC1600Bank::lhsRemapRow()` have
   no remaining callers outside their own test — either delete all three
   plus the test, or demote the remap table to a documentation comment.
-- `readRomFile` is duplicated three times across test files with three
-  different bodies; consolidate into `Core/tests/PresetTestSupport.hpp`.
 - `Qt6/app/PresetController.cpp`'s `loadPreset` inlines the PC-1600 case
   and leaves an implicit, unnamed PC-1500 path — extract two symmetric
   private methods and reduce `loadPreset` to peek-model → pick →
   commit-or-report.
-- `startPC1600()` blocks app startup on six sequential ROM reads; move
-  onto the background queue now that the loader's path accessors are
-  safe to call off the main thread.
-- Module identity should be read from the slot (`virtual moduleName()`
-  on `ExpansionCard`), not reported ad hoc by each preset loader — see
-  `TODO(slot-identity)` in `Core/Connector/ExpansionCard.hpp`. Precondition:
-  the hardcoded prototype cards (`CE155Card`, `PlainRamCard`,
-  `CE1638PlusCard`, `CE163FCard`) get duplicated as `.card.yaml`
-  definitions and removed, so `SoftwareDefinedCard` is the only
-  implementer.
 - `Core/PC1500/PresetFile.{hpp,cpp}` is actually family-agnostic but
   lives in the PC-1500 directory; move to `Core/Preset/` next time it's
   opened.
@@ -157,6 +121,3 @@ touched, not proactively:
 - `MemorySlotConnector` and `ExpansionConnector` share ~25 lines of
   copy-pasted dispatch shell; a small base class holding the dispatch
   would remove the duplication.
-- `PC1600Memory::attachSlot1(size_t)` has no remaining caller outside
-  tests now that the old Bridge/Swift path is gone — drop the overload
-  and retarget its test at `PlainRamCard` directly.

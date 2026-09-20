@@ -49,8 +49,14 @@ public:
 
     PC1500Variant variant() const { return m_memory.variant(); }
 
+    bool loadROM(const uint8_t* data, std::size_t size);
     bool loadROMFile(const std::string& path);
+    /// The reset button: CPU and chips reset, RAM kept.
     void reset();
+    /// Reset with all RAM cleared to 0x00 first (Machine > Reset All). The
+    /// PC-1500 has no separate ALL RESET line; this models pulling the
+    /// batteries, like PC1600Machine::allReset().
+    void allReset();
 
     /// Seed the uPD1990AC real-time clock from a host date/time so BASIC's
     /// TIME reads back something sensible instead of 00000. `month` is
@@ -123,6 +129,24 @@ public:
     bool isDisplayOn() const {
         std::lock_guard<std::mutex> lock(m_mutex);
         return m_cpu.displayOn() && !m_cpu.poweredOff();
+    }
+
+    /// Buzzer audio (mono int16 PCM at audioSampleRate()), produced from
+    /// the PC6 drive line as emulated time advances -- see PiezoSampler.
+    /// drainAudio() moves up to `max` of the oldest samples into `out`.
+    size_t drainAudio(int16_t* out, size_t max) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_memory.piezo().drain(out, max);
+    }
+    void discardAudio() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_memory.piezo().discard();
+    }
+    int audioSampleRate() const { return PiezoSampler::kDefaultSampleRate; }
+    /// Buzzer line level changes so far (PiezoSampler::edgeCount()).
+    uint64_t buzzerEdgeCount() {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_memory.piezo().edgeCount();
     }
 
     // Locked, UI-thread-safe debug reads so the App layer can log

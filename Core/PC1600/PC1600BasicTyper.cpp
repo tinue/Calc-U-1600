@@ -3,11 +3,11 @@
 #include <cctype>
 #include <sstream>
 
-#include "../SharpShiftedSymbols.hpp"
 #include "PC1600Display.hpp"
 #include "PC1600Keyboard.hpp"
 #include "PC1600Machine.hpp"
 #include "PC1600StatusLine.hpp"
+#include "PC1600TypedInput.hpp"
 
 namespace {
 
@@ -73,33 +73,6 @@ void settleUntilProgramPtrStable(PC1600Machine& machine) {
     }
 }
 
-bool charToKeyName(char c, std::string* outName) {
-    if (c == ' ') {
-        *outName = "space";
-    } else {
-        *outName = std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
-    }
-    return PC1600Keyboard::keyFromName(*outName) != PC1600Keyboard::Key::Unknown;
-}
-
-// A character produced by SHIFT + a base key, in precedence order:
-//   1. a-z            -> SHIFT + the uppercase letter key (lowercase)
-//   2. the 13 shared "second legend" punctuation chars (SharpShiftedSymbols)
-//   3. the PC-1600 digit-row second legends, which the PC-1500 keyboard
-//      lacks.
-//   4. '^' -> SHIFT + SPACE. A `type:` step can carry a literal caret
-//      (e.g. a DiskWorks `.CFG` line written via PRINT#), so unlike the
-//      PC-1500 typer -- which omits it as unreachable in BASIC source --
-//      the PC-1600 typer maps it.
-bool shiftedCharBaseKey(char c, std::string* base) {
-    if (c >= 'a' && c <= 'z') {
-        *base = std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
-        return true;
-    }
-    if (sharpShiftedSymbolBaseKey(c, base)) return true;
-    return pc1600DigitRowShiftedBaseKey(c, base);
-}
-
 } // namespace
 
 void tapKey(PC1600Machine& machine, const std::string& name) {
@@ -126,8 +99,15 @@ void waitForKeyboardScanLoop(PC1600Machine& machine) {
     // the first scripted keystroke would otherwise land in a dead scan.
     if (!machine.ce1600pAttached() && !machine.ce150Attached()) return;
 
+    //
+    // "Ready" per frame: CK0 (the LCD clock) is on, and the SC7852 is either
+    // in the BASIC command loop (pc1600AtBasicPrompt) or has read the key
+    // matrix (port 37H) at least once this frame. The idle loop polls 37H
+    // only ~0-1 times per frame, so the command-loop PC is the primary
+    // signal; the scan read covers key: steps taken outside it (RSV mode,
+    // INPUT, ...). An earlier ">= 3 scans per frame" test never held and
+    // ran every call into the cap.
     constexpr int kActiveFramesNeeded = 15;                           // held ~0.25 s
-    constexpr uint64_t kMinScansPerFrame = 3;                         // a real matrix sweep, not one stray read
     constexpr uint64_t kCap = static_cast<uint64_t>(kTStateHz * 15);  // safety only
 
     uint64_t spent = 0;
@@ -136,11 +116,34 @@ void waitForKeyboardScanLoop(PC1600Machine& machine) {
     while (active < kActiveFramesNeeded && spent < kCap) {
         spent += machine.runCycles(kFrameTStates);
         uint64_t nowScan = machine.keyboard().scanCount();
-        const bool polling = (nowScan - lastScan) >= kMinScansPerFrame;
+        const bool polling = nowScan != lastScan;
         lastScan = nowScan;
-        if (polling && machine.display().clockEnabled()) active++;
+        const bool ready = pc1600AtBasicPrompt(machine) || polling;
+        if (ready && machine.display().clockEnabled()) active++;
         else active = 0;
     }
+}
+
+void runBootToPrompt(PC1600Machine& machine) {
+    // Generous margin past the boot ROM's power-on sequence -- the ROM
+    // doesn't poll the keyboard until it settles into its post-boot idle
+    // loop (headless: ~2M T-states to a stable PC set, see
+    // tools/pc1600_cli.cpp) -- then a BUSY-symbol idle poll for the tail of
+    // a slower boot.
+    constexpr uint64_t kBootSettleTStates = PC1600Machine::kTStateHz * 2;
+    constexpr uint64_t kBootIdleCapTStates = PC1600Machine::kTStateHz * 5;
+    machine.runCycles(kBootSettleTStates);
+    waitIdle(machine, kBootIdleCapTStates);
+    // With a plotter attached the boot ROM only turns the LCD on and enters
+    // its keyboard-scan idle loop once the CE-1600P has finished its power-
+    // on init (on real hardware the LCD + indicator strip stay dark until
+    // then) -- that init raises no BUSY symbol. No-op without a plotter.
+    waitForKeyboardScanLoop(machine);
+    // The keyboard-scan test above can pass while the ROM is still finishing
+    // its start-up (measured with a CE-1600P: ~10 s of emulated time before
+    // the cursor appears), so also wait until it is steady in the BASIC
+    // command loop -- otherwise that tail runs in real time.
+    waitUntilBasicIdle(machine, PC1600Machine::kTStateHz * 20);  // cap: safety only
 }
 
 uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates) {
@@ -153,16 +156,14 @@ uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates) {
     // The PC-1600 ROM set is fixed, so this address is stable; the window
     // is generous and the hold long, so a transient BREAK-poll visit during
     // a run doesn't count.
-    constexpr uint16_t kCmdLoopLo = 0x9280;
-    constexpr uint16_t kCmdLoopHi = 0x9300;
+    // The address window itself lives in pc1600AtBasicPrompt().
     constexpr int kFramesNeeded = 20;  // ~0.33 s continuously in the command loop
 
     uint64_t spent = 0;
     int inLoop = 0;
     while (inLoop < kFramesNeeded && spent < maxTStates) {
         spent += machine.runCycles(kFrameTStates);
-        const uint16_t pc = machine.sc7852().pc();
-        if (machine.sc7852Owns() && pc >= kCmdLoopLo && pc <= kCmdLoopHi) inLoop++;
+        if (pc1600AtBasicPrompt(machine)) inLoop++;
         else inLoop = 0;
     }
     return spent;
@@ -177,25 +178,20 @@ bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, 
 
     for (char c : line) {
         std::string name;
-        // shiftedCharBaseKey checked first (before charToKeyName, which
-        // case-folds) so lowercase letters take the shifted path rather
-        // than being typed as their unshifted uppercase key.
-        if (shiftedCharBaseKey(c, &name)) {
+        bool needsShift = false;
+        if (!pc1600ResolveTypedChar(c, &name, &needsShift)) {
+            if (error) *error = "no PC-1600 key for character '" + std::string(1, c) + "'";
+            return false;
+        }
+        if (needsShift) {
             // SHIFT tapped (not held) immediately before the base key; the
             // latch is consumed by that key and must NOT be explicitly
             // un-latched afterward (an explicit un-latch corrupts the next
             // unshifted character -- confirmed on the PC-1500 side).
             tapKey(machine, "shift");
             machine.runCycles(kFrameTStates * kShiftGapFrames);
-            tapKey(machine, name);
-            continue;
         }
-        if (charToKeyName(c, &name)) {
-            tapKey(machine, name);
-            continue;
-        }
-        if (error) *error = "no PC-1600 key for character '" + std::string(1, c) + "'";
-        return false;
+        tapKey(machine, name);
     }
     if (pressEnter) {
         tapKey(machine, "enter");

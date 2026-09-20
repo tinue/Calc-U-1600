@@ -24,6 +24,7 @@
 
 #include "../PC1600/PC1600BasicTyper.hpp"
 #include "../PC1600/PC1600Machine.hpp"
+#include "TestRoms.hpp"
 
 namespace {
 
@@ -35,40 +36,8 @@ int g_fail = 0;
     else { g_fail++; std::fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } \
 } while (0)
 
-bool readRomFile(const char* path, std::vector<uint8_t>* out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    *out = std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return !out->empty();
-}
-
 // Loads the confirmed PC-1600 ROM set; returns false (test skipped) if the
 // images aren't at their repo-root path. Mirrors pc1600_preset_tests.cpp.
-bool loadRomSet(PC1600Machine& m) {
-    std::vector<uint8_t> i0, ii0, iii3, r3b, iv6, r1500;
-    if (!readRomFile("roms/PC1600-P0-B0.bin", &i0) ||
-        !readRomFile("roms/PC1600-P1-B0.bin", &ii0) ||
-        !readRomFile("roms/PC1600-P1-B3.bin", &iii3) ||
-        !readRomFile("roms/PC1600-P1-B3B.bin", &r3b) ||
-        !readRomFile("roms/PC1600-P2-B6.bin", &iv6) ||
-        !readRomFile("roms/PC1600-LH5803-C000-FFFF.bin", &r1500)) {
-        return false;
-    }
-    return m.loadBank0(i0.data(), i0.size(), ii0.data(), ii0.size()) &&
-           m.loadBank3Rom(iii3.data(), iii3.size()) &&
-           m.loadBank3bRom(r3b.data(), r3b.size()) &&
-           m.loadBank6Rom(iv6.data(), iv6.size()) &&
-           m.loadLH5803Rom(r1500.data(), r1500.size());
-}
-
-bool bootMachine(PC1600Machine& m) {
-    if (!loadRomSet(m)) return false;
-    m.allReset();
-    m.runCycles(static_cast<uint64_t>(PC1600Machine::kTStateHz) * 2);
-    waitIdle(m, static_cast<uint64_t>(PC1600Machine::kTStateHz) * 5);
-    return true;
-}
-
 // No ROM needed: an untypeable character fails the line cleanly with an
 // error rather than half-typing it.
 void test_typeline_rejects_untypeable_char() {
@@ -100,7 +69,7 @@ void test_typebasicprogram_length_guard() {
 // BASPRG_END), and an over-length line is the only one rejected.
 void test_typebasicprogram_pro_mode_load() {
     PC1600Machine m;
-    if (!bootMachine(m)) {
+    if (!bootPC1600(m)) {
         std::fprintf(stderr, "SKIP test_typebasicprogram_pro_mode_load: PC-1600 ROM images not found\n");
         return;
     }
@@ -121,7 +90,7 @@ void test_typebasicprogram_pro_mode_load() {
 // nothing -- every line is reported rejected and the error names PRO mode.
 void test_typebasicprogram_detects_run_mode() {
     PC1600Machine m;
-    if (!bootMachine(m)) {
+    if (!bootPC1600(m)) {
         std::fprintf(stderr, "SKIP test_typebasicprogram_detects_run_mode: PC-1600 ROM images not found\n");
         return;
     }
@@ -139,7 +108,7 @@ void test_typebasicprogram_detects_run_mode() {
 // commit (ENTER), so type WITH enter and read it back after.
 void test_typeline_lowercase_reaches_input_buffer() {
     PC1600Machine m;
-    if (!bootMachine(m)) {
+    if (!bootPC1600(m)) {
         std::fprintf(stderr, "SKIP test_typeline_lowercase_reaches_input_buffer: PC-1600 ROM images not found\n");
         return;
     }
@@ -167,7 +136,7 @@ void test_typeline_accepts_caret() {
 // byte (0x5E), same check shape as the lowercase test above.
 void test_typeline_caret_reaches_input_buffer() {
     PC1600Machine m;
-    if (!bootMachine(m)) {
+    if (!bootPC1600(m)) {
         std::fprintf(stderr, "SKIP test_typeline_caret_reaches_input_buffer: PC-1600 ROM images not found\n");
         return;
     }
