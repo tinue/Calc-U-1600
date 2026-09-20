@@ -50,12 +50,12 @@ int main(int argc, char** argv) {
 
     std::vector<uint8_t> i0, ii0, iii3, r3b, iv6, r1500;
     const bool ok =
-        readRom(dir + "PC1600-P0-B0.bin", &i0) &&
-        readRom(dir + "PC1600-P1-B0.bin", &ii0) &&
-        readRom(dir + "PC1600-P1-B3.bin", &iii3) &&
-        readRom(dir + "PC1600-P1-B3B.bin", &r3b) &&
-        readRom(dir + "PC1600-P2-B6.bin", &iv6) &&
-        readRom(dir + "PC1600-LH5803-C000-FFFF.bin", &r1500);
+        readRom(dir + "PC1600-P0-B0-new.bin", &i0) &&
+        readRom(dir + "PC1600-P1-B0-new.bin", &ii0) &&
+        readRom(dir + "PC1600-P1-B3-new.bin", &iii3) &&
+        readRom(dir + "PC1600-P1-B3B-new.bin", &r3b) &&
+        readRom(dir + "PC1600-P2-B6-new.bin", &iv6) &&
+        readRom(dir + "PC1600-LH5803-C000-FFFF-new.bin", &r1500);
     if (!ok) {
         std::fprintf(stderr, "could not read the PC1600-*.bin set from '%s'\n", dir.c_str());
         return 1;

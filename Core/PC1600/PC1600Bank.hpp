@@ -44,7 +44,7 @@
 //   Port 3CH (write-only) — the SLOT1MAP (0196H) / SLOT2MAP (0199H)
 //   gate-array control. The firmware keeps a RAM shadow at F08DH and
 //   re-derives the port byte from it; the SLOT2MAP ROM routine
-//   (PC1600-P0-B0.bin 0A6DH) shows the layout:
+//   (PC1600-P0-B0-new.bin 0A6DH) shows the layout:
 //     b2      SLOT1MAP: 0 = Slot 1 at page-C banks 0/1 (default); 1 =
 //             Slot 1's high 16KB half (beta) ALSO answers at page-B bank 1
 //             (4000-7FFF), in addition to its normal page-C bank-1 home --

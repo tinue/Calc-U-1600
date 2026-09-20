@@ -278,7 +278,7 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
         // the matching command port. See PC1600SubCpu's class comment.
         case 0x33: return m_subCpu.readAnswer();
         // 35H (IOR ZMSK) = read back the SC-7852 interrupt mask written via
-        // this port's write side. The timer ISR reads it at PC1600-P1-B3.bin
+        // this port's write side. The timer ISR reads it at PC1600-P1-B3-new.bin
         // 4102H/4112H to decide which pending causes are unmasked.
         case 0x35: return m_intMask;
         case 0x18: return m_opc;
@@ -373,7 +373,7 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
         // this range as behaviour-affecting until proven otherwise.
         // Deliberately a no-op rather than falling through to the open-bus
         // default: the timer ISR writes EFH here every time it runs, at
-        // PC1600-P1-B3.bin 4197H, immediately after the `IN A,(32H)` cause
+        // PC1600-P1-B3-new.bin 4197H, immediately after the `IN A,(32H)` cause
         // read at 40FFH -- i.e. an interrupt acknowledge/re-arm -- and
         // interrupts keep arriving with it ignored, so nothing in this
         // core needs the register's contents yet. Recorded here so it

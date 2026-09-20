@@ -418,7 +418,7 @@ void test_memory_pb5_survives_opb_read_modify_write() {
     bus.writeIO(0x1D, 0x00);
 
     // Replay the ROM's own key-scan strobe assert/release pair verbatim
-    // (PC1600-P1-B3.bin 4887H and 4896H): PB5 must stay driven by the timer
+    // (PC1600-P1-B3-new.bin 4887H and 4896H): PB5 must stay driven by the timer
     // throughout this exact sequence.
     mem.setTimer64Bit(true);
     // 4887H: IN A,(1DH) / OR 40H / OUT (1DH),A  -- PB6 to output
@@ -690,8 +690,8 @@ void test_pb3_reads_high_for_the_alternate_charset_gate() {
 
     // PB3 latches its externally-pulled-up pin (PCSTB, pin 78) at reset and
     // reads 1 forever after. The boot ROM copies exactly this bit into
-    // F1BCH bit 7 (PC1600-P0-B0.bin 0512H), which gates the KBII key's whole
-    // toggle (PC1600-P1-B0.bin 6CC1H). Reading 0 here makes KBII inert.
+    // F1BCH bit 7 (PC1600-P0-B0-new.bin 0512H), which gates the KBII key's whole
+    // toggle (PC1600-P1-B0-new.bin 6CC1H). Reading 0 here makes KBII inert.
     CHECK((bus.readIO(0x1F) & 0x08) != 0);
 
     // It is an input pin, so the ROM's own read-modify-write of OPB must
@@ -735,9 +735,9 @@ void test_memory_clock_enable_via_port37_write() {
 // PC-1600-Keyboard.md §7). Regression: '_' used to map to SHIFT + 9, but
 // SFTCDT puts it on "." and leaves 9 unshifted.
 void test_digit_row_shift_table_matches_rom_sftcdt() {
-    std::ifstream in("roms/PC1600-P2-B6.bin", std::ios::binary);
+    std::ifstream in("roms/PC1600-P2-B6-new.bin", std::ios::binary);
     if (!in) {
-        std::fprintf(stderr, "SKIP test_digit_row_shift_table_matches_rom_sftcdt: roms/PC1600-P2-B6.bin not found\n");
+        std::fprintf(stderr, "SKIP test_digit_row_shift_table_matches_rom_sftcdt: roms/PC1600-P2-B6-new.bin not found\n");
         return;
     }
     const std::vector<unsigned char> rom((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());

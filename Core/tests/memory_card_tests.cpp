@@ -1386,7 +1386,7 @@ void test_ce1601m_end_to_end_through_pc1600() {
 // The SLOT2MAP gate-array remap (Port 3CH b5:b4): the firmware can make the
 // Slot 2 RAM chip-select assert for a bank-1 access outside the ordinary
 // page-C window -- the "(S2:) at Bank 1" path the RAM-disk file system uses.
-// SLOT2MAP ROM routine: PC1600-P0-B0.bin 0A6DH.
+// SLOT2MAP ROM routine: PC1600-P0-B0-new.bin 0A6DH.
 void test_ce1601m_slot2map_remap() {
     PC1600Bank bank;
     PC1600Memory mem(bank);

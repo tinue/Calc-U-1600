@@ -27,12 +27,12 @@ bool readRomFile(const char* path, std::vector<uint8_t>* out) {
 }
 bool loadRomSet(PC1600Machine& m) {
     std::vector<uint8_t> i0, ii0, iii3, r3b, iv6, r1500;
-    if (!readRomFile("roms/PC1600-P0-B0.bin", &i0) ||
-        !readRomFile("roms/PC1600-P1-B0.bin", &ii0) ||
-        !readRomFile("roms/PC1600-P1-B3.bin", &iii3) ||
-        !readRomFile("roms/PC1600-P1-B3B.bin", &r3b) ||
-        !readRomFile("roms/PC1600-P2-B6.bin", &iv6) ||
-        !readRomFile("roms/PC1600-LH5803-C000-FFFF.bin", &r1500)) {
+    if (!readRomFile("roms/PC1600-P0-B0-new.bin", &i0) ||
+        !readRomFile("roms/PC1600-P1-B0-new.bin", &ii0) ||
+        !readRomFile("roms/PC1600-P1-B3-new.bin", &iii3) ||
+        !readRomFile("roms/PC1600-P1-B3B-new.bin", &r3b) ||
+        !readRomFile("roms/PC1600-P2-B6-new.bin", &iv6) ||
+        !readRomFile("roms/PC1600-LH5803-C000-FFFF-new.bin", &r1500)) {
         return false;
     }
     return m.loadBank0(i0.data(), i0.size(), ii0.data(), ii0.size()) &&

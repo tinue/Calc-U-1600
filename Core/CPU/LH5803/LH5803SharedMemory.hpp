@@ -28,7 +28,7 @@ class PC1600BusArbiter;
 //   0000-7FFF  forwarded to sharedMem.read/write(addr + 0x8000)
 //   8000-BFFF  CE-158 ROM (PVOUT=1) or CE-150 ROM (PVOUT=0) window --
 //              open bus, no peripheral ROM backing it
-//   C000-FFFF  LH5803-private internal ROM (PC1600-LH5803-C000-FFFF.bin), fixed, loadable
+//   C000-FFFF  LH5803-private internal ROM (PC1600-LH5803-C000-FFFF-new.bin), fixed, loadable
 //
 // ME1 defaults to aliasing ME0, EXCEPT:
 //   * 0xA038: `STA #(0A038H)` is the LH5803-side handoff trigger (the
@@ -40,7 +40,7 @@ class PC1600BusArbiter;
 //     PC-1500's LH5801 (see that file's top comment / its `case 0xB`).
 //     Modelled here as a plain 16-byte register file: writes latch, reads
 //     return the latched byte. It MUST NOT fall through to readME0(), where
-//     0xF00x >= kRomBase would serve PC1600-LH5803-C000-FFFF.bin bytes --
+//     0xF00x >= kRomBase would serve PC1600-LH5803-C000-FFFF-new.bin bytes --
 //     the CE-150 cartridge's per-plot-point pacing poll `BII #(0xF00B),0x02`
 //     (system-ROM helper at E451) depends on reading register 0xB (IF,
 //     input flags) as software-only state, not ROM data. Bit 1 of IF is
@@ -80,7 +80,7 @@ public:
     void detachCe150() { m_ce150 = nullptr; }
     bool ce150Attached() const { return m_ce150 != nullptr; }
 
-    /// Loads the LH5803-private internal ROM at C000-FFFF (PC1600-LH5803-C000-FFFF.bin).
+    /// Loads the LH5803-private internal ROM at C000-FFFF (PC1600-LH5803-C000-FFFF-new.bin).
     /// Returns false (untouched) if `size` isn't exactly 16384 bytes.
     bool loadROM(const uint8_t* data, size_t size);
     bool loadROMFile(const std::string& path);

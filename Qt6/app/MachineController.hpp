@@ -22,8 +22,11 @@ class PtySerialLink;
 
 namespace MachineControllerNS {
 enum class Model { PC1500, PC1500A, PC1600 };
+// PC-1600 calculator ROM version: New = PEEK #(0,&7FFF) 4/5, Old = 130.
+enum class PC1600RomVersion { New, Old };
 }
 using MachineControllerNS::Model;
+using MachineControllerNS::PC1600RomVersion;
 
 // The per-model settings key ("PC1500"/"PC1500A"/"PC1600") shared by
 // AppSettings::startupModelPreference() and defaultPresetPath(); lowercased,
@@ -90,12 +93,18 @@ public:
     Model currentModel() const { return m_model; }
 
     // PC-1500 (plain) only -- PC-1500A is A04-only (see PC1500Variant.hpp)
-    // and PC-1600 has its own fixed ROM set, so this is a no-op change of
-    // m_pc1500RomRevision alone in those two cases (no rebuild), but a full
+    // and PC-1600 has its own version picker (below), so this is a no-op
+    // change of m_pc1500RomRevision alone in those two cases (no rebuild), but a full
     // switchModel()-style rebuild when a PC-1500 is (or becomes) active, so
     // the new ROM actually takes effect immediately.
     void setPC1500RomRevision(PC1500RomRevision revision);
     PC1500RomRevision pc1500RomRevision() const { return m_pc1500RomRevision; }
+
+    // PC-1600 calculator ROM version (the CE-1600P peripheral ROM is
+    // independent of it). Rebuilds the machine when a PC-1600 is active;
+    // otherwise only remembers the choice for the next switch to PC-1600.
+    void setPC1600RomVersion(PC1600RomVersion version);
+    PC1600RomVersion pc1600RomVersion() const { return m_pc1600RomVersion; }
 
     // Reset (`allReset` = ALL RESET on the PC-1600; the PC-1500 has one
     // level), then run the boot flat out until the ROM waits at the prompt
@@ -204,11 +213,12 @@ public:
     // relative roms/ directory -- see its header comment).
     PC1500Machine& resetBareForPresetPC1500(PC1500Variant variant);
     // Replaces the live machine with a freshly constructed PC1600Machine
-    // with its fixed ROM set already loaded (same bytes/order as
+    // with the ROM set of `version` already loaded (remembered as the
+    // current version) (same bytes/order as
     // switchModel()'s PC-1600 branch) but no module attach or reset --
     // PC1600PresetLoader.cpp does both itself, driven by the preset's own
     // memory-expansion-1:/-2: blocks.
-    PC1600Machine& resetBareForPresetPC1600();
+    PC1600Machine& resetBareForPresetPC1600(PC1600RomVersion version);
     // Call once the preset loader returns, success or failure alike: the
     // machine object was already swapped in by resetBareForPreset*()
     // above -- this just finalizes model/UI bookkeeping the same way
@@ -280,6 +290,7 @@ signals:
 private:
     Model m_model = Model::PC1500A;
     PC1500RomRevision m_pc1500RomRevision = PC1500RomRevision::A04;
+    PC1600RomVersion m_pc1600RomVersion = PC1600RomVersion::New;
     std::unique_ptr<PC1500Machine> m_pc1500;
     std::unique_ptr<PC1600Machine> m_pc1600;
     KeyPasteFeeder m_paste;

@@ -593,9 +593,15 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         // A PC-1600 preset is model + memory slots + keys only. Reject the
         // PC-1500-only pieces with a clear message rather than silently
         // ignoring them.
+        // `firmware: new|old` picks the calculator ROM version (default
+        // "new"); CE-1600P peripheral ROMs are independent of it.
+        out->romVariant = "new";
         if (hasFirmware) {
-            *error = "'firmware:' is not valid for a PC-1600 preset (the ROM set is fixed)";
-            return false;
+            if (firmware != "new" && firmware != "old") {
+                *error = "'firmware:' for a PC-1600 preset must be 'new' or 'old'";
+                return false;
+            }
+            out->romVariant = firmware;
         }
         if (!out->memoryExpansionModuleSpecFile.empty() || !out->memoryExpansionModuleSpecName.empty()) {
             *error = "use 'memory-expansion-1:' / 'memory-expansion-2:' for a PC-1600 preset, not 'memory-expansion:'";

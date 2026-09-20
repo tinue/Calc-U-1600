@@ -35,7 +35,7 @@ public:
         /// distinct switch as PC1500Keyboard::Key::Rsv. Cycles among the
         /// three RESERVE memory areas. Its matrix position (KS1 bit7) is
         /// pinned down by (1) the ROM's own key-code table (KYCDTB, bank 6
-        /// @ 94FBH in PC1600-P2-B6.bin): this exact matrix slot's byte is
+        /// @ 94FBH in PC1600-P2-B6-new.bin): this exact matrix slot's byte is
         /// 09H, the KEYDIRECT code for this key's `⇕` keycap glyph per the
         /// TRM §10.2 key-code figure, and (2) the PC-1600 schematic's
         /// keyboard-matrix diagram, where this position is drawn with that

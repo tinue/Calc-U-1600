@@ -206,7 +206,8 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
     };
 
     if (preset.isPC1600()) {
-        PC1600Machine& machine = m_controller->resetBareForPresetPC1600();
+        PC1600Machine& machine = m_controller->resetBareForPresetPC1600(
+            preset.romVariant == "old" ? PC1600RomVersion::Old : PC1600RomVersion::New);
         const ScopedYieldHook<PC1600Machine> yieldHook(machine, m_yieldHook, m_controller->clockHz());
         // Announce the model switch before applyPC1600Preset() even runs,
         // not after -- MainWindow's `armed()` handler (below) needs

@@ -19,11 +19,14 @@ public:
     void setModel(Model model); // reflect an externally-driven model change
 
     // ROM-revision picker -- PC-1500 (plain) only; PC-1500A is A04-only
-    // (see PC1500Variant.hpp) so there's nothing worth picking there, and
-    // PC-1600 has its own fixed ROM set entirely. Mirrors setModel()'s
+    // (see PC1500Variant.hpp) so there's nothing worth picking there. The
+    // PC-1600 has its own New/Old picker below. Mirrors setModel()'s
     // QSignalBlocker'd external-resync shape.
     void setRomRevision(PC1500RomRevision revision);
     void setRomPickerVisible(bool visible);
+    // PC-1600 calculator ROM version picker (New/Old).
+    void setPC1600RomVersion(PC1600RomVersion version);
+    void setPC1600RomPickerVisible(bool visible);
 
     // Resyncs slot `slot`'s (1 or 2) combo box: bundled entries, then a
     // separator, then instance entries, with a leading "-empty-" item;
@@ -64,6 +67,7 @@ public:
 signals:
     void modelSelected(Model model);
     void romRevisionSelected(PC1500RomRevision revision);
+    void pc1600RomVersionSelected(PC1600RomVersion version);
     void moduleSelected(int slot, QString moduleNameOrEmpty); // "" => -empty-
     void nameAndSaveRequested(int slot);
     void ce150ToggleRequested();
@@ -75,6 +79,7 @@ signals:
 private:
     QComboBox* m_modelCombo = nullptr;
     QComboBox* m_romCombo = nullptr;
+    QComboBox* m_rom1600Combo = nullptr;
     QPushButton* m_ce150Button = nullptr;
     QPushButton* m_ce1600pButton = nullptr;
     QLabel* m_floppyLabel = nullptr;

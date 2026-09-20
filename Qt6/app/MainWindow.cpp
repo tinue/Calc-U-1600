@@ -107,6 +107,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     connect(m_controlBar, &ControlBar::modelSelected, this, &MainWindow::applyModelSelection);
     connect(m_controlBar, &ControlBar::romRevisionSelected, this, &MainWindow::applyRomRevisionSelection);
+    connect(m_controlBar, &ControlBar::pc1600RomVersionSelected, this, &MainWindow::applyPC1600RomVersionSelection);
     connect(m_controlBar, &ControlBar::moduleSelected, this, [this](int slot, QString moduleNameOrEmpty) {
         m_moduleManager->selectModule(slot, moduleNameOrEmpty);
         m_controller->switchModel(m_controller->currentModel()); // rebuild -> re-attach
@@ -243,9 +244,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_faceplate->setModel(m_controller->currentModel());
     m_controlBar->setModel(m_controller->currentModel());
     m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
+    m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
     syncControlBarForModel();
     syncMachineMenuFromModel(m_controller->currentModel());
     syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
+    syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
     refreshModuleCombos();
 
     resize(AppSettings::windowSize());
@@ -281,6 +284,8 @@ void MainWindow::syncControlBarForModel() {
     const bool romPickerVisible = m_controller->currentModel() == Model::PC1500;
     m_controlBar->setRomPickerVisible(romPickerVisible);
     m_romMenuAction->setVisible(romPickerVisible);
+    m_controlBar->setPC1600RomPickerVisible(isPC1600);
+    m_rom1600MenuAction->setVisible(isPC1600);
 }
 
 void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::function<bool(QString*)>& loadFn,
@@ -453,9 +458,11 @@ void MainWindow::onPresetArmed() {
     m_faceplate->setModel(m_controller->currentModel());
     m_controlBar->setModel(m_controller->currentModel());
     m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
+    m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
     syncControlBarForModel();
     syncMachineMenuFromModel(m_controller->currentModel());
     syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
+    syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
     refreshModuleCombos();
     // The preset attached its plotter directly on the Core machine,
     // bypassing PlotterController/attachCE150()/attachCE1600P() entirely --
@@ -761,6 +768,21 @@ void MainWindow::buildMenuBar() {
     addRomAction(PC1500RomRevision::A03, tr("A03"));
     addRomAction(PC1500RomRevision::A04, tr("A04"));
 
+    QMenu* rom1600Menu = machineMenu->addMenu(tr("ROM Version"));
+    m_rom1600MenuAction = rom1600Menu->menuAction();
+    m_rom1600ActionGroup = new QActionGroup(this);
+    m_rom1600ActionGroup->setExclusive(true);
+    auto addRom1600Action = [&](PC1600RomVersion version, const QString& label) {
+        QAction* action = rom1600Menu->addAction(label);
+        action->setCheckable(true);
+        m_rom1600ActionGroup->addAction(action);
+        m_rom1600Actions.insert(version, action);
+        connect(action, &QAction::triggered, this, [this, version] { applyPC1600RomVersionSelection(version); });
+    };
+    addRom1600Action(PC1600RomVersion::New, tr("New"));
+    addRom1600Action(PC1600RomVersion::Old, tr("Old"));
+    m_rom1600MenuAction->setVisible(false);
+
     machineMenu->addSeparator();
     QAction* resetAction = machineMenu->addAction(tr("Reset"));
     resetAction->setShortcut(QKeySequence(Qt::ControlModifier | Qt::Key_R));
@@ -784,9 +806,11 @@ void MainWindow::applyModelSelection(Model model) {
     m_faceplate->setModel(model);
     m_controlBar->setModel(model);
     m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
+    m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
     syncControlBarForModel();
     syncMachineMenuFromModel(model);
     syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
+    syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
     refreshModuleCombos();
     applyDefaultPreset(model);
 }
@@ -807,6 +831,21 @@ void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
     m_controlBar->setRomRevision(revision);
     syncMachineMenuFromRomRevision(revision);
     refreshModuleCombos();
+}
+
+void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
+    m_moduleManager->flushPendingPersist();
+    m_floppyManager->flushPendingPersist();
+    m_controller->setPC1600RomVersion(version); // rebuilds the machine when a PC-1600 is active
+    m_plotterController->resetOnModelSwitch();
+    m_controlBar->setPC1600RomVersion(version);
+    syncMachineMenuFromPC1600RomVersion(version);
+    syncControlBarForModel();
+    refreshModuleCombos();
+}
+
+void MainWindow::syncMachineMenuFromPC1600RomVersion(PC1600RomVersion version) {
+    if (QAction* action = m_rom1600Actions.value(version, nullptr)) action->setChecked(true);
 }
 
 void MainWindow::syncMachineMenuFromModel(Model model) {

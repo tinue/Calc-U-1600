@@ -144,11 +144,11 @@ struct PresetFile {
     std::string model;
     /// True for `model: PC-1600` -- derived from `model` rather than stored
     /// alongside it, so the two can't disagree. The PC-1600 is a separate
-    /// machine (Core/PC1600/) with a fixed ROM set, its own two memory slots
-    /// (memory-expansion-1:/memory-expansion-2: below) and no BASIC/binary
-    /// program loading -- so a PC-1600 preset carries no `firmware:`, no
-    /// `program:` section, and no `memory-expansion:` (unsuffixed) block, and
-    /// `variant`/`romVariant` below are left at their defaults and unused.
+    /// machine (Core/PC1600/) with its own two memory slots
+    /// (memory-expansion-1:/memory-expansion-2: below); its `firmware:` is
+    /// `new` or `old` (calculator ROM version, default `new`; stored in
+    /// `romVariant`) and it takes no `memory-expansion:` (unsuffixed) block.
+    /// `variant` below is unused.
     /// Applied by Core/PC1600/PC1600PresetLoader.cpp, not applyPC1500Preset().
     bool isPC1600() const { return model == "PC-1600"; }
     // Parsed from `model:` -- PC1500Variant::PC1500A for "PC-1500A",
@@ -157,10 +157,11 @@ struct PresetFile {
     // constructed with this variant (variant is fixed at construction --
     // see PC1500Memory.hpp).
     PC1500Variant variant = PC1500Variant::PC1500A;
-    // Which ROM revision to run, always one of "A01"/"A03"/"A04" -- never
+    // PC-1600: "new" or "old" (calculator ROM version, default "new").
+    // PC-1500/1500A: which ROM revision to run, always one of "A01"/"A03"/"A04" -- never
     // a file path or a bare-model-dependent choice. There are only three
     // real options across all three machines (per the project owner):
-    // the PC-1600 has exactly one ROM (no choice at all), the PC-1500A
+    // the PC-1600 chooses "new"/"old" instead (see above), the PC-1500A
     // can only run A04, and the PC-1500 (non-A) is the only model that
     // actually chooses between A01/A03/A04. For "PC-1500A", this
     // resolves unconditionally to "A04" regardless of any `firmware:`

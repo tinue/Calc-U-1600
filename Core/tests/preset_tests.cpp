@@ -470,9 +470,24 @@ void test_preset_parser_firmware_ignored_for_pc1500a() {
     CHECK(preset.romVariant == "A04");
 }
 
+void test_preset_parser_pc1600_firmware_version() {
+    // PC-1600: `firmware:` selects the calculator ROM version.
+    PresetFile preset;
+    std::string error;
+    CHECK(parse("model: PC-1600\n", &preset, &error));
+    CHECK(preset.romVariant == "new");
+    CHECK(parse("model: PC-1600\nfirmware: old\n", &preset, &error));
+    CHECK(preset.romVariant == "old");
+    CHECK(parse("model: PC-1600\nfirmware: new\n", &preset, &error));
+    CHECK(preset.romVariant == "new");
+    CHECK(!parse("model: PC-1600\nfirmware: A04\n", &preset, &error));
+    CHECK(error.find("new") != std::string::npos);
+}
+
 } // namespace
 
 int run_preset_tests() {
+    test_preset_parser_pc1600_firmware_version();
     test_preset_parser_rejects_module_form();
     test_preset_parser_rejects_extra_field();
     test_preset_parser_rejects_second_item();

@@ -91,6 +91,7 @@ private:
     // only lambdas in the constructor).
     void applyModelSelection(Model model);
     void applyRomRevisionSelection(PC1500RomRevision revision);
+    void applyPC1600RomVersionSelection(PC1600RomVersion version);
     // Loads `model`'s default preset (AppSettings::defaultPresetPath()), if
     // one is set -- run whenever a model gets selected, including at startup.
     void applyDefaultPreset(Model model);
@@ -103,9 +104,13 @@ private:
     // resyncs ControlBar (constructor, onPresetArmed()).
     void syncMachineMenuFromModel(Model model);
     void syncMachineMenuFromRomRevision(PC1500RomRevision revision);
+    void syncMachineMenuFromPC1600RomVersion(PC1600RomVersion version);
 
     QHash<Model, QAction*> m_modelActions;
     QHash<PC1500RomRevision, QAction*> m_romActions;
+    QHash<PC1600RomVersion, QAction*> m_rom1600Actions;
+    QActionGroup* m_rom1600ActionGroup = nullptr;
+    QAction* m_rom1600MenuAction = nullptr; // Machine > ROM Version submenu (PC-1600 only)
     QActionGroup* m_modelActionGroup = nullptr;
     QActionGroup* m_romActionGroup = nullptr;
     QAction* m_romMenuAction = nullptr; // Machine > ROM Revision submenu's own action, for show/hide

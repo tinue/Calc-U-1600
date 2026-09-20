@@ -217,7 +217,7 @@ public:
     /// whatever the CPU last wrote to the port. Keeping the two apart
     /// means a plain `OUT (1FH),A` cannot forge an input pin's level, even
     /// though the ROM only ever touches OPB through a read-modify-write
-    /// (`PC1600-P1-B3.bin` 4887H/4896H) that happens to preserve bit 5
+    /// (`PC1600-P1-B3-new.bin` 4887H/4896H) that happens to preserve bit 5
     /// anyway, so a live headless trace shows the same duty cycle and edge
     /// count with or without the split (measured over 21.6M T-states:
     /// 50.78% high, 771 edges vs. 772 expected for 64 Hz).
@@ -237,7 +237,7 @@ public:
     /// distinct from `setTimer64Bit()`'s raw-level PB5 update above. A
     /// read of port 32H (`readIO()`) clears it, matching the observed
     /// real-ROM access pattern: the timer ISR's own dispatcher
-    /// (`PC1600-P1-B3.bin` 0x40FF `IN A,(32H)`) captures the cause byte once
+    /// (`PC1600-P1-B3-new.bin` 0x40FF `IN A,(32H)`) captures the cause byte once
     /// into a register and only ever reads that port again on a
     /// subsequent, later interrupt -- never re-reads it mid-dispatch, and
     /// never writes it -- so "read clears" is the only access pattern
@@ -266,17 +266,17 @@ public:
     void latchCommInterruptCause() { m_intCause |= 0x01; }
 
     /// Loads the always-resident system ROM: `lower` backs page A
-    /// (0000-3FFF, PC1600-P0-B0.bin) and `upper` backs page B bank 0
-    /// (4000-7FFF, PC1600-P1-B0.bin) — the same physical ROM device, loaded as
+    /// (0000-3FFF, PC1600-P0-B0-new.bin) and `upper` backs page B bank 0
+    /// (4000-7FFF, PC1600-P1-B0-new.bin) — the same physical ROM device, loaded as
     /// two 16KB halves since that's how the source images are split.
     /// Returns false (untouched) if either size isn't exactly kBankSize.
     bool loadBank0(const uint8_t* lower, size_t lowerSize,
                     const uint8_t* upper, size_t upperSize);
 
-    /// Page B bank 3 (PC1600-P1-B3.bin) / hidden bank 3b (PC1600-P1-B3B.bin).
+    /// Page B bank 3 (PC1600-P1-B3-new.bin) / hidden bank 3b (PC1600-P1-B3B-new.bin).
     bool loadBank3Rom(const uint8_t* data, size_t size);
     bool loadBank3bRom(const uint8_t* data, size_t size);
-    /// Page C bank 6 (PC1600-P2-B6.bin, display/timer/serial/char tables).
+    /// Page C bank 6 (PC1600-P2-B6-new.bin, display/timer/serial/char tables).
     bool loadBank6Rom(const uint8_t* data, size_t size);
 
     /// The 60-pin system bus (Page B banks 4/5 ROM window + I/O ports
@@ -470,10 +470,10 @@ private:
     /// and PB3 reads 1 forever after.
     ///
     /// This is not cosmetic: the boot ROM copies exactly this bit into the
-    /// alternate-charset enable flag. `PC1600-P0-B0.bin` 0512H does
+    /// alternate-charset enable flag. `PC1600-P0-B0-new.bin` 0512H does
     /// `LD HL,F1BCH / LD A,(HL) / AND 7FH / LD B,A / IN A,(1FH) /
     /// AND 08H / JR Z,+2 / SET 7,B / LD (HL),B` -- F1BCH bit 7 is PB3,
-    /// latched once at startup. The KBII key handler (`PC1600-P1-B0.bin` 6CC1H)
+    /// latched once at startup. The KBII key handler (`PC1600-P1-B0-new.bin` 6CC1H)
     /// then gates its whole toggle on that bit: `LD A,(F1BCH) / RLA /
     /// JR NC,...` skips the `LD A,L / XOR 80H / LD L,A` at 6CCBH that
     /// flips the KBII flag. With PB3 low, KBII would be inert -- the key
@@ -531,7 +531,7 @@ private:
     /// the firmware can make the Slot 2 RAM chip-select assert for a bank-1
     /// access *outside* the normal page-C window -- the "(S2:) at Bank 1"
     /// path (PC-1600-Memory-Bank-Switching.md Part 1; SLOT2MAP ROM routine
-    /// PC1600-P0-B0.bin 0A6DH). Modelled as an effective-address rewrite feeding
+    /// PC1600-P0-B0-new.bin 0A6DH). Modelled as an effective-address rewrite feeding
     /// the ordinary Slot 2 decode. Returns true when `addr` is currently so
     /// remapped, filling `*pvoutHigh` (false/true = low/high 16 KB half of
     /// the module's selected vertical bank) and `*offset` (0..0x3FFF within

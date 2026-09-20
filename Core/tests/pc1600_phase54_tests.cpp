@@ -1,5 +1,5 @@
 // Headless C++ tests for the remaining PC-1600 ROM images:
-// PC1600-P1-B3.bin/PC1600-P1-B3B.bin/PC1600-P2-B6.bin wired into PC1600Machine at their
+// PC1600-P1-B3-new.bin/PC1600-P1-B3B-new.bin/PC1600-P2-B6-new.bin wired into PC1600Machine at their
 // documented bank addresses, and PC1600-P1-B4-CE1600P.bin/PC1600-P1-B5-CE1600P-OR-F.bin
 // (confirmed CE-1600P ROM -- see roms/README.md) wired in via PC1600Machine::attachCE1600P().
 // Same no-framework, assert-and-tally style as lh5801_tests.cpp -- see that
@@ -32,10 +32,10 @@ int g_fail = 0;
 void test_hidden_rom_latch_via_execution() {
     PC1600Machine m;
     std::vector<uint8_t> bank3, bank3b;
-    if (!readRomImage("roms/PC1600-P1-B3.bin", &bank3) ||
-        !readRomImage("roms/PC1600-P1-B3B.bin", &bank3b)) {
+    if (!readRomImage("roms/PC1600-P1-B3-new.bin", &bank3) ||
+        !readRomImage("roms/PC1600-P1-B3B-new.bin", &bank3b)) {
         std::fprintf(stderr, "SKIP test_hidden_rom_latch_via_execution: "
-                              "roms/PC1600-P1-B3.bin or PC1600-P1-B3B.bin not found "
+                              "roms/PC1600-P1-B3-new.bin or PC1600-P1-B3B-new.bin not found "
                               "relative to cwd (run tests from the repo root)\n");
         return;
     }
@@ -64,9 +64,9 @@ void test_hidden_rom_latch_via_execution() {
 void test_bank6_display_timer_serial_char_rom_load() {
     PC1600Machine m;
     std::vector<uint8_t> bank6;
-    if (!readRomImage("roms/PC1600-P2-B6.bin", &bank6)) {
+    if (!readRomImage("roms/PC1600-P2-B6-new.bin", &bank6)) {
         std::fprintf(stderr, "SKIP test_bank6_display_timer_serial_char_rom_load: "
-                              "roms/PC1600-P2-B6.bin not found\n");
+                              "roms/PC1600-P2-B6-new.bin not found\n");
         return;
     }
     std::vector<uint8_t> lower(16384, 0x00), upper(16384, 0x00);

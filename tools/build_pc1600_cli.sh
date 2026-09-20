@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds the headless PC-1600 CLI harness. Usage:
-#   tools/build_pc1600_cli.sh && ./headless/pc1600_cli roms/PC1600-P0-B0.bin roms/PC1600-P1-B0.bin
+#   tools/build_pc1600_cli.sh && ./headless/pc1600_cli roms/PC1600-P0-B0-new.bin roms/PC1600-P1-B0-new.bin
 #   tools/build_pc1600_cli.sh && ./headless/pc1600_cli --preset examples/foo.pc1600 --dump-basic
 set -e
 cd "$(dirname "$0")/.."

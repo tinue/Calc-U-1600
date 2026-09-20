@@ -1,12 +1,12 @@
 // Headless CLI harness for the PC-1600's SC7852 (Z-80) core, single-CPU,
-// no LH5803/no dual-CPU arbitration. Boots PC1600-P0-B0.bin+PC1600-P1-B0.bin, runs for a fixed cycle budget,
+// no LH5803/no dual-CPU arbitration. Boots romI-0+romII-0 (given on the command line), runs for a fixed cycle budget,
 // and reports a PC-visit histogram used to detect convergence onto a
 // small repeating loop -- mirrors pc1500_cli.cpp's own convergence-signal
 // approach (see that file's comment), minus the preset/trace-ring support
 // it has, since neither exists for SC7852 yet (trace lands in Phase 5.3).
 //
 // Usage: pc1600_cli <romI-0-file> <romII-0-file> [maxCycles]
-//        pc1600_cli --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--modules-dir <dir>] [--wav <out.wav>]
+//        pc1600_cli --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--modules-dir <dir>] [--wav <out.wav>] [--rom new|old]
 //
 // The --preset form loads the confirmed PC-1600 ROM set from roms/ (same
 // names pc1600_preset_tests.cpp uses), builds a full PC1600Machine, and
@@ -15,6 +15,9 @@
 // program pointers and the raw program-area bytes (read-only), the oracle
 // for the fast BASIC loader work (see
 // ~/.claude/plans/goal-faster-basic-program-woolly-wall.md).
+//
+// --rom new|old (--preset only) overrides the preset's `firmware:` ROM version
+// (default new).
 //
 // --wav <out.wav> (--preset only) records the buzzer (OPC 18H, see
 // PiezoSampler.hpp) while the preset script runs, as 48 kHz mono 16-bit
@@ -48,7 +51,7 @@ bool readFile(const std::string& path, std::vector<uint8_t>* out) {
 
 int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
               const std::string& moduleDir, const std::vector<std::string>& extraModuleDirs,
-              const std::string& wavPath) {
+              const std::string& wavPath, const std::string& romOverride) {
     (void)maxCycles;
     PresetFile preset;
     std::string error;
@@ -62,7 +65,9 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
     }
     PC1600Machine machine;
     std::string romSetError;
-    if (!BundledRoms::loadPC1600RomSet(machine, {"roms"}, &romSetError)) {
+    if (!BundledRoms::loadPC1600RomSet(machine, {"roms"},
+                                        romOverride.empty() ? preset.romVariant : romOverride,
+                                        &romSetError)) {
         std::fprintf(stderr, "could not load the PC-1600 ROM set: %s (run from repo root)\n",
                      romSetError.c_str());
         return 1;
@@ -165,23 +170,25 @@ int main(int argc, char** argv) {
         uint64_t maxCycles = 2'000'000ull;
         bool dumpBasic = false;
         std::string wavPath;
+        std::string romOverride;
         std::string moduleDir = ".";
         std::vector<std::string> extraModuleDirs;  // 2nd+ `--modules-dir`, searched after `moduleDir`
         bool moduleDirSet = false;
         for (int i = 3; i < argc; ++i) {
             if (std::strcmp(argv[i], "--dump-basic") == 0) dumpBasic = true;
             else if (std::strcmp(argv[i], "--wav") == 0 && i + 1 < argc) wavPath = argv[++i];
+            else if (std::strcmp(argv[i], "--rom") == 0 && i + 1 < argc) romOverride = argv[++i];
             else if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
                 if (!moduleDirSet) { moduleDir = argv[++i]; moduleDirSet = true; }
                 else               { extraModuleDirs.push_back(argv[++i]); }
             }
             else maxCycles = std::strtoull(argv[i], nullptr, 10);
         }
-        return runPreset(argv[2], maxCycles, dumpBasic, moduleDir, extraModuleDirs, wavPath);
+        return runPreset(argv[2], maxCycles, dumpBasic, moduleDir, extraModuleDirs, wavPath, romOverride);
     }
     if (argc < 3) {
         std::fprintf(stderr, "usage: %s <romI-0-file> <romII-0-file> [maxCycles]\n", argv[0]);
-        std::fprintf(stderr, "       %s --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--wav <out.wav>]\n", argv[0]);
+        std::fprintf(stderr, "       %s --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--wav <out.wav>] [--rom new|old]\n", argv[0]);
         return 1;
     }
     uint64_t maxCycles = 2'000'000ull;

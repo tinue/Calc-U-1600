@@ -122,6 +122,11 @@ void MachineController::switchModel(Model model) {
     emit modelChanged(m_model);
 }
 
+void MachineController::setPC1600RomVersion(PC1600RomVersion version) {
+    m_pc1600RomVersion = version;
+    if (m_model == Model::PC1600) switchModel(m_model); // rebuild with the new ROM
+}
+
 void MachineController::setPC1500RomRevision(PC1500RomRevision revision) {
     m_pc1500RomRevision = revision;
     if (m_model != Model::PC1600) switchModel(m_model); // rebuild with the new ROM
@@ -133,7 +138,8 @@ std::vector<std::string> MachineController::bundledRomDirs() {
 
 void MachineController::loadPC1600RomSet(PC1600Machine& machine) {
     std::string err;
-    if (!BundledRoms::loadPC1600RomSet(machine, bundledRomDirs(), &err)) {
+    const char* version = m_pc1600RomVersion == PC1600RomVersion::Old ? "old" : "new";
+    if (!BundledRoms::loadPC1600RomSet(machine, bundledRomDirs(), version, &err)) {
         reportMissingRomAndExit(err);
     }
 }
@@ -146,7 +152,8 @@ PC1500Machine& MachineController::resetBareForPresetPC1500(PC1500Variant variant
     return *m_pc1500;
 }
 
-PC1600Machine& MachineController::resetBareForPresetPC1600() {
+PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion version) {
+    m_pc1600RomVersion = version;
     m_paste.cancel({});
     m_pc1500.reset();
     m_pc1600.reset();

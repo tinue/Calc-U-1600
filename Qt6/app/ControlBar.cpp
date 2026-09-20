@@ -73,6 +73,14 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     layout->addWidget(m_romCombo);
     setRomPickerVisible(false); // PC-1500A is the default model (see m_modelCombo above)
 
+    m_rom1600Combo = new QComboBox(this);
+    m_rom1600Combo->addItem(tr("New ROM"), static_cast<int>(PC1600RomVersion::New));
+    m_rom1600Combo->addItem(tr("Old ROM"), static_cast<int>(PC1600RomVersion::Old));
+    m_rom1600Combo->setToolTip(tr("PC-1600 BASIC ROM version"));
+    m_rom1600Combo->setFocusPolicy(Qt::NoFocus);
+    layout->addWidget(m_rom1600Combo);
+    setPC1600RomPickerVisible(false);
+
     addSeparator(layout, this);
     for (int i = 0; i < 2; ++i) {
         const int slot = i + 1;
@@ -178,6 +186,9 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     connect(m_romCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
         emit romRevisionSelected(static_cast<PC1500RomRevision>(m_romCombo->itemData(index).toInt()));
     });
+    connect(m_rom1600Combo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        emit pc1600RomVersionSelected(static_cast<PC1600RomVersion>(m_rom1600Combo->itemData(index).toInt()));
+    });
     // Buttons are checkable so their own click already toggled the visual
     // check state -- MainWindow will resync it (via setCe150State/
     // setCe1600pState) once PlotterController confirms the actual result,
@@ -199,6 +210,16 @@ void ControlBar::setRomRevision(PC1500RomRevision revision) {
 
 void ControlBar::setRomPickerVisible(bool visible) {
     m_romCombo->setVisible(visible);
+}
+
+void ControlBar::setPC1600RomVersion(PC1600RomVersion version) {
+    const QSignalBlocker blocker(m_rom1600Combo);
+    const int idx = m_rom1600Combo->findData(static_cast<int>(version));
+    m_rom1600Combo->setCurrentIndex(idx >= 0 ? idx : 0);
+}
+
+void ControlBar::setPC1600RomPickerVisible(bool visible) {
+    m_rom1600Combo->setVisible(visible);
 }
 
 void ControlBar::setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& bundled,

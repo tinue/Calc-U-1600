@@ -100,8 +100,8 @@ void test_reset_clears_ram_not_rom() {
 
 void test_boot_smoke_real_rom() {
     LH5803Memory mem;
-    if (!mem.loadROMFile("roms/PC1600-LH5803-C000-FFFF.bin")) {
-        std::fprintf(stderr, "SKIP test_boot_smoke_real_rom: roms/PC1600-LH5803-C000-FFFF.bin "
+    if (!mem.loadROMFile("roms/PC1600-LH5803-C000-FFFF-new.bin")) {
+        std::fprintf(stderr, "SKIP test_boot_smoke_real_rom: roms/PC1600-LH5803-C000-FFFF-new.bin "
                               "not found relative to cwd (run tests from the repo root)\n");
         return;
     }

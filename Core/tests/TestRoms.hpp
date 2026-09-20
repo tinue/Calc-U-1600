@@ -25,7 +25,7 @@ inline bool readRomImage(const char* path, std::vector<uint8_t>* out) {
 // The PC-1600's six-file ROM set, through the same loader the app uses.
 inline bool loadPC1600Roms(PC1600Machine& m) {
     std::string error;
-    return BundledRoms::loadPC1600RomSet(m, {"roms"}, &error);
+    return BundledRoms::loadPC1600RomSet(m, {"roms"}, "new", &error);
 }
 
 // ROMs loaded, ALL RESET, then the boot run to the prompt -- the same
