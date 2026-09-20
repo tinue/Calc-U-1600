@@ -38,7 +38,8 @@
   appears, including a plotter's power-on init (the CE-1600P pen
   calibration), then sets the clock from the computer's time: Reset and
   Reset All, and also the reset that follows choosing a memory module, a
-  ROM or a model.
+  ROM or a model. On the PC-1600 with a plotter the boot now really runs
+  until the cursor appears; it used to stop early and finish in real time.
 - **Paste** Edit > Paste Text (Cmd-V) types the clipboard's text into
   the machine, paced so no character is lost. Nothing is added or
   checked: a line break presses ENTER and waits for the line to finish,

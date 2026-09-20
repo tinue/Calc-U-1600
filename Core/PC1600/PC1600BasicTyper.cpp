@@ -139,6 +139,11 @@ void runBootToPrompt(PC1600Machine& machine) {
     // on init (on real hardware the LCD + indicator strip stay dark until
     // then) -- that init raises no BUSY symbol. No-op without a plotter.
     waitForKeyboardScanLoop(machine);
+    // The keyboard-scan test above can pass while the ROM is still finishing
+    // its start-up (measured with a CE-1600P: ~10 s of emulated time before
+    // the cursor appears), so also wait until it is steady in the BASIC
+    // command loop -- otherwise that tail runs in real time.
+    waitUntilBasicIdle(machine, PC1600Machine::kTStateHz * 20);  // cap: safety only
 }
 
 uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates) {
