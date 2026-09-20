@@ -93,14 +93,12 @@ fetch_pc1600_calc new PC1600-P1-B3             6f6e1a9d46db7dc91d4322c93583ac81
 fetch_pc1600_calc new PC1600-P1-B3B            2483319acf35da4e848e59ab954abf46
 fetch_pc1600_calc new PC1600-P2-B6             86cb9036da284de2b04c7946d140a9fd
 
-# Old ROM (PEEK #(0,&7FFF) = 130) -- unverified upstream.
-# P1-B3B is TRUNCATED (16368 bytes): the app rejects it until it is redumped;
-# replace its md5 then.
+# Old ROM (PEEK #(0,&7FFF) = 130)
 fetch_pc1600_calc old PC1600-LH5803-C000-FFFF 6005b6420bd5e191e81a1562f3242ec9
 fetch_pc1600_calc old PC1600-P0-B0             5afcc22134e106bfd63b899febe9df7c
 fetch_pc1600_calc old PC1600-P1-B0             3bcb6b178f5967c7c8e32afe560a3e75
 fetch_pc1600_calc old PC1600-P1-B3             ded92d8280f8f83ce3498fb9cbfb9b3d
-fetch_pc1600_calc old PC1600-P1-B3B            0bfd6f02f6c053c6e9f48554ac40f075
+fetch_pc1600_calc old PC1600-P1-B3B            2e8e075cac8f9696c5e833ceef130a4f
 fetch_pc1600_calc old PC1600-P2-B6             2c977fdd8c924c1492a2c23f67a20f23
 
 # CE-1600P peripheral ROMs (independent of the calculator ROM version)
