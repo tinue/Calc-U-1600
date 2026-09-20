@@ -28,10 +28,12 @@ const BasicPointerEntry kPC1500BasicPointers[] = {
     {"ON_ERR_VEC",  0x78A4, W::Word, "ON ERROR GOTO handler address"},
     {"SRCH_PTR",    0x78A6, W::Word, "Program/variable scan workspace"},
     {"STK_FOR_GSB", 0x78B8, W::Byte, "FOR/NEXT + GOSUB stack depth"},
+    {"LOCK",        0x79FF, W::Byte, "Lock register; unlocked with NEW0 or UNLOCK ROM routine"},
 };
 const int kPC1500BasicPointerCount = sizeof(kPC1500BasicPointers) / sizeof(kPC1500BasicPointers[0]);
 const int kPC1500BasPrgEndIndex = 1;  // "BASPRG_END"
 const int kPC1500RamEndIndex = 12;    // "RAM_END"
+const int kPC1500LockIndex = 21;      // "LOCK"
 const int kPC1500BasicPointerMaxNameLength = 11;  // "TRACE_PARAM" / "STK_FOR_GSB"
 
 using V = PC1600PointerEntry::Value;

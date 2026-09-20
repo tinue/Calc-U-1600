@@ -11,5 +11,6 @@ memory-expansion:
 
 # Clear memory and go to RUN mode
 keys:
+  - type: NEW0
   - type: NEW&112
   - key: mode

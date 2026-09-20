@@ -366,10 +366,15 @@ void DebugPanel::debugDumpPointersPC1500() {
         const auto& p = CoreDebug::kPC1500BasicPointers[i];
         const std::string name = padRight(p.name, nameWidth);
         std::string value;
+        std::string description = p.description;
         if (p.width == CoreDebug::BasicPointerEntry::Width::Byte) {
             const std::uint8_t v = m_controller->debugPeek(p.address);
             if (i == CoreDebug::kPC1500RamEndIndex) ramEndPage = v;
             value = padRight(fmt("$%02X", v), 6);
+            if (i == CoreDebug::kPC1500LockIndex) {
+                description = (v == 0xFF ? "(unlocked) " : "(locked) ");
+                description += (v == 0xFF ? p.description : "Lock register; MODE key is blocked");
+            }
         } else {
             const std::uint8_t hi = m_controller->debugPeek(p.address);
             const std::uint8_t lo = m_controller->debugPeek(p.address + 1);
@@ -377,7 +382,7 @@ void DebugPanel::debugDumpPointersPC1500() {
             if (i == CoreDebug::kPC1500BasPrgEndIndex) basPrgEnd = word;
             value = padRight(fmt("$%04X", word), 6);
         }
-        lines.push_back(fmt("%s $%04X = %s-- %s", name.c_str(), p.address, value.c_str(), p.description));
+        lines.push_back(fmt("%s $%04X = %s-- %s", name.c_str(), p.address, value.c_str(), description.c_str()));
     }
     const std::uint16_t ramEndAddr = static_cast<std::uint16_t>(ramEndPage) << 8;
     const int mem = static_cast<int>(ramEndAddr) - static_cast<int>(basPrgEnd) - 1;
