@@ -311,7 +311,7 @@ private:
     // AppPaths::bundledResourcesDir(), the same directory the .card.yaml
     // catalog lives in.
     static std::vector<std::string> bundledRomDirs();
-    void loadPC1600RomSet(PC1600Machine& machine);
+    bool loadPC1600RomSet(PC1600Machine& machine, std::string* error);
     void seedClockFromHost();
     // AppSettings::serialLinkDirOverride(), falling back to AppPaths::instanceDir().
     static QString effectiveSerialLinkDir();

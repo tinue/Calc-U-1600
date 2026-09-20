@@ -838,8 +838,9 @@ void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
     m_floppyManager->flushPendingPersist();
     m_controller->setPC1600RomVersion(version); // rebuilds the machine when a PC-1600 is active
     m_plotterController->resetOnModelSwitch();
-    m_controlBar->setPC1600RomVersion(version);
-    syncMachineMenuFromPC1600RomVersion(version);
+    // The controller may have fallen back to New if the old ROM failed to load.
+    m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
+    syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
     syncControlBarForModel();
     refreshModuleCombos();
 }

@@ -86,7 +86,19 @@ void MachineController::switchModel(Model model) {
 
     if (model == Model::PC1600) {
         m_pc1600 = std::make_unique<PC1600Machine>();
-        loadPC1600RomSet(*m_pc1600);
+        std::string romErr;
+        if (!loadPC1600RomSet(*m_pc1600, &romErr)) {
+            if (m_pc1600RomVersion != PC1600RomVersion::Old) reportMissingRomAndExit(romErr);
+            // The old ROM set is optional (its dump may be missing or
+            // incomplete): warn and fall back to the new ROM rather than quit.
+            QMessageBox::warning(nullptr, QObject::tr("Old ROM unavailable"),
+                                 QObject::tr("The old PC-1600 ROM could not be loaded:\n\n%1\n\n"
+                                             "Using the new ROM instead.")
+                                     .arg(QString::fromStdString(romErr)));
+            m_pc1600RomVersion = PC1600RomVersion::New;
+            m_pc1600 = std::make_unique<PC1600Machine>();
+            if (!loadPC1600RomSet(*m_pc1600, &romErr)) reportMissingRomAndExit(romErr);
+        }
 
         // Attach any currently-selected memory modules before the cold
         // boot -- a module's state must be visible on the very first ROM
@@ -136,12 +148,9 @@ std::vector<std::string> MachineController::bundledRomDirs() {
     return {AppPaths::bundledResourcesDir().toStdString()};
 }
 
-void MachineController::loadPC1600RomSet(PC1600Machine& machine) {
-    std::string err;
+bool MachineController::loadPC1600RomSet(PC1600Machine& machine, std::string* error) {
     const char* version = m_pc1600RomVersion == PC1600RomVersion::Old ? "old" : "new";
-    if (!BundledRoms::loadPC1600RomSet(machine, bundledRomDirs(), version, &err)) {
-        reportMissingRomAndExit(err);
-    }
+    return BundledRoms::loadPC1600RomSet(machine, bundledRomDirs(), version, error);
 }
 
 PC1500Machine& MachineController::resetBareForPresetPC1500(PC1500Variant variant) {
@@ -158,7 +167,8 @@ PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion vers
     m_pc1500.reset();
     m_pc1600.reset();
     m_pc1600 = std::make_unique<PC1600Machine>();
-    loadPC1600RomSet(*m_pc1600);
+    std::string romErr;
+    if (!loadPC1600RomSet(*m_pc1600, &romErr)) reportMissingRomAndExit(romErr);
     attachSerialLink(*m_pc1600);
     return *m_pc1600;
 }
