@@ -298,6 +298,19 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
             a.newNote += " Warning: the code starts below " + hex(first.windowBase + kReserve) +
                          ", inside the area the system keeps for itself -- load it at " +
                          hex(first.windowBase + kReserve) + " or higher.";
+        // NEW "S0:" can only reserve from the START of the area, so code
+        // parked high costs BASIC everything underneath it as well. Say
+        // what that costs -- for code deliberately placed in the middle of
+        // the user area, no NEW at all is usually the better trade.
+        const uint32_t areaStart = first.windowBase + kReserve;
+        if (addr > areaStart) {
+            const uint32_t below = addr - areaStart;
+            a.newNote += " Note: only " + std::to_string(len) + " of those bytes are the code -- the " +
+                         std::to_string(below) + " bytes below it (" + hex(areaStart) + "-" + hex(addr - 1) +
+                         ") are reserved along with it and lost to BASIC. If the code was placed this high on "
+                         "purpose, skip the NEW and keep the program and its variables from growing into it "
+                         "instead.";
+        }
         a.newNote += workAreaWarning;
     } else if (hit > 0) {
         const BasicArea& first = basicAreas.front();
@@ -306,7 +319,28 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
                     "\"S0:\" only reserves from the start of that area -- load the code at " +
                     hex(first.windowBase + kReserve) + areaWhere(first.slot) + " to protect it." + workAreaWarning;
     } else {
-        a.newNote = "BASIC doesn't use this memory, so the code needs no NEW." + workAreaWarning;
+        // No run of the program area covers the code. In internal RAM that
+        // does not mean BASIC never comes here: &C0C5-&EFFF is ONE user
+        // area (TRM §6.1) shared by the machine/BASIC program growing up
+        // from the bottom and the variables growing down from &EFFF, and
+        // the program area's top is a live ceiling (the variable pointer,
+        // $F899). Code parked above it is free right now but sits in the
+        // variables' path -- and a NEW long enough to protect it would
+        // reserve everything below it too, which is why a program is
+        // deliberately placed up here without one.
+        const BasicArea* internal = nullptr;
+        for (const BasicArea& area : basicAreas)
+            if (area.slot == 0) internal = &area;
+        if (slot == Slot::S0 && internal && addr > internal->top && end <= kPc1600WorkArea) {
+            a.newNote = "Nothing uses this memory right now: the BASIC program area reaches up to " +
+                        hex(internal->top) + ", and " + hex(internal->top + 1) + "-" + hex(kPc1600WorkArea - 1) +
+                        " above it is the variable area, which grows downwards. No NEW is needed -- and one long "
+                        "enough to reach here would reserve everything below it as well, giving up most of the free "
+                        "memory -- but variables growing down can still overwrite the code.";
+        } else {
+            a.newNote = "BASIC doesn't use this memory, so the code needs no NEW.";
+        }
+        a.newNote += workAreaWarning;
     }
     return a;
 }
