@@ -19,7 +19,10 @@
   now comes from a `.card.yaml` definition.
 - **RAM** Powers up as zeros instead of &FF -- internal RAM and fresh
   memory modules, matching how CMOS RAM comes back after a power loss.
-  Flash memory still starts erased (&FF). On the PC-1500/1500A, Reset now
+  Flash memory still starts erased (&FF). The exception is the PC-1500's
+  &7600-&7BFF (display RAM and system RAM), which reads &FF after a power
+  loss on the real machine and now does here too -- including the lock
+  register at &79FF. On the PC-1500/1500A, Reset now
   keeps RAM (the BASIC program survives, like the real reset button) and
   Reset All clears it.
 - **Settings** moved from the control bar to the menu bar: the
@@ -67,6 +70,25 @@
   preset. Afterwards it shows the `NEW` that keeps BASIC from
   overwriting the code and the `CALL` that starts it. The code is never run automatically. A
   CE-158 file on a PC-1600 (LH5803 side) is not supported yet.
+- **PC-1600** The calculator ROM version is selectable: the new ROM
+  (default) or the old one (Machine > ROM Version, or `firmware: new|old`
+  in a preset). If the old ROM can't be loaded, the app warns and uses
+  the new one.
+- **Plotters** Attaching or detaching a plotter now runs its OFF/ON
+  power cycle at full speed (like Reset), including the power-on
+  rotation of the pen header, and then sets the clock from the
+  computer's time.
+- **Control bar** Choosing a memory module or a ROM version no longer
+  detaches the plotter or changes any other selector; the rebuild that
+  applies it keeps the CE-150/CE-1600P you had (its paper starts blank).
+  Switching the model starts from a default machine instead: PC-1500
+  ROM A04 / PC-1600 new ROM, nothing attached, then the startup preset.
+- **Debug** The pointer dump shows the PC-1500 lock register (&79FF) as
+  locked or unlocked. The MODE key is ignored while it isn't &FF; `NEW0`
+  unlocks it, so the startup presets now begin with `NEW0`.
+- **Examples** Added CalCula, an RPN calculator program.
+- **Build** `tools/fetch_roms.sh` fetches the PC-1600 new and old ROM
+  sets and the CE-1600P ROMs from the updated PC-1600-ROM dumps.
 
 ## [0.3.0] - 2026-09-19
 
