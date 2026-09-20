@@ -1,5 +1,7 @@
 # Changelog
 
+## [0.5.0] - work in progress
+
 ## [0.4.0] - 2026-09-20
 
 - **Keyboard** Fixed a key getting stuck down and freezing the

@@ -24,7 +24,7 @@ set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../Core)
 # Version.h below and the MACOSX_BUNDLE_*VERSION* properties further down
 # reference this instead of each hardcoding "0.1.0" separately, as does
 # the Windows installer (generated Version.iss below).
-set(APP_VERSION "0.4.0")
+set(APP_VERSION "0.5.0")
 
 # git describe gives a short, human-meaningful build id (tag or short hash,
 # +"-dirty" if the tree has local changes) for bug reports. Falls back to
