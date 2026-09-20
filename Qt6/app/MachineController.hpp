@@ -89,7 +89,11 @@ public:
     explicit MachineController(QObject* parent = nullptr);
     ~MachineController();
 
-    void switchModel(Model model);
+    // keepPlotter: re-attach whichever plotter (CE-150 / CE-1600P) was attached
+    // before the rebuild, ahead of the cold boot, so a rebuild (module, ROM or
+    // model change) never detaches it as a side effect. Default false (model
+    // switch, preset load: fresh machine, nothing attached).
+    void switchModel(Model model, bool keepPlotter = false);
     Model currentModel() const { return m_model; }
 
     // PC-1500 (plain) only -- PC-1500A is A04-only (see PC1500Variant.hpp)

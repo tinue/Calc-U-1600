@@ -78,7 +78,10 @@ MachineController::MachineController(QObject* parent) : QObject(parent) {
 
 MachineController::~MachineController() = default;
 
-void MachineController::switchModel(Model model) {
+void MachineController::switchModel(Model model, bool keepPlotter) {
+    const bool restoreCE150 = keepPlotter && ce150Attached();
+    const bool restoreCE1600P = keepPlotter && ce1600pAttached();
+    flushFloppyBeforeDetach(); // the old machine (and its disk) is going away
     m_model = model;
     m_paste.cancel({}); // the machine it was typing into is going away
     m_pc1500.reset();
@@ -104,6 +107,8 @@ void MachineController::switchModel(Model model) {
         // boot -- a module's state must be visible on the very first ROM
         // check.
         if (m_moduleManager) m_moduleManager->attachAllToFreshMachine();
+        if (restoreCE150) attachCE150();
+        if (restoreCE1600P) attachCE1600P();
 
         attachSerialLink(*m_pc1600);
 
@@ -124,6 +129,7 @@ void MachineController::switchModel(Model model) {
         }
 
         if (m_moduleManager) m_moduleManager->attachAllToFreshMachine();
+        if (restoreCE150) attachCE150();
 
         // PC1500Machine has only one reset level.
         m_pc1500->reset();
@@ -136,12 +142,12 @@ void MachineController::switchModel(Model model) {
 
 void MachineController::setPC1600RomVersion(PC1600RomVersion version) {
     m_pc1600RomVersion = version;
-    if (m_model == Model::PC1600) switchModel(m_model); // rebuild with the new ROM
+    if (m_model == Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
 }
 
 void MachineController::setPC1500RomRevision(PC1500RomRevision revision) {
     m_pc1500RomRevision = revision;
-    if (m_model != Model::PC1600) switchModel(m_model); // rebuild with the new ROM
+    if (m_model != Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
 }
 
 std::vector<std::string> MachineController::bundledRomDirs() {

@@ -110,7 +110,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_controlBar, &ControlBar::pc1600RomVersionSelected, this, &MainWindow::applyPC1600RomVersionSelection);
     connect(m_controlBar, &ControlBar::moduleSelected, this, [this](int slot, QString moduleNameOrEmpty) {
         m_moduleManager->selectModule(slot, moduleNameOrEmpty);
-        m_controller->switchModel(m_controller->currentModel()); // rebuild -> re-attach
+        m_controller->switchModel(m_controller->currentModel(), /*keepPlotter=*/true); // rebuild -> re-attach
+        m_plotterController->resetOnModelSwitch();  // idle the toggle state machine...
+        m_plotterController->syncFromMachineState(); // ...and show what's really attached
         refreshModuleCombos();
     });
     connect(m_controlBar, &ControlBar::nameAndSaveRequested, this, [this](int slot) {
@@ -828,6 +830,8 @@ void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     m_controller->setPC1500RomRevision(revision); // rebuilds the machine
+    m_plotterController->resetOnModelSwitch();
+    m_plotterController->syncFromMachineState();   // the plotter survives the rebuild
     m_controlBar->setRomRevision(revision);
     syncMachineMenuFromRomRevision(revision);
     refreshModuleCombos();
@@ -838,6 +842,7 @@ void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
     m_floppyManager->flushPendingPersist();
     m_controller->setPC1600RomVersion(version); // rebuilds the machine when a PC-1600 is active
     m_plotterController->resetOnModelSwitch();
+    m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
     // The controller may have fallen back to New if the old ROM failed to load.
     m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
     syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
