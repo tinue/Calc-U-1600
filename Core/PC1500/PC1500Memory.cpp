@@ -1,6 +1,6 @@
-#include <algorithm>
 #include "PC1500Memory.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <vector>
 
@@ -34,10 +34,13 @@ PC1500Memory::PC1500Memory(PC1500Variant variant)
 
 void PC1500Memory::clearRam() {
     m_userRam.fill(0x00);
+    // The measured 0xFF window is &7600-&7BFF: all of display RAM plus the low
+    // 1K of system RAM. A PC-1500A's upper 1K (&7C00-&7FFF) is unmeasured, so
+    // it stays 0x00; a plain PC-1500 never reaches it (it aliases the low 1K).
     m_displayRam.fill(0xFF);
-    m_systemRam.fill(0x00);
-    // &7800-&7BFF; a PC-1500A's upper 1K (&7C00-&7FFF) is unmeasured, left 0.
-    std::fill_n(m_systemRam.begin(), 0x400, uint8_t{0xFF});
+    const auto systemFfEnd = m_systemRam.begin() + kSystemRamPowerUpFfSize;
+    std::fill(m_systemRam.begin(), systemFfEnd, uint8_t{0xFF});
+    std::fill(systemFfEnd, m_systemRam.end(), uint8_t{0x00});
 }
 
 bool PC1500Memory::loadROM(const uint8_t* data, size_t size) {

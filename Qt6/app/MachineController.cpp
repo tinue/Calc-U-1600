@@ -88,19 +88,20 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
     m_pc1600.reset();
 
     if (model == Model::PC1600) {
-        m_pc1600 = std::make_unique<PC1600Machine>();
         std::string romErr;
-        if (!loadPC1600RomSet(*m_pc1600, &romErr)) {
+        for (;;) {
+            m_pc1600 = std::make_unique<PC1600Machine>();
+            if (loadPC1600RomSet(*m_pc1600, &romErr)) break;
+            // Only the old ROM set is optional (its dump may be missing or
+            // incomplete): warn, fall back to the new ROM and retry once --
+            // a new-ROM failure quits. reportMissingRomAndExit() is
+            // [[noreturn]], so the retry can't loop a third time.
             if (m_pc1600RomVersion != PC1600RomVersion::Old) reportMissingRomAndExit(romErr);
-            // The old ROM set is optional (its dump may be missing or
-            // incomplete): warn and fall back to the new ROM rather than quit.
             QMessageBox::warning(nullptr, QObject::tr("Old ROM unavailable"),
                                  QObject::tr("The old PC-1600 ROM could not be loaded:\n\n%1\n\n"
                                              "Using the new ROM instead.")
                                      .arg(QString::fromStdString(romErr)));
             m_pc1600RomVersion = PC1600RomVersion::New;
-            m_pc1600 = std::make_unique<PC1600Machine>();
-            if (!loadPC1600RomSet(*m_pc1600, &romErr)) reportMissingRomAndExit(romErr);
         }
 
         // Attach any currently-selected memory modules before the cold
@@ -111,13 +112,6 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
         if (restoreCE1600P) attachCE1600P();
 
         attachSerialLink(*m_pc1600);
-
-        // Every rebuild is a full cold boot, run flat out to the prompt (incl.
-        // a plotter's power-on init); the clock is set from the host after,
-        // since the boot ran seconds of emulated time ahead of it.
-        m_pc1600->allReset();
-        runBootToPrompt(*m_pc1600);
-        seedClockFromHost();
     } else {
         const auto variant = (model == Model::PC1500A) ? PC1500Variant::PC1500A : PC1500Variant::PC1500;
         // PC-1500A is A04-only (PC1500Variant.hpp) -- clamp regardless of
@@ -133,12 +127,14 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
 
         if (m_moduleManager) m_moduleManager->attachAllToFreshMachine();
         if (restoreCE150) attachCE150();
-
-        // PC1500Machine has only one reset level.
-        m_pc1500->reset();
-        runBootToPrompt(*m_pc1500);
-        seedClockFromHost();
     }
+
+    // Every rebuild is a full cold boot, run flat out to the prompt (incl. a
+    // plotter's power-on init), after which resetToPrompt() sets the clock
+    // from the host -- the boot ran seconds of emulated time ahead of it.
+    // PC1500Machine has only one reset level, so only the PC-1600 gets the
+    // ALL RESET; a freshly-constructed machine's RAM is cleared either way.
+    resetToPrompt(/*allReset=*/model == Model::PC1600);
     discardAudio(); // whatever the flat-out boot beeped is stale
 
     AppSettings::setLastUsedModel(static_cast<int>(m_model));

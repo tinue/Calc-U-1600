@@ -76,7 +76,10 @@ inline bool loadPC1500Rom(PC1500Machine& machine, const std::string& romVariant,
                           const std::vector<std::string>& dirs, std::string* error) {
     std::string path;
     if (!resolveBundledRomPath(dirs, "PC-1500_" + romVariant + ".ROM", &path, error)) return false;
-    if (!machine.loadROMFile(path)) {
+    // Via the byte cache, like the PC-1600 set below: a rebuild is routine now
+    // (every module or ROM-revision pick makes one), so don't re-read on each.
+    std::vector<uint8_t> rom;
+    if (!detail::readWholeFileCached(path, &rom) || !machine.loadROM(rom.data(), rom.size())) {
         if (error) *error = "failed to load firmware ROM: " + path;
         return false;
     }

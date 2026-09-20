@@ -68,7 +68,7 @@ public:
     bool loadROMFile(const std::string& path);
 
     void reset();     // chip-side reset (PIO, RTC, I/O); RAM, ROM and keyboard state untouched
-    void clearRam();  // power-up / ALL RESET: user RAM 0x00, all RAM (user, display, system) to 0x00 -- power-up / ALL RESET7600-all RAM (user, display, system) to 0x00 -- power-up / ALL RESET7BFF window 0xFF
+    void clearRam();  // power-up / ALL RESET: user RAM 0x00, the &7600-&7BFF window 0xFF
 
     // LH5801Bus
     uint8_t readME0(uint16_t addr) override;
@@ -186,6 +186,10 @@ private:
     static constexpr size_t   kSystemRamSize = 0x0800; // 2048B backing store (PC-1500A only uses it
                                                          // all; the plain PC-1500's TC5514 pair only
                                                          // decodes the first 1024B — see resolve())
+    // &7800-&7BFF: the part of system RAM inside the measured power-up 0xFF
+    // window (see clearRam()). Not derivable from m_systemRamAddrMask — the
+    // window is these 1024B on both models, PC-1500A's wider mask included.
+    static constexpr size_t   kSystemRamPowerUpFfSize = 0x0400;
     static constexpr uint16_t kRomBase = 0xC000;
     static constexpr size_t   kRomSize = 0x4000; // 16384B
 

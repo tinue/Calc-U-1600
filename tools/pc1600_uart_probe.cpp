@@ -29,8 +29,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
-#include <iterator>
 #include <memory>
 #include <string>
 #include <thread>
@@ -42,43 +40,22 @@
 #include "../Core/Connector/SoftwareDefinedCard.hpp"
 #include "../Core/PC1600/PC1600BasicTyper.hpp"
 #include "../Core/PC1600/PC1600Machine.hpp"
+#include "../Core/Resources/BundledRomCatalog.hpp"
 #include "../Core/PC1600/PC1600PowerProbe.hpp"
 #include "../Core/PC1600/PtySerialLink.hpp"
 
 namespace {
 
-bool readRom(const std::string& path, std::vector<uint8_t>* out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    *out = std::vector<uint8_t>((std::istreambuf_iterator<char>(in)),
-                                std::istreambuf_iterator<char>());
-    return out->size() == 16384;
-}
-
 } // namespace
 
 int main(int argc, char** argv) {
-    const std::string dir = (argc >= 2) ? std::string(argv[1]) + "/" : "roms/";
+    const std::string dir = (argc >= 2) ? argv[1] : "roms";
     const std::string line = (argc >= 3) ? argv[2] : "INIT \"S2:\",\"M\"";
 
-    std::vector<uint8_t> i0, ii0, iii3, r3b, iv6, r1500;
-    if (!(readRom(dir + "PC1600-P0-B0-new.bin", &i0) &&
-          readRom(dir + "PC1600-P1-B0-new.bin", &ii0) &&
-          readRom(dir + "PC1600-P1-B3-new.bin", &iii3) &&
-          readRom(dir + "PC1600-P1-B3B-new.bin", &r3b) &&
-          readRom(dir + "PC1600-P2-B6-new.bin", &iv6) &&
-          readRom(dir + "PC1600-LH5803-C000-FFFF-new.bin", &r1500))) {
-        std::fprintf(stderr, "could not read the PC1600-*.bin set from '%s'\n", dir.c_str());
-        return 1;
-    }
-
     PC1600Machine m;
-    if (!m.loadBank0(i0.data(), i0.size(), ii0.data(), ii0.size()) ||
-        !m.loadBank3Rom(iii3.data(), iii3.size()) ||
-        !m.loadBank3bRom(r3b.data(), r3b.size()) ||
-        !m.loadBank6Rom(iv6.data(), iv6.size()) ||
-        !m.loadLH5803Rom(r1500.data(), r1500.size())) {
-        std::fprintf(stderr, "ROM load failed\n");
+    std::string romErr;
+    if (!BundledRoms::loadPC1600RomSet(m, {dir}, "new", &romErr)) {
+        std::fprintf(stderr, "could not load the PC-1600 ROM set from '%s': %s\n", dir.c_str(), romErr.c_str());
         return 1;
     }
 

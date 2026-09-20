@@ -49,6 +49,7 @@ public:
 
     PC1500Variant variant() const { return m_memory.variant(); }
 
+    bool loadROM(const uint8_t* data, std::size_t size);
     bool loadROMFile(const std::string& path);
     /// The reset button: CPU and chips reset, RAM kept.
     void reset();

@@ -125,6 +125,7 @@ private:
     QAction* m_settingsAction = nullptr;
     QAction* m_aboutAction = nullptr;
 
+    void syncUiFromController();
     void refreshModuleCombos();
     void refreshFloppyCombo();
 

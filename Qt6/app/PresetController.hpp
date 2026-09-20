@@ -106,6 +106,11 @@ private:
     // Shared tail of loadPreset()/loadDefaultPreset() once the file parsed.
     bool runPreset(const PresetFile& preset, QString* error);
 
+    // Runs `body` with the yield hook installed on whichever machine is
+    // active (the ScopedYieldHook template argument is the only thing the
+    // two branches differ in); false + `error` with no machine.
+    bool withYieldHook(const std::function<void()>& body, QString* error);
+
     MachineController* m_controller;       // not owned
     MemoryModuleManager* m_moduleManager;  // not owned
     FloppyDiskManager* m_floppyManager;    // not owned

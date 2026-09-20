@@ -111,8 +111,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_controlBar, &ControlBar::moduleSelected, this, [this](int slot, QString moduleNameOrEmpty) {
         m_moduleManager->selectModule(slot, moduleNameOrEmpty);
         m_controller->switchModel(m_controller->currentModel(), /*keepPlotter=*/true); // rebuild -> re-attach
-        m_plotterController->resetOnModelSwitch();  // idle the toggle state machine...
-        m_plotterController->syncFromMachineState(); // ...and show what's really attached
+        restartPacing(); // the rebuild's flat-out boot blocked the frame timer
+        m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
         refreshModuleCombos();
     });
     connect(m_controlBar, &ControlBar::nameAndSaveRequested, this, [this](int slot) {
@@ -246,15 +246,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // but the faceplate/control bar were built with their own hardcoded
     // PC-1500A defaults -- resync them now so the visible calculator
     // actually matches what's running underneath.
-    m_faceplate->setModel(m_controller->currentModel());
-    m_controlBar->setModel(m_controller->currentModel());
-    m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
-    m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
-    syncControlBarForModel();
-    syncMachineMenuFromModel(m_controller->currentModel());
-    syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
-    syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
-    refreshModuleCombos();
+    syncUiFromController();
 
     resize(AppSettings::windowSize());
     setFocus();
@@ -460,19 +452,10 @@ void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
 }
 
 void MainWindow::onPresetArmed() {
-    m_faceplate->setModel(m_controller->currentModel());
-    m_controlBar->setModel(m_controller->currentModel());
-    m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
-    m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
-    syncControlBarForModel();
-    syncMachineMenuFromModel(m_controller->currentModel());
-    syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
-    syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
-    refreshModuleCombos();
-    // The preset attached its plotter directly on the Core machine,
-    // bypassing PlotterController/attachCE150()/attachCE1600P() entirely --
-    // resync from the machine's actual state rather than assuming detached.
-    m_plotterController->syncFromMachineState();
+    // The preset attached its plotter directly on the Core machine, bypassing
+    // PlotterController/attachCE150()/attachCE1600P() entirely -- the plotter
+    // resync inside this picks that up from the machine's actual state.
+    syncUiFromController();
     // Force a repaint of the armed-but-off state now, before control
     // returns into Core's (possibly many-seconds-long) boot + preset
     // script -- otherwise nothing would reach the screen until the whole
@@ -483,6 +466,23 @@ void MainWindow::onPresetArmed() {
     // this call returns into the blocking preset script below.
     repaint();
     QCoreApplication::processEvents();
+}
+
+// Every UI surface that mirrors machine state, pulled from the controller:
+// called after anything rebuilds or replaces the machine (startup, model
+// switch, preset load), so no call site has to know which pickers exist.
+void MainWindow::syncUiFromController() {
+    const Model model = m_controller->currentModel();
+    m_faceplate->setModel(model);
+    m_controlBar->setModel(model);
+    m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
+    m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
+    syncControlBarForModel();
+    syncMachineMenuFromModel(model);
+    syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
+    syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
+    refreshModuleCombos();
+    m_plotterController->syncFromMachineState();
 }
 
 void MainWindow::refreshModuleCombos() {
@@ -809,17 +809,9 @@ void MainWindow::applyModelSelection(Model model) {
     // modules (onModelChanged above), no floppy. A startup preset customises it.
     m_controller->resetRomSelectionsToDefault();
     m_controller->switchModel(model);
+    restartPacing(); // the rebuild's flat-out boot blocked the frame timer
     m_floppyManager->selectDisk(QString());
-    m_plotterController->resetOnModelSwitch();
-    m_faceplate->setModel(model);
-    m_controlBar->setModel(model);
-    m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
-    m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
-    syncControlBarForModel();
-    syncMachineMenuFromModel(model);
-    syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
-    syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
-    refreshModuleCombos();
+    syncUiFromController();
     applyDefaultPreset(model);
 }
 
@@ -836,8 +828,8 @@ void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     m_controller->setPC1500RomRevision(revision); // rebuilds the machine
-    m_plotterController->resetOnModelSwitch();
-    m_plotterController->syncFromMachineState();   // the plotter survives the rebuild
+    restartPacing(); // the rebuild's flat-out boot blocked the frame timer
+    m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
     m_controlBar->setRomRevision(revision);
     syncMachineMenuFromRomRevision(revision);
     refreshModuleCombos();
@@ -847,7 +839,7 @@ void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     m_controller->setPC1600RomVersion(version); // rebuilds the machine when a PC-1600 is active
-    m_plotterController->resetOnModelSwitch();
+    restartPacing(); // the rebuild's flat-out boot blocked the frame timer
     m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
     // The controller may have fallen back to New if the old ROM failed to load.
     m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());

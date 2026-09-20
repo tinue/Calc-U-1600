@@ -6,6 +6,10 @@ PC1500Machine::PC1500Machine(PC1500Variant variant)
     m_memory.setSystemBus(&m_systemBus);
 }
 
+bool PC1500Machine::loadROM(const uint8_t* data, std::size_t size) {
+    return m_memory.loadROM(data, size);
+}
+
 bool PC1500Machine::loadROMFile(const std::string& path) {
     return m_memory.loadROMFile(path);
 }
