@@ -74,8 +74,8 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     setRomPickerVisible(false); // PC-1500A is the default model (see m_modelCombo above)
 
     m_rom1600Combo = new QComboBox(this);
-    m_rom1600Combo->addItem(tr("New ROM"), static_cast<int>(PC1600RomVersion::New));
-    m_rom1600Combo->addItem(tr("Old ROM"), static_cast<int>(PC1600RomVersion::Old));
+    m_rom1600Combo->addItem(tr("New"), static_cast<int>(PC1600RomVersion::New));
+    m_rom1600Combo->addItem(tr("Old"), static_cast<int>(PC1600RomVersion::Old));
     m_rom1600Combo->setToolTip(tr("PC-1600 BASIC ROM version"));
     m_rom1600Combo->setFocusPolicy(Qt::NoFocus);
     layout->addWidget(m_rom1600Combo);
@@ -136,8 +136,8 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     // The CE-1600P's ROM chip sits in its box, so the CE-1600F follows this
     // choice too. Independent of the PC-1600 ROM picker above.
     m_ce1600pRomCombo = new QComboBox(this);
-    m_ce1600pRomCombo->addItem(tr("New ROM"), static_cast<int>(CE1600PRomVersion::New));
-    m_ce1600pRomCombo->addItem(tr("Old ROM"), static_cast<int>(CE1600PRomVersion::Old));
+    m_ce1600pRomCombo->addItem(tr("New"), static_cast<int>(CE1600PRomVersion::New));
+    m_ce1600pRomCombo->addItem(tr("Old"), static_cast<int>(CE1600PRomVersion::Old));
     m_ce1600pRomCombo->setToolTip(tr("CE-1600P ROM version (also used by the CE-1600F)"));
     m_ce1600pRomCombo->setFocusPolicy(Qt::NoFocus);
     layout->addWidget(m_ce1600pRomCombo);
@@ -153,7 +153,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
 
     m_floppyCombo = new QComboBox(this);
     m_floppyCombo->setFocusPolicy(Qt::NoFocus);
-    m_floppyCombo->setMinimumContentsLength(12);
+    m_floppyCombo->setMinimumContentsLength(9);
     layout->addWidget(m_floppyCombo);
 
     // Side toggle -- the software analogue of ejecting and flipping the
@@ -162,12 +162,16 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_floppySideButton = new QPushButton(tr("A"), this);
     m_floppySideButton->setFocusPolicy(Qt::NoFocus);
     m_floppySideButton->setToolTip(tr("Eject and turn the disk over"));
+    // Compact: one letter / one icon, so no wider than the diskette symbol.
+    const int compactWidth = m_floppySideButton->iconSize().width() + 12;
+    m_floppySideButton->setFixedWidth(compactWidth);
     layout->addWidget(m_floppySideButton);
 
     m_floppySaveButton = new QPushButton(this);
     m_floppySaveButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     m_floppySaveButton->setToolTip(tr("Name & Save"));
     m_floppySaveButton->setFocusPolicy(Qt::NoFocus);
+    m_floppySaveButton->setFixedWidth(compactWidth);
     layout->addWidget(m_floppySaveButton);
 
     // The "green lamp" -- drive-active indicator. A plain colored dot via
