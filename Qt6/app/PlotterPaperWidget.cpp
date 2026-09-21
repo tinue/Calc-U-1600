@@ -73,7 +73,21 @@ public:
         return QSize(w, static_cast<int>(std::ceil(h)));
     }
 
+    // QScrollArea (widgetResizable) only grows its widget past the viewport
+    // up to the widget's *minimum* size hint, not its sizeHint -- without
+    // this the paper never exceeds the viewport and there is nothing to
+    // scroll. Height only: a width minimum would pin the paper at a stale
+    // width and it would stop fitting the pane.
+    QSize minimumSizeHint() const override { return QSize(0, sizeHint().height()); }
+
 protected:
+    // The content height depends on the width (fixed-width paper scaled to
+    // the pane), so a resize changes what the scroll area needs.
+    void resizeEvent(QResizeEvent* event) override {
+        QWidget::resizeEvent(event);
+        updateGeometry();
+    }
+
     void paintEvent(QPaintEvent*) override {
         QPainter painter(this);
         paintPaper(painter, m_owner->m_geometry, width(), height(), m_owner->m_points, m_owner->penYRange().first);
@@ -105,6 +119,8 @@ PlotterPaperWidget::PlotterPaperWidget(MachineController* controller, QWidget* p
     m_scrollArea->setWidget(m_plotArea);
     m_scrollArea->setWidgetResizable(true);
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    // No visible bar (the wheel/touchpad scrolls); the range still exists.
+    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     // Never take keyboard focus from MainWindow (which owns physical-
     // keyboard typing for the calculator) -- same convention as
     // ControlBar's widgets.
