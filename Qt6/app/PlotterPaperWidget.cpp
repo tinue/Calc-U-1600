@@ -23,7 +23,7 @@
 
 namespace {
 constexpr double kFollowThresholdPt = 64.0;
-constexpr double kDpiScale = 600.0 / 72.0;     // target 600 DPI (72pt/in base)
+constexpr double kDpiScale = 1200.0 / 72.0;    // target 1200 DPI (72pt/in base); full res up to ~339 mm of paper
 constexpr double kMaxTextureDimPx = 16000.0;   // GPU texture size cap
 
 // pen[color % 4] -- AlpsPlotterMechanism::PenColor's raw value order.
@@ -250,7 +250,8 @@ void PlotterPaperWidget::copyToClipboard() {
                  std::max(1, qRound(contentHeightPt * effectiveScale)),
                  QImage::Format_ARGB32);
     QPainter painter(&image);
-    painter.setRenderHint(QPainter::Antialiasing);
+    // Deliberately no anti-aliasing: at 1200 DPI the strokes are ~16 px wide,
+    // and the soft edges only made the printout look worse.
     painter.scale(effectiveScale, effectiveScale);
     paintPaper(painter, m_geometry, paneWidthPt, contentHeightPt, m_points, lower);
     painter.end();

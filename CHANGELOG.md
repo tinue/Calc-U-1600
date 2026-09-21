@@ -7,6 +7,14 @@
   independent of the PC-1600 ROM, and the CE-1600F follows it (same box).
   Changing it while the CE-1600P is attached restarts the machine, like
   the PC-1600 ROM choice does.
+- **Plotter paper** Long plots now scroll (mouse wheel / touchpad) instead
+  of being squeezed to fit the pane; the scroll bar itself is hidden.
+- **Plotter paper** Copy / Cut to the clipboard now export at 1200 DPI
+  without anti-aliasing. Physical size is unchanged; papers longer than
+  ~339 mm are scaled down proportionally.
+- **Control bar** Narrower ROM and floppy widgets: the ROM pickers read
+  New / Old, the floppy save and side buttons shrink to icon width, and
+  the disk-name box is 9 characters wide.
 - **Presets** The ROM is now part of the model and plotter:
   `model: PC-1500:A01`, `model: PC-1600:old`, `plotter: ce1600p:old`. The
   `firmware:` key is gone (a preset that still has it fails with a hint).
