@@ -46,6 +46,10 @@ public:
     void setCe150State(bool attached, bool enabled);
     void setCe1600pState(bool attached, bool enabled);
     void setCe1600pVisible(bool visible);
+    // CE-1600P ROM version picker (New/Old), shown next to the CE-1600P
+    // button on a PC-1600. Independent of the PC-1600 ROM picker.
+    void setCE1600PRomVersion(CE1600PRomVersion version);
+    void setCE1600PRomPickerVisible(bool visible);
 
     // CE-1600F floppy disk picker -- same combo+save-button shape as a
     // memory slot (setModuleCombos/setSlotSaveEnabled above). Always
@@ -68,6 +72,7 @@ signals:
     void modelSelected(Model model);
     void romRevisionSelected(PC1500RomRevision revision);
     void pc1600RomVersionSelected(PC1600RomVersion version);
+    void ce1600pRomVersionSelected(CE1600PRomVersion version);
     void moduleSelected(int slot, QString moduleNameOrEmpty); // "" => -empty-
     void nameAndSaveRequested(int slot);
     void ce150ToggleRequested();
@@ -82,6 +87,7 @@ private:
     QComboBox* m_rom1600Combo = nullptr;
     QPushButton* m_ce150Button = nullptr;
     QPushButton* m_ce1600pButton = nullptr;
+    QComboBox* m_ce1600pRomCombo = nullptr;
     QLabel* m_floppyLabel = nullptr;
     QComboBox* m_floppyCombo = nullptr;
     QPushButton* m_floppySaveButton = nullptr;

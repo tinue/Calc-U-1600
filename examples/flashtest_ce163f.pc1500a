@@ -29,8 +29,7 @@
 # strobe latch, so the real firmware's interleaved &6808/&6809 writes are
 # not reproduced here -- issue the sequences as pure &1555/&2AAA writes.
 
-model: PC-1500A
-firmware: A04
+model: PC-1500A:A04
 
 memory-expansion:
   - modulespec: CE-163F

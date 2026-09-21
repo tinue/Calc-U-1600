@@ -2,7 +2,7 @@
 
 ROMs are not in this repository (see `.gitignore`) — they're Sharp
 Corporation's copyrighted firmware. Run
-[`tools/fetch_roms.sh`](../tools/fetch_roms.sh) to (re)download all 19
+[`tools/fetch_roms.sh`](../tools/fetch_roms.sh) to (re)download all 21
 files with a known public source into this directory before building; it
 verifies each against the md5 in the table below.
 
@@ -18,14 +18,17 @@ verifies each against the md5 in the table below.
 | `PC1600-P1-B3-new.bin`, `PC1600-P1-B3-old.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/new/`, `dumps/old/`) | Bank 3, 0x4000 (CS24 normal half) — **new** and **old** ROM version | Confirmed, dumped from real hardware |
 | `PC1600-P1-B3B-new.bin`, `PC1600-P1-B3B-old.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/new/`, `dumps/old/`) | Bank 3b, 0x4000, hidden BASIC ROM (Port 3DH bit b2) — **new** and **old** ROM version | Confirmed, dumped from real hardware |
 | `PC1600-P2-B6-new.bin`, `PC1600-P2-B6-old.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/new/`, `dumps/old/`) | Bank 6, 0x8000 (display/timer/serial/char tables, CS123) — **new** and **old** ROM version | Confirmed, dumped from real hardware |
-| `PC1600-P1-B4-CE1600P.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/peripherals/`) | CE-1600P plotter ROM, lower 16KB half (card-local 0x0000-0x3FFF), banked onto the PC-1600's Page B bank 4 via the PV pin | Confirmed, dumped from real hardware |
-| `PC1600-P1-B5-CE1600P-OR-F.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/peripherals/`) | CE-1600P plotter ROM, upper 16KB half (card-local 0x4000-0x7FFF), banked onto Page B bank 5 via the PV pin | Confirmed, dumped from real hardware |
+| `PC1600-P1-B4-CE1600P-new.bin`, `PC1600-P1-B4-CE1600P-old.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/ce1600p/new/`, `dumps/ce1600p/old/`) | CE-1600P plotter ROM, lower 16KB half (card-local 0x0000-0x3FFF), banked onto the PC-1600's Page B bank 4 via the PV pin — **new** (`PEEK #(5,&7FFE)` = 5) and **old** (= 4) CE-1600P ROM version | Confirmed, dumped from real hardware |
+| `PC1600-P1-B5-CE1600P-OR-F-new.bin`, `PC1600-P1-B5-CE1600P-OR-F-old.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/ce1600p/new/`, `dumps/ce1600p/old/`) | CE-1600P plotter ROM, upper 16KB half (card-local 0x4000-0x7FFF), banked onto Page B bank 5 via the PV pin; also the CE-1600F's ROM — **new** (`PEEK #(5,&7FFF)` = 18) and **old** (= 16) | Confirmed, dumped from real hardware |
 | `CE-158.ROM` | [Jeff-Birt/Sharp_CE-158](https://github.com/Jeff-Birt/Sharp_CE-158) (`CE-158_ROM_ORIG.bin`) | CE-158 cassette-interface firmware, 16384 bytes, md5 `aa952878fb29da4844791d95185649ca`. Not yet wired into any card implementation here -- fetched in advance of that work. | Confirmed |
 
 The PC-1600 has two calculator ROM versions, selectable in the app
-(Machine > ROM Version, or `firmware: new|old` in a PC-1600 preset).
+(Machine > ROM Version, or `model: PC-1600:new|old` in a PC-1600 preset).
 `PEEK #(0,&7FFF)` reads 4 or 5 on the **new** ROM and 130 on the **old**
-one. The CE-1600P peripheral ROMs are independent of that choice.
+one. The CE-1600P ROM has its own new/old choice (Machine > CE-1600P ROM,
+or `plotter: ce1600p:new|old` in a preset) that is independent of the
+calculator ROM: any combination works. The CE-1600F lives in the same box, so
+it follows the CE-1600P choice.
 
 All PC-1600 images are our own dumps, pulled straight off real Sharp
 PC-1600 hardware with a purpose-built ROM-dumper cartridge tool (see

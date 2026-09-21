@@ -25,9 +25,13 @@ namespace MachineControllerNS {
 enum class Model { PC1500, PC1500A, PC1600 };
 // PC-1600 calculator ROM version: New = PEEK #(0,&7FFF) 4/5, Old = 130.
 enum class PC1600RomVersion { New, Old };
+// CE-1600P ROM version: New = PEEK #(5,&7FFE) 5, Old = 4. Independent of the
+// PC-1600 calculator ROM version; the CE-1600F in the same box follows it.
+enum class CE1600PRomVersion { New, Old };
 }
 using MachineControllerNS::Model;
 using MachineControllerNS::PC1600RomVersion;
+using MachineControllerNS::CE1600PRomVersion;
 
 // The per-model settings key ("PC1500"/"PC1500A"/"PC1600") shared by
 // AppSettings::startupModelPreference() and defaultPresetPath(); lowercased,
@@ -95,6 +99,7 @@ public:
     void resetRomSelectionsToDefault() {
         m_pc1500RomRevision = PC1500RomRevision::A04;
         m_pc1600RomVersion = PC1600RomVersion::New;
+        m_ce1600pRomVersion = CE1600PRomVersion::New;
     }
     // keepPlotter: re-attach whichever plotter (CE-150 / CE-1600P) was attached
     // before the rebuild, ahead of the cold boot, so a rebuild (module, ROM or
@@ -116,6 +121,12 @@ public:
     // otherwise only remembers the choice for the next switch to PC-1600.
     void setPC1600RomVersion(PC1600RomVersion version);
     PC1600RomVersion pc1600RomVersion() const { return m_pc1600RomVersion; }
+
+    // CE-1600P ROM version (independent of the PC-1600 one; the CE-1600F
+    // follows it). Rebuilds the machine, keeping the plotter, when a CE-1600P
+    // is attached; otherwise only remembers the choice for the next attach.
+    void setCE1600PRomVersion(CE1600PRomVersion version);
+    CE1600PRomVersion ce1600pRomVersion() const { return m_ce1600pRomVersion; }
 
     // Reset (`allReset` = ALL RESET on the PC-1600; the PC-1500 has one
     // level), then run the boot flat out until the ROM waits at the prompt
@@ -237,7 +248,7 @@ public:
     // switchModel()'s PC-1600 branch) but no module attach or reset --
     // PC1600PresetLoader.cpp does both itself, driven by the preset's own
     // memory-expansion-1:/-2: blocks.
-    PC1600Machine& resetBareForPresetPC1600(PC1600RomVersion version);
+    PC1600Machine& resetBareForPresetPC1600(PC1600RomVersion version, CE1600PRomVersion ce1600pVersion);
     // Call once the preset loader returns, success or failure alike: the
     // machine object was already swapped in by resetBareForPreset*()
     // above -- this just finalizes model/UI bookkeeping the same way
@@ -310,6 +321,7 @@ private:
     Model m_model = Model::PC1500A;
     PC1500RomRevision m_pc1500RomRevision = PC1500RomRevision::A04;
     PC1600RomVersion m_pc1600RomVersion = PC1600RomVersion::New;
+    CE1600PRomVersion m_ce1600pRomVersion = CE1600PRomVersion::New;
     std::unique_ptr<PC1500Machine> m_pc1500;
     std::unique_ptr<PC1600Machine> m_pc1600;
     KeyPasteFeeder m_paste;

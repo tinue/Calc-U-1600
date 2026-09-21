@@ -298,8 +298,8 @@ Top level (the inline comments below are annotations for this guide only
 must be on its own line):
 
 ```yaml
-model: PC-1500              # PC-1500 | PC-1500A | PC-1600
-firmware: A04                # PC-1500 only; A01 | A03 | A04
+model: PC-1500:A04          # PC-1500[:A01|A03|A04] | PC-1500A[:A04] | PC-1600[:new|old]
+                             # the ROM after ':' is optional (default A04 / new)
 
 memory-expansion:            # PC-1500/1500A: one module in slot 1
   - modulespec: CE-155        #   by bundled/saved module-name
@@ -310,7 +310,7 @@ memory-expansion-1:           # PC-1600: slot 1
 memory-expansion-2:           # PC-1600: slot 2
   - modulespec: CE-1601M
 
-plotter: ce150                # ce150 (PC-1500/1500A) | ce1600p (PC-1600)
+plotter: ce150                # ce150 (PC-1500/1500A) | ce1600p[:new|old] (PC-1600)
 ```
 
 Then any number of `keys:`/`program:` blocks, run top to bottom:

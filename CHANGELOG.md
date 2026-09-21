@@ -2,6 +2,18 @@
 
 ## [0.5.0] - work in progress
 
+- **CE-1600P** The CE-1600P ROM is now selectable: the new ROM (default)
+  or the old one (control bar, or Machine > CE-1600P ROM). It is
+  independent of the PC-1600 ROM, and the CE-1600F follows it (same box).
+  Changing it while the CE-1600P is attached restarts the machine, like
+  the PC-1600 ROM choice does.
+- **Presets** The ROM is now part of the model and plotter:
+  `model: PC-1500:A01`, `model: PC-1600:old`, `plotter: ce1600p:old`. The
+  `firmware:` key is gone (a preset that still has it fails with a hint).
+  `model: PC-1500A` accepts only A04.
+- **ROMs** `tools/fetch_roms.sh` now also fetches the old CE-1600P ROM
+  (21 files). Fetch again to update `roms/`.
+
 ## [0.4.0] - 2026-09-20
 
 - **Keyboard** Fixed a key getting stuck down and freezing the

@@ -4,8 +4,7 @@
 # LPRINT. The CE-150 paper pane opens automatically (right of the debug
 # log) once the plotter is attached.
 
-model: PC-1500A
-firmware: A04
+model: PC-1500A:A04
 plotter: ce150
 
 program:

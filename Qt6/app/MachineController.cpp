@@ -146,6 +146,13 @@ void MachineController::setPC1600RomVersion(PC1600RomVersion version) {
     if (m_model == Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
 }
 
+void MachineController::setCE1600PRomVersion(CE1600PRomVersion version) {
+    m_ce1600pRomVersion = version;
+    if (m_model == Model::PC1600 && ce1600pAttached()) {
+        switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new CE-1600P ROM
+    }
+}
+
 void MachineController::setPC1500RomRevision(PC1500RomRevision revision) {
     m_pc1500RomRevision = revision;
     if (m_model != Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
@@ -168,8 +175,10 @@ PC1500Machine& MachineController::resetBareForPresetPC1500(PC1500Variant variant
     return *m_pc1500;
 }
 
-PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion version) {
+PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion version,
+                                                           CE1600PRomVersion ce1600pVersion) {
     m_pc1600RomVersion = version;
+    m_ce1600pRomVersion = ce1600pVersion;
     m_paste.cancel({});
     m_pc1500.reset();
     m_pc1600.reset();
@@ -583,8 +592,21 @@ bool MachineController::ce150Attached() const {
 
 bool MachineController::attachCE1600P() {
     if (!m_pc1600) return false;
+    const auto versionName = [](CE1600PRomVersion v) { return v == CE1600PRomVersion::Old ? "old" : "new"; };
     std::string err;
-    if (!BundledRoms::attachCE1600P(*m_pc1600, bundledRomDirs(), &err)) return false;
+    if (!BundledRoms::attachCE1600P(*m_pc1600, bundledRomDirs(), versionName(m_ce1600pRomVersion), &err)) {
+        // Like the PC-1600's own old ROM: the old set is optional (its dump
+        // may be missing), so warn and fall back to the new one. A failing
+        // new set just leaves the plotter detached.
+        if (m_ce1600pRomVersion != CE1600PRomVersion::Old) return false;
+        QMessageBox::warning(nullptr, QObject::tr("Old CE-1600P ROM unavailable"),
+                             QObject::tr("The old CE-1600P ROM could not be loaded:\n\n%1\n\n"
+                                         "Using the new ROM instead.")
+                                 .arg(QString::fromStdString(err)));
+        m_ce1600pRomVersion = CE1600PRomVersion::New;
+        err.clear();
+        if (!BundledRoms::attachCE1600P(*m_pc1600, bundledRomDirs(), "new", &err)) return false;
+    }
     if (m_floppyManager) m_floppyManager->insertSelectedDisk();
     return true;
 }

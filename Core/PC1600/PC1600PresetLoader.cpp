@@ -238,8 +238,8 @@ bool loadMachineBinary(PC1600Machine& machine, const PresetProgram& program, int
 // plotter behind). `moduleDirs` is the same bundled-then-save-folder list
 // `- modulespec:` resolution searches. Returns false with result->error
 // set on any problem.
-bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter, const std::string& floppy,
-                         int floppySide, const std::vector<std::string>& romDirs,
+bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter,
+                         const std::string& ce1600pRom, const std::string& floppy, int floppySide, const std::vector<std::string>& romDirs,
                          const std::vector<std::string>& moduleDirs, const PC1600PresetLogFn& log,
                          PC1600PresetLoadResult* result) {
     if (plotter.empty()) return true;
@@ -255,7 +255,8 @@ bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter, con
         result->floppyResolvedPath = path;
     }
 
-    if (!BundledRoms::attachPlotterByName(machine, plotter, romDirs, &result->error, &result->ce150Attached)) {
+    if (!BundledRoms::attachPlotterByName(machine, plotter, romDirs, &result->error, &result->ce150Attached,
+                                          ce1600pRom)) {
         return false;
     }
     if (!floppy.empty()) {
@@ -264,7 +265,7 @@ bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter, con
     }
     if (log) {
         log(plotter == "ce150" ? "plotter: CE-150 attached (LH5803 side)"
-                                : "plotter: " + plotter + " attached" +
+                                : "plotter: " + plotter + (plotter == "ce1600p" ? ":" + ce1600pRom : "") + " attached" +
                                       (floppy.empty() ? "" : " (floppy: " + floppy + ")"));
     }
     return true;
@@ -336,8 +337,8 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
     // Plotter (`plotter:`) -- attach before the reset below, so the boot
     // ROM's peripheral scan sees it (mirrors real hardware: power off,
     // connect, power on).
-    if (!attachPresetPlotter(machine, preset.plotter, preset.floppy, preset.floppySide, romDirs, moduleDirs,
-                              log, &result))
+    if (!attachPresetPlotter(machine, preset.plotter, preset.ce1600pRomVariant, preset.floppy,
+                             preset.floppySide, romDirs, moduleDirs, log, &result))
         return result;
 
     // Machine is now fully armed (model/cards/plotter wired) but still

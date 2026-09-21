@@ -134,7 +134,7 @@ public:
 
     // ── CE-1600P plotter (60-pin system bus) ─────────────────────────────
     //
-    // `PC1600-P1-B4-CE1600P.bin`/`-2.bin` are confirmed CE-1600P ROM (see
+    // `PC1600-P1-B4-CE1600P-{new,old}.bin`/`PC1600-P1-B5-CE1600P-OR-F-{new,old}.bin` are confirmed CE-1600P ROM (see
     // roms/README.md) -- `attachCE1600P` builds a card, loads both halves,
     // and attaches it to `m_z80Mem.ce1600pBus()`; PC1600Memory routes Page B
     // banks 4/5 and I/O ports 0x70-0x8F to that bus once attached.

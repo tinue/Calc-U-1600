@@ -1,6 +1,6 @@
 // Headless C++ tests for CE1600FCard -- the CE-1600F floppy drive's
 // register-level protocol, confirmed by direct disassembly of the real
-// roms/PC1600-P1-B5-CE1600P-OR-F.bin (see CE1600FCard.hpp's class comment
+// roms/PC1600-P1-B5-CE1600P-OR-F-new.bin (see CE1600FCard.hpp's class comment
 // for the file-offset citations). Same no-framework, assert-and-tally
 // style as lh5801_tests.cpp -- see that file's header comment.
 //

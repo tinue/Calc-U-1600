@@ -108,6 +108,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_controlBar, &ControlBar::modelSelected, this, &MainWindow::applyModelSelection);
     connect(m_controlBar, &ControlBar::romRevisionSelected, this, &MainWindow::applyRomRevisionSelection);
     connect(m_controlBar, &ControlBar::pc1600RomVersionSelected, this, &MainWindow::applyPC1600RomVersionSelection);
+    connect(m_controlBar, &ControlBar::ce1600pRomVersionSelected, this, &MainWindow::applyCE1600PRomVersionSelection);
     connect(m_controlBar, &ControlBar::moduleSelected, this, [this](int slot, QString moduleNameOrEmpty) {
         m_moduleManager->selectModule(slot, moduleNameOrEmpty);
         m_controller->switchModel(m_controller->currentModel(), /*keepPlotter=*/true); // rebuild -> re-attach
@@ -270,6 +271,8 @@ void MainWindow::syncControlBarForModel() {
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     m_controlBar->setSlot2Visible(isPC1600);
     m_controlBar->setCe1600pVisible(isPC1600);
+    m_controlBar->setCE1600PRomPickerVisible(isPC1600);
+    m_ce1600pRomMenuAction->setVisible(isPC1600);
     // Always shown on a PC-1600 (never hidden alongside the CE-1600P
     // toggle) so the control bar doesn't jump around as the plotter/
     // floppy union attaches and detaches -- onPlotterAttachedChanged()
@@ -477,10 +480,12 @@ void MainWindow::syncUiFromController() {
     m_controlBar->setModel(model);
     m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
     m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
+    m_controlBar->setCE1600PRomVersion(m_controller->ce1600pRomVersion());
     syncControlBarForModel();
     syncMachineMenuFromModel(model);
     syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
     syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
+    syncMachineMenuFromCE1600PRomVersion(m_controller->ce1600pRomVersion());
     refreshModuleCombos();
     m_plotterController->syncFromMachineState();
 }
@@ -787,6 +792,23 @@ void MainWindow::buildMenuBar() {
     addRom1600Action(PC1600RomVersion::Old, tr("Old"));
     m_rom1600MenuAction->setVisible(false);
 
+    // The CE-1600P's ROM is independent of the PC-1600's (any combination is
+    // possible); the CE-1600F in the same box follows it.
+    QMenu* ce1600pRomMenu = machineMenu->addMenu(tr("CE-1600P ROM"));
+    m_ce1600pRomMenuAction = ce1600pRomMenu->menuAction();
+    m_ce1600pRomActionGroup = new QActionGroup(this);
+    m_ce1600pRomActionGroup->setExclusive(true);
+    auto addCE1600PRomAction = [&](CE1600PRomVersion version, const QString& label) {
+        QAction* action = ce1600pRomMenu->addAction(label);
+        action->setCheckable(true);
+        m_ce1600pRomActionGroup->addAction(action);
+        m_ce1600pRomActions.insert(version, action);
+        connect(action, &QAction::triggered, this, [this, version] { applyCE1600PRomVersionSelection(version); });
+    };
+    addCE1600PRomAction(CE1600PRomVersion::New, tr("New"));
+    addCE1600PRomAction(CE1600PRomVersion::Old, tr("Old"));
+    m_ce1600pRomMenuAction->setVisible(false);
+
     machineMenu->addSeparator();
     QAction* resetAction = machineMenu->addAction(tr("Reset"));
     resetAction->setShortcut(QKeySequence(Qt::ControlModifier | Qt::Key_R));
@@ -846,6 +868,23 @@ void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
     syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
     syncControlBarForModel();
     refreshModuleCombos();
+}
+
+void MainWindow::applyCE1600PRomVersionSelection(CE1600PRomVersion version) {
+    m_moduleManager->flushPendingPersist();
+    m_floppyManager->flushPendingPersist();
+    m_controller->setCE1600PRomVersion(version); // rebuilds the machine when a CE-1600P is attached
+    restartPacing(); // the rebuild's flat-out boot blocked the frame timer
+    m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
+    // The controller may have fallen back to New if the old ROM failed to load.
+    m_controlBar->setCE1600PRomVersion(m_controller->ce1600pRomVersion());
+    syncMachineMenuFromCE1600PRomVersion(m_controller->ce1600pRomVersion());
+    syncControlBarForModel();
+    refreshModuleCombos();
+}
+
+void MainWindow::syncMachineMenuFromCE1600PRomVersion(CE1600PRomVersion version) {
+    if (QAction* action = m_ce1600pRomActions.value(version, nullptr)) action->setChecked(true);
 }
 
 void MainWindow::syncMachineMenuFromPC1600RomVersion(PC1600RomVersion version) {

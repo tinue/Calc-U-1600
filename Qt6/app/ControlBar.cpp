@@ -133,6 +133,16 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     layout->addWidget(m_ce1600pButton);
     setCe1600pVisible(false);
 
+    // The CE-1600P's ROM chip sits in its box, so the CE-1600F follows this
+    // choice too. Independent of the PC-1600 ROM picker above.
+    m_ce1600pRomCombo = new QComboBox(this);
+    m_ce1600pRomCombo->addItem(tr("New ROM"), static_cast<int>(CE1600PRomVersion::New));
+    m_ce1600pRomCombo->addItem(tr("Old ROM"), static_cast<int>(CE1600PRomVersion::Old));
+    m_ce1600pRomCombo->setToolTip(tr("CE-1600P ROM version (also used by the CE-1600F)"));
+    m_ce1600pRomCombo->setFocusPolicy(Qt::NoFocus);
+    layout->addWidget(m_ce1600pRomCombo);
+    setCE1600PRomPickerVisible(false);
+
     // CE-1600F floppy disk picker -- attaches as a union with CE-1600P
     // (PC1600Machine::attachCE1600P()). Always shown on a PC-1600 (see
     // setFloppyVisible()'s comment) so the control bar doesn't jump around
@@ -188,6 +198,9 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     });
     connect(m_rom1600Combo, &QComboBox::currentIndexChanged, this, [this](int index) {
         emit pc1600RomVersionSelected(static_cast<PC1600RomVersion>(m_rom1600Combo->itemData(index).toInt()));
+    });
+    connect(m_ce1600pRomCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        emit ce1600pRomVersionSelected(static_cast<CE1600PRomVersion>(m_ce1600pRomCombo->itemData(index).toInt()));
     });
     // Buttons are checkable so their own click already toggled the visual
     // check state -- MainWindow will resync it (via setCe150State/
@@ -258,6 +271,16 @@ void ControlBar::setCe1600pState(bool attached, bool enabled) {
 
 void ControlBar::setCe1600pVisible(bool visible) {
     m_ce1600pButton->setVisible(visible);
+}
+
+void ControlBar::setCE1600PRomVersion(CE1600PRomVersion version) {
+    const QSignalBlocker blocker(m_ce1600pRomCombo);
+    const int idx = m_ce1600pRomCombo->findData(static_cast<int>(version));
+    m_ce1600pRomCombo->setCurrentIndex(idx >= 0 ? idx : 0);
+}
+
+void ControlBar::setCE1600PRomPickerVisible(bool visible) {
+    m_ce1600pRomCombo->setVisible(visible);
 }
 
 void ControlBar::setFloppyCombo(const QVector<FloppyDiskManager::DiskEntry>& bundled,

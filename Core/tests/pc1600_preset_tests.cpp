@@ -84,7 +84,7 @@ void test_parser_both_slots() {
 void test_parser_rejects_cross_model_fields() {
     PresetFile p;
     std::string err;
-    // PC-1600 preset with a firmware: field.
+    // PC-1600 preset with a firmware: field (gone -- the ROM rides on the model).
     CHECK(!parse("model: PC-1600\nfirmware: A04\n", &p, &err));
     CHECK(!err.empty());
     // PC-1600 preset with the unsuffixed memory-expansion: block.
@@ -632,7 +632,7 @@ void test_parser_rejects_floppy_without_ce1600p() {
 void test_parser_rejects_floppy_on_pc1500() {
     PresetFile p;
     std::string err;
-    CHECK(!parse("model: PC-1500\nfirmware: A04\nfloppy: mydisk\n", &p, &err));
+    CHECK(!parse("model: PC-1500\nfloppy: mydisk\n", &p, &err));
     CHECK(err.find("floppy") != std::string::npos);
 }
 

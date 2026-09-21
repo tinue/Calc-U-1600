@@ -285,7 +285,7 @@ void test_preset_plotter_ce150_attaches_before_reset() {
     }
     const std::string presetPath = "/tmp/calcu1600_ce150_scratch.pc1500a";
     CHECK(writeScratchPreset(presetPath,
-        "model: PC-1500A\nfirmware: A04\nplotter: ce150\n"));
+        "model: PC-1500A\nplotter: ce150\n"));
 
     PresetFile preset;
     std::string err;

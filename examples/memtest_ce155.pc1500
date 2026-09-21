@@ -4,8 +4,7 @@
 #  X=2 (2 passes)
 #  CALL &38C5,X   -> X holds the test result when finished
 
-model: PC-1500
-firmware: A04
+model: PC-1500:A04
 
 memory-expansion:
   - modulespec: CE-155

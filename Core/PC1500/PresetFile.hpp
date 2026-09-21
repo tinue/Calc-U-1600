@@ -145,9 +145,10 @@ struct PresetFile {
     /// True for `model: PC-1600` -- derived from `model` rather than stored
     /// alongside it, so the two can't disagree. The PC-1600 is a separate
     /// machine (Core/PC1600/) with its own two memory slots
-    /// (memory-expansion-1:/memory-expansion-2: below); its `firmware:` is
-    /// `new` or `old` (calculator ROM version, default `new`; stored in
-    /// `romVariant`) and it takes no `memory-expansion:` (unsuffixed) block.
+    /// (memory-expansion-1:/memory-expansion-2: below); its calculator ROM
+    /// version rides on the model (`model: PC-1600:old`, default `new`;
+    /// stored in `romVariant`) and it takes no `memory-expansion:`
+    /// (unsuffixed) block. `model` itself always holds the bare name.
     /// `variant` below is unused.
     /// Applied by Core/PC1600/PC1600PresetLoader.cpp, not applyPC1500Preset().
     bool isPC1600() const { return model == "PC-1600"; }
@@ -157,26 +158,20 @@ struct PresetFile {
     // constructed with this variant (variant is fixed at construction --
     // see PC1500Memory.hpp).
     PC1500Variant variant = PC1500Variant::PC1500A;
-    // PC-1600: "new" or "old" (calculator ROM version, default "new").
-    // PC-1500/1500A: which ROM revision to run, always one of "A01"/"A03"/"A04" -- never
-    // a file path or a bare-model-dependent choice. There are only three
-    // real options across all three machines (per the project owner):
-    // the PC-1600 chooses "new"/"old" instead (see above), the PC-1500A
-    // can only run A04, and the PC-1500 (non-A) is the only model that
-    // actually chooses between A01/A03/A04. For "PC-1500A", this
-    // resolves unconditionally to "A04" regardless of any `firmware:`
-    // field (accepted syntactically but genuinely ignored, since its
-    // value can't matter for that model). For "PC-1500", it's read from
-    // `firmware:` when present -- either a bare revision (`firmware:
-    // A03`, the preferred form) or, kept for backward compatibility with
-    // existing preset files, a
-    // `.../PC-1500_A0N.ROM`-shaped path (only the "A0N" is ever extracted
-    // from it) -- defaulting to "A04" when absent or matching neither
-    // shape, matching AppSettings.swift's own default. WHERE the actual
-    // ROM file for this variant lives is
-    // deliberately not this struct's concern -- that's environment-
-    // specific (a CLI tool's repo-relative `roms/` convention vs. a GUI
-    // app's bundled resource lookup) and is left to whoever calls
+    // Parsed from the ROM suffix of `model: NAME[:ROM]`.
+    // PC-1600: "new" or "old" (calculator ROM version, default "new"), from
+    // `model: PC-1600:old`.
+    // PC-1500/1500A: which ROM revision to run, always one of "A01"/"A03"/"A04"
+    // -- never a file path. There are only three real options across all
+    // three machines: the PC-1600 chooses "new"/"old" instead (see above),
+    // the PC-1500A can only run A04 (`model: PC-1500A:A04`; any other suffix
+    // is a parse error), and the PC-1500 (non-A) is the only model that
+    // actually chooses between A01/A03/A04 (`model: PC-1500:A03`). With no
+    // suffix it defaults to "A04". (The old `firmware:` key is gone -- it is
+    // a parse error pointing at this syntax.) WHERE the actual ROM file for
+    // this variant lives is deliberately not this struct's concern -- that's
+    // environment-specific (a CLI tool's repo-relative `roms/` convention vs.
+    // a GUI app's bundled resource lookup) and is left to whoever calls
     // applyPC1500Preset() (PC1500PresetLoader.hpp) to resolve.
     std::string romVariant;
     // `keys:`/`program:` blocks, in file order -- see PresetSection above
@@ -186,7 +181,8 @@ struct PresetFile {
     // The pen-plotter/printer on the 60-pin system bus. `""` (key absent)
     // = none. Normalized to lower case; `plotter: none`/`off` -> `""`.
     //
-    //  * PC-1600 preset: `"ce1600p"` (attached by applyPC1600Preset before
+    //  * PC-1600 preset: `"ce1600p"` (`plotter: ce1600p[:new|old]`, ROM in
+    //    `ce1600pRomVariant`; attached by applyPC1600Preset before
     //    the cold boot so the ROM sees it -- the loader needs the CE-1600P
     //    ROM path passed in). `"ce150"` also valid once the PC-1600
     //    LH5803-side CE-150 support lands (Phase 2); until then
@@ -196,6 +192,11 @@ struct PresetFile {
     //    path passed in). `"ce1600p"` is a parse error -- that is a PC-1600
     //    device.
     std::string plotter;
+    // PC-1600 only: "new" or "old" -- the CE-1600P ROM version, from
+    // `plotter: ce1600p:old` (default "new", also when there is no plotter).
+    // Independent of `romVariant`; the CE-1600F in the same box follows it.
+    // Any ROM suffix on another plotter is a parse error.
+    std::string ce1600pRomVariant = "new";
 
     // PC-1600 only: `floppy: <name>` names a saved CE-1600F disk by its
     // `disk-name` (a `*.floppy.yaml` in the bundled or the user's save

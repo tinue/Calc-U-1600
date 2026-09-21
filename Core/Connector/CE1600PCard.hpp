@@ -11,8 +11,9 @@
 //
 // This card claims:
 //   - Page B banks 4/5 ROM read window (4000-7FFF, banked by PC1600BusPins
-//     ::bank5) -- both 16 KB halves of PC1600-P1-B4-CE1600P.bin/-2.bin, loaded
-//     contiguously.
+//     ::bank5) -- both 16 KB halves of the new or old ROM version
+//     (PC1600-P1-B4-CE1600P-<ver>.bin + PC1600-P1-B5-CE1600P-OR-F-<ver>.bin),
+//     loaded contiguously.
 //   - I/O port 0x82 write: Z-motor phase (low nibble) -- pen lift +
 //     color-turret rotation.
 //   - I/O port 0x83 write: X-motor phase (low nibble) / Y-motor phase
@@ -33,8 +34,8 @@ public:
     static constexpr size_t kRomHalfSize = 0x4000;
     static constexpr size_t kRomSize = 2 * kRomHalfSize;
 
-    /// `data` must be exactly kRomSize bytes: PC1600-P1-B4-CE1600P.bin followed by
-    /// PC1600-P1-B5-CE1600P-OR-F.bin (16KB @ 0x0000, 16KB @ 0x4000 of the
+    /// `data` must be exactly kRomSize bytes: PC1600-P1-B4-CE1600P-<ver>.bin followed by
+    /// PC1600-P1-B5-CE1600P-OR-F-<ver>.bin (16KB @ 0x0000, 16KB @ 0x4000 of the
     /// card's own 32KB address space).
     bool loadRom(const uint8_t* data, size_t size) {
         if (size != kRomSize) return false;

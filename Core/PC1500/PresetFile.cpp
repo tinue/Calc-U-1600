@@ -484,9 +484,9 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
     std::filesystem::path presetDir = std::filesystem::path(path).parent_path();
     if (presetDir.empty()) presetDir = ".";
 
-    std::string firmware;
-    bool hasFirmware = false;
-    std::string plotter;  // normalized `plotter:` value ("" / "ce1600p" / "ce150")
+    std::string modelRom;  // the ROM suffix of `model: NAME:ROM`, verbatim ("" = none given)
+    std::string plotter;  // normalized `plotter:` name ("" / "ce1600p" / "ce150"), suffix stripped
+    std::string plotterRom;  // the ROM suffix of `plotter: NAME:ROM`, lower-cased ("" = none given)
     bool hasPlotter = false;
     std::string floppy;  // `floppy:` value with any `,A`/`,B` suffix stripped
     int floppySide = 0;  // 0 = A, 1 = B, parsed from that suffix
@@ -508,11 +508,25 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         idx++;
         if (key == "model") {
             if (!hasInline) { *error = "'model' requires a value"; return false; }
-            out->model = value;
+            // `model: NAME[:ROM]` -- the ROM revision rides on the model
+            // (`PC-1500:A01`, `PC-1600:new`). `model` stays the bare name so
+            // everything keyed off it is unaffected; the suffix is
+            // validated per model below.
+            const size_t colon = value.find(':');
+            out->model = value.substr(0, colon);
+            if (colon != std::string::npos) {
+                modelRom = value.substr(colon + 1);
+                if (modelRom.empty()) {
+                    *error = "line " + std::to_string(line.lineNo) + ": 'model: " + value +
+                             "' has an empty ROM after ':'";
+                    return false;
+                }
+            }
         } else if (key == "firmware") {
-            if (!hasInline) { *error = "'firmware' requires a value"; return false; }
-            firmware = value;
-            hasFirmware = true;
+            *error = "line " + std::to_string(line.lineNo) +
+                     ": 'firmware:' is no longer supported -- put the ROM on the model instead "
+                     "(e.g. 'model: PC-1500:A01' or 'model: PC-1600:old')";
+            return false;
         } else if (key == "program") {
             if (hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'program:' takes a block, not an inline value"; return false; }
             PresetSection section;
@@ -548,6 +562,18 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             hasPlotter = true;
             plotter = value;
             for (char& ch : plotter) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            // `plotter: NAME[:ROM]` -- only the CE-1600P has a ROM choice
+            // (`plotter: ce1600p:old`); split it off before normalizing.
+            const size_t plotterColon = plotter.find(':');
+            if (plotterColon != std::string::npos) {
+                plotterRom = plotter.substr(plotterColon + 1);
+                plotter.resize(plotterColon);
+                if (plotterRom.empty()) {
+                    *error = "line " + std::to_string(line.lineNo) + ": 'plotter: " + value +
+                             "' has an empty ROM after ':'";
+                    return false;
+                }
+            }
             // Accept a couple of spellings; normalize to the canonical token.
             if (plotter == "ce-1600p") plotter = "ce1600p";
             else if (plotter == "ce-150") plotter = "ce150";
@@ -555,6 +581,16 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             if (!plotter.empty() && plotter != "ce1600p" && plotter != "ce150") {
                 *error = "line " + std::to_string(line.lineNo) +
                          ": 'plotter: " + value + "' is not a known plotter (expected ce1600p or ce150)";
+                return false;
+            }
+            if (!plotterRom.empty() && plotter != "ce1600p") {
+                *error = "line " + std::to_string(line.lineNo) + ": 'plotter: " + value +
+                         "' -- only the CE-1600P has a ROM choice ('plotter: ce1600p:new|old')";
+                return false;
+            }
+            if (!plotterRom.empty() && plotterRom != "new" && plotterRom != "old") {
+                *error = "line " + std::to_string(line.lineNo) + ": 'plotter: " + value +
+                         "' -- the CE-1600P ROM must be 'new' or 'old'";
                 return false;
             }
         } else if (key == "floppy") {
@@ -593,16 +629,19 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         // A PC-1600 preset is model + memory slots + keys only. Reject the
         // PC-1500-only pieces with a clear message rather than silently
         // ignoring them.
-        // `firmware: new|old` picks the calculator ROM version (default
-        // "new"); CE-1600P peripheral ROMs are independent of it.
+        // `model: PC-1600:new|old` picks the calculator ROM version (default
+        // "new"); the CE-1600P ROM (`plotter: ce1600p:new|old`) is
+        // independent of it.
         out->romVariant = "new";
-        if (hasFirmware) {
-            if (firmware != "new" && firmware != "old") {
-                *error = "'firmware:' for a PC-1600 preset must be 'new' or 'old'";
+        if (!modelRom.empty()) {
+            for (char& ch : modelRom) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            if (modelRom != "new" && modelRom != "old") {
+                *error = "'model: PC-1600:" + modelRom + "' -- the PC-1600 ROM must be 'new' or 'old'";
                 return false;
             }
-            out->romVariant = firmware;
+            out->romVariant = modelRom;
         }
+        out->ce1600pRomVariant = plotterRom.empty() ? "new" : plotterRom;
         if (!out->memoryExpansionModuleSpecFile.empty() || !out->memoryExpansionModuleSpecName.empty()) {
             *error = "use 'memory-expansion-1:' / 'memory-expansion-2:' for a PC-1600 preset, not 'memory-expansion:'";
             return false;
@@ -662,40 +701,27 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         // isn't "ce150" was already rejected by the parser.
         out->plotter = plotter; // "" or "ce150"
     }
+    // `model: PC-1500:A01|A03|A04` / `model: PC-1500A:A04` -- the ROM
+    // revision rides on the model. WHERE the file lives is deliberately not
+    // this struct's concern (see PresetFile::romVariant's doc comment).
+    for (char& ch : modelRom) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
     if (out->model == "PC-1500A") {
         out->variant = PC1500Variant::PC1500A;
-        // The PC-1500A can only run A04 -- unconditional, not a default,
-        // regardless of whatever (if anything) the preset's own
-        // `firmware:` field said. See PresetFile::romVariant's doc
-        // comment.
+        // The PC-1500A can only run A04 (the default).
+        if (!modelRom.empty() && modelRom != "A04") {
+            *error = "'model: PC-1500A:" + modelRom + "' -- the PC-1500A can only run ROM A04";
+            return false;
+        }
         out->romVariant = "A04";
     } else if (out->model == "PC-1500") {
         out->variant = PC1500Variant::PC1500;
-        // `firmware:` may be a bare revision ("A01"/"A03"/"A04" -- the
-        // preferred form: it names *which ROM* to run without pretending
-        // to know *where* its file lives, which is environment-specific
-        // -- a CLI tool's repo-relative `roms/` convention vs. a GUI
-        // app's bundled resource, see PresetFile::romVariant's own doc
-        // comment) or a `.../PC-1500_A0N.ROM`-shaped path (kept for
-        // backward compatibility with existing preset files -- only the
-        // "A0N" is ever extracted from it, never the path itself). Defaults to "A04"
-        // (valid on both models, see AppSettings.swift's own
-        // resolvedRomRevision() default) when `firmware:` is absent or
-        // matches neither shape.
         out->romVariant = "A04";
-        if (hasFirmware) {
-            if (firmware == "A01" || firmware == "A03" || firmware == "A04") {
-                out->romVariant = firmware;
-            } else {
-                size_t marker = firmware.rfind("PC-1500_");
-                size_t romExt = firmware.rfind(".ROM");
-                if (marker != std::string::npos && romExt != std::string::npos && romExt > marker) {
-                    std::string candidate = firmware.substr(marker + 8, romExt - (marker + 8));
-                    if (candidate == "A01" || candidate == "A03" || candidate == "A04") {
-                        out->romVariant = candidate;
-                    }
-                }
+        if (!modelRom.empty()) {
+            if (modelRom != "A01" && modelRom != "A03" && modelRom != "A04") {
+                *error = "'model: PC-1500:" + modelRom + "' -- the PC-1500 ROM must be A01, A03 or A04";
+                return false;
             }
+            out->romVariant = modelRom;
         }
     } else {
         *error = "unsupported model '" + out->model + "' (must be 'PC-1500', 'PC-1500A' or 'PC-1600')";

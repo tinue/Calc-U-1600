@@ -49,7 +49,6 @@ void test_inline_comment_stripped_from_key_step_only() {
     std::string err;
     CHECK(parse(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - key: mode   # switch to RUN\n"
         "  - type: RUN\n"
@@ -64,7 +63,6 @@ void test_hash_without_leading_space_is_kept() {
     std::string err;
     CHECK(parse(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - type: PRINT#2,A#B\n",
         &p, &err));
@@ -94,7 +92,6 @@ void test_type_step_fully_quoted_is_unwrapped() {
     std::string err;
     CHECK(parse(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - type: '10 A$=\"x #1\"'\n",
         &p, &err));
@@ -110,7 +107,6 @@ void test_key_step_with_non_key_value_is_rejected() {
     std::string err;
     CHECK(!parse(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - key: mode\n"
         "  - key: X=34\n",
@@ -125,7 +121,6 @@ void test_key_step_with_real_key_names_ok() {
     std::string err;
     CHECK(parse(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - key: cl\n"
         "  - key: mode\n"
@@ -157,7 +152,6 @@ void test_trace_step_start_and_stop() {
     std::string err;
     CHECK(parse(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - trace: run1.bin\n"
         "  - wait: 0.1\n"
@@ -177,7 +171,6 @@ void test_trace_step_rejects_path_separator() {
     std::string err;
     CHECK(!parse(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - trace: sub/run.bin\n",
         &p, &err));
@@ -187,7 +180,6 @@ void test_trace_step_rejects_path_separator() {
     PresetFile p2;
     CHECK(!parse(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - trace: a\\b.bin\n",
         &p2, &err2));
@@ -200,7 +192,6 @@ void test_trace_step_requires_a_value() {
     std::string err;
     CHECK(!parse(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - trace:\n",
         &p, &err));
@@ -228,7 +219,6 @@ void test_wait_step_value_and_parameterless() {
     std::string err;
     CHECK(parse(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - wait: 2.5\n"
         "  - type: RUN\n"
@@ -263,7 +253,7 @@ void test_syncclock_step() {
 void test_wait_step_rejects_negative_value() {
     PresetFile p;
     std::string err;
-    CHECK(!parse("model: PC-1500A\nfirmware: A04\nkeys:\n  - wait: -5\n", &p, &err));
+    CHECK(!parse("model: PC-1500A\nkeys:\n  - wait: -5\n", &p, &err));
     CHECK(err.find("negative") != std::string::npos);
 }
 
@@ -302,17 +292,17 @@ void test_plotter_unknown_value_is_rejected() {
 void test_plotter_ce1600p_on_pc1500_is_rejected() {
     PresetFile p;
     std::string err;
-    CHECK(!parse("model: PC-1500A\nfirmware: A04\nplotter: ce1600p\n", &p, &err));
+    CHECK(!parse("model: PC-1500A\nplotter: ce1600p\n", &p, &err));
     CHECK(err.find("PC-1600 device") != std::string::npos);
 }
 
 void test_plotter_ce150_on_pc1500_parses() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1500A\nfirmware: A04\nplotter: ce150\n", &p, &err));
+    CHECK(parse("model: PC-1500A\nplotter: ce150\n", &p, &err));
     CHECK(p.plotter == "ce150");  // applyPC1500Preset attaches it before reset()
     PresetFile p2;
-    CHECK(parse("model: PC-1500\nfirmware: A04\nplotter: CE-150\n", &p2, &err));
+    CHECK(parse("model: PC-1500\nplotter: CE-150\n", &p2, &err));
     CHECK(p2.plotter == "ce150"); // spelling normalised
 }
 
@@ -437,57 +427,92 @@ void test_preset_parser_rejects_old_pre_post_load_keys() {
     CHECK(!parse("model: PC-1500A\npost-load-keys:\n  - key: cl\n", &preset, &error));
 }
 
-void test_preset_parser_firmware_bare_revision() {
-    // `firmware: A03` -- the preferred form, naming *which* ROM to run
-    // without pretending to know *where* its file lives (a GUI app never
-    // wants a preset dictating a raw disk path -- see
-    // PresetFile::romVariant's own doc comment).
+void test_preset_parser_model_rom_pc1500() {
+    // `model: PC-1500:A03` -- the ROM rides on the model. `model` itself
+    // stays the bare name; the revision goes into romVariant.
     PresetFile preset;
     std::string error;
-    CHECK(parse("model: PC-1500\nfirmware: A03\n", &preset, &error));
+    CHECK(parse("model: PC-1500:A03\n", &preset, &error));
+    CHECK(preset.model == "PC-1500");
     CHECK(preset.romVariant == "A03");
-}
-
-void test_preset_parser_firmware_path_still_works() {
-    // Backward compatibility: existing preset files (this project's own
-    // examples/, and pc1500preset's own convention) spell this as a
-    // `.../PC-1500_A0N.ROM`-shaped path -- only the "A0N" is extracted,
-    // the path itself is never used as a real filesystem path by this
-    // parser (see PresetFile::romVariant's own doc comment on why WHERE
-    // the ROM file lives is deliberately not this struct's concern).
-    PresetFile preset;
-    std::string error;
-    CHECK(parse("model: PC-1500\nfirmware: ../roms/PC-1500_A01.ROM\n", &preset, &error));
+    CHECK(parse("model: PC-1500:a01\n", &preset, &error));  // case-insensitive
     CHECK(preset.romVariant == "A01");
+    CHECK(parse("model: PC-1500\n", &preset, &error));      // default
+    CHECK(preset.romVariant == "A04");
+    CHECK(!parse("model: PC-1500:A02\n", &preset, &error));
+    CHECK(error.find("A01") != std::string::npos);
+    CHECK(!parse("model: PC-1500:\n", &preset, &error));
 }
 
-void test_preset_parser_firmware_ignored_for_pc1500a() {
-    // PC-1500A can only run A04 -- unconditional, regardless of whatever
-    // (if anything) firmware: says, bare revision or path alike.
+void test_preset_parser_model_rom_pc1500a_is_a04_only() {
+    // PC-1500A can only run A04: no suffix or A04 are fine, anything else
+    // is now an error (it used to be silently ignored).
     PresetFile preset;
     std::string error;
-    CHECK(parse("model: PC-1500A\nfirmware: A01\n", &preset, &error));
+    CHECK(parse("model: PC-1500A\n", &preset, &error));
     CHECK(preset.romVariant == "A04");
+    CHECK(parse("model: PC-1500A:A04\n", &preset, &error));
+    CHECK(preset.romVariant == "A04");
+    CHECK(!parse("model: PC-1500A:A01\n", &preset, &error));
+    CHECK(error.find("A04") != std::string::npos);
 }
 
-void test_preset_parser_pc1600_firmware_version() {
-    // PC-1600: `firmware:` selects the calculator ROM version.
+void test_preset_parser_model_rom_pc1600() {
+    // PC-1600: `model: PC-1600:new|old` selects the calculator ROM version.
     PresetFile preset;
     std::string error;
     CHECK(parse("model: PC-1600\n", &preset, &error));
     CHECK(preset.romVariant == "new");
-    CHECK(parse("model: PC-1600\nfirmware: old\n", &preset, &error));
+    CHECK(parse("model: PC-1600:old\n", &preset, &error));
+    CHECK(preset.model == "PC-1600");
+    CHECK(preset.isPC1600());
     CHECK(preset.romVariant == "old");
-    CHECK(parse("model: PC-1600\nfirmware: new\n", &preset, &error));
+    CHECK(parse("model: PC-1600:new\n", &preset, &error));
     CHECK(preset.romVariant == "new");
-    CHECK(!parse("model: PC-1600\nfirmware: A04\n", &preset, &error));
+    CHECK(!parse("model: PC-1600:A04\n", &preset, &error));
     CHECK(error.find("new") != std::string::npos);
+}
+
+void test_preset_parser_firmware_key_is_gone() {
+    // The old `firmware:` key is a parse error that points at the new syntax.
+    PresetFile preset;
+    std::string error;
+    CHECK(!parse("model: PC-1500\nfirmware: A03\n", &preset, &error));
+    CHECK(error.find("model: PC-1500:A01") != std::string::npos);
+    CHECK(!parse("model: PC-1600\nfirmware: old\n", &preset, &error));
+}
+
+void test_preset_parser_plotter_ce1600p_rom() {
+    // `plotter: ce1600p:old` -- independent of the PC-1600's own ROM.
+    PresetFile preset;
+    std::string error;
+    CHECK(parse("model: PC-1600\nplotter: ce1600p\n", &preset, &error));
+    CHECK(preset.plotter == "ce1600p");
+    CHECK(preset.ce1600pRomVariant == "new");
+    CHECK(parse("model: PC-1600\nplotter: ce1600p:old\n", &preset, &error));
+    CHECK(preset.plotter == "ce1600p");
+    CHECK(preset.ce1600pRomVariant == "old");
+    CHECK(preset.romVariant == "new");
+    CHECK(parse("model: PC-1600:old\nplotter: CE-1600P:New\n", &preset, &error));
+    CHECK(preset.ce1600pRomVariant == "new");
+    CHECK(preset.romVariant == "old");
+    CHECK(!parse("model: PC-1600\nplotter: ce1600p:A04\n", &preset, &error));
+    CHECK(!parse("model: PC-1600\nplotter: ce1600p:\n", &preset, &error));
+    // Only the CE-1600P has a ROM choice.
+    CHECK(!parse("model: PC-1600\nplotter: ce150:old\n", &preset, &error));
+    CHECK(error.find("CE-1600P") != std::string::npos);
+    CHECK(!parse("model: PC-1500A\nplotter: ce150:new\n", &preset, &error));
+    // Still a PC-1600 device.
+    CHECK(!parse("model: PC-1500A\nplotter: ce1600p:old\n", &preset, &error));
 }
 
 } // namespace
 
 int run_preset_tests() {
-    test_preset_parser_pc1600_firmware_version();
+    test_preset_parser_model_rom_pc1600();
+    test_preset_parser_firmware_key_is_gone();
+    test_preset_parser_plotter_ce1600p_rom();
+    test_preset_parser_model_rom_pc1500a_is_a04_only();
     test_preset_parser_rejects_module_form();
     test_preset_parser_rejects_extra_field();
     test_preset_parser_rejects_second_item();
@@ -495,9 +520,7 @@ int run_preset_tests() {
     test_preset_parser_unquotes_single_and_double_quoted_values();
     test_preset_parser_sequential_keys_and_program_blocks();
     test_preset_parser_rejects_old_pre_post_load_keys();
-    test_preset_parser_firmware_bare_revision();
-    test_preset_parser_firmware_path_still_works();
-    test_preset_parser_firmware_ignored_for_pc1500a();
+    test_preset_parser_model_rom_pc1500();
     test_inline_comment_stripped_from_key_step_only();
     test_hash_without_leading_space_is_kept();
     test_type_step_keeps_space_hash();

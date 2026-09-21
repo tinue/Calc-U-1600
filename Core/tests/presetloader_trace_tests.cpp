@@ -118,7 +118,6 @@ void test_trace_step_produces_wellformed_file() {
     std::string err;
     CHECK(parsePresetString(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - trace: t.bin\n"
         "  - wait: 0.3\n"
@@ -160,7 +159,6 @@ void test_trace_left_open_is_auto_closed() {
     std::string err;
     CHECK(parsePresetString(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - trace: t2.bin\n"
         "  - wait: 0.2\n",
