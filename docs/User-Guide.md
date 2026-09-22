@@ -74,7 +74,9 @@ user-remappable). The practical mapping:
 - A few navigation-cluster keys, reachable only from an external/PC-style
   keyboard, map to calculator keys that don't have an obvious host
   equivalent otherwise — these are this project's own choice, not a
-  documented hardware correspondence: **Scroll Lock** → `RSV`, **Home** →
+  documented hardware correspondence: **Scroll Lock** → `RSV` (on
+  Windows/Linux, **Insert** too — it sits where a Mac-layout keyboard has
+  Scroll Lock), **Home** →
   `RCL`, **End** → `SML`, **Page Up** → Shift+Left, **Page Down** →
   Shift+Right.
 - Keys held with **Cmd or Ctrl** (macOS), or with **Ctrl, Alt or the

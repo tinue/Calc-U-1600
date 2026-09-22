@@ -535,7 +535,8 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
 
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     auto resolved = PC1500KeyboardMap::resolve(static_cast<Qt::Key>(event->key()),
-                                                event->modifiers(), event->text(), isPC1600);
+                                                event->modifiers(), event->text(), isPC1600,
+                                                event->nativeVirtualKey());
     if (!resolved) {
         QWidget::keyPressEvent(event);
         return;

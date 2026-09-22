@@ -39,7 +39,11 @@ struct ResolvedKey {
 // (Windows reports it as Ctrl+Alt together, so that pair is let through).
 // Anything else that doesn't match a case below falls through to nullopt
 // via the matchers themselves.
+//
+// `nativeVirtualKey` is QKeyEvent::nativeVirtualKey() -- only consulted on
+// macOS, for keys Qt has no Qt::Key for (see resolve()'s own comment).
 std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
-                                    const QString& text, bool isPC1600);
+                                    const QString& text, bool isPC1600,
+                                    quint32 nativeVirtualKey = 0);
 
 } // namespace PC1500KeyboardMap

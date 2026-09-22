@@ -60,11 +60,16 @@ std::optional<ResolvedKey> characterName(QChar c) {
 } // namespace
 
 std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
-                                    const QString& text, bool isPC1600) {
+                                    const QString& text, bool isPC1600, quint32 nativeVirtualKey) {
 #ifdef Q_OS_MACOS
     // Qt maps Cmd to ControlModifier and the Control key to MetaModifier.
     if (modifiers & (Qt::ControlModifier | Qt::MetaModifier)) return std::nullopt;
+    // macOS reports a PC keyboard's Scroll Lock as kVK_ContextualMenu
+    // (0x6E), which Qt has no Qt::Key for (it hands over the raw 0x10
+    // character code instead) -- match the physical key code directly.
+    if (nativeVirtualKey == 0x6E) return plain("rsv");
 #else
+    (void)nativeVirtualKey;
     if (modifiers & Qt::MetaModifier) return std::nullopt;
     const bool ctrl = modifiers & Qt::ControlModifier;
     const bool alt = modifiers & Qt::AltModifier;
@@ -83,6 +88,12 @@ std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
     // not hardware-documented correspondences.
     switch (key) {
     case Qt::Key_ScrollLock: return plain("rsv");
+#ifndef Q_OS_MACOS
+    // Insert sits where a Mac-layout keyboard's Scroll Lock is (that one
+    // is matched by its virtual key code above); on macOS, Insert arrives
+    // as Key_Help and stays unmapped.
+    case Qt::Key_Insert: return plain("rsv");
+#endif
     case Qt::Key_Home: return plain("rcl");
     case Qt::Key_End: return plain("sml");
     case Qt::Key_PageUp: return plain("left", true);
