@@ -37,6 +37,15 @@
   it for the next key.
 - **Docs** `docs/Keyboard-Mapping.md` has the complete host-key table,
   with a keycap view of the six-key block above the cursor keys.
+- **Docs** `docs/Floppy-Image-Format.md` specifies the `.floppy.yaml` disk
+  image format, so other tools can read and write disks —
+  SharpDataExchange 0.2.3 (`sde dir/get/put/del`) implements it. Eject a
+  disk before editing its file with such a tool: the emulator rewrites
+  the file after every disk access. Also fixes the `addressed-hex`
+  example in `docs/Memory-Card-Definition-Format.md`.
+- **Headless** `pc1600_cli --save-dir <dir>` makes a preset's
+  `- saveas: floppy:<name>` step write the disk to
+  `<dir>/<name>.floppy.yaml` (it was a no-op in the headless harness).
 
 ## [0.4.0] - 2026-09-20
 

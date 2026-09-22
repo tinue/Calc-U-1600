@@ -279,13 +279,14 @@ bytes: |
   $0000: 00...
   $0050: 00 00 00 00 00 00 11 F1  8A 26 45 33 2C 58 40 12
   $0060: F0 97 22 42 41 4E 4B 20  22 3B F1 6F 26 45 32 40
-  $0070: 13 F0 97 22 56 32 30 22  40 FF...
+  $0070: 13 F0 97 22 56 32 30 22  40 FF FF FF FF FF FF FF
+  $0080: FF...
   $3FF0: AA...
 ```
 
 - `$XXXX: <up to 16 space-separated hex byte pairs>` places those literal
   bytes starting at that address.
-- `$XXXX: XX...` means "byte `XX` repeats from this address up to (but not
+- `$XXXX: XX...` (the only token on its line) means "byte `XX` repeats from this address up to (but not
   including) the next line's address" — or up to the end of the block's
   span for the last line. This is exact, not a guess: because lines must
   partition the block's address range with no gap or overlap, a run's

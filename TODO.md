@@ -98,7 +98,17 @@ obligations.
 - Allow viewing a memory module's or diskette's binary file contents in the
   debug area, without having to save them out first. For memory modules
   this means the disk part (the RAM-disk filesystem), not the RAM-extension
-  part.
+  part. For a floppy side, SharpDataExchange 0.2.3's `sde_disk_list` /
+  `sde_disk_get` already decode the directory and files (BASIC as a
+  listing) from the in-memory image.
+- Use SharpDataExchange's disk API once the vendored libsharpdx is
+  refreshed to 0.2.3 (`tools/refresh_sharpdx.sh` / `fetch_sharpdx.sh`):
+  e.g. a preset step that puts a `.bas` / text file straight onto the
+  floppy (`sde_disk_put`), without typing `SAVE` in the emulator.
+- Watch an inserted floppy's `.floppy.yaml` for outside changes (e.g.
+  `sde put` while the disk is in the drive) and reload or warn, instead
+  of overwriting them at the next autosave. Until then the rule is
+  "eject first" (`docs/Floppy-Image-Format.md` §8).
 
 ## Code cleanup backlog
 

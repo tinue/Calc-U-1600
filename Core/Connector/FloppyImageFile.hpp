@@ -11,6 +11,9 @@
 
 // ── CE-1600F floppy-disk file (`<name>.floppy.yaml`) ───────────────────
 //
+// Specification: docs/Floppy-Image-Format.md (other tools, e.g.
+// SharpDataExchange, implement that document -- keep the two in step).
+//
 // A saved CE-1600F diskette: an explicit `disk-name` (what the GUI picker
 // shows and a preset's `floppy:` key refers to -- the counterpart of a
 // card's `module-name`) plus both 64 KB sides as `addressed-hex` blocks
