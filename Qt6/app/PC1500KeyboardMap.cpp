@@ -105,11 +105,7 @@ std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
     case Qt::Key_PageUp:
         if (modifiers & Qt::ShiftModifier) return plain("def");
         return plain("left", true);
-    case Qt::Key_PageDown:
-        // A bare tap of the calculator's own SHIFT, which latches it for
-        // the next key.
-        if (modifiers & Qt::ShiftModifier) return plain("shift");
-        return plain("right", true);
+    case Qt::Key_PageDown: return plain("right", true);
     default: break;
     }
 

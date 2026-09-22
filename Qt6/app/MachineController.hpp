@@ -155,6 +155,11 @@ public:
     // enqueueShiftedKey() for the PC-1500 equivalent.
     void tapShiftedKey(const std::string& baseName);
 
+    // A single fire-and-forget tap of `name` (press, short hold, release):
+    // through the live-typing queue on the PC-1500 (see enqueueKey()), a
+    // 30ms timed press on the PC-1600 (tapShiftedKey()'s own hold time).
+    void tapKey(const std::string& name);
+
     // PC-1500 live-typing keystroke buffer, so fast host typing can't
     // outrun the ROM's key-scan loop and drop characters -- forwards to
     // PC1500Machine::enqueueKey(), which owns the whole press/hold/

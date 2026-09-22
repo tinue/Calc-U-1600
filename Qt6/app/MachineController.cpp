@@ -321,6 +321,15 @@ void MachineController::tapShiftedKey(const std::string& baseName) {
     QTimer::singleShot(30 + 100 + 30, this, [this, baseName] { releaseKey(baseName); });
 }
 
+void MachineController::tapKey(const std::string& name) {
+    if (m_pc1500) {
+        m_pc1500->enqueueKey(name);
+    } else if (m_pc1600) {
+        pressKey(name);
+        QTimer::singleShot(30, this, [this, name] { releaseKey(name); });
+    }
+}
+
 void MachineController::enqueueKey(const std::string& name) {
     if (m_pc1500) {
         m_pc1500->enqueueKey(name);

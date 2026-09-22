@@ -19,8 +19,24 @@
   `model: PC-1500:A01`, `model: PC-1600:old`, `plotter: ce1600p:old`. The
   `firmware:` key is gone (a preset that still has it fails with a hint).
   `model: PC-1500A` accepts only A04.
+- **Presets** New `- saveas:` step saves a memory card or floppy from the
+  script: `s1:<name>`, `s2:<name>` or `floppy:<name>` (`s2:` and
+  `floppy:` are PC-1600 only). It overwrites a same-named file, so a
+  preset can save several times as it goes. The DiskWorks setup presets
+  now use it instead of asking you to save by hand.
 - **ROMs** `tools/fetch_roms.sh` now also fetches the old CE-1600P ROM
   (21 files). Fetch again to update `roms/`.
+- **Keyboard** Scroll Lock -> `RSV` now works on a Mac-layout keyboard
+  (macOS reported it as an unknown key). On Windows/Linux, Insert -- the
+  key in that position on a PC-layout keyboard -- maps to `RSV` too.
+- **Keyboard** New Shift variants: Shift+Delete -> Shift+`CL`,
+  Shift+Home -> `CTRL` and Shift+End -> `KB II` (PC-1600 only; on the
+  PC-1500/1500A they act like plain Home/End), Shift+Page Up -> `DEF`.
+- **Keyboard** Tapping Shift on its own (pressed and released within
+  0.4 s, nothing else in between) taps the calculator's `SHIFT`, latching
+  it for the next key.
+- **Docs** `docs/Keyboard-Mapping.md` has the complete host-key table,
+  with a keycap view of the six-key block above the cursor keys.
 
 ## [0.4.0] - 2026-09-20
 

@@ -59,6 +59,9 @@ constexpr double kMaxTickSeconds = 0.1;
 // popup appears (short loads finish without flashing it).
 constexpr int kLoadPumpIntervalMs = 30;
 constexpr int kLoadPopupDelayMs = 500;
+
+// Longest host-Shift press still counted as a tap (see m_shiftTapArmed).
+constexpr qint64 kShiftTapMaxMs = 400;
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
@@ -231,6 +234,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // A key held while focus moves to another widget (a combo box, a
     // dialog) releases there, not here -- let go of it now instead.
     connect(qApp, &QApplication::focusChanged, this, [this] { releaseHeldKeys(); });
+    qApp->installEventFilter(this); // mouse presses disarm a host-Shift tap
     connect(m_faceplate->lcdWidget(), &LcdWidget::turboRequested, this,
             [this](bool active) { m_turboActive = active; });
 
@@ -533,6 +537,16 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
         return;
     }
 
+    // A Shift press arms the tap; any other key (letters, Cmd/Ctrl/Alt,
+    // Shift+Delete, ...) means Shift is being used as a modifier.
+    if (event->key() == Qt::Key_Shift) {
+        m_shiftTapArmed = true;
+        m_shiftTapClock.start();
+        QWidget::keyPressEvent(event);
+        return;
+    }
+    m_shiftTapArmed = false;
+
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     auto resolved = PC1500KeyboardMap::resolve(static_cast<Qt::Key>(event->key()),
                                                 event->modifiers(), event->text(), isPC1600,
@@ -623,6 +637,17 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event) {
         return;
     }
 
+    if (event->key() == Qt::Key_Shift) {
+        const bool tapped = m_shiftTapArmed && m_shiftTapClock.elapsed() <= kShiftTapMaxMs;
+        m_shiftTapArmed = false;
+        if (tapped) {
+            if (m_controller->pasteActive()) m_controller->cancelPaste();
+            m_controller->tapKey("shift");
+            event->accept();
+            return;
+        }
+    }
+
     auto it = m_physicalKeysDown.find(physicalKeyId(event));
     if (it == m_physicalKeysDown.end()) {
         QWidget::keyReleaseEvent(event);
@@ -641,6 +666,12 @@ void MainWindow::changeEvent(QEvent* event) {
 void MainWindow::releaseHeldKeys() {
     for (const std::string& key : std::as_const(m_physicalKeysDown)) m_controller->releaseKey(key);
     m_physicalKeysDown.clear();
+    m_shiftTapArmed = false; // the Shift release may land elsewhere
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::MouseButtonPress) m_shiftTapArmed = false; // a Shift-click
+    return QMainWindow::eventFilter(watched, event);
 }
 
 void MainWindow::restartPacing() {

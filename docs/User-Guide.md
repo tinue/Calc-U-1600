@@ -54,7 +54,9 @@ speed until the prompt appears, then set the clock from the computer.
 
 The host keyboard drives the calculator directly — there's no separate
 "click the on-screen keys" requirement, and the mapping is fixed (not
-user-remappable). The practical mapping:
+user-remappable). The complete table, including a keycap view of the
+six-key block above the cursor keys, is in
+[Keyboard-Mapping.md](Keyboard-Mapping.md). The practical mapping:
 
 - **Letters, digits, and `+ - = * / ( ) .`** type directly.
 - **Space**, **Enter/Return** (→ `ENTER`), and the **arrow keys** work as
@@ -79,7 +81,11 @@ user-remappable). The practical mapping:
   Scroll Lock), **Home** → `RCL`, **Shift+Home** → `CTRL` (PC-1600
   only), **End** → `SML`, **Shift+End** → `KB II` (PC-1600 only),
   **Page Up** → Shift+Left, **Shift+Page Up** → `DEF`, **Page Down** →
-  Shift+Right, **Shift+Page Down** → `SHIFT` (latched for the next key).
+  Shift+Right.
+- **Shift tapped on its own** (pressed and released within 0.4 s, no
+  other key or mouse click in between) taps the calculator's `SHIFT`,
+  latching it for the next key. Holding Shift while typing a character
+  never does this.
 - Keys held with **Cmd or Ctrl** (macOS), or with **Ctrl, Alt or the
   Windows key** (Windows/Linux), never reach the calculator — those are
   shortcuts. **Option** (macOS) and **AltGr** (Windows/Linux) still type

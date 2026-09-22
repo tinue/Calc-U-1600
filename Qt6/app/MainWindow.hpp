@@ -52,6 +52,7 @@ protected:
     void keyReleaseEvent(QKeyEvent* event) override;
     void changeEvent(QEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     std::unique_ptr<MachineController> m_controller;
@@ -183,6 +184,13 @@ private:
     // stops receiving key events (deactivation, focus moving to another
     // widget) -- the matching release would never reach us.
     void releaseHeldKeys();
+
+    // Host Shift tapped on its own (pressed and released within
+    // kShiftTapMaxMs, nothing else in between) taps the calculator's SHIFT,
+    // latching it for the next key. Armed on the Shift press; any other key
+    // press, a mouse press, or losing focus disarms it.
+    bool m_shiftTapArmed = false;
+    QElapsedTimer m_shiftTapClock;
 
     void onFrameTick();
 };
