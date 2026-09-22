@@ -290,7 +290,9 @@ jobs:
           if-no-files-found: error
 
   mac-aarch64:
-    runs-on: macos-14 # Apple Silicon (arm64) hosted runner
+    # Apple Silicon (arm64). macOS 15 so Homebrew's Qt bottles (embedded by
+    # macdeployqt) are built for 15.x too, matching CMAKE_OSX_DEPLOYMENT_TARGET.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
 

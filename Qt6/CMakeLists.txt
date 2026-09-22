@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
+# Minimum macOS for the .app (must precede project()). Without it the
+# compiler defaults to the build host's OS version, so the minimum silently
+# follows whatever runner/Mac built it. Matches the vendored libsharpdx
+# (SharpDataExchange's .cargo/config.toml) and tools/refresh_sharpdx.sh.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "15.8" CACHE STRING "Minimum macOS version")
 if(APPLE)
   # MacClipboardImage.mm needs Objective-C++ -- see its own doc comment for
   # why the plotter-paper clipboard export can't use Qt's cross-platform
