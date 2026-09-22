@@ -173,6 +173,13 @@ bool FloppyDiskManager::saveAsFromPreset(const QString& diskName, QString* error
         *error = tr("Couldn't write \"%1\".").arg(newPath);
         return false;
     }
+
+    // Retarget the drive at the saved copy, like nameAndSave(): it now shows
+    // under its new name and autosaves there.
+    m_diskName = name;
+    m_instanceFilePath = newPath;
+    m_persistPending = false;
+    m_lastSeenRevision = m1600->ce1600fRevision();
     return true;
 }
 

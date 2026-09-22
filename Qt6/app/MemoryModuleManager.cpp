@@ -307,6 +307,13 @@ bool MemoryModuleManager::saveAsFromPreset(int slot, const QString& instanceName
         *error = tr("Couldn't write \"%1\".").arg(newPath);
         return false;
     }
+
+    // Retarget the slot at the saved copy, like nameAndSave(): it now shows
+    // under its new name and autosaves there.
+    st.moduleName = name;
+    st.instanceFilePath = newPath;
+    st.persistPending = false;
+    emit moduleChanged(slot);
     return true;
 }
 
