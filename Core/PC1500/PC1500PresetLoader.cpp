@@ -76,7 +76,7 @@ void tapBreak(PC1500Machine& machine) {
 }
 
 bool runSteps(PC1500Machine& machine, const std::vector<PresetStep>& steps, std::string* error,
-              const PresetLogFn& log, const std::string& traceDir) {
+              const PresetLogFn& log, const std::string& traceDir, const PresetSaveAsFn& onSaveAs) {
     for (const PresetStep& step : steps) {
         switch (step.kind) {
             case PresetStep::Kind::Key:
@@ -167,6 +167,20 @@ bool runSteps(PC1500Machine& machine, const std::vector<PresetStep>& steps, std:
                 if (log) log(std::string("  syncclock: -> ") + stamp);
                 break;
             }
+            case PresetStep::Kind::SaveAs: {
+                if (!onSaveAs) {
+                    if (log) log("  saveas: skipped (no save handler configured)");
+                    break;
+                }
+                std::string saveError;
+                if (!onSaveAs(step.saveAsTarget, step.text, &saveError)) {
+                    if (error) *error = "saveas: " + saveError;
+                    if (log) log("  saveas: FAILED: " + saveError);
+                    return false;
+                }
+                if (log) log("  saveas: -> \"" + step.text + "\"");
+                break;
+            }
         }
     }
     return true;
@@ -188,7 +202,8 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
                               const std::string& traceDir, const std::string& moduleDir,
                               const PresetBootedFn& onBooted, const std::vector<std::string>& romDirs,
                               const std::vector<std::string>& extraModuleDirs,
-                              const PresetArmedFn& onArmed) {
+                              const PresetArmedFn& onArmed,
+                              const PresetSaveAsFn& onSaveAs) {
     PresetLoadResult result;
 
     // A trace started by a `- trace:` step and never explicitly stopped
@@ -281,7 +296,7 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
                               section.keys.size(), section.keys.size() == 1 ? "" : "s");
                 log(hdr);
             }
-            if (!runSteps(machine, section.keys, &result.error, log, traceDir)) return result;
+            if (!runSteps(machine, section.keys, &result.error, log, traceDir, onSaveAs)) return result;
             continue;
         }
 

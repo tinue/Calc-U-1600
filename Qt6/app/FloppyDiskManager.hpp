@@ -72,6 +72,14 @@ public:
     // is always refused (the bundled disk would shadow the saved one).
     bool nameAndSave(const QString& diskName, QString* error);
 
+    // Preset `saveas:floppy:<name>` (PresetController's PC1600PresetSaveAsFn
+    // callback). Unlike nameAndSave(): works even when the drive's disk is
+    // already saved (doesn't touch m_instanceFilePath -- autosave, if any,
+    // keeps targeting wherever it already does; this just snapshots the
+    // live image under a new name), and silently overwrites an existing
+    // instance file of the same name. A bundled name is still refused.
+    bool saveAsFromPreset(const QString& diskName, QString* error);
+
     void markDirtyAndSchedulePersist();  // called once per frame tick
     void flushPendingPersist();          // called before select/model-switch/quit
 

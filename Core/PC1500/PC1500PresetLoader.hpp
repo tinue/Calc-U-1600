@@ -55,6 +55,16 @@ struct PresetLoadResult {
 /// no behavior.
 using PresetArmedFn = std::function<void(const PresetLoadResult& armedSoFar)>;
 
+/// Fired for a `- saveas: s1:<name>` step (see PresetFile.hpp's top-of-file
+/// doc comment; only `s1:` is valid on a PC-1500/1500A preset -- the
+/// parser rejects `s2:`/`floppy:`). Mirrors PC1600PresetLoader.hpp's
+/// PC1600PresetSaveAsFn: `target` is always SaveAsTarget::S1 here; `name`
+/// is the name to save the live expansion-slot card under. Returns true on
+/// success, or false with `*error` filled in. Left unset (the default)
+/// makes a `saveas:` step a logged no-op.
+using PresetSaveAsFn =
+    std::function<bool(PresetStep::SaveAsTarget target, const std::string& name, std::string* error)>;
+
 /// Applies `preset` (already parsed via parsePresetFile) to `machine`:
 /// loads firmware, resets, steps past the boot sequence, then walks
 /// `preset.sections` in file order, running each `keys:` block's steps or
@@ -87,6 +97,9 @@ using PresetArmedFn = std::function<void(const PresetLoadResult& armedSoFar)>;
 /// that point (Core/HostClock.hpp). The load itself runs flat out, which
 /// leaves the clock ahead of real time -- make it the last step.
 ///
+/// A `- saveas: s1:<name>` step saves the live expansion-slot card under
+/// `<name>` via `onSaveAs`; a no-op (logged) if `onSaveAs` is unset.
+///
 /// `moduleDir` is the directory searched first for a
 /// `- modulespec: <module-name>` memory-expansion reference (a
 /// bundled/standard module named by its `module-name:`), via
@@ -102,6 +115,7 @@ using PresetArmedFn = std::function<void(const PresetLoadResult& armedSoFar)>;
 /// reference is resolved by the parser and never looks here.
 /// `onArmed` fires right before reset(), once the module/plotter are
 /// attached but the machine is still powered off -- see PresetArmedFn.
+/// `onSaveAs` fires for each `saveas:` step -- see PresetSaveAsFn.
 PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& preset,
                               const PresetLogFn& log = {},
                               const std::string& traceDir = ".",
@@ -109,4 +123,5 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
                               const PresetBootedFn& onBooted = {},
                               const std::vector<std::string>& romDirs = {},
                               const std::vector<std::string>& extraModuleDirs = {},
-                              const PresetArmedFn& onArmed = {});
+                              const PresetArmedFn& onArmed = {},
+                              const PresetSaveAsFn& onSaveAs = {});

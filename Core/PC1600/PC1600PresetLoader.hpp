@@ -72,6 +72,19 @@ struct PC1600PresetLoadResult {
 /// costs nothing and changes no behavior.
 using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& armedSoFar)>;
 
+/// Fired for a `- saveas: s1:<name>` / `s2:<name>` / `floppy:<name>` step
+/// (see PresetFile.hpp's top-of-file doc comment) -- WHERE the save goes,
+/// and how to splice/format it, are environment-specific (Qt6/app's
+/// AppPaths/MemoryModuleManager/FloppyDiskManager), so Core only calls
+/// out here, mirroring onArmed/onBooted. `target` is which slot/device to
+/// save; `name` is the name to save it under. Returns true on success, or
+/// false with `*error` filled in -- a failure stops the preset exactly
+/// like any other step failure. Left unset (the default) makes a
+/// `saveas:` step a logged no-op, for a caller (CLI, tests) with no
+/// configured save directory.
+using PC1600PresetSaveAsFn =
+    std::function<bool(PresetStep::SaveAsTarget target, const std::string& name, std::string* error)>;
+
 /// Applies a `model: PC-1600` preset (already parsed via parsePresetFile,
 /// `preset.isPC1600 == true`) to `machine`. The machine must ALREADY have
 /// its ROM set loaded (the PC-1600 ROM set is fixed and environment-
@@ -102,6 +115,9 @@ using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& arm
 ///   - `syncclock:` -- re-seeds the RTC from the host's local time
 ///     (Core/HostClock.hpp). The load runs flat out and leaves the clock
 ///     ahead of real time -- make it the last step.
+///   - `saveas:` -- `- saveas: s1:<name>` / `s2:<name>` / `floppy:<name>`
+///     saves the live card in slot 1/2, or the live floppy, under `<name>`
+///     via `onSaveAs`; a no-op (logged) if `onSaveAs` is unset.
 ///
 /// A `program:` block is one of:
 ///   - `format: basic-text` / `format: basic-binary` -- a BASIC program.
@@ -155,6 +171,8 @@ using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& arm
 /// message; a preset with no `plotter:` never touches `romDirs`.
 /// `onArmed` fires right before the cold boot, once cards/plotter are
 /// attached but the machine is still powered off -- see PC1600PresetArmedFn.
+/// `onSaveAs` fires for each `saveas:` step encountered while walking the
+/// preset's sections -- see PC1600PresetSaveAsFn.
 PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& preset,
                                          const PC1600PresetLogFn& log = {},
                                          const std::string& traceDir = ".",
@@ -162,4 +180,5 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
                                          const PC1600PresetBootedFn& onBooted = {},
                                          const std::vector<std::string>& romDirs = {},
                                          const std::vector<std::string>& extraModuleDirs = {},
-                                         const PC1600PresetArmedFn& onArmed = {});
+                                         const PC1600PresetArmedFn& onArmed = {},
+                                         const PC1600PresetSaveAsFn& onSaveAs = {});

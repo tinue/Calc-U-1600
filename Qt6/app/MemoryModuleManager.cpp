@@ -271,6 +271,45 @@ bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QSt
     return true;
 }
 
+bool MemoryModuleManager::saveAsFromPreset(int slot, const QString& instanceName, QString* error) {
+    const QString name = instanceName.trimmed();
+    if (name.isEmpty()) {
+        *error = tr("Name cannot be empty.");
+        return false;
+    }
+    SlotState& st = m_slots[slot - 1];
+    if (st.moduleName.isEmpty()) {
+        *error = tr("No module attached.");
+        return false;
+    }
+    if (name.contains(QLatin1Char('"'))) {
+        *error = tr("Name cannot contain '\"'.");
+        return false;
+    }
+    if (bundledNames().contains(name)) {
+        *error = tr("\"%1\" is a built-in card name. Choose a different name.").arg(name);
+        return false;
+    }
+
+    std::string p;
+    if (!resolveModuleSpecByName(AppPaths::bundledResourcesDir().toStdString(), st.moduleName.toStdString(), &p,
+                                 nullptr)) {
+        *error = tr("Couldn't find the source template for \"%1\".").arg(st.moduleName);
+        return false;
+    }
+    const QString sourcePath = QString::fromStdString(p);
+
+    std::string spliced;
+    if (!spliceCardImageInto(slot, sourcePath, st.moduleName, name, &spliced, error)) return false;
+
+    const QString newPath = AppPaths::instancePathFor(name);
+    if (!AppPaths::atomicWriteFile(newPath, spliced)) {
+        *error = tr("Couldn't write \"%1\".").arg(newPath);
+        return false;
+    }
+    return true;
+}
+
 void MemoryModuleManager::writeInstance(int slot) {
     SlotState& st = m_slots[slot - 1];
     if (st.instanceFilePath.isEmpty()) return;

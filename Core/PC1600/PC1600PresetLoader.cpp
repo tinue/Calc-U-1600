@@ -279,7 +279,8 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
                                          const PC1600PresetBootedFn& onBooted,
                                          const std::vector<std::string>& romDirs,
                                          const std::vector<std::string>& extraModuleDirs,
-                                         const PC1600PresetArmedFn& onArmed) {
+                                         const PC1600PresetArmedFn& onArmed,
+                                         const PC1600PresetSaveAsFn& onSaveAs) {
     PC1600PresetLoadResult result;
 
     // The `- modulespec: <name>` search path: `moduleDir` first (bundled
@@ -487,6 +488,20 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
                     char stamp[32];
                     std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &t);
                     if (log) log(std::string("  syncclock: -> ") + stamp);
+                    break;
+                }
+                case PresetStep::Kind::SaveAs: {
+                    if (!onSaveAs) {
+                        if (log) log("  saveas: skipped (no save handler configured)");
+                        break;
+                    }
+                    std::string saveError;
+                    if (!onSaveAs(step.saveAsTarget, step.text, &saveError)) {
+                        result.error = "saveas: " + saveError;
+                        if (log) log("  saveas: FAILED: " + saveError);
+                        return result;
+                    }
+                    if (log) log("  saveas: -> \"" + step.text + "\"");
                     break;
                 }
             }

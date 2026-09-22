@@ -82,6 +82,17 @@ public:
     // targets (the bundled card would shadow the saved one on lookup).
     bool nameAndSave(int slot, const QString& instanceName, QString* error);
 
+    // Preset `saveas:s1:<name>` / `saveas:s2:<name>` (PresetController's
+    // PC1600PresetSaveAsFn/PresetSaveAsFn callback). Unlike nameAndSave():
+    // works even when the slot is already saved (doesn't touch this
+    // slot's own instanceFilePath -- it keeps autosaving wherever it
+    // already does, if anywhere; this just snapshots the live image under
+    // a new name), and silently overwrites an existing instance file of
+    // the same name instead of refusing. A bundled name is still refused
+    // -- writing under one would produce a file bundled-first lookup could
+    // never load back.
+    bool saveAsFromPreset(int slot, const QString& instanceName, QString* error);
+
     void markDirtyAndSchedulePersist();  // called once per frame tick
     void flushPendingPersist();          // called before select/model-switch/quit
 

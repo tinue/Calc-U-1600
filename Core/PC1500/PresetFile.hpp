@@ -33,8 +33,8 @@
 // `PC-1600` models are accepted (see PresetFile::isPC1600 / variant). Not general
 // YAML: flat `key: value` top-level mappings, `- key: value` sequence
 // items (one verb per step, no further nesting), and one `text: |` block
-// scalar. Step verbs: `key:`, `type:`, `wait:`, `trace:`, `screenshot:`, and
-// `syncclock:`. `- wait: N`
+// scalar. Step verbs: `key:`, `type:`, `wait:`, `trace:`, `screenshot:`,
+// `syncclock:`, and `saveas:`. `- wait: N`
 // runs N seconds of emulated time; `- wait:` with no value blocks until the
 // ROM's keyboard idle loop re-engages -- i.e. until a long-running program
 // or plot has finished (a generous safety cap still applies). `trace:` is
@@ -59,6 +59,21 @@
 // preset files (this project's own samples) actually use, not a
 // general-purpose YAML implementation.
 //
+// `- saveas: s1:<name>` / `- saveas: s2:<name>` / `- saveas: floppy:<name>`
+// saves the live battery card in slot 1/2, or the live floppy disk, to the
+// environment's configured save directory under `<name>` -- the scripted
+// counterpart of the control bar's "Name & Save" icon. `s2:`/`floppy:` are
+// PC-1600 only (rejected on a PC-1500/1500A preset); `s1:` works on either
+// model. Unlike the GUI's Name & Save, it works even when the slot/floppy
+// was already saved/loaded from a named instance, and it silently
+// overwrites an existing file of the same name -- so a preset can
+// `saveas:` a card or floppy more than once, under different names, as it
+// evolves through the script. See PC1600PresetLoader.hpp's
+// PC1600PresetSaveAsFn / PC1500PresetLoader.hpp's PresetSaveAsFn -- WHERE
+// the save goes is environment-specific (the GUI's configured instance
+// directory), so Core only parses the step; a caller that doesn't supply
+// the callback gets a logged no-op.
+//
 // This project's loader treats a preset as an ordered SEQUENCE of
 // `keys:`/`program:` blocks, executed top-to-bottom in file order -- so a
 // preset can install a loader/firmware program, run it, then load and run
@@ -67,13 +82,14 @@
 // not recognized at all -- both become a single, repeatable `keys:` block
 // name.
 struct PresetStep {
-    enum class Kind { Key, Type, Wait, Trace, Screenshot, SyncClock };
+    enum class Kind { Key, Type, Wait, Trace, Screenshot, SyncClock, SaveAs };
     Kind kind = Kind::Key;
     // key name (Key), program text (Type), or -- for Trace -- the trace
     // output filename to start capturing to, or "" to stop the current
     // capture (`- trace: off`). See PC1500PresetLoader.cpp's `trace:`
     // handling; a port of Calc-U-59's `KEYSTROKES:` `Trace:` directive.
-    // For Screenshot, the PNG filename.
+    // For Screenshot, the PNG filename. For SaveAs, the name to save
+    // under (see saveAsTarget below).
     std::string text;
     // (Wait) seconds of emulated time to run. A negative value is the
     // sentinel for a parameterless `- wait:` step: "run until the ROM's
@@ -82,6 +98,13 @@ struct PresetStep {
     // duration. The loader applies a generous safety cap.
     double waitSeconds = 0.0;
     static constexpr double kWaitUntilIdle = -1.0;
+
+    // (SaveAs) which slot/device `text` (the name) should be saved under --
+    // parsed from `- saveas: s1:<name>` / `s2:<name>` / `floppy:<name>`.
+    // S2/Floppy are PC-1600 only; see parsePresetFile()'s per-model
+    // validation.
+    enum class SaveAsTarget { S1, S2, Floppy };
+    SaveAsTarget saveAsTarget = SaveAsTarget::S1;
 };
 
 struct PresetProgram {

@@ -1,6 +1,6 @@
 # PC-1600 Prepare a floppy for later use with DiskWorks. Load a few Basic programs
-# and store them to X: plus set-up the required CW.CFG file.
-# When done, save the floppy as "Progs"
+# and store them to X: plus set-up the required CW.CFG file, then save it as
+# "Progs".
 
 model: PC-1600
 plotter: ce1600p
@@ -61,3 +61,7 @@ keys:
 keys:
   - type: DSKF"X:"
   - type: FILES"X:"
+
+# Save the floppy for use in the DiskWorks preset file
+keys:
+  - saveas: floppy:Progs

@@ -144,6 +144,38 @@ bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
     return true;
 }
 
+bool FloppyDiskManager::saveAsFromPreset(const QString& diskName, QString* error) {
+    const QString name = diskName.trimmed();
+    if (name.isEmpty()) {
+        *error = tr("Name cannot be empty.");
+        return false;
+    }
+    auto* m1600 = m_controller->pc1600();
+    if (!m1600 || !m1600->ce1600fAttached()) {
+        *error = tr("No floppy attached.");
+        return false;
+    }
+    if (!m1600->ce1600fHasDisk()) {
+        *error = tr("There's no disk in the drive.");
+        return false;
+    }
+    if (name.contains(QLatin1Char('"'))) {
+        *error = tr("Name cannot contain '\"'.");
+        return false;
+    }
+    if (containsName(bundledEntries(), name)) {
+        *error = tr("\"%1\" is a built-in disk name. Choose a different name.").arg(name);
+        return false;
+    }
+
+    const QString newPath = AppPaths::floppyInstancePathFor(name);
+    if (!AppPaths::atomicWriteFile(newPath, formatFloppyFile(name.toStdString(), m1600->ce1600fDiskImage()))) {
+        *error = tr("Couldn't write \"%1\".").arg(newPath);
+        return false;
+    }
+    return true;
+}
+
 void FloppyDiskManager::writeInstance() {
     if (m_instanceFilePath.isEmpty()) return;
     auto* m1600 = m_controller->pc1600();

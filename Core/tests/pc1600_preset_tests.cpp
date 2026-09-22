@@ -742,6 +742,67 @@ void test_loader_floppy_key_missing_file_is_an_error() {
     CHECK(!m.ce1600fAttached());
 }
 
+// A `saveas:` step invokes onSaveAs with the right target/name, at the
+// right point in step order (after the preceding steps have already run).
+void test_loader_saveas_step_invokes_callback() {
+    PresetFile p;
+    std::string err;
+    CHECK(parse(
+        "model: PC-1600\n"
+        "keys:\n"
+        "  - type: 1\n"
+        "  - saveas: s2:My Card\n"
+        "  - saveas: floppy:My Disk\n",
+        &p, &err));
+
+    PC1600Machine m;
+    std::vector<std::pair<PresetStep::SaveAsTarget, std::string>> calls;
+    PC1600PresetSaveAsFn onSaveAs = [&](PresetStep::SaveAsTarget target, const std::string& name,
+                                        std::string*) {
+        calls.push_back({target, name});
+        return true;
+    };
+    PC1600PresetLoadResult r =
+        applyPC1600Preset(m, p, {}, ".", ".", {}, {}, {}, {}, onSaveAs);
+    CHECK(r.ok);
+    CHECK(calls.size() == 2);
+    CHECK(calls[0].first == PresetStep::SaveAsTarget::S2);
+    CHECK(calls[0].second == "My Card");
+    CHECK(calls[1].first == PresetStep::SaveAsTarget::Floppy);
+    CHECK(calls[1].second == "My Disk");
+}
+
+// An onSaveAs failure surfaces its error and stops the preset, exactly
+// like any other step failure.
+void test_loader_saveas_step_failure_stops_preset() {
+    PresetFile p;
+    std::string err;
+    CHECK(parse("model: PC-1600\nkeys:\n  - saveas: s1:Bad\n  - type: 1\n", &p, &err));
+
+    PC1600Machine m;
+    PC1600PresetSaveAsFn onSaveAs = [](PresetStep::SaveAsTarget, const std::string&,
+                                       std::string* error) {
+        *error = "disk full";
+        return false;
+    };
+    PC1600PresetLoadResult r =
+        applyPC1600Preset(m, p, {}, ".", ".", {}, {}, {}, {}, onSaveAs);
+    CHECK(!r.ok);
+    CHECK(r.error.find("disk full") != std::string::npos);
+}
+
+// With no onSaveAs callback given, a `saveas:` step is a logged no-op --
+// the preset still succeeds.
+void test_loader_saveas_step_without_callback_is_noop() {
+    PresetFile p;
+    std::string err;
+    CHECK(parse("model: PC-1600\nkeys:\n  - saveas: s1:Whatever\n", &p, &err));
+
+    PC1600Machine m;
+    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    CHECK(r.ok);
+}
+
 } // namespace
 
 int run_pc1600_preset_tests() {
@@ -776,6 +837,9 @@ int run_pc1600_preset_tests() {
     test_loader_floppy_key_loads_named_disk_image();
     test_loader_floppy_key_side_suffix_selects_side_b();
     test_loader_floppy_key_missing_file_is_an_error();
+    test_loader_saveas_step_invokes_callback();
+    test_loader_saveas_step_failure_stops_preset();
+    test_loader_saveas_step_without_callback_is_noop();
 
     std::printf("pc1600_preset_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

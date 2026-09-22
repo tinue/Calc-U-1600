@@ -1,6 +1,6 @@
 # PC-1600 Prepare a card for later use with DiskWorks. Load a few Basic programs
-# and store them to S2: plus set-up the required CW.CFG file.
-# When done, save the card as "CE-1601M - Progs" for use in the DiskWorks preset file.
+# and store them to S2: plus set-up the required CW.CFG file, then save it as
+# "CE-1601M - Progs" for use in the DiskWorks preset file.
 
 model: PC-1600
 plotter: ce1600p
@@ -68,3 +68,7 @@ keys:
 keys:
   - type: DSKF"S2:"
   - type: FILES"S2:"
+
+# Save the card for use in the DiskWorks preset file
+keys:
+  - saveas: s2:CE-1601M - Progs

@@ -192,6 +192,33 @@ bool PresetController::loadDefaultPreset(const QString& path, Model model, QStri
     return runPreset(preset, error);
 }
 
+namespace {
+
+// Preset `saveas:` dispatch -- shared by the PC-1600 and PC-1500 branches
+// below (the PC-1500 side only ever sees SaveAsTarget::S1, per
+// PresetFile.cpp's per-model validation).
+bool saveAsFromPreset(MemoryModuleManager* moduleManager, FloppyDiskManager* floppyManager,
+                       PresetStep::SaveAsTarget target, const std::string& name, std::string* error) {
+    QString qerror;
+    const QString qname = QString::fromStdString(name);
+    bool ok = false;
+    switch (target) {
+        case PresetStep::SaveAsTarget::S1:
+            ok = moduleManager->saveAsFromPreset(1, qname, &qerror);
+            break;
+        case PresetStep::SaveAsTarget::S2:
+            ok = moduleManager->saveAsFromPreset(2, qname, &qerror);
+            break;
+        case PresetStep::SaveAsTarget::Floppy:
+            ok = floppyManager->saveAsFromPreset(qname, &qerror);
+            break;
+    }
+    if (!ok && error) *error = qerror.toStdString();
+    return ok;
+}
+
+}  // namespace
+
 bool PresetController::runPreset(const PresetFile& preset, QString* error) {
 
     // Bundled catalog first, then the user's writable instance directory --
@@ -231,10 +258,14 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
                                                 QString::fromStdString(armedSoFar.floppyResolvedPath));
             emit armed();
         };
+        const auto onSaveAs = [this](PresetStep::SaveAsTarget target, const std::string& name,
+                                     std::string* saveError) {
+            return ::saveAsFromPreset(m_moduleManager, m_floppyManager, target, name, saveError);
+        };
         const PC1600PresetLoadResult result =
             applyPC1600Preset(machine, preset, logSink, traceDir, moduleDir,
                                [&machine] { seedClockFromHost(machine); }, romDirs, extraModuleDirs,
-                               onArmed);
+                               onArmed, onSaveAs);
         // Safety net for a preset that fails before ever arming (bad
         // modulespec, missing plotter ROM, ...) -- onArmed never fired, so
         // the machine's actually-empty slots (resetBareForPresetPC1600()
@@ -263,9 +294,14 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
         m_moduleManager->syncFromPresetLoad(2);
         emit armed();
     };
+    const auto onSaveAs = [this](PresetStep::SaveAsTarget target, const std::string& name,
+                                 std::string* saveError) {
+        return ::saveAsFromPreset(m_moduleManager, m_floppyManager, target, name, saveError);
+    };
     const PresetLoadResult result =
         applyPC1500Preset(machine, preset, logSink, traceDir, moduleDir,
-                           [&machine] { seedClockFromHost(machine); }, romDirs, extraModuleDirs, onArmed);
+                           [&machine] { seedClockFromHost(machine); }, romDirs, extraModuleDirs, onArmed,
+                           onSaveAs);
     // Safety net for a preset that fails before ever arming -- see the
     // matching comment in the PC-1600 branch above.
     m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(result.expansionModuleResolvedPath));

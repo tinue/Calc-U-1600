@@ -233,6 +233,40 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
                 return false;
             }
             step.kind = PresetStep::Kind::SyncClock;
+        } else if (verb == "saveas") {
+            // `- saveas: s1:<name>` / `s2:<name>` / `floppy:<name>` -- the
+            // scripted counterpart of the control bar's "Name & Save" icon
+            // (see PresetFile.hpp's top-of-file doc comment). `value` is
+            // everything after the verb's own colon, e.g. "s1:CE-1601M -
+            // Progs" -- split it on ITS first colon (mirroring
+            // splitKeyValue's own rule) into target/name.
+            const size_t targetColon = value.find(':');
+            if (targetColon == std::string::npos) {
+                *error = "line " + std::to_string(line.lineNo) +
+                         ": expected 'saveas: s1:<name>', 'saveas: s2:<name>' or 'saveas: floppy:<name>'";
+                return false;
+            }
+            std::string target = trim(value.substr(0, targetColon));
+            std::string name = trim(value.substr(targetColon + 1));
+            for (char& ch : target) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            if (target == "s1") step.saveAsTarget = PresetStep::SaveAsTarget::S1;
+            else if (target == "s2") step.saveAsTarget = PresetStep::SaveAsTarget::S2;
+            else if (target == "floppy") step.saveAsTarget = PresetStep::SaveAsTarget::Floppy;
+            else {
+                *error = "line " + std::to_string(line.lineNo) + ": 'saveas: " + value +
+                         "' -- target must be 's1', 's2' or 'floppy'";
+                return false;
+            }
+            if (name.empty()) {
+                *error = "line " + std::to_string(line.lineNo) + ": 'saveas:' needs a name";
+                return false;
+            }
+            if (name.find('"') != std::string::npos) {
+                *error = "line " + std::to_string(line.lineNo) + ": 'saveas:' name must not contain '\"'";
+                return false;
+            }
+            step.kind = PresetStep::Kind::SaveAs;
+            step.text = name;
         } else if (verb == "check") {
             *error = "line " + std::to_string(line.lineNo) + ": 'check' steps are not yet supported by this loader";
             return false;
@@ -683,6 +717,16 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             *error = "'program: slot:' is only valid for a PC-1600 preset (a PC-1500 'format: "
                      "binary' block pokes the whole file at 'address:')";
             return false;
+        }
+        if (s.kind == PresetSection::Kind::Keys) {
+            for (const PresetStep& step : s.keys) {
+                if (step.kind == PresetStep::Kind::SaveAs &&
+                    step.saveAsTarget != PresetStep::SaveAsTarget::S1) {
+                    *error = "'saveas: s2:'/'saveas: floppy:' are only valid for a PC-1600 preset -- "
+                             "the PC-1500 has one expansion slot ('saveas: s1:') and no floppy drive";
+                    return false;
+                }
+            }
         }
     }
     if (hasFloppy) {

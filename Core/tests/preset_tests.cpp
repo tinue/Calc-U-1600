@@ -257,6 +257,55 @@ void test_wait_step_rejects_negative_value() {
     CHECK(err.find("negative") != std::string::npos);
 }
 
+// `- saveas: s1:<name>` / `s2:<name>` / `floppy:<name>` -- all three forms
+// parse on a PC-1600 preset, with the target/name split correctly.
+void test_saveas_step_parses_all_targets_pc1600() {
+    PresetFile p;
+    std::string err;
+    CHECK(parse(
+        "model: PC-1600\n"
+        "keys:\n"
+        "  - saveas: s1:First Card\n"
+        "  - saveas: s2:CE-1601M - Progs\n"
+        "  - saveas: floppy:Progs\n",
+        &p, &err));
+    CHECK(!p.sections.empty());
+    const auto& steps = p.sections[0].keys;
+    CHECK(steps.size() == 3);
+    CHECK(steps[0].kind == PresetStep::Kind::SaveAs);
+    CHECK(steps[0].saveAsTarget == PresetStep::SaveAsTarget::S1);
+    CHECK(steps[0].text == "First Card");
+    CHECK(steps[1].saveAsTarget == PresetStep::SaveAsTarget::S2);
+    CHECK(steps[1].text == "CE-1601M - Progs");
+    CHECK(steps[2].saveAsTarget == PresetStep::SaveAsTarget::Floppy);
+    CHECK(steps[2].text == "Progs");
+}
+
+// A missing target/name colon, an unknown target, an empty name, and a
+// quoted name are all rejected.
+void test_saveas_step_rejects_malformed_forms() {
+    PresetFile p;
+    std::string err;
+    CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: NoColonHere\n", &p, &err));
+    CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: s3:Name\n", &p, &err));
+    CHECK(err.find("target") != std::string::npos);
+    CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: s1:\n", &p, &err));
+    CHECK(err.find("needs a name") != std::string::npos);
+    CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: 's1:bad \"name\"'\n", &p, &err));
+}
+
+// `s1:` is valid on a PC-1500/1500A preset (its one expansion slot); `s2:`
+// and `floppy:` are PC-1600 only.
+void test_saveas_step_pc1500_scope() {
+    PresetFile p;
+    std::string err;
+    CHECK(parse("model: PC-1500A\nkeys:\n  - saveas: s1:My Card\n", &p, &err));
+    CHECK(!parse("model: PC-1500A\nkeys:\n  - saveas: s2:My Card\n", &p, &err));
+    CHECK(err.find("PC-1600") != std::string::npos);
+    CHECK(!parse("model: PC-1500A\nkeys:\n  - saveas: floppy:My Disk\n", &p, &err));
+    CHECK(err.find("PC-1600") != std::string::npos);
+}
+
 void test_plotter_ce1600p_parses_and_normalizes() {
     PresetFile p;
     std::string err;
@@ -533,6 +582,9 @@ int run_preset_tests() {
     test_wait_step_value_and_parameterless();
     test_wait_parameterless_pc1600();
     test_syncclock_step();
+    test_saveas_step_parses_all_targets_pc1600();
+    test_saveas_step_rejects_malformed_forms();
+    test_saveas_step_pc1500_scope();
     test_wait_step_rejects_negative_value();
     test_plotter_ce1600p_parses_and_normalizes();
     test_plotter_none_clears();
