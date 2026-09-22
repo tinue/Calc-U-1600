@@ -94,10 +94,22 @@ std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
     // as Key_Help and stays unmapped.
     case Qt::Key_Insert: return plain("rsv");
 #endif
-    case Qt::Key_Home: return plain("rcl");
-    case Qt::Key_End: return plain("sml");
-    case Qt::Key_PageUp: return plain("left", true);
-    case Qt::Key_PageDown: return plain("right", true);
+    case Qt::Key_Home:
+        // CTRL exists only on the PC-1600; elsewhere Shift+Home = Home.
+        if (isPC1600 && (modifiers & Qt::ShiftModifier)) return plain("ctrl");
+        return plain("rcl");
+    case Qt::Key_End:
+        // KB II exists only on the PC-1600; elsewhere Shift+End = End.
+        if (isPC1600 && (modifiers & Qt::ShiftModifier)) return plain("kbii");
+        return plain("sml");
+    case Qt::Key_PageUp:
+        if (modifiers & Qt::ShiftModifier) return plain("def");
+        return plain("left", true);
+    case Qt::Key_PageDown:
+        // A bare tap of the calculator's own SHIFT, which latches it for
+        // the next key.
+        if (modifiers & Qt::ShiftModifier) return plain("shift");
+        return plain("right", true);
     default: break;
     }
 
@@ -108,7 +120,7 @@ std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
     case Qt::Key_Down: return plain("down");
     case Qt::Key_Left: return plain("left");
     case Qt::Key_Right: return plain("right");
-    case Qt::Key_Delete: return plain("cl");
+    case Qt::Key_Delete: return plain("cl", modifiers & Qt::ShiftModifier);
     case Qt::Key_Tab: return plain("mode");
     default: break;
     }

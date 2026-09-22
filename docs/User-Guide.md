@@ -64,7 +64,7 @@ user-remappable). The practical mapping:
   keyboards put it).
 - **F1–F6** → the calculator's six function keys.
 - **Tab** → `MODE` (RUN/PRO toggle).
-- **Delete** → `CL`.
+- **Delete** → `CL`; **Shift+Delete** → Shift+`CL`.
 - Any host key that types a **shifted punctuation character** already
   printed as the calculator keyboard's "second legend" (e.g. `!`, `#`,
   `@`) is mapped straight to that character's base key with Shift held —
@@ -76,9 +76,10 @@ user-remappable). The practical mapping:
   equivalent otherwise — these are this project's own choice, not a
   documented hardware correspondence: **Scroll Lock** → `RSV` (on
   Windows/Linux, **Insert** too — it sits where a Mac-layout keyboard has
-  Scroll Lock), **Home** →
-  `RCL`, **End** → `SML`, **Page Up** → Shift+Left, **Page Down** →
-  Shift+Right.
+  Scroll Lock), **Home** → `RCL`, **Shift+Home** → `CTRL` (PC-1600
+  only), **End** → `SML`, **Shift+End** → `KB II` (PC-1600 only),
+  **Page Up** → Shift+Left, **Shift+Page Up** → `DEF`, **Page Down** →
+  Shift+Right, **Shift+Page Down** → `SHIFT` (latched for the next key).
 - Keys held with **Cmd or Ctrl** (macOS), or with **Ctrl, Alt or the
   Windows key** (Windows/Linux), never reach the calculator — those are
   shortcuts. **Option** (macOS) and **AltGr** (Windows/Linux) still type
