@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="pc1600_power_probe" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="roms" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Calc-U-1600" TARGET_NAME="pc1600_power_probe" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="Calc-U-1600" RUN_TARGET_NAME="pc1600_power_probe">
+    <method v="2">
+      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+    </method>
+  </configuration>
+</component>

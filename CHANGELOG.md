@@ -46,6 +46,13 @@
 - **Headless** `pc1600_cli --save-dir <dir>` makes a preset's
   `- saveas: floppy:<name>` step write the disk to
   `<dir>/<name>.floppy.yaml` (it was a no-op in the headless harness).
+- **Build** A root `CMakeLists.txt` builds the app, the headless
+  harnesses and probes, and the `Core/` test suite in one project, with
+  shared CLion run/debug configurations in `.run/` — so all of them can
+  be debugged with breakpoints instead of only run from
+  `tools/build_*.sh`. `Qt6/` remains the release entry point; the new
+  `core-tests` CI job builds this root project and runs the tests via
+  CTest. See `docs/Building.md`.
 
 ## [0.4.0] - 2026-09-20
 

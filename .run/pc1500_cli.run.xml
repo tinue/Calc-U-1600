@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="pc1500_cli" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="roms/PC-1500_A04.ROM" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="Calc-U-1600" TARGET_NAME="pc1500_cli" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="Calc-U-1600" RUN_TARGET_NAME="pc1500_cli">
+    <method v="2">
+      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+    </method>
+  </configuration>
+</component>

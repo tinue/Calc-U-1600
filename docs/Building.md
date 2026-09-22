@@ -150,6 +150,41 @@ the `windows-aarch64` sharpdx release. It passes `/DAPP_ARCH=arm64` to
 ARM64 machine, run the steps above from an ARM64 developer prompt
 (`vcvarsall.bat arm64`) with the ARM64 Qt kit.
 
+### CLion / IDE integration
+
+Alongside the per-platform recipes above, the repo root has its own
+[`CMakeLists.txt`](../CMakeLists.txt) that builds *everything* in one
+project — the Qt6 app (it just pulls in `Qt6/` unchanged), the headless
+CLI harnesses and probes that `tools/build_*.sh` build by hand, and the
+`Core/` test suite as a CTest target. It's a development/IDE
+convenience; `Qt6/` stays the release entry point, so keep using the
+commands above for an actual build.
+
+Open the repository root in CLion and it configures that project
+automatically, picking up the shared run/debug configurations committed
+in `.run/`:
+
+| Run configuration | CMake target | Notes |
+|---|---|---|
+| `Calc-U-1600` | `CalcU1600Qt` | The Qt6 GUI app |
+| `CoreTests` | `CoreTests` | Headless test suite, also runnable via CTest |
+| `pc1500_cli`, `pc1600_cli` | same | Headless CLI harnesses |
+| `pc1600_plotter_probe`, `pc1600_power_probe`, `pc1600_uart_probe` | same | Hardware diagnostic probes |
+
+All of them run and debug interactively (breakpoints, variable
+inspection, stepping) — which is the main thing this build adds over
+`tools/build_*.sh` and `tools/run_tests.sh`.
+
+Run `tools/fetch_roms.sh` (step 2 above) first: `CoreTests` and the
+`pc1500_cli`/probe configurations pass paths under `roms/`, and ROMs
+aren't committed. The configurations use repo-relative paths throughout,
+so they work in any checkout without editing.
+
+CI covers this build too — the `core-tests` job in
+[`.github/workflows/build.yml`](../.github/workflows/build.yml)
+configures the root `CMakeLists.txt` and runs CTest, so a new `Core/`
+source that's only added to `Qt6/CMakeLists.txt` won't silently break it.
+
 ## Running the tests
 
 ```sh
@@ -159,6 +194,17 @@ tools/run_tests.sh
 Builds and runs the headless `Core/` test suite (no Qt, no GUI) from a
 plain `clang++` invocation — must be run from the repo root, since the
 tests load `roms/PC-1500_A04.ROM` via a relative path.
+
+The same suite is also a `CoreTests` target in the root `CMakeLists.txt`
+(see [CLion / IDE integration](#clion--ide-integration) above), which is
+what CI's `core-tests` job runs and what to use if you want to debug a
+failing test:
+
+```sh
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --target CoreTests
+ctest --test-dir build --output-on-failure
+```
 
 ## Packaging
 

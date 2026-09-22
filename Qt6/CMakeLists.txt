@@ -19,6 +19,15 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC OFF)
 
+# Ensure Qt6 is found automatically in standard macOS Homebrew locations if not explicitly configured
+if(APPLE AND NOT DEFINED CMAKE_PREFIX_PATH)
+  if(EXISTS "/opt/homebrew/opt/qt")
+    list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt")
+  elseif(EXISTS "/usr/local/opt/qt")
+    list(APPEND CMAKE_PREFIX_PATH "/usr/local/opt/qt")
+  endif()
+endif()
+
 find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
 qt_standard_project_setup()
 
