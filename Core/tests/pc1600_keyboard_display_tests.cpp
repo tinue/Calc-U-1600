@@ -359,7 +359,7 @@ void test_memory_keyboard_and_on_key_via_io() {
     CHECK((bus.readIO(0x1A) & 0x20) == 0);
     mem.setOnKeyPressed(true);
     CHECK((bus.readIO(0x1B) & 0x02) != 0);
-    // The live level too (Systemhandbuch p.92 / Anhang A): PB7 = &1F bit 7, and
+    // The live level too (Baum Systemhandbuch p.92 / Anhang A): PB7 = &1F bit 7, and
     // the MSK read's PB7 slot = &1A bit 5, both 1 while held.
     CHECK((bus.readIO(0x1F) & 0x80) != 0);
     CHECK((bus.readIO(0x1A) & 0x20) != 0);

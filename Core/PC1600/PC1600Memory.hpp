@@ -475,11 +475,11 @@ private:
     // phi/64, /128, /256, /512 or /1024. Only the idle case is modelled:
     // no serial transmit (L, 16H), so SXO sits at mark = 1 and SDO = FX.
     //
-    // phi, measured: dampflok.bas (Systemhandbuch p.52) whistles with F = 41H
+    // phi, measured: dampflok.bas (Baum Systemhandbuch p.52) whistles with F = 41H
     // (FX = /128). A real unit plays it at 2539 Hz (2533.24 Hz recorded, less
     // the recorder's -0.22% seen in every BEEP recording), = 1.3 MHz / 512.
     // So this block's modulator runs from phi = 1.3 MHz / 4 = 325 kHz.
-    // Systemhandbuch Anhang A p.93 confirms &17: "OUT &17,65" on /
+    // Baum Systemhandbuch Anhang A p.93 confirms &17: "OUT &17,65" on /
     // "OUT &17,0" off, a continuous tone, the cassette-recording sync signal.
     // Its "2639 Hz" is a typo: no power-of-two divider of 1.3 or 3.58 MHz
     // gives that, while 2539 Hz is 1.3 MHz / 512. (The
