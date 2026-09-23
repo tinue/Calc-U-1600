@@ -105,7 +105,7 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
     };
     if (!wavPath.empty()) machine.setYieldHook(drainWav, PC1600Machine::kTStateHz / 20);
     if (!ce158Peer.attach(machine)) return 1; // before the preset attaches the card
-    PC1600PresetSaveAsFn onSaveAs;
+    PresetSaveAsFn onSaveAs;
     if (!saveDir.empty()) {
         onSaveAs = [&machine, &saveDir](PresetStep::SaveAsTarget target, const std::string& name,
                                         std::string* err) {

@@ -34,7 +34,6 @@ int g_fail = 0;
 std::string tapsAsText(const std::vector<PasteStep>& steps) {
     std::string out;
     for (const PasteStep& s : steps) {
-        if (s.kind == PasteStep::Kind::Enter) { out += "<enter>"; continue; }
         if (s.needsShift) out += "^";
         out += s.key == "space" ? std::string("_") : s.key;
         out += ' ';
@@ -78,51 +77,18 @@ void test_feeder_cadence() {
     f.setPacing(pc1600PastePacing());
     f.append(buildPasteSteps("a1", pc1600ResolveTypedChar));
     Recorder r;
-    for (r.frame = 0; r.frame < 100 && f.active(); ++r.frame) f.onFrame(r.press(), r.release(), false);
+    for (r.frame = 0; r.frame < 100 && f.active(); ++r.frame) f.onFrame(r.press(), r.release());
     // shift: 4 held + 4 gap, 6-frame shift gap, A: 4+4, then 1: 4+4.
     const std::vector<std::string> expected = {"0+shift", "4-shift", "14+A", "18-A", "22+1", "26-1"};
     CHECK(r.events == expected);
     CHECK(!f.active());
 }
 
-// "1", ENTER, "2" -- buildPasteSteps() never emits Enter, so built by hand.
-std::vector<PasteStep> oneEnterTwoSteps() {
-    std::vector<PasteStep> steps = buildPasteSteps("1", pc1500ResolveTypedChar);
-    PasteStep enter;
-    enter.kind = PasteStep::Kind::Enter;
-    enter.key = "enter";
-    steps.push_back(enter);
-    const std::vector<PasteStep> two = buildPasteSteps("2", pc1500ResolveTypedChar);
-    steps.insert(steps.end(), two.begin(), two.end());
-    return steps;
-}
-
-void test_feeder_waits_for_prompt_after_enter() {
-    KeyPasteFeeder f;
-    f.setPacing(pc1500PastePacing());
-    f.append(oneEnterTwoSteps());
-    Recorder r;
-    // Prompt only reached from frame 40 on: "2" must wait for 20 at-prompt frames.
-    for (r.frame = 0; r.frame < 400 && f.active(); ++r.frame) f.onFrame(r.press(), r.release(), r.frame >= 40);
-    CHECK(r.events.size() == 6);
-    CHECK(r.events.size() == 6 && r.events[2] == "8+enter");
-    CHECK(r.events.size() == 6 && r.events[4] == "59+2");
-}
-
-void test_feeder_prompt_wait_is_capped() {
-    KeyPasteFeeder f;
-    f.append(oneEnterTwoSteps());
-    Recorder r;
-    for (r.frame = 0; r.frame < 1000 && f.active(); ++r.frame) f.onFrame(r.press(), r.release(), false);
-    CHECK(!f.active()); // gave up waiting (~5 s) and typed "2" anyway
-    CHECK(!r.events.empty() && r.events.back().find("-2") != std::string::npos);
-}
-
 void test_feeder_cancel_releases_held_key() {
     KeyPasteFeeder f;
     f.append(buildPasteSteps("AB", pc1500ResolveTypedChar));
     Recorder r;
-    f.onFrame(r.press(), r.release(), false); // A pressed
+    f.onFrame(r.press(), r.release()); // A pressed
     f.cancel(r.release());
     CHECK(!f.active());
     CHECK((r.events == std::vector<std::string>{"0+A", "0-A"}));
@@ -138,9 +104,9 @@ bool bootPC1500(PC1500Machine& m) {
 
 // Drives the feeder the way MachineController::advance() does: one frame
 // of emulated time, then onFrame(). Returns how many ENTERs it pressed.
-template <typename Machine, typename AtPrompt>
+template <typename Machine>
 int pasteInto(Machine& m, uint64_t frameCycles, const PastePacing& pacing, TypedCharResolver resolve,
-              const std::string& text, AtPrompt atPrompt) {
+              const std::string& text) {
     KeyPasteFeeder f;
     f.setPacing(pacing);
     f.append(buildPasteSteps(text, resolve));
@@ -149,7 +115,7 @@ int pasteInto(Machine& m, uint64_t frameCycles, const PastePacing& pacing, Typed
     auto release = [&](const std::string& k) { m.releaseKey(k); };
     for (int frame = 0; frame < 60 * 120 && f.active(); ++frame) {
         m.runCycles(frameCycles);
-        f.onFrame(press, release, atPrompt(m));
+        f.onFrame(press, release);
     }
     return enters;
 }
@@ -169,7 +135,7 @@ void test_pc1600_paste_line_no_enter() {
     }
     const std::string line = "OPEN \"X:ATLANTIS.PUN\"FOR INPUT AS #1";
     const int enters = pasteInto(m, PC1600Machine::kTStateHz / 60, pc1600PastePacing(), pc1600ResolveTypedChar,
-                                 line, [](const PC1600Machine& mm) { return pc1600AtBasicPrompt(mm); });
+                                 line);
     CHECK(enters == 0);
     tapKey(m, "enter");
     waitIdle(m, PC1600Machine::kTStateHz);
@@ -194,8 +160,7 @@ void test_pc1600_paste_multiline_types_first_line() {
     m.runCycles(PC1600Machine::kTStateHz / 2);
     const uint16_t before = readBE16(m, 0xF867);
     const int enters = pasteInto(m, PC1600Machine::kTStateHz / 60, pc1600PastePacing(), pc1600ResolveTypedChar,
-                                 "10 PRINT \"Hi\"\n20 A=1\n30 END",
-                                 [](const PC1600Machine& mm) { return pc1600AtBasicPrompt(mm); });
+                                 "10 PRINT \"Hi\"\n20 A=1\n30 END");
     CHECK(enters == 0);
     m.runCycles(PC1600Machine::kTStateHz / 2);
     CHECK(readBE16(m, 0xF867) == before);
@@ -232,8 +197,7 @@ void test_pc1500_paste_multiline_types_first_line() {
     std::string err;
     CHECK(typeLine(m, "NEW0", /*pressEnter=*/true, &err));
     const int enters = pasteInto(m, static_cast<uint64_t>(1300000.0 / 60), pc1500PastePacing(),
-                                 pc1500ResolveTypedChar, "10 PRINT \"Paste: ok\"\n20 REM Tail#x",
-                                 [](const PC1500Machine& mm) { return pc1500AtBasicPrompt(mm); });
+                                 pc1500ResolveTypedChar, "10 PRINT \"Paste: ok\"\n20 REM Tail#x");
     CHECK(enters == 0);
     CHECK(memoryContains(m, "Paste: ok")); // case kept via the SHIFT taps
     CHECK(!memoryContains(m, "Tail#x"));   // the second line is never typed
@@ -257,8 +221,6 @@ int run_key_paste_tests() {
     test_build_steps_line_breaks();
     test_build_steps_pc1500_lacks_digit_row_legends();
     test_feeder_cadence();
-    test_feeder_waits_for_prompt_after_enter();
-    test_feeder_prompt_wait_is_capped();
     test_feeder_cancel_releases_held_key();
     test_pc1600_paste_line_no_enter();
     test_pc1600_paste_multiline_types_first_line();

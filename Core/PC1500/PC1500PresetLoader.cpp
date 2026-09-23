@@ -167,20 +167,9 @@ bool runSteps(PC1500Machine& machine, const std::vector<PresetStep>& steps, std:
                 if (log) log(std::string("  syncclock: -> ") + stamp);
                 break;
             }
-            case PresetStep::Kind::SaveAs: {
-                if (!onSaveAs) {
-                    if (log) log("  saveas: skipped (no save handler configured)");
-                    break;
-                }
-                std::string saveError;
-                if (!onSaveAs(step.saveAsTarget, step.text, &saveError)) {
-                    if (error) *error = "saveas: " + saveError;
-                    if (log) log("  saveas: FAILED: " + saveError);
-                    return false;
-                }
-                if (log) log("  saveas: -> \"" + step.text + "\"");
+            case PresetStep::Kind::SaveAs:
+                if (!runPresetSaveAsStep(step, onSaveAs, log, error)) return false;
                 break;
-            }
         }
     }
     return true;

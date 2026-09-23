@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -69,7 +70,7 @@
 // overwrites an existing file of the same name -- so a preset can
 // `saveas:` a card or floppy more than once, under different names, as it
 // evolves through the script. See PC1600PresetLoader.hpp's
-// PC1600PresetSaveAsFn / PC1500PresetLoader.hpp's PresetSaveAsFn -- WHERE
+// PresetSaveAsFn (below) -- WHERE
 // the save goes is environment-specific (the GUI's configured instance
 // directory), so Core only parses the step; a caller that doesn't supply
 // the callback gets a logged no-op.
@@ -106,6 +107,37 @@ struct PresetStep {
     enum class SaveAsTarget { S1, S2, Floppy };
     SaveAsTarget saveAsTarget = SaveAsTarget::S1;
 };
+
+/// Fired for a `- saveas: s1:<name>` / `s2:<name>` / `floppy:<name>` step
+/// (see the top-of-file doc comment) -- WHERE the save goes, and how to
+/// splice/format it, are environment-specific (Qt6/app's AppPaths/
+/// MemoryModuleManager/FloppyDiskManager), so Core only calls out here,
+/// mirroring onArmed/onBooted. `target` is which slot/device to save
+/// (always S1 on a PC-1500/1500A -- the parser rejects the others); `name`
+/// is the name to save it under. Returns true on success, or false with
+/// `*error` filled in -- a failure stops the preset exactly like any other
+/// step failure. Left unset (the default) makes a `saveas:` step a logged
+/// no-op, for a caller (CLI, tests) with no configured save directory.
+using PresetSaveAsFn =
+    std::function<bool(PresetStep::SaveAsTarget target, const std::string& name, std::string* error)>;
+
+/// Runs one `saveas:` step through `onSaveAs` (both preset loaders share
+/// this). Returns false with `*error` set ("saveas: ...") on failure.
+inline bool runPresetSaveAsStep(const PresetStep& step, const PresetSaveAsFn& onSaveAs,
+                                const std::function<void(const std::string&)>& log, std::string* error) {
+    if (!onSaveAs) {
+        if (log) log("  saveas: skipped (no save handler configured)");
+        return true;
+    }
+    std::string saveError;
+    if (!onSaveAs(step.saveAsTarget, step.text, &saveError)) {
+        if (error) *error = "saveas: " + saveError;
+        if (log) log("  saveas: FAILED: " + saveError);
+        return false;
+    }
+    if (log) log("  saveas: -> \"" + step.text + "\"");
+    return true;
+}
 
 struct PresetProgram {
     // Binary      -- `format: binary`: raw machine-code bytes poked verbatim,

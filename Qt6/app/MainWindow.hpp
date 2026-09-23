@@ -148,6 +148,9 @@ private:
     // signals: they only differ in which plotter is "self" vs "other".
     void onPlotterAttachedChanged(bool isCE150, bool attached);
     void onCe158AttachedChanged(bool attached);
+    // Enables/checks the CE-150/CE-1600P/CE-158 buttons from their attach
+    // states (shared by both handlers above).
+    void syncPeripheralButtons(bool ce150Attached, bool ce1600pAttached, bool ce158Attached);
 
     // PresetController::armed handler: the preset has attached its
     // model/cards/plotter but the machine is still powered off. Resyncs

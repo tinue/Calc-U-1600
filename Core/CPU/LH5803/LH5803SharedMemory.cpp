@@ -31,6 +31,7 @@ uint8_t LH5803SharedMemory::readME0(uint16_t addr) {
         // (the ROM sets it from CALLH's PARBAN): CE-150 ROM at PVOUT=0
         // (upper 8K), CE-158 ROM at PVOUT=1 (lower 8K, PU-banked). Each
         // card gates its window on the PV/PU it is shown.
+        if (!m_ce158 && !m_ce150) return 0xFF; // open bus
         uint8_t v;
         const PinState p = peripheralPins(addr, /*forWrite=*/false, /*me1=*/false);
         if (m_ce158 && m_ce158->respondsToRead(p, v)) return v;

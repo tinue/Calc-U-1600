@@ -16,26 +16,23 @@
 //
 // Model-agnostic: the caller supplies the per-model character resolver
 // (pc1500ResolveTypedChar / pc1600ResolveTypedChar), pacing, key press /
-// release callbacks and the "back at the BASIC prompt" sample.
+// release callbacks.
 //
 // Nothing is added and nothing is validated: the text is typed as is, up
 // to (not including) its first line break -- ENTER is never pressed, so a
 // paste never executes anything. A character with no key is silently
-// skipped. (The feeder itself still handles Enter steps -- ENTER, then
-// wait for the ROM to finish with the line -- for callers that build them.)
+// skipped.
 
 struct PasteStep {
-    enum class Kind { Tap, Enter };
-    Kind kind = Kind::Tap;
-    std::string key;         // (Tap) key name in the machine's vocabulary
-    bool needsShift = false; // (Tap) tap SHIFT (a one-shot latch) first
+    std::string key;         // key name in the machine's vocabulary
+    bool needsShift = false; // tap SHIFT (a one-shot latch) first
 };
 
 using TypedCharResolver = bool (*)(char c, std::string* baseKey, bool* needsShift);
 
 /// Turns pasted text into steps. Only the text before the first line break
 /// (CR or LF) is used; control characters, non-ASCII bytes and characters
-/// `resolve` has no key for are skipped. Never emits an Enter step.
+/// `resolve` has no key for are skipped.
 std::vector<PasteStep> buildPasteSteps(const std::string& text, TypedCharResolver resolve);
 
 /// Per-model cadence, all in emulated 60 Hz frames.
@@ -43,9 +40,6 @@ struct PastePacing {
     int tapFrames = 4;              // key held down
     int gapFrames = 4;              // idle after release
     int shiftGapFrames = 0;         // extra idle between the SHIFT tap and its base key
-    int postEnterFloorFrames = 12;  // fixed wait after ENTER before sampling the prompt
-    int promptHoldFrames = 20;      // at-prompt frames in a row that count as "done"
-    int postEnterCapFrames = 300;   // give up waiting after ~5 s (RUN, INPUT, ...)
 };
 
 /// Same 4+4 frame cadence as PC1500BasicTyper's tapKey(); SHIFT then base
@@ -74,14 +68,12 @@ public:
     /// Drops everything still queued; releases a key currently held down.
     void cancel(const KeyFn& release);
 
-    /// Call once after every emulated frame. `atPrompt` is this frame's
-    /// "ROM is in its BASIC command loop" sample (pc1500AtBasicPrompt /
-    /// pc1600AtBasicPrompt); only consulted while waiting after ENTER.
-    void onFrame(const KeyFn& press, const KeyFn& release, bool atPrompt);
+    /// Call once after every emulated frame.
+    void onFrame(const KeyFn& press, const KeyFn& release);
 
 private:
     struct Action {
-        enum class Kind { Tap, Wait, WaitPrompt };
+        enum class Kind { Tap, Wait };
         Kind kind = Kind::Wait;
         std::string key; // Tap
         int frames = 0;  // Wait
@@ -89,7 +81,7 @@ private:
     enum class TapPhase { Hold, Gap };
 
     void begin(const Action& action, const KeyFn& press);
-    bool elapse(bool atPrompt, const KeyFn& release); // true once the current action is done
+    bool elapse(const KeyFn& release); // true once the current action is done
 
     PastePacing m_pacing;
     std::deque<Action> m_queue;
@@ -97,5 +89,4 @@ private:
     Action m_current;
     TapPhase m_tapPhase = TapPhase::Hold;
     int m_framesLeft = 0;
-    int m_promptRun = 0;
 };

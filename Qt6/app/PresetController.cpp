@@ -90,7 +90,6 @@ bool PresetController::loadMachineCodeLive(const MachineCodeLoadRequest& request
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
 
-#include <QDateTime>
 #include <QDebug>
 #include <vector>
 
@@ -102,29 +101,13 @@ bool PresetController::loadMachineCodeLive(const MachineCodeLoadRequest& request
 #include "PC1600/PC1600Machine.hpp"
 #include "PC1600/PC1600BasicLoader.hpp"
 #include "Basic/BasicProgramSource.hpp"
+#include "HostClock.hpp"
 
 namespace {
 
 Model modelForPreset(const PresetFile& preset) {
     if (preset.isPC1600()) return Model::PC1600;
     return preset.variant == PC1500Variant::PC1500A ? Model::PC1500A : Model::PC1500;
-}
-
-// Seeds `machine`'s RTC from the host's wall-clock time -- must run via
-// PresetBootedFn (right after reset/allReset settles, before any of the
-// preset's own keys:/program: steps), NOT after applyPreset() returns:
-// MachineController::finishPresetLoad()'s own seedClockFromHost() call
-// runs too late for this -- a preset step that saves a file (e.g. `FILES
-// "S2:"` after a `SAVE`) stamps it with whatever the RTC held at that
-// moment, which without this would still be the machine's un-seeded
-// power-on default (1/1/00:00), not "now". Templated so one definition
-// covers both PC1500Machine::seedClock and PC1600Machine::seedClock
-// (same signature, no shared base).
-template <typename Machine>
-void seedClockFromHost(Machine& machine) {
-    const QDateTime now = QDateTime::currentDateTime();
-    machine.seedClock(now.date().year(), now.date().month(), now.date().day(), now.time().hour(),
-                       now.time().minute(), now.time().second(), now.time().msec());
 }
 
 // Live-machine LOAD: mirrors real hardware LOAD semantics, not NEW+type. No
@@ -240,6 +223,11 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
         qDebug().noquote() << "[preset]" << QString::fromStdString(line);
     };
 
+    const PresetSaveAsFn onSaveAs = [this](PresetStep::SaveAsTarget target, const std::string& name,
+                                           std::string* saveError) {
+        return ::saveAsFromPreset(m_moduleManager, m_floppyManager, target, name, saveError);
+    };
+
     if (preset.isPC1600()) {
         PC1600Machine& machine = m_controller->resetBareForPresetPC1600(
             preset.romVariant == "old" ? PC1600RomVersion::Old : PC1600RomVersion::New,
@@ -260,13 +248,9 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
                                                 QString::fromStdString(armedSoFar.floppyResolvedPath));
             emit armed();
         };
-        const auto onSaveAs = [this](PresetStep::SaveAsTarget target, const std::string& name,
-                                     std::string* saveError) {
-            return ::saveAsFromPreset(m_moduleManager, m_floppyManager, target, name, saveError);
-        };
         const PC1600PresetLoadResult result =
             applyPC1600Preset(machine, preset, logSink, traceDir, moduleDir,
-                               [&machine] { seedClockFromHost(machine); }, romDirs, extraModuleDirs,
+                               [&machine] { seedClockFromHostTime(machine); }, romDirs, extraModuleDirs,
                                onArmed, onSaveAs);
         // Safety net for a preset that fails before ever arming (bad
         // modulespec, missing plotter ROM, ...) -- onArmed never fired, so
@@ -303,13 +287,9 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
         m_moduleManager->syncFromPresetLoad(2);
         emit armed();
     };
-    const auto onSaveAs = [this](PresetStep::SaveAsTarget target, const std::string& name,
-                                 std::string* saveError) {
-        return ::saveAsFromPreset(m_moduleManager, m_floppyManager, target, name, saveError);
-    };
     const PresetLoadResult result =
         applyPC1500Preset(machine, preset, logSink, traceDir, moduleDir,
-                           [&machine] { seedClockFromHost(machine); }, romDirs, extraModuleDirs, onArmed,
+                           [&machine] { seedClockFromHostTime(machine); }, romDirs, extraModuleDirs, onArmed,
                            onSaveAs);
     // Safety net for a preset that fails before ever arming -- see the
     // matching comment in the PC-1600 branch above.

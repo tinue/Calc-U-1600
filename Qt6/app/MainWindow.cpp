@@ -446,10 +446,7 @@ void MainWindow::loadMachineCode() {
 void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
     const bool ce150Attached = isCE150 ? attached : m_controller->ce150Attached();
     const bool ce1600pAttached = isCE150 ? m_controller->ce1600pAttached() : attached;
-    const bool ce158Attached = m_controller->ce158Attached();
-    m_controlBar->setCe150State(ce150Attached, !ce1600pAttached);
-    m_controlBar->setCe1600pState(ce1600pAttached, !ce150Attached && !ce158Attached);
-    m_controlBar->setCe158State(ce158Attached, !ce1600pAttached);
+    syncPeripheralButtons(ce150Attached, ce1600pAttached, m_controller->ce158Attached());
     const bool otherAttached = isCE150 ? ce1600pAttached : ce150Attached;
     if (!isCE150) {
         // CE-1600F attaches as a union with CE-1600P (PC1600Machine::
@@ -470,12 +467,17 @@ void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
     }
 }
 
+void MainWindow::syncPeripheralButtons(bool ce150Attached, bool ce1600pAttached, bool ce158Attached) {
+    // The CE-1600P excludes both the CE-150 and (on a PC-1600) the CE-158
+    // -- the CE-158 does not connect to the CE-1600P: gray out whichever
+    // buttons the attached peripherals rule out.
+    m_controlBar->setCe150State(ce150Attached, !ce1600pAttached);
+    m_controlBar->setCe1600pState(ce1600pAttached, !ce150Attached && !ce158Attached);
+    m_controlBar->setCe158State(ce158Attached, !ce1600pAttached);
+}
+
 void MainWindow::onCe158AttachedChanged(bool attached) {
-    // On a PC-1600 the CE-158 and the CE-1600P exclude each other (the
-    // CE-158 does not connect to the CE-1600P): gray out the other button.
-    const bool ce1600pAttached = m_controller->ce1600pAttached();
-    m_controlBar->setCe158State(attached, /*enabled=*/!ce1600pAttached);
-    m_controlBar->setCe1600pState(ce1600pAttached, !m_controller->ce150Attached() && !attached);
+    syncPeripheralButtons(m_controller->ce150Attached(), m_controller->ce1600pAttached(), attached);
     if (attached) {
         // A preset attaches the card on the Core machine directly: make
         // sure it has its host PTY before the preset script runs.
@@ -941,14 +943,17 @@ void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
 void MainWindow::applyCE1600PRomVersionSelection(CE1600PRomVersion version) {
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
-    m_controller->setCE1600PRomVersion(version); // rebuilds the machine when a CE-1600P is attached
-    restartPacing(); // the rebuild's flat-out boot blocked the frame timer
-    m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
+    // Rebuilds the machine only when a CE-1600P is attached; otherwise just
+    // records the choice for the next attach.
+    if (m_controller->setCE1600PRomVersion(version)) {
+        restartPacing(); // the rebuild's flat-out boot blocked the frame timer
+        m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
+        syncControlBarForModel();
+        refreshModuleCombos();
+    }
     // The controller may have fallen back to New if the old ROM failed to load.
     m_controlBar->setCE1600PRomVersion(m_controller->ce1600pRomVersion());
     syncMachineMenuFromCE1600PRomVersion(m_controller->ce1600pRomVersion());
-    syncControlBarForModel();
-    refreshModuleCombos();
 }
 
 void MainWindow::syncMachineMenuFromCE1600PRomVersion(CE1600PRomVersion version) {

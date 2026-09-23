@@ -73,7 +73,6 @@ public:
     /// halves of the 8000-BFFF window; PU picks the CE-158's ROM bank.
     void updatePUPV(bool pu, bool pv) { m_pu = pu; m_pv = pv; }
     bool pv() const { return m_pv; }
-    bool pu() const { return m_pu; }
 
     /// Attach/detach a CE-150 plotter (the same card the PC-1500 uses;
     /// non-owning, PC1600Machine owns it). Once attached the 8000-BFFF
@@ -135,7 +134,8 @@ private:
     /// The CE-158's ME1 register blocks: LH5811 + UART 0xD000-0xD3FF,
     /// interrupt-ID 0xDE00-0xDFFF (see Ce158Card).
     static bool isCe158Io(uint16_t addr) {
-        return (addr & 0xFC00) == 0xD000 || (addr & 0xFE00) == 0xDE00;
+        return (addr >= Ce158Card::kPioBase && addr <= Ce158Card::kUartEnd) ||
+               (addr >= Ce158Card::kIntIdBase && addr <= Ce158Card::kIntIdEnd);
     }
 
     PC1600Memory& m_shared;

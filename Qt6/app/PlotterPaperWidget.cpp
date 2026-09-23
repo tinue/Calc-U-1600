@@ -177,14 +177,7 @@ void PlotterPaperWidget::applyChrome() {
     // so a click gives clearly visible "goes down" feedback -- there is no
     // other visible change from Copy/Cut, unlike DebugPanel's dump buttons
     // where the log output itself is the feedback.
-    const QString buttonStyle =
-        QString("QPushButton { border: none; %1 }"
-                "QPushButton:hover:!disabled { background-color: %2; }"
-                "QPushButton:pressed, QPushButton:hover:pressed { background-color: %3; }"
-                "QPushButton:disabled { background-color: %4; color: %5; }")
-            .arg(ChromeStyle::pillCore(c.pillBackground, c.pillText),
-                 cssRgba(c.pillBackground.lighter(115)), cssRgba(c.pillBackground.darker(130)),
-                 cssRgba(c.pillBackgroundOff), cssRgba(c.pillText));
+    const QString buttonStyle = ChromeStyle::pillPushButton(c);
     m_copyButton->setStyleSheet(buttonStyle);
     m_cutButton->setStyleSheet(buttonStyle);
 }

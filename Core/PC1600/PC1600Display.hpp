@@ -2,6 +2,7 @@
 #include <array>
 #include <cstdint>
 
+#include "PC1600Clocks.hpp"
 #include "PC1600StatusLine.hpp"
 
 // ── PC-1600 LCD (1x HD61203 + 2x HD61102) ────────────────────────────────
@@ -141,8 +142,8 @@ private:
     Controller m_ic2; // panel columns 0-63
     // LCD clock: phi-OS (1.3 MHz) / 6, counted in edges. Scaled by 6 so the
     // accumulator stays integral: SC-7852 T-states * 1.3 MHz vs 3.58 MHz * 6.
-    static constexpr int64_t kLcdClockHzTimes6 = 1300000;
-    static constexpr int64_t kTStateHzTimes6 = 3580000LL * 6;
+    static constexpr int64_t kLcdClockHzTimes6 = kPC1600PhiOsHz;
+    static constexpr int64_t kTStateHzTimes6 = int64_t{kPC1600TStateHz} * 6;
     int64_t  m_lcdClockAccum{0};
     uint64_t m_lcdEdges{0};
     Controller m_ic3; // panel columns 64-127

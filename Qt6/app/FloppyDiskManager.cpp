@@ -100,6 +100,14 @@ bool FloppyDiskManager::nameCollides(const QString& diskName) const {
 }
 
 bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
+    return saveDiskAs(diskName, /*fromPreset=*/false, error);
+}
+
+bool FloppyDiskManager::saveAsFromPreset(const QString& diskName, QString* error) {
+    return saveDiskAs(diskName, /*fromPreset=*/true, error);
+}
+
+bool FloppyDiskManager::saveDiskAs(const QString& diskName, bool fromPreset, QString* error) {
     const QString name = diskName.trimmed();
     if (name.isEmpty()) {
         *error = tr("Name cannot be empty.");
@@ -114,7 +122,7 @@ bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
         *error = tr("There's no disk in the drive.");
         return false;
     }
-    if (hasInstanceFile()) {
+    if (!fromPreset && hasInstanceFile()) {
         *error = tr("\"%1\" is already saved; changes are saved automatically.").arg(m_diskName);
         return false;
     }
@@ -126,7 +134,7 @@ bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
         *error = tr("\"%1\" is a built-in disk name. Choose a different name.").arg(name);
         return false;
     }
-    if (nameCollides(name)) {
+    if (!fromPreset && nameCollides(name)) {
         *error = tr("A disk named \"%1\" already exists. Choose a different name.").arg(name);
         return false;
     }
@@ -137,45 +145,8 @@ bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
         return false;
     }
 
-    m_diskName = name;
-    m_instanceFilePath = newPath;
-    m_persistPending = false;
-    m_lastSeenRevision = m1600->ce1600fRevision();
-    return true;
-}
-
-bool FloppyDiskManager::saveAsFromPreset(const QString& diskName, QString* error) {
-    const QString name = diskName.trimmed();
-    if (name.isEmpty()) {
-        *error = tr("Name cannot be empty.");
-        return false;
-    }
-    auto* m1600 = m_controller->pc1600();
-    if (!m1600 || !m1600->ce1600fAttached()) {
-        *error = tr("No floppy attached.");
-        return false;
-    }
-    if (!m1600->ce1600fHasDisk()) {
-        *error = tr("There's no disk in the drive.");
-        return false;
-    }
-    if (name.contains(QLatin1Char('"'))) {
-        *error = tr("Name cannot contain '\"'.");
-        return false;
-    }
-    if (containsName(bundledEntries(), name)) {
-        *error = tr("\"%1\" is a built-in disk name. Choose a different name.").arg(name);
-        return false;
-    }
-
-    const QString newPath = AppPaths::floppyInstancePathFor(name);
-    if (!AppPaths::atomicWriteFile(newPath, formatFloppyFile(name.toStdString(), m1600->ce1600fDiskImage()))) {
-        *error = tr("Couldn't write \"%1\".").arg(newPath);
-        return false;
-    }
-
-    // Retarget the drive at the saved copy, like nameAndSave(): it now shows
-    // under its new name and autosaves there.
+    // Retarget the drive at the saved copy: it now shows under its new name
+    // and autosaves there.
     m_diskName = name;
     m_instanceFilePath = newPath;
     m_persistPending = false;

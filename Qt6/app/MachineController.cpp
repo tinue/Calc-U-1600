@@ -2,7 +2,6 @@
 
 #include <cstdlib>
 
-#include <QDateTime>
 #include <QDebug>
 #include <QMessageBox>
 #include <QTimer>
@@ -19,6 +18,7 @@
 #include "PC1600/PC1600TypedInput.hpp"
 #include "Serial/PtySerialLink.hpp"
 #include "Resources/BundledRomCatalog.hpp"
+#include "HostClock.hpp"
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
 #include "FloppyDiskManager.hpp"
@@ -149,11 +149,11 @@ void MachineController::setPC1600RomVersion(PC1600RomVersion version) {
     if (m_model == Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
 }
 
-void MachineController::setCE1600PRomVersion(CE1600PRomVersion version) {
+bool MachineController::setCE1600PRomVersion(CE1600PRomVersion version) {
     m_ce1600pRomVersion = version;
-    if (m_model == Model::PC1600 && ce1600pAttached()) {
-        switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new CE-1600P ROM
-    }
+    if (m_model != Model::PC1600 || !ce1600pAttached()) return false;
+    switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new CE-1600P ROM
+    return true;
 }
 
 void MachineController::setPC1500RomRevision(PC1500RomRevision revision) {
@@ -236,7 +236,6 @@ void MachineController::syncCE158SerialLink() {
 
 void MachineController::finishPresetLoad(Model model) {
     m_model = model;
-    syncCE158SerialLink(); // first-ever CE-158 attached by the preset: create its PTY now
     seedClockFromHost();
     AppSettings::setLastUsedModel(static_cast<int>(m_model));
     emit modelChanged(m_model);
@@ -255,19 +254,8 @@ bool MachineController::resyncClockIfSeeded() {
 }
 
 void MachineController::seedClockFromHostNow() {
-    const QDateTime now = QDateTime::currentDateTime();
-    const int year = now.date().year();
-    const int month = now.date().month();
-    const int day = now.date().day();
-    const int hour = now.time().hour();
-    const int minute = now.time().minute();
-    const int second = now.time().second();
-    const int msec = now.time().msec();
-    if (m_pc1600) {
-        m_pc1600->seedClock(year, month, day, hour, minute, second, msec);
-    } else if (m_pc1500) {
-        m_pc1500->seedClock(year, month, day, hour, minute, second, msec);
-    }
+    if (m_pc1600) seedClockFromHostTime(*m_pc1600);
+    else if (m_pc1500) seedClockFromHostTime(*m_pc1500);
 }
 
 void MachineController::resetToPrompt(bool allReset) {
@@ -412,10 +400,8 @@ void MachineController::runActive(std::uint64_t cycles) {
 }
 
 void MachineController::pasteOnFrame() {
-    const bool atPrompt = m_pc1600 ? pc1600AtBasicPrompt(*m_pc1600)
-                                   : (m_pc1500 && pc1500AtBasicPrompt(*m_pc1500));
     m_paste.onFrame([this](const std::string& key) { pressKey(key); },
-                    [this](const std::string& key) { releaseKey(key); }, atPrompt);
+                    [this](const std::string& key) { releaseKey(key); });
 }
 
 void MachineController::advance(std::uint64_t cyclesBudget) {

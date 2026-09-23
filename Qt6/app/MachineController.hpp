@@ -125,7 +125,8 @@ public:
     // CE-1600P ROM version (independent of the PC-1600 one; the CE-1600F
     // follows it). Rebuilds the machine, keeping the plotter, when a CE-1600P
     // is attached; otherwise only remembers the choice for the next attach.
-    void setCE1600PRomVersion(CE1600PRomVersion version);
+    // Returns whether it rebuilt.
+    bool setCE1600PRomVersion(CE1600PRomVersion version);
     CE1600PRomVersion ce1600pRomVersion() const { return m_ce1600pRomVersion; }
 
     // Reset (`allReset` = ALL RESET on the PC-1600; the PC-1500 has one

@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "../BcdCalendar.hpp"
+#include "PC1600Clocks.hpp"
 
 // ── PC-1600 sub-CPU (LU-57813P) command/answer interface ─────────────────
 //
@@ -85,7 +86,7 @@ public:
     // for PSR bit 5 before sending; A98C waits for PSR bit 6 after sending,
     // then reads 33H. The TC8576F reports both while busy().
     static constexpr int kResponseMicros = 1660;
-    static constexpr int kBusyTStates = 3580000 / 1000 * kResponseMicros / 1000; // SC-7852 T-states
+    static constexpr int kBusyTStates = static_cast<int>(kPC1600TStateHz / 1000 * kResponseMicros / 1000); // SC-7852 T-states
 
     /// True while the modelled BUSY window after a command is still open.
     bool busy() const { return m_busyTStatesLeft > 0; }

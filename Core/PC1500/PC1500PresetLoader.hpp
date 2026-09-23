@@ -58,16 +58,6 @@ struct PresetLoadResult {
 /// no behavior.
 using PresetArmedFn = std::function<void(const PresetLoadResult& armedSoFar)>;
 
-/// Fired for a `- saveas: s1:<name>` step (see PresetFile.hpp's top-of-file
-/// doc comment; only `s1:` is valid on a PC-1500/1500A preset -- the
-/// parser rejects `s2:`/`floppy:`). Mirrors PC1600PresetLoader.hpp's
-/// PC1600PresetSaveAsFn: `target` is always SaveAsTarget::S1 here; `name`
-/// is the name to save the live expansion-slot card under. Returns true on
-/// success, or false with `*error` filled in. Left unset (the default)
-/// makes a `saveas:` step a logged no-op.
-using PresetSaveAsFn =
-    std::function<bool(PresetStep::SaveAsTarget target, const std::string& name, std::string* error)>;
-
 /// Applies `preset` (already parsed via parsePresetFile) to `machine`:
 /// loads firmware, resets, steps past the boot sequence, then walks
 /// `preset.sections` in file order, running each `keys:` block's steps or

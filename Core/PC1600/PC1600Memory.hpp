@@ -181,8 +181,6 @@ public:
     /// Credits `tstates` of elapsed time to the buzzer: runs the F-register
     /// modulator (toggling SDO at its exact edge times) and the sampler.
     void advanceBuzzer(uint32_t tstates);
-    /// The T-state rate advanceBuzzer() counts in (== PC1600Machine::kTStateHz).
-    static constexpr int64_t kSdoTStateHz = 3580000;
 
     /// Sets/clears the ON key's live state (not part of the scan matrix --
     /// see PC1600Keyboard's class comment). A press transition sets IF
@@ -201,9 +199,8 @@ public:
     /// gates at 0B07H/0B66H and P1-B3 4770H, and the key scan at
     /// P2-B6 9412H.
     bool setOnKeyPressed(bool pressed) {
-        bool risingEdge = pressed && !m_onKeyPressed;
+        const bool risingEdge = pressed && !(m_pbIn & kPbInOnKey);
         if (risingEdge) m_if |= 0x02;
-        m_onKeyPressed = pressed;
         if (pressed) m_pbIn |= kPbInOnKey;
         else         m_pbIn &= static_cast<uint8_t>(~kPbInOnKey);
         return risingEdge;
@@ -492,13 +489,13 @@ private:
     // audible level is (b6 && b7) && SDO. The recording agrees: the
     // whistle runs on unchanged through the noise routine's OPC writes, and
     // BEEP OFF (b6 low) silences both.
-    static constexpr int64_t kModulatorHz = 1300000 / 4;   // phi of the F-register dividers
+    static constexpr int64_t kModulatorHz = kPC1600PhiOsHz / 4;   // phi of the F-register dividers
     uint8_t m_fReg{0};
     bool    m_sdo{true};
     int64_t m_sdoAccum{0};  // T-states * kModulatorHz into the current SDO half period
     void updateBuzzerLine() { m_piezo.setLevel((m_opc & 0xC0) == 0xC0 && m_sdo); }
-    // TRM 7.5: SC-7852 T-states at 3.58 MHz (PC1600Machine::kTStateHz).
-    PiezoSampler m_piezo{3580000.0, PiezoSampler::Transducer::PC1600};
+    // Sampled in SC-7852 T-states.
+    PiezoSampler m_piezo{double(kPC1600TStateHz), PiezoSampler::Transducer::PC1600};
     // Live PB *pin* levels for the bits driven from outside the CPU, kept
     // apart from the m_opb output latch above and merged in on a read of
     // 1FH (see readIO()). PB5 = the sub-CPU's 64Hz timer square wave
@@ -541,7 +538,6 @@ private:
     PC1600Display m_display;
     PC1600SubCpu  m_subCpu;
     TC8576F       m_uart{m_subCpu}; // declared after m_subCpu -- it holds a ref
-    bool m_onKeyPressed{false};
 
     std::array<uint8_t, kBankSize> m_bank0Lower{};   // page A, fixed
     std::array<uint8_t, kBankSize> m_bank0Upper{};   // page B bank 0

@@ -757,7 +757,7 @@ void test_loader_saveas_step_invokes_callback() {
 
     PC1600Machine m;
     std::vector<std::pair<PresetStep::SaveAsTarget, std::string>> calls;
-    PC1600PresetSaveAsFn onSaveAs = [&](PresetStep::SaveAsTarget target, const std::string& name,
+    PresetSaveAsFn onSaveAs = [&](PresetStep::SaveAsTarget target, const std::string& name,
                                         std::string*) {
         calls.push_back({target, name});
         return true;
@@ -780,7 +780,7 @@ void test_loader_saveas_step_failure_stops_preset() {
     CHECK(parse("model: PC-1600\nkeys:\n  - saveas: s1:Bad\n  - type: 1\n", &p, &err));
 
     PC1600Machine m;
-    PC1600PresetSaveAsFn onSaveAs = [](PresetStep::SaveAsTarget, const std::string&,
+    PresetSaveAsFn onSaveAs = [](PresetStep::SaveAsTarget, const std::string&,
                                        std::string* error) {
         *error = "disk full";
         return false;

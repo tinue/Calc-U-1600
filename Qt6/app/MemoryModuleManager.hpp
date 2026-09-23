@@ -83,7 +83,7 @@ public:
     bool nameAndSave(int slot, const QString& instanceName, QString* error);
 
     // Preset `saveas:s1:<name>` / `saveas:s2:<name>` (PresetController's
-    // PC1600PresetSaveAsFn/PresetSaveAsFn callback). Like nameAndSave(),
+    // PresetSaveAsFn callback). Like nameAndSave(),
     // the slot is then retargeted at the new instance (shown under that
     // name, autosaving there), but unlike it: works even when the slot is
     // already saved (a "save as" -- the previous instance file just stops
@@ -113,6 +113,9 @@ signals:
     void errorMessage(const QString& text);
 
 private:
+    // Shared body of nameAndSave()/saveAsFromPreset(); `fromPreset` skips
+    // the already-saved and name-collision checks.
+    bool saveSlotAs(int slot, const QString& instanceName, bool fromPreset, QString* error);
     QSet<QString> bundledNames() const;  // every bundled card's module-name, all hosts
     bool nameCollides(const QString& instanceName) const;
 

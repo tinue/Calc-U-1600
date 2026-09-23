@@ -65,7 +65,7 @@ void PC1600Memory::advanceBuzzer(uint32_t tstates) {
     // FX = phi / (64 << F0-2); SDO toggles every half of that period.
     // Codes 5-7 aren't in the TRM table; treat them as the slowest, /1024.
     const int fx = std::min(m_fReg & 0x07, 4);
-    const int64_t halfPeriod = kSdoTStateHz * (int64_t{64} << fx) / 2; // in T-states * kModulatorHz
+    const int64_t halfPeriod = int64_t{kPC1600TStateHz} * (int64_t{64} << fx) / 2; // in T-states * kModulatorHz
     int64_t remaining = tstates;
     while (m_sdoAccum + remaining * kModulatorHz >= halfPeriod) {
         const int64_t take = (halfPeriod - m_sdoAccum + kModulatorHz - 1) / kModulatorHz;

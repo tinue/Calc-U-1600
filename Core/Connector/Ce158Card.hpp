@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <vector>
 
 #include "ExpansionCard.hpp"
@@ -66,7 +67,7 @@
 //     already gates every send.
 //   - The PE/FE/OE status bits are never set (a byte stream has no line
 //     errors); a control-register write clears them anyway.
-class Ce158Card : public ExpansionCard {
+class Ce158Card final : public ExpansionCard {
 public:
     static constexpr size_t   kBankSize = 0x2000;      // 8 KB per PU bank
     static constexpr size_t   kRomSize  = 2 * kBankSize; // CE-158.ROM, 16384 B
@@ -119,7 +120,6 @@ public:
         m_lastDtr = m_lastRts = -1; // re-announce our lines to the new peer
         refreshLines();
     }
-    SerialLink* serialLink() const { return m_link; }
 
     /// Re-anchor to power-on state: LH5811 latches cleared, UART idle.
     /// Keeps the serial link and any captured-but-undrained parallel output.
@@ -165,15 +165,16 @@ public:
     /// Bytes the ROM has strobed out of the Centronics port since the last
     /// drain, in order.
     std::vector<uint8_t> drainParallelOutput() {
-        std::vector<uint8_t> out;
-        out.swap(m_parallelOut);
+        // Copy + clear (not swap): keeps the buffer's capacity for the
+        // next frame's bytes instead of regrowing it every drain.
+        std::vector<uint8_t> out(m_parallelOut);
+        m_parallelOut.clear();
         return out;
     }
 
     // ── Debug / test peek ───────────────────────────────────────────────
     uint8_t uartStatus() const { return m_uartStatus; }
     uint8_t uartControl() const { return m_uartControl; }
-    uint8_t pioRegister(uint8_t sel) const { return m_pio[sel & 0x0F]; }
     /// Decoded from PC0-4 + PA7; 0 when the code is not one the ROM uses.
     int baudRate() const { return decodeBaud(); }
 
@@ -345,3 +346,24 @@ private:
     static constexpr size_t kParallelCap = 1 << 20;
     std::vector<uint8_t> m_parallelOut;
 };
+
+/// Renders CE-158 parallel-port (printer) bytes for display: CR dropped,
+/// LF and printable ASCII kept, anything else shown as `<XX>` (hex).
+/// Shared by the GUI printer pane and the CLIs' report.
+inline std::string ce158PrintableText(const uint8_t* bytes, size_t size) {
+    static const char kHex[] = "0123456789ABCDEF";
+    std::string text;
+    for (size_t i = 0; i < size; ++i) {
+        const uint8_t b = bytes[i];
+        if (b == '\r') continue;
+        if (b == '\n' || (b >= 0x20 && b < 0x7F)) {
+            text += static_cast<char>(b);
+        } else {
+            text += '<';
+            text += kHex[b >> 4];
+            text += kHex[b & 0x0F];
+            text += '>';
+        }
+    }
+    return text;
+}

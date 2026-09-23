@@ -93,10 +93,9 @@ public:
     // Everything that measures emulated time derives from kTStateHz rather
     // than restating it: the timer periods below, runCycles()'s budget, and
     // (via `paceHz` on the Bridge wrapper) the GUI's batch pacing.
-    static constexpr uint32_t kTStateHz = 3580000;
+    static constexpr uint32_t kTStateHz = kPC1600TStateHz;
     static_assert(CE1600FCard::kTStateHz == kTStateHz, "CE1600FCard times seeks in SC7852 T-states");
-    static_assert(PC1600Memory::kSdoTStateHz == kTStateHz, "the F-register modulator counts SC7852 T-states");
-    static constexpr uint32_t kLH5803Hz = 1300000;
+    static constexpr uint32_t kLH5803Hz = kPC1600PhiOsHz;
 
     /// Converts a cycle count returned by whichever CPU owned the bus into
     /// this machine's canonical T-state unit. SC-7852 counts pass through;
@@ -505,7 +504,6 @@ private:
     // against it. Here it fires on a falling edge. The exact phase isn't
     // known from any source, and nothing observed so far depends on it.
     static constexpr int kTimer64EdgesPerHalfSecond = 64;
-    static constexpr int kHalfSecondEdgePhase = 0;
     int m_timer64EdgeCount{0};
 
     // LU-57813P real-time clock: one calendar second per second of

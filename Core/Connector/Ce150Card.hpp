@@ -36,7 +36,7 @@
 // Cassette (CSAVE/CLOAD/CHAIN/PRINT#) is out of scope, same as the
 // CE-1600P: the RMT bits on OPA are latched and ignored, the ROM's tape
 // paths run but move no data.
-class Ce150Card : public ExpansionCard {
+class Ce150Card final : public ExpansionCard {
 public:
     static constexpr size_t   kRomSize = 0x2000;   // 8192 B
     static constexpr uint16_t kRomBase = 0xA000;

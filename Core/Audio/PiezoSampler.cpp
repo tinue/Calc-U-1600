@@ -83,7 +83,6 @@ PiezoSampler::PiezoSampler(double cpuHz, Transducer transducer, int sampleRate)
 }
 
 void PiezoSampler::setTransducer(Transducer transducer) {
-    m_transducer = transducer;
     m_stageCount = 0;
     m_gain = kGain;
     const BiquadSpec* specs = nullptr;

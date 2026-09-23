@@ -64,13 +64,15 @@ void AudioOutput::pump(MachineController& controller, bool discard) {
     if (n == 0 && m_pending.empty()) return;
 
     const bool silent = isSilent(m_buffer.data(), n);
-    if (!m_io) {
+    const bool justStarted = !m_io;
+    if (justStarted) {
         if (silent || !startSink()) return;
     }
 
     // The sink went idle = it played out everything it had: the emulation
-    // fell behind the audio clock and there's a gap in the sound.
-    if (m_sink->state() == QAudio::IdleState && !silent) {
+    // fell behind the audio clock and there's a gap in the sound. (A sink
+    // started on this pump is idle only because it has no data yet.)
+    if (!justStarted && m_sink->state() == QAudio::IdleState && !silent) {
         qWarning() << "AudioOutput: sink ran dry (emulation behind audio clock) -- audible gap";
     }
     m_pending.insert(m_pending.end(), m_buffer.begin(), m_buffer.begin() + static_cast<std::ptrdiff_t>(n));

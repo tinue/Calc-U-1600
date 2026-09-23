@@ -1,6 +1,7 @@
 #include "Ce158PrinterWidget.hpp"
 #include "ChromeColors.hpp"
 #include "MachineController.hpp"
+#include "Connector/Ce158Card.hpp"
 #include <QEvent>
 #include <QFile>
 #include <QFileDialog>
@@ -81,14 +82,7 @@ void Ce158PrinterWidget::applyChrome() {
     m_output->setStyleSheet(QString("QPlainTextEdit { background-color: %1; color: %2; border: 1px solid %3; }")
                                 .arg(cssRgba(c.outputBackground), cssRgba(c.outputText), cssRgba(c.outputBorder)));
     m_buttonBar->setStyleSheet(ChromeStyle::buttonBar(c));
-    const QString buttonStyle =
-        QString("QPushButton { border: none; %1 }"
-                "QPushButton:hover:!disabled { background-color: %2; }"
-                "QPushButton:pressed, QPushButton:hover:pressed { background-color: %3; }"
-                "QPushButton:disabled { background-color: %4; color: %5; }")
-            .arg(ChromeStyle::pillCore(c.pillBackground, c.pillText),
-                 cssRgba(c.pillBackground.lighter(115)), cssRgba(c.pillBackground.darker(130)),
-                 cssRgba(c.pillBackgroundOff), cssRgba(c.pillText));
+    const QString buttonStyle = ChromeStyle::pillPushButton(c);
     m_saveButton->setStyleSheet(buttonStyle);
     m_clearButton->setStyleSheet(buttonStyle);
 }
@@ -110,13 +104,8 @@ void Ce158PrinterWidget::onFrameTick() {
 
 void Ce158PrinterWidget::appendBytes(const QByteArray& bytes) {
     m_printed.append(bytes);
-    QString text;
-    for (const char ch : bytes) {
-        const auto b = static_cast<unsigned char>(ch);
-        if (b == '\r') continue;
-        if (b == '\n' || (b >= 0x20 && b < 0x7F)) text += QChar(b);
-        else text += QString("<%1>").arg(b, 2, 16, QChar('0')).toUpper();
-    }
+    const QString text = QString::fromStdString(ce158PrintableText(
+        reinterpret_cast<const std::uint8_t*>(bytes.constData()), static_cast<std::size_t>(bytes.size())));
     QScrollBar* bar = m_output->verticalScrollBar();
     const bool follow = bar->value() >= bar->maximum() - 4;
     QTextCursor cursor(m_output->document());

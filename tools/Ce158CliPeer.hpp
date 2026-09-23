@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "../Core/Connector/Ce158Card.hpp"
 #include "../Core/Serial/PtySerialLink.hpp"
 
 // --ce158-rx / --ce158-tx: a file-backed serial peer for repeatable runs.
@@ -30,13 +31,7 @@ public:
 
 inline void printCe158Bytes(const char* title, const std::vector<uint8_t>& bytes) {
     std::printf("%s (%zu bytes):\n", title, bytes.size());
-    std::string text;
-    for (uint8_t b : bytes) {
-        if (b == '\r') continue;
-        if (b == '\n' || (b >= 0x20 && b < 0x7F)) text += static_cast<char>(b);
-        else { char hex[8]; std::snprintf(hex, sizeof hex, "<%02X>", b); text += hex; }
-    }
-    std::printf("%s\n", text.c_str());
+    std::printf("%s\n", ce158PrintableText(bytes.data(), bytes.size()).c_str());
 }
 
 class Ce158CliPeer {

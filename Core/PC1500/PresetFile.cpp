@@ -11,6 +11,11 @@
 
 namespace {
 
+// ASCII-lowercases `s` in place (preset keywords/values are case-insensitive).
+void lowerAscii(std::string& s) {
+    for (char& ch : s) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+}
+
 struct RawLine {
     int indent;
     std::string content; // leading indent stripped
@@ -199,7 +204,7 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
             // not contain a path separator -- WHERE it lands is the trace
             // directory's concern (see PC1500PresetLoader::applyPC1500Preset()).
             std::string lowered = value;
-            for (char& ch : lowered) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            lowerAscii(lowered);
             step.kind = PresetStep::Kind::Trace;
             if (lowered == "off") {
                 step.text = "";
@@ -248,7 +253,7 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
             }
             std::string target = trim(value.substr(0, targetColon));
             std::string name = trim(value.substr(targetColon + 1));
-            for (char& ch : target) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            lowerAscii(target);
             if (target == "s1") step.saveAsTarget = PresetStep::SaveAsTarget::S1;
             else if (target == "s2") step.saveAsTarget = PresetStep::SaveAsTarget::S2;
             else if (target == "floppy") step.saveAsTarget = PresetStep::SaveAsTarget::Floppy;
@@ -384,7 +389,7 @@ bool parseProgramBlock(const std::vector<RawLine>& lines, size_t& idx, const std
         } else if (key == "slot") {
             if (!hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'slot' requires a value"; return false; }
             std::string v = value;
-            for (char& c : v) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            lowerAscii(v);
             if (v == "s0") prog.slot = PresetProgram::Slot::S0;
             else if (v == "s1") prog.slot = PresetProgram::Slot::S1;
             else if (v == "s2") prog.slot = PresetProgram::Slot::S2;
@@ -596,7 +601,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             if (!hasInline) { *error = "'plotter' requires a value"; return false; }
             hasPlotter = true;
             plotter = value;
-            for (char& ch : plotter) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            lowerAscii(plotter);
             // `plotter: NAME[:ROM]` -- only the CE-1600P has a ROM choice
             // (`plotter: ce1600p:old`); split it off before normalizing.
             const size_t plotterColon = plotter.find(':');
@@ -631,7 +636,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         } else if (key == "interface") {
             if (!hasInline) { *error = "'interface' requires a value"; return false; }
             interfaceName = value;
-            for (char& ch : interfaceName) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            lowerAscii(interfaceName);
             if (interfaceName == "ce-158") interfaceName = "ce158";
             else if (interfaceName == "none" || interfaceName == "off") interfaceName.clear();
             if (!interfaceName.empty() && interfaceName != "ce158") {
@@ -680,7 +685,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         // independent of it.
         out->romVariant = "new";
         if (!modelRom.empty()) {
-            for (char& ch : modelRom) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            lowerAscii(modelRom);
             if (modelRom != "new" && modelRom != "old") {
                 *error = "'model: PC-1600:" + modelRom + "' -- the PC-1600 ROM must be 'new' or 'old'";
                 return false;

@@ -220,6 +220,14 @@ bool MemoryModuleManager::spliceCardImageInto(int slot, const QString& sourcePat
 }
 
 bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QString* error) {
+    return saveSlotAs(slot, instanceName, /*fromPreset=*/false, error);
+}
+
+bool MemoryModuleManager::saveAsFromPreset(int slot, const QString& instanceName, QString* error) {
+    return saveSlotAs(slot, instanceName, /*fromPreset=*/true, error);
+}
+
+bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool fromPreset, QString* error) {
     const QString name = instanceName.trimmed();
     if (name.isEmpty()) {
         *error = tr("Name cannot be empty.");
@@ -230,7 +238,7 @@ bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QSt
         *error = tr("No module attached.");
         return false;
     }
-    if (!st.instanceFilePath.isEmpty()) {
+    if (!fromPreset && !st.instanceFilePath.isEmpty()) {
         *error = tr("\"%1\" is already saved; changes are saved automatically.").arg(st.moduleName);
         return false;
     }
@@ -242,7 +250,7 @@ bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QSt
         *error = tr("\"%1\" is a built-in card name. Choose a different name.").arg(name);
         return false;
     }
-    if (nameCollides(name)) {
+    if (!fromPreset && nameCollides(name)) {
         *error = tr("A card named \"%1\" already exists. Choose a different name.").arg(name);
         return false;
     }
@@ -264,52 +272,8 @@ bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QSt
         return false;
     }
 
-    st.moduleName = name;
-    st.instanceFilePath = newPath;
-    st.persistPending = false;
-    emit moduleChanged(slot);
-    return true;
-}
-
-bool MemoryModuleManager::saveAsFromPreset(int slot, const QString& instanceName, QString* error) {
-    const QString name = instanceName.trimmed();
-    if (name.isEmpty()) {
-        *error = tr("Name cannot be empty.");
-        return false;
-    }
-    SlotState& st = m_slots[slot - 1];
-    if (st.moduleName.isEmpty()) {
-        *error = tr("No module attached.");
-        return false;
-    }
-    if (name.contains(QLatin1Char('"'))) {
-        *error = tr("Name cannot contain '\"'.");
-        return false;
-    }
-    if (bundledNames().contains(name)) {
-        *error = tr("\"%1\" is a built-in card name. Choose a different name.").arg(name);
-        return false;
-    }
-
-    std::string p;
-    if (!resolveModuleSpecByName(AppPaths::bundledResourcesDir().toStdString(), st.moduleName.toStdString(), &p,
-                                 nullptr)) {
-        *error = tr("Couldn't find the source template for \"%1\".").arg(st.moduleName);
-        return false;
-    }
-    const QString sourcePath = QString::fromStdString(p);
-
-    std::string spliced;
-    if (!spliceCardImageInto(slot, sourcePath, st.moduleName, name, &spliced, error)) return false;
-
-    const QString newPath = AppPaths::instancePathFor(name);
-    if (!AppPaths::atomicWriteFile(newPath, spliced)) {
-        *error = tr("Couldn't write \"%1\".").arg(newPath);
-        return false;
-    }
-
-    // Retarget the slot at the saved copy, like nameAndSave(): it now shows
-    // under its new name and autosaves there.
+    // Retarget the slot at the saved copy: it now shows under its new name
+    // and autosaves there.
     st.moduleName = name;
     st.instanceFilePath = newPath;
     st.persistPending = false;

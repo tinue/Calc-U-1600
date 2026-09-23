@@ -72,7 +72,7 @@ public:
     // is always refused (the bundled disk would shadow the saved one).
     bool nameAndSave(const QString& diskName, QString* error);
 
-    // Preset `saveas:floppy:<name>` (PresetController's PC1600PresetSaveAsFn
+    // Preset `saveas:floppy:<name>` (PresetController's PresetSaveAsFn
     // callback). Like nameAndSave(), the drive is then retargeted at the new
     // instance (shown under that name, autosaving there), but unlike it:
     // works even when the drive's disk is already saved (a "save as" -- the
@@ -87,6 +87,9 @@ signals:
     void errorMessage(const QString& text);
 
 private:
+    // Shared body of nameAndSave()/saveAsFromPreset(); `fromPreset` skips
+    // the already-saved and name-collision checks.
+    bool saveDiskAs(const QString& diskName, bool fromPreset, QString* error);
     bool nameCollides(const QString& diskName) const;
 
     MachineController* m_controller;  // not owned

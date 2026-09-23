@@ -49,7 +49,6 @@ public:
     /// Switches the acoustic model on or off. Tests that measure the drive
     /// signal's pitch/timing turn it off; the host hears it on.
     void setTransducer(Transducer transducer);
-    Transducer transducer() const { return m_transducer; }
 
     int sampleRate() const { return m_sampleRate; }
 
@@ -112,7 +111,6 @@ private:
     double m_hpPrevIn{0.0};
     double m_hpPrevOut{0.0};
 
-    Transducer m_transducer{Transducer::None};
     Biquad m_stages[kMaxStages];
     int    m_stageCount{0};
     double m_gain{0.0};

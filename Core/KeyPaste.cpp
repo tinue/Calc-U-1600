@@ -31,14 +31,6 @@ void KeyPasteFeeder::append(const std::vector<PasteStep>& steps) {
         m_queue.push_back(a);
     };
     for (const PasteStep& step : steps) {
-        if (step.kind == PasteStep::Kind::Enter) {
-            tap(step.key);
-            wait(m_pacing.postEnterFloorFrames);
-            Action a;
-            a.kind = Action::Kind::WaitPrompt;
-            m_queue.push_back(a);
-            continue;
-        }
         if (step.needsShift) {
             // SHIFT is a one-shot latch: tapped, not held, and consumed by
             // the next key -- never explicitly un-latched afterward.
@@ -69,14 +61,10 @@ void KeyPasteFeeder::begin(const Action& action, const KeyFn& press) {
         case Action::Kind::Wait:
             m_framesLeft = action.frames;
             break;
-        case Action::Kind::WaitPrompt:
-            m_framesLeft = m_pacing.postEnterCapFrames;
-            m_promptRun = 0;
-            break;
     }
 }
 
-bool KeyPasteFeeder::elapse(bool atPrompt, const KeyFn& release) {
+bool KeyPasteFeeder::elapse(const KeyFn& release) {
     switch (m_current.kind) {
         case Action::Kind::Tap:
             if (--m_framesLeft > 0) return false;
@@ -89,21 +77,18 @@ bool KeyPasteFeeder::elapse(bool atPrompt, const KeyFn& release) {
             return true;
         case Action::Kind::Wait:
             return --m_framesLeft <= 0;
-        case Action::Kind::WaitPrompt:
-            m_promptRun = atPrompt ? m_promptRun + 1 : 0;
-            return m_promptRun >= m_pacing.promptHoldFrames || --m_framesLeft <= 0;
     }
     return true;
 }
 
-void KeyPasteFeeder::onFrame(const KeyFn& press, const KeyFn& release, bool atPrompt) {
+void KeyPasteFeeder::onFrame(const KeyFn& press, const KeyFn& release) {
     if (m_hasCurrent) {
-        if (!elapse(atPrompt, release)) return;
+        if (!elapse(release)) return;
         m_hasCurrent = false;
     }
     if (m_queue.empty()) return;
-    // Start the next action at this frame boundary. Only a Tap/Wait/
-    // WaitPrompt with time left can be current, so one begin() suffices.
+    // Start the next action at this frame boundary. Only a Tap/Wait with
+    // time left can be current, so one begin() suffices.
     const Action next = m_queue.front();
     m_queue.pop_front();
     begin(next, press);

@@ -69,4 +69,15 @@ inline QString pillCore(const QColor& background, const QColor& text) {
         .arg(cssRgba(background), cssRgba(text));
 }
 
+// A pill-styled QPushButton with a visible pressed state (the pane action
+// buttons: plotter paper Copy/Cut, CE-158 printer Save/Clear).
+inline QString pillPushButton(const ChromeColors& c) {
+    return QString("QPushButton { border: none; %1 }"
+                   "QPushButton:hover:!disabled { background-color: %2; }"
+                   "QPushButton:pressed, QPushButton:hover:pressed { background-color: %3; }"
+                   "QPushButton:disabled { background-color: %4; color: %5; }")
+        .arg(pillCore(c.pillBackground, c.pillText), cssRgba(c.pillBackground.lighter(115)),
+             cssRgba(c.pillBackground.darker(130)), cssRgba(c.pillBackgroundOff), cssRgba(c.pillText));
+}
+
 } // namespace ChromeStyle
