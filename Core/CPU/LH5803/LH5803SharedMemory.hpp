@@ -5,6 +5,7 @@
 #include <string>
 
 #include "../LH5801/LH5801.hpp"
+#include "LH5803Rom.hpp"
 #include "../../Connector/Ce150Card.hpp"
 #include "../../Connector/Ce158Card.hpp"
 
@@ -97,8 +98,8 @@ public:
 
     /// Loads the LH5803-private internal ROM at C000-FFFF (PC1600-LH5803-C000-FFFF-new.bin).
     /// Returns false (untouched) if `size` isn't exactly 16384 bytes.
-    bool loadROM(const uint8_t* data, size_t size);
-    bool loadROMFile(const std::string& path);
+    bool loadROM(const uint8_t* data, size_t size) { return m_rom.load(data, size); }
+    bool loadROMFile(const std::string& path) { return m_rom.loadFile(path); }
 
     /// Clear volatile I/O state -- the internal-PIO register file at ME1
     /// 0xF000-0xF00F. ROM/PV/card attachment are untouched (matching
@@ -112,8 +113,7 @@ public:
     void    writeME1(uint16_t addr, uint8_t value) override;
 
 private:
-    static constexpr uint16_t kRomBase = 0xC000;
-    static constexpr size_t   kRomSize = 0x4000; // 16384B
+    static constexpr uint16_t kRomBase = LH5803Rom::kBase;
     static constexpr uint16_t kHandoffTriggerAddr = 0xA038;
 
     /// True and fills *reg (0..3, the A1:A0 UART register) / *isSubCpuAnswer
@@ -146,9 +146,8 @@ private:
     PC1600BusArbiter* m_arbiter{nullptr};
     Ce150Card* m_ce150{nullptr};
     Ce158Card* m_ce158{nullptr};
-    std::array<uint8_t, kRomSize> m_rom{};
+    LH5803Rom m_rom;
     std::array<uint8_t, 16> m_ioRegs{}; // internal LH5811-compat PIO, ME1 0xF000-0xF00F
-    bool m_romLoaded{false};
     bool m_pv{false};
     bool m_pu{false};
 };

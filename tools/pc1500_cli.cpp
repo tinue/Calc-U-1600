@@ -230,7 +230,7 @@ int main(int argc, char** argv) {
 
     // Drain trace ring buffer and print the last few instructions executed.
     // The ring only ever retains its own fixed capacity (512, see
-    // LH5801::kRingSize) regardless of how many instructions actually ran
+    // LH5801's TraceRing<CpuFrame, 512>) regardless of how many instructions actually ran
     // -- draining fewer than that here would return the *oldest* surviving
     // entries, not the most recent ones (drainTraceEvents advances forward
     // from the oldest undrained event), so this must request the full

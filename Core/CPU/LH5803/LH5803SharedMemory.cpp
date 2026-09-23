@@ -1,28 +1,7 @@
 #include "LH5803SharedMemory.hpp"
 
-#include <cstdio>
-#include <cstring>
-#include <vector>
-
 #include "../../PC1600/PC1600BusArbiter.hpp"
 #include "../../PC1600/PC1600Memory.hpp"
-
-bool LH5803SharedMemory::loadROM(const uint8_t* data, size_t size) {
-    if (size != kRomSize) return false;
-    std::memcpy(m_rom.data(), data, kRomSize);
-    m_romLoaded = true;
-    return true;
-}
-
-bool LH5803SharedMemory::loadROMFile(const std::string& path) {
-    FILE* f = std::fopen(path.c_str(), "rb");
-    if (!f) return false;
-    std::vector<uint8_t> buf(kRomSize + 1);
-    size_t n = std::fread(buf.data(), 1, buf.size(), f);
-    std::fclose(f);
-    if (n != kRomSize) return false;
-    return loadROM(buf.data(), kRomSize);
-}
 
 uint8_t LH5803SharedMemory::readME0(uint16_t addr) {
     if (addr < 0x8000) return m_shared.read(uint16_t(addr + 0x8000));
@@ -31,14 +10,13 @@ uint8_t LH5803SharedMemory::readME0(uint16_t addr) {
         // (the ROM sets it from CALLH's PARBAN): CE-150 ROM at PVOUT=0
         // (upper 8K), CE-158 ROM at PVOUT=1 (lower 8K, PU-banked). Each
         // card gates its window on the PV/PU it is shown.
-        if (!m_ce158 && !m_ce150) return 0xFF; // open bus
         uint8_t v;
         const PinState p = peripheralPins(addr, /*forWrite=*/false, /*me1=*/false);
         if (m_ce158 && m_ce158->respondsToRead(p, v)) return v;
         if (m_ce150 && m_ce150->respondsToRead(p, v)) return v;
         return 0xFF; // open bus
     }
-    return m_romLoaded ? m_rom[addr - kRomBase] : 0xFF;
+    return m_rom.read(addr);
 }
 
 void LH5803SharedMemory::writeME0(uint16_t addr, uint8_t value) {

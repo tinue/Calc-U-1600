@@ -1,10 +1,9 @@
 #pragma once
 #include <atomic>
 #include <cstdint>
-#include <mutex>
-#include <vector>
 
 #include "../../TraceTypes.hpp"
+#include "../TraceRing.hpp"
 
 // ── Bus interface ────────────────────────────────────────────────────────
 //
@@ -113,9 +112,9 @@ public:
     void     setPV(bool v) { PV = v; }
     bool     displayOn() const { return DISP; }
     uint16_t timer() const { return TM; }
-    /// Debug/test/state-load access to AM0/AM1's own load path (resyncs
-    /// the internal LFSR step position too -- see the .cpp comment on the
-    /// private overload this forwards to).
+    /// Debug/test/state-load access to AM0/AM1's own load path: sets TM
+    /// only. The cycle accumulator toward the next LFSR step is left
+    /// running, as on AM0/AM1.
     void setTimer(uint16_t v);
     bool     halted() const { return m_halted; }
 
@@ -161,7 +160,7 @@ public:
     /// Drain up to `max` frames from the ring (oldest first since the last
     /// drain). If frames were overwritten before being drained, *outLost is
     /// set to the count lost. Returns the number of frames written to `out`.
-    uint32_t drainTraceEvents(CpuFrame* out, uint32_t max, uint32_t* outLost);
+    uint32_t drainTraceEvents(CpuFrame* out, uint32_t max, uint32_t* outLost) { return m_trace.drain(out, max, outLost); }
 
     /// Read up to the `max` most-recently-written frames (oldest of that
     /// set first) WITHOUT consuming them -- unlike drainTraceEvents(),
@@ -169,13 +168,13 @@ public:
     /// frames have been written. For a debugger's frozen view: freeze,
     /// call once to capture a stable snapshot, and the live drain cursor
     /// (and thus the next unfrozen drainTraceEvents() call) is untouched.
-    uint32_t peekTraceEvents(CpuFrame* out, uint32_t max);
+    uint32_t peekTraceEvents(CpuFrame* out, uint32_t max) { return m_trace.peek(out, max); }
 
-    void addBreakpoint(uint16_t addr);
-    void removeBreakpoint(uint16_t addr);
-    void clearBreakpoints();
+    void addBreakpoint(uint16_t addr) { m_breakpoints.add(addr); }
+    void removeBreakpoint(uint16_t addr) { m_breakpoints.remove(addr); }
+    void clearBreakpoints() { m_breakpoints.clear(); }
     /// Returns true once per hit; call after each step() that returned 0.
-    bool consumeBreakpointHit();
+    bool consumeBreakpointHit() { return m_breakpoints.consumeHit(); }
 
     /// True if the most recently executed opcode had no case in execute()/
     /// executeFD() (i.e. isn't in the LH5801_Guide.md instruction set this
@@ -261,15 +260,8 @@ private:
     // ── Trace / debug state ──────────────────────────────────────────────
     std::atomic<uint32_t> m_traceFlags{TRACE_NONE};
     uint32_t m_traceSeqno{0};
-    static constexpr uint32_t kRingSize = 512;
-    static constexpr uint32_t kRingMask = kRingSize - 1;
-    CpuFrame m_ring[kRingSize]{};
-    uint32_t m_drainCursor{0};   // next read index
-    uint32_t m_totalWritten{0};  // write count so far; also gives the next write index (m_totalWritten & kRingMask) and overflow accounting
-    mutable std::mutex m_traceMutex;
-
-    std::vector<uint16_t> m_breakpoints; // sorted ascending
-    bool m_breakpointHit{false};
+    TraceRing<CpuFrame, 512> m_trace;
+    BreakpointSet m_breakpoints;
 
     bool     m_illegalOpcodeHit{false};
     uint16_t m_lastIllegalOpcodePC{0};

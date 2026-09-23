@@ -1,10 +1,9 @@
 #pragma once
 #include <atomic>
 #include <cstdint>
-#include <mutex>
-#include <vector>
 
 #include "../../TraceTypes.hpp"
+#include "../TraceRing.hpp"
 
 // ── Bus interface ────────────────────────────────────────────────────────
 //
@@ -148,20 +147,14 @@ public:
     /// the real chip, not because anything in this project's scope raises it.
     void requestNMI();
 
-    // ── Trace / debug API (mirrors LH5801's) ─────────
+    // ── Trace API ─────────
     // Zero overhead when disabled: step() hot path costs one atomic load;
     // falls through with no extra work when traceFlags() == TRACE_NONE.
     void     setTraceFlags(uint32_t flags) { m_traceFlags.store(flags, std::memory_order_relaxed); }
     uint32_t traceFlags() const { return m_traceFlags.load(std::memory_order_relaxed); }
 
-    uint32_t drainTraceEvents(Z80CpuFrame* out, uint32_t max, uint32_t* outLost);
-    uint32_t peekTraceEvents(Z80CpuFrame* out, uint32_t max);
-
-    void addBreakpoint(uint16_t addr);
-    void removeBreakpoint(uint16_t addr);
-    void clearBreakpoints();
-    /// Returns true once per hit; call after each step() that returned 0.
-    bool consumeBreakpointHit();
+    uint32_t drainTraceEvents(Z80CpuFrame* out, uint32_t max, uint32_t* outLost) { return m_trace.drain(out, max, outLost); }
+    uint32_t peekTraceEvents(Z80CpuFrame* out, uint32_t max) { return m_trace.peek(out, max); }
 
 private:
     SC7852Bus& bus;
@@ -243,7 +236,7 @@ private:
     /// the whole "instruction" for that cycle).
     int serviceInterrupt(bool maskableBlocked);
 
-    // ── Trace / debug state (mirrors LH5801's exactly, Z80CpuFrame-shaped) ──
+    // ── Trace state ──
     std::atomic<uint32_t> m_traceFlags{TRACE_NONE};
     uint32_t m_traceSeqno{0};
     // Needs to be large relative to the LH5801's ring size: at PC1600's
@@ -258,15 +251,7 @@ private:
     // -- see also EmulatorViewModel.drainTraceEventsPC1600()'s matching
     // drain-buffer size, which must stay >= this to actually empty the
     // ring each tick.
-    static constexpr uint32_t kRingSize = 65536;
-    static constexpr uint32_t kRingMask = kRingSize - 1;
-    Z80CpuFrame m_ring[kRingSize]{};
-    uint32_t m_drainCursor{0};
-    uint32_t m_totalWritten{0};
-    mutable std::mutex m_traceMutex;
-
-    std::vector<uint16_t> m_breakpoints; // sorted ascending
-    bool m_breakpointHit{false};
+    TraceRing<Z80CpuFrame, 65536> m_trace;
 
     void recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles);
 };
