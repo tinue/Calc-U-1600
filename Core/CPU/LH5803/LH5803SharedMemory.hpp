@@ -35,6 +35,10 @@ class PC1600BusArbiter;
 //   C000-FFFF  LH5803-private internal ROM (PC1600-LH5803-C000-FFFF-new.bin), fixed, loadable
 //
 // ME1 defaults to aliasing ME0, EXCEPT:
+//   * ME1 0x8000-0xBFFF: an I/O cycle on the bus (the LH5803's ME1 is the
+//     SC7852's IORQ), so it never selects the ME0 peripheral-ROM window.
+//     Passed to the cards with me1=true -- the CE-150's LH5810 answers at
+//     0xB008-0xB00F -- and open bus otherwise.
 //   * 0xA038: `STA #(0A038H)` is the LH5803-side handoff trigger (the
 //     LH5803-side alias of the SC7852's Port 38H, since the LH5803 has no
 //     I/O space of its own) -- forwarded to a PC1600BusArbiter via

@@ -180,7 +180,8 @@ private:
     uint8_t m_im2VectorLow{0xFF};
 
     // ── Fetch helpers ────────────────────────────────────────────────────
-    uint8_t  fetch8();
+    uint8_t  fetchOpcode(); // an M1 cycle: also advances R
+    uint8_t  fetch8();      // operand/displacement byte: R untouched
     uint16_t fetch16(); // little-endian: low byte first, then high
     void     bumpR() { R = uint8_t((R & 0x80) | ((R + 1) & 0x7F)); }
 

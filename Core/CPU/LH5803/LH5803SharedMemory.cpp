@@ -55,21 +55,8 @@ bool LH5803SharedMemory::isUartShadow(uint16_t addr, uint8_t* reg, bool* isSubCp
 }
 
 uint8_t LH5803SharedMemory::readME1(uint16_t addr) {
-    // The CE-150's LH5810 chip-select covers the whole ME1 0xB000-0xB00F
-    // block (only 0xB008-0xB00F are registers the card decodes; the rest is
-    // claimed-but-inert, exactly as on real hardware). This branch is
-    // TERMINAL: without it, an ME1 read of 0xB000-0xB007 would
-    // fall through to readME0() and be mis-served as CE-150 *ROM* bytes
-    // (0xA000-0xBFFF is the ROM window in ME0), which breaks the plotter
-    // ROM's inter-step LH5810 polls -- LPRINT then prints one character and
-    // aborts.
-    if (m_ce150 && (addr & 0xFFF0) == 0xB000) {
-        uint8_t v = 0xFF;
-        m_ce150->respondsToRead(peripheralPins(addr, /*forWrite=*/false, /*me1=*/true), v); // v left 0xFF for the non-register part
-        return v;
-    }
-    // CE-158 register blocks: terminal for the same reason -- falling
-    // through would serve ROM bytes (0xD000+ >= kRomBase) as I/O.
+    // CE-158 register blocks: terminal -- falling through would serve ROM
+    // bytes (0xD000+ >= kRomBase) as I/O.
     if (m_ce158 && isCe158Io(addr)) {
         uint8_t v = 0xFF;
         m_ce158->respondsToRead(peripheralPins(addr, /*forWrite=*/false, /*me1=*/true), v);
@@ -91,18 +78,24 @@ uint8_t LH5803SharedMemory::readME1(uint16_t addr) {
     if ((addr & 0xFFF0) == 0xF000) {
         return m_ioRegs[addr & 0x0F];
     }
+    // 8000-BFFF: ME1 reaches the bus as an I/O cycle (IORQ), so it never
+    // selects a peripheral ROM. Shown to the cards as ME1 -- the CE-150's
+    // LH5810 at B008-B00F answers; everything else is open bus. Aliasing
+    // this to readME0() served CE-150/CE-158 ROM bytes as I/O (the CE-150
+    // LPRINT one-character bug came from exactly that at B000-B007).
+    if (addr >= 0x8000 && addr < kRomBase) {
+        uint8_t v = 0xFF;
+        const PinState p = peripheralPins(addr, /*forWrite=*/false, /*me1=*/true);
+        if (m_ce158 && m_ce158->respondsToRead(p, v)) return v;
+        if (m_ce150 && m_ce150->respondsToRead(p, v)) return v;
+        return 0xFF;
+    }
     return readME0(addr); // default aliasing -- no other read-side trigger
 }
 
 void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
     if (addr == kHandoffTriggerAddr) {
         if (m_arbiter) m_arbiter->requestSwitchFromLH5803();
-        return;
-    }
-    if (m_ce150 && (addr & 0xFFF0) == 0xB000) {
-        // Terminal, same reasoning as readME1(): a write to the LH5810
-        // window must never fall through to writeME0().
-        m_ce150->respondsToWrite(peripheralPins(addr, /*forWrite=*/true, /*me1=*/true), value);
         return;
     }
     if (m_ce158 && isCe158Io(addr)) {
@@ -118,6 +111,13 @@ void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
     // latch (IF at 0xB included). See readME1() for the rationale.
     if ((addr & 0xFFF0) == 0xF000) {
         m_ioRegs[addr & 0x0F] = value;
+        return;
+    }
+    // 8000-BFFF: an ME1 I/O cycle for the cards, see readME1().
+    if (addr >= 0x8000 && addr < kRomBase) {
+        const PinState p = peripheralPins(addr, /*forWrite=*/true, /*me1=*/true);
+        if (m_ce158 && m_ce158->respondsToWrite(p, value)) return;
+        if (m_ce150) m_ce150->respondsToWrite(p, value);
         return;
     }
     writeME0(addr, value); // default aliasing for every other ME1 address

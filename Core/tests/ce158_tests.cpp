@@ -383,6 +383,14 @@ void test_pc1600_lh5803_window_and_io_routing() {
     CHECK(mem.readME1(0xD203) == (Ce158Card::kStatusTHRE | Ce158Card::kStatusTSRE));
     CHECK(mem.readME1(0xDE00) == 0x80);
 
+    // ME1 8000-BFFF is an I/O cycle: never a card ROM byte, whatever PV is.
+    mem.updatePUPV(false, /*pv=*/true);
+    CHECK(mem.readME1(0x8000) == 0xFF);
+    mem.updatePUPV(false, /*pv=*/false);
+    CHECK(mem.readME1(0xA000) == 0xFF);
+    CHECK(mem.readME1(0xB010) == 0xFF);
+    CHECK(mem.readME1(0xB000) == 0xFF); // B000-B007: LH5810 select, no register
+
     m.detachCE158();
     CHECK(mem.readME1(0xD00C) != 0x3C || mem.readME0(0xD00C) == 0x3C); // falls back to the ROM alias
     mem.updatePUPV(false, true);

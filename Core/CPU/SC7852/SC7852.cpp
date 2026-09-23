@@ -41,16 +41,20 @@ void SC7852::reset() {
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────
 
-uint8_t SC7852::fetch8() {
-    uint8_t v = bus.readMem(PC++);
+// R counts M1 cycles only (opcode and prefix fetches, interrupt
+// acknowledges), not operand or displacement reads.
+uint8_t SC7852::fetchOpcode() {
     bumpR();
-    return v;
+    return bus.readMem(PC++);
+}
+
+uint8_t SC7852::fetch8() {
+    return bus.readMem(PC++);
 }
 
 uint16_t SC7852::fetch16() {
     uint8_t lo = bus.readMem(PC++);
     uint8_t hi = bus.readMem(PC++);
-    bumpR();
     return uint16_t(lo | (hi << 8));
 }
 
@@ -389,6 +393,7 @@ void SC7852::requestNMI() { m_nmiPending = true; }
 int SC7852::serviceInterrupt(bool maskableBlocked) {
     if (m_nmiPending) {
         m_nmiPending = false;
+        bumpR(); // the acknowledge is an M1 cycle
         m_halted = false;
         IFF2 = IFF1;
         IFF1 = false;
@@ -398,6 +403,7 @@ int SC7852::serviceInterrupt(bool maskableBlocked) {
     }
     if (m_irqPending && IFF1 && !maskableBlocked) {
         m_irqPending = false;
+        bumpR();
         m_halted = false;
         IFF1 = false;
         IFF2 = false;
@@ -461,7 +467,7 @@ int SC7852::step() {
     }
 
     uint16_t pcAtStart = PC;
-    uint8_t opcode = fetch8();
+    uint8_t opcode = fetchOpcode();
     int cycles = 0;
     // A DD/FD followed by another DD, FD or ED acts as a 4 T-state NOP
     // and the later prefix decides the instruction (DD ED B0 is LDIR,
@@ -469,7 +475,7 @@ int SC7852::step() {
     // prefix byte.
     uint8_t indexedOp = 0;
     while (opcode == 0xDD || opcode == 0xFD) {
-        indexedOp = fetch8();
+        indexedOp = fetchOpcode();
         if (indexedOp != 0xDD && indexedOp != 0xFD && indexedOp != 0xED) break;
         cycles += 4 + kM1WaitStates;
         opcode = indexedOp;
@@ -479,8 +485,8 @@ int SC7852::step() {
     // M1 wait (see SC7852.hpp's class comment) is added here, once per
     // opcode byte fetched as an M1 -- two for the prefixed forms.
     switch (opcode) {
-        case 0xCB: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xCB00 | op2); cycles += 4 + executeCB(op2) + 2 * kM1WaitStates; break; }
-        case 0xED: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xED00 | op2); cycles += 4 + executeED(op2) + 2 * kM1WaitStates; break; }
+        case 0xCB: { uint8_t op2 = fetchOpcode(); opcodeWord = uint16_t(0xCB00 | op2); cycles += 4 + executeCB(op2) + 2 * kM1WaitStates; break; }
+        case 0xED: { uint8_t op2 = fetchOpcode(); opcodeWord = uint16_t(0xED00 | op2); cycles += 4 + executeED(op2) + 2 * kM1WaitStates; break; }
         case 0xDD: { uint8_t op2 = indexedOp; opcodeWord = uint16_t(0xDD00 | op2); cycles += 4 + executeDDFD(op2, IX) + 2 * kM1WaitStates; break; }
         case 0xFD: { uint8_t op2 = indexedOp; opcodeWord = uint16_t(0xFD00 | op2); cycles += 4 + executeDDFD(op2, IY) + 2 * kM1WaitStates; break; }
         default: cycles += execute(opcode) + kM1WaitStates; break;

@@ -375,6 +375,18 @@ void test_last_index_prefix_wins() {
     CHECK(r.cpu.pc() == 0x000A);
 }
 
+void test_r_counts_m1_cycles_only() {
+    // LD A,n ; LD HL,nn ; LD (IX+d),n ; DD CB d 06 (RLC (IX+d)) ; LD A,R
+    Rig r({0x3E, 0x01, 0x21, 0x00, 0x90, 0xDD, 0x36, 0x00, 0x11,
+           0xDD, 0xCB, 0x00, 0x06, 0xED, 0x5F});
+    r.cpu.step(); CHECK(r.cpu.r() == 1);
+    r.cpu.step(); CHECK(r.cpu.r() == 2);
+    r.cpu.step(); CHECK(r.cpu.r() == 4); // DD + opcode; d and n are operands
+    r.cpu.step(); CHECK(r.cpu.r() == 6); // DD + CB; d and op are not M1s
+    r.cpu.step(); // LD A,R: R already advanced by ED + 5F when it is read
+    CHECK(r.cpu.a() == 8);
+}
+
 void test_ed_adc_sbc_hl() {
     // SCF ; LD HL,0x0001 ; LD BC,0x0001 ; ADC HL,BC -> HL=3 (1+1+1)
     Rig r({0x37, 0x21, 0x01, 0x00, 0x01, 0x01, 0x00, 0xED, 0x4A});
@@ -583,6 +595,7 @@ int run_sc7852_tests() {
     test_daa_after_bcd_sub();
     test_cb_rotate_and_bit_and_set_res();
     test_ed_ldir_block_copy();
+    test_r_counts_m1_cycles_only();
     test_dd_before_ed_is_ignored();
     test_last_index_prefix_wins();
     test_ed_adc_sbc_hl();
