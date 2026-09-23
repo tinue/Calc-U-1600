@@ -282,7 +282,6 @@ void MainWindow::syncControlBarForModel() {
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     m_controlBar->setSlot2Visible(isPC1600);
     m_controlBar->setCe1600pVisible(isPC1600);
-    m_controlBar->setCe158Visible(!isPC1600); // PC-1500/1500A only for now
     m_controlBar->setCE1600PRomPickerVisible(isPC1600);
     m_ce1600pRomMenuAction->setVisible(isPC1600);
     // Always shown on a PC-1600 (never hidden alongside the CE-1600P
@@ -444,8 +443,10 @@ void MainWindow::loadMachineCode() {
 void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
     const bool ce150Attached = isCE150 ? attached : m_controller->ce150Attached();
     const bool ce1600pAttached = isCE150 ? m_controller->ce1600pAttached() : attached;
+    const bool ce158Attached = m_controller->ce158Attached();
     m_controlBar->setCe150State(ce150Attached, !ce1600pAttached);
-    m_controlBar->setCe1600pState(ce1600pAttached, !ce150Attached);
+    m_controlBar->setCe1600pState(ce1600pAttached, !ce150Attached && !ce158Attached);
+    m_controlBar->setCe158State(ce158Attached, !ce1600pAttached);
     const bool otherAttached = isCE150 ? ce1600pAttached : ce150Attached;
     if (!isCE150) {
         // CE-1600F attaches as a union with CE-1600P (PC1600Machine::
@@ -467,7 +468,11 @@ void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
 }
 
 void MainWindow::onCe158AttachedChanged(bool attached) {
-    m_controlBar->setCe158State(attached, /*enabled=*/true);
+    // On a PC-1600 the CE-158 and the CE-1600P exclude each other (the
+    // CE-158 does not connect to the CE-1600P): gray out the other button.
+    const bool ce1600pAttached = m_controller->ce1600pAttached();
+    m_controlBar->setCe158State(attached, /*enabled=*/!ce1600pAttached);
+    m_controlBar->setCe1600pState(ce1600pAttached, !m_controller->ce150Attached() && !attached);
     if (attached) {
         // A preset attaches the card on the Core machine directly: make
         // sure it has its host PTY before the preset script runs.

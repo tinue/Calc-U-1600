@@ -1,0 +1,34 @@
+# PC-1600 (MODE 1) with the CE-158 RS-232C / Centronics interface on its
+# LH5803 side. Prints a line on the parallel port, sends one out of the
+# serial port, then waits for one character from the serial port and
+# prints its code. The CE-158 cannot be used together with the CE-1600P.
+#
+# Serial peer: calcu1600-ce158.serial in the serial-port symlink folder
+# (Settings), e.g. `screen <folder>/calcu1600-ce158.serial 300`.
+
+model: PC-1600
+interface: ce158
+
+keys:
+  - key: mode
+  - type: NEW
+  - type: MODE1
+
+program:
+  format: basic-text
+  text: |
+    10 OPN "LPRT"
+    20 LPRINT "HELLO FROM THE CE-158"
+    30 OPN
+    40 SETDEV PO
+    50 OUTSTAT 0
+    60 LPRINT "PRESS A KEY"
+    70 B$=RINKEY$
+    80 IF LEN(B$)=0 THEN 70
+    90 OPN "LPRT"
+    100 LPRINT "RECEIVED CODE";ASC(B$)
+    110 OPN
+
+keys:
+  - key: mode
+  - type: RUN

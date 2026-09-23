@@ -46,6 +46,9 @@ struct PC1600PresetLoadResult {
     /// to the LH5803 side. (`plotter: ce1600p` is reported via
     /// `machine.ce1600pAttached()` instead -- no result field for it yet.)
     bool ce150Attached = false;
+    /// True when the preset had `interface: ce158` and the CE-158 was
+    /// attached to the LH5803 side.
+    bool ce158Attached = false;
     /// The preset's `floppy:` name, verbatim -- empty if the key was
     /// absent (the drive stays empty, per the CE-1600F's union attach
     /// with `plotter: ce1600p`; see

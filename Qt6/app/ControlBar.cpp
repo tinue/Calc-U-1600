@@ -280,10 +280,6 @@ void ControlBar::setCe158State(bool attached, bool enabled) {
     m_ce158Button->setEnabled(enabled);
 }
 
-void ControlBar::setCe158Visible(bool visible) {
-    m_ce158Button->setVisible(visible);
-}
-
 void ControlBar::setCe1600pState(bool attached, bool enabled) {
     const QSignalBlocker blocker(m_ce1600pButton);
     m_ce1600pButton->setChecked(attached);

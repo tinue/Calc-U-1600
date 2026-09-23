@@ -318,9 +318,10 @@ public:
     void detachCE1600P();
     bool ce1600pAttached() const;
 
-    // CE-158 RS-232C / parallel interface: PC1500(A) only for now (false /
-    // no-op on a PC-1600). Same live power-cycled attach as the plotters;
-    // it shares the 60-pin bus with the CE-150 rather than excluding it.
+    // CE-158 RS-232C / parallel interface: PC1500(A), or a PC-1600's LH5803
+    // side (MODE 1). Same live power-cycled attach as the plotters; it
+    // shares the bus with the CE-150, but on a PC-1600 attaching it drops
+    // the CE-1600P and vice versa (Core-enforced).
     bool attachCE158();
     void detachCE158();
     bool ce158Attached() const;

@@ -341,6 +341,16 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
     if (!attachPresetPlotter(machine, preset.plotter, preset.ce1600pRomVariant, preset.floppy,
                              preset.floppySide, romDirs, moduleDirs, log, &result))
         return result;
+    // The CE-158 next to (or instead of) the CE-150 -- the parser already
+    // refused it together with the CE-1600P.
+    if (preset.interfaceName == "ce158") {
+        if (!BundledRoms::attachCE158(machine, romDirs, &result.error)) {
+            if (log) log(result.error);
+            return result;
+        }
+        result.ce158Attached = true;
+        if (log) log("interface: CE-158 attached (LH5803 side)");
+    }
 
     // Machine is now fully armed (model/cards/plotter wired) but still
     // powered off -- give the caller a chance to repaint that state before

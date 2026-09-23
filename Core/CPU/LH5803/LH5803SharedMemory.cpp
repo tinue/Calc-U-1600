@@ -27,26 +27,14 @@ bool LH5803SharedMemory::loadROMFile(const std::string& path) {
 uint8_t LH5803SharedMemory::readME0(uint16_t addr) {
     if (addr < 0x8000) return m_shared.read(uint16_t(addr + 0x8000));
     if (addr < kRomBase) {
-        // 8000-BFFF peripheral-ROM window. Real hardware bank-selects it
-        // with the LH5803's PV: CE-150 ROM at PVOUT=0 (upper 8K), CE-158
-        // ROM at PVOUT=1 (lower 8K).
-        //
-        // We present PV=0 to the card unconditionally here, NOT m_pv. The
-        // card keeps its real PV input (Ce150Card gates its ROM window on
-        // it, same decode on the PC-1500) -- this is the *host* deciding
-        // what reaches that pin. Two reasons it must be 0 on this path:
-        //   - the only peripheral ROM modelled is the CE-150, which lives
-        //     at PVOUT=0; there is no CE-158 to want PVOUT=1.
-        //   - our LH5803 core inherits LH5801 PV state but does not model
-        //     the CALLH/PARBAN bridge (F00EH: 00H=PV(0)) the SC7852 uses
-        //     to enter an LH5803 subroutine at a chosen bank, so m_pv is
-        //     not a trustworthy view of the bus PV when rom1500 runs the
-        //     CE-150 driver. TODO: model CALLH/PARBAN, then pass real PV.
-        if (m_ce150) {
-            uint8_t v;
-            PinState p = ce150Pins(addr, /*forWrite=*/false, /*me1=*/false, /*pv=*/false);
-            if (m_ce150->respondsToRead(p, v)) return v;
-        }
+        // 8000-BFFF peripheral-ROM window, selected by the LH5803's own PV
+        // (the ROM sets it from CALLH's PARBAN): CE-150 ROM at PVOUT=0
+        // (upper 8K), CE-158 ROM at PVOUT=1 (lower 8K, PU-banked). Each
+        // card gates its window on the PV/PU it is shown.
+        uint8_t v;
+        const PinState p = peripheralPins(addr, /*forWrite=*/false, /*me1=*/false);
+        if (m_ce158 && m_ce158->respondsToRead(p, v)) return v;
+        if (m_ce150 && m_ce150->respondsToRead(p, v)) return v;
         return 0xFF; // open bus
     }
     return m_romLoaded ? m_rom[addr - kRomBase] : 0xFF;
@@ -76,8 +64,14 @@ uint8_t LH5803SharedMemory::readME1(uint16_t addr) {
     // aborts.
     if (m_ce150 && (addr & 0xFFF0) == 0xB000) {
         uint8_t v = 0xFF;
-        PinState p = ce150Pins(addr, /*forWrite=*/false, /*me1=*/true, m_pv);
-        m_ce150->respondsToRead(p, v); // v left 0xFF for the non-register part
+        m_ce150->respondsToRead(peripheralPins(addr, /*forWrite=*/false, /*me1=*/true), v); // v left 0xFF for the non-register part
+        return v;
+    }
+    // CE-158 register blocks: terminal for the same reason -- falling
+    // through would serve ROM bytes (0xD000+ >= kRomBase) as I/O.
+    if (m_ce158 && isCe158Io(addr)) {
+        uint8_t v = 0xFF;
+        m_ce158->respondsToRead(peripheralPins(addr, /*forWrite=*/false, /*me1=*/true), v);
         return v;
     }
     uint8_t reg; bool answer;
@@ -107,8 +101,11 @@ void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
     if (m_ce150 && (addr & 0xFFF0) == 0xB000) {
         // Terminal, same reasoning as readME1(): a write to the LH5810
         // window must never fall through to writeME0().
-        PinState p = ce150Pins(addr, /*forWrite=*/true, /*me1=*/true, m_pv);
-        m_ce150->respondsToWrite(p, value);
+        m_ce150->respondsToWrite(peripheralPins(addr, /*forWrite=*/true, /*me1=*/true), value);
+        return;
+    }
+    if (m_ce158 && isCe158Io(addr)) {
+        m_ce158->respondsToWrite(peripheralPins(addr, /*forWrite=*/true, /*me1=*/true), value);
         return;
     }
     uint8_t reg; bool answer;

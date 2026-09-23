@@ -17,6 +17,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/PC1600/PC1600Memory.cpp \
   Core/PC1600/PC1600SubCpu.cpp \
   Core/PC1600/TC8576F.cpp \
+  Core/Serial/PtySerialLink.cpp \
   Core/PC1600/PC1600Display.cpp \
   Core/PC1600/PC1600Keyboard.cpp \
   Core/PC1600/PC1600Machine.cpp \

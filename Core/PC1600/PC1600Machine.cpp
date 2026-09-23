@@ -25,6 +25,7 @@ void PC1600Machine::resetLocked() {
     m_lh5803Mem.reset();                  // clear the internal-PIO register file (0xF00x)
     m_lh5803Mem.updatePUPV(false, false); // match the just-reset LH5803 CPU
     if (m_ce150Card) m_ce150Card->reset(); // re-anchor, keep it attached (like the CE-1600P)
+    if (m_ce158Card) m_ce158Card->reset();
 }
 
 void PC1600Machine::reset() {
@@ -72,6 +73,7 @@ bool PC1600Machine::attachCE1600P(const uint8_t* rom1, size_t rom1Size,
     auto floppy = std::make_unique<CE1600FCard>();  // drive starts empty
     detachCE1600P();
     detachCE150(); // one plotter on the bus at a time
+    detachCE158(); // the CE-158 cannot be used with the CE-1600P
     m_z80Mem.ce1600pBus().attach(card.get());
     m_z80Mem.ce1600pBus().attach(floppy.get());
     m_ce1600pCard = std::move(card);
@@ -181,6 +183,40 @@ void PC1600Machine::detachCE150() {
     m_ce150Card.reset();
 }
 
+// ── CE-158 interface (LH5803 side) ─────────────────────────────────────
+
+bool PC1600Machine::attachCE158(const uint8_t* rom, size_t romSize) {
+    if (romSize != Ce158Card::kRomSize) return false;
+    auto card = std::make_unique<Ce158Card>();
+    if (!card->loadRom(rom, romSize)) return false;
+    detachCE158();
+    detachCE1600P(); // not usable together with the CE-1600P
+    card->setClockHz(kTStateHz); // ticked with SC7852 T-states, see step()
+    card->reset();
+    card->setSerialLink(m_ce158Link);
+    m_lh5803Mem.attachCe158(card.get());
+    m_ce158Card = std::move(card);
+    return true;
+}
+
+void PC1600Machine::detachCE158() {
+    if (!m_ce158Card) return;
+    m_lh5803Mem.detachCe158();
+    m_ce158Card.reset();
+}
+
+void PC1600Machine::setCE158SerialLink(SerialLink* link) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_ce158Link = link;
+    if (m_ce158Card) m_ce158Card->setSerialLink(link);
+}
+
+std::vector<uint8_t> PC1600Machine::drainCE158ParallelOutput() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_ce158Card) return {};
+    return m_ce158Card->drainParallelOutput();
+}
+
 std::vector<AlpsPlotterMechanism::FlatPoint> PC1600Machine::ce150PlotPoints() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (!m_ce150Card) return {};
@@ -266,6 +302,7 @@ int PC1600Machine::step() {
         m_z80Mem.subCpu().tickByTStates(cost);
         m_z80Mem.display().tick(cost);
         if (m_ce1600fCard) m_ce1600fCard->advance(static_cast<uint32_t>(cost));
+        if (m_ce158Card) m_ce158Card->tick(static_cast<uint64_t>(cost));
         // The documented handoff is OUT (38H),A then HALT -- the write
         // sets the pending flag (PC1600Memory::writeIO), but the actual
         // switch only happens once the SC7852 has also reached HALT, so
@@ -292,6 +329,7 @@ int PC1600Machine::step() {
         m_z80Mem.uart().tick(tstates);
         m_z80Mem.subCpu().tickByTStates(tstates);
         m_z80Mem.display().tick(tstates);
+        if (m_ce158Card) m_ce158Card->tick(static_cast<uint64_t>(tstates)); // the CE-158's own UART clock
         // LU-57813P calendar clock: unlike the two SC7852-only timer
         // accumulators above (real hardware sources they free-run
         // against, but this core only models while the SC7852 steps),

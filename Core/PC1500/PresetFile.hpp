@@ -218,7 +218,8 @@ struct PresetFile {
     // The serial / parallel interface on the 60-pin system bus. `""` (key
     // absent, or `interface: none`/`off`) = none; `"ce158"` = the CE-158
     // (`interface: ce158` / `ce-158`). It sits alongside `plotter: ce150`
-    // or alone. PC-1500 / PC-1500A only for now.
+    // or alone, on a PC-1500 / PC-1500A or a PC-1600 (LH5803 side, MODE 1;
+    // not together with `plotter: ce1600p`).
     std::string interfaceName;
     // PC-1600 only: "new" or "old" -- the CE-1600P ROM version, from
     // `plotter: ce1600p:old` (default "new", also when there is no plotter).

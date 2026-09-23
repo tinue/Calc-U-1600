@@ -8,13 +8,16 @@
 #include "ExpansionCard.hpp"
 #include "../Serial/SerialLink.hpp"
 
-// ── CE-158 RS-232C / Centronics interface (PC-1500 60-pin bus) ──────────
+// ── CE-158 RS-232C / Centronics interface (60-pin bus) ──────────────────
 //
 // Like the CE-150, the CE-158 has no CPU: its 16 KB firmware runs on the
 // host LH5801 from a ROM window this card supplies, and drives two I/O
 // chips of its own. It works on the 60-pin bus alone or chained behind a
 // CE-150 (plugged into the CE-150's rear connector). The two cards'
 // windows never overlap, so SystemBus attach order does not matter.
+// On the PC-1600 the same card serves the LH5803 (MODE 1): its ROM half of
+// the LH5803's 8000-BFFF peripheral window is PVOUT = 1, the CE-150's is
+// PVOUT = 0 (LH5803SharedMemory routes both).
 //
 //   * ME0 read, guest 0x8000-0x9FFF, PV = 1  -> CE-158 ROM, PU picks the
 //     8 KB bank: PU = 0 the low half of CE-158.ROM, PU = 1 the high half
@@ -84,9 +87,16 @@ public:
     static constexpr uint8_t kStatusTSRE = 0x40; // transmitter shift register empty
     static constexpr uint8_t kStatusTHRE = 0x80; // transmitter holding register empty
 
-    /// The host LH5801 clock the pacing counts in (PC1500Machine ticks the
-    /// card with CPU cycles). Same value as Upd1990ac::kCpuHz.
+    /// The default unit tick() counts in: PC1500Machine ticks the card
+    /// with LH5801 cycles (same value as Upd1990ac::kCpuHz). The PC-1600
+    /// ticks it with SC7852 T-states and sets its own rate (setClockHz).
     static constexpr double kCpuHz = 1300000.0;
+
+    /// Rate of the units tick() is given in. Recomputes the character time.
+    void setClockHz(double hz) {
+        m_clockHz = hz;
+        updateCharCycles();
+    }
 
     /// `data` must be exactly `kRomSize` bytes (`CE-158.ROM`).
     bool loadRom(const uint8_t* data, size_t size) {
@@ -291,7 +301,7 @@ private:
     void updateCharCycles() {
         int baud = decodeBaud();
         if (baud == 0) baud = 300; // before SETCOM / unknown code: the ROM's default
-        m_charCycles = static_cast<uint64_t>(kCpuHz * 10.0 / baud);
+        m_charCycles = static_cast<uint64_t>(m_clockHz * 10.0 / baud);
     }
 
     // Sample the peer's lines; forward ours when they change. PA0/PA1 are
@@ -325,6 +335,7 @@ private:
     uint8_t m_txHold = 0;
     bool m_txPending = false;
     uint64_t m_accum = 0;
+    double m_clockHz = kCpuHz;
     uint64_t m_charCycles = static_cast<uint64_t>(kCpuHz * 10.0 / 300);
 
     SerialLink* m_link = nullptr;

@@ -18,6 +18,9 @@
 #include "../PC1500/PC1500Machine.hpp"
 #include "../PC1500/PC1500PresetLoader.hpp"
 #include "../PC1500/PresetFile.hpp"
+#include "../PC1600/PC1600Machine.hpp"
+#include "../PC1600/PC1600PresetLoader.hpp"
+#include "../Resources/BundledRomCatalog.hpp"
 
 namespace {
 
@@ -354,6 +357,117 @@ void test_rom_serial_lprint_and_input() {
     machine.setCE158SerialLink(nullptr);
 }
 
+// ── PC-1600: the CE-158 on the LH5803 side ─────────────────────────────
+
+void test_pc1600_lh5803_window_and_io_routing() {
+    PC1600Machine m;
+    auto rom = fakeRom();
+    std::vector<uint8_t> ce150(Ce150Card::kRomSize, 0x5A);
+    CHECK(m.attachCE158(rom.data(), rom.size()));
+    CHECK(m.attachCE150(ce150.data(), ce150.size())); // coexist on the bus
+    CHECK(m.ce158Attached() && m.ce150Attached());
+
+    auto& mem = m.lh5803Memory();
+    mem.updatePUPV(/*pu=*/false, /*pv=*/true);
+    CHECK(mem.readME0(0x8000) == rom[0]);
+    CHECK(mem.readME0(0xA000) == 0xFF);            // CE-150 half is PV = 0
+    mem.updatePUPV(/*pu=*/true, /*pv=*/true);
+    CHECK(mem.readME0(0x8000) == rom[0x2000]);     // PU picks the high bank
+    mem.updatePUPV(false, /*pv=*/false);
+    CHECK(mem.readME0(0x8000) == 0xFF);
+    CHECK(mem.readME0(0xA000) == 0x5A);
+
+    // ME1 register blocks reach the card, not the LH5803 ROM underneath.
+    mem.writeME1(0xD00C, 0x3C);
+    CHECK(mem.readME1(0xD00C) == 0x3C);
+    CHECK(mem.readME1(0xD203) == (Ce158Card::kStatusTHRE | Ce158Card::kStatusTSRE));
+    CHECK(mem.readME1(0xDE00) == 0x80);
+
+    m.detachCE158();
+    CHECK(mem.readME1(0xD00C) != 0x3C || mem.readME0(0xD00C) == 0x3C); // falls back to the ROM alias
+    mem.updatePUPV(false, true);
+    CHECK(mem.readME0(0x8000) == 0xFF);
+}
+
+void test_pc1600_ce158_and_ce1600p_exclusive() {
+    PC1600Machine m;
+    auto rom = fakeRom();
+    std::vector<uint8_t> half(CE1600PCard::kRomHalfSize, 0x11);
+    CHECK(m.attachCE158(rom.data(), rom.size()));
+    CHECK(m.attachCE1600P(half.data(), half.size(), half.data(), half.size()));
+    CHECK(m.ce1600pAttached() && !m.ce158Attached());
+    CHECK(m.attachCE158(rom.data(), rom.size()));
+    CHECK(m.ce158Attached() && !m.ce1600pAttached());
+
+    PresetFile p;
+    CHECK(!loadPreset("model: PC-1600\nplotter: ce1600p\ninterface: ce158\n", &p));
+    PresetFile ok;
+    CHECK(loadPreset("model: PC-1600\nplotter: ce150\ninterface: ce158\n", &ok));
+    CHECK(ok.interfaceName == "ce158" && ok.plotter == "ce150");
+}
+
+bool havePC1600Roms(const char* test) {
+    if (fileExists("roms/PC1600-P0-B0-new.bin") && fileExists(kCe158Rom)) return true;
+    std::fprintf(stderr, "SKIP %s: run from the repo root (needs the PC-1600 ROM set + %s)\n", test, kCe158Rom);
+    return false;
+}
+
+std::string pc1600Preset(const std::string& program) {
+    return "model: PC-1600\ninterface: ce158\n"
+           "keys:\n  - key: mode\n  - type: NEW\n  - type: MODE1\n"
+           "program:\n  format: basic-text\n  text: |\n" + program +
+           "keys:\n  - key: mode\n  - type: RUN\n";
+}
+
+// MODE 1: LPRINT through the CE-158's parallel port, then (SETDEV PO) its
+// serial port, from PC-1600 BASIC via the LH5803.
+void test_pc1600_rom_mode1_printing() {
+    if (!havePC1600Roms(__func__)) return;
+    PresetFile preset;
+    CHECK(loadPreset(pc1600Preset("    10 OPN \"LPRT\"\n    20 LPRINT \"HELLO 1600\"\n    30 OPN\n"
+                                  "    40 SETDEV PO\n    50 OUTSTAT 0\n    60 LPRINT \"SERIAL 1600\"\n") +
+                         "  - wait:\n",
+                     &preset));
+    PC1600Machine machine;
+    std::string romErr;
+    CHECK(BundledRoms::loadPC1600RomSet(machine, {"roms"}, "new", &romErr));
+    FakeLink link;
+    machine.setCE158SerialLink(&link);
+    PC1600PresetLoadResult res = applyPC1600Preset(machine, preset, {}, ".", ".", {}, {"roms"});
+    if (!res.ok) std::fprintf(stderr, "preset error: %s\n", res.error.c_str());
+    CHECK(res.ok);
+    CHECK(res.ce158Attached);
+    CHECK(text(machine.drainCE158ParallelOutput()) == "HELLO 1600\n");
+    CHECK(text(link.tx) == "SERIAL 1600\r");
+    machine.setCE158SerialLink(nullptr);
+}
+
+// MODE 1: RINKEY$ reads the CE-158's UART. The peer is armed once the
+// program is polling.
+void test_pc1600_rom_mode1_rinkey() {
+    if (!havePC1600Roms(__func__)) return;
+    PresetFile preset;
+    CHECK(loadPreset(pc1600Preset("    10 B$=RINKEY$\n    20 IF LEN(B$)=0 THEN 10\n"
+                                  "    30 OPN \"LPRT\":LPRINT ASC(B$)\n"),
+                     &preset));
+    PC1600Machine machine;
+    std::string romErr;
+    CHECK(BundledRoms::loadPC1600RomSet(machine, {"roms"}, "new", &romErr));
+    FakeLink link;
+    link.armed = false;
+    link.rx = {'A'};
+    machine.setCE158SerialLink(&link);
+    PC1600PresetLoadResult res = applyPC1600Preset(machine, preset, {}, ".", ".", {}, {"roms"});
+    if (!res.ok) std::fprintf(stderr, "preset error: %s\n", res.error.c_str());
+    CHECK(res.ok);
+    machine.runCycles(PC1600Machine::kTStateHz);
+    link.armed = true;
+    machine.runCycles(PC1600Machine::kTStateHz * 3);
+    CHECK(link.rx.empty());
+    CHECK(text(machine.drainCE158ParallelOutput()) == " 65\n");
+    machine.setCE158SerialLink(nullptr);
+}
+
 } // namespace
 
 int run_ce158_tests() {
@@ -367,6 +481,10 @@ int run_ce158_tests() {
     test_preset_parse_interface_key();
     test_rom_lprint_centronics_with_ce150_chained();
     test_rom_serial_lprint_and_input();
+    test_pc1600_lh5803_window_and_io_routing();
+    test_pc1600_ce158_and_ce1600p_exclusive();
+    test_pc1600_rom_mode1_printing();
+    test_pc1600_rom_mode1_rinkey();
 
     std::printf("ce158_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

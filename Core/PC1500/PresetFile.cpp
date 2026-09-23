@@ -708,10 +708,12 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             }
         }
         out->plotter = plotter;  // already validated/normalized above
-        if (!interfaceName.empty()) {
-            *error = "'interface: ce158' is not yet supported on a PC-1600 preset";
+        if (!interfaceName.empty() && plotter == "ce1600p") {
+            *error = "'interface: ce158' cannot be combined with 'plotter: ce1600p' (the CE-158 does "
+                     "not connect to the CE-1600P)";
             return false;
         }
+        out->interfaceName = interfaceName;
         if (hasFloppy && plotter != "ce1600p") {
             *error = "'floppy:' requires 'plotter: ce1600p' (the CE-1600F attaches as a union with it)";
             return false;

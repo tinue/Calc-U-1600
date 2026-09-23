@@ -47,10 +47,9 @@ public:
     void setCe1600pState(bool attached, bool enabled);
     void setCe1600pVisible(bool visible);
     // CE-158 RS-232C/parallel interface toggle, same conventions as the
-    // plotter buttons. It shares the 60-pin bus with the CE-150 (no mutual
-    // exclusion). PC-1500/1500A only for now.
+    // plotter buttons. It coexists with the CE-150; on a PC-1600 it and
+    // the CE-1600P exclude each other.
     void setCe158State(bool attached, bool enabled);
-    void setCe158Visible(bool visible);
     // CE-1600P ROM version picker (New/Old), shown next to the CE-1600P
     // button on a PC-1600. Independent of the PC-1600 ROM picker.
     void setCE1600PRomVersion(CE1600PRomVersion version);

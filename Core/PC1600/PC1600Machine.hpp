@@ -212,6 +212,22 @@ public:
     std::vector<std::string> drainCE150Events();
     void clearCE150Paper();
 
+    // ── CE-158 RS-232C / Centronics interface (LH5803 side, MODE 1) ──────
+    //
+    // The PC-1500's CE-158 on the LH5803: ROM at LH5803 0x8000-0x9FFF with
+    // PV=1 (PU-banked), LH5811 / UART / interrupt-ID blocks in ME1
+    // 0xD000-0xDFFF (see Ce158Card). Coexists with the CE-150; cannot be
+    // used with the CE-1600P (Machine Overview: "CE-158 and CE-162E cannot
+    // connect to the CE-1600P"), so attaching one detaches the other. Its
+    // UART is paced in SC7852 T-states. The serial link set with
+    // setCE158SerialLink() is kept across detach/attach.
+    bool attachCE158(const uint8_t* rom, size_t romSize); // 16384 bytes
+    void detachCE158();
+    bool ce158Attached() const { return m_ce158Card != nullptr; }
+    Ce158Card* ce158Card() { return m_ce158Card.get(); } // unlocked -- tests only
+    void setCE158SerialLink(SerialLink* link);             // non-owning; GUI-safe
+    std::vector<uint8_t> drainCE158ParallelOutput();       // GUI-safe
+
     // ── Access (debug / tests) ───────────────────────────────────────────
     SC7852&       sc7852() { return m_sc7852; }
     const SC7852& sc7852() const { return m_sc7852; }
@@ -422,6 +438,8 @@ private:
     std::unique_ptr<CE1600PCard> m_ce1600pCard; // see attachCE1600P()
     std::unique_ptr<CE1600FCard> m_ce1600fCard; // union-attached with m_ce1600pCard
     std::unique_ptr<Ce150Card> m_ce150Card;     // see attachCE150() -- LH5803-side plotter (MODE 1)
+    std::unique_ptr<Ce158Card> m_ce158Card;     // see attachCE158() -- LH5803-side interface (MODE 1)
+    SerialLink* m_ce158Link = nullptr;          // see setCE158SerialLink()
 
     bool m_traceEnabled{false};
 

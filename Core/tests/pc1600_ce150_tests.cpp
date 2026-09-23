@@ -33,25 +33,23 @@ std::vector<uint8_t> fakeRom(size_t n, uint8_t seed) {
     return v;
 }
 
-void test_lh5803_rom_window_ignores_cpu_pv() {
+void test_lh5803_rom_window_follows_cpu_pv() {
     PC1600Machine m;
     auto rom = fakeRom(Ce150Card::kRomSize, 1);
     CHECK(m.attachCE150(rom.data(), rom.size()));
     CHECK(m.ce150Attached());
 
     auto& mem = m.lh5803Memory();
-    // The CE-150 ROM shows in the LH5803's 0xA000-0xBFFF window whenever a
-    // card is attached. LH5803SharedMemory presents PV=0 to the card on
-    // this path unconditionally -- NOT the CPU's PV flip-flop -- because
-    // the CE-150 lives at PVOUT=0 and our LH5803 core does not yet model
-    // the CALLH/PARBAN bank bridge that would make m_pv trustworthy here
-    // (see the comment in LH5803SharedMemory::readME0). So the same bytes
-    // come back at CPU PV = 0 and CPU PV = 1.
-    for (bool pv : {false, true}) {
-        mem.updatePUPV(false, pv);
-        CHECK(mem.readME0(0xA000) == rom[0]);
-        CHECK(mem.readME0(0xBFFF) == rom[0x1FFF]);
-    }
+    // The CE-150 ROM shows in the LH5803's 0xA000-0xBFFF window at the
+    // CPU's PV = 0 (PVOUT = 0); PV = 1 is the CE-158's half, open bus with
+    // no CE-158 attached. The LH5803 ROM sets PV itself from CALLH's
+    // PARBAN (E224), so the real flip-flop is what the card sees.
+    mem.updatePUPV(false, /*pv=*/false);
+    CHECK(mem.readME0(0xA000) == rom[0]);
+    CHECK(mem.readME0(0xBFFF) == rom[0x1FFF]);
+    mem.updatePUPV(false, /*pv=*/true);
+    CHECK(mem.readME0(0xA000) == 0xFF);
+    mem.updatePUPV(false, /*pv=*/false);
     // Below the window is open bus regardless.
     CHECK(mem.readME0(0x9FFF) == 0xFF);
 
@@ -163,7 +161,7 @@ void test_lh5803_internal_pio_f00x_is_a_register_not_rom() {
 } // namespace
 
 int run_pc1600_ce150_tests() {
-    test_lh5803_rom_window_ignores_cpu_pv();
+    test_lh5803_rom_window_follows_cpu_pv();
     test_lh5803_me1_block_and_motor_writes();
     test_ce150_and_ce1600p_are_mutually_exclusive();
     test_reset_reanchors_but_keeps_the_card();

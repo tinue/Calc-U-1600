@@ -25,6 +25,12 @@
 // write the live disk to <dir>/<name>.floppy.yaml (without it, saveas is a
 // logged no-op). Card saveas targets are not supported here.
 //
+// CE-158 (--preset only, a preset with `interface: ce158`): --ce158-pty,
+// --ce158-rx <file>, --ce158-rx-hold <n>, --ce158-tx <file> -- same as
+// pc1500_cli (see its header). --run-after <tstates> keeps the machine
+// running that long after the preset script (e.g. to finish a serial
+// exchange with a --ce158-rx peer).
+//
 // --wav <out.wav> (--preset only) records the buzzer (OPC 18H, see
 // PiezoSampler.hpp) while the preset script runs, as 48 kHz mono 16-bit
 // PCM -- as the host hears it, i.e. through the PC-1600 transducer model.
@@ -45,6 +51,7 @@
 #include "../Core/PC1600/PC1600PresetLoader.hpp"
 #include "../Core/PC1500/PresetFile.hpp"
 #include "../Core/Resources/BundledRomCatalog.hpp"
+#include "Ce158CliPeer.hpp"
 
 namespace {
 bool readFile(const std::string& path, std::vector<uint8_t>* out) {
@@ -59,7 +66,8 @@ bool readFile(const std::string& path, std::vector<uint8_t>* out) {
 int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
               const std::string& moduleDir, const std::vector<std::string>& extraModuleDirs,
               const std::string& wavPath, const std::string& romOverride,
-              const std::string& ce1600pRomOverride, const std::string& saveDir) {
+              const std::string& ce1600pRomOverride, const std::string& saveDir,
+              Ce158CliPeer& ce158Peer, uint64_t runAfter) {
     (void)maxCycles;
     PresetFile preset;
     std::string error;
@@ -96,6 +104,7 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
         while ((n = machine.drainAudio(chunk, 4096)) > 0) wav.insert(wav.end(), chunk, chunk + n);
     };
     if (!wavPath.empty()) machine.setYieldHook(drainWav, PC1600Machine::kTStateHz / 20);
+    if (!ce158Peer.attach(machine)) return 1; // before the preset attaches the card
     PC1600PresetSaveAsFn onSaveAs;
     if (!saveDir.empty()) {
         onSaveAs = [&machine, &saveDir](PresetStep::SaveAsTarget target, const std::string& name,
@@ -145,6 +154,12 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
         return 1;
     }
     std::printf("Preset '%s' applied successfully.\n", presetPath.c_str());
+    if (runAfter) machine.runCycles(runAfter);
+    if (machine.ce150Attached()) {
+        std::printf("CE-150: attached, plot points=%zu revision=%llu\n", machine.ce150PlotPoints().size(),
+                    static_cast<unsigned long long>(machine.ce150PlotRevision()));
+    }
+    if (!ce158Peer.report(machine)) return 1;
 
     if (!wavPath.empty()) {
         machine.setYieldHook({}, 0);
@@ -207,6 +222,8 @@ int main(int argc, char** argv) {
         std::string romOverride;
         std::string ce1600pRomOverride;
         std::string saveDir;
+        Ce158CliPeer ce158Peer;
+        uint64_t runAfter = 0;
         std::string moduleDir = ".";
         std::vector<std::string> extraModuleDirs;  // 2nd+ `--modules-dir`, searched after `moduleDir`
         bool moduleDirSet = false;
@@ -216,6 +233,8 @@ int main(int argc, char** argv) {
             else if (std::strcmp(argv[i], "--rom") == 0 && i + 1 < argc) romOverride = argv[++i];
             else if (std::strcmp(argv[i], "--ce1600p-rom") == 0 && i + 1 < argc) ce1600pRomOverride = argv[++i];
             else if (std::strcmp(argv[i], "--save-dir") == 0 && i + 1 < argc) saveDir = argv[++i];
+            else if (std::strcmp(argv[i], "--run-after") == 0 && i + 1 < argc) runAfter = std::strtoull(argv[++i], nullptr, 10);
+            else if (ce158Peer.parseArg(argc, argv, i)) {}
             else if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
                 if (!moduleDirSet) { moduleDir = argv[++i]; moduleDirSet = true; }
                 else               { extraModuleDirs.push_back(argv[++i]); }
@@ -223,7 +242,7 @@ int main(int argc, char** argv) {
             else maxCycles = std::strtoull(argv[i], nullptr, 10);
         }
         return runPreset(argv[2], maxCycles, dumpBasic, moduleDir, extraModuleDirs, wavPath, romOverride,
-                         ce1600pRomOverride, saveDir);
+                         ce1600pRomOverride, saveDir, ce158Peer, runAfter);
     }
     if (argc < 3) {
         std::fprintf(stderr, "usage: %s <romI-0-file> <romII-0-file> [maxCycles]\n", argv[0]);

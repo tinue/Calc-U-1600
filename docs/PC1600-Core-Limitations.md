@@ -395,11 +395,13 @@ still worth understanding. They say what the code actually does now.
 - **CE-1600P Ni-Cd pack / battery voltage** — no model (see PC-1600
   sub-CPU section above). The plotter mechanism and its floppy drive are
   now modeled; see the next section.
-- **CE-158 on the PC-1600** — the LH5803 side serves only the CE-150's
-  half of the peripheral ROM window (PVOUT = 0); the CE-158's half
-  (PVOUT = 1, `0x8000-0x9FFF`) and its ME1 I/O blocks are not routed yet.
-  The CE-158 itself is modelled on the PC-1500 (`Core/Connector/Ce158Card.hpp`).
-  `LH5803SharedMemory.cpp` (readME0)
+- **CE-158 on the PC-1600: input through `SETDEV KI` / `INPUT`** — in
+  MODE 1 the CE-158 prints (parallel `OPN "LPRT"`, serial `SETDEV PO`)
+  and `RINKEY$` reads its UART, but `SETDEV KI` + `INPUT` never reaches
+  the CE-158's ROM (no UART access at all; INPUT takes the keyboard). The
+  PC-1600 has its own native `SETDEV` (KI = F14EH b0), which likely takes
+  the command; not yet checked against real hardware.
+  `Core/Connector/Ce158Card.hpp`, `LH5803SharedMemory.cpp`
 - **Cassette (CMT)** — connector pins exist, no FSK / audio path.
   `SystemBus.hpp:27`
 - **Buzzer: partial.** Modelled: the PC-1500 OPC/PC6 line, the PC-1600 OPC

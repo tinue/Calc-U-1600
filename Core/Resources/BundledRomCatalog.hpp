@@ -164,8 +164,8 @@ inline bool attachCE150(Machine& machine, const std::vector<std::string>& dirs, 
 }
 
 // Attaches the CE-158 RS-232C / Centronics interface to `machine` (a
-// PC-1500/1500A today; the PC-1600's LH5803 side exposes the same
-// attachCE158(bytes, size) shape).
+// PC-1500/1500A, or a PC-1600's LH5803 side -- same attachCE158(bytes,
+// size) shape).
 template <typename Machine>
 inline bool attachCE158(Machine& machine, const std::vector<std::string>& dirs, std::string* error) {
     std::string path;

@@ -111,6 +111,7 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
         if (m_moduleManager) m_moduleManager->attachAllToFreshMachine();
         if (restoreCE150) attachCE150();
         if (restoreCE1600P) attachCE1600P();
+        if (restoreCE158) attachCE158();
 
         attachSerialLink(*m_pc1600);
     } else {
@@ -191,6 +192,7 @@ PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion vers
     std::string romErr;
     if (!loadPC1600RomSet(*m_pc1600, &romErr)) reportMissingRomAndExit(romErr);
     attachSerialLink(*m_pc1600);
+    if (m_ce158SerialLink) m_pc1600->setCE158SerialLink(m_ce158SerialLink.get()); // see resetBareForPresetPC1500
     return *m_pc1600;
 }
 
@@ -223,12 +225,13 @@ QString MachineController::ce158SerialLinkStatus() const {
 }
 
 void MachineController::syncCE158SerialLink() {
-    if (!m_pc1500 || !m_pc1500->ce158Attached()) return;
+    if (!ce158Attached()) return;
     if (!m_ce158SerialLink) {
         m_ce158SerialLink = std::make_unique<PtySerialLink>(effectiveSerialLinkDir().toStdString(),
                                                             PtySerialLink::kCE158LinkName);
     }
-    m_pc1500->setCE158SerialLink(m_ce158SerialLink.get());
+    if (m_pc1600) m_pc1600->setCE158SerialLink(m_ce158SerialLink.get());
+    else if (m_pc1500) m_pc1500->setCE158SerialLink(m_ce158SerialLink.get());
 }
 
 void MachineController::finishPresetLoad(Model model) {
@@ -634,27 +637,36 @@ bool MachineController::ce150Attached() const {
 }
 
 bool MachineController::attachCE158() {
-    if (!m_pc1500) return false;
     std::string err;
-    if (!BundledRoms::attachCE158(*m_pc1500, bundledRomDirs(), &err)) return false;
+    if (m_pc1600) {
+        flushFloppyBeforeDetach(); // Core detaches the CE-1600P/F to make room
+        if (!BundledRoms::attachCE158(*m_pc1600, bundledRomDirs(), &err)) return false;
+    } else if (m_pc1500) {
+        if (!BundledRoms::attachCE158(*m_pc1500, bundledRomDirs(), &err)) return false;
+    } else {
+        return false;
+    }
     syncCE158SerialLink();
     return true;
 }
 
 void MachineController::detachCE158() {
-    if (m_pc1500) m_pc1500->detachCE158();
+    if (m_pc1600) m_pc1600->detachCE158();
+    else if (m_pc1500) m_pc1500->detachCE158();
 }
 
 bool MachineController::ce158Attached() const {
+    if (m_pc1600) return m_pc1600->ce158Attached();
     return m_pc1500 && m_pc1500->ce158Attached();
 }
 
 std::vector<std::uint8_t> MachineController::drainCE158PrinterOutput() {
+    if (m_pc1600) return m_pc1600->drainCE158ParallelOutput();
     return m_pc1500 ? m_pc1500->drainCE158ParallelOutput() : std::vector<std::uint8_t>{};
 }
 
 bool MachineController::attachCE1600P() {
-    if (!m_pc1600) return false;
+    if (!m_pc1600) return false; // (Core drops a CE-158 to make room -- PlotterController reports it)
     const auto versionName = [](CE1600PRomVersion v) { return v == CE1600PRomVersion::Old ? "old" : "new"; };
     std::string err;
     if (!BundledRoms::attachCE1600P(*m_pc1600, bundledRomDirs(), versionName(m_ce1600pRomVersion), &err)) {

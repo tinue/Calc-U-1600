@@ -6,6 +6,7 @@
 
 #include "../LH5801/LH5801.hpp"
 #include "../../Connector/Ce150Card.hpp"
+#include "../../Connector/Ce158Card.hpp"
 
 class PC1600Memory;
 class PC1600BusArbiter;
@@ -26,8 +27,11 @@ class PC1600BusArbiter;
 // Slot 1/2.
 //
 //   0000-7FFF  forwarded to sharedMem.read/write(addr + 0x8000)
-//   8000-BFFF  CE-158 ROM (PVOUT=1) or CE-150 ROM (PVOUT=0) window --
-//              open bus, no peripheral ROM backing it
+//   8000-BFFF  peripheral ROM window, selected by the LH5803's own PV:
+//              CE-150 ROM (PV=0, A000-BFFF) or CE-158 ROM (PV=1,
+//              8000-9FFF, PU picks its 8 KB bank). Open bus where no
+//              attached card answers. The LH5803 ROM sets PV itself from
+//              CALLH's PARBAN (E224: RPV, then SPV if (700EH) bit 0).
 //   C000-FFFF  LH5803-private internal ROM (PC1600-LH5803-C000-FFFF-new.bin), fixed, loadable
 //
 // ME1 defaults to aliasing ME0, EXCEPT:
@@ -62,14 +66,14 @@ public:
 
     void setBusArbiter(PC1600BusArbiter* arbiter) { m_arbiter = arbiter; }
 
-    /// Cache the LH5803's PV flip-flop state (SPV/RPV never touch the bus
-    /// themselves, so pushing the post-instruction value here is enough for
-    /// the next access to see it -- same contract as PC1500Memory::updatePUPV).
-    /// PV gates the CE-150 ROM window in the 8000-BFFF region. PU is
-    /// accepted for call-site symmetry with the LH5801 path but not cached --
-    /// nothing on the LH5803 bus consumes it yet.
-    void updatePUPV(bool /*pu*/, bool pv) { m_pv = pv; }
+    /// Cache the LH5803's PU/PV flip-flop state (SPV/RPV/SPU/RPU never touch
+    /// the bus themselves, so pushing the post-instruction value here is
+    /// enough for the next access to see it -- same contract as
+    /// PC1500Memory::updatePUPV). PV selects between the CE-150 and CE-158
+    /// halves of the 8000-BFFF window; PU picks the CE-158's ROM bank.
+    void updatePUPV(bool pu, bool pv) { m_pu = pu; m_pv = pv; }
     bool pv() const { return m_pv; }
+    bool pu() const { return m_pu; }
 
     /// Attach/detach a CE-150 plotter (the same card the PC-1500 uses;
     /// non-owning, PC1600Machine owns it). Once attached the 8000-BFFF
@@ -79,6 +83,14 @@ public:
     void attachCe150(Ce150Card* card) { m_ce150 = card; }
     void detachCe150() { m_ce150 = nullptr; }
     bool ce150Attached() const { return m_ce150 != nullptr; }
+
+    /// Attach/detach a CE-158 interface (the PC-1500's card, non-owning).
+    /// Its ROM answers in 8000-9FFF at PV=1; its LH5811 (ME1 0xD000-0xD1FF),
+    /// UART (0xD200-0xD3FF) and interrupt-ID register (0xDE00-0xDFFF) are
+    /// routed to it. Coexists with a CE-150.
+    void attachCe158(Ce158Card* card) { m_ce158 = card; }
+    void detachCe158() { m_ce158 = nullptr; }
+    bool ce158Attached() const { return m_ce158 != nullptr; }
 
     /// Loads the LH5803-private internal ROM at C000-FFFF (PC1600-LH5803-C000-FFFF-new.bin).
     /// Returns false (untouched) if `size` isn't exactly 16384 bytes.
@@ -106,23 +118,33 @@ private:
     /// 20H-27H or 33H, in either the bare or the 0xA0xx-shadowed form).
     static bool isUartShadow(uint16_t addr, uint8_t* reg, bool* isSubCpuAnswer);
 
-    /// Build the 4-field PinState `Ce150Card` decodes on (address, forWrite,
-    /// me1, PV) -- no S-block/Y strobe, so no PC1500SignalDecode dependency
-    /// here. See Ce150Card.hpp's "Bus dependency" note.
-    static PinState ce150Pins(uint16_t addr, bool forWrite, bool me1, bool pv) {
+    /// Build the PinState the 60-pin peripheral cards decode on (address,
+    /// forWrite, me1, PV, PU) -- no S-block/Y strobe, so no
+    /// PC1500SignalDecode dependency here. See Ce150Card.hpp's "Bus
+    /// dependency" note.
+    PinState peripheralPins(uint16_t addr, bool forWrite, bool me1) const {
         PinState p;
         p.address = addr;
         p.forWrite = forWrite;
         p.me1 = me1;
-        p.pin[2] = pv; // PV
+        p.pin[2] = m_pv; // PV
+        p.pin[3] = m_pu; // PU
         return p;
+    }
+
+    /// The CE-158's ME1 register blocks: LH5811 + UART 0xD000-0xD3FF,
+    /// interrupt-ID 0xDE00-0xDFFF (see Ce158Card).
+    static bool isCe158Io(uint16_t addr) {
+        return (addr & 0xFC00) == 0xD000 || (addr & 0xFE00) == 0xDE00;
     }
 
     PC1600Memory& m_shared;
     PC1600BusArbiter* m_arbiter{nullptr};
     Ce150Card* m_ce150{nullptr};
+    Ce158Card* m_ce158{nullptr};
     std::array<uint8_t, kRomSize> m_rom{};
     std::array<uint8_t, 16> m_ioRegs{}; // internal LH5811-compat PIO, ME1 0xF000-0xF00F
     bool m_romLoaded{false};
     bool m_pv{false};
+    bool m_pu{false};
 };
