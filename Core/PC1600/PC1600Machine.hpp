@@ -91,6 +91,7 @@ public:
     // (via `paceHz` on the Bridge wrapper) the GUI's batch pacing.
     static constexpr uint32_t kTStateHz = 3580000;
     static_assert(CE1600FCard::kTStateHz == kTStateHz, "CE1600FCard times seeks in SC7852 T-states");
+    static_assert(PC1600Memory::kSdoTStateHz == kTStateHz, "the F-register modulator counts SC7852 T-states");
     static constexpr uint32_t kLH5803Hz = 1300000;
 
     /// Converts a cycle count returned by whichever CPU owned the bus into

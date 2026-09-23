@@ -175,8 +175,14 @@ public:
     TC8576F&             uart() { return m_uart; }
     const TC8576F&       uart() const { return m_uart; }
     /// Buzzer drive line as PCM, in SC-7852 T-states -- advanced by
-    /// PC1600Machine::step() on both CPUs' branches. See m_opc.
+    /// PC1600Machine::step() on both CPUs' branches (via advanceBuzzer()).
+    /// See m_opc and m_fReg.
     PiezoSampler&        piezo() { return m_piezo; }
+    /// Credits `tstates` of elapsed time to the buzzer: runs the F-register
+    /// modulator (toggling SDO at its exact edge times) and the sampler.
+    void advanceBuzzer(uint32_t tstates);
+    /// The T-state rate advanceBuzzer() counts in (== PC1600Machine::kTStateHz).
+    static constexpr int64_t kSdoTStateHz = 3580000;
 
     /// Sets/clears the ON key's live state (not part of the scan matrix --
     /// see PC1600Keyboard's class comment). A press transition sets IF
@@ -452,6 +458,31 @@ private:
     // so a future cassette model shares this latch. It has to be readable
     // because the ROM does read-modify-write on it.
     uint8_t m_opc{0};
+    // F register (17H) and the modulated serial output SDO -- PC-1500 TRM
+    // 3-3-2 (9) and 3-2 D for the LH5810/5811 this block is compatible
+    // with. F6 = 1 switches SDO from normal serial data to the modulation
+    // clocks: SDO = SXO*FX + /SXO*FY. F0-2 pick FX and F3-5 pick FY, each
+    // phi/64, /128, /256, /512 or /1024. Only the idle case is modelled:
+    // no serial transmit (L, 16H), so SXO sits at mark = 1 and SDO = FX.
+    //
+    // phi, measured: dampflok.bas's locomotive whistle writes F = 41H
+    // (FX = /128). A real unit plays it at 2539 Hz (2533.24 Hz recorded, less
+    // the recorder's -0.22% seen in every BEEP recording), = 1.3 MHz / 512.
+    // So this block's modulator runs from phi = 1.3 MHz / 4 = 325 kHz. (The
+    // PC-1500's own LH5811 runs at 1.3 MHz: the CE-150 tape code writes
+    // F = 63H for its 2539 / 1270 Hz tones, /512 and /1024.)
+    //
+    // SDO reaches the buzzer through the same gate as OPC b7/b6. The line
+    // idles high and either input going low sounds it
+    // (PC-1600-CPU-SC7852-Z80.md pin 75: PC6 = NAND(..., SD0)). So the
+    // audible level is (b6 && b7) && SDO. The recording agrees: the
+    // whistle runs on unchanged through the noise routine's OPC writes, and
+    // BEEP OFF (b6 low) silences both.
+    static constexpr int64_t kModulatorHz = 1300000 / 4;   // phi of the F-register dividers
+    uint8_t m_fReg{0};
+    bool    m_sdo{true};
+    int64_t m_sdoAccum{0};  // T-states * kModulatorHz into the current SDO half period
+    void updateBuzzerLine() { m_piezo.setLevel((m_opc & 0xC0) == 0xC0 && m_sdo); }
     // TRM 7.5: SC-7852 T-states at 3.58 MHz (PC1600Machine::kTStateHz).
     PiezoSampler m_piezo{3580000.0, PiezoSampler::Transducer::PC1600};
     // Live PB *pin* levels for the bits driven from outside the CPU, kept

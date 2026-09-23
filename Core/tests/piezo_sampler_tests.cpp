@@ -369,6 +369,33 @@ void test_pc1600_beep_repeat_spacing() {
     }
 }
 
+// Port 17H, the LH5810-style F register: F6 = 1 puts the modulation clock
+// FX on SDO, which drives the buzzer alongside OPC. dampflok.bas whistles
+// with F = 41H (FX = phi/128), measured at 2539 Hz on a real unit, so
+// phi = 1.3 MHz / 4.
+void test_pc1600_f_register_modulator() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_pc1600_f_register_modulator: PC-1600 ROM images not found\n");
+        return;
+    }
+    m.memory().piezo().setTransducer(PiezoSampler::Transducer::None);
+    ToneStats on = analyse(runAndCapture(m, "OUT 23,65"));
+    std::printf("  PC-1600 OUT 23,65: %.1f ms at %.1f Hz\n", 1000.0 * on.audibleSamples / kRate, on.hz);
+    CHECK(near(on.hz, 1300000.0 / 512, 0.003));
+    CHECK(on.audibleSamples > static_cast<size_t>(kRate * 2)); // keeps sounding
+    // Modulation off: silent again (bar the DC step's brief decay).
+    CHECK(analyse(runAndCapture(m, "OUT 23,0")).audibleSamples < static_cast<size_t>(kRate / 20));
+    // FX = phi/512 (F0-2 = 011): 635 Hz.
+    CHECK(near(analyse(runAndCapture(m, "OUT 23,67")).hz, 1300000.0 / 2048, 0.003));
+    runAndCapture(m, "OUT 23,0");
+    // BEEP OFF gates it like the BEEP tone.
+    runAndCapture(m, "BEEP OFF");
+    CHECK(analyse(runAndCapture(m, "OUT 23,65")).audibleSamples < static_cast<size_t>(kRate / 20));
+    runAndCapture(m, "OUT 23,0");
+    runAndCapture(m, "BEEP ON");
+}
+
 } // namespace
 
 int run_piezo_sampler_tests() {
@@ -381,6 +408,7 @@ int run_piezo_sampler_tests() {
     test_pc1500_settle_waits_for_beep();
     test_pc1600_beep();
     test_pc1600_beep_repeat_spacing();
+    test_pc1600_f_register_modulator();
 
     std::printf("piezo_sampler_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

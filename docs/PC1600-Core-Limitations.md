@@ -308,9 +308,10 @@ still worth understanding. They say what the code actually does now.
 
 - **LH5811 I/O controller: only the registers a stock PC-1500 needs are
   modelled** (DDA/OPA, DDB/OPB, and the uPD1990AC RTC bit-banged via
-  OPC/PC0-PC5). **Serial transfer and the buzzer (OPC/PC6) are out of
-  scope** — no stock boot-to-idle or BASIC-editing behaviour depends on
-  them. `PC1500Memory.hpp:52`
+  OPC/PC0-PC5), plus the buzzer on OPC/PC6. **Serial transfer and the F
+  register's modulated SDO output are out of scope**: no stock
+  boot-to-idle or BASIC-editing behaviour depends on them. The CE-150 tape
+  code would need them (F = 63H: 2539 / 1270 Hz). `PC1500Memory.hpp:52`
 - **F / G / MSK registers and the unused register-select codes**: stored
   as plain read/write bytes defaulting to `0x00`. This does *not* model
   serial transfer or MSK's real interrupt-masking effect — but a real ROM
@@ -396,8 +397,13 @@ still worth understanding. They say what the code actually does now.
   `LH5803SharedMemory.hpp:30`
 - **Cassette (CMT)** — connector pins exist, no FSK / audio path.
   `SystemBus.hpp:27`
-- **Buzzer / piezo / sound** — out of scope on both machines.
-  `PC1500Memory.hpp:52`
+- **Buzzer: partial.** Modelled: the PC-1500 OPC/PC6 line, the PC-1600 OPC
+  b7/b6 line, and the PC-1600 F-register (17H) modulator in its idle case
+  (SDO = FX, phi = 1.3 MHz / 4, measured). The PC-1600 also has an
+  acoustic transducer model. Not modelled: serial transmit through
+  L (16H), so SXO never leaves mark and FY is never heard; the G register
+  (19H); and the buzzer's second input F from the sub-CPU (key click,
+  alarm). `PiezoSampler.hpp`, `PC1600Memory.hpp` (m_fReg)
 
 ## CE-1600P plotter / CE-1600F floppy
 

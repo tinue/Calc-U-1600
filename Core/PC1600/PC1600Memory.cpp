@@ -1,5 +1,7 @@
 #include "PC1600Memory.hpp"
 
+#include <algorithm>
+
 #include <cstring>
 
 #ifdef PC1600_POWER_PROBE
@@ -48,6 +50,33 @@ void PC1600Memory::reset() {
     // not a reset-latched line.
     m_pbIn = static_cast<uint8_t>((m_pbIn & kPbInFreeRunning) | kPbInResetLevels);
     m_uart.reset();
+    // Port-block reset: modulation off, SDO back to its idle level.
+    m_fReg = 0;
+    m_sdo = true;
+    m_sdoAccum = 0;
+    updateBuzzerLine();
+}
+
+void PC1600Memory::advanceBuzzer(uint32_t tstates) {
+    if ((m_fReg & 0x40) == 0) {
+        m_piezo.advance(tstates);
+        return;
+    }
+    // FX = phi / (64 << F0-2); SDO toggles every half of that period.
+    // Codes 5-7 aren't in the TRM table; treat them as the slowest, /1024.
+    const int fx = std::min(m_fReg & 0x07, 4);
+    const int64_t halfPeriod = kSdoTStateHz * (int64_t{64} << fx) / 2; // in T-states * kModulatorHz
+    int64_t remaining = tstates;
+    while (m_sdoAccum + remaining * kModulatorHz >= halfPeriod) {
+        const int64_t take = (halfPeriod - m_sdoAccum + kModulatorHz - 1) / kModulatorHz;
+        m_piezo.advance(static_cast<uint32_t>(take));
+        remaining -= take;
+        m_sdoAccum += take * kModulatorHz - halfPeriod;
+        m_sdo = !m_sdo;
+        updateBuzzerLine();
+    }
+    m_sdoAccum += remaining * kModulatorHz;
+    m_piezo.advance(static_cast<uint32_t>(remaining));
 }
 
 const uint8_t* PC1600Memory::resolveConst(uint16_t addr) const {
@@ -281,6 +310,7 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
         // this port's write side. The timer ISR reads it at PC1600-P1-B3-new.bin
         // 4102H/4112H to decide which pending causes are unmasked.
         case 0x35: return m_intMask;
+        case 0x17: return m_fReg;
         case 0x18: return m_opc;
         case 0x1B: return m_if;
         case 0x1C: return m_dda;
@@ -356,7 +386,15 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
             // Buzzer: bit 6 = enable (BEEP ON/OFF), bit 7 = the square
             // wave the BEEP loop toggles. See m_opc.
             m_opc = value;
-            m_piezo.setLevel((value & 0xC0) == 0xC0);
+            updateBuzzerLine();
+            return;
+        // 14H: divider reset -- restart the modulation clocks' phase.
+        case 0x14: m_sdoAccum = 0; return;
+        // 17H: F register -- SDO modulation (see m_fReg).
+        case 0x17:
+            m_fReg = static_cast<uint8_t>(value & 0x7F);
+            if ((m_fReg & 0x40) == 0) m_sdo = true; // normal mode: SDO = SXO = idle mark
+            updateBuzzerLine();
             return;
         case 0x1B: m_if = value; return;
         case 0x1C: m_dda = value; return;

@@ -252,7 +252,7 @@ int PC1600Machine::step() {
         // LU-57813P calendar clock: one tick per emulated second. See
         // kRtcPeriodTStates.
         m_rtcAccum += cost;
-        m_z80Mem.piezo().advance(static_cast<uint32_t>(cost));
+        m_z80Mem.advanceBuzzer(static_cast<uint32_t>(cost));
         while (m_rtcAccum >= kRtcPeriodTStates) {
             m_rtcAccum -= kRtcPeriodTStates;
             m_z80Mem.subCpu().tickOneSecond();
@@ -301,7 +301,7 @@ int PC1600Machine::step() {
         // branch's own T-states instead.
         m_rtcAccum += tstates;
         // Buzzer time keeps running while the LH5803 owns the bus too.
-        m_z80Mem.piezo().advance(static_cast<uint32_t>(tstates));
+        m_z80Mem.advanceBuzzer(static_cast<uint32_t>(tstates));
         while (m_rtcAccum >= kRtcPeriodTStates) {
             m_rtcAccum -= kRtcPeriodTStates;
             m_z80Mem.subCpu().tickOneSecond();
