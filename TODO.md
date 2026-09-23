@@ -188,3 +188,133 @@ touched, not proactively:
 - `MemorySlotConnector` and `ExpansionConnector` share ~25 lines of
   copy-pasted dispatch shell; a small base class holding the dispatch
   would remove the duplication.
+
+### From the 0.5.0 `/simplify` review (skipped, 29de332)
+
+Larger or behaviour-changing items left out of the 0.5.0 cleanup commit.
+
+- **Expansion cards have no common `tick()`.** Each card is ticked by
+  hand in each machine: `PC1500Machine.cpp` step/halt paths and
+  `PC1600Machine.cpp` both CPU branches (~lines 146/201/210 and
+  305/332). The CE-158 added five hand-placed `tick()` calls next to
+  the CE-150 ones. A missed one fails silently (e.g. UART stalls during
+  HALT). Fix: `virtual void tick(uint64_t)` on `ExpansionCard`, a
+  `SystemBus::tick()` iterating attached cards (plus an equivalent list
+  on the LH5803 side), and call that once per step.
+- **CE-158 attach plumbing is duplicated per machine.**
+  `attachCE158`/`detachCE158`/`setCE158SerialLink`/
+  `drainCE158ParallelOutput` + `m_ce158Card`/`m_ce158Link` are
+  near-identical in `PC1500Machine` and `PC1600Machine` (only
+  `setClockHz`, the bus attach call and the CE-1600P exclusion differ).
+  Both `attachCE158`s also re-check `romSize` that `loadRom()` checks
+  again. Fix: a small `Ce158Port` in `Core/Connector` owning the card +
+  sticky `SerialLink*`; machines keep only their bus hookup. Same for
+  the `interface: ce158` attach block duplicated in
+  `PC1500PresetLoader.cpp` / `PC1600PresetLoader.cpp` — a templated
+  `attachPresetInterface<Machine>()` (like `BundledRoms::attachCE158`).
+- **`MachineController` branches on the model in every new method.**
+  `attachCE158`, `detachCE158`, `ce158Attached`,
+  `drainCE158PrinterOutput`, `tapKey`, `seedClockFromHostNow`, … are
+  all `if (m_pc1600) … else if (m_pc1500) …`. Fix: one
+  `template<class F> auto withMachine(F&&)` visitor (both machines
+  already share the method names), then write each operation once.
+- **CE-158 host PTY is wired from several places.** The link is created
+  lazily in `syncCE158SerialLink()`, which is called from
+  `resetBareForPreset*` (hand-over only), `attachCE158`, and
+  `MainWindow::onCe158AttachedChanged` (a UI slot doing I/O wiring, so a
+  preset-attached card gets its PTY). Fix: hand every newly built
+  machine its CE-158 link at one construction hook (as
+  `attachSerialLink(*m_pc1600)` does for the PC-1600 port); open the
+  PTY lazily inside the link or on first attach there; drop the other
+  sync calls.
+- **CE-158 / CE-1600P exclusion is encoded in several layers.** Core
+  (`PC1600Machine` attach detaches the other), the parser
+  (`PresetFile.cpp`), `PlotterController` (`hadCE158`/`hadCE1600P`
+  delta bookkeeping) and MainWindow (now one
+  `syncPeripheralButtons()`). Fix: keep the rule in Core; after any
+  toggle, have `PlotterController` call `syncFromMachineState()` and
+  MainWindow read all three attach states from the controller instead
+  of being passed "self" state by the signal.
+- **Preset `armedFired` flag in `PresetController.cpp`** (both
+  branches): the post-load "safety net" slot/floppy resync from
+  `result` would undo a `saveas:` retarget, so it is skipped once
+  `onArmed` fired. Fix in Core (per the fix-the-loader rule): have
+  `applyPC1500Preset`/`applyPC1600Preset` call `onArmed` (or a single
+  `onFinished`) on every exit path, including early failure, then drop
+  the safety net and the flag.
+- **Preset `saveas:` twice on the same card slot likely fails.**
+  `MemoryModuleManager::saveSlotAs()` resolves the source template via
+  `resolveModuleSpecByName(bundledDir, st.moduleName)`, but after the
+  first save `moduleName` is the new instance name, so a second
+  `saveas: s1:<other>` probably errors "Couldn't find the source
+  template". Unverified — confirm with a preset test, then keep the
+  original template name in `SlotState` separate from the
+  display/instance name.
+- **Clock seeding still has a two-step flat-out/paced dance.**
+  `MachineController::seedClockFromHost()` seeds during the flat-out
+  preset run and sets `m_clockResyncPending`; `resyncClockIfSeeded()`
+  re-seeds on the first paced tick (`MainWindow.cpp` ~732). Fix: seed
+  only when paced emulation (re)starts (`restartPacing()`), keeping the
+  preset `syncclock:` step as the one explicit exception.
+- **CE-1600P ROM-version plumbing clones the PC-1600 one.**
+  `CE1600PRomVersion` duplicates `PC1600RomVersion`;
+  `BundledRoms::isCE1600PRomVersion` == `isPC1600RomVersion`; enum↔
+  string mapping is inlined in `MachineController.cpp` (`versionName`
+  lambda, `loadPC1600RomSet`) and `PresetController.cpp`; the old-ROM
+  fallback `QMessageBox` is copied; MainWindow's menu builder/sync and
+  ControlBar's combo are copy-pasted. Fix: one `NewOldRom` enum with
+  to/from-string, one `warnOldRomFallback()`, one menu/combo builder
+  parameterised by label and slot.
+- **CLI helpers.** `tools/pc1600_cli.cpp` hand-rolls fopen/fwrite for
+  `--save-dir` and copies the CE-150 summary printf from
+  `pc1500_cli.cpp`; `Ce158CliPeer.hpp` reads `--ce158-rx` with an
+  fgetc loop though `readFile`/`BundledRoms::detail::readWholeFile`
+  exist. Fix: `tools/CliCommon.hpp` with `readFile`/`writeFile`/
+  `printCe150Report`.
+- **MainWindow docked panes.** Plotter paper and CE-158 printer each
+  repeat add/show/remove/hide + an `m_*InLayout` bool; could be one
+  `setDockedPane(QWidget*, bool show)` using
+  `m_debugRowLayout->indexOf(w) >= 0`. Same for
+  `serialLinkStatus`/`ce158SerialLinkStatus` (one static helper over a
+  `PtySerialLink*`) and `ControlBar::setCe150State`/`setCe158State`.
+
+Performance / behaviour items (each changes observable behaviour or
+timing — decide deliberately):
+
+- **Fitted timing constants absorbing one residual.**
+  `PC1600Display::kBusyClocks = 4` and
+  `PC1600SubCpu::kResponseMicros = 1660` were both fitted to real-unit
+  benchmarks on 2026-09-23 while the ~0.65 % BASIC-speed residual is
+  still open (see *PC-1600 timing* above), so each may partly
+  compensate for it. The HD61102 datasheet bound on busy time should be
+  checked against the fitted 4 clocks; the 1.66 ms figure comes from
+  the 0.5 s ISR's commands but is applied to every sub-CPU command (key
+  scan, clock, IOCS). Chase the residual first, then re-fit once;
+  consider a per-command response time.
+- **Plotter paper Copy at 1200 DPI allocates huge images on the GUI
+  thread.** `PlotterPaperWidget.cpp` (~26/249): ~9 900 px wide ×
+  paper length; a ~300 mm plot is ~550 MB ARGB32, plus the clipboard
+  copy. `kMaxTextureDimPx` caps only the longest side. Options: put a
+  vector PDF on the macOS pasteboard (exact physical size, no DPI
+  trade-off), or cap total pixels (~64 MP) and use RGB32.
+- **PC-1600 `display().tick()` every instruction.** Called from both
+  CPU branches of `PC1600Machine::step()` (~303/331) just to keep
+  `m_lcdEdges` current, which is read only on LCD port 50H–5BH access.
+  Could keep a running T-state total and derive edges lazily in
+  `readIO`/`writeIO` (`total * 1300000 / 21480000`). Timing-sensitive —
+  verify with the scrolling-PRINT benchmark.
+- **App-wide event filter for the Shift tap.**
+  `qApp->installEventFilter(this)` in `MainWindow.cpp` (~244/703) sees
+  every event of every object, only to catch a mouse press during the
+  ≤ 400 ms a Shift tap is armed. Install on Shift press / remove on
+  disarm, or check `QGuiApplication::mouseButtons()` at Shift release.
+- **CE-158 ROM reads on the PC-1500 go through the generic open-bus
+  path.** Every fetch at 0x8000–0x9FFF runs resolve → readOpenBus →
+  SystemBus decode → per-card `respondsToRead`; `inhibitAsserted()` (every
+  read ≥ 0xC000) also asks each card. Options: a cached "some card can
+  inhibit" flag in `SystemBus`, and/or a direct per-PU/PV ROM pointer
+  from the card.
+- **`Ce158PrinterWidget::onFrameTick`** fetches the PTY path (mutex +
+  string copy + QString) and sets button enables every frame; refresh
+  the label only on link create/relink and toggle buttons only when
+  the printout goes empty ↔ non-empty. Minor.
