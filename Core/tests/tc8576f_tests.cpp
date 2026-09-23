@@ -126,13 +126,19 @@ void test_parallel_out_drives_subcpu_command_and_busy_window() {
     uart.writeRegister(1, 0x5A);        // 21H PVOUT = sub-CPU request 5AH (reset cause)
     CHECK(sub.busy());                  // BUSY asserted for the handshake window
     CHECK((uart.psr() & kPsrBUSY) != 0);
+    CHECK((uart.psr() & 0x40) != 0);    // bit 6: still processing (the ROM's A98C wait)
     CHECK(!sub.answerReady());          // not readable until BUSY clears
+    // The window is the sub-CPU's measured response time (~1.66 ms), not
+    // just the TRM's ~20 us strobe pulse.
+    sub.tickByTStates(PC1600SubCpu::kBusyTStates / 2);
+    CHECK(sub.busy());
     // The answer register itself is filled synchronously (legacy callers).
     CHECK(sub.answerPending());
 
     sub.tickByTStates(PC1600SubCpu::kBusyTStates); // elapse the window
     CHECK(!sub.busy());
     CHECK((uart.psr() & kPsrBUSY) == 0);
+    CHECK((uart.psr() & 0x40) == 0);
     CHECK(sub.answerReady());
     CHECK(sub.readAnswer() == 0xA0);    // cold-power-up reset cause
 }

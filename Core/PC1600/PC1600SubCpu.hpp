@@ -74,8 +74,18 @@ public:
     // pace this (romIV-6 A8F0/A974; the LH-5803 OFF loop rom1500 E538).
     // The answer register is still filled synchronously in command() so
     // every existing caller keeps working -- only busy() is time-gated.
-    // Approx 13-26 us per the TRM figure -> ~64 SC-7852 T-states.
-    static constexpr int kBusyTStates = 64;
+    //
+    // The window is the sub-CPU's *response time*, not just the TRM
+    // figure's 13-26 us strobe/ACK pulses: the LU-57813P (4-bit, 307 kHz)
+    // runs every command in its own ISR. Measured 2026-09-23 on a real
+    // unit: a BASIC FOR loop (2000 iterations, BEEP-bracketed) runs 45.9 ms
+    // faster with the sub-CPU interrupt masked (OUT 53,&1F). The emulator
+    // made that difference only 9.6 ms at a 64 T window, so each of the
+    // 0.5 s ISR's command bytes costs ~1.66 ms on hardware. P2-B6 A974 waits
+    // for PSR bit 5 before sending; A98C waits for PSR bit 6 after sending,
+    // then reads 33H. The TC8576F reports both while busy().
+    static constexpr int kResponseMicros = 1660;
+    static constexpr int kBusyTStates = 3580000 / 1000 * kResponseMicros / 1000; // SC-7852 T-states
 
     /// True while the modelled BUSY window after a command is still open.
     bool busy() const { return m_busyTStatesLeft > 0; }

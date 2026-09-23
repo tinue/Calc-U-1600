@@ -76,7 +76,10 @@ uint8_t TC8576F::psr() const {
     // Busy across a command, back to Ready when the answer is latched) is
     // what a readiness poll between OUT (21H) and IN (33H) watches.
     // TODO(trace): confirm bit position + polarity against romIV-6 A8F0.
-    if (m_sub.busy()) v |= kPsrBUSY;
+    // Bit 6: the sub-CPU is still processing the last command byte. The ROM
+    // waits for it to clear before reading the answer (P2-B6 A98C). It is the
+    // only reader of this bit; see PC1600SubCpu::kResponseMicros.
+    if (m_sub.busy()) v |= kPsrBUSY | kPsrXBUSY;
     // FAULT/SLCT/PE/P5V/PRIME/XBUSY/IntF: parallel-printer status, no
     // Centronics device modelled -- all clear.
     //
@@ -91,7 +94,7 @@ uint8_t TC8576F::psr() const {
         if (m_dcd) v |= kPsrSLCT;  // b1 = CD  (carrier detect)
         if (m_dsr) v |= kPsrPE;    // b2 = DS  (data set ready)
     }
-    (void)kPsrP5V; (void)kPsrPRIME; (void)kPsrXBUSY; (void)kPsrIntF;
+    (void)kPsrP5V; (void)kPsrPRIME; (void)kPsrIntF;
     return v;
 }
 
