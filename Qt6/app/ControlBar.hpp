@@ -46,6 +46,11 @@ public:
     void setCe150State(bool attached, bool enabled);
     void setCe1600pState(bool attached, bool enabled);
     void setCe1600pVisible(bool visible);
+    // CE-158 RS-232C/parallel interface toggle, same conventions as the
+    // plotter buttons. It shares the 60-pin bus with the CE-150 (no mutual
+    // exclusion). PC-1500/1500A only for now.
+    void setCe158State(bool attached, bool enabled);
+    void setCe158Visible(bool visible);
     // CE-1600P ROM version picker (New/Old), shown next to the CE-1600P
     // button on a PC-1600. Independent of the PC-1600 ROM picker.
     void setCE1600PRomVersion(CE1600PRomVersion version);
@@ -77,6 +82,7 @@ signals:
     void nameAndSaveRequested(int slot);
     void ce150ToggleRequested();
     void ce1600pToggleRequested();
+    void ce158ToggleRequested();
     void floppyDiskSelected(QString diskNameOrEmpty); // "" => no disk
     void floppyNameAndSaveRequested();
     void floppySideToggleRequested();
@@ -87,6 +93,7 @@ private:
     QComboBox* m_rom1600Combo = nullptr;
     QPushButton* m_ce150Button = nullptr;
     QPushButton* m_ce1600pButton = nullptr;
+    QPushButton* m_ce158Button = nullptr;
     QComboBox* m_ce1600pRomCombo = nullptr;
     QLabel* m_floppyLabel = nullptr;
     QComboBox* m_floppyCombo = nullptr;

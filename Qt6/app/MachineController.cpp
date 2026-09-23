@@ -81,6 +81,7 @@ MachineController::~MachineController() = default;
 void MachineController::switchModel(Model model, bool keepPlotter) {
     const bool restoreCE150 = keepPlotter && ce150Attached();
     const bool restoreCE1600P = keepPlotter && ce1600pAttached();
+    const bool restoreCE158 = keepPlotter && ce158Attached();
     flushFloppyBeforeDetach(); // the old machine (and its disk) is going away
     m_model = model;
     m_paste.cancel({}); // the machine it was typing into is going away
@@ -127,6 +128,7 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
 
         if (m_moduleManager) m_moduleManager->attachAllToFreshMachine();
         if (restoreCE150) attachCE150();
+        if (restoreCE158) attachCE158();
     }
 
     // Every rebuild is a full cold boot, run flat out to the prompt (incl. a
@@ -172,6 +174,9 @@ PC1500Machine& MachineController::resetBareForPresetPC1500(PC1500Variant variant
     m_pc1500.reset();
     m_pc1600.reset();
     m_pc1500 = std::make_unique<PC1500Machine>(variant);
+    // A preset's `interface: ce158` attaches the card itself; it picks up
+    // whatever link the machine holds (see syncCE158SerialLink()).
+    if (m_ce158SerialLink) m_pc1500->setCE158SerialLink(m_ce158SerialLink.get());
     return *m_pc1500;
 }
 
@@ -202,8 +207,9 @@ void MachineController::attachSerialLink(PC1600Machine& machine) {
 }
 
 void MachineController::refreshSerialLinkDirectory() {
-    if (!m_serialLink) return;
-    m_serialLink->relink(effectiveSerialLinkDir().toStdString());
+    const std::string dir = effectiveSerialLinkDir().toStdString();
+    if (m_serialLink) m_serialLink->relink(dir);
+    if (m_ce158SerialLink) m_ce158SerialLink->relink(dir);
 }
 
 QString MachineController::serialLinkStatus() const {
@@ -211,8 +217,23 @@ QString MachineController::serialLinkStatus() const {
     return QString::fromStdString(m_serialLink->preferredPath());
 }
 
+QString MachineController::ce158SerialLinkStatus() const {
+    if (!m_ce158SerialLink || !m_ce158SerialLink->isOpen()) return QString();
+    return QString::fromStdString(m_ce158SerialLink->preferredPath());
+}
+
+void MachineController::syncCE158SerialLink() {
+    if (!m_pc1500 || !m_pc1500->ce158Attached()) return;
+    if (!m_ce158SerialLink) {
+        m_ce158SerialLink = std::make_unique<PtySerialLink>(effectiveSerialLinkDir().toStdString(),
+                                                            PtySerialLink::kCE158LinkName);
+    }
+    m_pc1500->setCE158SerialLink(m_ce158SerialLink.get());
+}
+
 void MachineController::finishPresetLoad(Model model) {
     m_model = model;
+    syncCE158SerialLink(); // first-ever CE-158 attached by the preset: create its PTY now
     seedClockFromHost();
     AppSettings::setLastUsedModel(static_cast<int>(m_model));
     emit modelChanged(m_model);
@@ -610,6 +631,26 @@ bool MachineController::ce150Attached() const {
     if (m_pc1600) return m_pc1600->ce150Attached();
     if (m_pc1500) return m_pc1500->ce150Attached();
     return false;
+}
+
+bool MachineController::attachCE158() {
+    if (!m_pc1500) return false;
+    std::string err;
+    if (!BundledRoms::attachCE158(*m_pc1500, bundledRomDirs(), &err)) return false;
+    syncCE158SerialLink();
+    return true;
+}
+
+void MachineController::detachCE158() {
+    if (m_pc1500) m_pc1500->detachCE158();
+}
+
+bool MachineController::ce158Attached() const {
+    return m_pc1500 && m_pc1500->ce158Attached();
+}
+
+std::vector<std::uint8_t> MachineController::drainCE158PrinterOutput() {
+    return m_pc1500 ? m_pc1500->drainCE158ParallelOutput() : std::vector<std::uint8_t>{};
 }
 
 bool MachineController::attachCE1600P() {

@@ -4,8 +4,8 @@
 
 class MachineController;
 
-// Owns the plotter attach/detach power cycle: real CE-150/CE-1600P
-// hardware requires the calculator to be powered off, connected, then
+// Owns the attach/detach power cycle for the 60-pin peripherals -- the
+// CE-150/CE-1600P plotters and the CE-158 interface: real hardware requires the calculator to be powered off, connected, then
 // powered back on -- not a live hot-plug. The cycle itself (OFF, power-down,
 // the instantaneous Core attach/detach call, ON, boot) is run flat out and
 // synchronously by the runner MainWindow installs (see
@@ -19,6 +19,8 @@ public:
 
     void requestToggleCE150() { beginToggle(/*isCE150=*/true); }
     void requestToggleCE1600P() { beginToggle(/*isCE150=*/false); }
+    // The CE-158 shares the bus with the CE-150 -- no mutual exclusion.
+    void requestToggleCE158();
 
     // Runs a toggle's power cycle: called with the attach/detach step, must
     // run it inside the flat-out OFF/ON cycle. Unset: the step runs directly.
@@ -36,6 +38,7 @@ public:
 signals:
     void ce150AttachedChanged(bool attached);
     void ce1600pAttachedChanged(bool attached);
+    void ce158AttachedChanged(bool attached);
 
 private:
     MachineController* m_controller; // not owned

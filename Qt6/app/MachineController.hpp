@@ -248,6 +248,9 @@ public:
     // PTY slave if no symlink could be made), or empty when no PC-1600 has
     // ever been activated yet / the PTY failed to open.
     QString serialLinkStatus() const;
+    // The same for the CE-158's own port (`calcu1600-ce158.serial`, in the
+    // same folder): empty until a CE-158 has been attached once.
+    QString ce158SerialLinkStatus() const;
 
     // ---- Preset-loader support (PresetController only) ----
     // Replaces the live machine with a freshly constructed, UN-ROM'd
@@ -315,6 +318,19 @@ public:
     void detachCE1600P();
     bool ce1600pAttached() const;
 
+    // CE-158 RS-232C / parallel interface: PC1500(A) only for now (false /
+    // no-op on a PC-1600). Same live power-cycled attach as the plotters;
+    // it shares the 60-pin bus with the CE-150 rather than excluding it.
+    bool attachCE158();
+    void detachCE158();
+    bool ce158Attached() const;
+    // What the CE-158 printed on its parallel port since the last call.
+    std::vector<std::uint8_t> drainCE158PrinterOutput();
+    // Gives an attached CE-158 its host PTY (created on first use, then
+    // kept for the app's life). Called after every point that can attach a
+    // CE-158 behind this class's back -- a preset, a machine rebuild.
+    void syncCE158SerialLink();
+
     std::vector<AlpsPlotterMechanism::FlatPoint> ce150PlotPoints() const;
     std::uint64_t ce150PlotRevision() const;
     void clearCE150Paper();
@@ -351,6 +367,9 @@ private:
     // host-visible symlink shouldn't disappear/reappear just because the
     // user switched models or loaded a preset.
     std::unique_ptr<PtySerialLink> m_serialLink;
+    // The CE-158's PTY: created the first time a CE-158 is attached, then
+    // kept like m_serialLink (see syncCE158SerialLink()).
+    std::unique_ptr<PtySerialLink> m_ce158SerialLink;
 
     // Where Core's BundledRomCatalog should look for bundled ROM files --
     // AppPaths::bundledResourcesDir(), the same directory the .card.yaml

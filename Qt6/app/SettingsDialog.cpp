@@ -260,12 +260,18 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     // PtySerialLink is POSIX-only (macOS/Linux); on Windows it's an inert
     // stub, so this section is compiled out entirely rather than shown
     // disabled -- there is nothing for it to do there yet.
-    QGridLayout* serial = addSection(layout, this, sections, tr("Serial port (PC-1600)"));
+    // One folder for every emulated port: the PC-1600's own
+    // (calcu1600.serial) and the CE-158's (calcu1600-ce158.serial).
+    QGridLayout* serial = addSection(layout, this, sections, tr("Serial ports"));
     auto* serialStatusLabel = new QLabel(this);
     serialStatusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    auto refreshSerialStatusLabel = [this, serialStatusLabel] {
+    auto* ce158StatusLabel = new QLabel(this);
+    ce158StatusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    auto refreshSerialStatusLabel = [this, serialStatusLabel, ce158StatusLabel] {
         const QString status = m_controller ? m_controller->serialLinkStatus() : QString();
         serialStatusLabel->setText(status.isEmpty() ? tr("(PC-1600 not active)") : status);
+        const QString ce158 = m_controller ? m_controller->ce158SerialLinkStatus() : QString();
+        ce158StatusLabel->setText(ce158.isEmpty() ? tr("(CE-158 not attached)") : ce158);
     };
     {
         PathRowSpec spec = directorySpec(this, tr("Symlink directory:"), tr("Choose Serial Port Directory"),
@@ -282,8 +288,10 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
         };
         addPathRow(serial, 0, this, sections, spec);
     }
-    addRowLabel(serial, 1, this, sections, tr("Connect client to:"));
+    addRowLabel(serial, 1, this, sections, tr("PC-1600 port:"));
     serial->addWidget(serialStatusLabel, 1, kValueColumn, 1, 3);
+    addRowLabel(serial, 2, this, sections, tr("CE-158 port:"));
+    serial->addWidget(ce158StatusLabel, 2, kValueColumn, 1, 3);
     refreshSerialStatusLabel();
 #endif
 

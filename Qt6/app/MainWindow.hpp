@@ -20,6 +20,7 @@ class ControlBar;
 class DebugPanel;
 class PlotterController;
 class PlotterPaperWidget;
+class Ce158PrinterWidget;
 class MemoryModuleManager;
 class FloppyDiskManager;
 class PresetController;
@@ -65,6 +66,8 @@ private:
     DebugPanel* m_debugPanel = nullptr;
     PlotterPaperWidget* m_plotterPaper = nullptr; // added to m_debugRowLayout only while a plotter is attached
     bool m_plotterPaperInLayout = false;
+    Ce158PrinterWidget* m_ce158Printer = nullptr; // added to m_debugRowLayout only while a CE-158 is attached
+    bool m_ce158PrinterInLayout = false;
     QWidget* m_debugRow = nullptr;
     QHBoxLayout* m_debugRowLayout = nullptr;
     QTimer* m_frameTimer = nullptr;
@@ -144,6 +147,7 @@ private:
     // PlotterController::ce150AttachedChanged/ce1600pAttachedChanged
     // signals: they only differ in which plotter is "self" vs "other".
     void onPlotterAttachedChanged(bool isCE150, bool attached);
+    void onCe158AttachedChanged(bool attached);
 
     // PresetController::armed handler: the preset has attached its
     // model/cards/plotter but the machine is still powered off. Resyncs

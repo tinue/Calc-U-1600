@@ -126,6 +126,12 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_ce150Button->setToolTip(tr("Attach/detach the CE-150 plotter (requires a power cycle)"));
     layout->addWidget(m_ce150Button);
 
+    m_ce158Button = new QPushButton(tr("CE-158"), this);
+    m_ce158Button->setCheckable(true);
+    m_ce158Button->setFocusPolicy(Qt::NoFocus);
+    m_ce158Button->setToolTip(tr("Attach/detach the CE-158 RS-232C/parallel interface (requires a power cycle)"));
+    layout->addWidget(m_ce158Button);
+
     m_ce1600pButton = new QPushButton(tr("CE-1600P"), this);
     m_ce1600pButton->setCheckable(true);
     m_ce1600pButton->setFocusPolicy(Qt::NoFocus);
@@ -212,6 +218,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     // so no manual setChecked() here.
     connect(m_ce150Button, &QPushButton::clicked, this, [this] { emit ce150ToggleRequested(); });
     connect(m_ce1600pButton, &QPushButton::clicked, this, [this] { emit ce1600pToggleRequested(); });
+    connect(m_ce158Button, &QPushButton::clicked, this, [this] { emit ce158ToggleRequested(); });
 }
 
 void ControlBar::setModel(Model model) {
@@ -265,6 +272,16 @@ void ControlBar::setCe150State(bool attached, bool enabled) {
     const QSignalBlocker blocker(m_ce150Button);
     m_ce150Button->setChecked(attached);
     m_ce150Button->setEnabled(enabled);
+}
+
+void ControlBar::setCe158State(bool attached, bool enabled) {
+    const QSignalBlocker blocker(m_ce158Button);
+    m_ce158Button->setChecked(attached);
+    m_ce158Button->setEnabled(enabled);
+}
+
+void ControlBar::setCe158Visible(bool visible) {
+    m_ce158Button->setVisible(visible);
 }
 
 void ControlBar::setCe1600pState(bool attached, bool enabled) {

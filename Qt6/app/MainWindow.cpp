@@ -9,6 +9,7 @@
 #include "PC1500KeyboardMap.hpp"
 #include "PlotterController.hpp"
 #include "PlotterPaperWidget.hpp"
+#include "Ce158PrinterWidget.hpp"
 #include "SettingsDialog.hpp"
 #include "AboutDialog.hpp"
 #include "MachineCodeLoadDialog.hpp"
@@ -87,6 +88,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_plotterController = std::make_unique<PlotterController>(m_controller.get(), this);
     m_plotterPaper = new PlotterPaperWidget(m_controller.get(), central);
     m_plotterPaper->hide(); // added to m_debugRowLayout only once a plotter attaches
+    m_ce158Printer = new Ce158PrinterWidget(m_controller.get(), central);
+    m_ce158Printer->hide(); // added to m_debugRowLayout only once a CE-158 attaches
 
     auto* layout = new QVBoxLayout(central);
     layout->setContentsMargins(6, 6, 6, 4);
@@ -215,6 +218,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             [this](bool attached) { onPlotterAttachedChanged(/*isCE150=*/true, attached); });
     connect(m_plotterController.get(), &PlotterController::ce1600pAttachedChanged, this,
             [this](bool attached) { onPlotterAttachedChanged(/*isCE150=*/false, attached); });
+    connect(m_controlBar, &ControlBar::ce158ToggleRequested, this,
+            [this] { m_plotterController->requestToggleCE158(); });
+    connect(m_plotterController.get(), &PlotterController::ce158AttachedChanged, this,
+            &MainWindow::onCe158AttachedChanged);
     connect(m_faceplate, &FaceplateWidget::keyPressed, this, [this](QString name) {
         const std::string key = name.toStdString();
         if (key == "on") {
@@ -275,6 +282,7 @@ void MainWindow::syncControlBarForModel() {
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     m_controlBar->setSlot2Visible(isPC1600);
     m_controlBar->setCe1600pVisible(isPC1600);
+    m_controlBar->setCe158Visible(!isPC1600); // PC-1500/1500A only for now
     m_controlBar->setCE1600PRomPickerVisible(isPC1600);
     m_ce1600pRomMenuAction->setVisible(isPC1600);
     // Always shown on a PC-1600 (never hidden alongside the CE-1600P
@@ -455,6 +463,21 @@ void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
         m_debugRowLayout->removeWidget(m_plotterPaper);
         m_plotterPaper->hide();
         m_plotterPaperInLayout = false;
+    }
+}
+
+void MainWindow::onCe158AttachedChanged(bool attached) {
+    m_controlBar->setCe158State(attached, /*enabled=*/true);
+    if (attached) {
+        // A preset attaches the card on the Core machine directly: make
+        // sure it has its host PTY before the preset script runs.
+        m_controller->syncCE158SerialLink();
+        if (!m_ce158PrinterInLayout) { m_debugRowLayout->addWidget(m_ce158Printer, 1); m_ce158PrinterInLayout = true; }
+        m_ce158Printer->show();
+    } else if (m_ce158PrinterInLayout) {
+        m_debugRowLayout->removeWidget(m_ce158Printer);
+        m_ce158Printer->hide();
+        m_ce158PrinterInLayout = false;
     }
 }
 
@@ -727,6 +750,7 @@ void MainWindow::onFrameTick() {
     m_controlBar->setFloppyMotorOn(m_floppyManager->motorOn());
     m_debugPanel->onFrameTick();
     if (m_plotterPaperInLayout) m_plotterPaper->onFrameTick();
+    if (m_ce158PrinterInLayout) m_ce158Printer->onFrameTick();
 }
 
 void MainWindow::buildMenuBar() {

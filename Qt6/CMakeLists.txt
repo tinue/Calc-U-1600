@@ -172,6 +172,7 @@ qt_add_executable(CalcU1600Qt
   app/DebugPanel.cpp
   app/PlotterController.cpp
   app/PlotterPaperWidget.cpp
+  app/Ce158PrinterWidget.cpp
   app/PC1500KeyboardMap.cpp
   app/keylayout/PC1500KeyLayout.cpp
   app/keylayout/PC1600KeyLayout.cpp
