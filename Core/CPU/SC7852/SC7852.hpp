@@ -104,6 +104,7 @@ public:
     bool     iff2() const { return IFF2; }
     uint8_t  im() const { return IM; }
     bool     halted() const { return m_halted; }
+    bool     intLine() const { return m_intLine; }
     /// Clears HALT without going through the interrupt path -- used by
     /// PC1600BusArbiter/PC1600Machine to resume the SC7852 when bus
     /// ownership switches back to it after parking on
@@ -129,14 +130,15 @@ public:
     bool flagN()  const { return (F & 0x02) != 0; }
     bool flagC()  const { return (F & 0x01) != 0; }
 
-    /// Maskable interrupt request (INT). Serviced at the start of the next
-    /// step() call if IFF1 is set and the previous instruction was not EI;
-    /// otherwise it stays pending (a HALTed CPU stays HALTed) until
-    /// interrupts are enabled -- real Z-80 behavior.
+    /// Drives the maskable INT line (a level, like the real pin). While it
+    /// is asserted, an interrupt is accepted at the start of a step() call
+    /// if IFF1 is set and the previous instruction was not EI; otherwise
+    /// nothing happens (a HALTed CPU stays HALTed). Accepting it does not
+    /// drop the line -- the device does, once the handler clears its cause.
     /// PC-1600's IM2 vector byte (Port 39H, low byte of the vector address;
     /// I register supplies the high byte) is the caller's responsibility to
     /// have wired up via setIM2VectorByte() before requesting.
-    void requestInterrupt();
+    void setIntLine(bool asserted) { m_intLine = asserted; }
     void setIM2VectorByte(uint8_t low) { m_im2VectorLow = low; }
 
     /// Non-maskable interrupt (NMI): always serviced, clears IFF1 (saving
@@ -167,8 +169,9 @@ private:
     bool IFF1{false}, IFF2{false};
     uint8_t IM{0};
     bool m_halted{false};
-    bool m_irqPending{false};
+    bool m_intLine{false};
     bool m_nmiPending{false};
+    uint8_t m_pendingPrefix{0}; // a DD/FD fetched but not yet executed (see step())
     bool m_eiShadow{false};   // set by EI: blocks INT acceptance for one instruction
     uint8_t m_im2VectorLow{0xFF};
 

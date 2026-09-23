@@ -153,13 +153,12 @@ public:
         m_uart.setInterruptHook([this] {
             if (!commInterruptEnabled()) return;
             latchCommInterruptCause();
-            if (m_cpu) m_cpu->requestInterrupt();
         });
     }
 
     /// True if interrupt-cause bit 4 (1/64s timer) is currently unmasked at
     /// port 35H -- PC1600Machine::step() consults this before calling
-    /// SC7852::requestInterrupt() on the timer's falling edge (see
+    /// latchTimer64InterruptCause() on the timer's falling edge (see
     /// PC-1600-CPU-SC7852-Z80.md §5.2's cause/mask pair).
     bool timer64InterruptEnabled() const { return (m_intMask & 0x10) != 0; }
     /// Raw port 35H value -- debug/test access, same convention as
@@ -257,7 +256,7 @@ public:
     /// this project's own trace evidence can distinguish from "write
     /// clears" or "cleared some other way," and is the simplest
     /// convention consistent with it.
-    void latchTimer64InterruptCause() { m_intCause |= 0x10; }
+    void latchTimer64InterruptCause() { m_intCause |= 0x10; updateIntLine(); }
 
     /// Port 35H bit 6 -- is the aggregated sub-CPU interrupt (INT6)
     /// unmasked? See PC1600Machine's own kTimer64EdgesPerHalfSecond comment
@@ -267,7 +266,7 @@ public:
     /// Latches interrupt-cause register (port 32H) bit 6, the sub-CPU's
     /// aggregated interrupt line. Same falling-edge-only, read-clears
     /// convention as latchTimer64InterruptCause() above.
-    void latchSubCpuInterruptCause() { m_intCause |= 0x40; }
+    void latchSubCpuInterruptCause() { m_intCause |= 0x40; updateIntLine(); }
 
     /// Port 35H bit 0 -- is the communication-port (TC8576F, INT0)
     /// interrupt unmasked? Checked by the UART's interrupt hook (see
@@ -276,7 +275,12 @@ public:
     /// Latches interrupt-cause register (port 32H) bit 0 -- the
     /// communication port received/sent data (TC8576F -> INT0, pin 81).
     /// Same read-clears convention as latchTimer64InterruptCause().
-    void latchCommInterruptCause() { m_intCause |= 0x01; }
+    void latchCommInterruptCause() { m_intCause |= 0x01; updateIntLine(); }
+
+    /// The SC-7852's INT line is the OR of the latched causes (port 32H)
+    /// that are enabled at port 35H -- a level, so masking a cause or the
+    /// 32H read that clears it withdraws a request not yet taken.
+    void updateIntLine() { if (m_cpu) m_cpu->setIntLine((m_intCause & m_intMask) != 0); }
 
     /// Loads the always-resident system ROM: `lower` backs page A
     /// (0000-3FFF, PC1600-P0-B0-new.bin) and `upper` backs page B bank 0

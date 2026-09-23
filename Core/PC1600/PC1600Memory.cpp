@@ -302,7 +302,7 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
     }
     switch (port) {
         case 0x31: return m_bank.readPort31();
-        case 0x32: { uint8_t v = m_intCause; m_intCause = 0; return v; } // read-clears, see latchTimer64InterruptCause()'s own comment
+        case 0x32: { uint8_t v = m_intCause; m_intCause = 0; updateIntLine(); return v; } // read-clears, see latchTimer64InterruptCause()'s own comment
         // 33H (IOR P) = the sub-CPU's answer register; 21H's write side is
         // the matching command port. See PC1600SubCpu's class comment.
         case 0x33: return m_subCpu.readAnswer();
@@ -383,7 +383,7 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
         // authoritative b5:b4 from this latch.
         case 0x3C: m_bank.writePort3C(value); return;
         case 0x3D: m_bank.writePort3D(value); return;
-        case 0x35: m_intMask = value; return;
+        case 0x35: m_intMask = value; updateIntLine(); return;
         case 0x39: m_im2VectorLow = value; if (m_cpu) m_cpu->setIM2VectorByte(value); return;
         case 0x38: if (m_arbiter) m_arbiter->requestSwitchFromSC7852(); return;
         case 0x18:

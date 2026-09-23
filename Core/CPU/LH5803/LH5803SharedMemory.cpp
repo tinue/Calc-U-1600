@@ -10,11 +10,7 @@ uint8_t LH5803SharedMemory::readME0(uint16_t addr) {
         // (the ROM sets it from CALLH's PARBAN): CE-150 ROM at PVOUT=0
         // (upper 8K), CE-158 ROM at PVOUT=1 (lower 8K, PU-banked). Each
         // card gates its window on the PV/PU it is shown.
-        uint8_t v;
-        const PinState p = peripheralPins(addr, /*forWrite=*/false, /*me1=*/false);
-        if (m_ce158 && m_ce158->respondsToRead(p, v)) return v;
-        if (m_ce150 && m_ce150->respondsToRead(p, v)) return v;
-        return 0xFF; // open bus
+        return cardRead(addr, /*me1=*/false);
     }
     return m_rom.read(addr);
 }
@@ -61,13 +57,7 @@ uint8_t LH5803SharedMemory::readME1(uint16_t addr) {
     // LH5810 at B008-B00F answers; everything else is open bus. Aliasing
     // this to readME0() served CE-150/CE-158 ROM bytes as I/O (the CE-150
     // LPRINT one-character bug came from exactly that at B000-B007).
-    if (addr >= 0x8000 && addr < kRomBase) {
-        uint8_t v = 0xFF;
-        const PinState p = peripheralPins(addr, /*forWrite=*/false, /*me1=*/true);
-        if (m_ce158 && m_ce158->respondsToRead(p, v)) return v;
-        if (m_ce150 && m_ce150->respondsToRead(p, v)) return v;
-        return 0xFF;
-    }
+    if (addr >= 0x8000 && addr < kRomBase) return cardRead(addr, /*me1=*/true);
     return readME0(addr); // default aliasing -- no other read-side trigger
 }
 
@@ -92,11 +82,6 @@ void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
         return;
     }
     // 8000-BFFF: an ME1 I/O cycle for the cards, see readME1().
-    if (addr >= 0x8000 && addr < kRomBase) {
-        const PinState p = peripheralPins(addr, /*forWrite=*/true, /*me1=*/true);
-        if (m_ce158 && m_ce158->respondsToWrite(p, value)) return;
-        if (m_ce150) m_ce150->respondsToWrite(p, value);
-        return;
-    }
+    if (addr >= 0x8000 && addr < kRomBase) { cardWrite(addr, /*me1=*/true, value); return; }
     writeME0(addr, value); // default aliasing for every other ME1 address
 }

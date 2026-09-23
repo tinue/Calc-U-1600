@@ -28,9 +28,10 @@ void SC7852::reset() {
     IFF1 = false; IFF2 = false;
     IM = 0;
     m_halted = false;
-    m_irqPending = false;
+    m_intLine = false;
     m_nmiPending = false;
     m_eiShadow = false;
+    m_pendingPrefix = 0;
     // A/F and the general-purpose registers are left as their construction-
     // time values on a real Z-80 reset (undefined/whatever they were) —
     // this core initializes them to 0xFF/0 at construction and never
@@ -387,7 +388,6 @@ bool SC7852::condTrue(int code) const {
 
 // ── Interrupts ─────────────────────────────────────────────────────────
 
-void SC7852::requestInterrupt() { m_irqPending = true; }
 void SC7852::requestNMI() { m_nmiPending = true; }
 
 int SC7852::serviceInterrupt(bool maskableBlocked) {
@@ -401,8 +401,7 @@ int SC7852::serviceInterrupt(bool maskableBlocked) {
         PC = 0x0066;
         return 11 + kM1WaitStates;
     }
-    if (m_irqPending && IFF1 && !maskableBlocked) {
-        m_irqPending = false;
+    if (m_intLine && IFF1 && !maskableBlocked) {
         bumpR();
         m_halted = false;
         IFF1 = false;
@@ -432,11 +431,9 @@ int SC7852::serviceInterrupt(bool maskableBlocked) {
         }
         return cost + kM1WaitStates; // the acknowledge cycle is an M1
     }
-    // A maskable request with IFF1 clear is neither serviced nor dropped:
-    // it stays pending until EI, and a HALTed CPU stays HALTed (Z-80 UM:
-    // only an accepted interrupt, NMI or RESET ends HALT). PC1600Machine
-    // raises requests on edges only, so dropping it here would lose the
-    // cause still latched at port 32H.
+    // INT with IFF1 clear is ignored, and a HALTed CPU stays HALTed (Z-80
+    // UM: only an accepted interrupt, NMI or RESET ends HALT). The line
+    // stays up as long as the device holds it.
     return -1; // nothing serviced -- step() should fetch/execute normally
 }
 
@@ -448,7 +445,8 @@ int SC7852::step() {
     // already pending is accepted.
     const bool eiShadow = m_eiShadow;
     m_eiShadow = false;
-    if (m_irqPending || m_nmiPending) {
+    // No interrupt is accepted between a DD/FD prefix and what follows it.
+    if (!m_pendingPrefix && (m_intLine || m_nmiPending)) {
         int serviced = serviceInterrupt(eiShadow);
         if (serviced >= 0) return serviced; // interrupt ack consumes this step() call on its own; no trace frame
     }
@@ -459,18 +457,27 @@ int SC7852::step() {
     uint32_t tf = traceFlags();
 
     uint16_t pcAtStart = PC;
-    uint8_t opcode = fetchOpcode();
+    uint8_t opcode = m_pendingPrefix ? m_pendingPrefix : fetchOpcode();
+    m_pendingPrefix = 0;
     int cycles = 0;
     // A DD/FD followed by another DD, FD or ED acts as a 4 T-state NOP
     // and the later prefix decides the instruction (DD ED B0 is LDIR,
-    // DD FD 21 is LD IY,nn). Consumed here so executeDDFD() never sees a
-    // prefix byte.
+    // DD FD 21 is LD IY,nn), so executeDDFD() never sees a prefix byte.
+    // A following DD/FD (already fetched) is carried into the next step(),
+    // keeping each step() bounded however long a prefix run is.
     uint8_t indexedOp = 0;
-    while (opcode == 0xDD || opcode == 0xFD) {
+    if (opcode == 0xDD || opcode == 0xFD) {
         indexedOp = fetchOpcode();
-        if (indexedOp != 0xDD && indexedOp != 0xFD && indexedOp != 0xED) break;
-        cycles += 4 + kM1WaitStates;
-        opcode = indexedOp;
+        if (indexedOp == 0xDD || indexedOp == 0xFD) {
+            m_pendingPrefix = indexedOp;
+            cycles = 4 + kM1WaitStates;
+            recordTraceFrame(tf, pcAtStart, opcode, uint8_t(cycles));
+            return cycles;
+        }
+        if (indexedOp == 0xED) {
+            cycles += 4 + kM1WaitStates;
+            opcode = 0xED;
+        }
     }
     uint16_t opcodeWord = opcode;
     // The execute*() tables return nominal Zilog T-states; the SC-7852's

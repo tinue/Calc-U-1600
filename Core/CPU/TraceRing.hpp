@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <vector>
@@ -87,18 +88,14 @@ public:
     bool check(uint16_t pc) {
         std::lock_guard<std::mutex> lock(m_mutex);
         if (!std::binary_search(m_addrs.begin(), m_addrs.end(), pc)) return false;
-        m_hit = true;
+        m_hit.store(true, std::memory_order_relaxed);
         return true;
     }
     /// Returns true once per hit.
-    bool consumeHit() {
-        bool hit = m_hit;
-        m_hit = false;
-        return hit;
-    }
+    bool consumeHit() { return m_hit.exchange(false, std::memory_order_relaxed); }
 
 private:
     std::vector<uint16_t> m_addrs; // sorted ascending
-    bool m_hit{false};
+    std::atomic<bool> m_hit{false};
     mutable std::mutex m_mutex;
 };

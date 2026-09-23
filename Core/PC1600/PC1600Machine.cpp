@@ -268,8 +268,7 @@ int PC1600Machine::step() {
             // after being woken and requires the bit to still read as set
             // then, not already back to whatever the raw pulse is doing).
             if (!m_timer64State && m_z80Mem.timer64InterruptEnabled()) {
-                m_z80Mem.latchTimer64InterruptCause();
-                m_sc7852.requestInterrupt();
+                m_z80Mem.latchTimer64InterruptCause(); // raises INT via port 35H/32H
             }
             // The sub-CPU's own aggregated interrupt line (INT6, cause bit
             // 6), driven here by its 0.5s timer -- divided down from this
@@ -283,7 +282,6 @@ int PC1600Machine::step() {
                 m_z80Mem.subCpu().toggleHalfSecondSignal();
                 if (m_z80Mem.subCpuInterruptEnabled()) {
                     m_z80Mem.latchSubCpuInterruptCause();
-                    m_sc7852.requestInterrupt();
                 }
             }
         }
@@ -426,11 +424,11 @@ void PC1600Machine::setOnKeyPressed(bool pressed) {
     // 64 Hz key-scan and 0.5 s sub-CPU ticks this class would otherwise
     // raise never fire again). Only the ON/BREAK line can wake it from
     // there. `m_z80Mem.setOnKeyPressed()` just latches the pollable IF-b1
-    // bit (port 1BH) -- a HALTed CPU never polls it -- so also raise a real
-    // interrupt, which the ROM's ISR then services (IFF1=1 in that park).
-    // A masked INT does not end a Z-80 HALT, so with IFF1 clear the ON line
-    // also resumes it directly -- the SC7852 counterpart of wakeFromHalt()
-    // below. Rising edge only, matching the latch and a real PB7 edge.
+    // bit (port 1BH) -- a HALTed CPU never polls it. ON has no port-32H
+    // cause bit, so it is not an SC7852 INT: when the SC7852 owns the bus
+    // the ON line resumes its HALT directly (it then polls the latch).
+    // A SC7852 parked by the OUT (38H) handoff is left for the arbiter to
+    // resume. Rising edge only, matching the latch and a real PB7 edge.
     // Wake whichever CPU is actually parked: a GUI-freeze repro (headless,
     // real ROM boot) found the arbiter had already switched bus ownership
     // to the LH5803 by the time power-down settles (SC7852 issues its
@@ -442,8 +440,7 @@ void PC1600Machine::setOnKeyPressed(bool pressed) {
     // with IE clear, which this repro also hit) -- wakeFromHalt() is the
     // unconditional counterpart for exactly this non-maskable ON signal.
     if (risingEdge) {
-        m_sc7852.requestInterrupt();
-        if (!m_sc7852.iff1()) m_sc7852.resumeFromHalt();
+        if (m_arbiter.sc7852Owns()) m_sc7852.resumeFromHalt();
         m_lh5803.wakeFromHalt();
     }
 }

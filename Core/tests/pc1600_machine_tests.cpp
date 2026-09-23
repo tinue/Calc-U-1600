@@ -11,6 +11,7 @@
 
 #include "../PC1600/PC1600Machine.hpp"
 #include "TestCards.hpp"
+#include "TestRoms.hpp"
 
 namespace {
 
@@ -544,6 +545,60 @@ void test_seed_clock_millisecond_aligns_next_tick() {
 
 } // namespace
 
+// INT is the level (cause & mask): masking a latched cause at 35H or the
+// 32H read that clears it withdraws the request.
+void test_int_line_follows_cause_and_mask() {
+    PC1600Machine m;
+    auto& mem = m.memory();
+    CHECK(!m.sc7852().intLine());
+    mem.writeIO(0x35, 0x10);
+    mem.latchTimer64InterruptCause();
+    CHECK(m.sc7852().intLine());
+    mem.writeIO(0x35, 0x00);
+    CHECK(!m.sc7852().intLine()); // masked: withdrawn
+    mem.writeIO(0x35, 0x10);
+    CHECK(m.sc7852().intLine());  // still latched, re-enabled
+    CHECK(mem.readIO(0x32) == 0x10);
+    CHECK(!m.sc7852().intLine()); // read-clear drops it
+}
+
+static int litPixels(const PC1600Machine& m) {
+    const PC1600DisplaySnapshot snap = m.displaySnapshot();
+    int n = 0;
+    for (const auto& row : snap.pixels)
+        for (bool px : row) n += px ? 1 : 0;
+    return n;
+}
+
+// ROM-gated: OFF parks the machine, it stays parked (no stray interrupt
+// brings it back), and ON restarts it -- several times over.
+void test_real_rom_off_stays_off_and_on_restarts() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_real_rom_off_stays_off_and_on_restarts: PC-1600 ROM images not found\n");
+        return;
+    }
+    const uint64_t hz = static_cast<uint64_t>(PC1600Machine::kTStateHz);
+    CHECK(litPixels(m) > 0);
+    for (int cycle = 0; cycle < 3; cycle++) {
+        m.pressKey("off");
+        m.runCycles(hz / 2);
+        m.releaseKey("off");
+        m.runCycles(hz * 3);
+        CHECK(litPixels(m) == 0);
+        m.runCycles(hz * 5); // long enough for many 64 Hz / 0.5 s edges
+        CHECK(litPixels(m) == 0);
+        CHECK(!m.sc7852Owns() || m.sc7852().halted());
+
+        m.setOnKeyPressed(true);
+        m.runCycles(hz / 4);
+        m.setOnKeyPressed(false);
+        m.runCycles(hz * 3);
+        CHECK(litPixels(m) > 0);
+        CHECK(m.sc7852Owns());
+    }
+}
+
 int run_pc1600_machine_tests() {
     test_simple_reset_keeps_internal_ram_all_reset_wipes_it();
     test_reset_releases_held_keys();
@@ -563,6 +618,8 @@ int run_pc1600_machine_tests() {
     test_half_second_signal_toggles_off_the_05s_accumulator();
     test_runcycles_budget_is_tstates_in_either_bus_mode();
     test_on_key_wakes_a_halted_sc7852();
+    test_int_line_follows_cause_and_mask();
+    test_real_rom_off_stays_off_and_on_restarts();
     test_on_key_wakes_a_halted_lh5803_owning_the_bus();
     test_rtc_advances_while_lh5803_owns_the_bus();
     test_seed_clock_millisecond_aligns_next_tick();

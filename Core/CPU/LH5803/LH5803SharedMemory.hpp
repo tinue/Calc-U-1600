@@ -135,6 +135,23 @@ private:
         return p;
     }
 
+    /// Offers an access to the attached cards, CE-158 first; 0xFF (open
+    /// bus) / ignored when none claims it.
+    uint8_t cardRead(uint16_t addr, bool me1) const {
+        if (!m_ce158 && !m_ce150) return 0xFF;
+        uint8_t v = 0xFF;
+        const PinState p = peripheralPins(addr, /*forWrite=*/false, me1);
+        if (m_ce158 && m_ce158->respondsToRead(p, v)) return v;
+        if (m_ce150 && m_ce150->respondsToRead(p, v)) return v;
+        return 0xFF;
+    }
+    void cardWrite(uint16_t addr, bool me1, uint8_t value) {
+        if (!m_ce158 && !m_ce150) return;
+        const PinState p = peripheralPins(addr, /*forWrite=*/true, me1);
+        if (m_ce158 && m_ce158->respondsToWrite(p, value)) return;
+        if (m_ce150) m_ce150->respondsToWrite(p, value);
+    }
+
     /// The CE-158's ME1 register blocks: LH5811 + UART 0xD000-0xD3FF,
     /// interrupt-ID 0xDE00-0xDFFF (see Ce158Card).
     static bool isCe158Io(uint16_t addr) {
