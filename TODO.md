@@ -17,7 +17,10 @@ obligations.
   name may report differently or be intercepted before Qt sees it).
 - **Minor display timing difference**: real LCD hardware is slower than
   the emulation, so a spurious character can briefly appear while
-  scrolling.
+  scrolling. Controller busy time is now modelled (2026-09-23: busy until
+  the 4th 216.7 kHz LCD-clock edge after each write, fitted to a
+  real-unit scrolling-PRINT benchmark). Recheck whether the spurious
+  character still shows.
 - **No way to latch Shift from the host keyboard** (tapping Shift doesn't
   produce a visible latched state in the UI).
 - **CE-1600P / CE-150 plotter: pen colour can drift out of sync after
@@ -40,17 +43,67 @@ obligations.
   its end. Do **not** reintroduce a bare "N turret clicks with pen up ⇒
   home spin" heuristic — it fires mid-`COLOR` command and breaks ordinary
   colour changes (tried and reverted once already).
-- **PC-1600 emulator runs ~7% fast in both CPU modes** (MODE 0 Z-80 and
-  MODE 1 LH-5803), on top of the correctly-paced idle/HALT timing. Ruled
-  out: the "1 WAIT per M-cycle" TRM reading (wrong direction — would make
-  it slower, not faster); LCD controller busy timing alone (MODE 1 does
-  much less display work but shows a similar error). The ~7% is common to
-  both CPU cores despite running different clocks through different code
-  paths, which points at something shared — the host pacing loop, or both
-  cores' cycle accounting being uniformly a little optimistic. Next
-  useful measurement: an LCD-free busy-loop benchmark (compute without
-  drawing) in both modes, to separate CPU/pacing error from display
-  timing.
+- **PC-1600 BASIC runs ~0.65% fast vs a real unit (MODE 0); cause open.**
+  Measured 2026-09-23 from audio recordings (BEEP markers, ms precision;
+  the recorder reads 0.22% slow, calibrated from the F-register whistle).
+  Every BASIC program is ~0.65% short:
+
+  | Program | Real | Emulator |
+  |---|---|---|
+  | A: `FOR I=1 TO 2000:NEXT I` | 6.275 s | 6.235 s (−0.65%) |
+  | B: 100 scrolling `PRINT`s | 5.894 s | 5.854 s (−0.68%) |
+  | C: A with sub-CPU interrupt masked (`OUT 53,&1F`) | 6.230 s | 6.189 s (−0.65%) |
+  | D: A with all interrupts masked (`OUT 53,0`) | 6.011 s | 5.974 s (−0.62%) |
+  | dampflok.bas, whistle 1→9 | 65.281 s | 64.843 s (−0.67%) |
+
+  The residual is ~70 T (~19 µs) per `FOR/NEXT` pass in A, C and D alike,
+  i.e. a fixed cost per statement/pass rather than a percentage.
+
+  **Found and fixed on the way** (dev-0.5.0):
+  - One wait per M1 cycle (f05e42e): BEEP pitch at two A values.
+  - Sub-CPU IOCS 25H fast-path probe (6d6318a): the BEEP repeat slips.
+  - Sub-CPU response time of 1.66 ms per command byte (64538ae): A−C.
+  - LCD busy until the 4th LCD-clock edge (c18411b): B.
+  - The ON key's live PB7 level (5011e2b).
+
+  **Ruled out**, all with interrupts off, emulator matching real within
+  ±0.1–0.2%. Test programs are in `headless/beep/bench/timing{,2,3,4,5}.bas`
+  (gitignored); `presetprobe` computes the emulator side:
+  - Opcode fetches from RAM and from every ROM bank the interpreter uses
+    (page A, page B banks 0/3, page C bank 6).
+  - Data and operand reads from all those ROM banks; RAM reads and writes
+    at C000/DFxx/F5xx/FAxx.
+  - `IN` from 18H/31H/59H; `OUT` to 31H/3DH (bank switching).
+  - `EX (SP),HL`, CALL/RET, PUSH/POP; IX-indexed, `CB`, `ED`, `DD CB`
+    instructions; `LDIR`, `RLD`/`RRD`, `DAA`, `ADC`/`SBC`, 16-bit adds,
+    `EX`/`EXX`, `LD (nn)`, `INC`/`DEC (HL)`, ALU ops, JP/JR/RET cc.
+  - An extra or unmodelled interrupt source: a NOP loop with EI and mask
+    00H matches (so the mask gates everything on hardware; D has no
+    interrupts at all yet is still slow), and with the normal mask it
+    matches too (the LH-5803 cause bit and all sub-CPU events enabled).
+    The 64 Hz and 0.5 s handler costs match (real A−D 264 ms vs 261 ms).
+  - How the program got into memory (typed vs binary-loaded: identical).
+  - The other bundled ROM set: "old" is a further 0.65% faster.
+
+  **Current hypothesis: the real unit takes a longer per-statement path
+  because of work-area state the emulator never produces.** The statement
+  loop (P0-B0 3AC0H) makes extra calls depending on F127H (pending BASIC
+  timer interrupts: b7 `WAKE$(0)`, b6 `ON TIME$`, b5 `ALARM$`; b5 →
+  `CALL 3860H` every statement) and F88DH (set by a hidden-ROM statement
+  pair at P1-B3b 41FEH/4201H; ≠0 → `CALL 41DAH` → `CURUDCHK` 0172H every
+  statement). On the real unit a PEEK after benchmark A gave F127H=64
+  (`ON TIME$` pending), F88DH=0, F88EH=2. The emulator can't produce
+  these: the sub-CPU accepts `WAKE$`/`ALARM$`/`ON TIME$` and drops them
+  (see the RTC wake-up feature item). Bit 6 is *not* what 3AC0H tests
+  (`AND 20H`), so next: find where bit 6 is acted on (e.g. 243FH/3E39H,
+  called just before 3AC0H), and re-time benchmark A on the real unit
+  with the `ON TIME$` request cleared. If the residual disappears, it's
+  this. If not, copy the FOR/NEXT arithmetic routine into RAM and time it
+  there. Forcing F127H/F88DH by POKE in the emulator hangs or changes
+  program flow, so it's no substitute for the real mechanism.
+
+  MODE 1 (LH-5803) hasn't been re-measured since the host-pacing fix; the
+  old "~7% fast" figure predates it.
 - **`TIME`/the RTC advances at emulated-CPU rate, not wall-clock** — it
   races ahead when the emulator runs faster than real-time, since the
   clock is seeded once from the host and thereafter advanced only by
@@ -86,6 +139,22 @@ obligations.
   serial-only tooling to bridge via `socat`.
 
 ## Feature ideas
+
+- **Real-time-clock timers in the sub-CPU: wake-up (`WAKE$`), `ALARM$`,
+  `ON TIME$`.** The real PC-1600 can switch itself on at a set time and
+  raise BASIC timer interrupts. The emulated sub-CPU stores the clock but
+  accepts and drops the timer commands (67H/69H/6BH). Its interrupt line
+  only carries the 0.5 s tick, and its buzzer input F (click/wake-up/alarm
+  tones) isn't modelled. Needed:
+  - store the three timers;
+  - raise the sub-CPU interrupt cause bits (§7.1: b7 wake-up, b6 alarm 1,
+    b5 alarm 2);
+  - power on from OFF at the wake-up time;
+  - drive F127H's pending bits through the ROM's own handlers;
+  - sound the alarm on the F path.
+
+  Possibly also the source of the remaining ~0.65% BASIC timing gap
+  (Known issues).
 
 - What is the "second program memory" for BASIC programs on the PC-1600
   (relevant for ROM modules and battery-backed RAM modules)?
