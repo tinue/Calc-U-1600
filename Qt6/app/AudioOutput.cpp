@@ -68,6 +68,11 @@ void AudioOutput::pump(MachineController& controller, bool discard) {
         if (silent || !startSink()) return;
     }
 
+    // The sink went idle = it played out everything it had: the emulation
+    // fell behind the audio clock and there's a gap in the sound.
+    if (m_sink->state() == QAudio::IdleState && !silent) {
+        qWarning() << "AudioOutput: sink ran dry (emulation behind audio clock) -- audible gap";
+    }
     m_pending.insert(m_pending.end(), m_buffer.begin(), m_buffer.begin() + static_cast<std::ptrdiff_t>(n));
     const std::size_t room = static_cast<std::size_t>(std::max<qsizetype>(m_sink->bytesFree(), 0)) / kBytesPerSample;
     const std::size_t count = std::min(room, m_pending.size());
@@ -77,6 +82,9 @@ void AudioOutput::pump(MachineController& controller, bool discard) {
         m_pending.erase(m_pending.begin(), m_pending.begin() + static_cast<std::ptrdiff_t>(count));
     }
     if (m_pending.size() > kMaxPendingSamples) {
+        qWarning() << "AudioOutput: backlog" << m_pending.size() * 1000 / kSampleRate
+                   << "ms beyond the sink buffer, dropping"
+                   << (m_pending.size() - kTrimPendingSamples) * 1000 / kSampleRate << "ms -- audible cut";
         m_pending.erase(m_pending.begin(),
                         m_pending.end() - static_cast<std::ptrdiff_t>(kTrimPendingSamples));
     }
