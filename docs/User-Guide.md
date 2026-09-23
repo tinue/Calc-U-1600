@@ -99,9 +99,11 @@ position/label.
 ## Memory modules & plotter
 
 Each module slot has its own combo box in the control bar. Opening it
-lists, in order: **–empty–**, then the bundled standard modules
-compatible with the current model/slot, then (below a separator, if any
-exist) your own previously-saved battery-backed instances. Picking an
+lists, in order: **–empty–**, then the templates compatible with the
+current model/slot (the bundled standard modules, plus any template of your
+own in the save directory — see
+[Custom YAML memory cards](#custom-yaml-memory-cards)), then (below a
+separator, if any exist) your own previously-saved battery-backed instances. Picking an
 entry attaches that module immediately (this rebuilds the machine, the
 same as a model switch).
 
@@ -122,8 +124,9 @@ instantly.
 
 Some memory modules are battery-backed on real hardware, meaning their
 contents survive being unplugged. Calc-U-1600 models this: for a
-battery-backed module, the slot's save-icon button (tooltip "Name &
-Save") is visible.
+battery-backed module loaded from a template, the slot's save-icon button
+(tooltip "Name & Save") is enabled. Templates are never written to; an
+instance you saved is kept up to date by autosave instead.
 
 Click it, type a name, and the module's current contents are written out
 as a standalone `<name>.card.yaml` file. From then on, that slot
@@ -260,6 +263,13 @@ To try it: a companion preset,
 [`examples/memory-cards/pc1500-maxed-out.pc1500`](../examples/memory-cards/pc1500-maxed-out.pc1500),
 loads this card via `modulespecfile:` and prints `MEM` so you can see the
 extra room BASIC gets. Open it via **Open Preset…**.
+
+The sample declares `template: true` (and, being fictional, `battery:
+true`). Copy it into the save directory (**Settings ▸ Battery-card save
+directory**) and it appears in the PC-1500/1500A module picker next to the
+bundled cards. Like them it is never written to; **Name & Save** turns it
+into your own autosaving instance. Leave out `template: true` only for a
+file you *want* the app to update in place.
 
 When you're ready to write your own: copy the closest bundled example
 under `Qt6/resources/cards/` (`ce155.card.yaml` for a simple unbanked,

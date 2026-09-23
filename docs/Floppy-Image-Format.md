@@ -20,6 +20,11 @@ CE-1600P ROM does, as on real hardware.
   the GUI picker refer to the disk name. Lookup searches the bundled directory first, then
   the user's save folder; a name resolves to the first directory holding exactly one file
   that declares it.
+- A disk declaring `template: true` is a **template**: the app never writes to it,
+  wherever it is stored (every bundled disk is one; a user may drop their own into the
+  save folder, and it is then listed with the bundled ones). Name & Save copies a template
+  into a new file without the key. A disk without it is an **instance**: the app autosaves
+  it in place.
 
 ## 3. Syntax
 
@@ -39,6 +44,7 @@ Keys may appear in any order. Unknown keys are an error at every level.
 | `format` | yes | `ce1600f-floppy` |
 | `format-version` | yes | integer; this document is version **1** |
 | `disk-name` | yes | non-empty string. Writers double-quote it; it therefore must not contain `"` or a newline |
+| `template` | no | `true` = read-only template (see §2); absent or `false` = instance. Never written by the app |
 | `saved` | no | ISO-8601 UTC timestamp `YYYY-MM-DDTHH:MM:SSZ` of the last write (informational) |
 | `sides` | yes | mapping with exactly the keys `a` and `b` |
 | `sides.a`, `sides.b` | yes | mapping with exactly `encoding` and `bytes` |
@@ -89,6 +95,7 @@ so that files diff cleanly whichever tool saved them:
 format: ce1600f-floppy
 format-version: 1
 disk-name: "Formatted"
+template: true
 saved: 2026-09-19T10:17:46Z
 sides:
   a:

@@ -27,6 +27,7 @@ struct MemoryCardCatalogEntry {
     std::string filePath;
     bool battery = false;
     bool rom = false;  // MemoryCardDefinition::isRom()
+    bool isTemplate = false;  // MemoryCardDefinition::isTemplate
 
     bool compatibleWith(CardHost h) const {
         return std::find(compatibleHosts.begin(), compatibleHosts.end(), h) != compatibleHosts.end();
@@ -38,17 +39,40 @@ struct MemoryCardCatalogEntry {
 // (newline-separated) -- one malformed file never hides the rest. A
 // missing / unreadable directory yields an empty list and sets `*error`.
 // Entries come back sorted by `moduleName` for a stable GUI order.
+namespace memory_card_catalog_detail {
+
+inline bool parseEntry(const std::string& text, const std::string& path, MemoryCardCatalogEntry* out,
+                       std::string* err) {
+    MemoryCardDefinition def;
+    if (!parseMemoryCardDefinition(text, &def, err)) return false;
+    *out = {def.moduleName, def.compatibleHosts, path, def.battery, def.isRom(), def.isTemplate};
+    return true;
+}
+
+}  // namespace memory_card_catalog_detail
+
 inline std::vector<MemoryCardCatalogEntry> scanMemoryCardDirectory(const std::string& dir,
                                                                    std::string* error) {
     return scanNamedFiles<MemoryCardCatalogEntry>(
-        dir, ".card.yaml", "module",
-        [](const std::string& text, const std::string& path, MemoryCardCatalogEntry* out, std::string* err) {
-            MemoryCardDefinition def;
-            if (!parseMemoryCardDefinition(text, &def, err)) return false;
-            *out = {def.moduleName, def.compatibleHosts, path, def.battery, def.isRom()};
-            return true;
-        },
+        dir, ".card.yaml", "module", memory_card_catalog_detail::parseEntry,
         [](const MemoryCardCatalogEntry& e) { return e.moduleName; }, error);
+}
+
+// The catalogue entry for one `.card.yaml` file -- e.g. to classify the
+// file a preset's `modulespec:`/`modulespecfile:` resolved to (template or
+// instance) without scanning its whole directory.
+inline bool readMemoryCardCatalogEntry(const std::string& path, MemoryCardCatalogEntry* out, std::string* error) {
+    std::string text;
+    if (!named_file_detail::readTextFile(path, &text)) {
+        if (error) *error = "cannot read '" + path + "'";
+        return false;
+    }
+    std::string err;
+    if (!memory_card_catalog_detail::parseEntry(text, path, out, &err)) {
+        if (error) *error = path + ": " + err;
+        return false;
+    }
+    return true;
 }
 
 // Ordered-search resolve of a `modulespec: <module-name>` reference to the

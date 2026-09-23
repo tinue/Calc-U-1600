@@ -31,6 +31,7 @@
 # Slot 1" for the full writeup of the same issue on the throwaway card.
 
 module-name: "CE-1638"
+template: true   # read-only starting point; Name & Save copies it
 compatible-hosts: [PC-1500, PC-1500A, PC-1600-Slot-1, PC-1600-Slot-2]
 definition-terminology: PC-1500
 battery: true

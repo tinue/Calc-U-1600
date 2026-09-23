@@ -23,15 +23,15 @@ QFrame* addSeparator(QHBoxLayout* layout, QWidget* parent) {
     return line;
 }
 
-// Shared by the memory-slot and floppy pickers: "–empty–", the bundled
-// names, then (after a separator) the user's saved ones, then (after
-// another) the ROM modules -- memory slots only.
-void fillPicker(QComboBox* combo, const QStringList& bundled, const QStringList& saved,
+// Shared by the memory-slot and floppy pickers: "–empty–", the templates
+// (bundled and the user's own), then (after a separator) the user's saved
+// instances, then (after another) the ROM modules -- memory slots only.
+void fillPicker(QComboBox* combo, const QStringList& templates, const QStringList& saved,
                 const QString& selectedOrEmpty, const QStringList& roms = {}) {
     const QSignalBlocker blocker(combo);
     combo->clear();
     combo->addItem(ControlBar::tr("–empty–"), QString());
-    for (const auto& name : bundled) combo->addItem(name, name);
+    for (const auto& name : templates) combo->addItem(name, name);
     if (!saved.isEmpty()) combo->insertSeparator(combo->count());
     for (const auto& name : saved) combo->addItem(name, name);
     if (!roms.isEmpty()) combo->insertSeparator(combo->count());
@@ -246,11 +246,11 @@ void ControlBar::setPC1600RomPickerVisible(bool visible) {
     m_rom1600Combo->setVisible(visible);
 }
 
-void ControlBar::setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& bundled,
+void ControlBar::setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& templates,
                                   const QVector<MemoryModuleManager::ModuleEntry>& instances,
                                   const QString& selectedOrEmpty) {
     QStringList ram, roms;
-    for (const auto& e : bundled) (e.rom ? roms : ram) << e.moduleName;
+    for (const auto& e : templates) (e.rom ? roms : ram) << e.moduleName;
     const auto name = [](const MemoryModuleManager::ModuleEntry& e) { return e.moduleName; };
     fillPicker(m_slot[slot - 1].combo, ram, namesOf(instances, name), selectedOrEmpty, roms);
 }
@@ -300,11 +300,11 @@ void ControlBar::setCE1600PRomPickerVisible(bool visible) {
     m_ce1600pRomCombo->setVisible(visible);
 }
 
-void ControlBar::setFloppyCombo(const QVector<FloppyDiskManager::DiskEntry>& bundled,
+void ControlBar::setFloppyCombo(const QVector<FloppyDiskManager::DiskEntry>& templates,
                                 const QVector<FloppyDiskManager::DiskEntry>& instances,
                                 const QString& selectedOrEmpty) {
     const auto name = [](const FloppyDiskManager::DiskEntry& e) { return e.diskName; };
-    fillPicker(m_floppyCombo, namesOf(bundled, name), namesOf(instances, name), selectedOrEmpty);
+    fillPicker(m_floppyCombo, namesOf(templates, name), namesOf(instances, name), selectedOrEmpty);
 }
 
 void ControlBar::setFloppyVisible(bool visible) {

@@ -152,6 +152,12 @@ struct MemoryCardDefinition {
     // persistence flow. Has no effect on region/content parsing.
     bool battery = false;
 
+    // `template: true`: a read-only starting point the app never writes
+    // to, wherever the file lives (bundled or the user's storage folder).
+    // Name & Save copies it into a new instance file, which never carries
+    // this key. A card without it is an instance, autosaved in place.
+    bool isTemplate = false;
+
     // A ROM module: every byte of every region is `rom` content (e.g. a
     // CE-502B program module). The app lists these in their own section.
     bool isRom() const {
@@ -1326,7 +1332,7 @@ inline bool parseMemoryCardDefinition(const std::string& yamlText, MemoryCardDef
     }
     if (!root.requireOnlyKeys(
             {"module-name", "compatible-hosts", "definition-terminology", "regions", "notes",
-             "battery"},
+             "battery", "template"},
             error))
         return false;
 
@@ -1342,6 +1348,9 @@ inline bool parseMemoryCardDefinition(const std::string& yamlText, MemoryCardDef
 
     if (const YamlNode* batteryN = root.find("battery")) {
         if (!batteryN->asBool(&out->battery, error)) return false;
+    }
+    if (const YamlNode* templateN = root.find("template")) {
+        if (!templateN->asBool(&out->isTemplate, error)) return false;
     }
 
     if (!hostsN->isSeq() || hostsN->seq.empty()) {

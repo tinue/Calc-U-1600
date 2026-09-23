@@ -33,6 +33,8 @@ same directory.
 | `compatible-hosts` | yes | List, non-empty, drawn from `PC-1500`, `PC-1500A`, `PC-1600-Slot-1`, `PC-1600-Slot-2`. The loader's **only** compatibility check (spec §1): a host not on this list is declined; a host on it gets no further test. |
 | `definition-terminology` | yes | Exactly one of the same four identifiers. Names the pin-name vocabulary every `chip-select` / `signal` / `line` field in the file is resolved against, once, at parse time (spec §1). Must appear in `compatible-hosts`. |
 | `regions` | yes | List of one or more region maps (§2). |
+| `battery` | no | `true` for battery-backed hardware. A battery-backed *template* offers the app's Name & Save; ignored by the loader otherwise. |
+| `template` | no | `true` marks a read-only **template** (§8): the app never writes to the file, wherever it is stored. Absent or `false` = an instance, autosaved in place. The app never writes this key into a saved instance. |
 | `notes` | no | Free text; ignored by the loader. |
 
 The reset-on-load behaviour (spec §2, last bullet) is a loader invariant,
@@ -365,6 +367,20 @@ memory-expansion:
   silently.
 - `modulespecfile: <path>` names a file directly and never consults the
   module directory.
+
+**Templates and instances.** What happens to a loaded card's file is decided
+by the file itself, not by where it lives:
+
+- `template: true` — a **template**. The app never writes to it. Every
+  bundled card is one, and a user can drop their own into the storage folder,
+  where it is listed with the bundled cards. A battery-backed template
+  (`battery: true`) offers **Name & Save**, which copies it (with the live
+  contents as `initial-content:`) into `<name>.card.yaml` in the storage
+  folder, without the `template` key.
+- No `template` key — an **instance**. Any write to the card is autosaved back
+  into that same file, wherever it was loaded from (never into the bundle).
+  A preset's `saveas:` can copy an instance under a new name; the copy keeps
+  the original template's name in its generated header comment.
 
 Either way the loader picks the target host from the preset (`PC-1500` /
 `PC-1500A`, or the slot number for `PC-1600`), checks it is in

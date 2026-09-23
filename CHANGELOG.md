@@ -24,6 +24,17 @@
   `floppy:` are PC-1600 only). It overwrites a same-named file, so a
   preset can save several times as it goes. The DiskWorks setup presets
   now use it instead of asking you to save by hand.
+- **Cards & floppies** A card or disk file now declares itself a template
+  with `template: true`, instead of being one only because it ships
+  with the app. The app never writes to a template, wherever it lives. So
+  you can drop your own template into the save directory (e.g.
+  `examples/memory-cards/pc1500-maxed-out.card.yaml`): it is listed with
+  the bundled ones and offers Name & Save. A file without the key is an
+  instance and is autosaved in place, as before. Existing saved cards and
+  disks need no change.
+- **Presets** `saveas:` now works on a slot whose card was loaded from a
+  saved instance, and a second `saveas:` of the same slot works too (both
+  failed with "Couldn't find the source template").
 - **ROMs** `tools/fetch_roms.sh` now also fetches the old CE-1600P ROM
   (21 files). Fetch again to update `roms/`.
 - **Keyboard** Scroll Lock -> `RSV` now works on a Mac-layout keyboard

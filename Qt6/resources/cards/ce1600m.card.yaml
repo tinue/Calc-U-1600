@@ -24,6 +24,7 @@
 # "one terminology, several compatible hosts" case in spec section 1.
 
 module-name: "CE-1600M"
+template: true   # read-only starting point; Name & Save copies it
 compatible-hosts: [PC-1600-Slot-1, PC-1600-Slot-2]
 definition-terminology: PC-1600-Slot-1
 battery: true

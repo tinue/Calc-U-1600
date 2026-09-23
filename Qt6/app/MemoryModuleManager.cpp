@@ -16,15 +16,8 @@
 
 namespace {
 
-QVector<MemoryModuleManager::ModuleEntry> entriesFor(const QString& dir, CardHost host) {
-    QVector<MemoryModuleManager::ModuleEntry> out;
-    std::string err;
-    const auto entries = scanMemoryCardDirectory(dir.toStdString(), &err);
-    for (const auto& e : entries) {
-        if (!e.compatibleWith(host)) continue;
-        out.push_back({QString::fromStdString(e.moduleName), e.battery, e.rom});
-    }
-    return out;
+MemoryModuleManager::ModuleEntry entryFrom(const MemoryCardCatalogEntry& e) {
+    return {QString::fromStdString(e.moduleName), e.battery, e.rom};
 }
 
 }  // namespace
@@ -43,46 +36,28 @@ CardHost MemoryModuleManager::hostForModel(int slot, Model model) {
     return model == Model::PC1500A ? CardHost::PC1500A : CardHost::PC1500;
 }
 
-QVector<MemoryModuleManager::ModuleEntry> MemoryModuleManager::bundledEntries(CardHost host) const {
-    return entriesFor(AppPaths::bundledResourcesDir(), host);
-}
-
-// Leaves out saved cards that share a bundled card's name (any host):
-// lookup is bundled-first, so they could never be loaded.
-QVector<MemoryModuleManager::ModuleEntry> MemoryModuleManager::instanceEntries(CardHost host) const {
-    QVector<ModuleEntry> out = entriesFor(AppPaths::instanceDir(), host);
-    const QSet<QString> bundled = bundledNames();
-    out.erase(std::remove_if(out.begin(), out.end(),
-                             [&](const ModuleEntry& e) { return bundled.contains(e.moduleName); }),
-              out.end());
-    return out;
+MemoryModuleManager::ModuleLists MemoryModuleManager::moduleLists(CardHost host) const {
+    ModuleLists lists;
+    QSet<QString> bundled;
+    for (const auto& e : scanMemoryCardDirectory(AppPaths::bundledResourcesDir().toStdString(), nullptr)) {
+        bundled.insert(QString::fromStdString(e.moduleName));
+        if (e.compatibleWith(host)) lists.templates.push_back(entryFrom(e));
+    }
+    for (const auto& e : scanMemoryCardDirectory(AppPaths::instanceDir().toStdString(), nullptr)) {
+        if (!e.compatibleWith(host) || bundled.contains(QString::fromStdString(e.moduleName))) continue;
+        (e.isTemplate ? lists.templates : lists.instances).push_back(entryFrom(e));
+    }
+    return lists;
 }
 
 void MemoryModuleManager::selectModule(int slot, const QString& moduleNameOrEmpty) {
     const int idx = slot - 1;
     flushPendingPersist();
+    m_slots[idx] = SlotState{};
     m_slots[idx].moduleName = moduleNameOrEmpty;
-    m_slots[idx].instanceFilePath.clear();
-    m_slots[idx].persistPending = false;
 }
 
 QString MemoryModuleManager::selectedModuleName(int slot) const { return m_slots[slot - 1].moduleName; }
-
-bool MemoryModuleManager::isSlotBatteryBacked(int slot) const {
-    const CardHost host = hostFor(slot);
-    return isSlotBatteryBacked(slot, bundledEntries(host), instanceEntries(host));
-}
-
-bool MemoryModuleManager::isSlotBatteryBacked(int slot, const QVector<ModuleEntry>& bundled,
-                                               const QVector<ModuleEntry>& instance) const {
-    const SlotState& st = m_slots[slot - 1];
-    if (st.moduleName.isEmpty()) return false;
-    for (const auto& e : bundled)
-        if (e.moduleName == st.moduleName) return e.battery;
-    for (const auto& e : instance)
-        if (e.moduleName == st.moduleName) return e.battery;
-    return false;
-}
 
 bool MemoryModuleManager::slotHasInstanceFile(int slot) const {
     return !m_slots[slot - 1].instanceFilePath.isEmpty();
@@ -98,15 +73,30 @@ void MemoryModuleManager::attachOneSlot(int slotIndex, CardHost host, AttachFn a
                                 &path, &err)) {
         auto card = makeSoftwareDefinedCard(path, host, &err);
         if (card) {
-            const QString resolvedPath = QString::fromStdString(path);
-            st.instanceFilePath = AppPaths::isUnderDir(resolvedPath, instDir) ? resolvedPath : QString();
+            classifySlot(st, QString::fromStdString(path));
             attach(std::move(card));
             return;
         }
     }
     emit errorMessage(tr("Couldn't attach \"%1\": %2").arg(st.moduleName, QString::fromStdString(err)));
-    st.moduleName.clear();
+    st = SlotState{};
+}
+
+void MemoryModuleManager::classifySlot(SlotState& st, const QString& resolvedPath) {
+    st.sourcePath = resolvedPath;
+    st.isTemplate = false;
+    st.battery = false;
     st.instanceFilePath.clear();
+    if (resolvedPath.isEmpty()) return;
+    MemoryCardCatalogEntry entry;
+    if (readMemoryCardCatalogEntry(resolvedPath.toStdString(), &entry, nullptr)) {
+        st.isTemplate = entry.isTemplate;
+        st.battery = entry.battery;
+    }
+    // An instance autosaves in place, wherever it was loaded from -- but
+    // never into the bundle, even if a bundled file lacked `template: true`.
+    if (!st.isTemplate && !AppPaths::isUnderDir(resolvedPath, AppPaths::bundledResourcesDir()))
+        st.instanceFilePath = resolvedPath;
 }
 
 void MemoryModuleManager::attachAllToFreshMachine() {
@@ -143,10 +133,9 @@ QString MemoryModuleManager::attachedModuleName(int slot) const {
 
 void MemoryModuleManager::syncFromPresetLoad(int slot, const QString& resolvedPathOrEmpty) {
     const int idx = slot - 1;
+    m_slots[idx] = SlotState{};
     m_slots[idx].moduleName = attachedModuleName(slot);
-    m_slots[idx].instanceFilePath =
-        AppPaths::isUnderDir(resolvedPathOrEmpty, AppPaths::instanceDir()) ? resolvedPathOrEmpty : QString();
-    m_slots[idx].persistPending = false;
+    if (!m_slots[idx].moduleName.isEmpty()) classifySlot(m_slots[idx], resolvedPathOrEmpty);
     emit moduleChanged(slot);
 }
 
@@ -174,6 +163,13 @@ bool MemoryModuleManager::currentSlotImage(int slot, int* bankCount, std::vector
         return !image->empty();
     }
     return false;
+}
+
+QSet<QString> MemoryModuleManager::templateNames() const {
+    QSet<QString> names = bundledNames();
+    for (const auto& e : scanMemoryCardDirectory(AppPaths::instanceDir().toStdString(), nullptr))
+        if (e.isTemplate) names.insert(QString::fromStdString(e.moduleName));
+    return names;
 }
 
 QSet<QString> MemoryModuleManager::bundledNames() const {
@@ -238,35 +234,38 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
         *error = tr("No module attached.");
         return false;
     }
-    if (!fromPreset && !st.instanceFilePath.isEmpty()) {
+    if (!fromPreset && !st.isTemplate) {
         *error = tr("\"%1\" is already saved; changes are saved automatically.").arg(st.moduleName);
+        return false;
+    }
+    if (st.sourcePath.isEmpty()) {
+        *error = tr("\"%1\" has no source file to save from.").arg(st.moduleName);
         return false;
     }
     if (name.contains(QLatin1Char('"'))) {
         *error = tr("Name cannot contain '\"'.");
         return false;
     }
-    if (bundledNames().contains(name)) {
-        *error = tr("\"%1\" is a built-in card name. Choose a different name.").arg(name);
+    if (templateNames().contains(name)) {
+        *error = tr("\"%1\" is a template's name. Choose a different name.").arg(name);
         return false;
     }
     if (!fromPreset && nameCollides(name)) {
         *error = tr("A card named \"%1\" already exists. Choose a different name.").arg(name);
         return false;
     }
-
-    std::string p;
-    if (!resolveModuleSpecByName(AppPaths::bundledResourcesDir().toStdString(), st.moduleName.toStdString(), &p,
-                                 nullptr)) {
-        *error = tr("Couldn't find the source template for \"%1\".").arg(st.moduleName);
+    const QString newPath = AppPaths::instancePathFor(name);
+    MemoryCardCatalogEntry existing;
+    if (readMemoryCardCatalogEntry(newPath.toStdString(), &existing, nullptr) && existing.isTemplate) {
+        *error = tr("\"%1\" is a template file and is never overwritten. Choose a different name.").arg(newPath);
         return false;
     }
-    const QString sourcePath = QString::fromStdString(p);
 
+    // Splice from the file the card was loaded from -- a template, or (a
+    // preset save-as) an instance; either way its layout is the card's.
     std::string spliced;
-    if (!spliceCardImageInto(slot, sourcePath, st.moduleName, name, &spliced, error)) return false;
+    if (!spliceCardImageInto(slot, st.sourcePath, st.moduleName, name, &spliced, error)) return false;
 
-    const QString newPath = AppPaths::instancePathFor(name);
     if (!AppPaths::atomicWriteFile(newPath, spliced)) {
         *error = tr("Couldn't write \"%1\".").arg(newPath);
         return false;
@@ -275,6 +274,8 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
     // Retarget the slot at the saved copy: it now shows under its new name
     // and autosaves there.
     st.moduleName = name;
+    st.sourcePath = newPath;
+    st.isTemplate = false;  // the splice never writes `template:`; `battery` carries over
     st.instanceFilePath = newPath;
     st.persistPending = false;
     emit moduleChanged(slot);

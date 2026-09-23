@@ -530,16 +530,16 @@ void MainWindow::syncUiFromController() {
 void MainWindow::refreshModuleCombos() {
     for (int slot = 1; slot <= 2; ++slot) {
         const CardHost host = MemoryModuleManager::hostForModel(slot, m_controller->currentModel());
-        const auto bundled = m_moduleManager->bundledEntries(host);
-        const auto instance = m_moduleManager->instanceEntries(host);
-        m_controlBar->setModuleCombos(slot, bundled, instance, m_moduleManager->selectedModuleName(slot));
-        m_controlBar->setSlotSaveEnabled(slot, m_moduleManager->canNameAndSave(slot, bundled, instance));
+        const MemoryModuleManager::ModuleLists lists = m_moduleManager->moduleLists(host);
+        m_controlBar->setModuleCombos(slot, lists.templates, lists.instances,
+                                      m_moduleManager->selectedModuleName(slot));
+        m_controlBar->setSlotSaveEnabled(slot, m_moduleManager->canNameAndSave(slot));
     }
 }
 
 void MainWindow::refreshFloppyCombo() {
-    m_controlBar->setFloppyCombo(m_floppyManager->bundledEntries(), m_floppyManager->instanceEntries(),
-                                 m_floppyManager->selectedDiskName());
+    const FloppyDiskManager::DiskLists lists = m_floppyManager->diskLists();
+    m_controlBar->setFloppyCombo(lists.templates, lists.instances, m_floppyManager->selectedDiskName());
     m_controlBar->setFloppySide(m_floppyManager->side());
     m_controlBar->setFloppySaveEnabled(m_floppyManager->canNameAndSave());
 }

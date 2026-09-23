@@ -242,14 +242,6 @@ Larger or behaviour-changing items left out of the 0.5.0 cleanup commit.
   `applyPC1500Preset`/`applyPC1600Preset` call `onArmed` (or a single
   `onFinished`) on every exit path, including early failure, then drop
   the safety net and the flag.
-- **Preset `saveas:` twice on the same card slot likely fails.**
-  `MemoryModuleManager::saveSlotAs()` resolves the source template via
-  `resolveModuleSpecByName(bundledDir, st.moduleName)`, but after the
-  first save `moduleName` is the new instance name, so a second
-  `saveas: s1:<other>` probably errors "Couldn't find the source
-  template". Unverified — confirm with a preset test, then keep the
-  original template name in `SlotState` separate from the
-  display/instance name.
 - **Clock seeding still has a two-step flat-out/paced dance.**
   `MachineController::seedClockFromHost()` seeds during the flat-out
   preset run and sets `m_clockResyncPending`; `resyncClockIfSeeded()`

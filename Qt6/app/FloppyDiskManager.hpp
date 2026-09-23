@@ -30,9 +30,16 @@ public:
         QString diskName;
     };
 
-    // Catalogue queries for ControlBar's disk combo-box population.
-    QVector<DiskEntry> bundledEntries() const;
-    QVector<DiskEntry> instanceEntries() const;
+    // Catalogue for ControlBar's disk combo-box population: `templates`
+    // are the disks declaring `template: true` (every bundled disk plus
+    // any the user dropped into the storage folder), `instances` the
+    // storage folder's other disks. A storage-folder disk sharing a
+    // bundled disk's name is left out: lookup is bundled-first.
+    struct DiskLists {
+        QVector<DiskEntry> templates;
+        QVector<DiskEntry> instances;
+    };
+    DiskLists diskLists() const;
 
     // Empty diskNameOrEmpty => no disk (drive empty). A live hot-swap (no power-cycle
     // needed -- unlike memory-card slots, the floppy isn't sized/scanned
@@ -40,9 +47,8 @@ public:
     // powered). No-op if no floppy is currently attached.
     void selectDisk(const QString& diskNameOrEmpty);
     QString selectedDiskName() const { return m_diskName; }
-    bool hasInstanceFile() const { return !m_instanceFilePath.isEmpty(); }
-    // Name & Save is offered only for a disk that isn't saved yet (a bundled
-    // one); a saved disk is kept up to date by autosave instead.
+    // Name & Save is offered only for a template disk; an instance is kept
+    // up to date by autosave instead.
     bool canNameAndSave() const;
 
     // Side A/B -- the software analogue of ejecting and flipping the
@@ -91,11 +97,17 @@ private:
     // the already-saved and name-collision checks.
     bool saveDiskAs(const QString& diskName, bool fromPreset, QString* error);
     bool nameCollides(const QString& diskName) const;
+    // Every template disk's name (bundled or in the storage folder).
+    QVector<DiskEntry> templateEntries() const;
+    // Records the file the disk came from: a template is never written, an
+    // instance autosaves in place (never into the bundle).
+    void classifySource(const QString& resolvedPathOrEmpty, bool isTemplate);
 
     MachineController* m_controller;  // not owned
 
     QString m_diskName;         // empty = no disk in the drive
-    QString m_instanceFilePath; // empty unless resolved from the instance dir
+    bool m_isTemplate = false;  // the loaded file declares `template: true`
+    QString m_instanceFilePath; // the loaded file if it is an instance (autosaved there), else empty
     bool m_persistPending = false;
     uint64_t m_lastSeenRevision = 0;
 
