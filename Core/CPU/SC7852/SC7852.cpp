@@ -28,7 +28,6 @@ void SC7852::reset() {
     IFF1 = false; IFF2 = false;
     IM = 0;
     m_halted = false;
-    m_intLine = false;
     m_nmiPending = false;
     m_eiShadow = false;
     m_pendingPrefix = 0;

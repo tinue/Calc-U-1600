@@ -93,7 +93,7 @@ void test_lh5803_to_sc7852_handoff() {
 
     m.step(); // LH5803: STA #(0A038H) -- requests the switch back
     CHECK(m.sc7852Owns());
-    CHECK(!m.sc7852().halted()); // resumed via resumeFromHalt(), not a real interrupt
+    CHECK(!m.sc7852().halted()); // parked with IFF1 clear: resumed directly (fallback)
     CHECK(m.sc7852().pc() == sc7852ParkedPC);
 
     m.step(); // SC7852 resumes normal execution: the NOP at its parked PC
@@ -430,6 +430,66 @@ void test_on_key_wakes_a_halted_sc7852() {
     CHECK(!m.sc7852().halted());
 }
 
+// The ROM's handoff (P1-B3 5C0E-5C22): 35H = 08H, OUT (38H), EI, HALT.
+// The LH5803's STA #(0A038H) then raises cause bit 3, and that INT -- not a
+// direct resume -- ends the SC7852's HALT.
+void test_lh5803_handback_is_a_cause_bit3_interrupt() {
+    PC1600Machine m;
+    std::vector<uint8_t> lower = makeBank(0x00);
+    std::vector<uint8_t> upper = makeBank(0x00);
+    const uint8_t park[] = {0xED, 0x56,        // IM 1 (vector 0038H)
+                            0x3E, 0x08, 0xD3, 0x35, // 35H = 08H
+                            0xD3, 0x38,        // OUT (38H),A
+                            0xFB, 0x76, 0x00}; // EI ; HALT ; NOP
+    for (size_t i = 0; i < sizeof park; i++) lower[i] = park[i];
+    CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+    std::vector<uint8_t> lh5803Rom(16384, 0x00);
+    lh5803Rom[0] = 0xFD; lh5803Rom[1] = 0xAE; lh5803Rom[2] = 0xA0; lh5803Rom[3] = 0x38; // STA #(0A038H)
+    lh5803Rom[16384 - 2] = 0xC0;
+    lh5803Rom[16384 - 1] = 0x00;
+    CHECK(m.loadLH5803Rom(lh5803Rom.data(), lh5803Rom.size()));
+    m.reset();
+
+    for (int i = 0; i < 6; i++) m.step(); // IM 1, LD, OUT (35H), OUT (38H), EI, HALT
+    CHECK(!m.sc7852Owns());
+    m.step();                             // LH5803: STA #(0A038H)
+    CHECK(m.sc7852Owns());
+    CHECK(m.sc7852().halted());           // still parked: the INT ends it, not the switch
+    CHECK(m.sc7852().intLine());
+    m.step();                             // INT accepted
+    CHECK(!m.sc7852().halted());
+    CHECK(m.sc7852().pc() == 0x0038);
+    CHECK(!m.sc7852().iff1());
+    CHECK((m.memory().readIO(0x32) & 0x08) == 0x08);
+}
+
+// An ON press that lands while the SC7852 is between OUT (38H) and HALT is
+// held until the LH5803 it hands to halts, then wakes that one.
+void test_on_press_before_handoff_halt_still_wakes() {
+    PC1600Machine m;
+    std::vector<uint8_t> lower = makeBank(0x00);
+    std::vector<uint8_t> upper = makeBank(0x00);
+    lower[0] = 0xD3; lower[1] = 0x38; // OUT (38H),A
+    lower[2] = 0x76;                  // HALT
+    CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+    std::vector<uint8_t> lh5803Rom(16384, 0x00);
+    lh5803Rom[0] = 0xFD; lh5803Rom[1] = 0xB1; // HLT
+    lh5803Rom[16384 - 2] = 0xC0;
+    lh5803Rom[16384 - 1] = 0x00;
+    CHECK(m.loadLH5803Rom(lh5803Rom.data(), lh5803Rom.size()));
+    m.reset();
+
+    m.step();                   // OUT (38H),A
+    m.setOnKeyPressed(true);    // SC7852 running: nothing to wake yet
+    m.step();                   // HALT -> bus to the LH5803
+    CHECK(!m.sc7852Owns());
+    m.step();                   // LH5803: HLT
+    CHECK(m.lh5803().halted());
+    m.step();                   // the held press wakes it
+    CHECK(!m.lh5803().halted());
+    CHECK(m.sc7852().halted()); // the parked SC7852 is left alone
+}
+
 // Same wake requirement, but with the bus already handed to the LH5803:
 // the SC7852 issues its documented `OUT (38H),A` handoff before its own
 // power-down HALT, so the machine can be frozen with the LH5803 parked
@@ -649,6 +709,8 @@ int run_pc1600_machine_tests() {
     test_runcycles_budget_is_tstates_in_either_bus_mode();
     test_on_key_wakes_a_halted_sc7852();
     test_int_line_follows_cause_and_mask();
+    test_lh5803_handback_is_a_cause_bit3_interrupt();
+    test_on_press_before_handoff_halt_still_wakes();
     test_real_rom_off_stays_off_and_on_restarts();
     test_on_key_wakes_a_halted_lh5803_owning_the_bus();
     test_rtc_advances_while_lh5803_owns_the_bus();

@@ -15,7 +15,7 @@ void PC1600Machine::resetLocked() {
     m_z80Mem.reset();
     m_z80Mem.keyboard().releaseAll();
     m_sc7852.reset();
-    m_z80Mem.updateIntLine(); // the CPU reset dropped its copy of the line
+    m_onWakePending = false;
     m_lh5803.reset();
     m_arbiter.reset();
     m_timer64Accum = 0;
@@ -243,6 +243,18 @@ void PC1600Machine::clearCE150Paper() {
 
 int PC1600Machine::step() {
     std::lock_guard<std::mutex> lock(m_mutex);
+    // An ON press resumes whichever CPU owns the bus from its next HALT
+    // (see setOnKeyPressed()). Held until then, so a press landing between
+    // the SC7852's OUT (38H) and its HALT still wakes the LH5803 it hands to.
+    if (m_onWakePending) {
+        if (m_arbiter.sc7852Owns() && m_sc7852.halted()) {
+            m_sc7852.resumeFromHalt();
+            m_onWakePending = false;
+        } else if (!m_arbiter.sc7852Owns() && m_lh5803.halted()) {
+            m_lh5803.wakeFromHalt();
+            m_onWakePending = false;
+        }
+    }
     if (m_arbiter.sc7852Owns()) {
         int c = m_sc7852.step();
         // A halted SC7852::step() returns 0 (this core's convention for
@@ -259,18 +271,13 @@ int PC1600Machine::step() {
             m_timer64State = !m_timer64State;
             m_z80Mem.setTimer64Bit(m_timer64State); // PB5 raw level only, see its own comment
             // TRM pin table (INT4, pin 83): "an interrupt is sent to the
-            // CPU on a falling edge." The actual INT line only pulses once
-            // per period, on the high->low transition, gated by whether
-            // this cause is unmasked at port 35H
-            // (PC-1600-CPU-SC7852-Z80.md §5.2's cause/mask pair) -- latches
-            // the port 32H cause bit separately from PB5's raw level (see
-            // latchTimer64InterruptCause()'s own comment for why: found by
-            // disassembling the real ISR, which reads port 32H immediately
-            // after being woken and requires the bit to still read as set
-            // then, not already back to whatever the raw pulse is doing).
-            // The cause latches whatever 35H says (the ROM's ISR filters
-            // the 32H byte with 35H itself, P1-B3 4102H/4112H); the mask
-            // only gates the INT line -- see updateIntLine().
+            // CPU on a falling edge." Each high->low transition latches
+            // port 32H bit 4, separately from PB5's raw level (the real ISR
+            // reads 32H right after waking and needs the bit still set --
+            // see latchTimer64InterruptCause()). It latches whatever 35H
+            // says (the ROM's ISR filters the 32H byte with 35H itself,
+            // P1-B3 4102H/4112H); the mask only gates the INT level -- see
+            // PC1600Memory::updateIntLine().
             if (!m_timer64State) m_z80Mem.latchTimer64InterruptCause();
             // The sub-CPU's own aggregated interrupt line (INT6, cause bit
             // 6), driven here by its 0.5s timer -- divided down from this
@@ -347,12 +354,20 @@ int PC1600Machine::step() {
             m_z80Mem.subCpu().tickOneSecond();
         }
     }
-    // LH5803->SC7852 has no documented following HALT -- the STA
-    // #(0A038H) store itself is the whole handoff, so the switch (and the
-    // SC7852's resume-from-park) happens immediately after this step().
+    // LH5803->SC7852: the STA #(0A038H) store is the whole handoff, so the
+    // switch happens immediately after this step(). It raises cause bit 3,
+    // and that INT ends the SC7852's HALT through the ROM's own handler
+    // (the park at P1-B3 5C0E-5C22 unmasks only bit 3, then EI;HALT). A
+    // SC7852 that parked unable to take it (IFF1 clear or bit 3 masked --
+    // hand-written code; a real machine would hang there) is resumed
+    // directly instead, without latching the cause.
     if (m_arbiter.switchRequestedByLH5803()) {
         m_arbiter.switchToSC7852();
-        m_sc7852.resumeFromHalt();
+        if (m_sc7852.iff1() && (m_z80Mem.intMask() & 0x08)) {
+            m_z80Mem.latchLh5803InterruptCause();
+        } else {
+            m_sc7852.resumeFromHalt();
+        }
     }
     maybeDrainTrace();
     return c;
@@ -425,27 +440,18 @@ void PC1600Machine::setOnKeyPressed(bool pressed) {
     // raise never fire again). Only the ON/BREAK line can wake it from
     // there. `m_z80Mem.setOnKeyPressed()` just latches the pollable IF-b1
     // bit (port 1BH) -- a HALTed CPU never polls it. ON has no port-32H
-    // cause bit, so it is not an SC7852 INT: the ON line resumes the HALT
-    // of whichever CPU owns the bus (it then polls the latch); the parked
-    // one is left for the arbiter. This is a stand-in -- the documented
-    // sources do not say how the real ON line ends a Z-80 HALT (sub-CPU
-    // INT6, NMI and clock gating are all candidates), so resuming directly
-    // skips any ISR a real wake might run. Rising edge only, matching the
-    // latch and a real PB7 edge.
-    // Wake whichever CPU is actually parked: a GUI-freeze repro (headless,
-    // real ROM boot) found the arbiter had already switched bus ownership
-    // to the LH5803 by the time power-down settles (SC7852 issues its
-    // documented `OUT (38H),A` handoff before its own final HALT, per
-    // step()'s own comment on that sequence), so waking only the SC7852
-    // left the machine stuck -- the LH5803 was the CPU actually halted
-    // (at 0xE555 in that repro). The LH5803 is LH5801-family and its
-    // ordinary requestMaskableInterrupt() is IE-gated (won't wake a HALT
-    // with IE clear, which this repro also hit) -- wakeFromHalt() is the
-    // unconditional counterpart for exactly this non-maskable ON signal.
-    if (risingEdge) {
-        if (m_arbiter.sc7852Owns()) m_sc7852.resumeFromHalt();
-        else                        m_lh5803.wakeFromHalt();
-    }
+    // cause bit, so it is not an SC7852 INT: a press sets m_onWakePending,
+    // and step() resumes whichever CPU owns the bus from its next HALT (it
+    // then polls the latch); the parked one is left for the arbiter. This
+    // is a stand-in -- the documented sources do not say how the real ON
+    // line ends a HALT (sub-CPU INT6, NMI and clock gating are all
+    // candidates), so resuming directly skips any ISR a real wake might
+    // run. Rising edge only, matching the latch and a real PB7 edge.
+    // After power-down settles the bus usually belongs to the LH5803, halted
+    // at 0xE555 (the SC7852 handed off at 5C1F before its own HALT); the
+    // LH5803's requestMaskableInterrupt() is IE-gated and IE is clear
+    // there, so its wake is wakeFromHalt(), the unconditional counterpart.
+    if (risingEdge) m_onWakePending = true;
 }
 
 bool PC1600Machine::pokeMemory(uint16_t address, const uint8_t* data, size_t size) {

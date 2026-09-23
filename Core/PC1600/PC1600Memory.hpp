@@ -259,6 +259,13 @@ public:
     /// convention as latchTimer64InterruptCause() above.
     void latchSubCpuInterruptCause() { m_intCause |= 0x40; updateIntLine(); }
 
+    /// Latches cause bit 3, "interrupt from the LH-5801/5803 side": the
+    /// LH5803's STA #(0A038H) handback. The ROM's only handoff (P1-B3
+    /// 5C0E-5C22) unmasks just this cause (35H = 08H) before EI;HALT, and
+    /// the dispatcher's bit-3 branch (4154H) acknowledges it -- so this
+    /// INT is what ends the parked SC7852's HALT.
+    void latchLh5803InterruptCause() { m_intCause |= 0x08; updateIntLine(); }
+
     /// Port 32H as read: the latched causes plus bit 0, the TC8576F's live
     /// INT output (TC8576F -> INT0, pin 81).
     uint8_t intCause() const {
@@ -435,8 +442,9 @@ private:
     PC1600SystemBus m_ce1600pBus; // Page B banks 4/5 + I/O 0x80-0x8F; see ce1600pBus()
     PC1600BusArbiter* m_arbiter{nullptr};
     SC7852* m_cpu{nullptr};
-    uint8_t m_intCause{0};      // Port 32H latched causes, whatever the mask -- bit 4 1/64 s
-                                // timer, bit 6 sub-CPU; the rest have no source yet. Read-clears.
+    uint8_t m_intCause{0};      // Port 32H latched causes, whatever the mask -- bit 3 LH5803
+                                // handback, bit 4 1/64 s timer, bit 6 sub-CPU; the rest have no
+                                // source yet. Read-clears.
                                 // Bit 0 (comm) is the UART's live level, see intCause().
                                 // INT = intCause() & mask (updateIntLine())
     uint8_t m_intMask{0};       // Port 35H

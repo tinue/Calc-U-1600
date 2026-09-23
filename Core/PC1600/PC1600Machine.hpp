@@ -487,6 +487,7 @@ private:
     static_assert(kTStateHz * kTimer64AccumScale % 128 == 0, "64 Hz half period must be exact");
     int m_timer64Accum{0};
     bool m_timer64State{false};
+    bool m_onWakePending{false}; // ON pressed, not yet delivered -- see setOnKeyPressed()
 
     // Sub-CPU interrupt (port 32H bit 6, INT6 pin 84). Per
     // PC-1600-CPU-SC7852-Z80.md §5.2 this one line aggregates everything

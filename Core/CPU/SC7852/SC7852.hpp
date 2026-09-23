@@ -169,7 +169,7 @@ private:
     bool IFF1{false}, IFF2{false};
     uint8_t IM{0};
     bool m_halted{false};
-    bool m_intLine{false};
+    bool m_intLine{false};    // an input driven by the board (setIntLine()); reset() leaves it
     bool m_nmiPending{false};
     uint8_t m_pendingPrefix{0}; // a DD/FD fetched but not yet executed (see step())
     bool m_eiShadow{false};   // set by EI: blocks INT acceptance for one instruction
