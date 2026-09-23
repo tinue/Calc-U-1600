@@ -285,7 +285,7 @@ timing — decide deliberately):
   `PC1600Display::kBusyClocks = 4` and
   `PC1600SubCpu::kResponseMicros = 1660` were both fitted to real-unit
   benchmarks on 2026-09-23 while the ~0.65 % BASIC-speed residual is
-  still open (see *PC-1600 timing* above), so each may partly
+  still open (see the "PC-1600 BASIC runs ~0.65% fast" known issue), so each may partly
   compensate for it. The HD61102 datasheet bound on busy time should be
   checked against the fitted 4 clocks; the 1.66 ms figure comes from
   the 0.5 s ISR's commands but is applied to every sub-CPU command (key
