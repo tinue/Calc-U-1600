@@ -345,12 +345,16 @@ void test_rti_restores_flags_and_pc() {
     r.cpu.requestMaskableInterrupt();
     r.cpu.step(); // services interrupt: pushes T (C=0,IE=1) and P, jumps to 0x9000
     CHECK(r.cpu.pc() == 0x9000);
+    CHECK(!r.cpu.flagIE()); // acceptance resets IE ...
+    r.cpu.requestMaskableInterrupt(); // ... so a second request can't re-enter the handler
     // Simulate the handler mutating flags before returning -- RTI must undo this.
     r.cpu.setFlagC(true);
-    r.cpu.step(); // rti
+    r.cpu.step(); // rti runs; the second request is still held off
     CHECK(r.cpu.pc() == returnPC);
     CHECK(!r.cpu.flagC());  // restored to the pre-interrupt value, not the handler's
-    CHECK(r.cpu.flagIE());  // still set -- unrelated to C, both came from the same pushed T
+    CHECK(r.cpu.flagIE());  // RTI restores IE from the pushed T
+    r.cpu.step(); // now the pending request is taken
+    CHECK(r.cpu.pc() == 0x9000);
 }
 
 void test_trace_ring_and_drain() {

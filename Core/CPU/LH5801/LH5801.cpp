@@ -207,6 +207,10 @@ void LH5801::serviceInterrupt() {
     // popped) byte, with T deepest (popped last), mirroring RTI exactly.
     pushByte(T);
     push16(P);
+    // Acceptance resets IE (RTI restores it from the pushed T). The ROM's
+    // MI handler at E171 pushes A/X/Y/U before clearing the level-held
+    // request at F00B, which only works if IE is already off on entry.
+    setFlagBit(0x02, false);
     uint8_t hi = bus.readME0(0xFFFA);
     uint8_t lo = bus.readME0(0xFFFB);
     P = (uint16_t(hi) << 8) | lo;
@@ -301,14 +305,11 @@ int LH5801::step() {
     // until powerOn() (the ON key's BFI pin) restores it. See executeFD()'s
     // case 0x4C and poweredOff()'s own doc comment.
     if (m_poweredOff) return 0;
-    // requestMaskableInterrupt() always wakes HLT (m_halted cleared there,
-    // unconditionally), but *servicing* the interrupt (pushing state and
-    // vectoring) is gated on IE -- a request made while IE=0 must sit
-    // pending, letting the CPU resume normal fetch/execute right after the
-    // HLT that woke it, until IE is later set (e.g. by SIE) and a
-    // subsequent step() call finally consumes it. This IE gate on
-    // servicing (as opposed to just waking) is the masking behavior that
-    // "maskable" in requestMaskableInterrupt() refers to.
+    // Servicing a maskable interrupt (pushing state and vectoring) is gated
+    // on IE, and so is the HLT wake in requestMaskableInterrupt() -- a
+    // request made while IE=0 sits pending (a HLT stays halted) until IE
+    // is later set (e.g. by SIE or RTI) and a subsequent step() call
+    // finally consumes it.
     if (m_irqPending && flagIE()) {
         serviceInterrupt();
         // Interrupt acknowledge consumes this step() call on its own —

@@ -141,9 +141,9 @@ public:
     /// modeled by this core -- see requestMaskableInterrupt()'s .cpp
     /// comment). Both waking from HLT and actually being serviced by the
     /// next step() call require IE to already be set. When serviced, the
-    /// CPU pushes P (and, unlike RTN, must resume via RTI so T is
-    /// restored) then jumps to the vector at 0xFFFA, the CPU's internal
-    /// timer vector.
+    /// CPU pushes T and P, resets IE (so the handler isn't re-entered;
+    /// unlike RTN, RTI restores T and with it IE) then jumps to the vector
+    /// at 0xFFFA, the CPU's internal timer vector.
     void requestMaskableInterrupt();
 
     /// Unconditional HLT wake, independent of IE -- for the ON key (see

@@ -462,17 +462,28 @@ int SC7852::step() {
 
     uint16_t pcAtStart = PC;
     uint8_t opcode = fetch8();
+    int cycles = 0;
+    // A DD/FD followed by another DD, FD or ED acts as a 4 T-state NOP
+    // and the later prefix decides the instruction (DD ED B0 is LDIR,
+    // DD FD 21 is LD IY,nn). Consumed here so executeDDFD() never sees a
+    // prefix byte.
+    uint8_t indexedOp = 0;
+    while (opcode == 0xDD || opcode == 0xFD) {
+        indexedOp = fetch8();
+        if (indexedOp != 0xDD && indexedOp != 0xFD && indexedOp != 0xED) break;
+        cycles += 4 + kM1WaitStates;
+        opcode = indexedOp;
+    }
     uint16_t opcodeWord = opcode;
-    int cycles;
     // The execute*() tables return nominal Zilog T-states; the SC-7852's
     // M1 wait (see SC7852.hpp's class comment) is added here, once per
     // opcode byte fetched as an M1 -- two for the prefixed forms.
     switch (opcode) {
-        case 0xCB: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xCB00 | op2); cycles = 4 + executeCB(op2) + 2 * kM1WaitStates; break; }
-        case 0xED: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xED00 | op2); cycles = 4 + executeED(op2) + 2 * kM1WaitStates; break; }
-        case 0xDD: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xDD00 | op2); cycles = 4 + executeDDFD(op2, IX) + 2 * kM1WaitStates; break; }
-        case 0xFD: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xFD00 | op2); cycles = 4 + executeDDFD(op2, IY) + 2 * kM1WaitStates; break; }
-        default: cycles = execute(opcode) + kM1WaitStates; break;
+        case 0xCB: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xCB00 | op2); cycles += 4 + executeCB(op2) + 2 * kM1WaitStates; break; }
+        case 0xED: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xED00 | op2); cycles += 4 + executeED(op2) + 2 * kM1WaitStates; break; }
+        case 0xDD: { uint8_t op2 = indexedOp; opcodeWord = uint16_t(0xDD00 | op2); cycles += 4 + executeDDFD(op2, IX) + 2 * kM1WaitStates; break; }
+        case 0xFD: { uint8_t op2 = indexedOp; opcodeWord = uint16_t(0xFD00 | op2); cycles += 4 + executeDDFD(op2, IY) + 2 * kM1WaitStates; break; }
+        default: cycles += execute(opcode) + kM1WaitStates; break;
     }
 
     recordTraceFrame(tf, pcAtStart, opcodeWord, uint8_t(cycles));

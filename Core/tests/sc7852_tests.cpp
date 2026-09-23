@@ -345,6 +345,36 @@ void test_ed_ldir_block_copy() {
     CHECK(r.cpu.de() == 0x9003);
 }
 
+void test_dd_before_ed_is_ignored() {
+    // LD HL,src ; LD DE,dst ; LD BC,2 ; DD ED B0 = LDIR (the DD is a NOP)
+    Rig r({0x21, 0x00, 0x80, 0x11, 0x00, 0x90, 0x01, 0x02, 0x00, 0xDD, 0xED, 0xB0});
+    r.bus.mem[0x8000] = 0x11;
+    r.bus.mem[0x8001] = 0x22;
+    r.cpu.step(); r.cpu.step(); r.cpu.step();
+    uint8_t a = r.cpu.a();
+    r.cpu.step();
+    while (r.cpu.bc() != 0) r.cpu.step();
+    CHECK(r.bus.mem[0x9000] == 0x11);
+    CHECK(r.bus.mem[0x9001] == 0x22);
+    CHECK(r.cpu.a() == a); // not run as OR B
+    CHECK(r.cpu.pc() == 0x000C);
+}
+
+void test_last_index_prefix_wins() {
+    // DD FD 21 34 12 = LD IY,1234h ; FD DD 21 78 56 = LD IX,5678h
+    Rig r({0xDD, 0xFD, 0x21, 0x34, 0x12, 0xFD, 0xDD, 0x21, 0x78, 0x56});
+    int c = r.cpu.step();
+    CHECK(r.cpu.iy() == 0x1234);
+    CHECK(r.cpu.ix() == 0x0000);
+    CHECK(r.cpu.pc() == 0x0005);
+    int plain = 0;
+    { Rig q({0xFD, 0x21, 0x00, 0x00}); plain = q.cpu.step(); }
+    CHECK(c == plain + 4 + SC7852::kM1WaitStates); // the ignored DD is one M1 NOP
+    r.cpu.step();
+    CHECK(r.cpu.ix() == 0x5678);
+    CHECK(r.cpu.pc() == 0x000A);
+}
+
 void test_ed_adc_sbc_hl() {
     // SCF ; LD HL,0x0001 ; LD BC,0x0001 ; ADC HL,BC -> HL=3 (1+1+1)
     Rig r({0x37, 0x21, 0x01, 0x00, 0x01, 0x01, 0x00, 0xED, 0x4A});
@@ -553,6 +583,8 @@ int run_sc7852_tests() {
     test_daa_after_bcd_sub();
     test_cb_rotate_and_bit_and_set_res();
     test_ed_ldir_block_copy();
+    test_dd_before_ed_is_ignored();
+    test_last_index_prefix_wins();
     test_ed_adc_sbc_hl();
     test_ed_neg();
     test_in_out_roundtrip();
