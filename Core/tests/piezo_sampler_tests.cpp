@@ -23,6 +23,7 @@
 #include "../PC1500/PC1500Machine.hpp"
 #include "../PC1600/PC1600BasicTyper.hpp"
 #include "../PC1600/PC1600Machine.hpp"
+#include "../PC1600/PC1600Memory.hpp"
 #include "TestRoms.hpp"
 
 namespace {
@@ -281,6 +282,42 @@ void test_pc1600_beep() {
     CHECK(analyse(runAndCapture(m, "BEEP 1")).audibleSamples > 0);
 }
 
+// BEEP n,A,d repeats are paced by the ROM counting 64 Hz PB5 rising edges
+// (P1-B3 5F12): period = (PB5 ticks the tone spans + 5) / 64 s. A real unit
+// plays BEEP 20,200,20 at a steady 156.25 ms (10 ticks). Two things used to
+// break that: nominal timing (tone too short -> 9 ticks) and the slow
+// PB5-synced sub-CPU path in the 0.5 s ISR, which swallowed edges (+1 tick
+// about every other beep). The boot's IOCS 25H probe must leave F0B8H
+// bit 0 set (fast path).
+void test_pc1600_beep_repeat_spacing() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_pc1600_beep_repeat_spacing: PC-1600 ROM images not found\n");
+        return;
+    }
+    CHECK((m.memory().read(0xF0B8) & 0x01) != 0);
+
+    const std::vector<int16_t> pcm = runAndCapture(m, "BEEP 12,200,20");
+    std::vector<size_t> starts;
+    size_t quiet = kRate; // samples since the last audible one
+    for (size_t i = 0; i < pcm.size(); ++i) {
+        if (std::abs(pcm[i]) >= kAudible) {
+            if (quiet >= static_cast<size_t>(kRate / 250)) starts.push_back(i); // >= 4 ms of silence
+            quiet = 0;
+        } else {
+            ++quiet;
+        }
+    }
+    CHECK(starts.size() == 12);
+    // The first tone starts whenever the command gets there, not on a
+    // PB5 edge, so its gap is partial. Every one after that is exact.
+    for (size_t i = 2; i < starts.size(); ++i) {
+        const double ms = 1000.0 * static_cast<double>(starts[i] - starts[i - 1]) / kRate;
+        if (!near(ms, 156.25, 0.005)) std::printf("  BEEP 12,200,20 period %zu: %.2f ms\n", i, ms);
+        CHECK(near(ms, 156.25, 0.005));
+    }
+}
+
 } // namespace
 
 int run_piezo_sampler_tests() {
@@ -291,6 +328,7 @@ int run_piezo_sampler_tests() {
     test_pc1500_beep();
     test_pc1500_settle_waits_for_beep();
     test_pc1600_beep();
+    test_pc1600_beep_repeat_spacing();
 
     std::printf("piezo_sampler_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

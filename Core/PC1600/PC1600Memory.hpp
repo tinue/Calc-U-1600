@@ -247,7 +247,7 @@ public:
     void latchTimer64InterruptCause() { m_intCause |= 0x10; }
 
     /// Port 35H bit 6 -- is the aggregated sub-CPU interrupt (INT6)
-    /// unmasked? See PC1600Machine's own kTimer05PeriodTStates comment
+    /// unmasked? See PC1600Machine's own kTimer64EdgesPerHalfSecond comment
     /// for which of that line's several sources this core actually raises.
     bool subCpuInterruptEnabled() const { return (m_intMask & 0x40) != 0; }
 

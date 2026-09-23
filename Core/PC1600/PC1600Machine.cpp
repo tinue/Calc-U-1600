@@ -19,7 +19,7 @@ void PC1600Machine::resetLocked() {
     m_arbiter.reset();
     m_timer64Accum = 0;
     m_timer64State = false;
-    m_timer05Accum = 0;
+    m_timer64EdgeCount = 0;
     m_rtcAccum = 0; // the clock value itself survives reset (see seedClock())
     m_z80Mem.setTimer64Bit(false);
     m_lh5803Mem.reset();                  // clear the internal-PIO register file (0xF00x)
@@ -214,9 +214,9 @@ int PC1600Machine::step() {
         // to wake it: the boot reaches a genuine HALT waiting on this
         // interrupt, so the timer must keep advancing once it gets there.
         const int cost = (c > 0 ? c : SC7852::kHaltTickCycles);
-        m_timer64Accum += cost;
-        while (m_timer64Accum >= kTimer64HalfPeriodTStates) {
-            m_timer64Accum -= kTimer64HalfPeriodTStates;
+        m_timer64Accum += cost * kTimer64AccumScale;
+        while (m_timer64Accum >= kTimer64HalfPeriodScaled) {
+            m_timer64Accum -= kTimer64HalfPeriodScaled;
             m_timer64State = !m_timer64State;
             m_z80Mem.setTimer64Bit(m_timer64State); // PB5 raw level only, see its own comment
             // TRM pin table (INT4, pin 83): "an interrupt is sent to the
@@ -233,20 +233,20 @@ int PC1600Machine::step() {
                 m_z80Mem.latchTimer64InterruptCause();
                 m_sc7852.requestInterrupt();
             }
-        }
-        // The sub-CPU's own aggregated interrupt line (INT6, cause bit 6),
-        // driven here by its 0.5s timer -- see kTimer05PeriodTStates.
-        m_timer05Accum += cost;
-        while (m_timer05Accum >= kTimer05PeriodTStates) {
-            m_timer05Accum -= kTimer05PeriodTStates;
-            // The sub-CPU's 0.5 s signal, visible in bit 1 of request 5DH,
-            // is a free-running level -- toggle it every period. The
-            // file/RAM-disk IOCS readiness handshake polls 5DH and waits
-            // for this to change.
-            m_z80Mem.subCpu().toggleHalfSecondSignal();
-            if (m_z80Mem.subCpuInterruptEnabled()) {
-                m_z80Mem.latchSubCpuInterruptCause();
-                m_sc7852.requestInterrupt();
+            // The sub-CPU's own aggregated interrupt line (INT6, cause bit
+            // 6), driven here by its 0.5s timer -- divided down from this
+            // same 64 Hz signal, see kTimer64EdgesPerHalfSecond.
+            if (++m_timer64EdgeCount == kTimer64EdgesPerHalfSecond) m_timer64EdgeCount = 0;
+            if (m_timer64EdgeCount == kHalfSecondEdgePhase) {
+                // The sub-CPU's 0.5 s signal, visible in bit 1 of request
+                // 5DH, is a free-running level -- toggle it every period.
+                // The file/RAM-disk IOCS readiness handshake polls 5DH and
+                // waits for this to change.
+                m_z80Mem.subCpu().toggleHalfSecondSignal();
+                if (m_z80Mem.subCpuInterruptEnabled()) {
+                    m_z80Mem.latchSubCpuInterruptCause();
+                    m_sc7852.requestInterrupt();
+                }
             }
         }
         // LU-57813P calendar clock: one tick per emulated second. See

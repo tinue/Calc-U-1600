@@ -456,8 +456,13 @@ private:
     // T-states (not LH5803 cycles, a different clock domain entirely), so
     // the pulse effectively pauses while the SC7852 is parked, a real but
     // small deviation from true hardware's always-running crystal.
-    // = kTStateHz / 64 / 2 rounded to nearest (27968.75 -> 27969).
-    static constexpr int kTimer64HalfPeriodTStates = (kTStateHz + 64) / 128;
+    // The half period is kTStateHz / 128 = 27968.75 T-states. The
+    // accumulator counts quarter T-states so it can hold that exactly.
+    // Rounding it to 27969 made the 64 Hz signal drift against anything
+    // counted in whole seconds.
+    static constexpr int kTimer64AccumScale = 4;
+    static constexpr int kTimer64HalfPeriodScaled = kTStateHz * kTimer64AccumScale / 128;
+    static_assert(kTStateHz * kTimer64AccumScale % 128 == 0, "64 Hz half period must be exact");
     int m_timer64Accum{0};
     bool m_timer64State{false};
 
@@ -472,12 +477,13 @@ private:
     // unraised until there is something to raise them: no battery or
     // analog model, no CI line, and no serial peripheral to time out.
     //
-    // Same accumulator shape as the 1/64s timer above, but no square-wave
-    // state: that timer keeps a level because it *publishes* one (PB5, via
-    // setTimer64Bit()). Nothing observes this one's level -- the sub-CPU
-    // line is edge-only -- so it is simply one interrupt per full period.
-    static constexpr int kTimer05PeriodTStates = kTStateHz / 2; // 0.5s
-    int m_timer05Accum{0};
+    // Both signals come out of the sub-CPU's one divider chain, so 0.5 s is
+    // exactly 64 edges (32 periods) of the 64 Hz signal, at a fixed phase
+    // against it. Here it fires on a falling edge. The exact phase isn't
+    // known from any source, and nothing observed so far depends on it.
+    static constexpr int kTimer64EdgesPerHalfSecond = 64;
+    static constexpr int kHalfSecondEdgePhase = 0;
+    int m_timer64EdgeCount{0};
 
     // LU-57813P real-time clock: one calendar second per second of
     // emulated time. Same accumulator shape as the two timers above, but
