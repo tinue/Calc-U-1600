@@ -26,11 +26,24 @@
 //
 // --wav <out.wav> records the buzzer (PC6, see PiezoSampler.hpp) for the
 // whole run -- preset script included -- as 48 kHz mono 16-bit PCM.
+//
+// CE-158 (a preset with `interface: ce158`):
+//   --ce158-pty       attach a host PTY as the RS-232C peer; its stable
+//                     symlink is ~/Library/Application Support/Calc-U-1600/
+//                     calcu1600-ce158.serial (path printed on stderr).
+//   --ce158-rx <file> scripted peer: the file's bytes are what the CE-158
+//                     receives, in order.
+//   --ce158-rx-hold <n> start sending the --ce158-rx bytes only after n
+//                     character times (the ROM flushes the receiver when
+//                     e.g. SETDEV runs, so a byte sent too early is lost).
+//   --ce158-tx <file> write every byte the CE-158 sends to <file>.
+// Anything printed on the Centronics port is dumped after the run.
 
 #include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -38,6 +51,38 @@
 #include "../Core/PC1500/PC1500Machine.hpp"
 #include "../Core/PC1500/PresetFile.hpp"
 #include "../Core/PC1500/PC1500PresetLoader.hpp"
+#include "../Core/Serial/PtySerialLink.hpp"
+
+namespace {
+
+// --ce158-rx / --ce158-tx: a file-backed serial peer for repeatable runs.
+class FileSerialLink final : public SerialLink {
+public:
+    std::vector<uint8_t> rx;
+    size_t rxPos = 0;
+    std::vector<uint8_t> tx;
+    long holdPolls = 0; // --ce158-rx-hold: character times to stay silent first
+    bool poll(uint8_t& out) override {
+        if (holdPolls > 0) { --holdPolls; return false; }
+        if (rxPos >= rx.size()) return false;
+        out = rx[rxPos++];
+        return true;
+    }
+    void send(uint8_t byte) override { tx.push_back(byte); }
+};
+
+void printBytes(const char* title, const std::vector<uint8_t>& bytes) {
+    std::printf("%s (%zu bytes):\n", title, bytes.size());
+    std::string text;
+    for (uint8_t b : bytes) {
+        if (b == '\r') continue;
+        if (b == '\n' || (b >= 0x20 && b < 0x7F)) text += static_cast<char>(b);
+        else { char hex[8]; std::snprintf(hex, sizeof hex, "<%02X>", b); text += hex; }
+    }
+    std::printf("%s\n", text.c_str());
+}
+
+}  // namespace
 
 int main(int argc, char** argv) {
     // Pull an optional `--modules-dir <dir>` out of argv up front so the
@@ -47,6 +92,9 @@ int main(int argc, char** argv) {
     bool moduleDirSet = false;
     bool dumpBasic = false;
     std::string wavPath;
+    bool ce158Pty = false;
+    std::string ce158RxPath, ce158TxPath;
+    long ce158RxHold = 0;
     {
         std::vector<char*> kept;
         for (int i = 0; i < argc; ++i) {
@@ -59,6 +107,10 @@ int main(int argc, char** argv) {
                 else               { extraModuleDirs.push_back(argv[++i]); }
                 continue;
             }
+            if (std::strcmp(argv[i], "--ce158-pty") == 0) { ce158Pty = true; continue; }
+            if (std::strcmp(argv[i], "--ce158-rx") == 0 && i + 1 < argc) { ce158RxPath = argv[++i]; continue; }
+            if (std::strcmp(argv[i], "--ce158-rx-hold") == 0 && i + 1 < argc) { ce158RxHold = std::strtol(argv[++i], nullptr, 10); continue; }
+            if (std::strcmp(argv[i], "--ce158-tx") == 0 && i + 1 < argc) { ce158TxPath = argv[++i]; continue; }
             if (std::strcmp(argv[i], "--dump-basic") == 0) {
                 dumpBasic = true; // read-only BASIC program-area / pointer dump
                 continue;
@@ -72,6 +124,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "usage: %s <rom-file> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       %s --preset <preset-file.pc1500> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       options: --modules-dir <dir>  --dump-basic  --wav <out.wav>\n");
+        std::fprintf(stderr, "                --ce158-pty | --ce158-rx <file> [--ce158-rx-hold <n>] --ce158-tx <file>\n");
         return 1;
     }
 
@@ -116,6 +169,30 @@ int main(int argc, char** argv) {
         while ((n = machine.drainAudio(chunk, 4096)) > 0) wav.insert(wav.end(), chunk, chunk + n);
     };
     if (!wavPath.empty()) machine.setYieldHook(drainWav, 1300000 / 20);
+
+    // The CE-158's serial peer. Set before the preset attaches the card --
+    // attachCE158() picks up whatever link the machine already holds.
+    std::unique_ptr<PtySerialLink> ptyLink;
+    FileSerialLink fileLink;
+    if (ce158Pty) {
+        ptyLink = std::make_unique<PtySerialLink>(std::string{}, PtySerialLink::kCE158LinkName);
+        if (!ptyLink->isOpen()) {
+            std::fprintf(stderr, "CE-158 PTY: %s\n", ptyLink->lastError().c_str());
+            return 1;
+        }
+        std::fprintf(stderr, "CE-158 serial port: %s\n", ptyLink->preferredPath().c_str());
+        machine.setCE158SerialLink(ptyLink.get());
+    } else if (!ce158RxPath.empty() || !ce158TxPath.empty()) {
+        if (!ce158RxPath.empty()) {
+            std::FILE* f = std::fopen(ce158RxPath.c_str(), "rb");
+            if (!f) { std::fprintf(stderr, "cannot read %s\n", ce158RxPath.c_str()); return 1; }
+            int ch;
+            while ((ch = std::fgetc(f)) != EOF) fileLink.rx.push_back(static_cast<uint8_t>(ch));
+            std::fclose(f);
+        }
+        fileLink.holdPolls = ce158RxHold;
+        machine.setCE158SerialLink(&fileLink);
+    }
 
     if (usingPreset) {
         std::string presetPath = argv[2];
@@ -279,6 +356,22 @@ int main(int argc, char** argv) {
             if (a > 0xFFF0) break;
         }
     }
+
+    if (machine.ce158Attached()) {
+        std::printf("CE-158: attached, baud=%d, UART status=%02X\n", machine.ce158Card()->baudRate(),
+                    machine.ce158Card()->uartStatus());
+        printBytes("CE-158 Centronics output", machine.drainCE158ParallelOutput());
+        if (!ce158RxPath.empty())
+            std::printf("CE-158 serial: received %zu of %zu scripted bytes\n", fileLink.rxPos, fileLink.rx.size());
+        if (!ce158TxPath.empty() || !ce158RxPath.empty()) printBytes("CE-158 serial output", fileLink.tx);
+        if (!ce158TxPath.empty()) {
+            std::FILE* f = std::fopen(ce158TxPath.c_str(), "wb");
+            if (!f) { std::fprintf(stderr, "cannot write %s\n", ce158TxPath.c_str()); return 1; }
+            std::fwrite(fileLink.tx.data(), 1, fileLink.tx.size(), f);
+            std::fclose(f);
+        }
+    }
+    machine.setCE158SerialLink(nullptr);
 
     if (machine.ce150Attached()) {
         auto pts = machine.ce150PlotPoints();

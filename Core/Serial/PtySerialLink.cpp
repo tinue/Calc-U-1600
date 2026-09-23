@@ -14,11 +14,11 @@
 
 namespace {
 
-// Best-effort <dir>/calcu1600.serial -> target. When `dir` is empty the
+// Best-effort <dir>/<name> -> target. When `dir` is empty the
 // caller supplied no folder (the headless probe, tests): fall back to
 // ~/Library/Application Support/Calc-U-1600. Returns the link path, or ""
 // if it could not be created.
-std::string makeStableSymlink(const std::string& target, const std::string& dir) {
+std::string makeStableSymlink(const std::string& target, const std::string& dir, const std::string& name) {
     std::string base = dir;
     if (base.empty()) {
         const char* home = ::getenv("HOME");
@@ -31,7 +31,7 @@ std::string makeStableSymlink(const std::string& target, const std::string& dir)
     // A folder given as "/private/tmp/" must not yield "/private/tmp//...".
     while (base.size() > 1 && base.back() == '/') base.pop_back();
     if (base == "/") base.clear();
-    const std::string link = base + "/calcu1600.serial";
+    const std::string link = base + "/" + name;
     ::unlink(link.c_str());
     if (::symlink(target.c_str(), link.c_str()) != 0) return "";
     return link;
@@ -53,7 +53,8 @@ void removeSymlinkIfOurs(const std::string& link, const std::string& slave) {
 
 } // namespace
 
-PtySerialLink::PtySerialLink(std::string linkDir) : m_linkDir(std::move(linkDir)) {
+PtySerialLink::PtySerialLink(std::string linkDir, std::string linkName)
+    : m_linkDir(std::move(linkDir)), m_linkName(std::move(linkName)) {
     m_master = ::posix_openpt(O_RDWR | O_NOCTTY);
     if (m_master < 0) {
         m_error = std::string("posix_openpt: ") + std::strerror(errno);
@@ -87,7 +88,7 @@ PtySerialLink::PtySerialLink(std::string linkDir) : m_linkDir(std::move(linkDir)
         ::tcsetattr(m_master, TCSANOW, &t);
     }
 
-    m_stablePath = makeStableSymlink(m_slavePath, m_linkDir);
+    m_stablePath = makeStableSymlink(m_slavePath, m_linkDir, m_linkName);
 
     m_reader = std::thread(&PtySerialLink::readerLoop, this);
     m_writer = std::thread(&PtySerialLink::writerLoop, this);
@@ -120,7 +121,7 @@ bool PtySerialLink::relink(std::string newDir) {
     if (newDir == m_linkDir && !m_stablePath.empty()) return true; // unchanged
     removeSymlinkIfOurs(m_stablePath, m_slavePath);
     m_linkDir = std::move(newDir);
-    m_stablePath = makeStableSymlink(m_slavePath, m_linkDir);
+    m_stablePath = makeStableSymlink(m_slavePath, m_linkDir, m_linkName);
     return !m_stablePath.empty();
 }
 
@@ -217,7 +218,8 @@ void PtySerialLink::getStatus(Lines& in) {
 
 #else // non-POSIX: inert stub
 
-PtySerialLink::PtySerialLink(std::string linkDir) : m_linkDir(std::move(linkDir)) {
+PtySerialLink::PtySerialLink(std::string linkDir, std::string linkName)
+    : m_linkDir(std::move(linkDir)), m_linkName(std::move(linkName)) {
     m_error = "PTY serial link not supported on this platform";
 }
 PtySerialLink::~PtySerialLink() = default;

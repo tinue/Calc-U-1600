@@ -42,6 +42,9 @@ struct PresetLoadResult {
     /// attached (before reset, so the boot ROM's peripheral scan sees it).
     /// The GUI reflects this into its control-bar CE-150 toggle.
     bool ce150Attached = false;
+    /// True when the preset asked for `interface: ce158` and the CE-158 was
+    /// attached (before reset, like the CE-150).
+    bool ce158Attached = false;
 };
 
 /// Optional callback fired exactly once, right after `machine` has its ROM

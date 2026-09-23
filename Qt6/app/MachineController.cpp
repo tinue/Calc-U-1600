@@ -17,7 +17,7 @@
 #include "PC1600/PC1600Machine.hpp"
 #include "PC1600/PC1600Screenshot.hpp"
 #include "PC1600/PC1600TypedInput.hpp"
-#include "PC1600/PtySerialLink.hpp"
+#include "Serial/PtySerialLink.hpp"
 #include "Resources/BundledRomCatalog.hpp"
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"

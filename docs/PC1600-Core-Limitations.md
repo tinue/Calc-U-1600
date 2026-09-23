@@ -85,7 +85,7 @@ still worth understanding. They say what the code actually does now.
 
 ## PC-1600 serial / UART (TC8576F)
 
-`Core/PC1600/TC8576F.*`, `SerialLink.hpp`, `PtySerialLink.*`
+`Core/PC1600/TC8576F.*`, `Core/Serial/SerialLink.hpp`, `Core/Serial/PtySerialLink.*`
 
 - **RS-232C / SIO connector mux not modelled** — "RS-232C and SIO share
   the one channel and cannot be used at once… the RS-232C/SIO connector
@@ -395,9 +395,11 @@ still worth understanding. They say what the code actually does now.
 - **CE-1600P Ni-Cd pack / battery voltage** — no model (see PC-1600
   sub-CPU section above). The plotter mechanism and its floppy drive are
   now modeled; see the next section.
-- **CE-150 / CE-158 ROM windows** (`0x8000-0xBFFF` on the LH5803 side,
-  `Y2` on the PC-1500 side) — open bus, no module. `PC1500Memory.hpp:35`,
-  `LH5803SharedMemory.hpp:30`
+- **CE-158 on the PC-1600** — the LH5803 side serves only the CE-150's
+  half of the peripheral ROM window (PVOUT = 0); the CE-158's half
+  (PVOUT = 1, `0x8000-0x9FFF`) and its ME1 I/O blocks are not routed yet.
+  The CE-158 itself is modelled on the PC-1500 (`Core/Connector/Ce158Card.hpp`).
+  `LH5803SharedMemory.cpp` (readME0)
 - **Cassette (CMT)** — connector pins exist, no FSK / audio path.
   `SystemBus.hpp:27`
 - **Buzzer: partial.** Modelled: the PC-1500 OPC/PC6 line, the PC-1600 OPC

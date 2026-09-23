@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "../PC1600/PC1600SubCpu.hpp"
-#include "../PC1600/SerialLink.hpp"
+#include "../Serial/SerialLink.hpp"
 #include "../PC1600/TC8576F.hpp"
 
 namespace {

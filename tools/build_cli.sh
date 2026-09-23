@@ -19,6 +19,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/Basic/BasicBinaryImage.cpp \
   Core/Basic/BasicProgramSource.cpp \
   Core/PC1500/PC1500TraceFile.cpp \
+  Core/Serial/PtySerialLink.cpp \
   tools/pc1500_cli.cpp \
   Core/Basic/vendor/sharpdx/libsharpdx.a \
   -o headless/pc1500_cli

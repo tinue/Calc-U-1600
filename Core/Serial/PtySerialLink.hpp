@@ -10,13 +10,16 @@
 
 #include "SerialLink.hpp"
 
-// ── Host pseudo-terminal backing for the PC-1600 serial port ────────────
+// ── Host pseudo-terminal backing for an emulated serial port ────────────
 //
 // Opens a PTY. The emulator drives the master end through the SerialLink
 // interface; a Mac serial application -- SharpDataExchange, `screen`, a
 // terminal program -- opens the slave end at `slavePath()`, or the stable
-// symlink at `stablePath()` (`<linkDir>/calcu1600.serial`), which
-// survives across runs even though the /dev/ttysNNN name does not.
+// symlink at `stablePath()` (`<linkDir>/<linkName>`), which survives
+// across runs even though the /dev/ttysNNN name does not. Each emulated
+// port passes its own `linkName` so several can share one `linkDir`: the
+// PC-1600's built-in port is `kPC1600LinkName`, the CE-158 interface
+// `kCE158LinkName`.
 //
 // `linkDir` (the constructor argument) is the directory the symlink is
 // created in -- the host app passes a folder the user has granted (see
@@ -36,7 +39,10 @@
 // a no-op and `isOpen()` is false.
 class PtySerialLink final : public SerialLink {
 public:
-    explicit PtySerialLink(std::string linkDir = {});
+    static constexpr const char* kPC1600LinkName = "calcu1600.serial";
+    static constexpr const char* kCE158LinkName = "calcu1600-ce158.serial";
+
+    explicit PtySerialLink(std::string linkDir = {}, std::string linkName = kPC1600LinkName);
     ~PtySerialLink() override;
     PtySerialLink(const PtySerialLink&) = delete;
     PtySerialLink& operator=(const PtySerialLink&) = delete;
@@ -74,6 +80,7 @@ private:
     // m_pathMx against the host UI thread reading stablePath()/preferredPath().
     mutable std::mutex m_pathMx;
     std::string m_linkDir;               // directory for the stable symlink; "" = App Support fallback
+    std::string m_linkName;              // the symlink's file name inside m_linkDir; set once in the ctor
     std::string m_stablePath;
 
     std::thread m_reader;

@@ -1365,6 +1365,9 @@ int run_ce150_tests();
 // Defined in pc1600_ce150_tests.cpp -- the CE-150 attached to the PC-1600's
 // LH5803 side (Phase 2).
 int run_pc1600_ce150_tests();
+// Defined in ce158_tests.cpp -- Ce158Card (ROM window, LH5811, CDP1854 UART,
+// Centronics) and the CE-158 driven by BASIC on a PC1500Machine.
+int run_ce158_tests();
 // Defined in basic_binary_image_tests.cpp -- the SharpDataExchange
 // tokenized-BASIC transfer-file parser (Core/Basic/BasicBinaryImage).
 int run_basic_binary_image_tests();
@@ -1472,6 +1475,7 @@ int main() {
     int ce1600fFailures = run_ce1600f_tests();
     int ce150Failures = run_ce150_tests();
     int pc1600Ce150Failures = run_pc1600_ce150_tests();
+    int ce158Failures = run_ce158_tests();
     int basicBinaryImageFailures = run_basic_binary_image_tests();
     int basicFastLoaderFailures = run_basic_fastloader_tests();
     int pc1600BasicLoaderFailures = run_pc1600_basicloader_tests();
@@ -1492,7 +1496,7 @@ int main() {
             pc1600KeyboardDisplayFailures == 0 && pc1600SlotRamFailures == 0 &&
             pc1600SlotModuleFailures == 0 && pc1600PresetFailures == 0 && ce1600pFailures == 0 &&
             ce1600fFailures == 0 &&
-            ce150Failures == 0 && pc1600Ce150Failures == 0)
+            ce150Failures == 0 && pc1600Ce150Failures == 0 && ce158Failures == 0)
                ? 0
                : 1;
 }

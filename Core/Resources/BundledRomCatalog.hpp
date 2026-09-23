@@ -163,6 +163,25 @@ inline bool attachCE150(Machine& machine, const std::vector<std::string>& dirs, 
     return true;
 }
 
+// Attaches the CE-158 RS-232C / Centronics interface to `machine` (a
+// PC-1500/1500A today; the PC-1600's LH5803 side exposes the same
+// attachCE158(bytes, size) shape).
+template <typename Machine>
+inline bool attachCE158(Machine& machine, const std::vector<std::string>& dirs, std::string* error) {
+    std::string path;
+    std::vector<uint8_t> rom;
+    if (!resolveBundledRomPath(dirs, "CE-158.ROM", &path, error) ||
+        !detail::readWholeFileCached(path, &rom)) {
+        if (error && error->empty()) *error = "could not read the CE-158 ROM";
+        return false;
+    }
+    if (!machine.attachCE158(rom.data(), rom.size())) {
+        if (error) *error = "CE-158 attach failed -- ROM size/shape rejected (expected 16384 bytes)";
+        return false;
+    }
+    return true;
+}
+
 // Attaches the CE-1600P plotter (and, per its union attach, the CE-1600F
 // floppy, with its drive empty -- PC1600Machine::attachCE1600P()) to a
 // PC-1600, using the ROM pair of the given version ("new"/"old" -- the ROM

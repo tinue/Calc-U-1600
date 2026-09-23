@@ -215,6 +215,11 @@ struct PresetFile {
     //    path passed in). `"ce1600p"` is a parse error -- that is a PC-1600
     //    device.
     std::string plotter;
+    // The serial / parallel interface on the 60-pin system bus. `""` (key
+    // absent, or `interface: none`/`off`) = none; `"ce158"` = the CE-158
+    // (`interface: ce158` / `ce-158`). It sits alongside `plotter: ce150`
+    // or alone. PC-1500 / PC-1500A only for now.
+    std::string interfaceName;
     // PC-1600 only: "new" or "old" -- the CE-1600P ROM version, from
     // `plotter: ce1600p:old` (default "new", also when there is no plotter).
     // Independent of `romVariant`; the CE-1600F in the same box follows it.

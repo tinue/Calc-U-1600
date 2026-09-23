@@ -24,6 +24,7 @@ void PC1500Machine::reset() {
     // real ink stays on real paper. Mirrors the CE-1600P, whose card is
     // likewise left attached across PC1600Machine::reset().
     if (m_ce150Card) m_ce150Card->reset();
+    if (m_ce158Card) m_ce158Card->reset();
 }
 
 void PC1500Machine::allReset() {
@@ -49,6 +50,36 @@ void PC1500Machine::detachCE150() {
     if (!m_ce150Card) return;
     m_systemBus.detach(m_ce150Card.get());
     m_ce150Card.reset();
+}
+
+bool PC1500Machine::attachCE158(const uint8_t* rom, size_t romSize) {
+    if (romSize != Ce158Card::kRomSize) return false;
+    auto card = std::make_unique<Ce158Card>();
+    if (!card->loadRom(rom, romSize)) return false;
+    detachCE158();
+    card->reset();
+    card->setSerialLink(m_ce158Link);
+    m_systemBus.attach(card.get());
+    m_ce158Card = std::move(card);
+    return true;
+}
+
+void PC1500Machine::detachCE158() {
+    if (!m_ce158Card) return;
+    m_systemBus.detach(m_ce158Card.get());
+    m_ce158Card.reset();
+}
+
+void PC1500Machine::setCE158SerialLink(SerialLink* link) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_ce158Link = link;
+    if (m_ce158Card) m_ce158Card->setSerialLink(link);
+}
+
+std::vector<uint8_t> PC1500Machine::drainCE158ParallelOutput() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_ce158Card) return {};
+    return m_ce158Card->drainParallelOutput();
 }
 
 // The four below take m_mutex so the GUI thread can read/clear the plotter
@@ -112,6 +143,7 @@ int PC1500Machine::step() {
     // Per-step hook for an attached CE-150 (no-op today -- the plotter is
     // fully reactive; see Ce150Card::tick()).
     if (m_ce150Card) m_ce150Card->tick(rtcCycles);
+    if (m_ce158Card) m_ce158Card->tick(rtcCycles);
     maybeDrainTrace();
     return c;
 }
@@ -166,6 +198,7 @@ uint64_t PC1500Machine::runCycles(uint64_t maxCycles) {
                 m_memory.advanceRtc(static_cast<uint32_t>(LH5801::kHaltTickCycles));
                 m_memory.advancePiezo(static_cast<uint32_t>(LH5801::kHaltTickCycles)); // buzzer time, same clock as the RTC
                 advanceKeyQueue(static_cast<uint32_t>(LH5801::kHaltTickCycles));
+                if (m_ce158Card) m_ce158Card->tick(LH5801::kHaltTickCycles); // the UART's own clock keeps running
                 consumed += static_cast<uint64_t>(LH5801::kHaltTickCycles);
                 continue;
             }
@@ -174,6 +207,7 @@ uint64_t PC1500Machine::runCycles(uint64_t maxCycles) {
         m_memory.advancePiezo(static_cast<uint32_t>(c)); // buzzer time, same clock as the RTC
         advanceKeyQueue(static_cast<uint32_t>(c));
         if (m_ce150Card) m_ce150Card->tick(static_cast<uint32_t>(c)); // no-op today; see step()
+        if (m_ce158Card) m_ce158Card->tick(static_cast<uint32_t>(c));
         consumed += static_cast<uint64_t>(c);
         maybeDrainTrace();
     }

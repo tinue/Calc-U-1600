@@ -42,7 +42,7 @@
 #include "../Core/PC1600/PC1600Machine.hpp"
 #include "../Core/Resources/BundledRomCatalog.hpp"
 #include "../Core/PC1600/PC1600PowerProbe.hpp"
-#include "../Core/PC1600/PtySerialLink.hpp"
+#include "../Core/Serial/PtySerialLink.hpp"
 
 namespace {
 

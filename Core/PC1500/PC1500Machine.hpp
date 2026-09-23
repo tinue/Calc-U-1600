@@ -10,6 +10,7 @@
 
 #include "../CPU/LH5801/LH5801.hpp"
 #include "../Connector/Ce150Card.hpp"
+#include "../Connector/Ce158Card.hpp"
 #include "../Connector/ExpansionConnector.hpp"
 #include "../Connector/SystemBus.hpp"
 #include "PC1500Display.hpp"
@@ -236,6 +237,26 @@ public:
     std::vector<std::string> drainCE150Events();
     void clearCE150Paper();
 
+    // ── CE-158 RS-232C / Centronics interface (60-pin system bus) ────────
+    //
+    // Attached to the same SystemBus chain as the CE-150, alone or together
+    // with it (on hardware it plugs into the PC-1500 directly or into the
+    // CE-150's rear connector). `attachCE158` builds a card, loads its
+    // 16 KB ROM, resets it and attaches it; the serial link set with
+    // setCE158SerialLink() is kept across detach/attach, so the host PTY
+    // stays put while the user toggles the interface.
+    bool attachCE158(const uint8_t* rom, size_t romSize);
+    void detachCE158();
+    bool ce158Attached() const { return m_ce158Card != nullptr; }
+    /// Unlocked direct access -- headless/tests only (see ce150Card()).
+    Ce158Card* ce158Card() { return m_ce158Card.get(); }
+    /// Non-owning; the caller keeps `link` alive until it sets another one
+    /// (or nullptr) or destroys the machine. GUI-safe (takes m_mutex).
+    void setCE158SerialLink(SerialLink* link);
+    /// GUI-safe: the bytes printed on the Centronics port since the last
+    /// call. Empty when no CE-158 is attached.
+    std::vector<uint8_t> drainCE158ParallelOutput();
+
     // Trace/breakpoint passthrough (Phase 2a's debugger consumes this via
     // the Bridge layer; exercised directly by headless tests since Phase
     // 1). Unlocked, like cpu()/memory() above -- LH5801 already guards its
@@ -279,6 +300,8 @@ private:
     SystemBus          m_systemBus;
     std::unique_ptr<ExpansionCard> m_attachedExpansionCard; // see attachExpansionCard()
     std::unique_ptr<Ce150Card> m_ce150Card;                 // see attachCE150()
+    std::unique_ptr<Ce158Card> m_ce158Card;                 // see attachCE158()
+    SerialLink* m_ce158Link = nullptr;                      // see setCE158SerialLink()
     mutable std::mutex m_mutex;
 
     // See setYieldHook(). m_yieldCountdown only runs down while a hook is set.

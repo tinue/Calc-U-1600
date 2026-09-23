@@ -522,6 +522,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
     std::string plotter;  // normalized `plotter:` name ("" / "ce1600p" / "ce150"), suffix stripped
     std::string plotterRom;  // the ROM suffix of `plotter: NAME:ROM`, lower-cased ("" = none given)
     bool hasPlotter = false;
+    std::string interfaceName;  // normalized `interface:` name ("" / "ce158")
     std::string floppy;  // `floppy:` value with any `,A`/`,B` suffix stripped
     int floppySide = 0;  // 0 = A, 1 = B, parsed from that suffix
     bool hasFloppy = false;
@@ -627,6 +628,17 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
                          "' -- the CE-1600P ROM must be 'new' or 'old'";
                 return false;
             }
+        } else if (key == "interface") {
+            if (!hasInline) { *error = "'interface' requires a value"; return false; }
+            interfaceName = value;
+            for (char& ch : interfaceName) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            if (interfaceName == "ce-158") interfaceName = "ce158";
+            else if (interfaceName == "none" || interfaceName == "off") interfaceName.clear();
+            if (!interfaceName.empty() && interfaceName != "ce158") {
+                *error = "line " + std::to_string(line.lineNo) + ": 'interface: " + value +
+                         "' is not a known interface (expected ce158)";
+                return false;
+            }
         } else if (key == "floppy") {
             if (!hasInline) { *error = "'floppy' requires a value"; return false; }
             hasFloppy = true;
@@ -696,6 +708,10 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             }
         }
         out->plotter = plotter;  // already validated/normalized above
+        if (!interfaceName.empty()) {
+            *error = "'interface: ce158' is not yet supported on a PC-1600 preset";
+            return false;
+        }
         if (hasFloppy && plotter != "ce1600p") {
             *error = "'floppy:' requires 'plotter: ce1600p' (the CE-1600F attaches as a union with it)";
             return false;
@@ -745,6 +761,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         // isn't "ce150" was already rejected by the parser.
         out->plotter = plotter; // "" or "ce150"
     }
+    out->interfaceName = interfaceName;
     // `model: PC-1500:A01|A03|A04` / `model: PC-1500A:A04` -- the ROM
     // revision rides on the model. WHERE the file lives is deliberately not
     // this struct's concern (see PresetFile::romVariant's doc comment).

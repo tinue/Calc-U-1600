@@ -259,6 +259,14 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
         result.ce150Attached = true;
         if (log) log("plotter: CE-150 attached");
     }
+    if (preset.interfaceName == "ce158") {
+        if (!BundledRoms::attachCE158(machine, romDirs, &result.error)) {
+            if (log) log(result.error);
+            return result;
+        }
+        result.ce158Attached = true;
+        if (log) log("interface: CE-158 attached");
+    }
 
     // Machine is now fully armed (ROM/module/plotter wired) but still
     // powered off -- give the caller a chance to repaint that state before

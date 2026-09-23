@@ -4,7 +4,7 @@
 #include <functional>
 
 #include "PC1600SubCpu.hpp"
-#include "SerialLink.hpp"
+#include "../Serial/SerialLink.hpp"
 
 // ── PC-1600 UART: Toshiba TC8576F ────────────────────────────────────────
 //

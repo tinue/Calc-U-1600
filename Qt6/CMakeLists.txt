@@ -91,7 +91,7 @@ set(CORE_SOURCES
   ${CORE_ROOT}/PC1600/PC1600Memory.cpp
   ${CORE_ROOT}/PC1600/PC1600SubCpu.cpp
   ${CORE_ROOT}/PC1600/TC8576F.cpp
-  ${CORE_ROOT}/PC1600/PtySerialLink.cpp
+  ${CORE_ROOT}/Serial/PtySerialLink.cpp
   ${CORE_ROOT}/PC1600/PC1600Display.cpp
   ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp

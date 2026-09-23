@@ -62,7 +62,7 @@ set(CORE_COMMON_SOURCES
   ${CORE_ROOT}/PC1600/PC1600Memory.cpp
   ${CORE_ROOT}/PC1600/PC1600SubCpu.cpp
   ${CORE_ROOT}/PC1600/TC8576F.cpp
-  ${CORE_ROOT}/PC1600/PtySerialLink.cpp
+  ${CORE_ROOT}/Serial/PtySerialLink.cpp
   ${CORE_ROOT}/PC1600/PC1600Display.cpp
   ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp
@@ -114,6 +114,7 @@ set(PC1500_CLI_SOURCES
   ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
   ${CORE_ROOT}/Basic/BasicProgramSource.cpp
   ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
+  ${CORE_ROOT}/Serial/PtySerialLink.cpp
   ${TOOLS_ROOT}/pc1500_cli.cpp
 )
 add_executable(pc1500_cli ${PC1500_CLI_SOURCES})
@@ -187,7 +188,7 @@ set(PC1600_UART_PROBE_SOURCES
   ${CORE_ROOT}/PC1600/PC1600Display.cpp
   ${CORE_ROOT}/PC1600/PC1600SubCpu.cpp
   ${CORE_ROOT}/PC1600/TC8576F.cpp
-  ${CORE_ROOT}/PC1600/PtySerialLink.cpp
+  ${CORE_ROOT}/Serial/PtySerialLink.cpp
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp
   ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
   ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
@@ -271,6 +272,7 @@ set(TEST_SOURCES
   ${CORE_ROOT}/tests/ce1600f_tests.cpp
   ${CORE_ROOT}/tests/ce150_tests.cpp
   ${CORE_ROOT}/tests/pc1600_ce150_tests.cpp
+  ${CORE_ROOT}/tests/ce158_tests.cpp
   ${CORE_ROOT}/tests/basic_binary_image_tests.cpp
   ${CORE_ROOT}/tests/basic_fastloader_tests.cpp
   ${CORE_ROOT}/tests/pc1600_basicloader_tests.cpp
