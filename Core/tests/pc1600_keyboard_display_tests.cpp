@@ -354,8 +354,24 @@ void test_memory_keyboard_and_on_key_via_io() {
     CHECK((sense & 0x01) == 0);
 
     CHECK(static_cast<SC7852Bus&>(mem).readIO(0x1B) == 0x00);
+    auto& bus = static_cast<SC7852Bus&>(mem);
+    CHECK((bus.readIO(0x1F) & 0x80) == 0);
+    CHECK((bus.readIO(0x1A) & 0x20) == 0);
     mem.setOnKeyPressed(true);
-    CHECK((static_cast<SC7852Bus&>(mem).readIO(0x1B) & 0x02) != 0);
+    CHECK((bus.readIO(0x1B) & 0x02) != 0);
+    // The live level too (Systemhandbuch p.92 / Anhang A): PB7 = &1F bit 7, and
+    // the MSK read's PB7 slot = &1A bit 5, both 1 while held.
+    CHECK((bus.readIO(0x1F) & 0x80) != 0);
+    CHECK((bus.readIO(0x1A) & 0x20) != 0);
+    mem.reset(); // a physical input: still held across a reset
+    CHECK((bus.readIO(0x1F) & 0x80) != 0);
+    mem.setOnKeyPressed(false);
+    CHECK((bus.readIO(0x1F) & 0x80) == 0);
+    CHECK((bus.readIO(0x1A) & 0x20) == 0);
+    CHECK((bus.readIO(0x1B) & 0x02) != 0); // the IF latch stays until the ROM clears it
+    // MSK keeps its low nibble; the upper nibble is the live inputs.
+    bus.writeIO(0x1A, 0xFF);
+    CHECK(bus.readIO(0x1A) == 0x0F);
 }
 
 void test_memory_pb6_strobe_needs_output_mode_via_io() {

@@ -192,10 +192,20 @@ public:
     /// Returns true on a press (rising) edge -- the caller
     /// (PC1600Machine::setOnKeyPressed) uses that to also raise a real
     /// SC7852 interrupt, the wake path out of the ROM's power-down HALT.
+    ///
+    /// The key is also PB7's live level: Baum, PC-1600 Systemhandbuch
+    /// (ISBN 3-924327-31-9) p.92 ("INP &1A AND &20 oder INP &1F AND &80")
+    /// and Anhang A pp.93-94 (1 = pressed). This matches the
+    /// PC-1500 TRM p.71's MSK read layout: CL1, SD1, PB7, IRQ in bits 7-4.
+    /// The ROM polls it directly: wait-for-release at P0-B0 0775H, the
+    /// gates at 0B07H/0B66H and P1-B3 4770H, and the key scan at
+    /// P2-B6 9412H.
     bool setOnKeyPressed(bool pressed) {
         bool risingEdge = pressed && !m_onKeyPressed;
         if (risingEdge) m_if |= 0x02;
         m_onKeyPressed = pressed;
+        if (pressed) m_pbIn |= kPbInOnKey;
+        else         m_pbIn &= static_cast<uint8_t>(~kPbInOnKey);
         return risingEdge;
     }
 
@@ -465,10 +475,14 @@ private:
     // phi/64, /128, /256, /512 or /1024. Only the idle case is modelled:
     // no serial transmit (L, 16H), so SXO sits at mark = 1 and SDO = FX.
     //
-    // phi, measured: dampflok.bas's locomotive whistle writes F = 41H
+    // phi, measured: dampflok.bas (Systemhandbuch p.52) whistles with F = 41H
     // (FX = /128). A real unit plays it at 2539 Hz (2533.24 Hz recorded, less
     // the recorder's -0.22% seen in every BEEP recording), = 1.3 MHz / 512.
-    // So this block's modulator runs from phi = 1.3 MHz / 4 = 325 kHz. (The
+    // So this block's modulator runs from phi = 1.3 MHz / 4 = 325 kHz.
+    // Systemhandbuch Anhang A p.93 confirms &17: "OUT &17,65" on /
+    // "OUT &17,0" off, a continuous tone, the cassette-recording sync signal.
+    // Its "2639 Hz" is a typo: no power-of-two divider of 1.3 or 3.58 MHz
+    // gives that, while 2539 Hz is 1.3 MHz / 512. (The
     // PC-1500's own LH5811 runs at 1.3 MHz: the CE-150 tape code writes
     // F = 63H for its 2539 / 1270 Hz tones, /512 and /1024.)
     //
@@ -487,11 +501,9 @@ private:
     PiezoSampler m_piezo{3580000.0, PiezoSampler::Transducer::PC1600};
     // Live PB *pin* levels for the bits driven from outside the CPU, kept
     // apart from the m_opb output latch above and merged in on a read of
-    // 1FH (see readIO()). Only PB5 (the sub-CPU's 64Hz timer square wave,
-    // setTimer64Bit()) has a source today; PB7 (ON/BREAK) still reaches the
-    // ROM through the 1BH interrupt-flag latch instead (setOnKeyPressed()),
-    // so bit 7 stays 0 here -- which is also what the old latch-only model
-    // effectively returned, since the ROM only ever writes 00H/40H to OPB.
+    // 1FH (see readIO()). PB5 = the sub-CPU's 64Hz timer square wave
+    // (setTimer64Bit()); PB7 = the ON key (setOnKeyPressed(), which also
+    // sets the 1BH interrupt-flag latch on the press edge).
     ///
     /// **PB3 starts high.** Pin 78 (PCSTB) is "reset → input mode, current
     /// state latched in the PB3 flip-flop (externally pulled up on the
@@ -517,7 +529,13 @@ private:
     /// agree -- wiring a second such pin means editing one constant, not
     /// two bare literals in different functions.
     static constexpr uint8_t kPbInFreeRunning = 0x20; // PB5
+    /// PB7: the ON key's live level. Also carried across reset(): the key
+    /// is a physical input, not a reset-latched line.
+    static constexpr uint8_t kPbInOnKey = 0x80;
     uint8_t m_pbIn{kPbInResetLevels};
+    // MSK (1AH) -- interrupt mask bits 0-3 (IRQ, PB7, RD, TD enables; PC-1500
+    // TRM p.71). Stored only: nothing in this core raises those causes.
+    uint8_t m_msk{0};
     uint8_t m_if{0}; // port 1BH -- bit1 = ON/BREAK latch (PC1600Keyboard's own doc §8)
     PC1600Keyboard m_keyboard;
     PC1600Display m_display;

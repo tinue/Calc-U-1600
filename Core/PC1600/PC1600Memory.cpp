@@ -48,7 +48,7 @@ void PC1600Memory::reset() {
     // samples its (pulled-up) pin exactly here on real hardware. Keep PB5's
     // current level: it is a free-running square wave from the sub-CPU,
     // not a reset-latched line.
-    m_pbIn = static_cast<uint8_t>((m_pbIn & kPbInFreeRunning) | kPbInResetLevels);
+    m_pbIn = static_cast<uint8_t>((m_pbIn & (kPbInFreeRunning | kPbInOnKey)) | kPbInResetLevels);
     m_uart.reset();
     // Port-block reset: modulation off, SDO back to its idle level.
     m_fReg = 0;
@@ -312,6 +312,10 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
         case 0x35: return m_intMask;
         case 0x17: return m_fReg;
         case 0x18: return m_opc;
+        // MSK read: the mask in bits 0-3, and the live CL1/SD1/PB7/IRQ inputs
+        // in bits 7-4 (PC-1500 TRM p.71). Only PB7 (the ON key, bit 5) has a
+        // source here; the others read 0.
+        case 0x1A: return static_cast<uint8_t>((m_msk & 0x0F) | ((m_pbIn & kPbInOnKey) ? 0x20 : 0x00));
         case 0x1B: return m_if;
         case 0x1C: return m_dda;
         case 0x1D: return m_ddb;
@@ -396,6 +400,7 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
             if ((m_fReg & 0x40) == 0) m_sdo = true; // normal mode: SDO = SXO = idle mark
             updateBuzzerLine();
             return;
+        case 0x1A: m_msk = static_cast<uint8_t>(value & 0x0F); return;
         case 0x1B: m_if = value; return;
         case 0x1C: m_dda = value; return;
         case 0x1D: m_ddb = value; return;
