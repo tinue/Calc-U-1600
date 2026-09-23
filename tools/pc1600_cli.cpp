@@ -27,7 +27,7 @@
 //
 // --wav <out.wav> (--preset only) records the buzzer (OPC 18H, see
 // PiezoSampler.hpp) while the preset script runs, as 48 kHz mono 16-bit
-// PCM.
+// PCM -- as the host hears it, i.e. through the PC-1600 transducer model.
 
 #include <array>
 #include <cstdio>

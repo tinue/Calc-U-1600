@@ -453,7 +453,7 @@ private:
     // because the ROM does read-modify-write on it.
     uint8_t m_opc{0};
     // TRM 7.5: SC-7852 T-states at 3.58 MHz (PC1600Machine::kTStateHz).
-    PiezoSampler m_piezo{3580000.0};
+    PiezoSampler m_piezo{3580000.0, PiezoSampler::Transducer::PC1600};
     // Live PB *pin* levels for the bits driven from outside the CPU, kept
     // apart from the m_opb output latch above and merged in on a read of
     // 1FH (see readIO()). Only PB5 (the sub-CPU's 64Hz timer square wave,

@@ -9,6 +9,7 @@
 //
 // Build & run: see tools/run_tests.sh
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -136,6 +137,53 @@ void test_mid_sample_edge_is_averaged() {
     CHECK(pcm.size() == 2 && std::abs(pcm[1] - 9830) < 50);
 }
 
+// DFT magnitude of `pcm` at `hz` (single bin, Hann window).
+double toneLevel(const std::vector<int16_t>& pcm, double hz) {
+    double re = 0.0, im = 0.0;
+    const size_t n = pcm.size();
+    for (size_t i = 0; i < n; ++i) {
+        const double w = 0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / (n - 1));
+        const double ph = 2.0 * 3.14159265358979 * hz * i / kRate;
+        re += w * pcm[i] * std::cos(ph);
+        im += w * pcm[i] * std::sin(ph);
+    }
+    return std::sqrt(re * re + im * im);
+}
+
+// The PC-1600 transducer model reproduces the real buzzer's shape: a
+// 287 Hz square (BEEP A=200) comes out with its fundamental far below the
+// 2 kHz 7th harmonic (real unit: ~35 dB), while the raw line keeps the
+// square wave's own 1/7 (-17 dB) ratio the other way round.
+void test_pc1600_transducer_shape() {
+    const double cpuHz = 3580000.0;
+    const uint32_t halfPeriod = 6221; // 60*200+441 T per period, /2
+    PiezoSampler raw(cpuHz), piezo(cpuHz, PiezoSampler::Transducer::PC1600);
+    bool level = false;
+    for (int i = 0; i < 2 * 287; ++i) { // ~1 s
+        level = !level;
+        raw.setLevel(level);
+        piezo.setLevel(level);
+        raw.advance(halfPeriod);
+        piezo.advance(halfPeriod);
+    }
+    std::vector<int16_t> r = drainAll(raw), p = drainAll(piezo);
+    r.erase(r.begin(), r.begin() + kRate / 10); // skip the filters' settling
+    p.erase(p.begin(), p.begin() + kRate / 10);
+    const double f0 = cpuHz / (2.0 * halfPeriod);
+    const double rawDb = 20.0 * std::log10(toneLevel(r, f0) / toneLevel(r, 7 * f0));
+    const double piezoDb = 20.0 * std::log10(toneLevel(p, f0) / toneLevel(p, 7 * f0));
+    std::printf("  PC-1600 transducer, fundamental vs 7th harmonic: raw %+.1f dB, piezo %+.1f dB\n",
+                rawDb, piezoDb);
+    CHECK(rawDb > 15.0);
+    CHECK(piezoDb < -25.0);
+    // No clipping even at the resonance (BEEP A=20, ~2.2 kHz).
+    PiezoSampler loud(cpuHz, PiezoSampler::Transducer::PC1600);
+    for (int i = 0; i < 2 * 2182; ++i) { level = !level; loud.setLevel(level); loud.advance(820); }
+    int peak = 0;
+    for (int16_t v : drainAll(loud)) peak = std::max(peak, std::abs(static_cast<int>(v)));
+    CHECK(peak < 32000);
+}
+
 // The ring keeps only the newest ~1 s when nobody drains it.
 void test_overflow_keeps_newest() {
     PiezoSampler s(48000.0); // 1 cycle per sample
@@ -248,6 +296,8 @@ void test_pc1600_beep() {
         std::fprintf(stderr, "SKIP test_pc1600_beep: PC-1600 ROM images not found\n");
         return;
     }
+    // Measure the ROM's drive signal, not the buzzer's acoustic response.
+    m.memory().piezo().setTransducer(PiezoSampler::Transducer::None);
     ToneStats t = analyse(runAndCapture(m, "BEEP 1"));
     std::printf("  PC-1600 BEEP 1: %.1f ms at %.1f Hz\n",
                 1000.0 * t.audibleSamples / kRate, t.hz);
@@ -296,6 +346,7 @@ void test_pc1600_beep_repeat_spacing() {
         return;
     }
     CHECK((m.memory().read(0xF0B8) & 0x01) != 0);
+    m.memory().piezo().setTransducer(PiezoSampler::Transducer::None);
 
     const std::vector<int16_t> pcm = runAndCapture(m, "BEEP 12,200,20");
     std::vector<size_t> starts;
@@ -325,6 +376,7 @@ int run_piezo_sampler_tests() {
     test_constant_level_decays_to_silence();
     test_mid_sample_edge_is_averaged();
     test_overflow_keeps_newest();
+    test_pc1600_transducer_shape();
     test_pc1500_beep();
     test_pc1500_settle_waits_for_beep();
     test_pc1600_beep();
