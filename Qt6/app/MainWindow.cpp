@@ -438,6 +438,9 @@ void MainWindow::loadMachineCode() {
     box.setTextFormat(Qt::RichText);
     box.setTextInteractionFlags(Qt::TextSelectableByMouse);
     box.exec();
+
+    // Type the proposed CALL, ready to run: the user presses ENTER.
+    m_controller->pasteText(advice.callCommand);
 }
 
 void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {

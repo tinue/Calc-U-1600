@@ -1,27 +1,12 @@
 #include "KeyPaste.hpp"
 
 std::vector<PasteStep> buildPasteSteps(const std::string& text, TypedCharResolver resolve) {
-    std::string normalized;
-    normalized.reserve(text.size());
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        if (text[i] == '\r') {
-            normalized.push_back('\n');
-            if (i + 1 < text.size() && text[i + 1] == '\n') ++i;
-        } else {
-            normalized.push_back(text[i]);
-        }
-    }
-    if (!normalized.empty() && normalized.back() == '\n') normalized.pop_back();
+    // Only the first line is typed, and never entered: the paste stops at
+    // the first line break (CR or LF), so nothing executes on its own.
+    const std::string firstLine = text.substr(0, text.find_first_of("\r\n"));
 
     std::vector<PasteStep> steps;
-    for (char c : normalized) {
-        if (c == '\n') {
-            PasteStep step;
-            step.kind = PasteStep::Kind::Enter;
-            step.key = "enter";
-            steps.push_back(step);
-            continue;
-        }
+    for (char c : firstLine) {
         const auto uc = static_cast<unsigned char>(c);
         if (uc < 0x20 || uc >= 0x7F) continue; // tabs, other controls, UTF-8 bytes
         PasteStep step;

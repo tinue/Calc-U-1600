@@ -18,10 +18,11 @@
 // (pc1500ResolveTypedChar / pc1600ResolveTypedChar), pacing, key press /
 // release callbacks and the "back at the BASIC prompt" sample.
 //
-// Nothing is added and nothing is validated: the text is typed as is. A
-// line break presses ENTER (and then waits for the ROM to finish with the
-// line); a single trailing line break is dropped, so copying one whole
-// line never executes it. A character with no key is silently skipped.
+// Nothing is added and nothing is validated: the text is typed as is, up
+// to (not including) its first line break -- ENTER is never pressed, so a
+// paste never executes anything. A character with no key is silently
+// skipped. (The feeder itself still handles Enter steps -- ENTER, then
+// wait for the ROM to finish with the line -- for callers that build them.)
 
 struct PasteStep {
     enum class Kind { Tap, Enter };
@@ -32,10 +33,9 @@ struct PasteStep {
 
 using TypedCharResolver = bool (*)(char c, std::string* baseKey, bool* needsShift);
 
-/// Turns pasted text into steps. CRLF and lone CR count as one line break;
-/// one trailing line break is dropped; control characters other than line
-/// breaks, non-ASCII bytes and characters `resolve` has no key for are
-/// skipped.
+/// Turns pasted text into steps. Only the text before the first line break
+/// (CR or LF) is used; control characters, non-ASCII bytes and characters
+/// `resolve` has no key for are skipped. Never emits an Enter step.
 std::vector<PasteStep> buildPasteSteps(const std::string& text, TypedCharResolver resolve);
 
 /// Per-model cadence, all in emulated 60 Hz frames.

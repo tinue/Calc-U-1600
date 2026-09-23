@@ -49,10 +49,11 @@ void test_build_steps_shift_and_skip() {
 }
 
 void test_build_steps_line_breaks() {
-    // CRLF and lone CR are one line break; the single trailing one is dropped.
-    CHECK(tapsAsText(buildPasteSteps("A\r\nB\rC\n", pc1500ResolveTypedChar)) == "A <enter>B <enter>C ");
-    CHECK(tapsAsText(buildPasteSteps("A\n\n", pc1500ResolveTypedChar)) == "A <enter>");
-    CHECK(buildPasteSteps("\n", pc1500ResolveTypedChar).empty());
+    // Only the first line is typed; ENTER is never pressed.
+    CHECK(tapsAsText(buildPasteSteps("A1\r\nB\rC\n", pc1500ResolveTypedChar)) == "A 1 ");
+    CHECK(tapsAsText(buildPasteSteps("A\rB", pc1500ResolveTypedChar)) == "A ");
+    CHECK(tapsAsText(buildPasteSteps("A\n\n", pc1500ResolveTypedChar)) == "A ");
+    CHECK(buildPasteSteps("\nB", pc1500ResolveTypedChar).empty());
 }
 
 void test_build_steps_pc1500_lacks_digit_row_legends() {
@@ -84,10 +85,22 @@ void test_feeder_cadence() {
     CHECK(!f.active());
 }
 
+// "1", ENTER, "2" -- buildPasteSteps() never emits Enter, so built by hand.
+std::vector<PasteStep> oneEnterTwoSteps() {
+    std::vector<PasteStep> steps = buildPasteSteps("1", pc1500ResolveTypedChar);
+    PasteStep enter;
+    enter.kind = PasteStep::Kind::Enter;
+    enter.key = "enter";
+    steps.push_back(enter);
+    const std::vector<PasteStep> two = buildPasteSteps("2", pc1500ResolveTypedChar);
+    steps.insert(steps.end(), two.begin(), two.end());
+    return steps;
+}
+
 void test_feeder_waits_for_prompt_after_enter() {
     KeyPasteFeeder f;
     f.setPacing(pc1500PastePacing());
-    f.append(buildPasteSteps("1\n2", pc1500ResolveTypedChar));
+    f.append(oneEnterTwoSteps());
     Recorder r;
     // Prompt only reached from frame 40 on: "2" must wait for 20 at-prompt frames.
     for (r.frame = 0; r.frame < 400 && f.active(); ++r.frame) f.onFrame(r.press(), r.release(), r.frame >= 40);
@@ -98,7 +111,7 @@ void test_feeder_waits_for_prompt_after_enter() {
 
 void test_feeder_prompt_wait_is_capped() {
     KeyPasteFeeder f;
-    f.append(buildPasteSteps("1\n2", pc1500ResolveTypedChar));
+    f.append(oneEnterTwoSteps());
     Recorder r;
     for (r.frame = 0; r.frame < 1000 && f.active(); ++r.frame) f.onFrame(r.press(), r.release(), false);
     CHECK(!f.active()); // gave up waiting (~5 s) and typed "2" anyway
@@ -168,13 +181,13 @@ void test_pc1600_paste_line_no_enter() {
     CHECK(buf.find("#1") != std::string::npos);
 }
 
-// Interior line breaks are ENTERs: in PRO mode both lines get stored
-// (BASPRG_END, F867H big-endian, grows), the last one only once ENTER is
-// tapped by hand -- the trailing-line rule.
-void test_pc1600_paste_multiline_program() {
+// Only the first line is pasted, and never entered: in PRO mode nothing is
+// stored (BASPRG_END, F867H big-endian, stays put) until ENTER is tapped by
+// hand, and then exactly that one line.
+void test_pc1600_paste_multiline_types_first_line() {
     PC1600Machine m;
     if (!bootPC1600(m)) {
-        std::fprintf(stderr, "SKIP test_pc1600_paste_multiline_program: PC-1600 ROM images not found\n");
+        std::fprintf(stderr, "SKIP test_pc1600_paste_multiline_types_first_line: PC-1600 ROM images not found\n");
         return;
     }
     tapKey(m, "mode"); // RUN -> PRO
@@ -183,13 +196,16 @@ void test_pc1600_paste_multiline_program() {
     const int enters = pasteInto(m, PC1600Machine::kTStateHz / 60, pc1600PastePacing(), pc1600ResolveTypedChar,
                                  "10 PRINT \"Hi\"\n20 A=1\n30 END",
                                  [](const PC1600Machine& mm) { return pc1600AtBasicPrompt(mm); });
-    CHECK(enters == 2);
+    CHECK(enters == 0);
     m.runCycles(PC1600Machine::kTStateHz / 2);
-    const uint16_t afterTwo = readBE16(m, 0xF867);
-    CHECK(afterTwo > before);
+    CHECK(readBE16(m, 0xF867) == before);
     tapKey(m, "enter");
     m.runCycles(PC1600Machine::kTStateHz / 2);
-    CHECK(readBE16(m, 0xF867) > afterTwo);
+    const uint16_t afterOne = readBE16(m, 0xF867);
+    CHECK(afterOne > before);
+    tapKey(m, "enter"); // an empty line stores nothing more
+    m.runCycles(PC1600Machine::kTStateHz / 2);
+    CHECK(readBE16(m, 0xF867) == afterOne);
 }
 
 bool memoryContains(PC1500Machine& m, const std::string& needle) {
@@ -203,10 +219,10 @@ bool memoryContains(PC1500Machine& m, const std::string& needle) {
     return false;
 }
 
-void test_pc1500_paste_multiline_program() {
+void test_pc1500_paste_multiline_types_first_line() {
     PC1500Machine m;
     if (!bootPC1500(m)) {
-        std::fprintf(stderr, "SKIP test_pc1500_paste_multiline_program: roms/PC-1500_A04.ROM not found\n");
+        std::fprintf(stderr, "SKIP test_pc1500_paste_multiline_types_first_line: roms/PC-1500_A04.ROM not found\n");
         return;
     }
     // A cold-booted PC-1500 needs CL + NEW0 before it stores program lines
@@ -218,11 +234,12 @@ void test_pc1500_paste_multiline_program() {
     const int enters = pasteInto(m, static_cast<uint64_t>(1300000.0 / 60), pc1500PastePacing(),
                                  pc1500ResolveTypedChar, "10 PRINT \"Paste: ok\"\n20 REM Tail#x",
                                  [](const PC1500Machine& mm) { return pc1500AtBasicPrompt(mm); });
-    CHECK(enters == 1);
+    CHECK(enters == 0);
     CHECK(memoryContains(m, "Paste: ok")); // case kept via the SHIFT taps
-    // No ENTER yet for the last line: BASPRG_END ($7867, big-endian) only
-    // moves once it is committed. (Its text already sits in the line
-    // buffer, so a plain memory search can't tell.)
+    CHECK(!memoryContains(m, "Tail#x"));   // the second line is never typed
+    // No ENTER: BASPRG_END ($7867, big-endian) only moves once the line is
+    // committed by hand. (Its text already sits in the line buffer, so a
+    // plain memory search can't tell.)
     auto programEnd = [&m] { return (m.memory().peek(0x7867) << 8) | m.memory().peek(0x7868); };
     const int endBeforeEnter = programEnd();
     m.runCycles(static_cast<uint64_t>(1300000.0 / 2));
@@ -244,8 +261,8 @@ int run_key_paste_tests() {
     test_feeder_prompt_wait_is_capped();
     test_feeder_cancel_releases_held_key();
     test_pc1600_paste_line_no_enter();
-    test_pc1600_paste_multiline_program();
-    test_pc1500_paste_multiline_program();
+    test_pc1600_paste_multiline_types_first_line();
+    test_pc1500_paste_multiline_types_first_line();
 
     std::printf("key_paste_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
