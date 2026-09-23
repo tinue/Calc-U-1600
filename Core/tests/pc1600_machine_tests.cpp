@@ -558,6 +558,8 @@ void test_int_line_follows_cause_and_mask() {
     CHECK(!m.sc7852().intLine()); // masked: withdrawn
     mem.writeIO(0x35, 0x10);
     CHECK(m.sc7852().intLine());  // still latched, re-enabled
+    mem.writeIO(0x23, 0xC5);                    // pr[5] = TxINTM: keep the UART's bit 0 out
+    mem.writeIO(0x22, 0x02);
     CHECK(mem.readIO(0x32) == 0x10);
     CHECK(!m.sc7852().intLine()); // read-clear drops it
 
@@ -568,10 +570,25 @@ void test_int_line_follows_cause_and_mask() {
     mem.writeIO(0x35, 0x40);
     CHECK(m.sc7852().intLine());
 
+    // Bit 0 is the TC8576F's live INT output, not a latch: a 32H read
+    // leaves it (and INT) up until the chip itself is serviced.
+    mem.readIO(0x32);
+    mem.writeIO(0x23, 0xC5);                    // pr[5] = 0: TxINTM clear
+    mem.writeIO(0x22, 0x00);
+    mem.writeIO(0x35, 0x01);
+    CHECK(m.memory().uart().interruptOutput()); // TxRDY with TxINTM clear
+    CHECK(m.sc7852().intLine());
+    CHECK((mem.readIO(0x32) & 0x01) == 0x01);
+    CHECK(m.sc7852().intLine());
+    mem.writeIO(0x23, 0xC5);                    // pr[5] = TxINTM
+    mem.writeIO(0x22, 0x02);
+    CHECK(!m.sc7852().intLine());
+    CHECK((mem.readIO(0x32) & 0x01) == 0x00);
+
     // Reset clears cause and mask, and the line with them.
     m.reset();
     CHECK(!m.sc7852().intLine());
-    CHECK(mem.readIO(0x32) == 0x00);
+    CHECK((mem.readIO(0x32) & 0xFE) == 0x00); // bit 0: the reset chip's TxRDY, masked at 35H
     CHECK(mem.intMask() == 0x00);
 }
 

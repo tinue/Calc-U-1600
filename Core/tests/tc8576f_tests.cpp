@@ -143,19 +143,21 @@ void test_parallel_out_drives_subcpu_command_and_busy_window() {
     CHECK(sub.readAnswer() == 0xA0);    // cold-power-up reset cause
 }
 
-void test_interrupt_hook_fires_on_transmit_when_unmasked() {
+void test_interrupt_output_follows_txrdy_and_txintm() {
     PC1600SubCpu sub;
     TC8576F uart(sub);
     uart.reset();
-    int hits = 0;
-    uart.setInterruptHook([&hits] { hits++; });
-    uart.writeRegister(0, 0x31);        // TxD -> TxRDY, hook fires (TxINTM clear)
-    CHECK(hits == 1);
-    // Set pr[5] b1 (TxINTM) -> transmit no longer raises the line.
+    std::vector<bool> edges;
+    uart.setInterruptHook([&edges](bool level) { edges.push_back(level); });
+    CHECK(uart.interruptOutput());      // TxRDY with TxINTM clear: a level, already high
+    // Set pr[5] b1 (TxINTM) -> the output drops and a transmit keeps it low.
     uart.writeRegister(3, 0xC5);
     uart.writeRegister(2, 0x02);
+    CHECK(!uart.interruptOutput());
+    CHECK(edges.size() == 1 && !edges[0]);
     uart.writeRegister(0, 0x32);
-    CHECK(hits == 1);
+    CHECK(!uart.interruptOutput());
+    CHECK(edges.size() == 1);
 }
 
 // ── Phase 2: a serial peer attached via setSerialLink() ─────────────────
@@ -207,20 +209,28 @@ void test_serial_rx_interrupt_needs_rxenable_unmasked() {
     uart.reset();
     FakeLink link;
     link.rx = {0x55};
-    int hits = 0;
+    std::vector<bool> edges;
     uart.setSerialLink(&link);
-    uart.setInterruptHook([&hits] { hits++; });
+    uart.setInterruptHook([&edges](bool level) { edges.push_back(level); });
+    uart.writeRegister(3, 0xC5);          // pr[5] = TxINTM: only RX can interrupt
+    uart.writeRegister(2, 0x02);
+    edges.clear();
 
     uart.writeRegister(3, 0x00);          // RxEN clear
     uart.tick(kDefaultCharTStates);       // byte latches, but no INT
     CHECK((uart.ssr() & kSsrRxRDY) != 0);
-    CHECK(hits == 0);
+    CHECK(!uart.interruptOutput());
 
     (void)uart.readRegister(0);           // clear RxRDY
     link.rx.push_back(0x56);
     uart.writeRegister(3, 0x04);          // RxEN
     uart.tick(kDefaultCharTStates);
-    CHECK(hits == 1);
+    CHECK(uart.interruptOutput());        // held while the byte waits
+    uart.tick(kDefaultCharTStates);
+    CHECK(uart.interruptOutput());
+    CHECK((uart.readRegister(0) & 0xFF) == 0x56);
+    CHECK(!uart.interruptOutput());       // reading RxD drops it
+    CHECK(edges.size() == 2 && edges[0] && !edges[1]);
 }
 
 void test_serial_baud_divisor_sets_cadence_and_notifies_peer() {
@@ -328,7 +338,7 @@ int run_tc8576f_tests() {
     test_command_register_reset_bit_clears_file();
     test_serial_transmit_reports_sent_immediately();
     test_parallel_out_drives_subcpu_command_and_busy_window();
-    test_interrupt_hook_fires_on_transmit_when_unmasked();
+    test_interrupt_output_follows_txrdy_and_txintm();
     test_serial_tx_fifo_drains_one_byte_per_char_time();
     test_serial_rx_latches_and_flags_overrun();
     test_serial_rx_interrupt_needs_rxenable_unmasked();

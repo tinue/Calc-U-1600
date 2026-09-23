@@ -702,23 +702,20 @@ void test_subcpu_interrupt_cause_bit6() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
     auto& bus = static_cast<SC7852Bus&>(mem);
+    // Bit 0 is the TC8576F's live INT output (TxRDY on a reset chip), not
+    // part of the latch under test here.
+    auto latched = [&] { return static_cast<uint8_t>(bus.readIO(0x32) & 0xFE); };
 
-    // Masked off (35H bit6 = 0): the machine layer won't latch.
+    // Masked off (35H bit6 = 0): the cause still latches; only INT is gated.
     bus.writeIO(0x35, 0x10);        // only the 1/64s timer unmasked
-    CHECK(!mem.subCpuInterruptEnabled());
-    CHECK(mem.timer64InterruptEnabled());
-
-    // Unmasked: bit6 latches and shows up on the cause register at 32H.
-    bus.writeIO(0x35, 0x40);
-    CHECK(mem.subCpuInterruptEnabled());
     mem.latchSubCpuInterruptCause();
-    CHECK(bus.readIO(0x32) == 0x40);
-    CHECK(bus.readIO(0x32) == 0x00); // read-clears, same as bit4's convention
+    CHECK(latched() == 0x40);
+    CHECK(latched() == 0x00); // read-clears, same as bit4's convention
 
     // Both causes can be pending at once without disturbing each other.
     mem.latchTimer64InterruptCause();
     mem.latchSubCpuInterruptCause();
-    CHECK(bus.readIO(0x32) == 0x50);
+    CHECK(latched() == 0x50);
 }
 
 void test_pb3_reads_high_for_the_alternate_charset_gate() {

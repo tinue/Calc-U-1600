@@ -306,7 +306,7 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
     }
     switch (port) {
         case 0x31: return m_bank.readPort31();
-        case 0x32: { uint8_t v = m_intCause; m_intCause = 0; updateIntLine(); return v; } // read-clears, see latchTimer64InterruptCause()'s own comment
+        case 0x32: { uint8_t v = intCause(); m_intCause = 0; updateIntLine(); return v; } // read-clears, see latchTimer64InterruptCause()'s own comment
         // 33H (IOR P) = the sub-CPU's answer register; 21H's write side is
         // the matching command port. See PC1600SubCpu's class comment.
         case 0x33: return m_subCpu.readAnswer();

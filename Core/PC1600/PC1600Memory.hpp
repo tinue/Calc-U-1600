@@ -146,18 +146,15 @@ public:
     /// same no-op-when-unset convention as setBusArbiter().
     void setCPU(SC7852* cpu) {
         m_cpu = cpu;
-        // The TC8576F's INT line (OR of RxRDY/TxRDY/PRRDY/PTRDY) reaches
-        // the SC-7852 on INT0 = interrupt-cause bit 0. The UART already
-        // applies its own per-source mask (pr[5]); port 35H bit 0 gates
-        // the resulting INT in updateIntLine().
-        m_uart.setInterruptHook([this] { latchCommInterruptCause(); });
+        // The TC8576F's INT output (a level, masked per source by its own
+        // pr[5]) reaches the SC-7852 on INT0 = interrupt-cause bit 0. It is
+        // not latched: bit 0 follows the chip until the handler services
+        // the chip (e.g. reads RxD). Port 35H bit 0 gates it in
+        // updateIntLine().
+        m_uart.setInterruptHook([this](bool) { updateIntLine(); });
         updateIntLine();
     }
 
-    /// True if interrupt-cause bit 4 (1/64s timer) is currently unmasked at
-    /// port 35H (PC-1600-CPU-SC7852-Z80.md §5.2's cause/mask pair).
-    /// Debug/test access; the mask itself is applied in updateIntLine().
-    bool timer64InterruptEnabled() const { return (m_intMask & 0x10) != 0; }
     /// Raw port 35H value -- debug/test access, same convention as
     /// PC1500Machine's own cpu()/memory() unlocked accessors.
     uint8_t intMask() const { return m_intMask; }
@@ -256,28 +253,22 @@ public:
     /// convention consistent with it.
     void latchTimer64InterruptCause() { m_intCause |= 0x10; updateIntLine(); }
 
-    /// Port 35H bit 6 -- is the aggregated sub-CPU interrupt (INT6)
-    /// unmasked? See PC1600Machine's own kTimer64EdgesPerHalfSecond comment
-    /// for which of that line's several sources this core actually raises.
-    bool subCpuInterruptEnabled() const { return (m_intMask & 0x40) != 0; }
 
     /// Latches interrupt-cause register (port 32H) bit 6, the sub-CPU's
     /// aggregated interrupt line. Same falling-edge-only, read-clears
     /// convention as latchTimer64InterruptCause() above.
     void latchSubCpuInterruptCause() { m_intCause |= 0x40; updateIntLine(); }
 
-    /// Port 35H bit 0 -- is the communication-port (TC8576F, INT0)
-    /// interrupt unmasked? Debug/test access, like the two above.
-    bool commInterruptEnabled() const { return (m_intMask & 0x01) != 0; }
-    /// Latches interrupt-cause register (port 32H) bit 0 -- the
-    /// communication port received/sent data (TC8576F -> INT0, pin 81).
-    /// Same read-clears convention as latchTimer64InterruptCause().
-    void latchCommInterruptCause() { m_intCause |= 0x01; updateIntLine(); }
+    /// Port 32H as read: the latched causes plus bit 0, the TC8576F's live
+    /// INT output (TC8576F -> INT0, pin 81).
+    uint8_t intCause() const {
+        return static_cast<uint8_t>(m_intCause | (m_uart.interruptOutput() ? 0x01 : 0x00));
+    }
 
     /// The SC-7852's INT line is the OR of the latched causes (port 32H)
     /// that are enabled at port 35H -- a level, so masking a cause or the
     /// 32H read that clears it withdraws a request not yet taken.
-    void updateIntLine() { if (m_cpu) m_cpu->setIntLine((m_intCause & m_intMask) != 0); }
+    void updateIntLine() { if (m_cpu) m_cpu->setIntLine((intCause() & m_intMask) != 0); }
 
     /// Loads the always-resident system ROM: `lower` backs page A
     /// (0000-3FFF, PC1600-P0-B0-new.bin) and `upper` backs page B bank 0
@@ -444,9 +435,10 @@ private:
     PC1600SystemBus m_ce1600pBus; // Page B banks 4/5 + I/O 0x80-0x8F; see ce1600pBus()
     PC1600BusArbiter* m_arbiter{nullptr};
     SC7852* m_cpu{nullptr};
-    uint8_t m_intCause{0};      // Port 32H: latched causes, whatever the mask -- bit 0 comm
-                                // (UART hook), bit 4 1/64 s timer, bit 6 sub-CPU; the rest have
-                                // no source yet. Read-clears. INT = cause & mask (updateIntLine())
+    uint8_t m_intCause{0};      // Port 32H latched causes, whatever the mask -- bit 4 1/64 s
+                                // timer, bit 6 sub-CPU; the rest have no source yet. Read-clears.
+                                // Bit 0 (comm) is the UART's live level, see intCause().
+                                // INT = intCause() & mask (updateIntLine())
     uint8_t m_intMask{0};       // Port 35H
     uint8_t m_im2VectorLow{0xFF}; // Port 39H
 

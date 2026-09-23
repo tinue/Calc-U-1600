@@ -30,7 +30,7 @@ constexpr uint32_t kBaudRefHz = 76800;
 constexpr uint32_t kTStateHz  = PC1600Machine::kTStateHz;
 } // namespace
 
-void TC8576F::reset() {
+void TC8576F::resetImpl() {
     for (auto& b : m_pr) b = 0;
     m_par = 0;
     m_txEnable = m_dtr = m_rxEnable = m_sendBreak = m_errorReset = m_rts = false;
@@ -98,7 +98,7 @@ uint8_t TC8576F::psr() const {
     return v;
 }
 
-uint8_t TC8576F::readRegister(uint8_t reg) {
+uint8_t TC8576F::readRegisterImpl(uint8_t reg) {
     switch (reg & 0x03) {
         case 0x00: // 20H -- serial receive data
             m_rxReady = false;
@@ -113,7 +113,7 @@ uint8_t TC8576F::readRegister(uint8_t reg) {
     }
 }
 
-void TC8576F::writeRegister(uint8_t reg, uint8_t value) {
+void TC8576F::writeRegisterImpl(uint8_t reg, uint8_t value) {
     switch (reg & 0x03) {
         case 0x00: // 20H -- serial transmit data
             m_txData = value;
@@ -122,7 +122,6 @@ void TC8576F::writeRegister(uint8_t reg, uint8_t value) {
                 // so a polling transmit loop makes progress.
                 m_txReady = true;
                 m_txEmpty = true;
-                if (m_raiseInterrupt && !m_txIntMask) m_raiseInterrupt();
                 return;
             }
             // Peer attached: queue the byte for tick() to shift out at the
@@ -214,7 +213,7 @@ void TC8576F::updateCharTStates(WordFormat wf) {
     m_charTStates = t < 1 ? 1 : t;
 }
 
-void TC8576F::tick(int tstates) {
+void TC8576F::tickImpl(int tstates) {
     // Standalone (no peer): the sub-CPU handshake timeline lives in
     // PC1600SubCpu (busy()/answerReady()), advanced separately by
     // PC1600Machine::step(). Nothing in the UART itself is time-driven
@@ -250,7 +249,6 @@ void TC8576F::tick(int tstates) {
                 m_rxData = b;
                 m_rxReady = true;
             }
-            if (m_raiseInterrupt && m_rxEnable && !m_rxIntMask) m_raiseInterrupt();
         }
 
         // TX: shift one queued byte out while the transmitter is enabled
@@ -261,10 +259,37 @@ void TC8576F::tick(int tstates) {
             if (m_txFifo.empty()) {
                 m_txEmpty = true;
                 m_txReady = true;
-                if (m_raiseInterrupt && !m_txIntMask) m_raiseInterrupt();
             } else {
                 m_txReady = m_txFifo.size() < kTxFifoMax;
             }
         }
     }
+}
+
+uint8_t TC8576F::readRegister(uint8_t reg) {
+    const uint8_t v = readRegisterImpl(reg);
+    refreshInterruptOutput();
+    return v;
+}
+
+void TC8576F::writeRegister(uint8_t reg, uint8_t value) {
+    writeRegisterImpl(reg, value);
+    refreshInterruptOutput();
+}
+
+void TC8576F::tick(int tstates) {
+    tickImpl(tstates);
+    refreshInterruptOutput();
+}
+
+void TC8576F::reset() {
+    resetImpl();
+    refreshInterruptOutput();
+}
+
+void TC8576F::refreshInterruptOutput() {
+    const bool out = (m_rxReady && m_rxEnable && !m_rxIntMask) || (m_txReady && !m_txIntMask);
+    if (out == m_intOut) return;
+    m_intOut = out;
+    if (m_intHook) m_intHook(out);
 }
