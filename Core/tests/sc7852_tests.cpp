@@ -383,20 +383,51 @@ void test_interrupt_im1_pushes_pc_and_vectors_to_0038() {
     Rig r({0xFB, 0x00, 0x00}); // EI ; NOP ; NOP
     r.cpu.step(); // EI
     r.cpu.requestInterrupt();
-    r.cpu.step(); // NOP step: services the pending IRQ first (IM defaults 0 -> treated as IM1 path)
+    r.cpu.step(); // NOP: runs in the EI shadow
+    r.cpu.step(); // services the pending IRQ (IM defaults 0 -> treated as IM1 path)
     CHECK(r.cpu.pc() == 0x0038);
     CHECK(!r.cpu.iff1());
 }
 
 void test_halt_wakes_on_interrupt() {
-    Rig r({0x76}); // HALT
-    r.cpu.step();
+    Rig r({0xFB, 0x76, 0x00}); // EI ; HALT ; NOP
+    r.cpu.step(); r.cpu.step();
     CHECK(r.cpu.halted());
     int cyclesWhileHalted = r.cpu.step();
     CHECK(cyclesWhileHalted == 0);
-    r.cpu.requestInterrupt(); // IFF1 is false (never EI'd) -- HALT still wakes, just doesn't service it
+    r.cpu.requestInterrupt();
     r.cpu.step();
     CHECK(!r.cpu.halted());
+    CHECK(r.cpu.pc() == 0x0038);
+    CHECK(r.bus.mem[r.cpu.sp()] == 0x02); // returns past the HALT
+}
+
+void test_masked_irq_keeps_halt_and_stays_pending() {
+    Rig r({0x76, 0x00}); // HALT (IFF1 clear: never EI'd)
+    r.cpu.step();
+    r.cpu.requestInterrupt();
+    CHECK(r.cpu.step() == 0);
+    CHECK(r.cpu.halted()); // a masked INT does not end HALT
+    r.cpu.resumeFromHalt();
+    r.cpu.setPC(0x0001);
+    r.bus.mem[0x0001] = 0xFB; // EI
+    r.bus.mem[0x0002] = 0x00; // NOP
+    r.cpu.step(); // EI
+    r.cpu.step(); // NOP (EI shadow)
+    r.cpu.step(); // the request latched while masked is serviced now
+    CHECK(r.cpu.pc() == 0x0038);
+}
+
+void test_ei_defers_pending_irq_by_one_instruction() {
+    Rig r({0xFB, 0x76, 0x00}); // EI ; HALT ; NOP
+    r.cpu.requestInterrupt(); // already pending when EI runs
+    r.cpu.step(); // EI
+    r.cpu.step(); // HALT still executes before the IRQ is accepted
+    CHECK(r.cpu.halted());
+    r.cpu.step(); // now accepted
+    CHECK(r.cpu.pc() == 0x0038);
+    CHECK(r.bus.mem[r.cpu.sp()] == 0x02);
+    CHECK(r.bus.mem[uint16_t(r.cpu.sp() + 1)] == 0x00);
 }
 
 void test_ix_load_and_displacement_access() {
@@ -528,6 +559,8 @@ int run_sc7852_tests() {
     test_di_ei_and_im();
     test_interrupt_im1_pushes_pc_and_vectors_to_0038();
     test_halt_wakes_on_interrupt();
+    test_masked_irq_keeps_halt_and_stays_pending();
+    test_ei_defers_pending_irq_by_one_instruction();
     test_ix_load_and_displacement_access();
     test_ix_add_and_inc_dec();
     test_ix_plain_opcode_passthrough_when_unrelated();

@@ -131,9 +131,9 @@ public:
     bool flagC()  const { return (F & 0x01) != 0; }
 
     /// Maskable interrupt request (INT). Serviced at the start of the next
-    /// step() call if IFF1 is set; wakes a HALTed CPU regardless of IFF1
-    /// (matching real Z-80 behavior -- HALT always resumes on any
-    /// interrupt, IFF1 only gates whether it's actually serviced).
+    /// step() call if IFF1 is set and the previous instruction was not EI;
+    /// otherwise it stays pending (a HALTed CPU stays HALTed) until
+    /// interrupts are enabled -- real Z-80 behavior.
     /// PC-1600's IM2 vector byte (Port 39H, low byte of the vector address;
     /// I register supplies the high byte) is the caller's responsibility to
     /// have wired up via setIM2VectorByte() before requesting.
@@ -176,6 +176,7 @@ private:
     bool m_halted{false};
     bool m_irqPending{false};
     bool m_nmiPending{false};
+    bool m_eiShadow{false};   // set by EI: blocks INT acceptance for one instruction
     uint8_t m_im2VectorLow{0xFF};
 
     // ── Fetch helpers ────────────────────────────────────────────────────
@@ -233,13 +234,13 @@ private:
 
     /// Returns the cycle cost if an interrupt was actually serviced (PC
     /// redirected to a handler) this call, or -1 if nothing happened (no
-    /// interrupt pending, or one just woke a HALTed CPU without being
-    /// serviced because IFF1 was clear). step() uses -1 to mean "go ahead
+    /// interrupt pending, or only a maskable one that IFF1 or
+    /// `maskableBlocked` -- the EI shadow -- holds off). step() uses -1 to mean "go ahead
     /// and fetch/execute a normal opcode this call" -- servicing an
     /// interrupt and executing the next opcode never happen in the same
     /// step() call, matching real hardware (the interrupt ack cycle IS
     /// the whole "instruction" for that cycle).
-    int serviceInterrupt();
+    int serviceInterrupt(bool maskableBlocked);
 
     // ── Trace / debug state (mirrors LH5801's exactly, Z80CpuFrame-shaped) ──
     std::atomic<uint32_t> m_traceFlags{TRACE_NONE};

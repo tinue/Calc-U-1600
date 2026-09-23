@@ -427,9 +427,10 @@ void PC1600Machine::setOnKeyPressed(bool pressed) {
     // raise never fire again). Only the ON/BREAK line can wake it from
     // there. `m_z80Mem.setOnKeyPressed()` just latches the pollable IF-b1
     // bit (port 1BH) -- a HALTed CPU never polls it -- so also raise a real
-    // interrupt: SC7852::step()'s HALT branch resumes on any interrupt
-    // regardless of IFF1, and the ROM's ISR then services the latch. Rising
-    // edge only, matching the latch and a real PB7 edge.
+    // interrupt, which the ROM's ISR then services (IFF1=1 in that park).
+    // A masked INT does not end a Z-80 HALT, so with IFF1 clear the ON line
+    // also resumes it directly -- the SC7852 counterpart of wakeFromHalt()
+    // below. Rising edge only, matching the latch and a real PB7 edge.
     // Wake whichever CPU is actually parked: a GUI-freeze repro (headless,
     // real ROM boot) found the arbiter had already switched bus ownership
     // to the LH5803 by the time power-down settles (SC7852 issues its
@@ -442,6 +443,7 @@ void PC1600Machine::setOnKeyPressed(bool pressed) {
     // unconditional counterpart for exactly this non-maskable ON signal.
     if (risingEdge) {
         m_sc7852.requestInterrupt();
+        if (!m_sc7852.iff1()) m_sc7852.resumeFromHalt();
         m_lh5803.wakeFromHalt();
     }
 }

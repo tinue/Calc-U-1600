@@ -30,6 +30,7 @@ void SC7852::reset() {
     m_halted = false;
     m_irqPending = false;
     m_nmiPending = false;
+    m_eiShadow = false;
     // A/F and the general-purpose registers are left as their construction-
     // time values on a real Z-80 reset (undefined/whatever they were) —
     // this core initializes them to 0xFF/0 at construction and never
@@ -385,7 +386,7 @@ bool SC7852::condTrue(int code) const {
 void SC7852::requestInterrupt() { m_irqPending = true; }
 void SC7852::requestNMI() { m_nmiPending = true; }
 
-int SC7852::serviceInterrupt() {
+int SC7852::serviceInterrupt(bool maskableBlocked) {
     if (m_nmiPending) {
         m_nmiPending = false;
         m_halted = false;
@@ -395,7 +396,7 @@ int SC7852::serviceInterrupt() {
         PC = 0x0066;
         return 11 + kM1WaitStates;
     }
-    if (m_irqPending && IFF1) {
+    if (m_irqPending && IFF1 && !maskableBlocked) {
         m_irqPending = false;
         m_halted = false;
         IFF1 = false;
@@ -425,23 +426,24 @@ int SC7852::serviceInterrupt() {
         }
         return cost + kM1WaitStates; // the acknowledge cycle is an M1
     }
-    if (m_irqPending && m_halted) {
-        // HALT always wakes on any interrupt even if IFF1 is clear; the
-        // interrupt itself just isn't serviced in that case (standard
-        // documented Z-80 behavior). Consume the pending flag either way
-        // so a masked IRQ doesn't re-wake indefinitely once already
-        // acknowledged as "woke the CPU up."
-        m_irqPending = false;
-        m_halted = false;
-    }
+    // A maskable request with IFF1 clear is neither serviced nor dropped:
+    // it stays pending until EI, and a HALTed CPU stays HALTed (Z-80 UM:
+    // only an accepted interrupt, NMI or RESET ends HALT). PC1600Machine
+    // raises requests on edges only, so dropping it here would lose the
+    // cause still latched at port 32H.
     return -1; // nothing serviced -- step() should fetch/execute normally
 }
 
 // ── step() ────────────────────────────────────────────────────────────
 
 int SC7852::step() {
+    // EI enables maskable interrupts only after the instruction following
+    // it (Z-80 UM), so EI;RETI and EI;HALT complete before an IRQ that was
+    // already pending is accepted.
+    const bool eiShadow = m_eiShadow;
+    m_eiShadow = false;
     if (m_irqPending || m_nmiPending) {
-        int serviced = serviceInterrupt();
+        int serviced = serviceInterrupt(eiShadow);
         if (serviced >= 0) return serviced; // interrupt ack consumes this step() call on its own; no trace frame
     }
     if (m_halted) {
@@ -453,6 +455,7 @@ int SC7852::step() {
         std::lock_guard<std::mutex> lock(m_traceMutex);
         if (std::binary_search(m_breakpoints.begin(), m_breakpoints.end(), PC)) {
             m_breakpointHit = true;
+            m_eiShadow = eiShadow; // nothing executed; keep the shadow for the retry
             return 0;
         }
     }
@@ -676,7 +679,7 @@ int SC7852::execute(uint8_t opcode) {
         case 0xF8: if (condTrue(7)) { PC = popWord(); return 11; } return 5;
         case 0xF9: SP = hl(); return 6;
         case 0xFA: { uint16_t nn = fetch16(); if (condTrue(7)) PC = nn; return 10; }
-        case 0xFB: IFF1 = true; IFF2 = true; return 4;
+        case 0xFB: IFF1 = true; IFF2 = true; m_eiShadow = true; return 4;
         case 0xFC: { uint16_t nn = fetch16(); if (condTrue(7)) { pushWord(PC); PC = nn; return 17; } return 10; }
         case 0xFE: cp8(A, fetch8()); return 7;
         case 0xFF: pushWord(PC); PC = 0x38; return 11;
