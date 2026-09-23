@@ -2,10 +2,9 @@
 
 #include <algorithm>
 
-// Standard Zilog Z-80A instruction set/timing. T-state (cycle) counts
-// follow the documented nominal values; "No extra wait state" in
-// SC7852.hpp's class comment covers the one open timing question (extra
-// wait states).
+// Standard Zilog Z-80A instruction set/timing. The execute*() tables return
+// the documented nominal T-state counts; step() and serviceInterrupt() add
+// the SC-7852's M1 wait state on top (see SC7852.hpp's class comment).
 
 namespace {
 constexpr uint8_t kFlagC  = 0x01;
@@ -394,7 +393,7 @@ int SC7852::serviceInterrupt() {
         IFF1 = false;
         pushWord(PC);
         PC = 0x0066;
-        return 11;
+        return 11 + kM1WaitStates;
     }
     if (m_irqPending && IFF1) {
         m_irqPending = false;
@@ -424,7 +423,7 @@ int SC7852::serviceInterrupt() {
                 break;
             }
         }
-        return cost;
+        return cost + kM1WaitStates; // the acknowledge cycle is an M1
     }
     if (m_irqPending && m_halted) {
         // HALT always wakes on any interrupt even if IFF1 is clear; the
@@ -462,18 +461,15 @@ int SC7852::step() {
     uint8_t opcode = fetch8();
     uint16_t opcodeWord = opcode;
     int cycles;
-    // TODO(wait-state-scope): every T-state count returned below is
-    // nominal Zilog timing with no extra wait state inserted -- the
-    // locked default for the Technical Reference Manual's unresolved "1
-    // WAIT automatically inserted in the machine cycle" note (see
-    // SC7852.hpp's class comment). Revisit only if a disassembled ROM
-    // delay loop or observed real-hardware behavior disagrees.
+    // The execute*() tables return nominal Zilog T-states; the SC-7852's
+    // M1 wait (see SC7852.hpp's class comment) is added here, once per
+    // opcode byte fetched as an M1 -- two for the prefixed forms.
     switch (opcode) {
-        case 0xCB: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xCB00 | op2); cycles = 4 + executeCB(op2); break; }
-        case 0xED: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xED00 | op2); cycles = 4 + executeED(op2); break; }
-        case 0xDD: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xDD00 | op2); cycles = 4 + executeDDFD(op2, IX); break; }
-        case 0xFD: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xFD00 | op2); cycles = 4 + executeDDFD(op2, IY); break; }
-        default: cycles = execute(opcode); break;
+        case 0xCB: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xCB00 | op2); cycles = 4 + executeCB(op2) + 2 * kM1WaitStates; break; }
+        case 0xED: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xED00 | op2); cycles = 4 + executeED(op2) + 2 * kM1WaitStates; break; }
+        case 0xDD: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xDD00 | op2); cycles = 4 + executeDDFD(op2, IX) + 2 * kM1WaitStates; break; }
+        case 0xFD: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xFD00 | op2); cycles = 4 + executeDDFD(op2, IY) + 2 * kM1WaitStates; break; }
+        default: cycles = execute(opcode) + kM1WaitStates; break;
     }
 
     recordTraceFrame(tf, pcAtStart, opcodeWord, uint8_t(cycles));

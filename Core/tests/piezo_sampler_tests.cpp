@@ -51,6 +51,7 @@ std::vector<int16_t> drainAll(PiezoSampler& s) {
 struct ToneStats {
     size_t audibleSamples = 0; // first..last audible sample, inclusive
     double hz = 0.0;
+    double periods = 0.0;      // full square-wave cycles seen
 };
 
 ToneStats analyse(const std::vector<int16_t>& pcm) {
@@ -65,12 +66,21 @@ ToneStats analyse(const std::vector<int16_t>& pcm) {
     if (first == pcm.size()) return t;
     t.audibleSamples = last - first + 1;
     int sign = pcm[first] >= 0 ? 1 : -1;
-    size_t crossings = 0;
+    size_t crossings = 0, firstCrossing = 0, lastCrossing = 0;
     for (size_t i = first; i <= last; ++i) {
-        if (sign > 0 && pcm[i] < -kAudible / 2) { sign = -1; ++crossings; }
-        else if (sign < 0 && pcm[i] > kAudible / 2) { sign = 1; ++crossings; }
+        bool crossed = false;
+        if (sign > 0 && pcm[i] < -kAudible / 2) { sign = -1; crossed = true; }
+        else if (sign < 0 && pcm[i] > kAudible / 2) { sign = 1; crossed = true; }
+        if (crossed) {
+            if (crossings++ == 0) firstCrossing = i;
+            lastCrossing = i;
+        }
     }
-    t.hz = (crossings / 2.0) / (static_cast<double>(t.audibleSamples) / kRate);
+    // Pitch from the span between the first and last crossing, so the DC
+    // blocker's decay tail after the last edge doesn't dilute it.
+    t.periods = crossings / 2.0;
+    if (crossings > 2)
+        t.hz = ((crossings - 1) / 2.0) / (static_cast<double>(lastCrossing - firstCrossing) / kRate);
     return t;
 }
 
@@ -250,13 +260,20 @@ void test_pc1600_beep() {
     std::printf("  PC-1600 BEEP 1,40,500: %.1f ms at %.1f Hz\n",
                 1000.0 * p.audibleSamples / kRate, p.hz);
     // Exactly BC = 500 periods, independent of CPU timing.
-    CHECK(near(p.hz * p.audibleSamples / kRate, 500.0, 0.02));
-    // Pitch vs the TRM formula (1243 Hz for A = 40). The loop measures
-    // ~12% high at the SC-7852's nominal Zilog timing: the formula matches
-    // one wait state per M1 fetch within ~1%, which the BASIC-loop
-    // hardware benchmark in PC-1600-CPU-SC7852-Z80.md 2.3 argues against.
-    // Kept loose until that's settled on hardware.
-    CHECK(near(p.hz, 1300000.0 / (166 + 22 * 40), 0.15));
+    CHECK(near(p.periods, 500.0, 0.01));
+    // Pitch vs the ROM loop's cycle count with the SC-7852's M1 wait:
+    // 60*A + 441 T-states per period (1260 Hz for A = 40), which a real
+    // unit matches to 0.2% (SC7852.hpp). The TRM 3.10 formula
+    // 1 300 000 / (166 + 22*A) is Sharp's rounded version of it.
+    CHECK(near(p.hz, 3580000.0 / (60 * 40 + 441), 0.01));
+    CHECK(near(p.hz, 1300000.0 / (166 + 22 * 40), 0.03));
+
+    // Hardware reference (2026-09-23): BEEP 1,200,1000 on a real PC-1600
+    // measured 287.13 Hz.
+    ToneStats hw = analyse(runAndCapture(m, "BEEP 1,200,300"));
+    std::printf("  PC-1600 BEEP 1,200,300: %.1f ms at %.1f Hz\n",
+                1000.0 * hw.audibleSamples / kRate, hw.hz);
+    CHECK(near(hw.hz, 287.13, 0.01));
 
     runAndCapture(m, "BEEP OFF");
     CHECK(analyse(runAndCapture(m, "BEEP 1")).audibleSamples == 0);

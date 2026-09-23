@@ -50,12 +50,12 @@ still worth understanding. They say what the code actually does now.
 ### SC7852 / Z-80 — `Core/CPU/SC7852/`
 *(PC-1600 main CPU.)*
 
-- **Wait states not modelled** — every instruction uses nominal Zilog
-  T-state counts. The TRM's "1 WAIT automatically inserted in the machine
-  cycle" note has unresolved scope (every M-cycle vs. I/O-cycle only) and
-  is ignored; this matches the documentation's own stated fallback and the
-  reference emulator's choice. `SC7852.cpp:461` (`TODO(wait-state-scope)`),
-  `SC7852.hpp:46`
+- **Wait states: M1 only** — the TRM's "1 WAIT automatically inserted in
+  the machine cycle" is modelled as one wait per M1 (opcode fetch /
+  interrupt acknowledge), calibrated against real-hardware BEEP pitch (A=200
+  and A=50 both within 0.22%). Whether I/O cycles get an extra wait on top
+  of the Z-80's own is not modelled; the BEEP loop's 4 port accesses per
+  period can't resolve it (<0.05%). `SC7852.hpp` (`kM1WaitStates`)
 - **MEMPTR register not modelled** — the undocumented X/Y flag bits after
   `BIT n,(HL)` / `(IX+d)` / `(IY+d)` are approximated from the operand
   byte instead of the internal MEMPTR. `SC7852.cpp:721`, `SC7852.cpp:1054`

@@ -41,11 +41,21 @@ public:
 // deltas -- both are just ordinary IN/OUT targets from this core's point of
 // view, decoded by whatever's on the far side of readIO()/writeIO().
 //
-// **No extra wait state inserted per M-cycle.** The Technical Reference
-// Manual's "1 WAIT automatically inserted in the machine cycle" note has
-// unresolved scope (every M-cycle vs. I/O-cycle only); this core uses
-// nominal Zilog timing throughout. Revisit only if observed ROM/trace
-// behavior disagrees.
+// **One wait state per M1 (opcode fetch) cycle.** The Technical Reference
+// Manual says "1 WAIT automatically inserted in the machine cycle" without
+// naming which one. Hardware measured 2026-09-23 settles it as M1. The ROM
+// BEEP tone loop (P1-B3 5EB9) costs 52*A+389 T-states per period at nominal
+// Zilog timing and contains 8*A+52 M1 cycles. A real unit plays A=200 at
+// 287.13 Hz and A=50 at 1038.15 Hz. Nominal timing gives 331.8 / 1197.7 Hz.
+// One wait per M1 gives 287.8 / 1040.4 Hz. That leaves the same -0.22%
+// residual at both pitches, i.e. crystal/recorder tolerance, not a timing
+// model error. It also matches TRM §3.10's 1.3M/(166+22A) formula. A wait on
+// every M-cycle would be ~3% slower still.
+// So every step() adds kM1WaitStates per opcode byte fetched as an M1:
+// one for a plain opcode and two for CB/ED/DD/FD-prefixed ones. DD/FD-CB
+// forms also count two, because their displacement and sub-opcode are
+// ordinary memory reads, not M1 fetches. Interrupt acknowledge adds one,
+// and so does each internal NOP while halted.
 class SC7852 {
 public:
     explicit SC7852(SC7852Bus& bus);
@@ -61,9 +71,14 @@ public:
     /// so PC1600Machine/PC1600BusArbiter can treat both CPUs uniformly.
     int step();
 
+    /// Wait states the SC-7852 inserts into every M1 cycle (see the class
+    /// comment).
+    static constexpr int kM1WaitStates = 1;
+
     /// T-states to credit for a step() that returned 0 because the CPU is
     /// halted. A real HALT is not free time: the Z-80 executes an internal
-    /// NOP every machine cycle while parked, burning 4 T-states apiece, so
+    /// NOP every machine cycle while parked, burning 4 T-states apiece plus
+    /// the M1 wait, so
     /// anything deriving emulated wall-clock time from step() costs must
     /// charge idle time at this rate rather than treating "halted" as "no
     /// time passed". Public for exactly that reason -- PC1600Machine's
@@ -71,7 +86,7 @@ public:
     /// have to agree: one paces wall-clock time, the other derives the
     /// 64 Hz timer from it. (Mirrors LH5801::kHaltTickCycles, whose value
     /// differs because that core's step() ticks its timer once per call.)
-    static constexpr int kHaltTickCycles = 4;
+    static constexpr int kHaltTickCycles = 4 + kM1WaitStates;
 
     // ── Register access (debug / tests) ──────────────────────────────────
     uint8_t  a() const { return A; }
