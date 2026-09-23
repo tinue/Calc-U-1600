@@ -79,7 +79,7 @@ void PC1500Machine::clearCE150Paper() {
     if (m_ce150Card) m_ce150Card->mechanism().clearPaper();
 }
 
-void PC1500Machine::seedClock(int year, int month, int day, int hour, int minute, int second) {
+void PC1500Machine::seedClock(int year, int month, int day, int hour, int minute, int second, int millisecond) {
     // Sakamoto's day-of-week: 0 = Sunday. Valid for any Gregorian date;
     // keeps this Core self-contained (no host <ctime> needed) so headless
     // tests can seed a fixed date and check the dow nibble too.
@@ -88,7 +88,7 @@ void PC1500Machine::seedClock(int year, int month, int day, int hour, int minute
     int dow = (y + y / 4 - y / 100 + y / 400 + t[month - 1] + day) % 7;
 
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_memory.seedClock(year, month, day, hour, minute, second, dow);
+    m_memory.seedClock(year, month, day, hour, minute, second, dow, millisecond);
 }
 
 int PC1500Machine::step() {

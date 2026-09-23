@@ -46,7 +46,7 @@ void PC1600Machine::allReset() {
     m_z80Mem.subCpu().setResetCauseAllReset();
 }
 
-void PC1600Machine::seedClock(int year, int month, int day, int hour, int minute, int second) {
+void PC1600Machine::seedClock(int year, int month, int day, int hour, int minute, int second, int millisecond) {
     std::lock_guard<std::mutex> lock(m_mutex);
     PC1600SubCpu::DateTime dt;
     dt.month  = static_cast<uint8_t>(month); // plain 1-12, as the protocol carries it
@@ -59,6 +59,8 @@ void PC1600Machine::seedClock(int year, int month, int day, int hour, int minute
     // Boot re-inits the calendar to its cold-start default once; keep the
     // seeded time through that write.
     m_z80Mem.subCpu().armHostSeedGuard();
+    // Align the next tick with the host's next whole second.
+    m_rtcAccum = static_cast<int>(static_cast<int64_t>(kRtcPeriodTStates) * millisecond / 1000);
 }
 
 bool PC1600Machine::attachCE1600P(const uint8_t* rom1, size_t rom1Size,

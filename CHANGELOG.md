@@ -43,6 +43,8 @@
   disk before editing its file with such a tool: the emulator rewrites
   the file after every disk access. Also fixes the `addressed-hex`
   example in `docs/Memory-Card-Definition-Format.md`.
+- **Buzzer** Improve Piezo accuracy.
+- **Timing** Improve emulator pacing.
 - **Headless** `pc1600_cli --save-dir <dir>` makes a preset's
   `- saveas: floppy:<name>` step write the disk to
   `<dir>/<name>.floppy.yaml` (it was a no-op in the headless harness).

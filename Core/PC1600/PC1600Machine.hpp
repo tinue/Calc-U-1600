@@ -69,8 +69,12 @@ public:
     /// this at startup (and after ALL RESET) from the host clock;
     /// thereafter the clock free-runs off emulated cycles (the 1 Hz
     /// accumulator in step()) and is never re-synced -- the same
-    /// crystal-driven behavior the real chip has.
-    void seedClock(int year, int month, int day, int hour, int minute, int second);
+    /// crystal-driven behavior the real chip has. `millisecond` (0-999)
+    /// is the host's sub-second phase: the chip only takes whole seconds,
+    /// so it preloads the 1 Hz accumulator instead, and the emulated
+    /// second rolls over in step with the host's (dropping it left the
+    /// clock up to ~1 s behind).
+    void seedClock(int year, int month, int day, int hour, int minute, int second, int millisecond = 0);
     /// Executes one instruction on whichever CPU currently owns the bus,
     /// completing a pending handoff first if one is due (see .cpp). Returns
     /// that CPU's own step() cycle count.

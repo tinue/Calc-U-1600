@@ -65,7 +65,7 @@ public:
     /// so this one seed rides through boot -- but it is deliberately kept
     /// out of reset() so headless tests / the CLI stay deterministic; the
     /// Bridge wrapper calls this after reset() with the real host time.
-    void seedClock(int year, int month, int day, int hour, int minute, int second);
+    void seedClock(int year, int month, int day, int hour, int minute, int second, int millisecond = 0);
 
     /// Execute one instruction. Returns the cycle count consumed (0 if
     /// halted with no pending interrupt, or a breakpoint was just hit).

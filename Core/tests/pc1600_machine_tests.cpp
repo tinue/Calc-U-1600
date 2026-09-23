@@ -517,6 +517,31 @@ void test_rtc_advances_while_lh5803_owns_the_bus() {
     CHECK(PC1600SubCpu::unpackBcd(dt.day) == 2);
 }
 
+// The chip only takes whole seconds, so seedClock()'s millisecond preloads
+// the 1 Hz accumulator: seeded at hh:mm:ss.900, the next tick must come
+// 0.1 s later, not a full second (which left the clock ~1 s behind after
+// every reset). Seeded at .000, it takes the full second.
+void test_seed_clock_millisecond_aligns_next_tick() {
+    PC1600Machine m;
+    std::vector<uint8_t> lower = makeBank(0x00);
+    std::vector<uint8_t> upper = makeBank(0x00);
+    lower[0] = 0x76; // HALT -- parked, just burns T-states
+    CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+    const auto tenth = static_cast<uint64_t>(PC1600Machine::kTStateHz) / 10;
+
+    m.reset();
+    m.seedClock(2026, 9, 23, 12, 0, 10, 900);
+    m.runCycles(tenth * 2);
+    CHECK(PC1600SubCpu::unpackBcd(m.memory().subCpu().dateTime().second) == 11);
+
+    m.reset();
+    m.seedClock(2026, 9, 23, 12, 0, 10, 0);
+    m.runCycles(tenth * 2);
+    CHECK(PC1600SubCpu::unpackBcd(m.memory().subCpu().dateTime().second) == 10);
+    m.runCycles(tenth * 9);
+    CHECK(PC1600SubCpu::unpackBcd(m.memory().subCpu().dateTime().second) == 11);
+}
+
 } // namespace
 
 int run_pc1600_machine_tests() {
@@ -540,6 +565,7 @@ int run_pc1600_machine_tests() {
     test_on_key_wakes_a_halted_sc7852();
     test_on_key_wakes_a_halted_lh5803_owning_the_bus();
     test_rtc_advances_while_lh5803_owns_the_bus();
+    test_seed_clock_millisecond_aligns_next_tick();
 
     std::printf("pc1600_machine_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

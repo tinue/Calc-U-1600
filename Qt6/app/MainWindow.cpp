@@ -698,6 +698,10 @@ void MainWindow::onFrameTick() {
             QCoreApplication::processEvents();
         } while (m_turboActive && std::chrono::steady_clock::now() < deadline);
         restartPacing();
+    } else if (m_controller->resyncClockIfSeeded()) {
+        // First tick after a flat-out run that set the clock: re-seeded
+        // just now, so pace from here (see resyncClockIfSeeded()).
+        restartPacing();
     } else {
         // Run exactly the wall-clock time since the last tick, carrying the
         // fractional cycle, rather than a fixed clockHz/60 per 16 ms tick

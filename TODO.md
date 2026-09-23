@@ -5,24 +5,12 @@ obligations.
 
 ## Known issues
 
-- **Scroll Lock doesn't map to "rsv".** Regressed alongside a Tab-focus
-  bug (fixed): clicking a button in the debug panel or the plotter
-  paper's Copy/Cut controls gave that widget keyboard focus, so Tab (and
-  presumably other keys) got eaten by Qt's focus navigation before
-  reaching the keyboard handler. Fixed for Tab (`Qt::NoFocus` on those
-  widgets); Scroll Lock's mapping (`PC1500KeyboardMap.cpp`) looks correct
-  on inspection, so the cause is likely upstream — worth checking whether
-  macOS/Qt even delivers a `Qt::Key_ScrollLock` event for the physical
-  key (Mac keyboards have none; an external PC keyboard's key of that
-  name may report differently or be intercepted before Qt sees it).
 - **Minor display timing difference**: real LCD hardware is slower than
   the emulation, so a spurious character can briefly appear while
   scrolling. Controller busy time is now modelled (2026-09-23: busy until
   the 4th 216.7 kHz LCD-clock edge after each write, fitted to a
   real-unit scrolling-PRINT benchmark). Recheck whether the spurious
   character still shows.
-- **No way to latch Shift from the host keyboard** (tapping Shift doesn't
-  produce a visible latched state in the UI).
 - **CE-1600P / CE-150 plotter: pen colour can drift out of sync after
   OFF/ON.** Deliberately left as a known limitation. Set a colour
   (`COLOR 2`), power off/on, print again — the plotter draws in the

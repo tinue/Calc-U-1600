@@ -103,10 +103,14 @@ public:
     /// battery-backed and comes up already reading the right time; the
     /// boot ROM never re-inits it, so this one seed survives boot and the
     /// user is spared keying in the date/time on every launch.
-    void seedFromHost(int year, int month, int day, int hour, int minute, int second, int dow);
+    /// `millisecond` (0-999) preloads the 1 Hz accumulator so the next
+    /// tick lands on the host's next whole second.
+    void seedFromHost(int year, int month, int day, int hour, int minute, int second, int dow,
+                      int millisecond = 0);
 
 private:
     void syncTp();
+    bool tpLevelNow() const;
     void latchCommand(bool c0, bool c1, bool c2);
     void tickOneSecond();
     uint64_t liveTimeAsBcd40() const;
@@ -153,14 +157,15 @@ private:
     // 1 Hz accumulator driving tickOneSecond() -- fed by advance() every
     // instruction, off emulated cycles, never gated by tpConfigured_.
     double rtcAccumSeconds_ = 0.0;
-    // Monotonic total elapsed seconds, only for dataOut()'s status
-    // waveform in the non-shift modes (the ROM never samples it there).
+    // Monotonic total elapsed seconds: the free-running divider chain TP
+    // is tapped from (tpLevelNow()), and dataOut()'s status waveform in
+    // the non-shift modes (the ROM never samples it there).
     double rtcElapsedSeconds_ = 0.0;
 
     // ── TP output ─────────────────────────────────────────────────────
     bool tpConfigured_ = false; // see latchCommand's own comment
     int tpRateHz_ = 64;
-    double elapsedSeconds_ = 0.0; // since TP was last (re-)configured
+    double elapsedSeconds_ = 0.0; // since TP was last (re-)configured; OPB/IF debounce only
     bool tpLevel_ = false;
     bool tpEdgePending_ = false;
 

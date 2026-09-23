@@ -5,6 +5,7 @@
 //
 // Build & run: see tools/run_tests.sh
 
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -665,6 +666,42 @@ void test_rtc_tp_rate_and_gating() {
     CHECK(ticks >= 480 && ticks <= 505); // ~492 expected, generous margin
 }
 
+void test_rtc_tp_phase_free_runs_across_configures() {
+    // TP comes off the chip's free-running divider: a rate select doesn't
+    // restart its phase, so rising edges stay on the 1/64 s grid however
+    // the configures fall. (A real unit's BEEP repeat periods measure as
+    // whole 64ths of a second.) At 1.3 MHz a 64 Hz period is 20312.5
+    // cycles and rising edges fall at odd half-periods: 10156.25 + k*20312.5.
+    PC1500Memory mem;
+    uint64_t t = 0;
+    auto advance = [&](uint32_t c) { mem.advanceRtc(c); t += c; };
+    auto nextRisingEdge = [&]() {
+        for (;;) {
+            advance(10);
+            uint8_t ifVal = mem.readME1(0xF00B);
+            if (ifVal & 0x02) { mem.writeME1(0xF00B, uint8_t(ifVal & ~0x02)); return t; }
+        }
+    };
+    auto configure64 = [&]() {
+        mem.writeME1(0xF008, 0x20);
+        mem.writeME1(0xF008, uint8_t(0x20 | 0x02));
+    };
+    auto offGrid = [](uint64_t cyc) {
+        double k = (double(cyc) - 10156.25) / 20312.5;
+        return std::abs(k - std::round(k)) * 20312.5; // cycles off the grid
+    };
+    advance(3333);
+    configure64();
+    CHECK(offGrid(nextRisingEdge()) <= 10);
+    for (uint32_t skew : {777u, 5000u, 12345u}) {
+        mem.writeME1(0xF008, 0x00); // Register Hold: TP off (WAIT/BEEP cleanup)
+        mem.writeME1(0xF008, 0x02);
+        advance(skew);
+        configure64();
+        CHECK(offGrid(nextRisingEdge()) <= 10);
+    }
+}
+
 void test_rtc_if_does_not_clear_on_read() {
     // IF's TP flag (bit 1) must not clear on an ordinary read of the
     // register: the ROM's own MI interrupt handler (LE171) reads IF to
@@ -851,6 +888,22 @@ void test_rtc_calendar_advances_one_hz_with_bcd_and_month_carry() {
     CHECK(rtcNibble(r, 16) == 0 && rtcNibble(r, 20) == 0); // hour 00
     CHECK(rtcNibble(r, 8) == 0 && rtcNibble(r, 12) == 0);  // minute 00
     CHECK(rtcNibble(r, 0) == 1 && rtcNibble(r, 4) == 0);   // 58 -> 59 -> 00 -> 01
+}
+
+void test_rtc_seed_millisecond_aligns_next_tick() {
+    // seedClock()'s millisecond preloads the 1 Hz accumulator: seeded at
+    // .900, the next tick is 0.1 s away, not a full second.
+    PC1500Memory mem;
+    mem.seedClock(2026, 9, 23, 12, 0, 10, 3, 900);
+    mem.advanceRtc(260'000u); // 0.2 s at 1.3MHz
+    uint64_t r = rtcReadCalendar40(mem);
+    CHECK(rtcNibble(r, 0) == 1 && rtcNibble(r, 4) == 1); // 10 -> 11
+
+    PC1500Memory mem0;
+    mem0.seedClock(2026, 9, 23, 12, 0, 10, 3, 0);
+    mem0.advanceRtc(260'000u);
+    r = rtcReadCalendar40(mem0);
+    CHECK(rtcNibble(r, 0) == 0 && rtcNibble(r, 4) == 1); // still 10
 }
 
 void test_rtc_calendar_reset_is_deterministic() {
@@ -1370,6 +1423,7 @@ int main() {
     test_keyboard_name_lookup();
     test_io_chip_keyboard_wiring_through_memory();
     test_rtc_tp_rate_and_gating();
+    test_rtc_tp_phase_free_runs_across_configures();
     test_rtc_if_does_not_clear_on_read();
     test_pc1500_ram_powerup_reset_and_all_reset();
     test_rtc_opb_and_if_never_disagree_within_one_poll();
@@ -1377,6 +1431,7 @@ int main() {
     test_preset_syncclock_reseeds_rtc();
     test_rtc_calendar_set_via_shift_and_commit();
     test_rtc_calendar_advances_one_hz_with_bcd_and_month_carry();
+    test_rtc_seed_millisecond_aligns_next_tick();
     test_rtc_calendar_reset_is_deterministic();
     test_machine_seedclock_derives_day_of_week();
     test_on_key_press_sets_break_flag();

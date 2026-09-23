@@ -219,6 +219,18 @@ void MachineController::finishPresetLoad(Model model) {
 }
 
 void MachineController::seedClockFromHost() {
+    seedClockFromHostNow();
+    m_clockResyncPending = true;
+}
+
+bool MachineController::resyncClockIfSeeded() {
+    if (!m_clockResyncPending) return false;
+    m_clockResyncPending = false;
+    seedClockFromHostNow();
+    return true;
+}
+
+void MachineController::seedClockFromHostNow() {
     const QDateTime now = QDateTime::currentDateTime();
     const int year = now.date().year();
     const int month = now.date().month();
@@ -226,10 +238,11 @@ void MachineController::seedClockFromHost() {
     const int hour = now.time().hour();
     const int minute = now.time().minute();
     const int second = now.time().second();
+    const int msec = now.time().msec();
     if (m_pc1600) {
-        m_pc1600->seedClock(year, month, day, hour, minute, second);
+        m_pc1600->seedClock(year, month, day, hour, minute, second, msec);
     } else if (m_pc1500) {
-        m_pc1500->seedClock(year, month, day, hour, minute, second);
+        m_pc1500->seedClock(year, month, day, hour, minute, second, msec);
     }
 }
 

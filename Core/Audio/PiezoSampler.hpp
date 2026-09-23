@@ -39,6 +39,7 @@ public:
 
     enum class Transducer {
         None,   // the drive line as-is (after the DC blocker)
+        PC1500, // PC-1500/1500A buzzer, fitted to a real-unit sweep (see .cpp)
         PC1600, // PC-1600 buzzer, fitted to real-unit recordings (see .cpp)
     };
 

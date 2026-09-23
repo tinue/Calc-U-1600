@@ -135,6 +135,15 @@ public:
     // PresetController::resetLive()).
     void resetToPrompt(bool allReset);
 
+    // Every host clock seed above happens while the machine runs flat out
+    // with the frame timer stopped; wall time keeps passing until paced
+    // emulation actually resumes (the Loading sheet closing, a late first
+    // tick capped at MainWindow's kMaxTickSeconds), which left the clock
+    // up to ~1 s behind. The first paced frame tick calls this instead: it
+    // re-seeds once if a seed is pending, and says so -- the caller then
+    // rebases its pacing on this moment rather than advancing.
+    bool resyncClockIfSeeded();
+
     // The plotter attach/detach power cycle, flat out: OFF, wait for the
     // emulated ROM to power down, `change()` (the instantaneous attach or
     // detach), ON, boot to the prompt (incl. the plotter's power-on init),
@@ -349,6 +358,8 @@ private:
     static std::vector<std::string> bundledRomDirs();
     bool loadPC1600RomSet(PC1600Machine& machine, std::string* error);
     void seedClockFromHost();
+    void seedClockFromHostNow();
+    bool m_clockResyncPending = false; // see resyncClockIfSeeded()
     // AppSettings::serialLinkDirOverride(), falling back to AppPaths::instanceDir().
     static QString effectiveSerialLinkDir();
     // Ensures m_serialLink exists (constructing it from the effective

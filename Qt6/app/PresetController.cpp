@@ -124,7 +124,7 @@ template <typename Machine>
 void seedClockFromHost(Machine& machine) {
     const QDateTime now = QDateTime::currentDateTime();
     machine.seedClock(now.date().year(), now.date().month(), now.date().day(), now.time().hour(),
-                       now.time().minute(), now.time().second());
+                       now.time().minute(), now.time().second(), now.time().msec());
 }
 
 // Live-machine LOAD: mirrors real hardware LOAD semantics, not NEW+type. No
