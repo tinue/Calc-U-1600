@@ -49,6 +49,10 @@ void PC1600Memory::reset() {
     // current level: it is a free-running square wave from the sub-CPU,
     // not a reset-latched line.
     m_pbIn = static_cast<uint8_t>((m_pbIn & (kPbInFreeRunning | kPbInOnKey)) | kPbInResetLevels);
+    // Interrupt cause/mask start clear; the boot ROM programs 35H itself.
+    m_intCause = 0;
+    m_intMask = 0;
+    updateIntLine();
     m_uart.reset();
     // Port-block reset: modulation off, SDO back to its idle level.
     m_fReg = 0;

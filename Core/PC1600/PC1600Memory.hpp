@@ -147,19 +147,16 @@ public:
     void setCPU(SC7852* cpu) {
         m_cpu = cpu;
         // The TC8576F's INT line (OR of RxRDY/TxRDY/PRRDY/PTRDY) reaches
-        // the SC-7852 on INT0 = interrupt-cause bit 0, gated by port 35H
-        // mask bit 0. The UART already applies its own per-source mask
-        // (pr[5]); this adds the SC-7852-side mask + cause latch.
-        m_uart.setInterruptHook([this] {
-            if (!commInterruptEnabled()) return;
-            latchCommInterruptCause();
-        });
+        // the SC-7852 on INT0 = interrupt-cause bit 0. The UART already
+        // applies its own per-source mask (pr[5]); port 35H bit 0 gates
+        // the resulting INT in updateIntLine().
+        m_uart.setInterruptHook([this] { latchCommInterruptCause(); });
+        updateIntLine();
     }
 
     /// True if interrupt-cause bit 4 (1/64s timer) is currently unmasked at
-    /// port 35H -- PC1600Machine::step() consults this before calling
-    /// latchTimer64InterruptCause() on the timer's falling edge (see
-    /// PC-1600-CPU-SC7852-Z80.md §5.2's cause/mask pair).
+    /// port 35H (PC-1600-CPU-SC7852-Z80.md §5.2's cause/mask pair).
+    /// Debug/test access; the mask itself is applied in updateIntLine().
     bool timer64InterruptEnabled() const { return (m_intMask & 0x10) != 0; }
     /// Raw port 35H value -- debug/test access, same convention as
     /// PC1500Machine's own cpu()/memory() unlocked accessors.
@@ -187,8 +184,9 @@ public:
     /// PC-1600-Keyboard.md §8 -- confirmed distinct from the PC-1500's own
     /// ON-key wiring in bit position only, same latch-on-press-edge idea.
     /// Returns true on a press (rising) edge -- the caller
-    /// (PC1600Machine::setOnKeyPressed) uses that to also raise a real
-    /// SC7852 interrupt, the wake path out of the ROM's power-down HALT.
+    /// (PC1600Machine::setOnKeyPressed) uses that to resume whichever CPU
+    /// owns the bus from its HALT (the ROM's power-down park). ON is not a
+    /// port-32H interrupt cause.
     ///
     /// The key is also PB7's live level: Baum, PC-1600 Systemhandbuch
     /// (ISBN 3-924327-31-9) p.92 ("INP &1A AND &20 oder INP &1F AND &80")
@@ -269,8 +267,7 @@ public:
     void latchSubCpuInterruptCause() { m_intCause |= 0x40; updateIntLine(); }
 
     /// Port 35H bit 0 -- is the communication-port (TC8576F, INT0)
-    /// interrupt unmasked? Checked by the UART's interrupt hook (see
-    /// setCPU()) before latching the cause and poking the SC-7852.
+    /// interrupt unmasked? Debug/test access, like the two above.
     bool commInterruptEnabled() const { return (m_intMask & 0x01) != 0; }
     /// Latches interrupt-cause register (port 32H) bit 0 -- the
     /// communication port received/sent data (TC8576F -> INT0, pin 81).
@@ -447,8 +444,9 @@ private:
     PC1600SystemBus m_ce1600pBus; // Page B banks 4/5 + I/O 0x80-0x8F; see ce1600pBus()
     PC1600BusArbiter* m_arbiter{nullptr};
     SC7852* m_cpu{nullptr};
-    uint8_t m_intCause{0};      // Port 32H -- bit 4 (1/64s timer) driven by setTimer64Bit();
-                                // bits 0-3/5-7 have no real interrupt source wired yet
+    uint8_t m_intCause{0};      // Port 32H: latched causes, whatever the mask -- bit 0 comm
+                                // (UART hook), bit 4 1/64 s timer, bit 6 sub-CPU; the rest have
+                                // no source yet. Read-clears. INT = cause & mask (updateIntLine())
     uint8_t m_intMask{0};       // Port 35H
     uint8_t m_im2VectorLow{0xFF}; // Port 39H
 

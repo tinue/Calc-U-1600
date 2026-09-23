@@ -560,6 +560,19 @@ void test_int_line_follows_cause_and_mask() {
     CHECK(m.sc7852().intLine());  // still latched, re-enabled
     CHECK(mem.readIO(0x32) == 0x10);
     CHECK(!m.sc7852().intLine()); // read-clear drops it
+
+    // A cause arriving while masked is still latched; unmasking raises INT.
+    mem.writeIO(0x35, 0x00);
+    mem.latchSubCpuInterruptCause();
+    CHECK(!m.sc7852().intLine());
+    mem.writeIO(0x35, 0x40);
+    CHECK(m.sc7852().intLine());
+
+    // Reset clears cause and mask, and the line with them.
+    m.reset();
+    CHECK(!m.sc7852().intLine());
+    CHECK(mem.readIO(0x32) == 0x00);
+    CHECK(mem.intMask() == 0x00);
 }
 
 static int litPixels(const PC1600Machine& m) {

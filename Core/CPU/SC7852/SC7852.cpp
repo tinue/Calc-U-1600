@@ -456,7 +456,7 @@ int SC7852::step() {
 
     uint32_t tf = traceFlags();
 
-    uint16_t pcAtStart = PC;
+    uint16_t pcAtStart = m_pendingPrefix ? uint16_t(PC - 1) : PC; // a carried prefix starts the instruction
     uint8_t opcode = m_pendingPrefix ? m_pendingPrefix : fetchOpcode();
     m_pendingPrefix = 0;
     int cycles = 0;

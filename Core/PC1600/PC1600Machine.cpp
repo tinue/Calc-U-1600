@@ -15,6 +15,7 @@ void PC1600Machine::resetLocked() {
     m_z80Mem.reset();
     m_z80Mem.keyboard().releaseAll();
     m_sc7852.reset();
+    m_z80Mem.updateIntLine(); // the CPU reset dropped its copy of the line
     m_lh5803.reset();
     m_arbiter.reset();
     m_timer64Accum = 0;
@@ -267,9 +268,10 @@ int PC1600Machine::step() {
             // disassembling the real ISR, which reads port 32H immediately
             // after being woken and requires the bit to still read as set
             // then, not already back to whatever the raw pulse is doing).
-            if (!m_timer64State && m_z80Mem.timer64InterruptEnabled()) {
-                m_z80Mem.latchTimer64InterruptCause(); // raises INT via port 35H/32H
-            }
+            // The cause latches whatever 35H says (the ROM's ISR filters
+            // the 32H byte with 35H itself, P1-B3 4102H/4112H); the mask
+            // only gates the INT line -- see updateIntLine().
+            if (!m_timer64State) m_z80Mem.latchTimer64InterruptCause();
             // The sub-CPU's own aggregated interrupt line (INT6, cause bit
             // 6), driven here by its 0.5s timer -- divided down from this
             // same 64 Hz signal, see kTimer64EdgesPerHalfSecond.
@@ -280,9 +282,7 @@ int PC1600Machine::step() {
                 // The file/RAM-disk IOCS readiness handshake polls 5DH and
                 // waits for this to change.
                 m_z80Mem.subCpu().toggleHalfSecondSignal();
-                if (m_z80Mem.subCpuInterruptEnabled()) {
-                    m_z80Mem.latchSubCpuInterruptCause();
-                }
+                m_z80Mem.latchSubCpuInterruptCause();
             }
         }
         // LU-57813P calendar clock: one tick per emulated second. See
@@ -425,10 +425,13 @@ void PC1600Machine::setOnKeyPressed(bool pressed) {
     // raise never fire again). Only the ON/BREAK line can wake it from
     // there. `m_z80Mem.setOnKeyPressed()` just latches the pollable IF-b1
     // bit (port 1BH) -- a HALTed CPU never polls it. ON has no port-32H
-    // cause bit, so it is not an SC7852 INT: when the SC7852 owns the bus
-    // the ON line resumes its HALT directly (it then polls the latch).
-    // A SC7852 parked by the OUT (38H) handoff is left for the arbiter to
-    // resume. Rising edge only, matching the latch and a real PB7 edge.
+    // cause bit, so it is not an SC7852 INT: the ON line resumes the HALT
+    // of whichever CPU owns the bus (it then polls the latch); the parked
+    // one is left for the arbiter. This is a stand-in -- the documented
+    // sources do not say how the real ON line ends a Z-80 HALT (sub-CPU
+    // INT6, NMI and clock gating are all candidates), so resuming directly
+    // skips any ISR a real wake might run. Rising edge only, matching the
+    // latch and a real PB7 edge.
     // Wake whichever CPU is actually parked: a GUI-freeze repro (headless,
     // real ROM boot) found the arbiter had already switched bus ownership
     // to the LH5803 by the time power-down settles (SC7852 issues its
@@ -441,7 +444,7 @@ void PC1600Machine::setOnKeyPressed(bool pressed) {
     // unconditional counterpart for exactly this non-maskable ON signal.
     if (risingEdge) {
         if (m_arbiter.sc7852Owns()) m_sc7852.resumeFromHalt();
-        m_lh5803.wakeFromHalt();
+        else                        m_lh5803.wakeFromHalt();
     }
 }
 

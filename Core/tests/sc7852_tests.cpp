@@ -367,7 +367,12 @@ void test_last_index_prefix_wins() {
     CHECK(r.cpu.pc() == 0x0002);                       // FD already fetched
     int plain = 0;
     { Rig q({0xFD, 0x21, 0x00, 0x00}); plain = q.cpu.step(); }
+    r.cpu.setTraceFlags(TRACE_PC);
     CHECK(r.cpu.step() == plain); // the carried FD runs exactly like a plain FD 21
+    Z80CpuFrame fr[1];
+    CHECK(r.cpu.drainTraceEvents(fr, 1, nullptr) == 1);
+    CHECK(fr[0].pc == 0x0001 && fr[0].opcode == 0xFD21); // traced at the FD, not the 21
+    r.cpu.setTraceFlags(TRACE_NONE);
     CHECK(r.cpu.iy() == 0x1234);
     CHECK(r.cpu.ix() == 0x0000);
     CHECK(r.cpu.pc() == 0x0005);
