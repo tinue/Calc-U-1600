@@ -107,7 +107,8 @@ still worth understanding. They say what the code actually does now.
   handshakes the ROM runs before any medium access (RAM disk, power-off
   clock save) and keeps headless probes deterministic. `TC8576F.hpp:44`
 - **Parallel (Centronics) printer port**: FAULT / SLCT / PE / PRIME /
-  XBUSY / IntF status lines have no model; the low printer-status bits are
+  IntF status lines have no model (XBUSY, bit 6, carries the sub-CPU's
+  still-processing state; see `PC1600SubCpu::kResponseMicros`); the low printer-status bits are
   reused to surface connector inputs. `TC8576F.cpp:78`
 - **Raw PTY carries no RS-232C modem lines** — `PtySerialLink::getStatus()`
   reports CTS and DSR permanently asserted; DCD approximates "a peer
@@ -276,10 +277,12 @@ still worth understanding. They say what the code actually does now.
 
 `Core/PC1600/PC1600Display.*`, `PC1600StatusLine.hpp`
 
-- **No controller-busy timing model** — a status/instruction read always
-  reports the busy bit (bit 7) clear. This is load-bearing, not cosmetic:
-  the boot ROM busy-waits on exactly this read before drawing.
-  `PC1600Display.cpp:37`
+- **Controller busy time is fitted, not from a datasheet**: busy (status
+  bit 7) holds until the 4th edge of the 216.7 kHz LCD clock after each
+  write. That was chosen to match a real unit's scrolling-PRINT benchmark
+  (see `PC1600Display.cpp` readIO). Status bit 5 (display on/off, Baum
+  Systemhandbuch Anhang A) still always reads 0 ("on").
+  `PC1600Display.hpp` (kBusyClocks)
 - **`displaySL` (set-display-start-line, `0xC0-0xFF`) rotating-window
   offset**: modelled on the read side for the graphics-area scroll (it was
   found to be necessary), but the right 28-dot block's *further* rotation

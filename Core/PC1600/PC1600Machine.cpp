@@ -262,6 +262,7 @@ int PC1600Machine::step() {
         // polls observe them in.
         m_z80Mem.uart().tick(cost);
         m_z80Mem.subCpu().tickByTStates(cost);
+        m_z80Mem.display().tick(cost);
         if (m_ce1600fCard) m_ce1600fCard->advance(static_cast<uint32_t>(cost));
         // The documented handoff is OUT (38H),A then HALT -- the write
         // sets the pending flag (PC1600Memory::writeIO), but the actual
@@ -288,6 +289,7 @@ int PC1600Machine::step() {
             toTStates(static_cast<uint64_t>(c > 0 ? c : 1), /*sc7852Owned=*/false));
         m_z80Mem.uart().tick(tstates);
         m_z80Mem.subCpu().tickByTStates(tstates);
+        m_z80Mem.display().tick(tstates);
         // LU-57813P calendar clock: unlike the two SC7852-only timer
         // accumulators above (real hardware sources they free-run
         // against, but this core only models while the SC7852 steps),

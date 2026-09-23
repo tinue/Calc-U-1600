@@ -52,14 +52,28 @@ public:
 
     /// `port` is the low 8 bits of the I/O address (50H-5BH is the only
     /// range this class claims -- callers should only forward addresses in
-    /// that range). Status/instruction reads (port's bit0 clear) return a
-    /// byte with the busy flag (bit7) always clear -- load-bearing, not
-    /// cosmetic: the boot ROM busy-waits on exactly this read before it
-    /// draws anything, see the .cpp's own comment. Data reads (bit0 set)
+    /// that range). Status reads (port's bit0 clear) return the busy flag
+    /// (bit7) for kBusyClocks LCD-clock edges after each write; the boot
+    /// ROM and user code busy-wait on it, see the .cpp's own comment. Data
+    /// reads (bit0 set)
     /// return the byte at the controller's current (column, page) address,
     /// auto-incrementing the column the same way a data write does.
     uint8_t readIO(uint8_t port);
     void    writeIO(uint8_t port, uint8_t value);
+
+    /// How long a controller reports busy (status bit 7) after a command or
+    /// data write: until the kBusyClocks-th edge of its own LCD clock
+    /// (phi-OS 1.3 MHz / 6 = 216.7 kHz, ~16.5 SC-7852 T-states per edge),
+    /// which free-runs asynchronously to the CPU. See the .cpp's readIO().
+    static constexpr int kBusyClocks = 4;
+    /// Credits elapsed SC-7852 T-states to the LCD clock.
+    void tick(int tstates) {
+        m_lcdClockAccum += static_cast<int64_t>(tstates) * kLcdClockHzTimes6;
+        while (m_lcdClockAccum >= kTStateHzTimes6) {
+            m_lcdClockAccum -= kTStateHzTimes6;
+            ++m_lcdEdges;
+        }
+    }
 
     /// True while CK0 (LCD base clock) is enabled -- Z-80 I/O port 37H bit
     /// 4, see PC1600Memory's I/O decode. The display renders as blank
@@ -112,6 +126,7 @@ private:
         uint8_t addressPage{0};      // current page (0-7) -- direct register access, NOT windowed by addressStartLine (see readIO's own dataByte)
         uint8_t addressStartLine{0}; // display start line (0-63), command 0xC0-0xFF
         bool displayOn{false};
+        uint64_t busyUntilEdge{0};   // status bit 7 stays set until m_lcdEdges reaches this (see kBusyClocks)
     };
 
     void writeCommand(Controller& c, uint8_t value);
@@ -124,6 +139,12 @@ private:
     bool readPixel(const Controller& c, int col, int y, int rowShift) const;
 
     Controller m_ic2; // panel columns 0-63
+    // LCD clock: phi-OS (1.3 MHz) / 6, counted in edges. Scaled by 6 so the
+    // accumulator stays integral: SC-7852 T-states * 1.3 MHz vs 3.58 MHz * 6.
+    static constexpr int64_t kLcdClockHzTimes6 = 1300000;
+    static constexpr int64_t kTStateHzTimes6 = 3580000LL * 6;
+    int64_t  m_lcdClockAccum{0};
+    uint64_t m_lcdEdges{0};
     Controller m_ic3; // panel columns 64-127
     bool m_clockEnabled{false};
     PC1600StatusLine m_statusLine;

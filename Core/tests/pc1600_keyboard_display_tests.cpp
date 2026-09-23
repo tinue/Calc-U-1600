@@ -97,6 +97,28 @@ void test_display_ic2_command_and_data() {
     CHECK(!d.pixel(5, 2 * 8 + 1));
 }
 
+// Status bit 7 (busy) after a write: set until the 4th edge of the
+// controllers' 216.7 kHz clock (~16.5 T per edge), then clear. Only the
+// written controller goes busy; 50H-53H writes hit both.
+void test_display_busy_after_write() {
+    PC1600Display d;
+    CHECK(d.readIO(0x59) == 0x00);
+    CHECK(d.readIO(0x55) == 0x00);
+    d.writeIO(0x5A, 0x81);               // IC2 data write
+    CHECK((d.readIO(0x59) & 0x80) != 0);
+    CHECK((d.readIO(0x55) & 0x80) == 0); // IC3 untouched
+    d.tick(49);                          // under 3 edges: still busy
+    CHECK((d.readIO(0x59) & 0x80) != 0);
+    d.tick(18);                          // past the 4th edge (<= 66 T total)
+    CHECK((d.readIO(0x59) & 0x80) == 0);
+    d.writeIO(0x50, 0x3F);               // both controllers
+    CHECK((d.readIO(0x59) & 0x80) != 0);
+    CHECK((d.readIO(0x55) & 0x80) != 0);
+    d.tick(70);
+    CHECK(d.readIO(0x59) == 0x00);
+    CHECK(d.readIO(0x55) == 0x00);
+}
+
 void test_display_ic3_column_offset() {
     PC1600Display d;
     // Port block 0x54-0x57 = IC3-only, columns 64-127 of the panel.
@@ -794,6 +816,7 @@ int run_pc1600_keyboard_display_tests() {
     test_display_status_symbols_wired_to_ic3_column63();
     test_display_status_symbols_blank_when_ic3_display_off();
     test_display_clock_enable_flag();
+    test_display_busy_after_write();
     test_statusline_defaults_all_off();
     test_statusline_set_and_read();
     test_statusline_reset_clears_all();
