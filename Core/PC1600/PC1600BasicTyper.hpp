@@ -20,8 +20,9 @@ class PC1600Machine;
 //     SC-7852-view F867H, big-endian (PC-1600-Work-Area-Map.md: "Block C
 //     is used exactly as on the PC-1500/1500A"). It advances by each
 //     stored line's size. typeBasicProgramText() waits for it to settle
-//     after each line and uses "did it advance?" to tell a stored line
-//     from an unstored one.
+//     after each line and uses "did the program change?" (BASPRG_END or
+//     the program bytes -- a same-length replacement moves only the
+//     latter) to tell a stored line from an unstored one.
 //   * BUT F867 only moves in PRO mode. After ALL RESET the machine is in
 //     RUN mode, where a typed line is a direct command, not stored.
 //     Getting into PRO mode is the PRESET AUTHOR's job (a `key: mode` step
