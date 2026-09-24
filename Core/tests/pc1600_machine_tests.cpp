@@ -490,6 +490,35 @@ void test_on_press_before_handoff_halt_still_wakes() {
     CHECK(m.sc7852().halted()); // the parked SC7852 is left alone
 }
 
+// An ON press while the bus owner is running is a BREAK the ROM reads from
+// the 1BH latch -- it must not stay pending and later wake the machine out
+// of the next power-down park.
+void test_on_press_while_running_does_not_wake_a_later_park() {
+    PC1600Machine m;
+    std::vector<uint8_t> lower = makeBank(0x00);
+    std::vector<uint8_t> upper = makeBank(0x00);
+    lower[0] = 0x00;                  // NOP -- "running"
+    lower[1] = 0xD3; lower[2] = 0x38; // OUT (38H),A
+    lower[3] = 0x76;                  // HALT
+    CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+    std::vector<uint8_t> lh5803Rom(16384, 0x00);
+    lh5803Rom[0] = 0xFD; lh5803Rom[1] = 0xB1; // HLT
+    lh5803Rom[16384 - 2] = 0xC0;
+    lh5803Rom[16384 - 1] = 0x00;
+    CHECK(m.loadLH5803Rom(lh5803Rom.data(), lh5803Rom.size()));
+    m.reset();
+
+    m.setOnKeyPressed(true);    // BREAK while the SC7852 runs
+    m.setOnKeyPressed(false);
+    m.step();                   // NOP
+    m.step();                   // OUT (38H),A
+    m.step();                   // HALT -> bus to the LH5803
+    m.step();                   // LH5803: HLT
+    CHECK(m.lh5803().halted());
+    m.runCycles(5000);
+    CHECK(m.lh5803().halted()); // still parked
+}
+
 // Same wake requirement, but with the bus already handed to the LH5803:
 // the SC7852 issues its documented `OUT (38H),A` handoff before its own
 // power-down HALT, so the machine can be frozen with the LH5803 parked
@@ -711,6 +740,7 @@ int run_pc1600_machine_tests() {
     test_int_line_follows_cause_and_mask();
     test_lh5803_handback_is_a_cause_bit3_interrupt();
     test_on_press_before_handoff_halt_still_wakes();
+    test_on_press_while_running_does_not_wake_a_later_park();
     test_real_rom_off_stays_off_and_on_restarts();
     test_on_key_wakes_a_halted_lh5803_owning_the_bus();
     test_rtc_advances_while_lh5803_owns_the_bus();

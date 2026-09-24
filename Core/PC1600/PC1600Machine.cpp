@@ -453,7 +453,14 @@ void PC1600Machine::setOnKeyPressed(bool pressed) {
     // at 0xE555 (the SC7852 handed off at 5C1F before its own HALT); the
     // LH5803's requestMaskableInterrupt() is IE-gated and IE is clear
     // there, so its wake is wakeFromHalt(), the unconditional counterpart.
-    if (risingEdge) m_onWakePending = true;
+    //
+    // Only a press that finds the bus owner halted, or the SC7852 between
+    // its OUT (38H) and HALT, is a wake. A press while the owner runs is a
+    // BREAK the ROM reads from the latch; kept pending, it would wake the
+    // machine from its next power-down park.
+    if (!risingEdge) return;
+    const bool ownerHalted = m_arbiter.sc7852Owns() ? m_sc7852.halted() : m_lh5803.halted();
+    if (ownerHalted || m_arbiter.switchRequestedBySC7852()) m_onWakePending = true;
 }
 
 bool PC1600Machine::pokeMemory(uint16_t address, const uint8_t* data, size_t size) {
