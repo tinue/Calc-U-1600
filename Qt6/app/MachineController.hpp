@@ -313,10 +313,12 @@ public:
     // callers don't need to know any resource paths. Core already enforces
     // CE-150/CE-1600P mutual exclusion on the PC-1600's shared 60-pin bus
     // (PC1600Machine::attachCE1600P/attachCE150 each detach the other).
-    bool attachCE150();   // works for PC1500(A) and PC1600 (LH5803 side)
+    // The attach calls report a failure's reason (a missing/unreadable ROM)
+    // via `error`, when given.
+    bool attachCE150(QString* error = nullptr); // works for PC1500(A) and PC1600 (LH5803 side)
     void detachCE150();
     bool ce150Attached() const;
-    bool attachCE1600P(); // PC1600 only; false (no-op) otherwise
+    bool attachCE1600P(QString* error = nullptr); // PC1600 only; false (no-op) otherwise
     void detachCE1600P();
     bool ce1600pAttached() const;
 
@@ -324,7 +326,7 @@ public:
     // side (MODE 1). Same live power-cycled attach as the plotters; it
     // shares the bus with the CE-150, but on a PC-1600 attaching it drops
     // the CE-1600P and vice versa (Core-enforced).
-    bool attachCE158();
+    bool attachCE158(QString* error = nullptr);
     void detachCE158();
     bool ce158Attached() const;
     // What the CE-158 printed on its parallel port since the last call.

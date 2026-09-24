@@ -222,6 +222,16 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             [this] { m_plotterController->requestToggleCE158(); });
     connect(m_plotterController.get(), &PlotterController::ce158AttachedChanged, this,
             &MainWindow::onCe158AttachedChanged);
+    // Queued: the failure is reported from inside the power cycle, and the
+    // dialog should appear once the machine is back on, not block it off.
+    connect(
+        m_plotterController.get(), &PlotterController::attachFailed, this,
+        [this](const QString& device, const QString& reason) {
+            QMessageBox::warning(this, tr("Attach %1").arg(device),
+                                 reason.isEmpty() ? tr("The %1 could not be attached.").arg(device)
+                                                  : tr("The %1 could not be attached:\n\n%2").arg(device, reason));
+        },
+        Qt::QueuedConnection);
     connect(m_faceplate, &FaceplateWidget::keyPressed, this, [this](QString name) {
         const std::string key = name.toStdString();
         if (key == "on") {

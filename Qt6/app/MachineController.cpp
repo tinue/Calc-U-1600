@@ -603,14 +603,17 @@ void MachineController::flushFloppyBeforeDetach() {
     if (m_floppyManager && ce1600pAttached()) m_floppyManager->flushPendingPersist();
 }
 
-bool MachineController::attachCE150() {
+bool MachineController::attachCE150(QString* error) {
     std::string err;
+    bool ok = false;
     if (m_pc1600) {
         flushFloppyBeforeDetach();  // Core detaches the CE-1600P/F to make room
-        return BundledRoms::attachCE150(*m_pc1600, bundledRomDirs(), &err);
+        ok = BundledRoms::attachCE150(*m_pc1600, bundledRomDirs(), &err);
+    } else if (m_pc1500) {
+        ok = BundledRoms::attachCE150(*m_pc1500, bundledRomDirs(), &err);
     }
-    if (m_pc1500) return BundledRoms::attachCE150(*m_pc1500, bundledRomDirs(), &err);
-    return false;
+    if (!ok && error) *error = QString::fromStdString(err);
+    return ok;
 }
 
 void MachineController::detachCE150() {
@@ -624,14 +627,17 @@ bool MachineController::ce150Attached() const {
     return false;
 }
 
-bool MachineController::attachCE158() {
+bool MachineController::attachCE158(QString* error) {
     std::string err;
+    bool ok = false;
     if (m_pc1600) {
         flushFloppyBeforeDetach(); // Core detaches the CE-1600P/F to make room
-        if (!BundledRoms::attachCE158(*m_pc1600, bundledRomDirs(), &err)) return false;
+        ok = BundledRoms::attachCE158(*m_pc1600, bundledRomDirs(), &err);
     } else if (m_pc1500) {
-        if (!BundledRoms::attachCE158(*m_pc1500, bundledRomDirs(), &err)) return false;
-    } else {
+        ok = BundledRoms::attachCE158(*m_pc1500, bundledRomDirs(), &err);
+    }
+    if (!ok) {
+        if (error) *error = QString::fromStdString(err);
         return false;
     }
     syncCE158SerialLink();
@@ -653,7 +659,7 @@ std::vector<std::uint8_t> MachineController::drainCE158PrinterOutput() {
     return m_pc1500 ? m_pc1500->drainCE158ParallelOutput() : std::vector<std::uint8_t>{};
 }
 
-bool MachineController::attachCE1600P() {
+bool MachineController::attachCE1600P(QString* error) {
     if (!m_pc1600) return false; // (Core drops a CE-158 to make room -- PlotterController reports it)
     const auto versionName = [](CE1600PRomVersion v) { return v == CE1600PRomVersion::Old ? "old" : "new"; };
     std::string err;
@@ -661,14 +667,20 @@ bool MachineController::attachCE1600P() {
         // Like the PC-1600's own old ROM: the old set is optional (its dump
         // may be missing), so warn and fall back to the new one. A failing
         // new set just leaves the plotter detached.
-        if (m_ce1600pRomVersion != CE1600PRomVersion::Old) return false;
+        if (m_ce1600pRomVersion != CE1600PRomVersion::Old) {
+            if (error) *error = QString::fromStdString(err);
+            return false;
+        }
         QMessageBox::warning(nullptr, QObject::tr("Old CE-1600P ROM unavailable"),
                              QObject::tr("The old CE-1600P ROM could not be loaded:\n\n%1\n\n"
                                          "Using the new ROM instead.")
                                  .arg(QString::fromStdString(err)));
         m_ce1600pRomVersion = CE1600PRomVersion::New;
         err.clear();
-        if (!BundledRoms::attachCE1600P(*m_pc1600, bundledRomDirs(), "new", &err)) return false;
+        if (!BundledRoms::attachCE1600P(*m_pc1600, bundledRomDirs(), "new", &err)) {
+            if (error) *error = QString::fromStdString(err);
+            return false;
+        }
     }
     if (m_floppyManager) m_floppyManager->insertSelectedDisk();
     return true;

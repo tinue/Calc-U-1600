@@ -17,12 +17,13 @@ void PlotterController::toggleAttachment(bool isCE150) {
     const bool wasOtherAttached = isCE150 ? m_controller->ce1600pAttached() : m_controller->ce150Attached();
     const bool hadCE158 = m_controller->ce158Attached();
 
+    QString error;
     if (isCE150) {
         if (m_controller->ce150Attached()) m_controller->detachCE150();
-        else m_controller->attachCE150();
+        else if (!m_controller->attachCE150(&error)) emit attachFailed(tr("CE-150"), error);
     } else {
         if (m_controller->ce1600pAttached()) m_controller->detachCE1600P();
-        else m_controller->attachCE1600P();
+        else if (!m_controller->attachCE1600P(&error)) emit attachFailed(tr("CE-1600P"), error);
     }
 
     if (isCE150) {
@@ -39,8 +40,9 @@ void PlotterController::toggleAttachment(bool isCE150) {
 void PlotterController::requestToggleCE158() {
     auto change = [this] {
         const bool hadCE1600P = m_controller->ce1600pAttached();
+        QString error;
         if (m_controller->ce158Attached()) m_controller->detachCE158();
-        else m_controller->attachCE158();
+        else if (!m_controller->attachCE158(&error)) emit attachFailed(tr("CE-158"), error);
         emit ce158AttachedChanged(m_controller->ce158Attached());
         // A PC-1600 drops the CE-1600P to make room for the CE-158.
         if (hadCE1600P && !m_controller->ce1600pAttached()) emit ce1600pAttachedChanged(false);

@@ -1,5 +1,6 @@
 #pragma once
 #include <QObject>
+#include <QString>
 #include <functional>
 
 class MachineController;
@@ -39,6 +40,9 @@ signals:
     void ce150AttachedChanged(bool attached);
     void ce1600pAttachedChanged(bool attached);
     void ce158AttachedChanged(bool attached);
+    // An attach the user asked for failed (`reason`: e.g. a missing ROM);
+    // the device stays detached.
+    void attachFailed(const QString& device, const QString& reason);
 
 private:
     MachineController* m_controller; // not owned
