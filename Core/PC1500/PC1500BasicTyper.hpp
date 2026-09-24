@@ -86,8 +86,12 @@ bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, 
 
 /// Types a whole BASIC program's source text in through the ROM's own
 /// PRO-mode line editor, one statement line at a time, tokenizing exactly
-/// as it would for a human typist (see file doc comment). Presses CL,
-/// then types NEW0 + Enter to clear any resident program, before typing
-/// `text`'s lines. A line that doesn't grow the program's stored size is
-/// collected into the result as rejected rather than aborting the load.
+/// as it would for a human typist (see file doc comment). Like the
+/// PC-1600's and the fast basic-binary loaders, it neither clears nor
+/// resets anything first: the lines are added to whatever program is
+/// resident, and the caller must have left the machine ready to store
+/// lines (on a cold-booted machine, CL then NEW0 -- a preset's own
+/// `- key: cl` / `- type: NEW0` steps). A line that doesn't grow the
+/// program's stored size is collected into the result as rejected rather
+/// than aborting the load.
 BasicTypeResult typeBasicProgramText(PC1500Machine& machine, const std::string& text);

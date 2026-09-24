@@ -56,6 +56,20 @@ bool bootMachine(PC1500Machine& machine) {
     return true;
 }
 
+// typeBasicProgramText() adds to the resident program and clears nothing;
+// a cold-booted machine needs CL + NEW0 first, as a preset's `keys:` would.
+BasicTypeResult typeFreshProgram(PC1500Machine& machine, const std::string& text) {
+    tapKey(machine, "cl");
+    waitIdle(machine, static_cast<uint64_t>(PC1500Machine::kCpuHz * 2));
+    std::string err;
+    if (!typeLine(machine, "NEW0", /*pressEnter=*/true, &err)) {
+        BasicTypeResult r;
+        r.error = err;
+        return r;
+    }
+    return typeBasicProgramText(machine, text);
+}
+
 void test_typeline_lowercase_via_shift() {
     PC1500Machine machine;
     if (!bootMachine(machine)) {
@@ -64,7 +78,7 @@ void test_typeline_lowercase_via_shift() {
         return;
     }
 
-    BasicTypeResult result = typeBasicProgramText(machine, "10 PRINT \"Bank: 7\"\n");
+    BasicTypeResult result = typeFreshProgram(machine, "10 PRINT \"Bank: 7\"\n");
     CHECK(result.ok);
     CHECK(result.rejectedLines.empty());
 
@@ -88,7 +102,7 @@ void test_typeline_still_types_uppercase_directly() {
     // Typing already-uppercase text (the overwhelmingly common case --
     // BASIC keywords, most preset scripts) must work unchanged: the
     // SHIFT-tap only applies to 'a'-'z', never to 'A'-'Z'.
-    BasicTypeResult result = typeBasicProgramText(machine, "10 PRINT \"BANK: 7\"\n");
+    BasicTypeResult result = typeFreshProgram(machine, "10 PRINT \"BANK: 7\"\n");
     CHECK(result.ok);
     CHECK(result.rejectedLines.empty());
     CHECK(memoryContainsBytes(machine, "BANK: 7", 0x4000, 0x7FFF));
@@ -108,7 +122,7 @@ void test_typebasicprogram_consecutive_long_lines() {
     }
 
     // 5 x ~72-char DATA lines back to back, same shape as the real listing.
-    BasicTypeResult result = typeBasicProgramText(
+    BasicTypeResult result = typeFreshProgram(
         machine,
         "10 DATA 48008E08FFFFFFFFFFFF4801FD88BEEE716A696815B50BBEED004A7448155A00\n"
         "20 DATA 58416A98BE1565FD0A4204AE411C4C018B14B558AE4153AE415CAE4178AE417E\n"
@@ -151,7 +165,7 @@ void test_typebasicprogram_long_data_then_short_line_tail() {
     prog += "340 DATA AE2AAA9AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\n";
     prog += "350 REM CS: -9066 (0xdc96) set X=34\n";
 
-    BasicTypeResult result = typeBasicProgramText(machine, prog);
+    BasicTypeResult result = typeFreshProgram(machine, prog);
 
     CHECK(result.ok);
     CHECK(result.rejectedLines.empty());
@@ -184,7 +198,7 @@ void test_typeline_waits_for_run_to_finish() {
         prog += std::to_string(10 + i) + " POKE " + std::to_string(0x7C50 + i) + "," +
                 std::to_string(0x41 + i) + "\n";
     }
-    CHECK(typeBasicProgramText(machine, prog).ok);
+    CHECK(typeFreshProgram(machine, prog).ok);
 
     tapKey(machine, "mode"); // PRO -> RUN
     // Run it, then immediately (no manual settle) issue a direct command.
@@ -216,7 +230,7 @@ void test_wait_until_basic_idle_confirms_prompt_loop_hold() {
     constexpr uint64_t kHz = 1300000;
     constexpr uint64_t kFrame = kHz / 60;
 
-    CHECK(typeBasicProgramText(machine,
+    CHECK(typeFreshProgram(machine,
         "10 POKE 31824,222\n"   // &7C50 <- &DE, so we can see the program ran
         "20 END\n").ok);
     tapKey(machine, "mode");                              // PRO -> RUN

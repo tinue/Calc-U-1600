@@ -193,15 +193,6 @@ bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, 
 BasicTypeResult typeBasicProgramText(PC1500Machine& machine, const std::string& text) {
     BasicTypeResult result;
 
-    tapKey(machine, "cl");
-    waitIdle(machine, static_cast<uint64_t>(kCpuHz * 2));
-
-    std::string newError;
-    if (!typeLine(machine, "NEW0", /*pressEnter=*/true, &newError)) {
-        result.error = newError;
-        return result;
-    }
-
     std::istringstream lines(text);
     std::string line;
     while (std::getline(lines, line)) {

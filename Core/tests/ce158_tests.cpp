@@ -312,6 +312,7 @@ void test_rom_lprint_centronics_with_ce150_chained() {
     PresetFile preset;
     CHECK(loadPreset(
         "model: PC-1500A:A04\nplotter: ce150\ninterface: ce158\n"
+        "keys:\n  - key: cl\n  - type: NEW0\n"
         "program:\n  format: basic-text\n  text: |\n"
         "    10 OPN \"LPRT\"\n    20 LPRINT \"HELLO CE-158\"\n    30 OPN\n    40 LPRINT \"CE150\"\n"
         "keys:\n  - key: cl\n  - key: mode\n  - type: RUN\n  - wait:\n",
@@ -335,6 +336,7 @@ void test_rom_serial_lprint_and_input() {
     PresetFile preset;
     CHECK(loadPreset(
         "model: PC-1500A:A04\ninterface: ce158\n"
+        "keys:\n  - key: cl\n  - type: NEW0\n"
         "program:\n  format: basic-text\n  text: |\n"
         "    10 SETDEV PO\n    20 OUTSTAT 0\n    30 LPRINT \"SERIAL OUT\"\n"
         "    40 SETDEV KI\n    50 INPUT A$\n    60 SETDEV\n    70 OPN \"LPRT\":LPRINT \"GOT \";A$\n"

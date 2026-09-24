@@ -78,6 +78,7 @@ bool tokenizeViaOracle(const std::string& src, std::vector<uint8_t>* payload, ui
                        uint16_t* endOut, uint8_t* markerOut) {
     PC1500Machine m;
     if (!bootMachine(m)) return false;
+    primeNew0(m);
     BasicTypeResult typed = typeBasicProgramText(m, src);
     if (!typed.ok || !typed.rejectedLines.empty()) return false;
     uint16_t st = be16(m, 0x7865);

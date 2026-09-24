@@ -191,7 +191,7 @@ void test_pc1500_paste_multiline_types_first_line() {
         return;
     }
     // A cold-booted PC-1500 needs CL + NEW0 before it stores program lines
-    // (typeBasicProgramText()'s own preamble).
+    // (the preamble a preset's keys: gives typeBasicProgramText()).
     tapKey(m, "cl");
     waitIdle(m, static_cast<uint64_t>(1300000.0 * 2));
     std::string err;
