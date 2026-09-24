@@ -39,7 +39,8 @@ bool PC1500Machine::attachCE150(const uint8_t* rom, size_t romSize) {
     if (romSize != Ce150Card::kRomSize) return false;
     auto card = std::make_unique<Ce150Card>();
     if (!card->loadRom(rom, romSize)) return false;
-    detachCE150();
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE150Locked();
     card->reset();
     m_systemBus.attach(card.get());
     m_ce150Card = std::move(card);
@@ -47,6 +48,11 @@ bool PC1500Machine::attachCE150(const uint8_t* rom, size_t romSize) {
 }
 
 void PC1500Machine::detachCE150() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE150Locked();
+}
+
+void PC1500Machine::detachCE150Locked() {
     if (!m_ce150Card) return;
     m_systemBus.detach(m_ce150Card.get());
     m_ce150Card.reset();
@@ -56,7 +62,8 @@ bool PC1500Machine::attachCE158(const uint8_t* rom, size_t romSize) {
     if (romSize != Ce158Card::kRomSize) return false;
     auto card = std::make_unique<Ce158Card>();
     if (!card->loadRom(rom, romSize)) return false;
-    detachCE158();
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE158Locked();
     card->reset();
     card->setSerialLink(m_ce158Link);
     m_systemBus.attach(card.get());
@@ -65,6 +72,11 @@ bool PC1500Machine::attachCE158(const uint8_t* rom, size_t romSize) {
 }
 
 void PC1500Machine::detachCE158() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE158Locked();
+}
+
+void PC1500Machine::detachCE158Locked() {
     if (!m_ce158Card) return;
     m_systemBus.detach(m_ce158Card.get());
     m_ce158Card.reset();

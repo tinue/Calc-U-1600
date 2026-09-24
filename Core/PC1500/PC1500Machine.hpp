@@ -320,6 +320,12 @@ private:
     // case (PC1500TraceFile::writeGap() covers the pathological one).
     static constexpr uint32_t kTraceDrainInterval = 256;
     CpuFrame m_traceDrainBuf[kTraceDrainBufFrames];
+    /// Bodies of the public detach calls; caller holds m_mutex. The
+    /// attach/detach calls take it because step() dispatches bus accesses
+    /// to these cards on the emulation thread.
+    void detachCE150Locked();
+    void detachCE158Locked();
+
     /// Drain the CPU trace ring into m_traceFile. Caller must hold
     /// m_mutex; safe to call only while m_traceFile is set.
     void pumpTraceFile();
