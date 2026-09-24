@@ -303,7 +303,9 @@ public:
     /// loading a BASIC program instead). Returns false, writing nothing,
     /// if any byte in the range would land on ROM or an open-bus/
     /// unattached region -- an all-or-nothing check up front, not a
-    /// partial write on failure.
+    /// partial write on failure. Writes take the host path (poke()), and
+    /// a byte a card claims but doesn't keep (read-only module RAM, mask
+    /// ROM) restores the range and also returns false.
     bool pokeMemory(uint16_t address, const uint8_t* data, size_t size);
 
     // ── Debug reads (GUI-safe: take m_mutex, like pokeMemory()) ───────────

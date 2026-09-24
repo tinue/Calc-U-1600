@@ -56,3 +56,27 @@ inline std::unique_ptr<SoftwareDefinedCard> plainRamCard(size_t sizeBytes) {
     if (!parseMemoryCardDefinition(yaml, &def, &error)) return nullptr;
     return std::make_unique<SoftwareDefinedCard>(std::move(def));
 }
+
+// A 16 KB Slot-1/Slot-2 module with the given `content:` value (a flow
+// mapping, e.g. "{ kind: regular, writable: false }"), mapped like the low
+// half of plainRamCard().
+inline std::unique_ptr<SoftwareDefinedCard> slotCardWithContent(const std::string& content) {
+    std::string yaml =
+        "module-name: \"Test module\"\n"
+        "compatible-hosts: [PC-1600-Slot-1, PC-1600-Slot-2]\n"
+        "definition-terminology: PC-1600-Slot-1\n"
+        "regions:\n"
+        "  - name: mem\n"
+        "    capacity: 0x4000\n"
+        "    banking: none\n"
+        "    content: " + content + "\n"
+        "    addressing:\n"
+        "      any-of:\n"
+        "        - all-of: [ { chip-select: RAM2 }, { signal-negated: PVOUT } ]\n"
+        "          span: 0x4000\n"
+        "          maps-to: 0x0000\n";
+    MemoryCardDefinition def;
+    std::string error;
+    if (!parseMemoryCardDefinition(yaml, &def, &error)) return nullptr;
+    return std::make_unique<SoftwareDefinedCard>(std::move(def));
+}
