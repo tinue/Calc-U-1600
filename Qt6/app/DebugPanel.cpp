@@ -1,6 +1,7 @@
 #include "DebugPanel.hpp"
 
 #include <QEvent>
+#include <QFileInfo>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -27,7 +28,6 @@
 #include "Debug/BasicPointerTable.hpp"
 #include "MachineController.hpp"
 #include "MemoryModuleManager.hpp"
-#include "PC1500/PC1500TraceFile.hpp"
 
 namespace {
 
@@ -147,6 +147,7 @@ DebugPanel::DebugPanel(MachineController* controller, QWidget* parent)
     connect(m_clearButton, &QPushButton::clicked, this, &DebugPanel::clearDebug);
     connect(m_traceButton, &QToolButton::clicked, this, [this] { setTraceEnabled(!m_traceEnabled); });
     connect(m_logButton, &QToolButton::clicked, this, &DebugPanel::toggleDebugLevel);
+    connect(m_controller, &MachineController::traceEndedByRebuild, this, &DebugPanel::onTraceEndedByRebuild);
 
     applyChrome();
 }
@@ -157,7 +158,7 @@ QString DebugPanel::selectedOutputText() const {
 }
 
 DebugPanel::~DebugPanel() {
-    if (m_traceEnabled) setTraceEnabled(false);
+    if (m_traceEnabled) m_controller->endTrace();
 }
 
 bool DebugPanel::isDarkMode() const {
@@ -256,59 +257,33 @@ void DebugPanel::setTraceEnabled(bool enabled) {
     if (enabled) {
         const QString dir = AppSettings::traceDirOverride().isEmpty() ? AppPaths::instanceDir()
                                                                         : AppSettings::traceDirOverride();
-        const QString path = dir + "/TRACE.bin";
-        std::FILE* handle = std::fopen(path.toStdString().c_str(), "wb");
-        if (!handle) {
+        m_tracePath = dir + "/TRACE.bin";
+        if (!m_controller->beginTrace(m_tracePath)) {
             m_traceEnabled = false;
+            ringWriteAll({fmt("TRACE: couldn't start a capture to %s.", m_tracePath.toStdString().c_str())});
             updateTraceButtonAppearance();
             return;
         }
-        m_traceFile = std::make_unique<PC1500TraceFile>(handle);
-        // 16-byte header + the 11-byte SESSION_START record the constructor
-        // just wrote (3-byte record header + 8-byte payload) -- see
-        // PC1500TraceFile's constructor.
-        m_traceBytesWritten = 16 + 11;
         const int maxMB = AppSettings::traceMaxFileSizeMB();
         m_traceMaxBytes = static_cast<std::uint64_t>(maxMB > 0 ? maxMB : 50) * 1'000'000;
-        m_controller->setTraceEnabled(true);
     } else {
-        m_controller->setTraceEnabled(false);
-        if (m_controller->currentModel() == Model::PC1600) drainTracePC1600(); else drainTracePC1500();
-        m_traceFile.reset();  // destructor calls finish()
+        m_controller->endTrace(); // drains the rest, writes SESSION_END, closes the file
     }
     updateTraceButtonAppearance();
 }
 
-void DebugPanel::drainTracePC1500() {
-    if (!m_traceFile) return;
-    std::uint32_t lost = 0;
-    std::vector<CpuFrame> buffer(256);
-    const std::uint32_t count = m_controller->drainPC1500Trace(buffer.data(), static_cast<std::uint32_t>(buffer.size()), &lost);
-    if (lost > 0) { m_traceFile->writeGap(lost); m_traceBytesWritten += 7; }
-    for (std::uint32_t i = 0; i < count; ++i) m_traceFile->writeFrame(buffer[i]);
-    m_traceBytesWritten += static_cast<std::uint64_t>(count) * 28;  // 3-byte record header + 25-byte payload
-}
-
-void DebugPanel::drainTracePC1600() {
-    if (!m_traceFile) return;
-    std::uint32_t lostZ80 = 0;
-    std::vector<Z80CpuFrame> z80Buffer(8192);
-    const std::uint32_t z80Count = m_controller->drainSC7852Trace(z80Buffer.data(), static_cast<std::uint32_t>(z80Buffer.size()), &lostZ80);
-    if (lostZ80 > 0) { m_traceFile->writeGap(lostZ80); m_traceBytesWritten += 7; }
-
-    std::uint32_t lostLh = 0;
-    std::vector<CpuFrame> lhBuffer(256);
-    const std::uint32_t lhCount = m_controller->drainLH5803Trace(lhBuffer.data(), static_cast<std::uint32_t>(lhBuffer.size()), &lostLh);
-    if (lostLh > 0) { m_traceFile->writeGap(lostLh); m_traceBytesWritten += 7; }
-
-    for (std::uint32_t i = 0; i < z80Count; ++i) m_traceFile->writeFrame(z80Buffer[i]);
-    for (std::uint32_t i = 0; i < lhCount; ++i) m_traceFile->writeFrame(lhBuffer[i]);
-    m_traceBytesWritten += static_cast<std::uint64_t>(z80Count) * 32;  // 3-byte header + 29-byte payload
-    m_traceBytesWritten += static_cast<std::uint64_t>(lhCount) * 28;
+void DebugPanel::onTraceEndedByRebuild() {
+    if (!m_traceEnabled) return;
+    m_traceEnabled = false;
+    ringWriteAll({"TRACE stopped: the machine was rebuilt (model, ROM, module or preset change). "
+                  "Re-enable TRACE to start a new session."});
+    updateTraceButtonAppearance();
 }
 
 void DebugPanel::checkTraceSizeLimit() {
-    if (m_traceBytesWritten < m_traceMaxBytes) return;
+    // Core writes the file; its size on disk (short of stdio's buffer) is
+    // the running byte count.
+    if (static_cast<std::uint64_t>(QFileInfo(m_tracePath).size()) < m_traceMaxBytes) return;
     ringWriteAll({fmt("TRACE stopped: reached the %llu MB size limit. Re-enable TRACE to start a new session.",
                        static_cast<unsigned long long>(m_traceMaxBytes / 1'000'000))});
     setTraceEnabled(false);
@@ -316,7 +291,6 @@ void DebugPanel::checkTraceSizeLimit() {
 
 void DebugPanel::onFrameTick() {
     if (!m_traceEnabled) return;
-    if (m_controller->currentModel() == Model::PC1600) drainTracePC1600(); else drainTracePC1500();
     checkTraceSizeLimit();
 }
 

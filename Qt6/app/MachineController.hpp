@@ -294,15 +294,16 @@ public:
     std::vector<std::uint8_t> debugInternalRamPC1600() const;
     DebugBankStateFrame debugBankStatePC1600() const;
 
-    // Trace. setTraceEnabled()/traceEnabled() just flip the CPU trace-flag
-    // switch; the three drain*Trace() calls hand back raw Core ring frames
-    // for the caller (DebugPanel) to write into its own PC1500TraceFile --
-    // kept as pass-throughs rather than owning a TraceFile here.
-    void setTraceEnabled(bool enabled);
-    bool traceEnabled() const;
-    std::uint32_t drainPC1500Trace(CpuFrame* out, std::uint32_t max, std::uint32_t* outLost);
-    std::uint32_t drainSC7852Trace(Z80CpuFrame* out, std::uint32_t max, std::uint32_t* outLost);
-    std::uint32_t drainLH5803Trace(CpuFrame* out, std::uint32_t max, std::uint32_t* outLost);
+    // TRACE (DebugPanel): a full instruction trace of the live machine to
+    // `path`, captured inside Core -- runCycles() drains the CPU ring(s)
+    // into the file as it goes (PC1500Machine/PC1600Machine::
+    // beginCpuTrace()), so nothing is lost between frame ticks. False if
+    // the file can't be opened or a capture is already running. A machine
+    // rebuild (switchModel(), resetBareForPreset*()) ends the capture and
+    // emits traceEndedByRebuild().
+    bool beginTrace(const QString& path);
+    void endTrace();
+    bool traceActive() const;
 
     // ---- Plotter support (PlotterController/PlotterPaperWidget only) ----
     // Attach/detach are live calls into the already-running machine (NOT a
@@ -351,6 +352,8 @@ public:
 
 signals:
     void modelChanged(Model model);
+    // A machine rebuild ended the active TRACE capture (see beginTrace()).
+    void traceEndedByRebuild();
 
 private:
     Model m_model = Model::PC1500A;
@@ -362,6 +365,9 @@ private:
     KeyPasteFeeder m_paste;
     std::uint64_t m_pasteFrameCycles = 0; // cycles run since the paste feeder's last frame boundary
     void runActive(std::uint64_t cycles);
+    // Ends an active TRACE capture on the machine about to be replaced
+    // (its file closed with SESSION_END) and emits traceEndedByRebuild().
+    void endTraceBeforeRebuild();
     void pasteOnFrame();
     MemoryModuleManager* m_moduleManager = nullptr; // not owned
     FloppyDiskManager* m_floppyManager = nullptr;   // not owned

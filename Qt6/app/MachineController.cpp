@@ -1,5 +1,6 @@
 #include "MachineController.hpp"
 
+#include <cstdio>
 #include <cstdlib>
 
 #include <QDebug>
@@ -83,6 +84,7 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
     const bool restoreCE1600P = keepPlotter && ce1600pAttached();
     const bool restoreCE158 = keepPlotter && ce158Attached();
     flushFloppyBeforeDetach(); // the old machine (and its disk) is going away
+    endTraceBeforeRebuild();
     m_model = model;
     m_paste.cancel({}); // the machine it was typing into is going away
     m_pc1500.reset();
@@ -175,6 +177,7 @@ void MachineController::makePC1600WithRomFallback() {
 }
 
 PC1500Machine& MachineController::resetBareForPresetPC1500(PC1500Variant variant) {
+    endTraceBeforeRebuild();
     m_paste.cancel({});
     m_pc1500.reset();
     m_pc1600.reset();
@@ -189,6 +192,7 @@ PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion vers
                                                            CE1600PRomVersion ce1600pVersion) {
     m_pc1600RomVersion = version;
     m_ce1600pRomVersion = ce1600pVersion;
+    endTraceBeforeRebuild();
     m_paste.cancel({});
     m_pc1500.reset();
     m_pc1600.reset();
@@ -569,32 +573,30 @@ DebugBankStateFrame MachineController::debugBankStatePC1600() const {
     return out;
 }
 
-void MachineController::setTraceEnabled(bool enabled) {
-    if (m_pc1600) {
-        m_pc1600->setTraceEnabled(enabled);
-        return;
-    }
-    if (!m_pc1500) return;
-    const uint32_t flags = enabled ? (TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL) : TRACE_NONE;
-    if (m_pc1500->traceFlags() != flags) m_pc1500->setTraceFlags(flags);
+bool MachineController::beginTrace(const QString& path) {
+    if (!m_pc1500 && !m_pc1600) return false;
+    std::FILE* handle = std::fopen(path.toStdString().c_str(), "wb");
+    if (!handle) return false;
+    constexpr uint32_t flags = TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL;
+    const bool ok = m_pc1600 ? m_pc1600->beginCpuTrace(handle, flags) : m_pc1500->beginCpuTrace(handle, flags);
+    if (!ok) std::fclose(handle); // a capture was already active; ownership passes only on success
+    return ok;
 }
 
-bool MachineController::traceEnabled() const {
-    if (m_pc1600) return m_pc1600->traceEnabled();
-    if (m_pc1500) return m_pc1500->traceFlags() != TRACE_NONE;
-    return false;
+void MachineController::endTrace() {
+    if (m_pc1600) m_pc1600->endCpuTrace();
+    else if (m_pc1500) m_pc1500->endCpuTrace();
 }
 
-std::uint32_t MachineController::drainPC1500Trace(CpuFrame* out, std::uint32_t max, std::uint32_t* outLost) {
-    return m_pc1500 ? m_pc1500->drainTraceEvents(out, max, outLost) : 0;
+bool MachineController::traceActive() const {
+    if (m_pc1600) return m_pc1600->cpuTraceActive();
+    return m_pc1500 && m_pc1500->cpuTraceActive();
 }
 
-std::uint32_t MachineController::drainSC7852Trace(Z80CpuFrame* out, std::uint32_t max, std::uint32_t* outLost) {
-    return m_pc1600 ? m_pc1600->sc7852().drainTraceEvents(out, max, outLost) : 0;
-}
-
-std::uint32_t MachineController::drainLH5803Trace(CpuFrame* out, std::uint32_t max, std::uint32_t* outLost) {
-    return m_pc1600 ? m_pc1600->lh5803().drainTraceEvents(out, max, outLost) : 0;
+void MachineController::endTraceBeforeRebuild() {
+    if (!traceActive()) return;
+    endTrace();
+    emit traceEndedByRebuild();
 }
 
 // ---- Plotter support ----
