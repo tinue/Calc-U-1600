@@ -431,6 +431,23 @@ void test_pc1600_f_register_modulator() {
     runAndCapture(m, "BEEP ON");
 }
 
+// Switching 17H to a faster divider mid-period (no 14H reset) leaves the
+// SDO phase past the new half period. The overdue toggle must fire at once,
+// not wrap into a ~4e9 T-state advance of the sampler.
+void test_pc1600_f_register_faster_divider_mid_period() {
+    PC1600Machine m;
+    PC1600Memory& mem = m.memory();
+    mem.writeIO(0x17, 0x44);   // FX = phi/1024: half period ~5640 T-states
+    mem.advanceBuzzer(5000);
+    int16_t buf[4096];
+    while (mem.piezo().drain(buf, 4096) > 0) {}
+    const uint64_t edges = mem.piezo().edgeCount();
+    mem.writeIO(0x17, 0x40);   // FX = phi/64: half period ~352 T-states
+    mem.advanceBuzzer(1);
+    CHECK(mem.piezo().available() <= 1);
+    CHECK(mem.piezo().edgeCount() - edges <= 1);
+}
+
 } // namespace
 
 int run_piezo_sampler_tests() {
@@ -445,6 +462,7 @@ int run_piezo_sampler_tests() {
     test_pc1600_beep();
     test_pc1600_beep_repeat_spacing();
     test_pc1600_f_register_modulator();
+    test_pc1600_f_register_faster_divider_mid_period();
 
     std::printf("piezo_sampler_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

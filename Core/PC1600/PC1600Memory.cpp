@@ -70,6 +70,10 @@ void PC1600Memory::advanceBuzzer(uint32_t tstates) {
     // Codes 5-7 aren't in the TRM table; treat them as the slowest, /1024.
     const int fx = std::min(m_fReg & 0x07, 4);
     const int64_t halfPeriod = int64_t{kPC1600TStateHz} * (int64_t{64} << fx) / 2; // in T-states * kModulatorHz
+    // A 17H write can select a faster divider mid-period (no 14H reset), so
+    // the phase may already be past the new half period: that toggle is
+    // due now, not a negative time from now.
+    m_sdoAccum = std::min(m_sdoAccum, halfPeriod);
     int64_t remaining = tstates;
     while (m_sdoAccum + remaining * kModulatorHz >= halfPeriod) {
         const int64_t take = (halfPeriod - m_sdoAccum + kModulatorHz - 1) / kModulatorHz;
