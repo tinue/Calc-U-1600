@@ -441,7 +441,7 @@ void test_pc1600_rom_mode1_printing() {
     CHECK(BundledRoms::loadPC1600RomSet(machine, {"roms"}, "new", &romErr));
     FakeLink link;
     machine.setCE158SerialLink(&link);
-    PC1600PresetLoadResult res = applyPC1600Preset(machine, preset, {}, ".", ".", {}, {"roms"});
+    PresetLoadResult res = applyPC1600Preset(machine, preset, {}, ".", ".", {}, {"roms"});
     if (!res.ok) std::fprintf(stderr, "preset error: %s\n", res.error.c_str());
     CHECK(res.ok);
     CHECK(res.ce158Attached);
@@ -465,7 +465,7 @@ void test_pc1600_rom_mode1_rinkey() {
     link.armed = false;
     link.rx = {'A'};
     machine.setCE158SerialLink(&link);
-    PC1600PresetLoadResult res = applyPC1600Preset(machine, preset, {}, ".", ".", {}, {"roms"});
+    PresetLoadResult res = applyPC1600Preset(machine, preset, {}, ".", ".", {}, {"roms"});
     if (!res.ok) std::fprintf(stderr, "preset error: %s\n", res.error.c_str());
     CHECK(res.ok);
     machine.runCycles(PC1600Machine::kTStateHz);

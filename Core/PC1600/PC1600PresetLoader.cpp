@@ -4,18 +4,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <ctime>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "../Connector/FloppyImageFile.hpp"
-#include "../Connector/MemoryCardCatalog.hpp"
-#include "../Connector/SoftwareDefinedCard.hpp"
 #include "../Resources/BundledRomCatalog.hpp"
-#include "../HostClock.hpp"
-#include "../TraceTypes.hpp"
-#include "../Basic/BasicProgramSource.hpp"
 #include "PC1600BasicLoader.hpp"
 #include "PC1600BasicTyper.hpp"
 #include "PC1600Keyboard.hpp"
@@ -66,32 +60,6 @@ void tapBreak(PC1600Machine& machine) {
     machine.runCycles(kIdleTStates);
 }
 
-// A `key:` step value: `break`/`on` (the ON key) or a single named PC-1600
-// key (PC1600Keyboard::keyFromName). The parser already rejects anything
-// else (pointing at `type:`), so this only stays defensive.
-bool runKeyStep(PC1600Machine& machine, const std::string& value, std::string* error) {
-    // Same gap as between typed lines: after a prior line's ENTER the ROM
-    // is out of its key-scan loop for a bit. No-op without a plotter.
-    waitForKeyboardScanLoop(machine);
-    if (value == "break" || value == "on") {
-        tapBreak(machine);
-        return true;
-    }
-    if (PC1600Keyboard::keyFromName(value) != PC1600Keyboard::Key::Unknown) {
-        tapKey(machine, value);
-        return true;
-    }
-    *error = "key: '" + value + "' is not a known PC-1600 key";
-    return false;
-}
-
-// A `type:` step: the line's characters as keystrokes, then ENTER. Case-
-// sensitive; lowercase and the shifted punctuation / digit-row symbols go
-// via a SHIFT-tap (see PC1600BasicTyper::typeLine).
-bool runTypeStep(PC1600Machine& machine, const std::string& text, std::string* error) {
-    return typeLine(machine, text, /*pressEnter=*/true, error);
-}
-
 // `errnoOut`, when given, receives the errno from a failed `fopen` --
 // EPERM/EACCES (a sandbox-denied path, e.g. a preset's sibling binary the
 // file picker never granted access to) look identical to ENOENT (a
@@ -131,9 +99,8 @@ bool readWholeFile(const std::string& path, std::vector<uint8_t>* out, int* errn
 // straight into one backing store via debugWriteInternalRam /
 // debugWriteSlotImage, which take Z-80 (SC7852) offsets with no +$8000
 // conversion.
-bool loadMachineBinary(PC1600Machine& machine, const PresetProgram& program, int sectionNo,
-                       const PC1600PresetLogFn& log, std::string* error) {
-    const std::string tag = "section " + std::to_string(sectionNo) + ": ";
+bool loadMachineBinary(PC1600Machine& machine, const PresetProgram& program, const std::string& tag,
+                       const PresetLogFn& log, std::string* error) {
 
     std::vector<uint8_t> file;
     int readErrno = 0;
@@ -240,8 +207,8 @@ bool loadMachineBinary(PC1600Machine& machine, const PresetProgram& program, int
 // set on any problem.
 bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter,
                          const std::string& ce1600pRom, const std::string& floppy, int floppySide, const std::vector<std::string>& romDirs,
-                         const std::vector<std::string>& moduleDirs, const PC1600PresetLogFn& log,
-                         PC1600PresetLoadResult* result) {
+                         const std::vector<std::string>& moduleDirs, const PresetLogFn& log,
+                         PresetLoadResult* result) {
     if (plotter.empty()) return true;
 
     FloppyFile disk;
@@ -271,65 +238,94 @@ bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter,
     return true;
 }
 
+class PC1600PresetMachine final : public PresetMachineBase<PC1600Machine> {
+public:
+    using PresetMachineBase::PresetMachineBase;
+
+    uint32_t cyclesPerSecond() const override { return kTStateHz; }
+    uint64_t waitUntilBasicIdle(uint64_t maxTStates) override {
+        return ::waitUntilBasicIdle(m_machine, maxTStates);
+    }
+    std::string stepTag() override { return ::stepTag(m_machine); }
+
+    // `break`/`on` (the ON key) or a single named PC-1600 key
+    // (PC1600Keyboard::keyFromName).
+    bool key(const std::string& name, std::string* error) override {
+        // Same gap as between typed lines: after a prior line's ENTER the ROM
+        // is out of its key-scan loop for a bit. No-op without a plotter.
+        waitForKeyboardScanLoop(m_machine);
+        if (name == "break" || name == "on") {
+            tapBreak(m_machine);
+            return true;
+        }
+        if (PC1600Keyboard::keyFromName(name) == PC1600Keyboard::Key::Unknown) {
+            *error = "key: '" + name + "' is not a known PC-1600 key";
+            return false;
+        }
+        tapKey(m_machine, name);
+        return true;
+    }
+    // Case-sensitive; lowercase and the shifted punctuation / digit-row
+    // symbols go via a SHIFT-tap (see PC1600BasicTyper::typeLine).
+    bool typeLine(const std::string& line, std::string* error) override {
+        return ::typeLine(m_machine, line, /*pressEnter=*/true, error);
+    }
+
+    // The graphics area (no status strip), same image as the GUI's Copy Screen.
+    bool writeScreenshot(const std::string& path, std::string* error) override {
+        return writeLcdScreenshotPng(pc1600LcdBitmap(m_machine), kPC1600ScreenMm, path, error);
+    }
+
+    BasicTypeResult typeBasicProgram(const std::string& text) override {
+        return typeBasicProgramText(m_machine, text);
+    }
+    basic::TransferModel transferModel() const override { return basic::TransferModel::PC1600; }
+    BasicLoadResult loadBasicPayload(const std::vector<uint8_t>& payload) override {
+        return loadBasicBinaryPayload(m_machine, payload);
+    }
+
+    bool loadBinary(const PresetProgram& program, const std::string& tag, const PresetLogFn& log,
+                    std::string* error) override {
+        return loadMachineBinary(m_machine, program, tag, log, error);
+    }
+};
+
 } // namespace
 
-PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& preset,
-                                         const PC1600PresetLogFn& log, const std::string& traceDir,
-                                         const std::string& moduleDir,
-                                         const PC1600PresetBootedFn& onBooted,
-                                         const std::vector<std::string>& romDirs,
-                                         const std::vector<std::string>& extraModuleDirs,
-                                         const PC1600PresetArmedFn& onArmed,
-                                         const PresetSaveAsFn& onSaveAs) {
-    PC1600PresetLoadResult result;
-
-    // The `- modulespec: <name>` search path: `moduleDir` first (bundled
-    // catalogue), then any `extraModuleDirs` (the GUI's iCloud BatteryCards
-    // folder). Built once here; the `plug` lambda below captures it.
-    std::vector<std::string> moduleDirs{moduleDir};
-    moduleDirs.insert(moduleDirs.end(), extraModuleDirs.begin(), extraModuleDirs.end());
-
-    // A trace started by a `- trace:` step and never explicitly stopped is
-    // closed (SESSION_END written, file closed) when this function returns
-    // by any path -- mirrors PC1500PresetLoader's own TraceCloser.
-    struct TraceCloser {
-        PC1600Machine& m;
-        ~TraceCloser() { if (m.cpuTraceActive()) m.endCpuTrace(); }
-    } traceCloser{machine};
+PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& preset,
+                                   const PresetLogFn& log, const std::string& traceDir,
+                                   const std::string& moduleDir,
+                                   const PresetBootedFn& onBooted,
+                                   const std::vector<std::string>& romDirs,
+                                   const std::vector<std::string>& extraModuleDirs,
+                                   const PresetArmedFn& onArmed,
+                                   const PresetSaveAsFn& onSaveAs) {
+    PresetLoadResult result;
+    PC1600PresetMachine adapter(machine);
+    const std::vector<std::string> moduleDirs = presetModuleDirs(moduleDir, extraModuleDirs);
 
     auto plug = [&](const std::string& specFile, const std::string& specName, int slot) -> bool {
-        std::unique_ptr<ExpansionCard> card;
-        std::string label;      // human-readable, for the log line
-        std::string resolvedPath;  // on-disk file, if any (modulespec/modulespecfile only)
-        if (!specFile.empty() || !specName.empty()) {
-            CardHost host = (slot == 1) ? CardHost::PC1600Slot1 : CardHost::PC1600Slot2;
-            std::string err;
-            std::string specPath = specFile;
-            if (specPath.empty() &&
-                !resolveModuleSpecByName(moduleDirs, specName, &specPath, &err)) {
-                result.error = "slot " + std::to_string(slot) + " modulespec: " + err;
-                return false;
-            }
-            card = makeSoftwareDefinedCard(specPath, host, &err);
-            if (!card) {
-                result.error = "slot " + std::to_string(slot) + " modulespec: " + err;
-                return false;
-            }
-            label = card->moduleName() + " (" + specPath + ")";
-            resolvedPath = specPath;
-        } else {
-            return true;  // empty slot
+        if (specFile.empty() && specName.empty()) return true;  // empty slot
+        CardHost host = (slot == 1) ? CardHost::PC1600Slot1 : CardHost::PC1600Slot2;
+        std::string err, specPath;
+        std::unique_ptr<ExpansionCard> card =
+            makePresetModuleCard(specFile, specName, moduleDirs, host, &specPath, &err);
+        if (!card) {
+            result.error = "slot " + std::to_string(slot) + " modulespec: " + err;
+            return false;
         }
+        const std::string label = card->moduleName() + " (" + specPath + ")";
         if (slot == 1) {
             machine.attachSlot1Card(std::move(card));
-            result.slot1ResolvedPath = resolvedPath;
+            result.slot1ResolvedPath = specPath;
         } else {
             machine.attachSlot2Card(std::move(card));
-            result.slot2ResolvedPath = resolvedPath;
+            result.slot2ResolvedPath = specPath;
         }
         if (log) log("slot " + std::to_string(slot) + ": " + label + " attached");
         return true;
     };
+
     if (!plug(preset.slot1ModuleSpecFile, preset.slot1ModuleSpecName, 1))
         return result;
     if (!plug(preset.slot2ModuleSpecFile, preset.slot2ModuleSpecName, 2))
@@ -362,152 +358,11 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
     machine.allReset();
     // Includes the plotter's power-on init -- `waitForKeyboardScanLoop`
     // also guards every typed line (PC1600BasicTyper) and every `key:` step
-    // (runKeyStep) for the same gap that reopens after each line's ENTER.
+    // (PC1600PresetMachine::key) for the same gap that reopens after each line's ENTER.
     runBootToPrompt(machine);
-    if (log) log("reset + boot settle done" + stepTag(machine));
+    if (log) log("reset + boot settle done" + adapter.stepTag());
     if (onBooted) onBooted();
 
-    int sectionNo = 0;
-    for (const PresetSection& section : preset.sections) {
-        sectionNo++;
-        if (section.kind == PresetSection::Kind::Program) {
-            // A preceding `type:` step returns right after its ENTER, so a
-            // command it started (e.g. a SAVE) may still be running -- let it
-            // finish before this section pokes a program into memory
-            // underneath it.
-            constexpr uint64_t kProgramIdleCap = static_cast<uint64_t>(kTStateHz) * 3600;  // 1 h emulated
-            waitUntilBasicIdle(machine, kProgramIdleCap);
-            const PresetProgram& program = section.program;
-            if (program.format == PresetProgram::Format::BasicBinary) {
-                basic::BasicProgramSource src =
-                    basic::readBasicProgramSource(program.path, basic::TransferModel::PC1600);
-                if (!src.ok) {
-                    result.error = "section " + std::to_string(sectionNo) + ": " + src.error;
-                    return result;
-                }
-                if (log)
-                    log("section " + std::to_string(sectionNo) + ": program (basic-binary, " +
-                        std::to_string(src.payload.size()) + " tokenized bytes)");
-                BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
-                if (!loaded.ok) {
-                    result.error = "basic-binary load failed: " + loaded.error;
-                    if (log) log("  " + result.error);
-                    return result;
-                }
-                if (log) {
-                    char n[96];
-                    std::snprintf(n, sizeof(n), "  program loaded OK: $%04X..$%04X", loaded.baseAddr,
-                                  loaded.endAddr);
-                    log(std::string(n) + stepTag(machine));
-                }
-                continue;
-            }
-            if (program.format == PresetProgram::Format::Binary) {
-                if (!loadMachineBinary(machine, program, sectionNo, log, &result.error)) {
-                    if (log) log("  " + result.error);
-                    return result;
-                }
-                continue;
-            }
-            if (log) log("section " + std::to_string(sectionNo) + ": program (basic-text)");
-            BasicTypeResult typed = typeBasicProgramText(machine, program.text);
-            for (const std::string& rejected : typed.rejectedLines) {
-                result.rejectedBasicLines.push_back(rejected);
-                if (log) log("  REJECTED (too long): " + rejected);
-            }
-            if (!typed.ok) {
-                result.error = typed.error;
-                if (log) log("  program typing FAILED: " + typed.error);
-                return result;
-            }
-            if (log) log("  program typed OK" + stepTag(machine));
-            continue;
-        }
-
-        for (const PresetStep& step : section.keys) {
-            switch (step.kind) {
-                case PresetStep::Kind::Key:
-                    if (!runKeyStep(machine, step.text, &result.error)) return result;
-                    if (log) log("  key: " + step.text + stepTag(machine));
-                    break;
-                case PresetStep::Kind::Type:
-                    if (!runTypeStep(machine, step.text, &result.error)) return result;
-                    if (log) log("  type: \"" + step.text + "\"" + stepTag(machine));
-                    break;
-                case PresetStep::Kind::Wait:
-                    if (step.waitSeconds < 0) {
-                        // Parameterless `- wait:` -- block until the interpreter
-                        // is back in its command loop (a long RUN / plot done).
-                        // A short unconditional lead-in first, so a RUN / plot
-                        // that hasn't spun up yet can't trip an instant false
-                        // "idle".
-                        constexpr uint64_t kLeadIn = kTStateHz / 2;  // 0.5 s emulated
-                        constexpr uint64_t kUntilIdleCap =
-                            static_cast<uint64_t>(kTStateHz) * 3600;  // 1 h emulated
-                        uint64_t spent = machine.runCycles(kLeadIn);
-                        spent += waitUntilBasicIdle(machine, kUntilIdleCap);
-                        if (log) {
-                            char secs[24];
-                            std::snprintf(secs, sizeof(secs), "%.1f",
-                                          spent / static_cast<double>(kTStateHz));
-                            log("  wait: (until idle, " + std::string(secs) +
-                                (spent >= kUntilIdleCap ? "s -- CAP HIT)" : "s)") + stepTag(machine));
-                        }
-                    } else {
-                        machine.runCycles(static_cast<uint64_t>(step.waitSeconds * kTStateHz));
-                        if (log) log("  wait: done" + stepTag(machine));
-                    }
-                    break;
-                case PresetStep::Kind::Trace: {
-                    // Port of the PC-1500 loader's `trace:` handling. Empty
-                    // text -> stop; otherwise (re)start a capture to
-                    // <traceDir>/<text>, first closing any open one.
-                    if (machine.cpuTraceActive()) machine.endCpuTrace();
-                    if (step.text.empty()) {
-                        if (log) log("  trace: stopped");
-                        break;
-                    }
-                    std::string path = traceDir + "/" + step.text;
-                    errno = 0;
-                    std::FILE* fh = std::fopen(path.c_str(), "wb");
-                    if (!fh) {
-                        result.error =
-                            "could not open trace file: " + path + " (" + std::strerror(errno) + ")";
-                        if (log) log("  trace: FAILED to open " + path + ": " + std::strerror(errno));
-                        return result;
-                    }
-                    machine.beginCpuTrace(fh, TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL);
-                    if (log) log("  trace: started -> " + path);
-                    break;
-                }
-                case PresetStep::Kind::Screenshot: {
-                    // PNG of the graphics area, as it stands right now, into
-                    // the trace directory (same image as the GUI's Copy Screen).
-                    const std::string path = traceDir + "/" + step.text;
-                    std::string writeError;
-                    if (!writeLcdScreenshotPng(pc1600LcdBitmap(machine), kPC1600ScreenMm, path, &writeError)) {
-                        result.error = "screenshot: " + writeError;
-                        if (log) log("  screenshot: FAILED: " + writeError);
-                        return result;
-                    }
-                    if (log) log("  screenshot: -> " + path);
-                    break;
-                }
-                case PresetStep::Kind::SyncClock: {
-                    const std::tm t = seedClockFromHostTime(machine);
-                    char stamp[32];
-                    std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &t);
-                    if (log) log(std::string("  syncclock: -> ") + stamp);
-                    break;
-                }
-                case PresetStep::Kind::SaveAs:
-                    if (!runPresetSaveAsStep(step, onSaveAs, log, &result.error)) return result;
-                    break;
-            }
-        }
-    }
-
-    result.ok = true;
-    if (log) log("preset applied OK" + stepTag(machine));
+    runPresetSections(adapter, preset, &result, log, traceDir, onSaveAs);
     return result;
 }

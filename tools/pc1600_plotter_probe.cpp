@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     PC1600Machine* mp = &machine;
-    PC1600PresetLoadResult res = applyPC1600Preset(
+    PresetLoadResult res = applyPC1600Preset(
         machine, preset,
         [mp](const std::string& l) {
             std::fprintf(stderr, "[preset] %s\n", l.c_str());

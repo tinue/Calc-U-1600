@@ -262,7 +262,7 @@ void test_pc1600_trace_step_produces_wellformed_file() {
         "  - trace: off\n",
         dir + "/scratch.pc1600", &preset, &err));
 
-    PC1600PresetLoadResult res = applyPC1600Preset(machine, preset, {}, dir);
+    PresetLoadResult res = applyPC1600Preset(machine, preset, {}, dir);
     CHECK(res.ok);
 
     TraceSummary s = readTrace(dir + "/t.bin");
@@ -304,7 +304,7 @@ void test_pc1600_trace_left_open_is_auto_closed() {
         "  - wait: 0.2\n",
         dir + "/scratch.pc1600", &preset, &err));
 
-    PC1600PresetLoadResult res = applyPC1600Preset(machine, preset, {}, dir);
+    PresetLoadResult res = applyPC1600Preset(machine, preset, {}, dir);
     CHECK(res.ok);
 
     TraceSummary s = readTrace(dir + "/t2.bin");

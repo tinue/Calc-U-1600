@@ -11,6 +11,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/CPU/LH5803/LH5803Memory.cpp \
   Core/CPU/LH5803/LH5803SharedMemory.cpp \
   Core/Preset/PresetFile.cpp \
+  Core/Preset/PresetRunner.cpp \
   Core/PC1500/PC1500Keyboard.cpp \
   Core/PC1500/PC1500TraceFile.cpp \
   Core/Audio/PiezoSampler.cpp \

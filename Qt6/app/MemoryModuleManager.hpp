@@ -72,8 +72,7 @@ public:
     // (ExpansionCard::moduleName()) -- an empty slot clears the selection.
     // `resolvedPathOrEmpty` is
     // the on-disk file a `modulespec:`/`modulespecfile:` reference resolved
-    // to (PresetLoadResult::expansionModuleResolvedPath /
-    // PC1600PresetLoadResult::slot1ResolvedPath/slot2ResolvedPath), empty
+    // to (PresetLoadResult::slot1ResolvedPath / slot2ResolvedPath), empty
     // for an empty slot. The file itself says what it is (classifySlot()):
     // an instance becomes autosave-eligible exactly as if it had been
     // picked from the GUI dropdown; a template never does.

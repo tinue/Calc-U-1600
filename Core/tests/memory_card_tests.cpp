@@ -1342,7 +1342,7 @@ void test_ce1601m_end_to_end_through_pc1600() {
     // route. `run` asserts the vertical-bank behaviour for a loaded preset.
     auto run = [&](const PresetFile& preset, const std::string& moduleDir) {
         PC1600Machine m;
-        PC1600PresetLoadResult r = applyPC1600Preset(m, preset, {}, ".", moduleDir);
+        PresetLoadResult r = applyPC1600Preset(m, preset, {}, ".", moduleDir);
         CHECK(r.ok);
         CHECK(m.slot2Attached());
         // The slot itself reports the attached module's module-name,

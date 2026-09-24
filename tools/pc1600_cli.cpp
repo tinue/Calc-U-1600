@@ -124,7 +124,7 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
             return std::fclose(f) == 0 && ok;
         };
     }
-    PC1600PresetLoadResult loaded = applyPC1600Preset(
+    PresetLoadResult loaded = applyPC1600Preset(
         machine, preset,
         [](const std::string& line) { std::fprintf(stderr, "[preset] %s\n", line.c_str()); }, ".",
         moduleDir,

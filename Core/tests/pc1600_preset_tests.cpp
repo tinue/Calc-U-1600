@@ -226,7 +226,7 @@ void test_loader_machine_binary_header() {
     std::string err;
     CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin + "\n",
                 &p, &err));
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
     CHECK(r.error.empty());
     CHECK(m.debugPeek(0xD000) == 0xC9);
@@ -250,7 +250,7 @@ void test_loader_machine_binary_length_mismatch() {
     std::string err;
     CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin + "\n",
                 &p, &err));
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
     CHECK(r.error.find("length") != std::string::npos);
 
@@ -261,7 +261,7 @@ void test_loader_machine_binary_length_mismatch() {
     CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin +
                     "\n  length: 4\n",
                 &p2, &err));
-    PC1600PresetLoadResult r2 = applyPC1600Preset(m2, p2);
+    PresetLoadResult r2 = applyPC1600Preset(m2, p2);
     CHECK(r2.ok);
     CHECK(m2.debugPeek(0xD100) == 0x11);
     CHECK(m2.debugPeek(0xD103) == 0x44);
@@ -281,7 +281,7 @@ void test_loader_machine_binary_headerless() {
     std::string err;
     CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin + "\n",
                 &p, &err));
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
     CHECK(r.error.find("required") != std::string::npos);
 
@@ -291,7 +291,7 @@ void test_loader_machine_binary_headerless() {
     CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin +
                     "\n  address: 0xD200\n  length: 4\n",
                 &p2, &err));
-    PC1600PresetLoadResult r2 = applyPC1600Preset(m2, p2);
+    PresetLoadResult r2 = applyPC1600Preset(m2, p2);
     CHECK(r2.ok);
     CHECK(m2.debugPeek(0xD200) == 0xAA);
     CHECK(m2.debugPeek(0xD203) == 0xDD);
@@ -313,7 +313,7 @@ void test_loader_machine_binary_autorun() {
     std::string err;
     CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin + "\n",
                 &p, &err));
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
     CHECK(r.error.empty());
     CHECK(m.debugPeek(0xD300) == 0xC9);
@@ -364,7 +364,7 @@ void test_loader_reports_overlong_basic_line() {
         "    30 END\n",
         &p, &err));
 
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
     CHECK(r.rejectedBasicLines.size() == 1);
     CHECK(!r.rejectedBasicLines.empty() && r.rejectedBasicLines[0] == longLine);
@@ -385,7 +385,7 @@ void test_loader_applies_ce155_and_type_step() {
     PC1600Machine m;
     // (No ROM set loaded -- the loader doesn't require it; boot-settle just
     // spins the CPU. Slot wiring + step replay is what we're checking.)
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "Qt6/resources/cards");
+    PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "Qt6/resources/cards");
     CHECK(r.ok);
     CHECK(m.slot1Attached());
     CHECK(!m.slot2Attached());
@@ -416,7 +416,7 @@ void test_loader_accepts_trace_step() {
                 "  - trace: off\n",
                 &p, &err));
     PC1600Machine m;
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p, {}, dir);
+    PresetLoadResult r = applyPC1600Preset(m, p, {}, dir);
     CHECK(r.ok);
 
     std::string path = std::string(dir) + "/t.bin";
@@ -437,7 +437,7 @@ void test_type_step_rejects_untypeable_char() {
     // A control byte (0x01) has no PC-1600 key.
     CHECK(parse(std::string("model: PC-1600\nkeys:\n  - type: a\x01""b\n"), &p, &err));
     PC1600Machine m;
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
     CHECK(!r.error.empty());
 }
@@ -455,7 +455,7 @@ void test_type_step_accepts_shifted_punctuation() {
     CHECK(p.sections.size() == 1 && p.sections[0].keys.size() == 1);
     CHECK(p.sections[0].keys[0].text == "INIT\"S2:\",\"M\"");
     PC1600Machine m;
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
     CHECK(r.error.empty());
 }
@@ -481,7 +481,7 @@ void test_type_step_shifted_punctuation_reaches_input_buffer() {
                 "keys:\n"
                 "  - type: A\"B:C,D\n",
                 &p, &err));
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
 
     // Scan FBB0H-FBFFH for the typed run. The ROM stores the edit line
@@ -507,7 +507,7 @@ void test_type_step_is_case_sensitive() {
     PresetFile p;
     std::string err;
     CHECK(parse("model: PC-1600\nkeys:\n  - type: abcXYZ\n", &p, &err));
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
 
     std::string buf;
@@ -538,7 +538,7 @@ void test_loader_applies_basic_text_program() {
         "    10 PRINT 1\n"
         "    20 GOTO 10\n",
         &p, &err));
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
     CHECK(r.rejectedBasicLines.empty());
     CHECK(r.error.empty());
@@ -558,7 +558,7 @@ void test_loader_rejects_unknown_key_defensively() {
     p.sections.push_back(s);
 
     PC1600Machine m;
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
     CHECK(!r.error.empty());
 }
@@ -570,7 +570,7 @@ void test_loader_ce150_plotter_needs_rom_path() {
 
     PC1600Machine m;
     // No romDirs passed -> a clear error, not a crash / silent skip.
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
     CHECK(r.error.find("CE-150.ROM") != std::string::npos);
     CHECK(!m.ce150Attached());
@@ -582,7 +582,7 @@ void test_loader_ce150_plotter_attaches_with_rom_path() {
     CHECK(parse("model: PC-1600\nplotter: ce150\n", &p, &err));
 
     PC1600Machine m;
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", ".", {}, {"roms"});
+    PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", ".", {}, {"roms"});
     if (!r.ok) {
         // Skip gracefully if the ROM asset isn't reachable from the cwd.
         std::fprintf(stderr, "SKIP test_loader_ce150_plotter_attaches_with_rom_path: %s\n",
@@ -599,7 +599,7 @@ void test_loader_ce1600p_plotter_needs_rom_path() {
 
     PC1600Machine m;
     // No romDirs passed -> a clear error, not a crash / silent skip.
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
     CHECK(r.error.find("CE1600P") != std::string::npos);
     CHECK(!m.ce1600pAttached());
@@ -611,7 +611,7 @@ void test_loader_no_plotter_key_attaches_nothing() {
     CHECK(parse("model: PC-1600\nkeys:\n  - type: 1\n", &p, &err));
 
     PC1600Machine m;
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
     CHECK(!m.ce1600pAttached());
 }
@@ -672,7 +672,7 @@ void test_loader_ce1600p_with_no_floppy_key_leaves_drive_empty() {
     CHECK(parse("model: PC-1600\nplotter: ce1600p\n", &p, &err));
 
     PC1600Machine m;
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", ".", {}, {"roms"});
+    PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", ".", {}, {"roms"});
     if (!r.ok) {
         std::fprintf(stderr, "SKIP test_loader_ce1600p_with_no_floppy_key_leaves_drive_empty: %s\n", r.error.c_str());
         return;
@@ -693,7 +693,7 @@ void test_loader_floppy_key_loads_named_disk_image() {
     CHECK(writeTextFile("/tmp/mydisk-file.floppy.yaml", formatFloppyFile("mydisk", diskImage)));
 
     PC1600Machine m;
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "/tmp", {}, {"roms"});
+    PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "/tmp", {}, {"roms"});
     if (!r.ok) {
         std::fprintf(stderr, "SKIP test_loader_floppy_key_loads_named_disk_image: %s\n", r.error.c_str());
         return;
@@ -719,7 +719,7 @@ void test_loader_floppy_key_side_suffix_selects_side_b() {
     CHECK(writeTextFile("/tmp/mydiskb.floppy.yaml", formatFloppyFile("mydiskb", diskImage)));
 
     PC1600Machine m;
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "/tmp", {}, {"roms"});
+    PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "/tmp", {}, {"roms"});
     if (!r.ok) {
         std::fprintf(stderr, "SKIP test_loader_floppy_key_side_suffix_selects_side_b: %s\n", r.error.c_str());
         return;
@@ -736,7 +736,7 @@ void test_loader_floppy_key_missing_file_is_an_error() {
     CHECK(parse("model: PC-1600\nplotter: ce1600p\nfloppy: nosuchdisk\n", &p, &err));
 
     PC1600Machine m;
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "/tmp", {}, {"roms"});
+    PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "/tmp", {}, {"roms"});
     CHECK(!r.ok);
     CHECK(r.error.find("nosuchdisk") != std::string::npos);
     CHECK(!m.ce1600fAttached());
@@ -762,7 +762,7 @@ void test_loader_saveas_step_invokes_callback() {
         calls.push_back({target, name});
         return true;
     };
-    PC1600PresetLoadResult r =
+    PresetLoadResult r =
         applyPC1600Preset(m, p, {}, ".", ".", {}, {}, {}, {}, onSaveAs);
     CHECK(r.ok);
     CHECK(calls.size() == 2);
@@ -785,7 +785,7 @@ void test_loader_saveas_step_failure_stops_preset() {
         *error = "disk full";
         return false;
     };
-    PC1600PresetLoadResult r =
+    PresetLoadResult r =
         applyPC1600Preset(m, p, {}, ".", ".", {}, {}, {}, {}, onSaveAs);
     CHECK(!r.ok);
     CHECK(r.error.find("disk full") != std::string::npos);
@@ -799,7 +799,7 @@ void test_loader_saveas_step_without_callback_is_noop() {
     CHECK(parse("model: PC-1600\nkeys:\n  - saveas: s1:Whatever\n", &p, &err));
 
     PC1600Machine m;
-    PC1600PresetLoadResult r = applyPC1600Preset(m, p);
+    PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
 }
 

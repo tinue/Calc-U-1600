@@ -123,7 +123,7 @@ bool loadBasicProgramLivePC1500(PC1500Machine& machine, const std::string& path,
         *error = QString::fromStdString(src.error);
         return false;
     }
-    PC1500BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
+    BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
     if (!loaded.ok) {
         *error = QString::fromStdString(loaded.error);
         return false;
@@ -137,7 +137,7 @@ bool loadBasicProgramLivePC1600(PC1600Machine& machine, const std::string& path,
         *error = QString::fromStdString(src.error);
         return false;
     }
-    PC1600BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
+    BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
     if (!loaded.ok) {
         *error = QString::fromStdString(loaded.error);
         return false;
@@ -240,7 +240,7 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
         // powered off.
         m_controller->finishPresetLoad(Model::PC1600);
         bool armedFired = false;
-        const auto onArmed = [this, &armedFired](const PC1600PresetLoadResult& armedSoFar) {
+        const auto onArmed = [this, &armedFired](const PresetLoadResult& armedSoFar) {
             armedFired = true;
             m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(armedSoFar.slot1ResolvedPath));
             m_moduleManager->syncFromPresetLoad(2, QString::fromStdString(armedSoFar.slot2ResolvedPath));
@@ -248,7 +248,7 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
                                                 QString::fromStdString(armedSoFar.floppyResolvedPath));
             emit armed();
         };
-        const PC1600PresetLoadResult result =
+        const PresetLoadResult result =
             applyPC1600Preset(machine, preset, logSink, traceDir, moduleDir,
                                [&machine] { seedClockFromHostTime(machine); }, romDirs, extraModuleDirs,
                                onArmed, onSaveAs);
@@ -283,7 +283,7 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
     bool armedFired = false;
     const auto onArmed = [this, &armedFired](const PresetLoadResult& armedSoFar) {
         armedFired = true;
-        m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(armedSoFar.expansionModuleResolvedPath));
+        m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(armedSoFar.slot1ResolvedPath));
         m_moduleManager->syncFromPresetLoad(2);
         emit armed();
     };
@@ -294,7 +294,7 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
     // Safety net for a preset that fails before ever arming -- see the
     // matching comment in the PC-1600 branch above.
     if (!armedFired) {
-        m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(result.expansionModuleResolvedPath));
+        m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(result.slot1ResolvedPath));
         m_moduleManager->syncFromPresetLoad(2);
     }
     if (!result.ok) {

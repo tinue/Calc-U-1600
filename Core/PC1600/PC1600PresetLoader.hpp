@@ -1,79 +1,11 @@
 #pragma once
-#include <functional>
 #include <string>
 #include <vector>
 
 #include "../Preset/PresetFile.hpp"
+#include "../Preset/PresetRunner.hpp"
 
 class PC1600Machine;
-
-/// Optional per-step progress sink -- one already-formatted line per call
-/// (no trailing newline), same convention as PC1500PresetLoader's
-/// PresetLogFn.
-using PC1600PresetLogFn = std::function<void(const std::string&)>;
-
-/// Optional callback fired exactly once, right after the machine has been
-/// slot-populated, ALL RESET, and settled past its boot sequence -- i.e.
-/// once `machine` is a fully live, running PC-1600 -- but *before* any of
-/// the preset's own `keys:`/`program:` steps start executing. A GUI can
-/// use this to swap the visible/active machine over at this point rather
-/// than waiting for the whole (possibly many-seconds-long) script to
-/// finish first: the boot itself is fast, so the model switch becomes
-/// visible immediately and the preset's own keystrokes/program typing
-/// then play out live on the already-switched-to machine, same as a
-/// person driving it by hand would see. Left unset (the default) costs
-/// nothing and changes no behavior.
-using PC1600PresetBootedFn = std::function<void()>;
-
-struct PC1600PresetLoadResult {
-    bool ok = false;
-    std::string error;
-    /// From a `program:` (basic-text) block: source lines the PC-1600
-    /// editor didn't store -- over-length lines (caught up front) and
-    /// lines that were typed but didn't advance BASPRG_END (usually
-    /// because the machine wasn't in PRO mode). Non-empty implies
-    /// `ok == false`. Mirrors PresetLoadResult::rejectedBasicLines.
-    std::vector<std::string> rejectedBasicLines;
-    /// The on-disk file a `modulespec:`/`modulespecfile:` reference
-    /// resolved to, if any -- empty for an empty slot. (Which module it is,
-    /// the GUI reads from the slot: PC1600Memory::slotModuleName().) Lets the GUI tell a bundled
-    /// read-only template apart from a real saved battery-card instance
-    /// (a file under the writable instance directory) so it can decide
-    /// whether the attached module should autosave.
-    std::string slot1ResolvedPath;
-    std::string slot2ResolvedPath;
-    /// True when the preset had `plotter: ce150` and the CE-150 was attached
-    /// to the LH5803 side. (`plotter: ce1600p` is reported via
-    /// `machine.ce1600pAttached()` instead -- no result field for it yet.)
-    bool ce150Attached = false;
-    /// True when the preset had `interface: ce158` and the CE-158 was
-    /// attached to the LH5803 side.
-    bool ce158Attached = false;
-    /// The preset's `floppy:` name, verbatim -- empty if the key was
-    /// absent (the drive stays empty, per the CE-1600F's union attach
-    /// with `plotter: ce1600p`; see
-    /// PC1600Machine::attachCE1600P()). Mirrors slot1ResolvedPath's shape,
-    /// for the GUI (FloppyDiskManager::syncFromPresetLoad()) to resync its
-    /// disk-picker combo without re-attaching anything.
-    std::string floppyImageLabel;
-    /// The on-disk `*.floppy.yaml` file `floppyImageLabel` resolved
-    /// to, if any -- empty when `floppyImageLabel` is empty. Mirrors
-    /// slot1ResolvedPath's shape/purpose (telling a bundled template apart
-    /// from a real saved user instance).
-    std::string floppyResolvedPath;
-};
-
-/// Optional callback fired exactly once, right after the machine has been
-/// slot-populated and the plotter (if any) attached, but *before* ALL
-/// RESET -- i.e. `machine` is fully "armed" (model, cards, plotter all
-/// wired) yet still powered off. `armedSoFar` is the in-progress result:
-/// what is plugged into the slots and `ce150Attached` are already final
-/// at this point (nothing after boot changes what's plugged in), so a GUI
-/// can use this to resync its slot selectors and plotter-paper visibility
-/// and repaint the armed-but-off machine before the (possibly many-
-/// seconds-long) boot and preset script run. Left unset (the default)
-/// costs nothing and changes no behavior.
-using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& armedSoFar)>;
 
 /// Applies a `model: PC-1600` preset (already parsed via parsePresetFile,
 /// `preset.isPC1600 == true`) to `machine`. The machine must ALREADY have
@@ -85,7 +17,8 @@ using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& arm
 /// the two memory-slot connectors (before reset, so the boot ROM's own
 /// memory sizing sees them); ALL RESET; run past the boot sequence (fixed
 /// settle + a BUSY-symbol idle poll); then walk `preset.sections` in file
-/// order, running each `keys:` block and typing in each `program:` block.
+/// order (runPresetSections(), Core/Preset/PresetRunner.hpp), running each
+/// `keys:` block and loading each `program:` block.
 ///
 /// A `keys:` step is one of:
 ///   - `key:` -- one named PC-1600 key, or `break`/`on` for the ON key.
@@ -160,15 +93,15 @@ using PC1600PresetArmedFn = std::function<void(const PC1600PresetLoadResult& arm
 /// asks for the plotter without a matching directory fails with a clear
 /// message; a preset with no `plotter:` never touches `romDirs`.
 /// `onArmed` fires right before the cold boot, once cards/plotter are
-/// attached but the machine is still powered off -- see PC1600PresetArmedFn.
+/// attached but the machine is still powered off -- see PresetArmedFn.
 /// `onSaveAs` fires for each `saveas:` step encountered while walking the
 /// preset's sections -- see PresetSaveAsFn.
-PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& preset,
-                                         const PC1600PresetLogFn& log = {},
-                                         const std::string& traceDir = ".",
-                                         const std::string& moduleDir = ".",
-                                         const PC1600PresetBootedFn& onBooted = {},
-                                         const std::vector<std::string>& romDirs = {},
-                                         const std::vector<std::string>& extraModuleDirs = {},
-                                         const PC1600PresetArmedFn& onArmed = {},
-                                         const PresetSaveAsFn& onSaveAs = {});
+PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& preset,
+                                   const PresetLogFn& log = {},
+                                   const std::string& traceDir = ".",
+                                   const std::string& moduleDir = ".",
+                                   const PresetBootedFn& onBooted = {},
+                                   const std::vector<std::string>& romDirs = {},
+                                   const std::vector<std::string>& extraModuleDirs = {},
+                                   const PresetArmedFn& onArmed = {},
+                                   const PresetSaveAsFn& onSaveAs = {});

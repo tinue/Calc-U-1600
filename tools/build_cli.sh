@@ -12,6 +12,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/PC1500/PC1500Display.cpp \
   Core/PC1500/Upd1990ac.cpp \
   Core/Preset/PresetFile.cpp \
+  Core/Preset/PresetRunner.cpp \
   Core/PC1500/PC1500BasicTyper.cpp \
   Core/PC1500/PC1500BasicLoader.cpp \
   Core/PC1500/PC1500PresetLoader.cpp \
