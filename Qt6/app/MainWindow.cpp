@@ -919,6 +919,9 @@ void MainWindow::buildMenuBar() {
 }
 
 void MainWindow::applyModelSelection(Model model) {
+    // The Machine menu's QActionGroup re-emits triggered() for the item
+    // that is already checked; re-picking it must not cold-rebuild.
+    if (model == m_controller->currentModel()) return;
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     m_moduleManager->onModelChanged();
@@ -942,6 +945,7 @@ void MainWindow::applyDefaultPreset(Model model) {
 }
 
 void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
+    if (revision == m_controller->pc1500RomRevision()) return; // see applyModelSelection()
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     m_controller->setPC1500RomRevision(revision); // rebuilds the machine
@@ -953,6 +957,7 @@ void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
 }
 
 void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
+    if (version == m_controller->pc1600RomVersion()) return; // see applyModelSelection()
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     m_controller->setPC1600RomVersion(version); // rebuilds the machine when a PC-1600 is active
@@ -966,6 +971,7 @@ void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
 }
 
 void MainWindow::applyCE1600PRomVersionSelection(CE1600PRomVersion version) {
+    if (version == m_controller->ce1600pRomVersion()) return; // see applyModelSelection()
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     // Rebuilds the machine only when a CE-1600P is attached; otherwise just
