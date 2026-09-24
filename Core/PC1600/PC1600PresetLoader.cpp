@@ -1,9 +1,7 @@
 #include "PC1600PresetLoader.hpp"
 
-#include <cerrno>
 #include <cstdint>
 #include <cstdio>
-#include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
@@ -15,7 +13,6 @@
 #include "PC1600Keyboard.hpp"
 #include "PC1600Machine.hpp"
 #include "PC1600MachineCodeLoader.hpp"
-#include "PC1600MachineImage.hpp"
 #include "PC1600Screenshot.hpp"
 
 namespace {
@@ -58,144 +55,6 @@ void tapBreak(PC1600Machine& machine) {
     machine.runCycles(kHoldTStates);
     machine.setOnKeyPressed(false);
     machine.runCycles(kIdleTStates);
-}
-
-// `errnoOut`, when given, receives the errno from a failed `fopen` --
-// EPERM/EACCES (a sandbox-denied path, e.g. a preset's sibling binary the
-// file picker never granted access to) look identical to ENOENT (a
-// genuinely missing/mistyped path) from the bool return alone, and the
-// caller needs to tell them apart to know whether a folder-access retry
-// could help.
-bool readWholeFile(const std::string& path, std::vector<uint8_t>* out, int* errnoOut = nullptr) {
-    errno = 0;
-    std::FILE* fh = std::fopen(path.c_str(), "rb");
-    if (!fh) {
-        if (errnoOut) *errnoOut = errno;
-        return false;
-    }
-    std::fseek(fh, 0, SEEK_END);
-    long size = std::ftell(fh);
-    std::fseek(fh, 0, SEEK_SET);
-    if (size < 0) { std::fclose(fh); return false; }
-    out->resize(static_cast<size_t>(size));
-    size_t got = out->empty() ? 0 : std::fread(out->data(), 1, out->size(), fh);
-    std::fclose(fh);
-    return got == out->size();
-}
-
-// ── `format: binary` -- load a PC-1600 machine-language block ──────────
-//
-// Linear load into exactly one slot: S0 = internal RAM ($C000-$FFFF),
-// S1/S2 = the $8000-$BFFF memory-slot window. Load address and length come
-// from a 16-byte PC-1600 machine-language header (magic FF 10 00 00, type
-// 0x10 -- Core/PC1600/PC1600MachineImage.hpp) when the file carries one,
-// and each is overridden by `address:` / `length:` in the preset. A file
-// with no such header must supply both. When the header's auto-run address
-// is non-zero the loader types `CALL &<addr>` afterwards (the machine must
-// already be in RUN mode -- true by default after the cold boot) and waits
-// for the interpreter to return to its command loop.
-//
-// Unlike the BASIC fast loader this needs no ADTBL scatter -- the bytes go
-// straight into one backing store via debugWriteInternalRam /
-// debugWriteSlotImage, which take Z-80 (SC7852) offsets with no +$8000
-// conversion.
-bool loadMachineBinary(PC1600Machine& machine, const PresetProgram& program, const std::string& tag,
-                       const PresetLogFn& log, std::string* error) {
-
-    std::vector<uint8_t> file;
-    int readErrno = 0;
-    if (!readWholeFile(program.path, &file, &readErrno)) {
-        *error = tag + "could not read program file: " + program.path + " (" + std::strerror(readErrno) + ")";
-        return false;
-    }
-
-    pc1600::MachineImage hdr = pc1600::parsePC1600MachineImage(file);
-    if (hdr.hasHeader && !hdr.ok) {
-        *error = tag + hdr.error;
-        return false;
-    }
-
-    const uint8_t* payload = file.data();
-    size_t avail = file.size();
-    uint32_t loadAddr = program.address;
-    uint32_t length = program.length;
-    uint32_t autorunAddr = 0;
-
-    if (hdr.hasHeader) {
-        payload = file.data() + hdr.headerSize;
-        avail = file.size() - hdr.headerSize;
-        if (!program.hasAddress) loadAddr = hdr.loadAddr;
-        if (!program.hasLength) {
-            length = hdr.headerPayloadLen;
-            if (hdr.headerPayloadLen != avail) {
-                char b[256];
-                std::snprintf(b, sizeof(b),
-                              "%sPC-1600 machine-language header says %u payload bytes but %zu "
-                              "follow the 16-byte header -- add an explicit 'length:' to override",
-                              tag.c_str(), hdr.headerPayloadLen, avail);
-                *error = b;
-                return false;
-            }
-        }
-        autorunAddr = hdr.autorunAddr;
-    } else if (!program.hasAddress || !program.hasLength) {
-        *error = tag + program.path +
-                 " has no PC-1600 machine-language header: both 'address' and 'length' are required";
-        return false;
-    }
-
-    if (length == 0) {
-        *error = tag + "program is empty (length 0)";
-        return false;
-    }
-    if (length > avail) {
-        char b[192];
-        std::snprintf(b, sizeof(b), "%s'length' %u exceeds the %zu program bytes available in %s",
-                      tag.c_str(), length, avail, program.path.c_str());
-        *error = b;
-        return false;
-    }
-
-    const int slot = program.slot == PresetProgram::Slot::S1   ? 1
-                     : program.slot == PresetProgram::Slot::S2 ? 2
-                                                               : 0;
-    const char* slotName = slot == 1 ? "S1" : slot == 2 ? "S2" : "S0";
-    std::string writeError;
-    if (!loadPC1600MachineCode(machine, slot, loadAddr, payload, length, &writeError)) {
-        *error = tag + writeError;
-        return false;
-    }
-
-    if (log) {
-        char b[176];
-        std::snprintf(b, sizeof(b), "%sprogram (binary, slot %s, $%04X..$%04X%s)", tag.c_str(),
-                      slotName, loadAddr, static_cast<uint32_t>(loadAddr + length - 1),
-                      hdr.hasHeader ? ", header" : "");
-        log(std::string(b) + stepTag(machine));
-    }
-
-    if (autorunAddr != 0) {
-        if (autorunAddr > 0xFFFF) {
-            char b[208];
-            std::snprintf(b, sizeof(b),
-                          "%sheader auto-run address $%X is outside bank 0 -- add an explicit "
-                          "'- type: CALL #<bank>,&<addr>' step instead",
-                          tag.c_str(), autorunAddr);
-            *error = b;
-            return false;
-        }
-        char line[24];
-        std::snprintf(line, sizeof(line), "CALL &%X", autorunAddr);
-        std::string typeErr;
-        if (!typeLine(machine, line, /*pressEnter=*/true, &typeErr)) {
-            *error = tag + "auto-run '" + line + "' failed: " + typeErr;
-            return false;
-        }
-        constexpr uint64_t kAutorunIdleCap = static_cast<uint64_t>(kTStateHz) * 3600;  // 1 h emulated
-        waitUntilBasicIdle(machine, kAutorunIdleCap);
-        if (log) log("  auto-run " + std::string(line) + stepTag(machine));
-    }
-    return true;
 }
 
 // Attach the plotter the preset's `plotter:` asks for, before the cold
@@ -284,9 +143,17 @@ public:
         return loadBasicBinaryPayload(m_machine, payload);
     }
 
-    bool loadBinary(const PresetProgram& program, const std::string& tag, const PresetLogFn& log,
-                    std::string* error) override {
-        return loadMachineBinary(m_machine, program, tag, log, error);
+    machinecode::Target codeTarget() const override { return machinecode::Target::PC1600; }
+    // Linear, into exactly the one slot the preset names: S0 = internal RAM
+    // ($C000-$FFFF), S1/S2 = the $8000-$BFFF memory-slot window. Straight
+    // into the backing store, so the current bank state doesn't matter and
+    // no ADTBL scatter applies (unlike the BASIC fast loader).
+    bool loadMachineCode(const PresetProgram& program, uint32_t addr, const uint8_t* data, size_t len,
+                         std::string* error) override {
+        const int slot = program.slot == PresetProgram::Slot::S1   ? 1
+                         : program.slot == PresetProgram::Slot::S2 ? 2
+                                                                   : 0;
+        return loadPC1600MachineCode(m_machine, slot, addr, data, len, error);
     }
 };
 

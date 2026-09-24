@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 
 #include "../Basic/BasicProgramSource.hpp"
 #include "../Connector/MemoryCardCatalog.hpp"
@@ -138,6 +140,94 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
     return true;
 }
 
+// `format: binary`: a machine-code block. The file may carry a CE-158
+// (PC-1500) or PC-1600 header (machinecode::readFile()) giving the load
+// address, length and an auto-run address; the preset's `address:` /
+// `length:` override the header's fields, and a headerless file needs
+// `address:` (its length defaults to the whole file). A non-zero auto-run
+// address makes the loader type `CALL &<addr>` afterwards and wait for the
+// interpreter to come back -- the machine must be in RUN mode by then.
+bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, const std::string& tag,
+                       const PresetLogFn& log, std::string* error) {
+    errno = 0;
+    std::ifstream in(program.path, std::ios::binary);
+    if (!in) {
+        // errno detail -- "Permission denied" (a sandbox-denied path, e.g. a
+        // preset's sibling binary the file picker never granted access to)
+        // and "No such file or directory" (a genuinely missing/mistyped
+        // path) look identical from `!in` alone otherwise.
+        *error = tag + "could not read program file: " + program.path + " (" + std::strerror(errno) + ")";
+        return false;
+    }
+    const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+
+    const machinecode::File file = machinecode::readFile(bytes);
+    if (!file.ok && !(file.lengthMismatch && program.hasLength)) {
+        *error = tag + program.path + ": " + file.error;
+        if (file.lengthMismatch) *error += " Add an explicit 'length:' to override.";
+        return false;
+    }
+    const std::string mismatch = machinecode::headerMismatch(machine.codeTarget(), file);
+    if (!mismatch.empty()) {
+        *error = tag + program.path + ": " + mismatch;
+        return false;
+    }
+    const bool hasHeader = file.header != machinecode::File::Header::None;
+    if (!hasHeader && !program.hasAddress) {
+        *error = tag + program.path + " has no machine-code header: 'address' is required";
+        return false;
+    }
+
+    const uint32_t addr = program.hasAddress ? program.address : file.loadAddr;
+    const size_t len = program.hasLength ? program.length : file.payload.size();
+    if (len == 0) {
+        *error = tag + "program is empty (length 0)";
+        return false;
+    }
+    if (len > file.payload.size()) {
+        *error = tag + "'length' " + std::to_string(len) + " exceeds the " + std::to_string(file.payload.size()) +
+                 " program bytes available in " + program.path;
+        return false;
+    }
+    std::string loadError;
+    if (!machine.loadMachineCode(program, addr, file.payload.data(), len, &loadError)) {
+        *error = tag + "binary " + program.path + ": " + loadError;
+        return false;
+    }
+    if (log) {
+        const char* slot = program.slot == PresetProgram::Slot::S0   ? ", slot S0"
+                           : program.slot == PresetProgram::Slot::S1 ? ", slot S1"
+                           : program.slot == PresetProgram::Slot::S2 ? ", slot S2"
+                                                                     : "";
+        char range[40];
+        std::snprintf(range, sizeof(range), "$%04X..$%04X", addr, static_cast<uint32_t>(addr + len - 1));
+        log(tag + "binary " + program.path + " (" + std::to_string(len) + " bytes" + (hasHeader ? ", header" : "") +
+            slot + ") -> " + range + machine.stepTag());
+    }
+
+    if (file.autorunAddr != 0) {
+        if (file.autorunAddr > 0xFFFF) {
+            char b[208];
+            std::snprintf(b, sizeof(b),
+                          "header auto-run address $%X is outside bank 0 -- add an explicit "
+                          "'- type: CALL #<bank>,&<addr>' step instead",
+                          file.autorunAddr);
+            *error = tag + b;
+            return false;
+        }
+        char line[24];
+        std::snprintf(line, sizeof(line), "CALL &%X", file.autorunAddr);
+        std::string typeError;
+        if (!machine.typeLine(line, &typeError)) {
+            *error = tag + "auto-run '" + line + "' failed: " + typeError;
+            return false;
+        }
+        machine.waitUntilBasicIdle(static_cast<uint64_t>(machine.cyclesPerSecond()) * kSecondsPerHour);
+        if (log) log("  auto-run " + std::string(line) + machine.stepTag());
+    }
+    return true;
+}
+
 bool runProgram(PresetMachine& machine, const PresetProgram& program, const std::string& tag,
                 PresetLoadResult* result, const PresetLogFn& log) {
     switch (program.format) {
@@ -178,7 +268,7 @@ bool runProgram(PresetMachine& machine, const PresetProgram& program, const std:
             return true;
         }
         case PresetProgram::Format::Binary:
-            if (!machine.loadBinary(program, tag, log, &result->error)) {
+            if (!loadBinaryProgram(machine, program, tag, log, &result->error)) {
                 if (log) log("  " + result->error);
                 return false;
             }

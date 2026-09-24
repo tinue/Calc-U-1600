@@ -109,6 +109,8 @@ set(PC1500_CLI_SOURCES
   ${CORE_ROOT}/PC1500/Upd1990ac.cpp
   ${CORE_ROOT}/Preset/PresetFile.cpp
   ${CORE_ROOT}/Preset/PresetRunner.cpp
+  ${CORE_ROOT}/MachineCodeFile.cpp
+  ${CORE_ROOT}/PC1600/PC1600MachineImage.cpp
   ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
   ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
   ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
@@ -134,6 +136,7 @@ set(PC1600_CLI_SOURCES
   ${CORE_ROOT}/CPU/LH5803/LH5803SharedMemory.cpp
   ${CORE_ROOT}/Preset/PresetFile.cpp
   ${CORE_ROOT}/Preset/PresetRunner.cpp
+  ${CORE_ROOT}/MachineCodeFile.cpp
   ${CORE_ROOT}/PC1500/PC1500Keyboard.cpp
   ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
   ${CORE_ROOT}/Audio/PiezoSampler.cpp
@@ -214,6 +217,7 @@ set(PC1600_PLOTTER_PROBE_SOURCES
   ${CORE_ROOT}/PC1500/Upd1990ac.cpp
   ${CORE_ROOT}/Preset/PresetFile.cpp
   ${CORE_ROOT}/Preset/PresetRunner.cpp
+  ${CORE_ROOT}/MachineCodeFile.cpp
   ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
   ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
   ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp

@@ -12,6 +12,7 @@
 #include "../Connector/ExpansionCard.hpp"
 #include "../Connector/MemoryCardDefinition.hpp"
 #include "../HostClock.hpp"
+#include "../MachineCodeFile.hpp"
 #include "PresetFile.hpp"
 
 // ── The model-independent half of applying a preset ─────────────────────
@@ -118,10 +119,12 @@ public:
     /// that pokes the tokenized payload into the program area.
     virtual basic::TransferModel transferModel() const = 0;
     virtual BasicLoadResult loadBasicPayload(const std::vector<uint8_t>& payload) = 0;
-    /// `format: binary`: load the block (the whole section, header handling
-    /// included). `tag` ("section N/M: ") prefixes errors and log lines.
-    virtual bool loadBinary(const PresetProgram& program, const std::string& tag, const PresetLogFn& log,
-                            std::string* error) = 0;
+    /// `format: binary`: which machine-code header family this machine
+    /// takes (machinecode::headerMismatch()), and the write of `len` bytes
+    /// at `addr` -- on the PC-1600 into the preset's `program.slot`.
+    virtual machinecode::Target codeTarget() const = 0;
+    virtual bool loadMachineCode(const PresetProgram& program, uint32_t addr, const uint8_t* data, size_t len,
+                                 std::string* error) = 0;
 };
 
 /// The parts of PresetMachine every machine forwards the same way.

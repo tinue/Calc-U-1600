@@ -166,16 +166,20 @@ void test_parser_pc1600_machine_binary() {
         CHECK(err.find("PC-1600") != std::string::npos);
     }
 
-    // PC-1500 `format: binary` still needs an address and rejects `length`.
+    // PC-1500 `format: binary` takes `address` / `length` like the PC-1600:
+    // both optional at parse time (a CE-158 header can supply them; the
+    // loader refuses a headerless file without `address`).
     {
         PresetFile p;
-        CHECK(!parse("model: PC-1500A\nprogram:\n  format: binary\n  path: x.bin\n", &p, &err));
+        CHECK(parse("model: PC-1500A\nprogram:\n  format: binary\n  path: x.bin\n", &p, &err));
+        CHECK(!p.sections[0].program.hasAddress);
     }
     {
         PresetFile p;
-        CHECK(!parse("model: PC-1500A\nprogram:\n  format: binary\n  path: x.bin\n  address: 0x40C5\n"
-                     "  length: 8\n",
-                     &p, &err));
+        CHECK(parse("model: PC-1500A\nprogram:\n  format: binary\n  path: x.bin\n  address: 0x40C5\n"
+                    "  length: 8\n",
+                    &p, &err));
+        CHECK(p.sections[0].program.hasLength && p.sections[0].program.length == 8);
     }
 }
 
@@ -295,6 +299,47 @@ void test_loader_machine_binary_headerless() {
     CHECK(r2.ok);
     CHECK(m2.debugPeek(0xD200) == 0xAA);
     CHECK(m2.debugPeek(0xD203) == 0xDD);
+}
+
+// Functional: a headerless blob with only `address:` loads the whole file;
+// a CE-158 (PC-1500) file is refused rather than poked header and all.
+void test_loader_machine_binary_headerless_address_only_and_ce158() {
+    PC1600Machine m;
+    if (!loadPC1600Roms(m)) {
+        std::fprintf(stderr, "SKIP test_loader_machine_binary_headerless_address_only_and_ce158: "
+                             "PC-1600 ROM images not found\n");
+        return;
+    }
+    const std::string bin = "/tmp/pc1600_ml_raw_addr.bin";
+    CHECK(writeFile(bin, {0x12, 0x34, 0x56}));
+    PresetFile p;
+    std::string err;
+    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin +
+                    "\n  address: 0xD400\n",
+                &p, &err));
+    PresetLoadResult r = applyPC1600Preset(m, p);
+    CHECK(r.ok);
+    CHECK(m.debugPeek(0xD400) == 0x12);
+    CHECK(m.debugPeek(0xD402) == 0x56);
+
+    std::vector<uint8_t> ce158 = {0x01, 0x42, 'C', 'O', 'M'};
+    ce158.resize(5 + 16, 0);
+    for (uint16_t v : {uint16_t{0x40C5}, uint16_t{0}, uint16_t{0}}) {
+        ce158.push_back(static_cast<uint8_t>(v >> 8));
+        ce158.push_back(static_cast<uint8_t>(v & 0xFF));
+    }
+    ce158.push_back(0x9A);
+    const std::string ce158Bin = "/tmp/pc1600_ml_ce158.bin";
+    CHECK(writeFile(ce158Bin, ce158));
+    PC1600Machine m2;
+    loadPC1600Roms(m2);
+    PresetFile p2;
+    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + ce158Bin +
+                    "\n  address: 0xD500\n",
+                &p2, &err));
+    PresetLoadResult r2 = applyPC1600Preset(m2, p2);
+    CHECK(!r2.ok);
+    CHECK(r2.error.find("CE-158") != std::string::npos);
 }
 
 // Functional: a non-zero header auto-run address makes the loader type
@@ -823,6 +868,7 @@ int run_pc1600_preset_tests() {
     test_loader_machine_binary_header();
     test_loader_machine_binary_length_mismatch();
     test_loader_machine_binary_headerless();
+    test_loader_machine_binary_headerless_address_only_and_ce158();
     test_loader_machine_binary_autorun();
     test_loader_rejects_unknown_key_defensively();
     test_loader_ce150_plotter_needs_rom_path();

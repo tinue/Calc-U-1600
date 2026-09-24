@@ -140,19 +140,21 @@ inline bool runPresetSaveAsStep(const PresetStep& step, const PresetSaveAsFn& on
 }
 
 struct PresetProgram {
-    // Binary      -- `format: binary`: raw machine-code bytes poked verbatim,
-    //                no BASIC-pointer fix-up (a CALL payload). PC-1500 pokes
-    //                the whole file at `address`. A PC-1600 preset instead
-    //                gives `slot: S0|S1|S2` and loads linearly into that one
-    //                slot; `address` / `length` default to a 16-byte PC-1600
-    //                machine-language header (magic FF 10 00 00, type 0x10 --
-    //                see Core/PC1600/PC1600MachineImage.hpp) when the file
-    //                carries one, and each overrides its header field when
-    //                given. A non-zero auto-run address in that header makes
-    //                the loader type `CALL &<addr>` afterwards, so the
-    //                machine must be in RUN mode at the end of the block
-    //                (it is by default after boot; a preceding `keys:` block
-    //                that went to PRO must `- key: mode` back first).
+    // Binary      -- `format: binary`: machine-code bytes poked verbatim,
+    //                no BASIC-pointer fix-up (a CALL payload). The file may
+    //                carry the machine's own machine-code header -- CE-158
+    //                on a PC-1500/1500A, the 16-byte PC-1600 one on a PC-1600
+    //                (Core/MachineCodeFile.hpp) -- which supplies the load
+    //                address and length; `address` / `length` each override
+    //                their header field, and a headerless file needs
+    //                `address` (its length defaults to the whole file). A
+    //                PC-1600 preset also gives `slot: S0|S1|S2` and loads
+    //                linearly into that one slot. A non-zero auto-run
+    //                address in the header makes the loader type
+    //                `CALL &<addr>` afterwards, so the machine must be in RUN
+    //                mode at the end of the block (it is by default after
+    //                boot; a preceding `keys:` block that went to PRO must
+    //                `- key: mode` back first).
     // BasicText   -- `format: basic-text`: BASIC source typed in through the
     //                ROM's line editor (slow, but exact); `text` holds it.
     // BasicBinary -- `format: basic-binary` (alias `basic-tokenized`): a
@@ -170,14 +172,14 @@ struct PresetProgram {
     enum class Format { Binary, BasicText, BasicBinary };
     Format format = Format::Binary;
     std::string path;   // resolved absolute/relative-to-cwd path (Binary / BasicBinary, or BasicText loaded from a file)
-    uint16_t address = 0; // Binary only -- load address (overrides a PC-1600 ML header's field)
+    uint16_t address = 0; // Binary only -- load address (overrides the file header's)
     std::string text;   // BasicText only -- the program source, one statement per line
 
-    // PC-1600 `format: binary` only. `slot` is required for a PC-1600
-    // machine-language block; `S0` = internal RAM ($C000-$FFFF), `S1`/`S2`
-    // = the two 40-pin memory slots ($8000-$BFFF window). `length` (bytes)
-    // overrides the header's length field, and is required together with
-    // `address` when the file has no PC-1600 ML header. `hasAddress` /
+    // `format: binary` only. `slot` is required for a PC-1600
+    // machine-language block (and rejected on a PC-1500); `S0` = internal
+    // RAM ($C000-$FFFF), `S1`/`S2` = the two 40-pin memory slots
+    // ($8000-$BFFF window). `length` (bytes) overrides the header's length
+    // field, or the whole-file length of a headerless file. `hasAddress` /
     // `hasLength` record whether the field was present in the preset (0 is
     // a legal explicit value).
     enum class Slot { None, S0, S1, S2 };

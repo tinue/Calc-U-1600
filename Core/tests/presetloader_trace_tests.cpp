@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <unistd.h>   // mkdtemp
@@ -352,6 +353,52 @@ void test_binary_program_outside_ram_fails() {
     std::remove(dir.c_str());
 }
 
+// `format: binary` with a CE-158 header on a PC-1500: the payload (not the
+// 27 header bytes) lands at the header's load address, with no `address:`.
+// A headerless file without `address:` is refused at load time.
+void test_binary_program_ce158_header() {
+    if (!romPresent()) {
+        std::fprintf(stderr, "SKIP test_binary_program_ce158_header: %s not found\n", kRomPath);
+        return;
+    }
+    std::string dir = makeTempDir();
+    CHECK(!dir.empty());
+    if (dir.empty()) return;
+    {
+        // CE-158 header: 01 'B' "COM", 16-byte name, then big-endian load
+        // address, length - 1 and auto-run address (0 = none).
+        std::vector<char> header = {0x01, 0x42, 'C', 'O', 'M'};
+        header.resize(5 + 16, 0);
+        for (uint16_t v : {uint16_t{0x7C10}, uint16_t{4 - 1}, uint16_t{0}}) {
+            header.push_back(static_cast<char>(v >> 8));
+            header.push_back(static_cast<char>(v & 0xFF));
+        }
+        std::ofstream bin(dir + "/ce158.bin", std::ios::binary);
+        bin.write(header.data(), static_cast<std::streamsize>(header.size()));
+        bin.write("\x11\x22\x33\x44", 4);
+        std::ofstream raw(dir + "/raw.bin", std::ios::binary);
+        raw.write("\x11\x22", 2);
+    }
+    auto run = [&](const char* file) {
+        PresetFile preset;
+        std::string err;
+        CHECK(parsePresetString(std::string("model: PC-1500A\nprogram:\n  format: binary\n  path: ") + file + "\n",
+                                dir + "/scratch.pc1500a", &preset, &err));
+        PC1500Machine machine(preset.variant);
+        PresetLoadResult res = applyPC1500Preset(machine, preset, {}, dir, ".", {}, {"roms"});
+        return std::make_pair(res, std::vector<uint8_t>{machine.debugPeek(0x7C10), machine.debugPeek(0x7C13)});
+    };
+    auto [loaded, bytes] = run("ce158.bin");
+    CHECK(loaded.ok);
+    CHECK(bytes[0] == 0x11 && bytes[1] == 0x44);
+    auto [headerless, unused] = run("raw.bin");
+    (void)unused;
+    CHECK(!headerless.ok && headerless.error.find("'address' is required") != std::string::npos);
+    std::remove((dir + "/ce158.bin").c_str());
+    std::remove((dir + "/raw.bin").c_str());
+    std::remove(dir.c_str());
+}
+
 } // namespace
 
 int run_presetloader_trace_tests() {
@@ -361,6 +408,7 @@ int run_presetloader_trace_tests() {
     test_pc1600_trace_step_produces_wellformed_file();
     test_pc1600_trace_left_open_is_auto_closed();
     test_binary_program_outside_ram_fails();
+    test_binary_program_ce158_header();
 
     std::printf("presetloader_trace_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

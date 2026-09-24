@@ -461,24 +461,9 @@ bool parseProgramBlock(const std::vector<RawLine>& lines, size_t& idx, const std
         prog.format = PresetProgram::Format::Binary;
         if (!hasPath) { *error = "'program: format: binary' requires 'path'"; return false; }
         if (hasText) { *error = "'text' is only valid with 'format: basic-text'"; return false; }
-        if (hasSlot) {
-            // PC-1600 machine-language: bytes go linearly into the one named
-            // slot. `address` / `length` are optional -- a 16-byte PC-1600
-            // ML header supplies them -- and each overrides its header field
-            // when given. (The loader requires both when the file has no
-            // header.)
-        } else {
-            // PC-1500-style: the whole file poked at a fixed address.
-            if (!hasAddress) {
-                *error = "'program: format: binary' requires 'address' (or 'slot: S0|S1|S2' for "
-                         "a PC-1600 preset)";
-                return false;
-            }
-            if (hasLength) {
-                *error = "'length' is only valid with 'slot:' (PC-1600 machine-language loading)";
-                return false;
-            }
-        }
+        // `address` / `length` are optional: a CE-158 or PC-1600 machine-code
+        // header supplies them, and each overrides its header field when
+        // given. The loader requires `address` for a headerless file.
     } else if (formatStr == "basic-text") {
         prog.format = PresetProgram::Format::BasicText;
         if (!hasText && !hasPath) {

@@ -1,10 +1,6 @@
 #include "PC1500PresetLoader.hpp"
 
-#include <cerrno>
 #include <cstdio>
-#include <cstring>
-#include <fstream>
-#include <iterator>
 
 #include "../Resources/BundledRomCatalog.hpp"
 #include "PC1500BasicLoader.hpp"
@@ -95,27 +91,10 @@ public:
         return loadBasicBinaryPayload(m_machine, payload);
     }
 
-    bool loadBinary(const PresetProgram& program, const std::string& tag, const PresetLogFn& log,
-                    std::string* error) override {
-        errno = 0;
-        std::ifstream in(program.path, std::ios::binary);
-        if (!in) {
-            // errno detail -- "Permission denied" (a sandbox-denied path) and
-            // "No such file or directory" (a genuinely missing/mistyped path)
-            // look identical from `!in` alone otherwise.
-            *error = tag + "failed to open program file: " + program.path + " (" + std::strerror(errno) + ")";
-            return false;
-        }
-        std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        std::string loadError;
-        if (!loadPC1500MachineCode(m_machine, program.address, bytes.data(), bytes.size(), &loadError)) {
-            *error = tag + "binary " + program.path + ": " + loadError;
-            return false;
-        }
-        if (log)
-            log(tag + "binary " + program.path + " (" + std::to_string(bytes.size()) + " bytes) -> " +
-                hex4(program.address));
-        return true;
+    machinecode::Target codeTarget() const override { return machinecode::Target::PC1500; }
+    bool loadMachineCode(const PresetProgram&, uint32_t addr, const uint8_t* data, size_t len,
+                         std::string* error) override {
+        return loadPC1500MachineCode(m_machine, addr, data, len, error);
     }
 };
 

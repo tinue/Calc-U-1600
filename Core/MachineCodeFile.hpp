@@ -38,13 +38,23 @@ struct File {
     uint32_t loadAddr = 0;         // header only
     uint32_t autorunAddr = 0;      // header only; 0 = none
     std::vector<uint8_t> payload;  // the bytes to load (header stripped)
+    /// The header's length field disagrees with the bytes that follow it.
+    /// `ok` is false and `error` says so, but `loadAddr`/`autorunAddr` and
+    /// `payload` (everything after the header) are still filled in, so a
+    /// preset's explicit `length:` can override the header.
+    bool lengthMismatch = false;
 };
 
 // Recognises the header and splits off the payload. A header that is
 // present but not machine language (e.g. tokenized BASIC) or whose length
 // doesn't match the file is an error; anything without a known magic is a
-// headerless payload.
+// headerless payload. Shared by the GUI's "Load Machine Code…" and the
+// preset loaders' `format: binary`.
 File readFile(const std::vector<uint8_t>& bytes);
+
+// Empty when `file`'s header (or lack of one) suits `target`; otherwise why
+// not -- a CE-158 file on a PC-1600, a PC-1600 file on a PC-1500.
+std::string headerMismatch(Target target, const File& file);
 
 // One run of the PC-1600's live BASIC program area ("S0"), in the order the
 // ROM lays a program down (ADTBL order). With a RAM module fitted the area

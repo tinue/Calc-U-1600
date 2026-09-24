@@ -57,7 +57,8 @@ class PC1600Machine;
 ///     address and byte count come from a 16-byte PC-1600 machine-language
 ///     header (magic FF 10 00 00, type 0x10) when the file has one;
 ///     `address:` / `length:` in the preset each override their header
-///     field, and both are required when the file has no header. Reserving
+///     field, and a headerless file needs `address:` (its length defaults
+///     to the whole file). Reserving
 ///     the target region (`NEW &addr`) is the preset's job -- do it with
 ///     `keys:` steps before the block. If the header carries a non-zero
 ///     auto-run address the loader then types `CALL &<addr>` and waits for

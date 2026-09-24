@@ -77,17 +77,17 @@ File readFile(const std::vector<uint8_t>& bytes) {
             f.error = img.error;
             return f;
         }
-        const size_t avail = bytes.size() - img.headerSize;
-        if (img.headerPayloadLen != avail) {
-            char b[160];
-            std::snprintf(b, sizeof(b), "The PC-1600 header says %u bytes of code, but %zu follow it.",
-                          img.headerPayloadLen, avail);
-            f.error = b;
-            return f;
-        }
         f.loadAddr = img.loadAddr;
         f.autorunAddr = img.autorunAddr;
         f.payload.assign(bytes.begin() + static_cast<std::ptrdiff_t>(img.headerSize), bytes.end());
+        if (img.headerPayloadLen != f.payload.size()) {
+            char b[160];
+            std::snprintf(b, sizeof(b), "The PC-1600 header says %u bytes of code, but %zu follow it.",
+                          img.headerPayloadLen, f.payload.size());
+            f.error = b;
+            f.lengthMismatch = true;
+            return f;
+        }
         f.ok = true;
         return f;
     }
@@ -102,16 +102,17 @@ File readFile(const std::vector<uint8_t>& bytes) {
         }
         // Length field is stored as (length - 1) -- Binary-Exchange-Formats.md §2.3.
         const size_t len = static_cast<size_t>(be16(bytes, 0x17)) + 1;
-        const size_t avail = bytes.size() - kCe158HeaderSize;
-        if (len != avail) {
-            char b[160];
-            std::snprintf(b, sizeof(b), "The CE-158 header says %zu bytes of code, but %zu follow it.", len, avail);
-            f.error = b;
-            return f;
-        }
         f.loadAddr = be16(bytes, 0x15);
         f.autorunAddr = be16(bytes, 0x19);
         f.payload.assign(bytes.begin() + kCe158HeaderSize, bytes.end());
+        if (len != f.payload.size()) {
+            char b[160];
+            std::snprintf(b, sizeof(b), "The CE-158 header says %zu bytes of code, but %zu follow it.", len,
+                          f.payload.size());
+            f.error = b;
+            f.lengthMismatch = true;
+            return f;
+        }
         f.ok = true;
         return f;
     }
@@ -173,6 +174,15 @@ uint32_t pc1600DefaultAddress(const std::vector<BasicArea>& basicAreas) {
     return (basicAreas.empty() ? kPc1600S0Base : basicAreas.front().windowBase) + kReserve;
 }
 
+std::string headerMismatch(Target target, const File& file) {
+    if (target == Target::PC1600 && file.header == File::Header::CE158)
+        return "This file has a CE-158 (PC-1500) header. Loading PC-1500 machine code into the PC-1600's "
+               "LH5803 side is not supported yet.";
+    if (target == Target::PC1500 && file.header == File::Header::PC1600)
+        return "This file has a PC-1600 header and can't be loaded into a PC-1500.";
+    return {};
+}
+
 Plan plan(Target target, const File& file, const std::vector<BasicArea>& basicAreas) {
     Plan p;
     if (!file.ok) {
@@ -183,15 +193,8 @@ Plan plan(Target target, const File& file, const std::vector<BasicArea>& basicAr
         p.error = "The file contains no code.";
         return p;
     }
-    if (target == Target::PC1600 && file.header == File::Header::CE158) {
-        p.error = "This file has a CE-158 (PC-1500) header. Loading PC-1500 machine code into the PC-1600's "
-                  "LH5803 side is not supported yet.";
-        return p;
-    }
-    if (target == Target::PC1500 && file.header == File::Header::PC1600) {
-        p.error = "This file has a PC-1600 header and can't be loaded into a PC-1500.";
-        return p;
-    }
+    p.error = headerMismatch(target, file);
+    if (!p.error.empty()) return p;
     if (file.header == File::Header::None) {
         p.needsAddress = true;
         if (target == Target::PC1600) p.defaultAddr = pc1600DefaultAddress(basicAreas);
