@@ -269,7 +269,22 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     QTimer::singleShot(0, this, [this] { applyDefaultPreset(m_controller->currentModel()); });
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow() {
+    // The child widgets hold raw MachineController pointers, and some use
+    // them on destruction (~DebugPanel ends an active TRACE session through
+    // the controller). ~QWidget only deletes children after the unique_ptr
+    // members -- m_controller included -- are gone, so tear the widget tree
+    // down here while the controller still exists.
+    m_frameTimer->stop();
+    delete takeCentralWidget();
+    m_faceplate = nullptr;
+    m_controlBar = nullptr;
+    m_debugPanel = nullptr;
+    m_plotterPaper = nullptr;
+    m_ce158Printer = nullptr;
+    m_debugRow = nullptr;
+    m_debugRowLayout = nullptr;
+}
 
 void MainWindow::closeEvent(QCloseEvent* event) {
     AppSettings::setWindowSize(size());
