@@ -453,6 +453,12 @@ private:
     static constexpr uint32_t kTraceDrainInterval = 256;
     CpuFrame m_lhTraceDrainBuf[kTraceDrainBufFrames];
     Z80CpuFrame m_z80TraceDrainBuf[kTraceDrainBufFrames];
+    /// Advance everything that runs off the shared clock regardless of
+    /// which CPU owns the bus: RTC, buzzer, UART, sub-CPU, display and the
+    /// CE-158. step() calls it from both branches with the T-states just
+    /// spent. Caller holds m_mutex.
+    void advanceSharedClocks(int tstates);
+
     /// Drain both CPU trace rings into m_traceFile. Caller holds m_mutex;
     /// safe only while m_traceFile is set. Cross-ring order is per-drain,
     /// not globally chronological -- the cpuId tag disambiguates, and

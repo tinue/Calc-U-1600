@@ -292,22 +292,8 @@ int PC1600Machine::step() {
                 m_z80Mem.latchSubCpuInterruptCause();
             }
         }
-        // LU-57813P calendar clock: one tick per emulated second. See
-        // kRtcPeriodTStates.
-        m_rtcAccum += cost;
-        m_z80Mem.advanceBuzzer(static_cast<uint32_t>(cost));
-        while (m_rtcAccum >= kRtcPeriodTStates) {
-            m_rtcAccum -= kRtcPeriodTStates;
-            m_z80Mem.subCpu().tickOneSecond();
-        }
-        // TC8576F UART + the sub-CPU parallel-port BUSY window: both are
-        // paced in SC-7852 T-states, the domain the firmware's status
-        // polls observe them in.
-        m_z80Mem.uart().tick(cost);
-        m_z80Mem.subCpu().tickByTStates(cost);
-        m_z80Mem.display().tick(cost);
+        advanceSharedClocks(cost);
         if (m_ce1600fCard) m_ce1600fCard->advance(static_cast<uint32_t>(cost));
-        if (m_ce158Card) m_ce158Card->tick(static_cast<uint64_t>(cost));
         // The documented handoff is OUT (38H),A then HALT -- the write
         // sets the pending flag (PC1600Memory::writeIO), but the actual
         // switch only happens once the SC7852 has also reached HALT, so
@@ -325,35 +311,12 @@ int PC1600Machine::step() {
     // PC1500Machine::step()'s updatePUPV for the LH5801.
     m_lh5803Mem.updatePUPV(m_lh5803.pu(), m_lh5803.pv());
     // The LH-5803 also drives the UART / sub-CPU handshake (the OFF-path
-    // clock save, rom1500 E538). Credit its cycles in T-states so the
-    // BUSY window and any serial timing advance while it owns the bus
-    // too.
-    {
-        const int tstates = static_cast<int>(
-            toTStates(static_cast<uint64_t>(c > 0 ? c : 1), /*sc7852Owned=*/false));
-        m_z80Mem.uart().tick(tstates);
-        m_z80Mem.subCpu().tickByTStates(tstates);
-        m_z80Mem.display().tick(tstates);
-        if (m_ce158Card) m_ce158Card->tick(static_cast<uint64_t>(tstates)); // the CE-158's own UART clock
-        // LU-57813P calendar clock: unlike the two SC7852-only timer
-        // accumulators above (real hardware sources they free-run
-        // against, but this core only models while the SC7852 steps),
-        // the calendar clock sits on the always-powered VGG rail and must
-        // keep ticking here too. The OFF-key/auto-power-off shutdown
-        // hands the bus to the LH5803 and can leave it there for the
-        // machine's entire "powered off" span -- without this, TIME/DATE$
-        // would visibly lag by however long the machine stayed off, even
-        // though the emulation itself keeps running at real speed the
-        // whole time. Same accumulator, same period, just fed from this
-        // branch's own T-states instead.
-        m_rtcAccum += tstates;
-        // Buzzer time keeps running while the LH5803 owns the bus too.
-        m_z80Mem.advanceBuzzer(static_cast<uint32_t>(tstates));
-        while (m_rtcAccum >= kRtcPeriodTStates) {
-            m_rtcAccum -= kRtcPeriodTStates;
-            m_z80Mem.subCpu().tickOneSecond();
-        }
-    }
+    // clock save, rom1500 E538), and the calendar clock and buzzer keep
+    // running while it owns the bus -- see advanceSharedClocks(). A halted
+    // step returns 0 and is charged LH5801::kHaltTickCycles, the same
+    // figure runCycles() budgets for it.
+    advanceSharedClocks(static_cast<int>(toTStates(
+        static_cast<uint64_t>(c > 0 ? c : LH5801::kHaltTickCycles), /*sc7852Owned=*/false)));
     // LH5803->SC7852: the STA #(0A038H) store is the whole handoff, so the
     // switch happens immediately after this step(). It raises cause bit 3,
     // and that INT ends the SC7852's HALT through the ROM's own handler
@@ -373,6 +336,27 @@ int PC1600Machine::step() {
     return c;
 }
 
+void PC1600Machine::advanceSharedClocks(int tstates) {
+    // LU-57813P calendar clock: one tick per emulated second, fed from
+    // both bus-ownership branches of step() -- see kRtcPeriodTStates. The
+    // OFF-key/auto-power-off shutdown hands the bus to the LH5803 and can
+    // leave it there for the machine's whole "powered off" span; the
+    // clock sits on the always-powered VGG rail and must not lag by it.
+    m_rtcAccum += tstates;
+    m_z80Mem.advanceBuzzer(static_cast<uint32_t>(tstates));
+    while (m_rtcAccum >= kRtcPeriodTStates) {
+        m_rtcAccum -= kRtcPeriodTStates;
+        m_z80Mem.subCpu().tickOneSecond();
+    }
+    // TC8576F UART + the sub-CPU parallel-port BUSY window: both are
+    // paced in SC-7852 T-states, the domain the firmware's status polls
+    // observe them in.
+    m_z80Mem.uart().tick(tstates);
+    m_z80Mem.subCpu().tickByTStates(tstates);
+    m_z80Mem.display().tick(tstates);
+    if (m_ce158Card) m_ce158Card->tick(static_cast<uint64_t>(tstates)); // the CE-158's own UART clock
+}
+
 uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {
     uint64_t consumed = 0;
     while (consumed < maxCycles) {
@@ -382,10 +366,10 @@ uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {
         const bool z80Owns = sc7852Owns();
         const int c = step(); // takes m_mutex per step, as PC1500Machine does
         // The halted-step fallback must match whichever CPU actually owned
-        // the bus -- step()'s own internal accounting (the LH5803 branch's
-        // local `tstates`, which feeds m_rtcAccum among others) already
-        // charges a halted LH5803 step 1 raw LH5803 cycle
-        // (LH5801::kHaltTickCycles), not SC7852::kHaltTickCycles. Using the
+        // the bus -- step()'s own internal accounting (what its LH5803
+        // branch hands advanceSharedClocks(), which feeds m_rtcAccum among
+        // others) charges a halted LH5803 step LH5801::kHaltTickCycles raw
+        // LH5803 cycles, not SC7852::kHaltTickCycles. Using the
         // SC7852 figure here regardless of owner would overcount this
         // budget by ~5.5x during an OFF/auto-power-off span -- runCycles
         // would then stop calling step() long before step()'s own
