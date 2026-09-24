@@ -68,7 +68,7 @@ public:
 
     QSize sizeHint() const override {
         const int w = std::max(1, width());
-        const auto [lower, upper] = m_owner->penYRange();
+        const auto [lower, upper] = m_owner->m_penYRange;
         const double h = m_owner->m_geometry.contentHeight(0, lower, upper, w);
         return QSize(w, static_cast<int>(std::ceil(h)));
     }
@@ -90,7 +90,7 @@ protected:
 
     void paintEvent(QPaintEvent*) override {
         QPainter painter(this);
-        paintPaper(painter, m_owner->m_geometry, width(), height(), m_owner->m_points, m_owner->penYRange().first);
+        paintPaper(painter, m_owner->m_geometry, width(), height(), m_owner->m_points, m_owner->m_penYRange.first);
     }
 
 private:
@@ -185,7 +185,7 @@ void PlotterPaperWidget::applyChrome() {
 void PlotterPaperWidget::setKind(Kind kind) {
     m_kind = kind;
     m_geometry = kind == Kind::CE1600P ? PaperGeometry::ce1600p() : PaperGeometry::ce150();
-    m_points.clear();
+    setPoints({});
     m_lastRevision = UINT64_MAX;
     m_plotArea->updateGeometry();
     m_plotArea->update();
@@ -193,11 +193,15 @@ void PlotterPaperWidget::setKind(Kind kind) {
     updateButtonsEnabled();
 }
 
-std::pair<std::int32_t, std::int32_t> PlotterPaperWidget::penYRange() const {
-    if (m_points.empty()) return {0, 0};
-    const auto [lo, hi] = std::minmax_element(m_points.begin(), m_points.end(),
-                                               [](const auto& a, const auto& b) { return a.y < b.y; });
-    return {lo->y, hi->y};
+void PlotterPaperWidget::setPoints(std::vector<AlpsPlotterMechanism::FlatPoint> points) {
+    m_points = std::move(points);
+    if (m_points.empty()) {
+        m_penYRange = {0, 0};
+    } else {
+        const auto [lo, hi] = std::minmax_element(m_points.begin(), m_points.end(),
+                                                   [](const auto& a, const auto& b) { return a.y < b.y; });
+        m_penYRange = {lo->y, hi->y};
+    }
 }
 
 bool PlotterPaperWidget::isNearBottom() const {
@@ -223,7 +227,7 @@ void PlotterPaperWidget::onFrameTick() {
     m_lastRevision = rev;
 
     const bool wasNearBottom = isNearBottom();
-    m_points = m_kind == Kind::CE1600P ? m_controller->ce1600pPlotPoints() : m_controller->ce150PlotPoints();
+    setPoints(m_kind == Kind::CE1600P ? m_controller->ce1600pPlotPoints() : m_controller->ce150PlotPoints());
     m_plotArea->updateGeometry();
     m_plotArea->update();
     updateButtonsEnabled();
@@ -234,7 +238,7 @@ void PlotterPaperWidget::copyToClipboard() {
     if (m_points.empty()) return;
 
     const double paneWidthPt = m_geometry.physicalPaneWidthPt();
-    const auto [lower, upper] = penYRange();
+    const auto [lower, upper] = m_penYRange;
     const double contentHeightPt = m_geometry.contentHeight(0, lower, upper, paneWidthPt);
     const double longestDimPt = std::max(paneWidthPt, contentHeightPt);
     const double effectiveScale = std::min(kDpiScale, longestDimPt > 0 ? kMaxTextureDimPx / longestDimPt : kDpiScale);
@@ -270,7 +274,7 @@ void PlotterPaperWidget::cutPaper() {
     copyToClipboard();
     if (m_kind == Kind::CE1600P) m_controller->clearCE1600PPaper();
     else m_controller->clearCE150Paper();
-    m_points.clear();
+    setPoints({});
     m_lastRevision = UINT64_MAX;
     m_plotArea->updateGeometry();
     m_plotArea->update();
