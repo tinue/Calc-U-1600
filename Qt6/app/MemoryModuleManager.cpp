@@ -75,6 +75,12 @@ void MemoryModuleManager::attachOneSlot(int slotIndex, CardHost host, AttachFn a
         if (card) {
             classifySlot(st, QString::fromStdString(path));
             attach(std::move(card));
+            // Freshly loaded from the file -- identical to it until the
+            // machine writes to the card.
+            if (!st.instanceFilePath.isEmpty()) {
+                int bankCount = 0;
+                currentSlotImage(slotIndex + 1, &bankCount, &st.persistedImage);
+            }
             return;
         }
     }
@@ -189,7 +195,8 @@ bool MemoryModuleManager::nameCollides(const QString& instanceName) const {
     return false;
 }
 
-bool MemoryModuleManager::spliceCardImageInto(int slot, const QString& sourcePath, const QString& sourceModuleName,
+bool MemoryModuleManager::spliceCardImageInto(int bankCount, const std::vector<uint8_t>& image,
+                                               const QString& sourcePath, const QString& sourceModuleName,
                                                const QString& targetName, std::string* spliced, QString* error) {
     QFile srcFile(sourcePath);
     if (!srcFile.open(QIODevice::ReadOnly)) {
@@ -198,12 +205,6 @@ bool MemoryModuleManager::spliceCardImageInto(int slot, const QString& sourcePat
     }
     const std::string sourceText = srcFile.readAll().toStdString();
 
-    int bankCount = 0;
-    std::vector<uint8_t> image;
-    if (!currentSlotImage(slot, &bankCount, &image)) {
-        if (error) *error = tr("Couldn't read the live card contents.");
-        return false;
-    }
     const auto contentLines = formatBatteryCardInitialContentBlock(bankCount, image);
 
     std::string splErr;
@@ -263,8 +264,14 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
 
     // Splice from the file the card was loaded from -- a template, or (a
     // preset save-as) an instance; either way its layout is the card's.
+    int bankCount = 0;
+    std::vector<uint8_t> image;
+    if (!currentSlotImage(slot, &bankCount, &image)) {
+        *error = tr("Couldn't read the live card contents.");
+        return false;
+    }
     std::string spliced;
-    if (!spliceCardImageInto(slot, st.sourcePath, st.moduleName, name, &spliced, error)) return false;
+    if (!spliceCardImageInto(bankCount, image, st.sourcePath, st.moduleName, name, &spliced, error)) return false;
 
     if (!AppPaths::atomicWriteFile(newPath, spliced)) {
         *error = tr("Couldn't write \"%1\".").arg(newPath);
@@ -278,6 +285,7 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
     st.isTemplate = false;  // the splice never writes `template:`; `battery` carries over
     st.instanceFilePath = newPath;
     st.persistPending = false;
+    st.persistedImage = std::move(image);
     emit moduleChanged(slot);
     return true;
 }
@@ -286,9 +294,19 @@ void MemoryModuleManager::writeInstance(int slot) {
     SlotState& st = m_slots[slot - 1];
     if (st.instanceFilePath.isEmpty()) return;
 
+    int bankCount = 0;
+    std::vector<uint8_t> image;
+    if (!currentSlotImage(slot, &bankCount, &image)) return;
+    // Nothing reports card writes, so this runs on every debounce: skip
+    // the file read + rewrite unless the card changed since it was last
+    // attached from or written to the file.
+    if (image == st.persistedImage) return;
+
     std::string spliced;
-    if (!spliceCardImageInto(slot, st.instanceFilePath, st.moduleName, st.moduleName, &spliced, nullptr)) return;
-    AppPaths::atomicWriteFile(st.instanceFilePath, spliced);
+    if (!spliceCardImageInto(bankCount, image, st.instanceFilePath, st.moduleName, st.moduleName, &spliced,
+                             nullptr))
+        return;
+    if (AppPaths::atomicWriteFile(st.instanceFilePath, spliced)) st.persistedImage = std::move(image);
 }
 
 void MemoryModuleManager::markDirtyAndSchedulePersist() {

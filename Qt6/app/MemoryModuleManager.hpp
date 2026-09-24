@@ -132,6 +132,9 @@ private:
         bool battery = false;      // that file declares `battery: true`
         QString instanceFilePath;  // == sourcePath for an instance (autosaved there), else empty
         bool persistPending = false;
+        // The card image as last attached from / written to
+        // instanceFilePath; empty = unknown, so the next persist writes.
+        std::vector<uint8_t> persistedImage;
     };
     // Records `resolvedPath` as the slot's source and classifies it from the
     // file's own `template:` key. Empty path = no file (clears the source).
@@ -142,15 +145,16 @@ private:
 
     CardHost hostFor(int slot) const;
     bool currentSlotImage(int slot, int* bankCount, std::vector<uint8_t>* image) const;
-    void writeInstance(int slot);  // re-splice + rewrite slot's instance file
+    void writeInstance(int slot);  // re-splice + rewrite slot's instance file, if the card changed
 
-    // Reads `sourcePath`, splices slot `slot`'s live image into it as
+    // Reads `sourcePath`, splices the card `image` (`bankCount` banks) into it as
     // `targetName` (attributed to `sourceModuleName` for the template
     // lookup), and returns the spliced text via `*spliced`. Shared by
     // nameAndSave() (surfaces failures via `error`) and writeInstance()
     // (best-effort re-splice; pass `error` as nullptr to fail silently).
-    bool spliceCardImageInto(int slot, const QString& sourcePath, const QString& sourceModuleName,
-                              const QString& targetName, std::string* spliced, QString* error);
+    bool spliceCardImageInto(int bankCount, const std::vector<uint8_t>& image, const QString& sourcePath,
+                             const QString& sourceModuleName, const QString& targetName, std::string* spliced,
+                             QString* error);
 
     // The name of the module in `slot` of the live machine, "" when empty.
 
