@@ -20,24 +20,22 @@ void Upd1990ac::latchCommand(bool c0, bool c1, bool c2) {
 
     if (!c2) {
         // Group 0 (C2=0): pick one of the four register-control modes.
-        Mode oldMode = mode_;
-        switch (sel) {
-            case 0: mode_ = Mode::RegisterHold;  break;
-            case 1: mode_ = Mode::RegisterShift; break;
-            case 2: mode_ = Mode::TimeSet;       break;
-            case 3:
-                mode_ = Mode::TimeRead;
-                // Time Read snapshots the live running clock into the shift
-                // register; it's the following Register Shift that walks it
-                // out over DATA OUT via CLK pulses (see setControlPins()).
-                shiftRegister_ = liveTimeAsBcd40();
-                break;
-            default: break;
-        }
-        // Time Set pauses the live clock while new nibbles shift in;
+        const Mode oldMode = mode_;
+        static constexpr Mode kGroup0[] = {Mode::RegisterHold, Mode::RegisterShift, Mode::TimeSet,
+                                           Mode::TimeRead};
+        mode_ = kGroup0[sel];
+        // Leaving Time Set commits the shifted-in value to the live clock;
         // committing on exit (rather than bit-by-bit) is indistinguishable
         // to anything that only reads the result afterward, and simpler.
+        // The clock is effectively paused meanwhile: the commit overwrites
+        // every field and restarts the 1 Hz accumulator. It must run before
+        // a Time Read snapshot, or Time Set -> Time Read would read the old
+        // time back and drop the TIME= value.
         if (oldMode == Mode::TimeSet && mode_ != Mode::TimeSet) commitShiftRegisterToTime();
+        // Time Read snapshots the live running clock into the shift
+        // register; it's the following Register Shift that walks it out
+        // over DATA OUT via CLK pulses (see setControlPins()).
+        if (mode_ == Mode::TimeRead) shiftRegister_ = liveTimeAsBcd40();
 
         // Any Group 0 command also means WAIT/BEEP is done with TP:
         // WAIT/BEEP's own cleanup issues this ("TP=RegisterHold", the

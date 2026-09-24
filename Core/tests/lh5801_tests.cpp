@@ -878,6 +878,25 @@ void test_rtc_calendar_set_via_shift_and_commit() {
     CHECK(rtcReadCalendar40(mem) == want);
 }
 
+void test_rtc_calendar_time_set_straight_to_time_read() {
+    // Time Set -> Time Read with no Register Hold in between: the commit
+    // on leaving Time Set must land before Time Read's snapshot, or the
+    // read returns the old time and the TIME= value is lost.
+    PC1500Memory mem;
+    mem.seedClock(2000, 1, 1, 0, 0, 0, 6);
+    const uint64_t want = (uint64_t(0x04) << 36) | (uint64_t(0x02) << 32) | (uint64_t(0x21) << 24) |
+                          (uint64_t(0x17) << 16) | (uint64_t(0x08) << 8) | uint64_t(0x33);
+    rtcSetMode(mem, 1); // Register Shift
+    for (int i = 0; i < 40; i++) {
+        uint8_t d = uint8_t(kRegShift | ((want >> i) & 1));
+        mem.writeME1(kOpc, d);
+        mem.writeME1(kOpc, uint8_t(d | 0x04));
+        mem.writeME1(kOpc, d);
+    }
+    rtcSetMode(mem, 2); // Time Set
+    CHECK(rtcReadCalendar40(mem) == want); // starts with Time Read
+}
+
 void test_rtc_calendar_advances_one_hz_with_bcd_and_month_carry() {
     // One tick per emulated second, with BCD carry rippling sec->min->
     // hour->day and a Jan(31)->Feb month rollover. 2026 is not a leap
@@ -1437,6 +1456,7 @@ int main() {
     test_rtc_calendar_seed_and_read();
     test_preset_syncclock_reseeds_rtc();
     test_rtc_calendar_set_via_shift_and_commit();
+    test_rtc_calendar_time_set_straight_to_time_read();
     test_rtc_calendar_advances_one_hz_with_bcd_and_month_carry();
     test_rtc_seed_millisecond_aligns_next_tick();
     test_rtc_calendar_reset_is_deterministic();
