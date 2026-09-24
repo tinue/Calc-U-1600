@@ -15,16 +15,16 @@
 // PRESET LOADING IS THREE PARTS:
 //   1. this file -- parsePresetFile() opens the file, parses it, and
 //      resolves `model:` into `PresetFile` (`isPC1600` / `variant`). Model-
-//      family-agnostic. The Bridge's +[PC1500MachineWrapper
-//      presetInfoAtPath:] is a thin wrapper over it for the "peek the
-//      model before building a machine" step.
-//   2. the correct family loader takes the parsed PresetFile + a machine:
-//      Core/PC1500/PC1500PresetLoader.cpp `applyPC1500Preset()` for
-//      PC-1500/1500A, Core/PC1600/PC1600PresetLoader.cpp
-//      `applyPC1600Preset()` for PC-1600.
-//   3. the dispatch (peek model -> build the right wrapper -> call its
-//      family loader) lives in EmulatorViewModel.loadPreset, the one place
-//      both machine wrappers coexist.
+//      family-agnostic.
+//   2. the family loader arms and boots a machine for the parsed
+//      PresetFile -- Core/PC1500/PC1500PresetLoader.cpp
+//      `applyPC1500Preset()` for PC-1500/1500A,
+//      Core/PC1600/PC1600PresetLoader.cpp `applyPC1600Preset()` for
+//      PC-1600 -- then hands the `keys:` / `program:` sections to the
+//      shared runPresetSections() (Core/Preset/PresetRunner.hpp).
+//   3. the dispatch (peek model -> build the right machine -> call its
+//      family loader) lives in the GUI's PresetController::loadPreset and
+//      in each CLI.
 //
 // `memory-expansion:` accepts exactly one module, named by definition
 // (`- modulespec: <module-name>` / `- modulespecfile: <path>`, see

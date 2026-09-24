@@ -117,22 +117,10 @@ Model modelForPreset(const PresetFile& preset) {
 // loadBasicBinaryPayload() validates whatever BASPRG_ST/BASPRG_END are
 // currently live, erases the resident program between them, and pokes the
 // new one in from BASPRG_ST -- see its own header doc comment.
-bool loadBasicProgramLivePC1500(PC1500Machine& machine, const std::string& path, QString* error) {
-    basic::BasicProgramSource src = basic::readBasicProgramSource(path, basic::TransferModel::PC1500);
-    if (!src.ok) {
-        *error = QString::fromStdString(src.error);
-        return false;
-    }
-    BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
-    if (!loaded.ok) {
-        *error = QString::fromStdString(loaded.error);
-        return false;
-    }
-    return true;
-}
-
-bool loadBasicProgramLivePC1600(PC1600Machine& machine, const std::string& path, QString* error) {
-    basic::BasicProgramSource src = basic::readBasicProgramSource(path, basic::TransferModel::PC1600);
+template <class Machine>
+bool loadBasicProgramLiveOn(Machine& machine, basic::TransferModel model, const std::string& path,
+                            QString* error) {
+    basic::BasicProgramSource src = basic::readBasicProgramSource(path, model);
     if (!src.ok) {
         *error = QString::fromStdString(src.error);
         return false;
@@ -312,7 +300,7 @@ bool PresetController::loadBasicProgramLive(const QString& path, QString* error)
             return false;
         }
         const ScopedYieldHook<PC1600Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
-        return loadBasicProgramLivePC1600(*machine, path.toStdString(), error);
+        return loadBasicProgramLiveOn(*machine, basic::TransferModel::PC1600, path.toStdString(), error);
     }
     PC1500Machine* machine = m_controller->pc1500();
     if (!machine) {
@@ -320,7 +308,7 @@ bool PresetController::loadBasicProgramLive(const QString& path, QString* error)
         return false;
     }
     const ScopedYieldHook<PC1500Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
-    return loadBasicProgramLivePC1500(*machine, path.toStdString(), error);
+    return loadBasicProgramLiveOn(*machine, basic::TransferModel::PC1500, path.toStdString(), error);
 }
 
 #else  // !CALCU1600_PRESET_LOADER_AVAILABLE

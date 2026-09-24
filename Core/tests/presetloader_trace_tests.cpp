@@ -145,7 +145,7 @@ void test_trace_step_produces_wellformed_file() {
 }
 
 // A trace left running at the end of the preset is still finalised
-// (SESSION_END written, file closed) by applyPC1500Preset()'s TraceCloser guard
+// (SESSION_END written, file closed) by runPresetSections()' TraceCloser guard
 // -- mirrors Calc-U-59's auto-close of a scripted trace.
 void test_trace_left_open_is_auto_closed() {
     if (!romPresent()) {

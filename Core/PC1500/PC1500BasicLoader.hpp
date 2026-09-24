@@ -34,12 +34,15 @@ class PC1500Machine;
 /// Loads a pre-tokenized PC-1500 BASIC program (`transferFile` = a full
 /// CE-158 transfer file, header included) into `machine`. Requires only that
 /// BASPRG_ST/BASPRG_END are currently valid pointers -- no reset, mode
-/// change, or NEW0 is performed. Used by the GUI `-loadBasicBinary:` action.
+/// change, or NEW0 is performed. Nothing in the app calls this today -- the
+/// GUI and presets load `.bas` listings (loadBasicBinaryPayload() below); it
+/// stays for already-tokenized transfer files and is covered by the tests.
 BasicLoadResult loadBasicBinaryProgram(PC1500Machine& machine,
-                                             const std::vector<uint8_t>& transferFile);
+                                       const std::vector<uint8_t>& transferFile);
 
 /// Same, but takes the bare tokenized payload (no CE-158 header) -- the run
-/// of in-RAM line records. Used by the preset loader, which tokenizes a
-/// `.bas` listing headerless via libsharpdx.
+/// of in-RAM line records. Used by the preset runner (`format: basic-binary`)
+/// and the GUI's Load BASIC Program, which both tokenize a `.bas` listing
+/// headerless via basic::readBasicProgramSource().
 BasicLoadResult loadBasicBinaryPayload(PC1500Machine& machine,
-                                             const std::vector<uint8_t>& payload);
+                                       const std::vector<uint8_t>& payload);

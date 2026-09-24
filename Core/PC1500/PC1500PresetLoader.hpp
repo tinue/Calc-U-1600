@@ -26,7 +26,7 @@ class PC1500Machine;
 /// ROM `romDirs` doesn't contain fails with a clear message.
 /// `traceDir` is the directory a `- trace: name.bin` step (see
 /// PresetFile.hpp -- a port of Calc-U-59's `Trace:` directive) writes
-/// its output file into. Like `romPathOverride`, WHERE trace files live
+/// its output file into. Like `romDirs`, WHERE trace files live
 /// is environment-specific and not the preset's concern: the CLI passes
 /// "." (cwd, same convention as its `roms/`), the GUI passes
 /// `AppSettings.traceDirectory()`. The preset's filename is appended to

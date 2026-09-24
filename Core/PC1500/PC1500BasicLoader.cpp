@@ -34,7 +34,7 @@ BasicLoadResult fail(const std::string& msg) {
 }  // namespace
 
 BasicLoadResult loadBasicBinaryProgram(PC1500Machine& machine,
-                                             const std::vector<uint8_t>& transferFile) {
+                                       const std::vector<uint8_t>& transferFile) {
     basic::BasicBinaryImage img = basic::parseBasicBinaryTransfer(transferFile);
     if (!img.ok) return fail(img.error);
     if (img.model != basic::TransferModel::PC1500) {
@@ -44,7 +44,7 @@ BasicLoadResult loadBasicBinaryProgram(PC1500Machine& machine,
 }
 
 BasicLoadResult loadBasicBinaryPayload(PC1500Machine& machine,
-                                             const std::vector<uint8_t>& payload) {
+                                       const std::vector<uint8_t>& payload) {
     // LOAD semantics: this works off whatever BASPRG_ST/BASPRG_END are
     // currently live -- there is no NEW0 precondition. The caller (the user,
     // via the menu, or a preset's own `- type: NEW0` step) is responsible for

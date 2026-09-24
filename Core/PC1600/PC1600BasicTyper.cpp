@@ -27,8 +27,7 @@ constexpr int kIdleFrames = 4;
 
 // SHIFT is a one-shot latch: tap it, give the ROM's key-scan a real gap
 // to notice and latch it, then tap the base key (which consumes the
-// latch). ~100 ms, matching EmulatorViewModel.swift's proven interactive
-// tapShiftedKey path.
+// latch). ~100 ms, the gap interactive shifted keys have always used.
 constexpr int kShiftGapFrames = 6;
 
 // Settle after a line's ENTER, from typeLine() -- a short interval (poll
