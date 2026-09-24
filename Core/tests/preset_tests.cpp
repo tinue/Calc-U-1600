@@ -467,6 +467,25 @@ void test_preset_parser_sequential_keys_and_program_blocks() {
     CHECK(preset.sections[2].keys[1].text == "CALL&7C01,X$");
 }
 
+void test_preset_parser_program_address_forms() {
+    auto address = [](const std::string& value, uint16_t* out) {
+        PresetFile preset;
+        std::string error;
+        if (!parse("model: PC-1500A\nprogram:\n  format: binary\n  path: x.bin\n  address: " + value + "\n",
+                   &preset, &error))
+            return false;
+        *out = preset.sections[0].program.address;
+        return true;
+    };
+    uint16_t a = 0;
+    CHECK(address("0x7C01", &a) && a == 0x7C01);
+    CHECK(address("7c01", &a) && a == 0x7C01);
+    CHECK(address("&4100", &a) && a == 0x4100);
+    CHECK(address("$4100", &a) && a == 0x4100);
+    CHECK(!address("14100", &a)); // > &FFFF, used to wrap to &4100
+    CHECK(!address("41zz", &a));  // trailing junk, used to parse as &41
+}
+
 void test_preset_parser_rejects_old_pre_post_load_keys() {
     // pre-load-keys/post-load-keys are no longer recognized at all -- both
     // are now a single, repeatable 'keys:' block name.
@@ -569,6 +588,7 @@ int run_preset_tests() {
     test_preset_parser_unquotes_single_and_double_quoted_values();
     test_preset_parser_sequential_keys_and_program_blocks();
     test_preset_parser_rejects_old_pre_post_load_keys();
+    test_preset_parser_program_address_forms();
     test_preset_parser_model_rom_pc1500();
     test_inline_comment_stripped_from_key_step_only();
     test_hash_without_leading_space_is_kept();

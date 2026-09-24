@@ -110,6 +110,7 @@ set(PC1500_CLI_SOURCES
   ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
   ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
   ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
+  ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
   ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
   ${CORE_ROOT}/Basic/BasicProgramSource.cpp

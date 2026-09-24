@@ -1,6 +1,7 @@
 #include "PresetFile.hpp"
 
 #include "PC1500Keyboard.hpp"
+#include "../MachineCodeFile.hpp"
 
 #include <cctype>
 #include <cerrno>
@@ -378,12 +379,13 @@ bool parseProgramBlock(const std::vector<RawLine>& lines, size_t& idx, const std
             hasPath = true;
         } else if (key == "address") {
             if (!hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'address' requires a value"; return false; }
-            try {
-                prog.address = static_cast<uint16_t>(std::stoul(value, nullptr, 16));
-            } catch (...) {
-                *error = "line " + std::to_string(line.lineNo) + ": invalid hex 'address' value '" + value + "'";
+            uint32_t addr = 0;
+            if (!machinecode::parseHexAddress(value, &addr)) {
+                *error = "line " + std::to_string(line.lineNo) + ": invalid hex 'address' value '" + value +
+                         "' (expected 0000-FFFF, optionally prefixed 0x, & or $)";
                 return false;
             }
+            prog.address = static_cast<uint16_t>(addr);
             hasAddress = true;
             prog.hasAddress = true;
         } else if (key == "slot") {

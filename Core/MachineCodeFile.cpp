@@ -345,27 +345,4 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
     return a;
 }
 
-bool parseHexAddress(const std::string& text, uint32_t* out) {
-    size_t i = 0, n = text.size();
-    while (i < n && std::isspace(static_cast<unsigned char>(text[i]))) i++;
-    while (n > i && std::isspace(static_cast<unsigned char>(text[n - 1]))) n--;
-    if (i < n && (text[i] == '&' || text[i] == '$')) {
-        i++;
-    } else if (n - i >= 2 && text[i] == '0' && (text[i + 1] == 'x' || text[i + 1] == 'X')) {
-        i += 2;
-    }
-    if (i == n || n - i > 6) return false;
-    uint32_t v = 0;
-    for (; i < n; i++) {
-        const char c = text[i];
-        if (!std::isxdigit(static_cast<unsigned char>(c))) return false;
-        v = v * 16 + static_cast<uint32_t>(std::isdigit(static_cast<unsigned char>(c))
-                                               ? c - '0'
-                                               : std::toupper(static_cast<unsigned char>(c)) - 'A' + 10);
-    }
-    if (v > 0xFFFF) return false;
-    *out = v;
-    return true;
-}
-
 }  // namespace machinecode

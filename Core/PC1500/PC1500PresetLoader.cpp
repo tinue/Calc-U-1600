@@ -18,6 +18,7 @@
 #include "PC1500BasicLoader.hpp"
 #include "PC1500BasicTyper.hpp"
 #include "PC1500Machine.hpp"
+#include "PC1500MachineCodeLoader.hpp"
 #include "PC1500Screenshot.hpp"
 
 namespace {
@@ -363,10 +364,11 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
                 return result;
             }
             std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-            uint16_t addr = program.address;
-            for (uint8_t b : bytes) {
-                machine.memory().poke(addr, b);
-                addr++;
+            std::string loadError;
+            if (!loadPC1500MachineCode(machine, program.address, bytes.data(), bytes.size(), &loadError)) {
+                result.error = "binary " + program.path + ": " + loadError;
+                if (log) log("section " + std::to_string(sectionNo) + ": binary FAILED: " + result.error);
+                return result;
             }
             if (log) {
                 char n[48];

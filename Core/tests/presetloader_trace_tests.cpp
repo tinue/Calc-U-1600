@@ -318,6 +318,40 @@ void test_pc1600_trace_left_open_is_auto_closed() {
     std::remove(dir.c_str());
 }
 
+// Not a trace test, but the same ROM-driven applyPC1500Preset() setup: a
+// `format: binary` block that isn't all RAM, or runs past &FFFF, fails the
+// preset instead of dropping or wrapping bytes and reporting success.
+void test_binary_program_outside_ram_fails() {
+    if (!romPresent()) {
+        std::fprintf(stderr, "SKIP test_binary_program_outside_ram_fails: %s not found\n", kRomPath);
+        return;
+    }
+    std::string dir = makeTempDir();
+    CHECK(!dir.empty());
+    if (dir.empty()) return;
+    {
+        std::ofstream bin(dir + "/code.bin", std::ios::binary);
+        bin.write("\x01\x02\x03\x04", 4);
+    }
+    auto run = [&](const char* address) {
+        PresetFile preset;
+        std::string err;
+        CHECK(parsePresetString(std::string("model: PC-1500A\nprogram:\n  format: binary\n  path: code.bin\n"
+                                            "  address: ") + address + "\n",
+                                dir + "/scratch.pc1500a", &preset, &err));
+        PC1500Machine machine(preset.variant);
+        return applyPC1500Preset(machine, preset, {}, dir, ".", {}, {"roms"});
+    };
+    PresetLoadResult rom = run("0xC000");
+    CHECK(!rom.ok && rom.error.find("not RAM") != std::string::npos);
+    PresetLoadResult wrap = run("0xFFFE");
+    CHECK(!wrap.ok && wrap.error.find("past &FFFF") != std::string::npos);
+    CHECK(run("0x7C01").ok);
+
+    std::remove((dir + "/code.bin").c_str());
+    std::remove(dir.c_str());
+}
+
 } // namespace
 
 int run_presetloader_trace_tests() {
@@ -326,6 +360,7 @@ int run_presetloader_trace_tests() {
     test_z80_frame_shares_one_file_with_lh5801_frame();
     test_pc1600_trace_step_produces_wellformed_file();
     test_pc1600_trace_left_open_is_auto_closed();
+    test_binary_program_outside_ram_fails();
 
     std::printf("presetloader_trace_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
