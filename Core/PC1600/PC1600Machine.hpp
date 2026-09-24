@@ -424,6 +424,13 @@ private:
     uint64_t m_yieldInterval = 0;
     uint64_t m_yieldCountdown = 0;
 
+    /// Bodies of the public detach calls; caller holds m_mutex. The
+    /// attach/detach calls take it because step() dereferences these
+    /// cards (and the buses dispatch to them) on the emulation thread.
+    void detachCE1600PLocked();
+    void detachCE150Locked();
+    void detachCE158Locked();
+
     /// Shared body of reset()/allReset(); caller holds m_mutex.
     void resetLocked();
 

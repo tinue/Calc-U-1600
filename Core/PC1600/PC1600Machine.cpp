@@ -72,9 +72,10 @@ bool PC1600Machine::attachCE1600P(const uint8_t* rom1, size_t rom1Size,
     auto card = std::make_unique<CE1600PCard>();
     if (!card->loadRom(rom1, rom1Size, rom2, rom2Size)) return false;
     auto floppy = std::make_unique<CE1600FCard>();  // drive starts empty
-    detachCE1600P();
-    detachCE150(); // one plotter on the bus at a time
-    detachCE158(); // the CE-158 cannot be used with the CE-1600P
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE1600PLocked();
+    detachCE150Locked(); // one plotter on the bus at a time
+    detachCE158Locked(); // the CE-158 cannot be used with the CE-1600P
     m_z80Mem.ce1600pBus().attach(card.get());
     m_z80Mem.ce1600pBus().attach(floppy.get());
     m_ce1600pCard = std::move(card);
@@ -83,6 +84,11 @@ bool PC1600Machine::attachCE1600P(const uint8_t* rom1, size_t rom1Size,
 }
 
 void PC1600Machine::detachCE1600P() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE1600PLocked();
+}
+
+void PC1600Machine::detachCE1600PLocked() {
     if (m_ce1600fCard) {
         m_z80Mem.ce1600pBus().detach(m_ce1600fCard.get());
         m_ce1600fCard.reset();
@@ -170,8 +176,9 @@ bool PC1600Machine::attachCE150(const uint8_t* rom, size_t romSize) {
     if (romSize != Ce150Card::kRomSize) return false;
     auto card = std::make_unique<Ce150Card>();
     if (!card->loadRom(rom, romSize)) return false;
-    detachCE150();
-    detachCE1600P(); // one plotter on the bus at a time
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE150Locked();
+    detachCE1600PLocked(); // one plotter on the bus at a time
     card->reset();
     m_lh5803Mem.attachCe150(card.get());
     m_ce150Card = std::move(card);
@@ -179,6 +186,11 @@ bool PC1600Machine::attachCE150(const uint8_t* rom, size_t romSize) {
 }
 
 void PC1600Machine::detachCE150() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE150Locked();
+}
+
+void PC1600Machine::detachCE150Locked() {
     if (!m_ce150Card) return;
     m_lh5803Mem.detachCe150();
     m_ce150Card.reset();
@@ -190,8 +202,9 @@ bool PC1600Machine::attachCE158(const uint8_t* rom, size_t romSize) {
     if (romSize != Ce158Card::kRomSize) return false;
     auto card = std::make_unique<Ce158Card>();
     if (!card->loadRom(rom, romSize)) return false;
-    detachCE158();
-    detachCE1600P(); // not usable together with the CE-1600P
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE158Locked();
+    detachCE1600PLocked(); // not usable together with the CE-1600P
     card->setClockHz(kTStateHz); // ticked with SC7852 T-states, see step()
     card->reset();
     card->setSerialLink(m_ce158Link);
@@ -201,6 +214,11 @@ bool PC1600Machine::attachCE158(const uint8_t* rom, size_t romSize) {
 }
 
 void PC1600Machine::detachCE158() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE158Locked();
+}
+
+void PC1600Machine::detachCE158Locked() {
     if (!m_ce158Card) return;
     m_lh5803Mem.detachCe158();
     m_ce158Card.reset();
