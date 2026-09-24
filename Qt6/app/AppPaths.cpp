@@ -68,7 +68,9 @@ bool isUnderDir(const QString& path, const QString& dir) {
     if (path.isEmpty() || dir.isEmpty()) return false;
     const QString a = QFileInfo(path).canonicalFilePath();
     const QString b = QFileInfo(dir).canonicalFilePath();
-    return !a.isEmpty() && !b.isEmpty() && a.startsWith(b);
+    if (a.isEmpty() || b.isEmpty()) return false;
+    // Match whole path components: "<dir>-backup/x" is not under "<dir>".
+    return a == b || a.startsWith(b.endsWith(QLatin1Char('/')) ? b : b + QLatin1Char('/'));
 }
 
 bool atomicWriteFile(const QString& path, const std::string& text) {
