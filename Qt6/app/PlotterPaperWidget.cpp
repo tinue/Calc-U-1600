@@ -163,7 +163,7 @@ void PlotterPaperWidget::changeEvent(QEvent* event) {
 void PlotterPaperWidget::applyChrome() {
     const ChromeColors c = ChromeColors::forWidget(this);
 
-    m_header->setText(m_kind == Kind::CE1600P ? tr("PC-1600P") : tr("CE-150"));
+    m_header->setText(m_kind == Kind::CE1600P ? tr("CE-1600P") : tr("CE-150"));
     m_header->setStyleSheet(ChromeStyle::header(c));
 
     m_buttonBar->setStyleSheet(ChromeStyle::buttonBar(c));
