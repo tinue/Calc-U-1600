@@ -167,6 +167,7 @@ public:
     /// attached, or the card has no bank concept) -- for the "Dump Mem"
     /// panel's per-region label. See ExpansionCard::debugCurrentBank().
     int debugSlotCardBank() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
         return m_attachedExpansionCard ? m_attachedExpansionCard->debugCurrentBank() : -1;
     }
 
@@ -174,6 +175,7 @@ public:
     /// attached, or the card has no bank concept). See
     /// ExpansionCard::debugBankCount().
     int debugSlotCardBankCount() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
         return m_attachedExpansionCard ? m_attachedExpansionCard->debugBankCount() : -1;
     }
 
@@ -184,6 +186,7 @@ public:
     /// just whichever one is currently latched in. See
     /// ExpansionCard::debugImage(). Empty if no card is attached.
     std::vector<uint8_t> debugSlotCardImage() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
         return m_attachedExpansionCard ? m_attachedExpansionCard->debugImage() : std::vector<uint8_t>{};
     }
 
@@ -209,10 +212,12 @@ public:
     /// ExpansionConnector -- for callers (the preset loader, the CLI) with
     /// no longer-lived object of their own to hold the card. Replaces any
     /// previously-attached owned card (matches the 40-pin connector's own
-    /// single-slot semantics -- see ExpansionConnector::attach()).
+    /// single-slot semantics -- see ExpansionConnector::attach()). Takes
+    /// m_mutex: the emulation thread dispatches bus accesses to the card.
     void attachExpansionCard(std::unique_ptr<ExpansionCard> card) {
-        m_attachedExpansionCard = std::move(card);
-        m_expansionConnector.attach(m_attachedExpansionCard.get());
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_expansionConnector.attach(card.get());
+        m_attachedExpansionCard = std::move(card); // old card freed only after it's unplugged
     }
 
     // ── CE-150 plotter / printer (60-pin system bus) ─────────────────────
@@ -325,6 +330,12 @@ private:
     /// to these cards on the emulation thread.
     void detachCE150Locked();
     void detachCE158Locked();
+
+    /// Advances everything outside the CPU that runs on real time (RTC,
+    /// buzzer, key queue, CE-150/CE-158) by `cycles`. The one place both
+    /// step() and runCycles() feed, so they stay in step. Caller holds
+    /// m_mutex.
+    void advancePeripherals(uint32_t cycles);
 
     /// Drain the CPU trace ring into m_traceFile. Caller must hold
     /// m_mutex; safe to call only while m_traceFile is set.
