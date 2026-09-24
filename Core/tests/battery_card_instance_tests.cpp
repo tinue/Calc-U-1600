@@ -86,7 +86,9 @@ void test_addressed_hex_single_differing_byte() {
     CHECK(out == bank);
 }
 
-void test_battery_card_block_omits_uniform_banks() {
+void test_battery_card_block_keeps_uniform_banks() {
+    // A uniform bank must still be written: dropped, it would reload at the
+    // region's power-up-fill (0xFF here), not the 0x00 it held.
     std::vector<uint8_t> image;
     auto zeroBank = uniformBank(0x100, 0x00);
     std::vector<uint8_t> mixedBank(0x100, 0);
@@ -95,15 +97,38 @@ void test_battery_card_block_omits_uniform_banks() {
     image.insert(image.end(), mixedBank.begin(), mixedBank.end());
 
     auto lines = formatBatteryCardInitialContentBlock(2, image);
-    bool sawOmittedComment = false;
-    bool sawBankEntry = false;
+    bool sawBank0 = false;
+    bool sawBank1 = false;
     for (const auto& l : lines) {
-        if (l.find("# Bank 0: omitted, uniform 0x00") != std::string::npos) sawOmittedComment = true;
-        if (l.find("- bank: 1") != std::string::npos) sawBankEntry = true;
-        CHECK(l.find("- bank: 0") == std::string::npos);  // uniform bank 0 never emitted
+        if (l.find("- bank: 0") != std::string::npos) sawBank0 = true;
+        if (l.find("- bank: 1") != std::string::npos) sawBank1 = true;
     }
-    CHECK(sawOmittedComment);
-    CHECK(sawBankEntry);
+    CHECK(sawBank0);
+    CHECK(sawBank1);
+
+    std::string yaml =
+        "module-name: X\n"
+        "compatible-hosts: [PC-1500]\n"
+        "definition-terminology: PC-1500\n"
+        "regions:\n"
+        "  - name: sram\n"
+        "    content: { kind: regular, writable: true, power-up-fill: 0xFF }\n"
+        "    addressing: { chip-select: Y0 }\n"
+        "    banking:\n"
+        "      latch: { type: trigger-based, trigger: { pin: 16 }, source-domain: address, sampled-lines: [A0] }\n"
+        "      bank-count: 2\n"
+        "      bank-size: 0x0100\n"
+        "      bank-window: { chip-select: Y0, span: 0x0100 }\n";
+    for (const auto& l : lines) { yaml += l; yaml += "\n"; }
+    MemoryCardDefinition def;
+    std::string err;
+    CHECK(parseMemoryCardDefinition(yaml, &def, &err));
+    if (!err.empty()) std::fprintf(stderr, "  (parse error: %s)\n", err.c_str());
+    if (!def.regions.empty()) {
+        auto it = def.regions[0].initialContentByBank.find(0);
+        CHECK(it != def.regions[0].initialContentByBank.end());
+        if (it != def.regions[0].initialContentByBank.end()) CHECK(it->second == zeroBank);
+    }
 }
 
 // Minimal single-region, single-bank battery-style card definition, for
@@ -130,8 +155,7 @@ const char* kSyntheticCardYaml =
 void test_battery_card_block_never_empty_when_all_banks_uniform() {
     // A freshly-attached, never-written-to card: every bank sits at its
     // power-up-fill value. Core's parseInitialContent() rejects an empty
-    // 'blocks' list, so the writer must still emit at least one explicit
-    // block instead of omitting every bank via the uniform-bank shortcut.
+    // 'blocks' list, so the writer must emit explicit blocks here too.
     std::vector<uint8_t> image(2 * 0x100, 0xFF);
     auto lines = formatBatteryCardInitialContentBlock(2, image);
     bool sawBankEntry = false;
@@ -381,7 +405,7 @@ int run_battery_card_instance_tests() {
     test_addressed_hex_roundtrip_mixed();
     test_addressed_hex_roundtrip_uniform_run_plus_tail();
     test_addressed_hex_single_differing_byte();
-    test_battery_card_block_omits_uniform_banks();
+    test_battery_card_block_keeps_uniform_banks();
     test_battery_card_block_never_empty_when_all_banks_uniform();
     test_battery_card_block_unbanked_region_omits_bank_key();
 

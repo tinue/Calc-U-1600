@@ -329,7 +329,18 @@ inline bool parseGroup(const YamlNode& g, CardHost term, bool gateOnly, EnableGr
             *error = "line " + std::to_string(allOf->line) + ": 'all-of' must be a list";
             return false;
         }
-        for (const auto& t : allOf->seq) termMaps.push_back(&t);
+        for (const auto& t : allOf->seq) {
+            // Each entry holds terms only -- span/maps-to belong on the group.
+            if (!t.isMap()) {
+                *error = "line " + std::to_string(t.line) + ": 'all-of' entries must be mappings";
+                return false;
+            }
+            if (!t.requireOnlyKeys({"chip-select", "signal", "signal-negated", "address-bits",
+                                    "memory-range"},
+                                   error))
+                return false;
+            termMaps.push_back(&t);
+        }
     }
     termMaps.push_back(&g);  // also read term keys sitting directly on the group
 
@@ -1272,14 +1283,16 @@ inline bool parseRegion(const YamlNode& node, CardHost term, Region* out, std::s
                           &out->contentByBank, error))
         return false;
 
-    // A flash range's sector-erase must stay inside one bank.
-    if (banked) {
+    // A flash range's sector-erase must stay inside one bank (or, unbanked,
+    // inside the region's capacity).
+    {
+        const uint32_t span = banked ? out->banking.bankSize : out->capacity;
+        const char* spanKey = banked ? "bank-size" : "capacity";
         auto checkSectorSize = [&](const RegionContent& c) -> bool {
             if (c.kind != ContentKind::Flash) return true;
-            if (c.flash.sectorSize > out->banking.bankSize ||
-                out->banking.bankSize % c.flash.sectorSize != 0) {
+            if (c.flash.sectorSize > span || span % c.flash.sectorSize != 0) {
                 *error = "line " + std::to_string(contN->line) +
-                         ": flash 'sector-size' must evenly divide 'bank-size'";
+                         ": flash 'sector-size' must evenly divide '" + spanKey + "'";
                 return false;
             }
             return true;

@@ -318,6 +318,7 @@ private:
         }
         m_xfer = kind;
         m_xferRemaining = length;
+        m_xferBase = sectorBase();
         m_busyRemaining = kTransferIdleTStates;
     }
 
@@ -339,6 +340,9 @@ private:
         }
     }
 
+    // Only valid while m_sectorReg < kSectorsPerTrack (startTransfer()
+    // checks); transfers use the m_xferBase latched there, since the guest
+    // may rewrite the sector register mid-transfer.
     size_t sectorBase() const {
         return static_cast<size_t>(m_side) * kSideSize +
                (static_cast<size_t>(m_track) * kSectorsPerTrack + m_sectorReg) * kSectorSize;
@@ -348,7 +352,7 @@ private:
         uint8_t value = m_dataReg;
         switch (m_xfer) {
             case Xfer::ReadSector:
-                value = m_image[sectorBase() + m_byteOffset];
+                value = m_image[m_xferBase + m_byteOffset];
                 break;
             case Xfer::ReadId:
                 value = readIdByte();
@@ -377,7 +381,7 @@ private:
         m_dataReg = value;
         switch (m_xfer) {
             case Xfer::WriteSector:
-                m_image[sectorBase() + m_byteOffset] = value;
+                m_image[m_xferBase + m_byteOffset] = value;
                 ++m_revision;
                 break;
             case Xfer::FormatTrack:
@@ -434,6 +438,7 @@ private:
     mutable Xfer m_xfer = Xfer::None;
     mutable size_t m_xferRemaining = 0;       // bytes left in the transfer
     mutable uint16_t m_byteOffset = 0;        // bytes moved so far
+    mutable size_t m_xferBase = 0;            // image offset of the sector being read/written
     mutable uint32_t m_busyRemaining = 0;     // seek time, or transfer idle timeout
     mutable uint8_t m_idSector = 0;           // sector of the last ID field read
 };

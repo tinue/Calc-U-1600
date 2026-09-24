@@ -72,6 +72,15 @@ inline std::string errAt(int line, const std::string& msg) {
     return "line " + std::to_string(line) + ": " + msg;
 }
 
+// Whether the quote at s[i] opens a quoted scalar. In YAML only a quote at
+// the very start of a scalar does; one inside a plain scalar (`Martin's`)
+// is just a character.
+inline bool opensQuote(const std::string& s, size_t i) {
+    if (i == 0) return true;
+    const char p = s[i - 1];
+    return p == ' ' || p == '\t' || p == '[' || p == '{' || p == ',';
+}
+
 // Drop a trailing `#` comment that sits outside quotes and outside a flow
 // collection, and that is either at the start or preceded by whitespace.
 inline std::string stripComment(const std::string& s) {
@@ -83,9 +92,9 @@ inline std::string stripComment(const std::string& s) {
             if (c == '\'') inS = false;
         } else if (inD) {
             if (c == '"') inD = false;
-        } else if (c == '\'') {
+        } else if (c == '\'' && opensQuote(s, i)) {
             inS = true;
-        } else if (c == '"') {
+        } else if (c == '"' && opensQuote(s, i)) {
             inD = true;
         } else if (c == '[' || c == '{') {
             depth++;
@@ -117,9 +126,9 @@ inline int mappingColon(const std::string& s) {
             if (c == '\'') inS = false;
         } else if (inD) {
             if (c == '"') inD = false;
-        } else if (c == '\'') {
+        } else if (c == '\'' && opensQuote(s, i)) {
             inS = true;
-        } else if (c == '"') {
+        } else if (c == '"' && opensQuote(s, i)) {
             inD = true;
         } else if (c == '[' || c == '{') {
             depth++;
@@ -179,17 +188,18 @@ inline bool splitFlowItems(const std::string& body, std::vector<std::string>* ou
     bool inS = false, inD = false;
     int depth = 0;
     std::string cur;
-    for (char c : body) {
+    for (size_t i = 0; i < body.size(); ++i) {
+        const char c = body[i];
         if (inS) {
             cur += c;
             if (c == '\'') inS = false;
         } else if (inD) {
             cur += c;
             if (c == '"') inD = false;
-        } else if (c == '\'') {
+        } else if (c == '\'' && opensQuote(body, i)) {
             inS = true;
             cur += c;
-        } else if (c == '"') {
+        } else if (c == '"' && opensQuote(body, i)) {
             inD = true;
             cur += c;
         } else if (c == '[' || c == '{') {

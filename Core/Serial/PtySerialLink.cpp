@@ -10,9 +10,14 @@
 #include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
+#include <chrono>
 #include <vector>
 
 namespace {
+
+// How long the reader waits before re-polling when poll() would return at
+// once without anything to do: RX ring full, or no peer on the slave.
+constexpr std::chrono::milliseconds kIdleBackoff{10};
 
 // Best-effort <dir>/<name> -> target. When `dir` is empty the
 // caller supplied no folder (the headless probe, tests): fall back to
@@ -138,9 +143,16 @@ void PtySerialLink::readerLoop() {
 
         // Back-pressure: while the RX ring is deep, leave the bytes in the
         // pty buffer so a blocking sender stalls (stand-in for RTS drop).
+        // poll() stays readable meanwhile, so back off instead of spinning
+        // straight back into it.
+        bool full;
         {
             std::lock_guard<std::mutex> lk(m_rxMx);
-            if (m_rxRing.size() >= kRxHighWater) continue;
+            full = m_rxRing.size() >= kRxHighWater;
+        }
+        if (full) {
+            std::this_thread::sleep_for(kIdleBackoff);
+            continue;
         }
 
         ssize_t n = ::read(m_master, buf, sizeof buf);
@@ -148,11 +160,12 @@ void PtySerialLink::readerLoop() {
             m_peerOpen.store(true, std::memory_order_relaxed);
             std::lock_guard<std::mutex> lk(m_rxMx);
             for (ssize_t i = 0; i < n; ++i) m_rxRing.push_back(buf[i]);
-        } else if (n == 0) {
+        } else if (n == 0 || errno == EIO) {
+            // No process holds the slave open (EIO is the BSD/macOS
+            // behaviour). poll() keeps reporting the hangup at once, so
+            // back off until a peer opens the slave.
             m_peerOpen.store(false, std::memory_order_relaxed);
-        } else if (errno == EIO) {
-            // No process holds the slave open (BSD/macOS behaviour).
-            m_peerOpen.store(false, std::memory_order_relaxed);
+            std::this_thread::sleep_for(kIdleBackoff);
         } else if (errno == EAGAIN || errno == EINTR) {
             // spurious wakeup -- retry
         } else {

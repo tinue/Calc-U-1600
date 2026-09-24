@@ -5,7 +5,7 @@ namespace CoreDebug {
 using W = BasicPointerEntry::Width;
 
 // PC-1500 BASIC/system-variable pointer table, used by the debug panel's
-// "Dump Pointers" view.
+// "Dump Pointers" view. Addresses per the ROM disassembly's PC-1500.lib.
 const BasicPointerEntry kPC1500BasicPointers[] = {
     {"BASPRG_ST",   0x7865, W::Word, "BASIC program start"},
     {"BASPRG_END",  0x7867, W::Word, "BASIC program end (used by MEM)"},
@@ -14,20 +14,20 @@ const BasicPointerEntry kPC1500BasicPointers[] = {
     {"CURVARTYPE",  0x7885, W::Byte, "Active variable's type"},
     {"VAR_START",   0x7899, W::Word, "Dimensioned-variable area boundary (grows downward)"},
     {"DATA_PTR",    0x78BE, W::Word, "DATA statement cursor"},
-    {"CURR_LINE",   0x78A0, W::Word, "Currently executing BASIC line"},
-    {"PREV_LINE",   0x78A2, W::Word, "Previous line (error reporting / CONT)"},
+    {"CURR_LINE",   0x789C, W::Word, "Currently executing BASIC line number"},
+    {"PREV_LINE",   0x78A2, W::Word, "Previous line number (error reporting / CONT)"},
     {"TRACE_ON",    0x788D, W::Byte, "Non-zero if TRON is active"},
     {"TRACE_PARAM", 0x788E, W::Word, "Trace output vector"},
-    {"RAM_ST",      0x7860, W::Byte, "High byte of user RAM start"},
+    {"RAM_ST",      0x7863, W::Byte, "High byte of user RAM start"},
     {"RAM_END",     0x7864, W::Byte, "High byte of first invalid page (one past top of RAM)"},
     {"WARM_START",  0x7A20, W::Byte, "Must be $01 to skip NEW0? cold start"},
     {"STK_SAVE",    0x7A21, W::Word, "System stack pointer, saved for warm start"},
     {"DISP_CTRL",   0x7880, W::Byte, "LCD refresh / auto-off flags"},
     {"BREAK_STAT",  0x7881, W::Byte, "BREAK-key/execution-pause status"},
-    {"IN_BUF_PTR",  0x7892, W::Word, "Cursor into the $7Bxx input buffer"},
-    {"ON_ERR_VEC",  0x78A4, W::Word, "ON ERROR GOTO handler address"},
+    {"IN_BUF_PTR",  0x788B, W::Byte, "Low byte of the cursor into the $7Bxx input buffer"},
+    {"ON_ERR_VEC",  0x78B8, W::Word, "ON ERROR GOTO handler address"},
     {"SRCH_PTR",    0x78A6, W::Word, "Program/variable scan workspace"},
-    {"STK_FOR_GSB", 0x78B8, W::Byte, "FOR/NEXT + GOSUB stack depth"},
+    {"STK_FOR_GSB", 0x7882, W::Byte, "FOR/NEXT + GOSUB stack depth"},
     {"LOCK",        0x79FF, W::Byte, "Lock register; unlocked with NEW0 or UNLOCK ROM routine"},
 };
 const int kPC1500BasicPointerCount = sizeof(kPC1500BasicPointers) / sizeof(kPC1500BasicPointers[0]);

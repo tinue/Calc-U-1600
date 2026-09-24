@@ -97,10 +97,12 @@ inline std::vector<std::string> formatAddressedHexLines(const std::vector<uint8_
 
 // Emits the `initial-content:`/`blocks:` lines (4-space region-field
 // indent, per docs/Memory-Card-Definition-Format.md), one `- bank:`/`offset:`/
-// `encoding: addressed-hex`/`bytes: |` entry per non-uniform bank, and a
-// trailing `# Bank N: omitted, uniform 0xXX` comment for banks whose
-// every byte is identical (so the file doesn't carry a needless 16 KB of
-// repeated-byte hex for e.g. an untouched RAM chip).
+// `encoding: addressed-hex`/`bytes: |` entry per bank. Every bank is
+// written, including uniform ones: an omitted bank would reload at the
+// region's power-up-fill rather than the value it held (e.g. an erased
+// CE-163F flash bank, all 0xFF, would come back as its 0xAA fill), and
+// formatAddressedHexLines() already collapses a uniform bank to a single
+// "$0000: XX..." line, so there is nothing to save by dropping it.
 //
 // `bankCountOrNegativeForUnbanked` follows ExpansionCard::debugBankCount()'s
 // own convention: a positive count for a genuinely banked region (its
@@ -116,39 +118,10 @@ inline std::vector<std::string> formatBatteryCardInitialContentBlock(int bankCou
     const int bankCount = banked ? bankCountOrNegativeForUnbanked : 1;
 
     std::vector<std::string> lines = {"    initial-content:", "      blocks:"};
-    std::vector<std::string> omitted;
     const size_t bankSize = image.size() / static_cast<size_t>(bankCount);
-    // Whether omitting every uniform bank would leave `blocks:` empty --
-    // Core's parseInitialContent() rejects an empty blocks list, so a
-    // freshly-attached, never-written-to card (every bank at its
-    // power-up-fill) must still emit at least one explicit block rather
-    // than omitting all of them.
-    bool anyNonUniform = false;
     for (int bank = 0; bank < bankCount; ++bank) {
-        const auto begin = image.begin() + static_cast<long>(bank * static_cast<int>(bankSize));
-        const auto end = begin + static_cast<long>(bankSize);
-        const uint8_t uniform = (begin == end) ? 0 : *begin;
-        for (auto it = begin; it != end; ++it) {
-            if (*it != uniform) { anyNonUniform = true; break; }
-        }
-        if (anyNonUniform) break;
-    }
-
-    for (int bank = 0; bank < bankCount; ++bank) {
-        const auto begin = image.begin() + static_cast<long>(bank * static_cast<int>(bankSize));
-        const auto end = begin + static_cast<long>(bankSize);
-        std::vector<uint8_t> bytes(begin, end);
-        const uint8_t uniform = bytes.empty() ? 0 : bytes.front();
-        bool allSame = !bytes.empty();
-        for (uint8_t b : bytes) {
-            if (b != uniform) { allSame = false; break; }
-        }
-        if (allSame && (anyNonUniform || bank != 0)) {
-            char note[64];
-            std::snprintf(note, sizeof(note), "Bank %d: omitted, uniform 0x%02X", bank, uniform);
-            omitted.push_back(note);
-            continue;
-        }
+        const auto begin = image.begin() + static_cast<long>(static_cast<size_t>(bank) * bankSize);
+        const std::vector<uint8_t> bytes(begin, begin + static_cast<long>(bankSize));
         if (banked) {
             char bankLine[32];
             std::snprintf(bankLine, sizeof(bankLine), "        - bank: %d", bank);
@@ -161,7 +134,6 @@ inline std::vector<std::string> formatBatteryCardInitialContentBlock(int bankCou
         lines.push_back("          bytes: |");
         for (const auto& hexLine : formatAddressedHexLines(bytes)) lines.push_back("            " + hexLine);
     }
-    for (const auto& note : omitted) lines.push_back("      # " + note);
     return lines;
 }
 

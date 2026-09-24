@@ -189,6 +189,33 @@ void test_sector_address_combines_head_track_and_sector_register() {
     CHECK(image[4 * CE1600FCard::kSectorSize] == 0);
 }
 
+// The sector is latched when the command is issued: rewriting the sector
+// register mid-transfer (here to 0xFF, far past the image on side B's last
+// track) must neither move the transfer nor reach outside the image.
+void test_sector_register_rewrite_mid_transfer_keeps_the_latched_sector() {
+    CE1600FCard card;
+    card.insertBlankDisk();
+    card.setSide(1);
+    seekTo(card, CE1600FCard::kTracksPerSide - 1);
+    writeReg(card, 0x79, 2);
+    writeReg(card, 0x78, 0x60);
+    writeReg(card, 0x7B, 0x11);
+    writeReg(card, 0x79, 0xFF);
+    writeReg(card, 0x7B, 0x22);
+    const size_t base = CE1600FCard::kSideSize +
+                        ((CE1600FCard::kTracksPerSide - 1) * CE1600FCard::kSectorsPerTrack + 2) *
+                            CE1600FCard::kSectorSize;
+    const auto image = card.imageForSave();
+    CHECK(image[base] == 0x11);
+    CHECK(image[base + 1] == 0x22);
+
+    writeReg(card, 0x79, 2);
+    writeReg(card, 0x78, 0x40);
+    writeReg(card, 0x79, 0xFF);
+    CHECK(readReg(card, 0x7B) == 0x11);
+    CHECK(readReg(card, 0x7B) == 0x22);
+}
+
 // Outside a write transfer, DATA is only a latch (the seek target) -- it
 // must never land in the disk image.
 void test_data_writes_outside_a_transfer_do_not_touch_the_image() {
@@ -489,6 +516,7 @@ int run_ce1600f_tests() {
     test_format_track_takes_eight_id_fields_and_clears_the_head_track();
     test_seek_then_read_id_returns_the_target_track();
     test_sector_address_combines_head_track_and_sector_register();
+    test_sector_register_rewrite_mid_transfer_keeps_the_latched_sector();
     test_data_writes_outside_a_transfer_do_not_touch_the_image();
     test_abandoned_transfer_times_out();
     test_port_0x81_reset_clears_motor_and_command_state();
