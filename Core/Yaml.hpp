@@ -17,7 +17,7 @@
 //   * `#` comments -- a whole-line comment or a ` #...` trailing comment
 //     (honoured outside quotes and outside `[]`/`{}`)
 //   * single- and double-quoted scalars (no escape processing, matching
-//     Core/PC1500/PresetFile.cpp) and bare scalars
+//     Core/Preset/PresetFile.cpp) and bare scalars
 //   * `key: |` block scalars (literal, common-indent stripped)
 // Not supported: anchors/aliases, tags, `>`, multiple documents, complex
 // keys, flow scalars spanning lines. Tabs are rejected, as in PresetFile.

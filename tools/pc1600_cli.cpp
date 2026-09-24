@@ -49,7 +49,7 @@
 #include "../Core/PC1600/PC1600Machine.hpp"
 #include "../Core/PC1600/PC1600Memory.hpp"
 #include "../Core/PC1600/PC1600PresetLoader.hpp"
-#include "../Core/PC1500/PresetFile.hpp"
+#include "../Core/Preset/PresetFile.hpp"
 #include "../Core/Resources/BundledRomCatalog.hpp"
 #include "Ce158CliPeer.hpp"
 

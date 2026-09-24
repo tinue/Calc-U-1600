@@ -21,7 +21,7 @@
 #include <unistd.h>   // mkdtemp
 
 #include "../PC1500/PC1500Machine.hpp"
-#include "../PC1500/PresetFile.hpp"
+#include "../Preset/PresetFile.hpp"
 #include "../PC1500/PC1500PresetLoader.hpp"
 #include "../PC1500/PC1500TraceFile.hpp"
 #include "../PC1600/PC1600Machine.hpp"

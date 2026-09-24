@@ -441,7 +441,7 @@ still worth understanding. They say what the code actually does now.
 
 ## Preset loader
 
-`Core/PC1500/PresetFile.cpp`, `Core/PC1600/PC1600PresetLoader.cpp`
+`Core/Preset/PresetFile.cpp`, `Core/PC1600/PC1600PresetLoader.cpp`
 
 - **`check:` steps** not yet supported. `PresetFile.cpp:178`
 - **`format: basic-tokenized`** not yet supported. `PresetFile.cpp:363`

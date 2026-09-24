@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "../PC1500/PresetFile.hpp"
+#include "../Preset/PresetFile.hpp"
 
 class PC1600Machine;
 

@@ -179,9 +179,6 @@ touched, not proactively:
   and leaves an implicit, unnamed PC-1500 path — extract two symmetric
   private methods and reduce `loadPreset` to peek-model → pick →
   commit-or-report.
-- `Core/PC1500/PresetFile.{hpp,cpp}` is actually family-agnostic but
-  lives in the PC-1500 directory; move to `Core/Preset/` next time it's
-  opened.
 - Converge `PC1500Memory`'s connector ownership (raw pointer, injected by
   `PC1500Machine`) onto `PC1600Memory`'s pattern (owns its connectors by
   value) next time PC-1500 connector wiring is touched.

@@ -1,6 +1,6 @@
 #include "PresetFile.hpp"
 
-#include "PC1500Keyboard.hpp"
+#include "../PC1500/PC1500Keyboard.hpp"
 #include "../MachineCodeFile.hpp"
 
 #include <cctype>

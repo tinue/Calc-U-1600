@@ -141,7 +141,7 @@ endif()
 
 if(EXISTS ${SHARPDX_LIB})
   list(APPEND CORE_SOURCES
-    ${CORE_ROOT}/PC1500/PresetFile.cpp
+    ${CORE_ROOT}/Preset/PresetFile.cpp
     ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
     ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
     ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp

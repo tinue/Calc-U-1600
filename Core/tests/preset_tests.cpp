@@ -10,7 +10,7 @@
 #include <cstdio>
 #include <string>
 
-#include "../PC1500/PresetFile.hpp"
+#include "../Preset/PresetFile.hpp"
 #include "PresetTestSupport.hpp"
 
 namespace {

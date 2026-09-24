@@ -49,7 +49,7 @@
 
 #include "../Core/Audio/WavFile.hpp"
 #include "../Core/PC1500/PC1500Machine.hpp"
-#include "../Core/PC1500/PresetFile.hpp"
+#include "../Core/Preset/PresetFile.hpp"
 #include "../Core/PC1500/PC1500PresetLoader.hpp"
 #include "Ce158CliPeer.hpp"
 

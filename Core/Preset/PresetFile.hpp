@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "PC1500Variant.hpp"
+#include "../PC1500/PC1500Variant.hpp"
 
 // ── Preset file model + parser (the "common loader": file open, parse, ──
 //     model resolution -- see the 3-part structure note below) ───────────

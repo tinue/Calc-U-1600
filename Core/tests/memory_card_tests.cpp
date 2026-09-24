@@ -22,7 +22,7 @@
 #include "../Connector/MemoryCardCatalog.hpp"
 #include "../Connector/MemoryCardDefinition.hpp"
 #include "../Connector/SoftwareDefinedCard.hpp"
-#include "../PC1500/PresetFile.hpp"
+#include "../Preset/PresetFile.hpp"
 #include "../PC1600/PC1600Machine.hpp"
 #include "../PC1600/PC1600PresetLoader.hpp"
 #include "../Yaml.hpp"

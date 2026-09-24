@@ -15,7 +15,7 @@
 #include "../Connector/Ce150Card.hpp"
 #include "../PC1500/PC1500Machine.hpp"
 #include "../PC1500/PC1500PresetLoader.hpp"
-#include "../PC1500/PresetFile.hpp"
+#include "../Preset/PresetFile.hpp"
 
 namespace {
 
