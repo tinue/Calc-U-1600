@@ -57,6 +57,21 @@ void TC8576F::resetImpl() {
     updateCharTStates();
 }
 
+void TC8576F::setSerialLink(SerialLink* link) {
+    m_link = link;
+    if (link) return;
+    // tick() does nothing without a peer, so a non-empty FIFO would hold
+    // TxRDY low for good and hang a transmit poll.
+    m_txFifo.clear();
+    m_serialAccum = 0;
+    m_txEmpty = true;
+    m_txReady = true;
+    m_cts = m_dcd = true;
+    m_dsr = false;
+    m_ci = false;
+    refreshInterruptOutput();
+}
+
 uint8_t TC8576F::ssr() const {
     uint8_t v = 0;
     if (m_txReady)      v |= kSsrTxRDY;

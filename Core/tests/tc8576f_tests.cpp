@@ -334,6 +334,29 @@ void test_chip_reset_keeps_peer_attached() {
     CHECK(uart.serialLink() == nullptr);
 }
 
+// Detaching the peer mid-transmit must not leave TxRDY low: without a
+// link tick() never drains the FIFO, so a ROM transmit poll would hang.
+void test_detach_with_queued_bytes_restores_ready() {
+    PC1600SubCpu sub;
+    TC8576F uart(sub);
+    uart.reset();
+    FakeLink link;
+    link.lines.dsr = true;
+    uart.setSerialLink(&link);
+    uart.writeRegister(3, 0x05);          // TxEN | RxEN
+    uart.tick(kDefaultCharTStates);       // pick up DSR from the peer
+    CHECK((uart.ssr() & 0x80) != 0);
+    for (int i = 0; i < 600; i++) uart.writeRegister(0, 0x41); // fill the FIFO
+    CHECK((uart.ssr() & kSsrTxRDY) == 0);
+    uart.setSerialLink(nullptr);
+    CHECK((uart.ssr() & kSsrTxRDY) != 0);
+    CHECK((uart.ssr() & kSsrTxE) != 0);
+    CHECK((uart.ssr() & 0x80) == 0);      // DSR back to the no-peer level
+    uart.setSerialLink(&link);
+    uart.tick(kDefaultCharTStates);
+    CHECK(link.tx.size() <= 1);           // nothing stale left to send
+}
+
 } // namespace
 
 int run_tc8576f_tests() {
@@ -353,6 +376,7 @@ int run_tc8576f_tests() {
     test_serial_cts_low_holds_the_transmitter();
     test_no_link_preserves_standalone_behaviour();
     test_chip_reset_keeps_peer_attached();
+    test_detach_with_queued_bytes_restores_ready();
     std::printf("tc8576f: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

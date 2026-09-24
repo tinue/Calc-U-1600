@@ -65,9 +65,10 @@ public:
 
     /// Attach / detach the RS-232C peer. Non-owning -- the host owns the
     /// object and must outlive the chip (or detach first). `nullptr`
-    /// restores the standalone no-peer behaviour. A chip reset does NOT
-    /// clear this.
-    void setSerialLink(SerialLink* link) { m_link = link; }
+    /// restores the standalone no-peer behaviour: queued bytes are dropped,
+    /// the transmitter reports ready/empty again and the modem lines fall
+    /// back to their no-peer levels. A chip reset does NOT clear this.
+    void setSerialLink(SerialLink* link);
     SerialLink* serialLink() const { return m_link; }
 
     /// A read / write of one of ports 20H-27H. `reg` is port & 3.
