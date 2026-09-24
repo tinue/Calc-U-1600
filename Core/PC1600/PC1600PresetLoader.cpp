@@ -388,7 +388,7 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
                 if (log)
                     log("section " + std::to_string(sectionNo) + ": program (basic-binary, " +
                         std::to_string(src.payload.size()) + " tokenized bytes)");
-                PC1600BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
+                BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
                 if (!loaded.ok) {
                     result.error = "basic-binary load failed: " + loaded.error;
                     if (log) log("  " + result.error);
@@ -410,7 +410,7 @@ PC1600PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFil
                 continue;
             }
             if (log) log("section " + std::to_string(sectionNo) + ": program (basic-text)");
-            PC1600BasicTypeResult typed = typeBasicProgramText(machine, program.text);
+            BasicTypeResult typed = typeBasicProgramText(machine, program.text);
             for (const std::string& rejected : typed.rejectedLines) {
                 result.rejectedBasicLines.push_back(rejected);
                 if (log) log("  REJECTED (too long): " + rejected);

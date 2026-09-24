@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 
+#include "../Basic/BasicLoadResults.hpp"
+
 class PC1500Machine;
 
 // ── Keystroke-injection primitives for scripted PC-1500 input ───────────
@@ -81,12 +83,6 @@ uint64_t waitUntilBasicIdle(PC1500Machine& machine, uint64_t maxCycles);
 /// never for a ROM-side syntax rejection, which callers that care (like
 /// typeBasicProgramText) detect themselves via the program-end pointer.
 bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, std::string* error);
-
-struct BasicTypeResult {
-    bool ok = false;
-    std::vector<std::string> rejectedLines; // lines the ROM's line editor didn't accept
-    std::string error; // set when ok is false for a reason other than a rejection (e.g. an unmapped character)
-};
 
 /// Types a whole BASIC program's source text in through the ROM's own
 /// PRO-mode line editor, one statement line at a time, tokenizing exactly

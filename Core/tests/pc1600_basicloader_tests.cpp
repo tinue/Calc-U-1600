@@ -92,7 +92,7 @@ void test_equivalence_against_typer() {
             std::fprintf(stderr, "SKIP pc1600_basicloader: PC-1600 ROM set not found\n");
             return;
         }
-        PC1600BasicTypeResult typed =
+        BasicTypeResult typed =
             typeBasicProgramText(m, "10 REM header\n20 PRINT \"AB\"\n30 GOTO 20\n40 END\n");
         CHECK(typed.ok);
         CHECK(typed.rejectedLines.empty());
@@ -105,7 +105,7 @@ void test_equivalence_against_typer() {
 
     PC1600Machine m;
     if (!bootIntoProNew0(m)) return;
-    PC1600BasicLoadResult r = loadBasicBinaryProgram(m, wrapPc1600(payload));
+    BasicLoadResult r = loadBasicBinaryProgram(m, wrapPc1600(payload));
     CHECK(r.ok);
     if (!r.ok) {
         std::fprintf(stderr, "  loader error: %s\n", r.error.c_str());
@@ -153,7 +153,7 @@ void test_ce1600m_module_equivalence_and_run() {
             std::fprintf(stderr, "SKIP pc1600_basicloader ce1600m: PC-1600 ROM set not found\n");
             return;
         }
-        PC1600BasicTypeResult typed = typeBasicProgramText(m, src);
+        BasicTypeResult typed = typeBasicProgramText(m, src);
         CHECK(typed.ok);
         CHECK(typed.rejectedLines.empty());
         typedStLh = be16(m, 0xF865);
@@ -174,7 +174,7 @@ void test_ce1600m_module_equivalence_and_run() {
     // Fast path: load that payload into a fresh module machine.
     PC1600Machine m;
     if (!bootIntoProNew0Slot1Ram(m, 0x8000)) return;
-    PC1600BasicLoadResult r = loadBasicBinaryPayload(m, typedPayload);
+    BasicLoadResult r = loadBasicBinaryPayload(m, typedPayload);
     CHECK(r.ok);
     if (!r.ok) {
         std::fprintf(stderr, "  loader error: %s\n", r.error.c_str());
@@ -221,7 +221,7 @@ void test_reload_over_shorter_program_clears_tail_stock() {
     std::vector<uint8_t> shortPayload = {0x00, 0x0A, 0x03, 0xF1, 0x30, 0x0D};
     CHECK(longPayload.size() > shortPayload.size());
 
-    PC1600BasicLoadResult first = loadBasicBinaryPayload(m, longPayload);
+    BasicLoadResult first = loadBasicBinaryPayload(m, longPayload);
     CHECK(first.ok);
     if (!first.ok) {
         std::fprintf(stderr, "  loader error: %s\n", first.error.c_str());
@@ -229,7 +229,7 @@ void test_reload_over_shorter_program_clears_tail_stock() {
     }
     uint16_t oldEnd = first.endAddr;
 
-    PC1600BasicLoadResult second = loadBasicBinaryPayload(m, shortPayload);
+    BasicLoadResult second = loadBasicBinaryPayload(m, shortPayload);
     CHECK(second.ok);
     if (!second.ok) {
         std::fprintf(stderr, "  loader error: %s\n", second.error.c_str());
@@ -258,7 +258,7 @@ void test_rejects_invalid_basprg_end() {
     m.memory().poke(0xF868, static_cast<uint8_t>(badEnd & 0xFF));
 
     std::vector<uint8_t> payload = {0x00, 0x0A, 0x03, 0xF1, 0x30, 0x0D};
-    PC1600BasicLoadResult r = loadBasicBinaryPayload(m, payload);
+    BasicLoadResult r = loadBasicBinaryPayload(m, payload);
     CHECK(!r.ok);
     CHECK(r.error.find("BASPRG_END") != std::string::npos);
 }
@@ -277,7 +277,7 @@ void test_reload_over_shorter_program_clears_tail_module() {
                                        0x22, 0x0D};
     std::vector<uint8_t> shortPayload = {0x00, 0x0A, 0x03, 0xF1, 0x30, 0x0D};
 
-    PC1600BasicLoadResult first = loadBasicBinaryPayload(m, longPayload);
+    BasicLoadResult first = loadBasicBinaryPayload(m, longPayload);
     CHECK(first.ok);
     if (!first.ok) {
         std::fprintf(stderr, "  loader error: %s\n", first.error.c_str());
@@ -285,7 +285,7 @@ void test_reload_over_shorter_program_clears_tail_module() {
     }
     uint16_t oldEndLh = be16(m, 0xF867);
 
-    PC1600BasicLoadResult second = loadBasicBinaryPayload(m, shortPayload);
+    BasicLoadResult second = loadBasicBinaryPayload(m, shortPayload);
     CHECK(second.ok);
     if (!second.ok) {
         std::fprintf(stderr, "  loader error: %s\n", second.error.c_str());
@@ -319,7 +319,7 @@ void test_rejects_pc1500_transfer_file() {
     f[0x17] = static_cast<uint8_t>(wire >> 8);
     f[0x18] = static_cast<uint8_t>(wire & 0xFF);
     f.insert(f.end(), payload.begin(), payload.end());
-    PC1600BasicLoadResult r = loadBasicBinaryProgram(m, f);
+    BasicLoadResult r = loadBasicBinaryProgram(m, f);
     CHECK(!r.ok);
     CHECK(r.error.find("PC-1500") != std::string::npos);
 }

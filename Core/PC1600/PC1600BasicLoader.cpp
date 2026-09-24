@@ -28,8 +28,8 @@ uint16_t readLE16(PC1600Machine& m, uint16_t addr) {
                                  (m.debugPeek(static_cast<uint16_t>(addr + 1)) << 8));
 }
 
-PC1600BasicLoadResult fail(const std::string& msg) {
-    PC1600BasicLoadResult r;
+BasicLoadResult fail(const std::string& msg) {
+    BasicLoadResult r;
     r.ok = false;
     r.error = msg;
     return r;
@@ -43,7 +43,7 @@ bool writePlacementSegment(PC1600Machine& machine, const pc1600::PlacementWrite&
 
 }  // namespace
 
-PC1600BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,
+BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,
                                              const std::vector<uint8_t>& transferFile) {
     basic::BasicBinaryImage img = basic::parseBasicBinaryTransfer(transferFile);
     if (!img.ok) return fail(img.error);
@@ -54,7 +54,7 @@ PC1600BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,
     return loadBasicBinaryPayload(machine, img.payload);
 }
 
-PC1600BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
+BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
                                              const std::vector<uint8_t>& payload) {
     // LOAD semantics: this works off whatever BASPRG_ST/BASPRG_END are
     // currently live -- no reset, no mode change, no NEW0 typed here. The
@@ -163,7 +163,7 @@ PC1600BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
         return fail("could not write BASPRG_END");
     }
 
-    PC1600BasicLoadResult r;
+    BasicLoadResult r;
     r.ok = true;
     r.baseAddr = plan.startAddr;
     r.endAddr = plan.endAddr;

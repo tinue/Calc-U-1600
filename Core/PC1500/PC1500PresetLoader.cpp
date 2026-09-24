@@ -333,7 +333,7 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
                               sectionNo, sectionCount, src.payload.size());
                 log(hdr);
             }
-            PC1500BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
+            BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
             if (!loaded.ok) {
                 result.error = "basic-binary load failed: " + loaded.error;
                 if (log) log("  " + result.error);

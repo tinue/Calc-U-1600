@@ -221,8 +221,8 @@ bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, 
     return true;
 }
 
-PC1600BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& text) {
-    PC1600BasicTypeResult result;
+BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& text) {
+    BasicTypeResult result;
 
     int typedLines = 0;   // lines actually sent to the editor (not the length-guard skips)
     int storedCount = 0;  // of those, how many changed the program
