@@ -262,7 +262,8 @@ public:
     PC1500Machine& resetBareForPresetPC1500(PC1500Variant variant);
     // Replaces the live machine with a freshly constructed PC1600Machine
     // with the ROM set of `version` already loaded (remembered as the
-    // current version) (same bytes/order as
+    // current version; an unavailable old set falls back to the new one,
+    // as in switchModel()) (same bytes/order as
     // switchModel()'s PC-1600 branch) but no module attach or reset --
     // PC1600PresetLoader.cpp does both itself, driven by the preset's own
     // memory-expansion-1:/-2: blocks.
@@ -378,6 +379,10 @@ private:
     // catalog lives in.
     static std::vector<std::string> bundledRomDirs();
     bool loadPC1600RomSet(PC1600Machine& machine, std::string* error);
+    // Replaces m_pc1600 with a fresh machine holding m_pc1600RomVersion's
+    // ROM set. A missing/incomplete old set warns and falls back to (and
+    // remembers) the new one; a new-set failure quits the app.
+    void makePC1600WithRomFallback();
     void seedClockFromHost();
     void seedClockFromHostNow();
     bool m_clockResyncPending = false; // see resyncClockIfSeeded()

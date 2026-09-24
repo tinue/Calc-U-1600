@@ -89,21 +89,7 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
     m_pc1600.reset();
 
     if (model == Model::PC1600) {
-        std::string romErr;
-        for (;;) {
-            m_pc1600 = std::make_unique<PC1600Machine>();
-            if (loadPC1600RomSet(*m_pc1600, &romErr)) break;
-            // Only the old ROM set is optional (its dump may be missing or
-            // incomplete): warn, fall back to the new ROM and retry once --
-            // a new-ROM failure quits. reportMissingRomAndExit() is
-            // [[noreturn]], so the retry can't loop a third time.
-            if (m_pc1600RomVersion != PC1600RomVersion::Old) reportMissingRomAndExit(romErr);
-            QMessageBox::warning(nullptr, QObject::tr("Old ROM unavailable"),
-                                 QObject::tr("The old PC-1600 ROM could not be loaded:\n\n%1\n\n"
-                                             "Using the new ROM instead.")
-                                     .arg(QString::fromStdString(romErr)));
-            m_pc1600RomVersion = PC1600RomVersion::New;
-        }
+        makePC1600WithRomFallback();
 
         // Attach any currently-selected memory modules before the cold
         // boot -- a module's state must be visible on the very first ROM
@@ -170,6 +156,24 @@ bool MachineController::loadPC1600RomSet(PC1600Machine& machine, std::string* er
     return BundledRoms::loadPC1600RomSet(machine, bundledRomDirs(), version, error);
 }
 
+void MachineController::makePC1600WithRomFallback() {
+    std::string romErr;
+    for (;;) {
+        m_pc1600 = std::make_unique<PC1600Machine>();
+        if (loadPC1600RomSet(*m_pc1600, &romErr)) return;
+        // Only the old ROM set is optional (its dump may be missing or
+        // incomplete): warn, fall back to the new ROM and retry once --
+        // a new-ROM failure quits. reportMissingRomAndExit() is
+        // [[noreturn]], so the retry can't loop a third time.
+        if (m_pc1600RomVersion != PC1600RomVersion::Old) reportMissingRomAndExit(romErr);
+        QMessageBox::warning(nullptr, QObject::tr("Old ROM unavailable"),
+                             QObject::tr("The old PC-1600 ROM could not be loaded:\n\n%1\n\n"
+                                         "Using the new ROM instead.")
+                                 .arg(QString::fromStdString(romErr)));
+        m_pc1600RomVersion = PC1600RomVersion::New;
+    }
+}
+
 PC1500Machine& MachineController::resetBareForPresetPC1500(PC1500Variant variant) {
     m_paste.cancel({});
     m_pc1500.reset();
@@ -188,9 +192,7 @@ PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion vers
     m_paste.cancel({});
     m_pc1500.reset();
     m_pc1600.reset();
-    m_pc1600 = std::make_unique<PC1600Machine>();
-    std::string romErr;
-    if (!loadPC1600RomSet(*m_pc1600, &romErr)) reportMissingRomAndExit(romErr);
+    makePC1600WithRomFallback();
     attachSerialLink(*m_pc1600);
     if (m_ce158SerialLink) m_pc1600->setCE158SerialLink(m_ce158SerialLink.get()); // see resetBareForPresetPC1500
     return *m_pc1600;
