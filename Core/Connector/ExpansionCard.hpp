@@ -81,6 +81,12 @@ public:
     /// never assert this.
     virtual bool assertsInhibit() const { return false; }
 
+    /// Whether this card can ever assert INHIBIT. Asked once, when the card
+    /// is attached, so a connector can skip the assertsInhibit() call on
+    /// every host-ROM fetch for the (usual) cards that never do. A card
+    /// that overrides assertsInhibit() must override this to return true.
+    virtual bool mayAssertInhibit() const { return false; }
+
     /// The bank index this card currently exposes through its main banked
     /// window, for the GUI debug "Dump Mem" panel's per-column labels.
     /// Return -1 (the default) when the card has no bank concept -- a plain

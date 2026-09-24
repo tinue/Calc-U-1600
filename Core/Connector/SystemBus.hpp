@@ -49,11 +49,15 @@ public:
     /// responding to the same access is a real hardware bus conflict, not
     /// something this phase resolves.
     void attach(ExpansionCard* card) {
-        if (card && std::find(m_chain.begin(), m_chain.end(), card) == m_chain.end())
+        if (card && std::find(m_chain.begin(), m_chain.end(), card) == m_chain.end()) {
             m_chain.push_back(card);
+            if (card->mayAssertInhibit()) m_inhibitChain.push_back(card);
+        }
     }
     void detach(ExpansionCard* card) {
         m_chain.erase(std::remove(m_chain.begin(), m_chain.end(), card), m_chain.end());
+        m_inhibitChain.erase(std::remove(m_inhibitChain.begin(), m_inhibitChain.end(), card),
+                             m_inhibitChain.end());
     }
     const std::vector<ExpansionCard*>& chain() const { return m_chain; }
 
@@ -102,14 +106,16 @@ public:
         return false;
     }
 
+    // Queried on every host-ROM fetch; see ExpansionCard::mayAssertInhibit().
     bool inhibitAsserted() const {
-        for (ExpansionCard* card : m_chain) if (card->assertsInhibit()) return true;
+        for (ExpansionCard* card : m_inhibitChain) if (card->assertsInhibit()) return true;
         return false;
     }
 
 private:
     PC1500Variant m_variant;
     std::vector<ExpansionCard*> m_chain;
+    std::vector<ExpansionCard*> m_inhibitChain; // the cards in m_chain that may assert INHIBIT
 
     // S-block -> physical-pin routing. The 60-pin connector's own S-pin
     // positions aren't transcribed in the research corpus, so this assumes
