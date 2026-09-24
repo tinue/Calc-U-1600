@@ -148,7 +148,6 @@ private:
     bool m_dtr{false};
     bool m_rxEnable{false};
     bool m_sendBreak{false};
-    bool m_errorReset{false};
     bool m_rts{false};
 
     // Parallel command register (23H write, b7:b6=10) decoded bits.

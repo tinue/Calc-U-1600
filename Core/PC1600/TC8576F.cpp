@@ -33,7 +33,7 @@ constexpr uint32_t kTStateHz  = PC1600Machine::kTStateHz;
 void TC8576F::resetImpl() {
     for (auto& b : m_pr) b = 0;
     m_par = 0;
-    m_txEnable = m_dtr = m_rxEnable = m_sendBreak = m_errorReset = m_rts = false;
+    m_txEnable = m_dtr = m_rxEnable = m_sendBreak = m_rts = false;
     m_intMask1 = m_intMask2 = false;
     m_txIntMask = m_rxIntMask = m_errIntMask = false;
     m_parityEnable = m_parityEven = false;
@@ -187,7 +187,9 @@ void TC8576F::writeCommandRegister(uint8_t cmd) {
         m_dtr        = cmd & 0x02;
         m_rxEnable   = cmd & 0x04;
         m_sendBreak  = cmd & 0x08;
-        m_errorReset = cmd & 0x10;
+        // b4 ER: a one-shot command, not a mode -- clears the SSR error
+        // flags (PERR/OE/FE), as on the 8251 the command word follows.
+        if (cmd & 0x10) m_parityError = m_overrunError = m_framingError = false;
         m_rts        = cmd & 0x20;
         if (m_link) m_link->setControl(m_dtr, m_rts);
     }

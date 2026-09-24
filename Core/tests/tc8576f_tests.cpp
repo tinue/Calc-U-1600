@@ -201,6 +201,11 @@ void test_serial_rx_latches_and_flags_overrun() {
     CHECK((uart.ssr() & kSsrOE) != 0);    // overrun
     CHECK((uart.readRegister(0) & 0xFF) == 0x41); // first byte kept
     CHECK((uart.ssr() & kSsrRxRDY) == 0); // cleared on read
+    CHECK((uart.ssr() & kSsrOE) != 0);    // the read leaves the error set
+    uart.writeRegister(3, 0x05);          // SCR without ER: still set
+    CHECK((uart.ssr() & kSsrOE) != 0);
+    uart.writeRegister(3, 0x15);          // SCR b4 ER: error reset
+    CHECK((uart.ssr() & kSsrOE) == 0);
 }
 
 void test_serial_rx_interrupt_needs_rxenable_unmasked() {
