@@ -238,7 +238,7 @@ private:
                         // (which looks like the "obvious" flag-register convention)
                         // is actually what breaks BREAK.
     Upd1990ac m_rtc;
-    PiezoSampler m_piezo{1300000.0, PiezoSampler::Transducer::PC1500}; // LH5801 clock; buzzer driven from OPC bit 6 (PC6)
+    PiezoSampler m_piezo{static_cast<double>(kPC1500CpuHz), PiezoSampler::Transducer::PC1500}; // LH5801 clock; buzzer driven from OPC bit 6 (PC6)
 
     // F/G/MSK (registers 0x7,0x9,0xA) and the two unused register-select
     // codes (0x0-0x3): stored as plain read/write bytes, defaulting to

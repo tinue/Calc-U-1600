@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
         size_t n;
         while ((n = machine.drainAudio(chunk, 4096)) > 0) wav.insert(wav.end(), chunk, chunk + n);
     };
-    if (!wavPath.empty()) machine.setYieldHook(drainWav, 1300000 / 20);
+    if (!wavPath.empty()) machine.setYieldHook(drainWav, PC1500Machine::kCpuHz / 20);
 
     // The CE-158's serial peer. Set before the preset attaches the card --
     // attachCE158() picks up whatever link the machine already holds.

@@ -443,8 +443,7 @@ double MachineController::clockHz() const {
     if (m_pc1600) {
         return static_cast<double>(PC1600Machine::kTStateHz);
     }
-    // Upd1990ac::kCpuHz -- the LH5801's own clock, 1.3 MHz.
-    return 1300000.0;
+    return static_cast<double>(PC1500Machine::kCpuHz);
 }
 
 DisplayFrame MachineController::currentDisplay() const {

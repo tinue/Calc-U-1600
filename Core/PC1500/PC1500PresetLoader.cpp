@@ -23,9 +23,7 @@
 
 namespace {
 
-// ~2.6MHz crystal / 2 -- same documented value as Upd1990ac.hpp's own
-// kCpuHz (duplicated locally, same as PC1500BasicTyper.cpp does).
-constexpr double kCpuHz = 1300000.0;
+constexpr double kCpuHz = PC1500Machine::kCpuHz;
 constexpr int kFramesPerSecond = 60;
 constexpr uint64_t kCyclesPerFrame = static_cast<uint64_t>(kCpuHz / kFramesPerSecond);
 

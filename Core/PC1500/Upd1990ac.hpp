@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 
+#include "PC1500Clocks.hpp"
+
 // ── uPD1990AC real-time clock ───────────────────────────────────────────
 //
 // A third chip beyond the LH5801 CPU's own internal timer and the LH5811
@@ -116,9 +118,8 @@ private:
     uint64_t liveTimeAsBcd40() const;
     void commitShiftRegisterToTime();
 
-    // ~2.6MHz crystal / 2 -- matches the app layer's own real-time pacing
-    // assumption, and PC1500BasicTyper.cpp's own kCpuHz.
-    static constexpr double kCpuHz = 1300000.0;
+    // The LH5801 clock (PC1500Clocks.hpp) -- `cycles` passed to tick() count it.
+    static constexpr double kCpuHz = kPC1500CpuHz;
 
     // The measured OPB-to-IF gap (~61us at 1.3MHz, via a vmj plus the
     // E451 helper's own bii+rtn) is ~79 cycles; 100us (~130 cycles)

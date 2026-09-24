@@ -13,6 +13,7 @@
 #include "../Connector/Ce158Card.hpp"
 #include "../Connector/ExpansionConnector.hpp"
 #include "../Connector/SystemBus.hpp"
+#include "PC1500Clocks.hpp"
 #include "PC1500Display.hpp"
 #include "PC1500Memory.hpp"
 #include "PC1500TraceFile.hpp"
@@ -46,6 +47,9 @@
 // that isn't a one-off debug peek.
 class PC1500Machine {
 public:
+    /// LH5801 cycles per second -- the unit runCycles() counts (PC1500Clocks.hpp).
+    static constexpr uint32_t kCpuHz = kPC1500CpuHz;
+
     explicit PC1500Machine(PC1500Variant variant = PC1500Variant::PC1500A);
 
     PC1500Variant variant() const { return m_memory.variant(); }
@@ -369,8 +373,7 @@ private:
     /// hardware key-scan timing already proven reliable there for
     /// preset/BASIC-program typing; duplicated locally (not shared via a
     /// header) matching this project's existing convention for small,
-    /// stable, cross-file timing constants (see e.g. Upd1990ac.hpp's own
-    /// kCpuHz comment). Directly manipulates m_memory.keyboard() rather
+    /// stable, cross-file timing constants. Directly manipulates m_memory.keyboard() rather
     /// than going through pressKey()/releaseKey() -- both already lock
     /// m_mutex, and this is only ever called from within a method that's
     /// already holding it (std::mutex isn't recursive).
