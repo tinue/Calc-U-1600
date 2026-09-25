@@ -83,8 +83,14 @@ std::vector<uint8_t> wrapPc1600(const std::vector<uint8_t>& payload) {
     return f;
 }
 
+// PRGADR's start/end triples ($FE3C-$FE41: address lo, hi, bank each) --
+// what LIST reads. The ROM sets them when it stores a typed line; the fast
+// loader has to leave the same bytes, or the program lists as empty.
+std::vector<uint8_t> prgAdr(PC1600Machine& m) { return readRange(m, 0xFE3C, 0xFE42); }
+
 void test_equivalence_against_typer() {
     std::vector<uint8_t> payload;
+    std::vector<uint8_t> typedPrgAdr;
     uint16_t baseA = 0, endA = 0;
     {
         PC1600Machine m;
@@ -101,6 +107,7 @@ void test_equivalence_against_typer() {
         CHECK(endA > baseA);
         payload = readRange(m, baseA, endA);
         CHECK(m.memory().peek(endA) == 0xFF);
+        typedPrgAdr = prgAdr(m);
     }
 
     PC1600Machine m;
@@ -120,6 +127,7 @@ void test_equivalence_against_typer() {
     std::vector<uint8_t> want = payload;
     want.push_back(0xFF);
     CHECK(fast == want);
+    CHECK(prgAdr(m) == typedPrgAdr);   // LIST sees the program without a MODE switch
 }
 
 // Run `RUN`, let it settle, return the VARIABLE POINTER ($F899, BE). A
@@ -146,6 +154,7 @@ void test_ce1600m_module_equivalence_and_run() {
     // Oracle: type the program with the module fitted; read the stored
     // tokens straight out of the module backing store.
     std::vector<uint8_t> typedPayload;
+    std::vector<uint8_t> typedPrgAdr;
     uint16_t typedStLh = 0, typedEndLh = 0, typedVarPtrAfterRun = 0;
     {
         PC1600Machine m;
@@ -166,6 +175,7 @@ void test_ce1600m_module_equivalence_and_run() {
             typedPayload.assign(img.begin() + typedStLh, img.begin() + typedEndLh);
             CHECK(img[typedEndLh] == 0xFF);
         }
+        typedPrgAdr = prgAdr(m);
         typedVarPtrAfterRun = runAndReadVarPtr(m);
     }
     CHECK(!typedPayload.empty());
@@ -190,6 +200,7 @@ void test_ce1600m_module_equivalence_and_run() {
     std::vector<uint8_t> got(img.begin() + typedStLh,
                              img.begin() + typedStLh + typedPayload.size() + 1);
     CHECK(got == want);   // byte-for-byte == the keystroke typer's stored program
+    CHECK(prgAdr(m) == typedPrgAdr);   // module bank byte and end address as the ROM sets them
 
     // ... and it RUNs: the interpreter reads the scattered program and
     // lands in exactly the state the typed program's RUN produced (same
