@@ -232,7 +232,7 @@ bool PC1500Machine::beginCpuTrace(std::FILE* handle, uint32_t flags) {
     if (!handle || m_traceFile) return false;
     m_traceFile = std::make_unique<PC1500TraceFile>(handle);
     m_traceDrainCounter = 0;
-    m_cpu.setTraceFlags(flags);
+    m_cpu.setTraceFlags(flags | (m_cpu.traceFlags() & TRACE_BREAKPOINTS)); // the debugger's breakpoints stay armed
     // Discard whatever is already in the ring (and its overflow
     // accounting) so the file starts clean even if tracing was already
     // enabled before this call -- e.g. tools/pc1500_cli.cpp turns the
@@ -248,7 +248,7 @@ void PC1500Machine::endCpuTrace() {
     pumpTraceFile();
     m_traceFile->finish();
     m_traceFile.reset();
-    m_cpu.setTraceFlags(TRACE_NONE);
+    m_cpu.setTraceFlags(m_cpu.traceFlags() & TRACE_BREAKPOINTS); // only the capture's flags go
     m_traceDrainCounter = 0;
 }
 

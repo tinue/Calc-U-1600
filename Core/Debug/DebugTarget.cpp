@@ -92,7 +92,7 @@ int DebugTarget::watchHitThread() const {
     return 0;
 }
 
-void DebugTarget::prepareResume() {
+void DebugTarget::resumeFromStop() {
     // A CPU parked on one of its breakpoints executes that instruction on
     // resume instead of stopping again. Only CPUs actually sitting on one
     // get the skip, so a parked second CPU can't lose a later stop.
@@ -115,17 +115,17 @@ Stop DebugTarget::watchStop(int thread) {
 }
 
 Stop DebugTarget::run(uint64_t budget) {
-    prepareResume();
+    resumeFromStop();
     return runMachine(budget);
 }
 
 Stop DebugTarget::step() {
-    prepareResume();
+    resumeFromStop();
     return stepMachine();
 }
 
 Stop DebugTarget::runUntil(uint64_t maxSteps, const std::function<bool()>& done) {
-    prepareResume();
+    resumeFromStop();
     for (uint64_t i = 0; i < maxSteps; i++) {
         Stop s = stepMachine();
         if (s.kind != Stop::None) return s;

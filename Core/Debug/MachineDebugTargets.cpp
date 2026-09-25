@@ -97,8 +97,10 @@ Stop PC1500DebugTarget::latchedStop() {
 }
 
 Stop PC1500DebugTarget::runMachine(uint64_t budget) {
-    m_machine.runCycles(budget);
-    return latchedStop();
+    const uint64_t cycles = m_machine.runCycles(budget);
+    Stop s = latchedStop();
+    s.cycles = cycles;
+    return s;
 }
 
 Stop PC1500DebugTarget::stepMachine() {
@@ -228,8 +230,10 @@ Stop PC1600DebugTarget::latchedStop() {
 }
 
 Stop PC1600DebugTarget::runMachine(uint64_t budget) {
-    m_machine.runCycles(budget);
-    return latchedStop();
+    const uint64_t cycles = m_machine.runCycles(budget);
+    Stop s = latchedStop();
+    s.cycles = cycles;
+    return s;
 }
 
 Stop PC1600DebugTarget::stepMachine() {

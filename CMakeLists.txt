@@ -56,6 +56,8 @@ set(CORE_COMMON_SOURCES
   ${CORE_ROOT}/Debug/CpuRegisters.cpp
   ${CORE_ROOT}/Debug/MachineDebugTargets.cpp
   ${CORE_ROOT}/Debug/SourceMap.cpp
+  ${CORE_ROOT}/Debug/BreakpointTable.cpp
+  ${CORE_ROOT}/Debug/RunControl.cpp
   ${CORE_ROOT}/Debug/Listing/Listing.cpp
   ${CORE_ROOT}/Debug/Listing/SdasListing.cpp
   ${CORE_ROOT}/Debug/Listing/ZasmListing.cpp
@@ -307,6 +309,7 @@ set(TEST_SOURCES
   ${CORE_ROOT}/tests/disasm_tests.cpp
   ${CORE_ROOT}/tests/debug_target_tests.cpp
   ${CORE_ROOT}/tests/listing_tests.cpp
+  ${CORE_ROOT}/tests/run_control_tests.cpp
 )
 
 add_executable(CoreTests ${TEST_SOURCES})

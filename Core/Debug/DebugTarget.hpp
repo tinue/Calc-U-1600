@@ -67,6 +67,7 @@ struct Stop {
     Kind kind = None;
     int thread = 0;       ///< the CPU that hit it (Breakpoint / Watch)
     WatchHit hit;         ///< Watch only
+    uint64_t cycles = 0;  ///< run(): machine cycles consumed
 };
 
 class DebugTarget {
@@ -144,6 +145,13 @@ public:
     /// a PC-1600 runs meanwhile if it owns the bus).
     Stop stepInstruction(int thread, uint64_t maxSteps);
 
+    /// The primitives under run()/step(), for a caller that manages resumes
+    /// itself (RunControl): runRaw()/stepRaw() stop again on a breakpoint a
+    /// CPU sits on unless resumeFromStop() let it go first.
+    void resumeFromStop();
+    Stop runRaw(uint64_t budget) { return runMachine(budget); }
+    Stop stepRaw() { return stepMachine(); }
+
     /// Machine reset / all reset (RAM cleared first).
     virtual void reset(bool allReset) = 0;
 
@@ -163,7 +171,6 @@ protected:
     int watchHitThread() const;
 
 private:
-    void prepareResume();
     std::vector<std::vector<uint16_t>> m_breakpoints; // per thread id - 1
     std::map<int, WatchSet> m_watches;                // per thread id; nodes stay put for the CPUs' pointers
 };

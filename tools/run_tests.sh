@@ -13,6 +13,8 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/Debug/CpuRegisters.cpp \
   Core/Debug/MachineDebugTargets.cpp \
   Core/Debug/SourceMap.cpp \
+  Core/Debug/BreakpointTable.cpp \
+  Core/Debug/RunControl.cpp \
   Core/Debug/Listing/Listing.cpp \
   Core/Debug/Listing/SdasListing.cpp \
   Core/Debug/Listing/ZasmListing.cpp \
@@ -89,6 +91,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/disasm_tests.cpp \
   Core/tests/debug_target_tests.cpp \
   Core/tests/listing_tests.cpp \
+  Core/tests/run_control_tests.cpp \
   Core/Basic/vendor/sharpdx/libsharpdx.a \
   -lz \
   -o /tmp/lh5801_tests

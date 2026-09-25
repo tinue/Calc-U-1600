@@ -605,8 +605,9 @@ bool PC1600Machine::beginCpuTrace(std::FILE* handle, uint32_t flags) {
     if (!handle || m_traceFile) return false;
     m_traceFile = std::make_unique<PC1500TraceFile>(handle);
     m_traceDrainCounter = 0;
-    m_sc7852.setTraceFlags(flags);
-    m_lh5803.setTraceFlags(flags);
+    // The debugger's breakpoints stay armed across a capture.
+    m_sc7852.setTraceFlags(flags | (m_sc7852.traceFlags() & TRACE_BREAKPOINTS));
+    m_lh5803.setTraceFlags(flags | (m_lh5803.traceFlags() & TRACE_BREAKPOINTS));
     // Discard whatever is already in either ring (and its overflow
     // accounting) so the file starts clean even if tracing was already on.
     uint32_t staleLost = 0;
@@ -621,8 +622,8 @@ void PC1600Machine::endCpuTrace() {
     pumpTraceFile();
     m_traceFile->finish();
     m_traceFile.reset();
-    m_sc7852.setTraceFlags(TRACE_NONE);
-    m_lh5803.setTraceFlags(TRACE_NONE);
+    m_sc7852.setTraceFlags(m_sc7852.traceFlags() & TRACE_BREAKPOINTS); // only the capture's flags go
+    m_lh5803.setTraceFlags(m_lh5803.traceFlags() & TRACE_BREAKPOINTS);
     m_traceDrainCounter = 0;
 }
 

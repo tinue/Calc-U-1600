@@ -85,6 +85,8 @@ set(CORE_SOURCES
   ${CORE_ROOT}/Debug/CpuRegisters.cpp
   ${CORE_ROOT}/Debug/MachineDebugTargets.cpp
   ${CORE_ROOT}/Debug/SourceMap.cpp
+  ${CORE_ROOT}/Debug/BreakpointTable.cpp
+  ${CORE_ROOT}/Debug/RunControl.cpp
   ${CORE_ROOT}/Debug/Listing/Listing.cpp
   ${CORE_ROOT}/Debug/Listing/SdasListing.cpp
   ${CORE_ROOT}/Debug/Listing/ZasmListing.cpp
