@@ -1,0 +1,17 @@
+# macOS-only screenshots that need the real window chrome / native menu bar
+# (`method: system`). The terminal (or whatever launches the run) needs the
+# Screen Recording, Accessibility and Automation (System Events)
+# permissions. Not byte-identical between runs (screen contents).
+out: ../images
+window: 900x1000
+
+shots:
+  - name: window-with-title-bar
+    preset: presets/pc1600-hello.pc1600
+    capture: { method: system, target: window, file: macos-window.png }
+
+  - name: machine-model-menu
+    preset: presets/pc1600-hello.pc1600
+    steps:
+      - menu: Machine > Model
+    capture: { method: system, target: screen-region, file: macos-machine-model-menu.png }

@@ -1,16 +1,14 @@
 # Screenshots for docs/User-Guide.md -- regenerate with
-# tools/make_screenshots.sh (format: docs/screenshots/README.md).
+# tools/make_screenshots.sh. Format: docs/screenshots/README.md.
+# Qt-rendered only (no macOS permissions needed), byte-identical per run.
 out: ../images
 window: 900x1000
 
 shots:
-  - name: pc1500a-window
+  # Getting started -- the whole window as it comes up.
+  - name: main-window
     preset: presets/pc1500a-hello.pc1500a
-    capture: pc1500a-window.png
-
-  - name: pc1600-faceplate
-    preset: presets/pc1600-hello.pc1600
-    capture: { target: faceplate, file: pc1600-faceplate.png }
+    capture: main-window.png
 
   - name: model-dropdown
     preset: presets/pc1500a-hello.pc1500a
@@ -18,19 +16,38 @@ shots:
       - open: controlbar.model
     capture: { target: controlbar, file: model-dropdown.png, padding: 4 }
 
-  - name: shift-held
+  # The calculator & keyboard.
+  - name: faceplate-pc1600
+    preset: presets/pc1600-hello.pc1600
+    capture: { target: faceplate, file: faceplate-pc1600.png }
+
+  - name: faceplate-shift-held
     preset: presets/pc1500a-hello.pc1500a
     steps:
       - hold-key: shift
-    capture: { target: faceplate, file: shift-held.png }
+    capture: { target: faceplate, file: faceplate-shift-held.png }
 
-  - name: settings-dialog
+  # Memory modules & plotter.
+  - name: slot-dropdown
+    preset: presets/pc1600-hello.pc1600
+    steps:
+      - open: controlbar.slot1
+    capture: { target: controlbar, file: slot-dropdown.png, padding: 4 }
+
+  - name: plotter
+    preset: presets/pc1600-lissajou.pc1600
+    capture: plotter-window.png
+
+  # Settings (Edit > Settings…; on macOS the item lives in the app menu,
+  # but the action is found either way).
+  - name: settings
     steps:
       - action: Edit > Settings…
     capture: { target: dialog, file: settings-dialog.png }
 
-  - name: lissajou-plot
-    preset: presets/pc1600-lissajou.pc1600
+  # Advanced topics -- Debug panel after "Pointers".
+  - name: debug-panel
+    preset: presets/pc1500a-hello.pc1500a
     steps:
-      - capture: { target: plot, file: lissajou-plot.png }
-    capture: pc1600-plotter-window.png
+      - click: debugpanel.pointers
+    capture: { target: debugpanel, file: debug-panel.png }
