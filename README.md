@@ -26,24 +26,23 @@ subset. Future releases will focus on the surroundings around that core
 
 ## Documentation
 
-- [docs/User-Guide.md](docs/User-Guide.md) — using the emulator: the
-  keyboard, memory modules and plotter, saving battery-backed module
-  state, Settings, and advanced topics (Debug panel, custom YAML memory
-  cards, presets).
+- [docs/User-Guide.md](docs/User-Guide.md) — using the emulator, from the
+  basics (models, keyboard, plotters) to loading BASIC and machine-code
+  programs, memory modules and floppy disks, COM ports and presets. With
+  screenshots and diagrams.
 - [docs/Building.md](docs/Building.md) — building from source
   (prerequisites, ROMs, per-platform build steps).
 
 ## Serial port
 
-The emulated PC-1600's RS-232C port is always live and backed by a host
-pseudo-terminal — **macOS and Linux only** (there's no Windows
-equivalent yet). Point any serial application (SharpDataExchange, a
-terminal program) at the stable `calcu1600.serial` symlink in the folder
-set under **Settings ▸ Serial Port**. On the PC-1600 side, use no
-handshake (`SETCOM "COM1:",9600,8,N,1,N,N`) and pace the host side with a
-fixed delay instead of XON/XOFF — a raw PTY has no device driver to
-filter those bytes out, so they'd otherwise just show up in the data
-stream (SharpDataExchange's `--raw` option does this). See
+The emulated PC-1600's RS-232C port (and the CE-158's) is always live and
+backed by a host pseudo-terminal — **macOS and Linux only** (there's no
+Windows equivalent yet). Point any serial application at the stable
+`calcu1600.serial` symlink in the folder set under **Settings ▸ Serial
+ports**. For the calculator-side settings and how to exchange programs
+with [SharpDataExchange](https://github.com/tinue/SharpDataExchange), see
+the User Guide's [COM ports](docs/User-Guide.md#7-com-ports) chapter;
+implementation details are in
 [docs/PC1600-Serial-Port.md](docs/PC1600-Serial-Port.md).
 
 ## License
