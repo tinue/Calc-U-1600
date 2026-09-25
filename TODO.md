@@ -193,13 +193,6 @@ touched, not proactively:
 
 Larger or behaviour-changing items left out of the 0.5.0 cleanup commit.
 
-- **Expansion cards have no common `tick()`.** Card ticks are now in
-  one place per machine (`PC1500Machine::advancePeripherals`, the end of
-  `PC1600Machine`'s per-step peripheral advance), but each card is
-  still listed there by hand, and the PC-1600 doesn't tick an attached
-  CE-150 (its `tick()` is empty today, so no effect yet). Fix:
-  `virtual void tick(uint64_t)` on `ExpansionCard` and a
-  `SystemBus::tick()` over the attached cards.
 - **CE-158 attach plumbing is duplicated per machine.**
   `attachCE158`/`detachCE158`/`setCE158SerialLink`/
   `drainCE158ParallelOutput` + `m_ce158Card`/`m_ce158Link` are
@@ -402,9 +395,8 @@ timing — decide deliberately):
   disarm, or check `QGuiApplication::mouseButtons()` at Shift release.
 - **CE-158 ROM reads on the PC-1500 go through the generic open-bus
   path.** Every fetch at 0x8000–0x9FFF runs resolve → readOpenBus →
-  SystemBus decode → per-card `respondsToRead`. (`inhibitAsserted()` is
-  already cheap: it only walks the cached `m_inhibitChain`.) Option: a
-  direct per-PU/PV ROM pointer from the card.
+  SystemBus decode → per-card `respondsToRead`. Option: a direct
+  per-PU/PV ROM pointer from the card.
 - **`Ce158PrinterWidget::onFrameTick`** fetches the PTY path (mutex +
   string copy + QString) and sets button enables every frame; refresh
   the label only on link create/relink and toggle buttons only when
