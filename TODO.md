@@ -148,7 +148,11 @@ obligations.
   (relevant for ROM modules and battery-backed RAM modules)?
 - Research MODE 1 (LH-5803/PC-1500-compat mode): does it genuinely reuse
   the old ROM for things like `PRINT`?
-- Emulate the CE-158.
+- CE-158 together with the CE-1600P. The real CE-1600P has its own
+  connector at the back (like the CE-150), so both can be attached at
+  once; today `PC1600Machine::attachCE1600P`/`attachCE158` detach each
+  other and the preset parser rejects the pair (User Guide says "not yet
+  supported").
 - Allow saving a diskette or memory module into a preset after it has been
   set up (e.g. formatted / populated in a session), so the preset carries
   that media state.
@@ -266,6 +270,118 @@ Larger or behaviour-changing items left out of the 0.5.0 cleanup commit.
   `m_debugRowLayout->indexOf(w) >= 0`. Same for
   `serialLinkStatus`/`ce158SerialLinkStatus` (one static helper over a
   `PtySerialLink*`) and `ControlBar::setCe150State`/`setCe158State`.
+
+### From the second 0.5.0 `/simplify` pass (skipped)
+
+Found reviewing the commits after 29de332; too large or behaviour-changing
+for the cleanup commit.
+
+- **PC-1500 typer doesn't recognise a same-length line replacement as
+  stored.** 5f0bd59 taught `PC1600BasicTyper` to snapshot the program
+  bytes; `PC1500BasicTyper.cpp` (~201-220) still only checks whether
+  `kProgramEndPtr` moved, so `10 A=1` then `10 A=2` in a `program:` block
+  is reported as rejected on the PC-1500. Fix: one shared "line stored"
+  check both typers call.
+- **`PC1600BasicTyper::programSnapshot()` is quadratic.** It copies the
+  whole program area through `peek()` into a new vector before and after
+  every typed line (~20M peeks for a 500-line, 20 KB program). Compare
+  F867H first; only if it didn't move, compare the saved bytes in place,
+  or snapshot just the typed line's own bytes.
+- **Card/floppy template-vs-instance rules are written twice and re-parse
+  files.** `MemoryModuleManager` (`moduleLists`, `classifySlot`,
+  `templateNames`, `saveSlotAs`) and `FloppyDiskManager` (`diskLists`,
+  `classifySource`, `saveDiskAs`) each hold bundled-first shadowing, the
+  template/instance split, the Name & Save checks and the "never
+  autosave under the bundle" rule. They also re-read files Core just
+  parsed: `classifySlot` fully parses the `.card.yaml` again (MB of
+  `initial-content` hex for superRAM 512K) on every rebuild and twice per
+  preset load; `saveSlotAs` parses the instance dir 3x; and
+  `refreshModuleCombos` scans + parses both dirs once per slot. Fix:
+  - `PresetLoadResult` / the attach path return `{path, isTemplate,
+    battery}`, not a bare path;
+  - a header-only card catalogue parse (as `scanFloppyDirectory` does);
+  - a shared `NamedFileCatalog`-level helper for lists / classify /
+    save-name validation, leaving the managers only Qt glue.
+- **Instance autosave compares full card images.** `writeInstance()`
+  copies the whole card (up to 512 KB) every 500 ms and keeps a second
+  copy per slot. A card write-revision counter (like
+  `ce1600fRevision()`) would make it one integer compare.
+- **GUI TRACE size check `stat()`s every frame.** `DebugPanel::
+  checkTraceSizeLimit()` calls `QFileInfo(path).size()` at 60 Hz and lags
+  by stdio's buffer. Have `PC1500TraceFile` count bytes written and read
+  that. Also, `DebugPanel::m_traceEnabled` shadows
+  `MachineController::traceActive()`, kept in step by the
+  `traceEndedByRebuild` signal/slot; reading `traceActive()` would drop
+  all three.
+- **Machine-code poke verifies by reading back.** `PC1600Machine::
+  pokeMemory` (write, read back, roll back) and
+  `PC1500MachineCodeLoader.cpp` (write, read back, no rollback) guess
+  writability by reading, which would also trigger any card register's
+  read side effects. Fix: cards report whether a host write was stored;
+  `poke()` returns `bool stored`.
+- **`ExpansionCard::mayAssertInhibit()` must be overridden together with
+  `assertsInhibit()`** or the card silently never inhibits (the cached
+  `m_inhibitCard`/`m_inhibitChain` skip it). No production card overrides
+  either. Make INHIBIT a declared capability (a constructor flag) instead
+  of a second virtual.
+- **Banked/unbanked split re-derived per access.**
+  `r.banked ? r.banking.bankSize : r.capacity` and `? bankCount : 1`
+  recur in `SoftwareDefinedCard.hpp` and `MemoryCardDefinition.hpp` (the
+  flash-on-unbanked bug was this omission). Normalise at parse time: an
+  unbanked region is one bank of `capacity` bytes.
+- **PC-1600 program pointers are written cell by cell.** The fast loader
+  pokes BASPRG_END and each PRGADR copy (`$FE3F`, 7b327cd) by hand, and
+  the LH5803↔Z80 `+0x8000` mapping is repeated in `PC1600BasicLoader`,
+  `PC1600BasicTyper` (`toZ80`) and `PC1600ProgramPlacement`. One
+  `PC1600ProgramPointers` read/write helper. Better: run the ROM's own
+  PRGADR routine (jump table 02F4H) after poking.
+- **TC8576F interrupt plumbing.** Four `read/write/tick/reset` →
+  `…Impl()` wrappers exist only to call `refreshInterruptOutput()`; the
+  `std::function<void(bool)>` hook's one subscriber ignores the bool.
+  Make `interruptOutput()` a const expression and have `PC1600Memory`
+  call `updateIntLine()` after UART access / tick / relink / reset.
+- **Screenshot runner hooks into MainWindow.** `loadPresetForShots`
+  reports success to `runSynchronousLoad` on failure just to dodge its
+  modal warning, and MainWindow grew `runEmulation`/`runUntilPasteDone`/
+  `resetForShots`/`isLoading`/widget accessors. Fix: `runSynchronousLoad`
+  returns ok/error and only interactive callers show the box; move frame
+  pacing (frozen vs 60 Hz, advance N s, refresh) into a small pacer
+  object both `onFrameTick` and `ShotRunner` drive.
+- **`AppPaths::forDisplay()`** rewrites the `--shots` temp dir at each
+  path label (`SettingsDialog` x5, `Ce158PrinterWidget`); a new label
+  that forgets it leaks the temp path into the docs images. Point the
+  default-storage root at the temp dir in `--shots` mode and keep one
+  general `~`-abbreviating `displayPath()`.
+- **`ShotCaptureSpec::target` is a free-form string** compared 7 times in
+  `ShotRunner::capture()`. Parse once into an enum + `objectName`.
+- **Menu re-pick guards.** dff5d13 added "already checked" guards to the
+  four `apply*Selection` handlers; connecting the exclusive-group actions
+  to `toggled(true)` instead of `triggered` removes all four.
+- **Per-machine preset adapters still duplicate small helpers.**
+  `screenText()` (differs only by 0x7BB0 vs 0xFBB0), `tapBreak()`, the
+  one-line `waitUntilBasicIdle`/`typeLine`/`typeBasicProgram`/
+  `loadBasicPayload` forwards, and two `PresetProgram::Slot` ternaries
+  (`PresetRunner.cpp`, `PC1600PresetMachine::loadMachineCode`).
+  `PresetMachineBase` can't host the forwards without including both
+  machines' headers (qualified `::` calls need the declarations);
+  consider `PresetProgram` holding a `machinecode::Slot` so
+  `slotName()` applies.
+- **Preset auto-run builds `CALL &%X` by hand** (`PresetRunner.cpp`
+  ~218) and ignores `program.slot`, while `machinecode::advice().
+  callCommand` produces `CALL #2,&xxxx` for S2. Use it (behaviour change
+  for S1/S2 presets with auto-run).
+- **Machine teardown written three times** in `MachineController.cpp`
+  (`endTraceBeforeRebuild` + `m_paste.cancel` + reset both machines,
+  ~87/180/195): one `replaceMachine()` helper.
+- **`tools/make_screenshots.sh`** copies `build_and_run.sh`'s
+  configure-and-build block; share it (`--build-only` or a sourced
+  `tools/build_app.sh`).
+- **`BreakpointSet` in shared `TraceRing.hpp`** now has one user (LH5801),
+  and nothing outside the tests sets a breakpoint (`pc1500_cli` and
+  `PC1500Machine` only poll `consumeBreakpointHit()`). Move it into
+  LH5801, or wire a real breakpoint UI/CLI flag.
+- `Ce158Card.hpp` still defaults its clock to the literal `1300000.0`;
+  take `kPC1500CpuHz` once Connector may include PC1500Clocks.hpp.
 
 Performance / behaviour items (each changes observable behaviour or
 timing — decide deliberately):

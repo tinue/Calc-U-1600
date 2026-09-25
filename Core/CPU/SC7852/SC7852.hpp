@@ -156,7 +156,6 @@ public:
     uint32_t traceFlags() const { return m_traceFlags.load(std::memory_order_relaxed); }
 
     uint32_t drainTraceEvents(Z80CpuFrame* out, uint32_t max, uint32_t* outLost) { return m_trace.drain(out, max, outLost); }
-    uint32_t peekTraceEvents(Z80CpuFrame* out, uint32_t max) { return m_trace.peek(out, max); }
 
 private:
     SC7852Bus& bus;
@@ -242,18 +241,10 @@ private:
     // ── Trace state ──
     std::atomic<uint32_t> m_traceFlags{TRACE_NONE};
     uint32_t m_traceSeqno{0};
-    // Needs to be large relative to the LH5801's ring size: at PC1600's
-    // ~1.3 MHz emulated clock and a Z80's short (~4-20 T-state)
-    // instructions, one 60 Hz GUI tick (EmulatorViewModel.tick(), which
-    // drains this ring) can correspond to several thousand instructions,
-    // and the background emulation loop (EmulatorViewModel's emulQueue, a
-    // separate ~20ms-batch timer) keeps producing frames regardless of
-    // whether the main thread's tick() is keeping up -- any stall on the
-    // main thread (rendering, other work) lets the ring wrap many times
-    // before the next drain. 65536 gives ample headroom (~1.9 MB, trivial)
-    // -- see also EmulatorViewModel.drainTraceEventsPC1600()'s matching
-    // drain-buffer size, which must stay >= this to actually empty the
-    // ring each tick.
+    // Large relative to the LH5801's ring: Z80 instructions are short
+    // (~4-20 T-states), so one drain interval covers many more of them.
+    // PC1600Machine's drain buffer must stay >= this to empty the ring in
+    // one pass. 65536 frames is ~1.9 MB.
     TraceRing<Z80CpuFrame, 65536> m_trace;
 
     void recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles);

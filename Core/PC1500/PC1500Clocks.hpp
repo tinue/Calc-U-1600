@@ -7,3 +7,7 @@
 // time on the PC-1500 side derives from this, like kPC1600TStateHz on the
 // PC-1600 (Core/PC1600/PC1600Clocks.hpp).
 inline constexpr uint32_t kPC1500CpuHz = 1300000;
+
+// One 60 Hz frame of CPU cycles: the unit the key-scan cadence (tap/idle
+// frames) and the headless loaders step in.
+inline constexpr uint64_t kPC1500CyclesPerFrame = kPC1500CpuHz / 60;

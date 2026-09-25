@@ -54,10 +54,14 @@ QList<QWidget*> visibleTransients(const QWidget* main) {
     return out;
 }
 
-QImage renderComposite(QWidget* target, const QList<QWidget*>& extras, int padding, double scale) {
+QRect compositeRect(const QWidget* target, const QList<QWidget*>& extras, int padding) {
     QRect area = globalRect(target);
-    for (QWidget* w : extras) area |= globalRect(w);
-    area.adjust(-padding, -padding, padding, padding);
+    for (const QWidget* w : extras) area |= globalRect(w);
+    return area.adjusted(-padding, -padding, padding, padding);
+}
+
+QImage renderComposite(QWidget* target, const QList<QWidget*>& extras, int padding, double scale) {
+    const QRect area = compositeRect(target, extras, padding);
 
     QImage image(QSize(static_cast<int>(std::ceil(area.width() * scale)),
                        static_cast<int>(std::ceil(area.height() * scale))),

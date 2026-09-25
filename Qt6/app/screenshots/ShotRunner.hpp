@@ -68,6 +68,8 @@ private:
     // Performs `step`. `delayMs` is how long to let the UI settle before
     // the next one; `deferred` (UI verbs) is run from a zero-delay timer
     // after the next step has been scheduled -- see the class comment.
+    // Lets go of the held faceplate key and gives the ROM time to react.
+    void releaseKey();
     bool runStep(const ShotStep& step, int* delayMs, std::function<void()>* deferred, QString* error);
     void failStep(const QString& message, int line);
     // The current shot's `window:`, else the scenario's (invalid = none).

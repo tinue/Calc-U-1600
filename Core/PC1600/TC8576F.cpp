@@ -39,10 +39,8 @@ void TC8576F::resetImpl() {
     m_parityEnable = m_parityEven = false;
     m_charLength = 8;
 
-    m_dsr = m_rxBreak = m_framingError = m_overrunError = m_parityError = false;
-    m_txEmpty = true;
+    m_rxBreak = m_framingError = m_overrunError = m_parityError = false;
     m_rxReady = false;
-    m_txReady = true;
     m_rxData = 0xFF;
     m_txData = 0;
     m_parallelIn = 0xFF;
@@ -50,18 +48,11 @@ void TC8576F::resetImpl() {
 
     // The peer attachment (m_link) is host-owned and survives a chip
     // reset; only the transient serial state clears here.
-    m_txFifo.clear();
-    m_serialAccum = 0;
-    m_cts = m_dcd = true;
-    m_ci = false;
+    resetSerialState();
     updateCharTStates();
 }
 
-void TC8576F::setSerialLink(SerialLink* link) {
-    m_link = link;
-    if (link) return;
-    // tick() does nothing without a peer, so a non-empty FIFO would hold
-    // TxRDY low for good and hang a transmit poll.
+void TC8576F::resetSerialState() {
     m_txFifo.clear();
     m_serialAccum = 0;
     m_txEmpty = true;
@@ -69,6 +60,14 @@ void TC8576F::setSerialLink(SerialLink* link) {
     m_cts = m_dcd = true;
     m_dsr = false;
     m_ci = false;
+}
+
+void TC8576F::setSerialLink(SerialLink* link) {
+    m_link = link;
+    if (link) return;
+    // tick() does nothing without a peer, so a non-empty FIFO would hold
+    // TxRDY low for good and hang a transmit poll.
+    resetSerialState();
     refreshInterruptOutput();
 }
 

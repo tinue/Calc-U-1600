@@ -602,18 +602,6 @@ PC1600Machine::DebugBankState PC1600Machine::debugBankState() {
     return s;
 }
 
-void PC1600Machine::setTraceEnabled(bool enabled) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_traceEnabled = enabled;
-    // TRACE_PC alone never populates a frame's register fields at all.
-    // PC1500Machine's own trace path (driven by EmulatorViewModel's
-    // `updateTraceFlags()`) passes [.PC, .regsLight, .regsFull]; this
-    // brings PC-1600 to parity.
-    uint32_t flags = enabled ? (TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL) : TRACE_NONE;
-    m_sc7852.setTraceFlags(flags);
-    m_lh5803.setTraceFlags(flags);
-}
-
 bool PC1600Machine::beginCpuTrace(std::FILE* handle, uint32_t flags) {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (!handle || m_traceFile) return false;

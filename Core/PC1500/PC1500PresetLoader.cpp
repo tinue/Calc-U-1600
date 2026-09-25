@@ -12,8 +12,7 @@
 namespace {
 
 constexpr double kCpuHz = PC1500Machine::kCpuHz;
-constexpr int kFramesPerSecond = 60;
-constexpr uint64_t kCyclesPerFrame = static_cast<uint64_t>(kCpuHz / kFramesPerSecond);
+constexpr uint64_t kCyclesPerFrame = kPC1500CyclesPerFrame;
 
 // Generous margin past the ROM's own power-on RAM-check/boot sequence --
 // keys sent immediately after reset are missed entirely, since the ROM

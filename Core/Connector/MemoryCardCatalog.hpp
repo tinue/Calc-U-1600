@@ -62,17 +62,7 @@ inline std::vector<MemoryCardCatalogEntry> scanMemoryCardDirectory(const std::st
 // file a preset's `modulespec:`/`modulespecfile:` resolved to (template or
 // instance) without scanning its whole directory.
 inline bool readMemoryCardCatalogEntry(const std::string& path, MemoryCardCatalogEntry* out, std::string* error) {
-    std::string text;
-    if (!named_file_detail::readTextFile(path, &text)) {
-        if (error) *error = "cannot read '" + path + "'";
-        return false;
-    }
-    std::string err;
-    if (!memory_card_catalog_detail::parseEntry(text, path, out, &err)) {
-        if (error) *error = path + ": " + err;
-        return false;
-    }
-    return true;
+    return readNamedFile(path, memory_card_catalog_detail::parseEntry, out, error);
 }
 
 // Ordered-search resolve of a `modulespec: <module-name>` reference to the

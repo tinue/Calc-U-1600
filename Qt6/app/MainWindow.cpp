@@ -668,9 +668,8 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
     event->accept();
 }
 
-void MainWindow::copyScreenToClipboard() {
-    const GrayImage screen = m_controller->currentScreenImage();
-    if (screen.width <= 0 || screen.height <= 0) return;
+QImage MainWindow::toQImage(const GrayImage& screen) {
+    if (screen.width <= 0 || screen.height <= 0) return {};
     QImage image(screen.width, screen.height, QImage::Format_Grayscale8);
     for (int y = 0; y < screen.height; ++y) {
         std::memcpy(image.scanLine(y), screen.pixels.data() + static_cast<std::size_t>(y) * screen.width,
@@ -679,6 +678,13 @@ void MainWindow::copyScreenToClipboard() {
     const int dotsPerMeter = static_cast<int>(screen.pixelsPerMeter());
     image.setDotsPerMeterX(dotsPerMeter);
     image.setDotsPerMeterY(dotsPerMeter);
+    return image;
+}
+
+void MainWindow::copyScreenToClipboard() {
+    const GrayImage screen = m_controller->currentScreenImage();
+    const QImage image = toQImage(screen);
+    if (image.isNull()) return;
 
 #ifdef Q_OS_MACOS
     // Qt's QClipboard::setImage() drops the physical size on macOS (see
@@ -823,8 +829,12 @@ void MainWindow::runEmulation(double seconds) {
 }
 
 bool MainWindow::runUntilPasteDone(double capSeconds) {
+    // advance() pumps the paste queue; refresh the views once at the end.
+    const auto perFrame = static_cast<std::uint64_t>(m_controller->clockHz() / 60.0);
     const int maxFrames = static_cast<int>(capSeconds * 60.0);
-    for (int i = 0; i < maxFrames && m_controller->pasteActive(); ++i) runEmulation(1.0 / 60.0);
+    for (int i = 0; i < maxFrames && m_controller->pasteActive(); ++i) m_controller->advance(perFrame);
+    m_controller->discardAudio();
+    refreshViewsAfterAdvance();
     return !m_controller->pasteActive();
 }
 

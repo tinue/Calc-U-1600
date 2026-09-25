@@ -24,7 +24,6 @@
 #include <QStyleHints>
 #include <QTimer>
 #include <cstdio>
-#include <cstring>
 
 namespace {
 
@@ -58,10 +57,6 @@ QString appleScriptString(const QString& s) {
     escaped.replace(QLatin1Char('\\'), QStringLiteral("\\\\"));
     escaped.replace(QLatin1Char('"'), QStringLiteral("\\\""));
     return QLatin1Char('"') + escaped + QLatin1Char('"');
-}
-
-QRect globalRect(const QWidget* w) {
-    return QRect(w->mapToGlobal(QPoint(0, 0)), w->size());
 }
 
 QDialog* topmostDialog() {
@@ -215,6 +210,11 @@ bool ShotRunner::menuScriptError(QString* error) {
     return true;
 }
 
+void ShotRunner::releaseKey() {
+    m_window->faceplate()->releasePressedKey();
+    m_window->runEmulation(kKeyReactSeconds);
+}
+
 bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void()>* deferred, QString* error) {
     using K = ShotStep::Kind;
     if (menuScriptError(error)) return false;
@@ -238,14 +238,10 @@ bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void(
             return false;
         }
         m_window->runEmulation(kKeyHoldSeconds);
-        if (step.kind == K::Key) {
-            faceplate->releasePressedKey();
-            m_window->runEmulation(kKeyReactSeconds);
-        }
+        if (step.kind == K::Key) releaseKey();
         return true;
     case K::ReleaseKeys:
-        faceplate->releasePressedKey();
-        m_window->runEmulation(kKeyReactSeconds);
+        releaseKey();
         return true;
     case K::Type:
         // Paste Text types one line and never presses ENTER -- tap it here.
@@ -256,8 +252,7 @@ bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void(
         }
         faceplate->pressKeyByName(QStringLiteral("enter"));
         m_window->runEmulation(kKeyHoldSeconds);
-        faceplate->releasePressedKey();
-        m_window->runEmulation(kKeyReactSeconds);
+        releaseKey();
         return true;
     case K::Run:
         m_window->runEmulation(step.number);
@@ -545,17 +540,7 @@ bool ShotRunner::capture(const ShotCaptureSpec& spec, QString* error) {
     } else if (spec.target == QLatin1String("lcd-image")) {
         // What Edit > Copy Screen puts on the clipboard: the dot matrix at
         // its physical size (see MainWindow::copyScreenToClipboard()).
-        const GrayImage screen = m_window->controller()->currentScreenImage();
-        QImage image;
-        if (screen.width > 0 && screen.height > 0) {
-            image = QImage(screen.width, screen.height, QImage::Format_Grayscale8);
-            for (int y = 0; y < screen.height; ++y)
-                std::memcpy(image.scanLine(y), screen.pixels.data() + static_cast<std::size_t>(y) * screen.width,
-                            static_cast<std::size_t>(screen.width));
-            const int dotsPerMeter = static_cast<int>(screen.pixelsPerMeter());
-            image.setDotsPerMeterX(dotsPerMeter);
-            image.setDotsPerMeterY(dotsPerMeter);
-        }
+        const QImage image = MainWindow::toQImage(m_window->controller()->currentScreenImage());
         if (!ShotCapture::savePng(image, file, error)) return false;
     } else if (spec.target == QLatin1String("plot")) {
         if (!ShotCapture::savePng(m_window->plotterPaper()->renderPaperImage(), file, error)) {
@@ -597,10 +582,7 @@ bool ShotRunner::capture(const ShotCaptureSpec& spec, QString* error) {
                 }
             }
 #endif
-            if (area.isEmpty()) {
-                area = globalRect(target);
-                for (QWidget* w : extras) area |= globalRect(w);
-            }
+            if (area.isEmpty()) area = ShotCapture::compositeRect(target, extras, 0);
             area.adjust(-spec.padding, -spec.padding, spec.padding, spec.padding);
             ok = ShotCapture::systemCaptureRect(area, file, error);
         }

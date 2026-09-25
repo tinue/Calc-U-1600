@@ -14,6 +14,10 @@ namespace ShotCapture {
 // tooltips).
 QList<QWidget*> visibleTransients(const QWidget* main);
 
+// The global screen rect covering `target` and `extras`, `padding`
+// logical px around their union.
+QRect compositeRect(const QWidget* target, const QList<QWidget*>& extras, int padding);
+
 // `method: qt`: renders `target` plus `extras` (each at its on-screen
 // position) into one image, `padding` logical px around their union, at
 // `scale` device px per logical px. Rendered via QWidget::render(), so the

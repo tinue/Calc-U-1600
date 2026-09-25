@@ -391,19 +391,11 @@ public:
     };
     DebugBankState debugBankState();
 
-    // ── Trace (both CPUs' trace rings drain into one
-    // TRACE.bin, tagged by cpuId; see TraceWriter.swift) ──────────────────
+    // ── Trace: both CPUs' rings drain into one TRACE.bin, tagged by cpuId ──
     //
-    // setTraceEnabled()/traceEnabled() just flip the CPU trace flags and
-    // expect an external consumer (the GUI's Swift drain at 60 Hz) to pump
-    // the rings. beginCpuTrace()/endCpuTrace() below instead capture a full
-    // instruction trace to a file entirely inside the Core -- step() drains
-    // both rings into it -- for the synchronous, tick-less
-    // PC1600PresetLoader::applyPC1600Preset() `trace:` step. Same design as
-    // PC1500Machine's own headless-trace pair; don't mix the two APIs on
-    // one machine.
-    void setTraceEnabled(bool enabled);
-    bool traceEnabled() const { return m_traceEnabled; }
+    // beginCpuTrace()/endCpuTrace() capture a full instruction trace to a
+    // file entirely inside the Core -- step() drains both rings into it.
+    // Used by the GUI's TRACE button and the preset `trace:` step.
 
     /// Begin capturing to `handle` (open for binary writing; this machine
     /// takes ownership and endCpuTrace() closes it). Sets `flags` as the
@@ -449,7 +441,6 @@ private:
     std::unique_ptr<Ce158Card> m_ce158Card;     // see attachCE158() -- LH5803-side interface (MODE 1)
     SerialLink* m_ce158Link = nullptr;          // see setCE158SerialLink()
 
-    bool m_traceEnabled{false};
 
     // ── Headless CPU-trace file -- see beginCpuTrace() ───────────────────
     std::unique_ptr<PC1500TraceFile> m_traceFile;

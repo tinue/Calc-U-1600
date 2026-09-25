@@ -2,6 +2,7 @@
 #include <QMainWindow>
 #include <QElapsedTimer>
 #include <QHash>
+#include <QImage>
 #include <QString>
 #include <functional>
 #include <memory>
@@ -72,6 +73,10 @@ public:
     // (timers included), and nothing may drive the machine until it's done.
     bool isLoading() const { return m_loading; }
     MachineController* controller() const { return m_controller.get(); }
+    // `screen` (MachineController::currentScreenImage()) as a QImage at its
+    // physical size (dots per metre set), as Copy Screen puts it on the
+    // clipboard; null for an empty screen.
+    static QImage toQImage(const GrayImage& screen);
     FaceplateWidget* faceplate() const { return m_faceplate; }
     PlotterPaperWidget* plotterPaper() const { return m_plotterPaper; }
 

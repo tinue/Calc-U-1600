@@ -576,8 +576,7 @@ bool MachineController::beginTrace(const QString& path) {
     if (!m_pc1500 && !m_pc1600) return false;
     std::FILE* handle = std::fopen(path.toStdString().c_str(), "wb");
     if (!handle) return false;
-    constexpr uint32_t flags = TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL;
-    const bool ok = m_pc1600 ? m_pc1600->beginCpuTrace(handle, flags) : m_pc1500->beginCpuTrace(handle, flags);
+    const bool ok = m_pc1600 ? m_pc1600->beginCpuTrace(handle, TRACE_FULL) : m_pc1500->beginCpuTrace(handle, TRACE_FULL);
     if (!ok) std::fclose(handle); // a capture was already active; ownership passes only on success
     return ok;
 }

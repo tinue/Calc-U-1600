@@ -274,17 +274,15 @@ public:
     void     setTraceFlags(uint32_t flags) { m_cpu.setTraceFlags(flags); }
     uint32_t traceFlags() const { return m_cpu.traceFlags(); }
     uint32_t drainTraceEvents(CpuFrame* out, uint32_t max, uint32_t* outLost) { return m_cpu.drainTraceEvents(out, max, outLost); }
-    uint32_t peekTraceEvents(CpuFrame* out, uint32_t max) { return m_cpu.peekTraceEvents(out, max); }
 
     // ── Headless CPU-trace file (the preset loader's `trace:` step) ──────
     //
     // Unlike the setTraceFlags()/drainTraceEvents() pair above -- which
-    // expect an external consumer (the GUI's Swift TraceWriter) to pump
-    // the ring at 60 Hz -- this captures a full instruction trace to a
-    // file entirely inside the Core: step()/runCycles() drain the ring
-    // into the file themselves. For the synchronous, tick-less
-    // PC1500PresetLoader::applyPC1500Preset() pipeline. Don't mix the two APIs
-    // on one machine.
+    // leave draining the ring to the caller -- this captures a full
+    // instruction trace to a file entirely inside the Core: step()/
+    // runCycles() drain the ring into the file themselves. Used by the
+    // GUI's TRACE button and the preset `trace:` step. Don't mix the two
+    // APIs on one machine.
 
     /// Begin capturing to `handle` (open for binary writing; this machine
     /// takes ownership and endCpuTrace() closes it). Sets `flags` as the

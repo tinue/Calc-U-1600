@@ -445,7 +445,7 @@ int SC7852::step() {
     const bool eiShadow = m_eiShadow;
     m_eiShadow = false;
     // No interrupt is accepted between a DD/FD prefix and what follows it.
-    if (!m_pendingPrefix && (m_intLine || m_nmiPending)) {
+    if (!m_pendingPrefix && (m_nmiPending || (m_intLine && IFF1 && !eiShadow))) {
         int serviced = serviceInterrupt(eiShadow);
         if (serviced >= 0) return serviced; // interrupt ack consumes this step() call on its own; no trace frame
     }

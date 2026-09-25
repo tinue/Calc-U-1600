@@ -219,17 +219,7 @@ inline std::vector<FloppyCatalogEntry> scanFloppyDirectory(const std::string& di
 // The header-only catalogue entry for one `.floppy.yaml` file -- e.g. to
 // classify the disk a preset resolved to (template or instance).
 inline bool readFloppyCatalogEntry(const std::string& path, FloppyCatalogEntry* out, std::string* error) {
-    std::string text;
-    if (!named_file_detail::readTextFile(path, &text)) {
-        if (error) *error = "cannot read '" + path + "'";
-        return false;
-    }
-    std::string err;
-    if (!floppy_detail::parseCatalogEntry(text, path, out, &err)) {
-        if (error) *error = path + ": " + err;
-        return false;
-    }
-    return true;
+    return readNamedFile(path, floppy_detail::parseCatalogEntry, out, error);
 }
 
 // Resolves `diskName` against `dirs` in order (bundled first, then the save

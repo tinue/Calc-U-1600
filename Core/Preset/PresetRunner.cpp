@@ -108,7 +108,7 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
                     if (log) log("  trace: FAILED to open " + path + ": " + std::strerror(errno));
                     return false;
                 }
-                machine.beginCpuTrace(fh, TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL);
+                machine.beginCpuTrace(fh, TRACE_FULL);
                 if (log) log("  trace: started -> " + path);
                 break;
             }

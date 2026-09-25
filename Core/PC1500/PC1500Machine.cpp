@@ -316,10 +316,8 @@ void PC1500Machine::advanceKeyQueue(uint32_t cycles) {
     // Same cadence as PC1500BasicTyper.cpp's tapKey() -- see this
     // method's own header doc comment for why it's duplicated here
     // rather than shared.
-    constexpr int kFramesPerSecond = 60;
-    constexpr uint64_t kCyclesPerFrame = static_cast<uint64_t>(kCpuHz / kFramesPerSecond);
-    constexpr uint64_t kTapCycles = kCyclesPerFrame * 4;  // kTapFrames
-    constexpr uint64_t kGapCycles = kCyclesPerFrame * 4;  // kIdleFrames
+    constexpr uint64_t kTapCycles = kPC1500CyclesPerFrame * 4;  // kTapFrames
+    constexpr uint64_t kGapCycles = kPC1500CyclesPerFrame * 4;  // kIdleFrames
 
     if (m_keyQueuePhase == KeyQueuePhase::Idle) {
         if (m_keyQueue.empty()) return;

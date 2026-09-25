@@ -78,13 +78,8 @@ int main(int argc, char** argv) {
 
     MainWindow window;
     ShotRunner runner(&window, scenario, options);
-    int exitCode = 0;
-    QObject::connect(&runner, &ShotRunner::finished, &app, [&](int code) {
-        exitCode = code;
-        QCoreApplication::exit(code);
-    });
+    QObject::connect(&runner, &ShotRunner::finished, &app, &QCoreApplication::exit);
     window.show();
     runner.start();
-    app.exec();
-    return exitCode;
+    return app.exec();
 }

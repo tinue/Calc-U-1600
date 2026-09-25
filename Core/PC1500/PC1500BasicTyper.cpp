@@ -10,8 +10,7 @@
 namespace {
 
 constexpr double kCpuHz = PC1500Machine::kCpuHz;
-constexpr int kFramesPerSecond = 60;
-constexpr uint64_t kCyclesPerFrame = static_cast<uint64_t>(kCpuHz / kFramesPerSecond);
+constexpr uint64_t kCyclesPerFrame = kPC1500CyclesPerFrame;
 
 // Key-scan cadence: kTapFrames=4 hold + kIdleFrames=4 idle, ~67ms per
 // keystroke at 60fps -- see this file's header comment.

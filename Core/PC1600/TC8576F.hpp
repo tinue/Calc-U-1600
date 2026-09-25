@@ -92,6 +92,8 @@ private:
     void    writeRegisterImpl(uint8_t reg, uint8_t value);
     void    tickImpl(int tstates);
     void    resetImpl();
+    // No-peer serial defaults: empty transmitter, CTS/DCD asserted.
+    void    resetSerialState();
     void writeCommandRegister(uint8_t cmd); // 23H write
     void writeParameter(uint8_t value);     // 22H write
     void loadSerialMode();                  // pr[5] -> SO/CL/PEN/...
