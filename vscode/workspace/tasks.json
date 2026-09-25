@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      // PC-1500: sdaslh5801 -> sdld -> makebin. The source's own .org sets the address.
+      "label": "sdas: build current file",
+      "type": "shell",
+      "options": { "cwd": "${fileDirname}" },
+      "command": "B=\"$CALCU_SDCC_BIN\"; [ -n \"$B\" ] || B=\"$HOME/Development/sharp/sdcc-pc1500/sdcc/bin\"; N='${fileBasenameNoExtension}'; \"$B/sdaslh5801\" -plosgff \"$N.asm\" && printf -- '-muwx\\n-i %s\\n%s.rel\\n\\n-e\\n' \"$N\" \"$N\" > \"$N.lnk\" && \"$B/sdld\" -nf \"$N\" && \"$B/makebin\" -p -o 0x$(head -1 \"$N.ihx\" | cut -c4-7) \"$N.ihx\" \"$N.bin\"",
+      "problemMatcher": "$calcu1600-sdas",
+      "group": "build"
+    },
+    {
+      // PC-1600: zasm writes the .lst and .bin in one go.
+      "label": "zasm: build current file",
+      "type": "shell",
+      "options": { "cwd": "${fileDirname}" },
+      "command": "Z=\"$CALCU_ZASM\"; [ -n \"$Z\" ] || Z=\"$HOME/Development/sharp/zasm/zasm\"; echo 'in file ${fileBasename}:'; \"$Z\" -uwy '${fileBasename}' '${fileBasenameNoExtension}.lst' '${fileBasenameNoExtension}.bin'",
+      "problemMatcher": "$calcu1600-zasm",
+      "group": "build"
+    }
+  ]
+}

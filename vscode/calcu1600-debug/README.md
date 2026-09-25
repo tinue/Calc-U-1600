@@ -29,7 +29,7 @@ Both assemblers are local checkouts. The tasks find them through two environment
 | `CALCU_SDCC_BIN` | `~/Development/sharp/sdcc-pc1500/sdcc/bin` (sdaslh5801, sdasz80, sdld, makebin) |
 | `CALCU_ZASM` | `~/Development/sharp/zasm/zasm` |
 
-Put these tasks in `.vscode/tasks.json`. Each builds the file open in the editor.
+Put these tasks in `.vscode/tasks.json`. Each builds the file open in the editor. `vscode/workspace/` has ready-made `tasks.json` and `launch.json` files to copy into `.vscode/`.
 
 ```jsonc
 {
@@ -72,11 +72,11 @@ A typical program configuration:
 {
   "type": "calcu1600",
   "request": "attach",
-  "name": "PC-1500: memtest",
+  "name": "PC-1500: memtest (stock)",
   "port": 4711,
   "preLaunchTask": "sdas: build current file",
   "buildTask": "sdas: build current file",
-  "preset": "${workspaceFolder}/examples/startup/default-pc1500.pc1500",
+  "preset": "${workspaceFolder}/examples/memtest_stock_debug.pc1500",
   "program": {
     "bin": "${fileDirname}/${fileBasenameNoExtension}.bin",
     "listing": "${fileDirname}/${fileBasenameNoExtension}.rst",

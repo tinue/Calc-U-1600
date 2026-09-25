@@ -1,0 +1,41 @@
+{
+    // Calc-U-1600 debugger configurations. Copy this file and tasks.json
+    // into the repository's .vscode/ (see docs/Debugger.md).
+    "version": "0.2.0",
+    "configurations": [
+        {
+            // examples/memtest.asm, stock build (ENTRY = &40C5). Focus
+            // memtest.asm before pressing F5: the build task assembles the
+            // current file. Set X (the pass count) at the entry stop.
+            "type": "calcu1600",
+            "request": "attach",
+            "name": "PC-1500: memtest (stock)",
+            "port": 4711,
+            "preLaunchTask": "sdas: build current file",
+            "buildTask": "sdas: build current file",
+            "preset": "${workspaceFolder}/examples/memtest_stock_debug.pc1500",
+            "program": {
+                "bin": "${workspaceFolder}/examples/memtest.bin",
+                "listing": "${workspaceFolder}/examples/memtest.rst",
+                "address": "0x40C5",
+                "after": "stopOnEntry"
+            }
+        },
+        {
+            // Stops on the reset vector's first instruction.
+            "type": "calcu1600",
+            "request": "attach",
+            "name": "ROM: reset and stop",
+            "port": 4711,
+            "reset": "reset",
+            "stopOnEntry": true
+        },
+        {
+            // Attaches to the machine as it is.
+            "type": "calcu1600",
+            "request": "attach",
+            "name": "Calc-U-1600: attach",
+            "port": 4711
+        }
+    ]
+}

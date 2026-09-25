@@ -70,24 +70,23 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
 ## Using VS Code
 
 1. **Install the extension:** run `tools/install_vscode_extension.sh`, then reload the VS Code window. The script packages a `.vsix` and installs it; a symlink into `~/.vscode/extensions` doesn't work with current VS Code.
-2. **Add the build tasks** from that README to `.vscode/tasks.json`:
-   - `sdas: build current file` runs sdaslh5801 → sdld → makebin;
-   - `zasm: build current file` runs zasm.
-
-   Their problem matchers put assembler errors in the Problems view. Set `CALCU_SDCC_BIN` / `CALCU_ZASM` if the assemblers aren't in the default checkouts.
-3. **Add a launch configuration** (*Add Configuration… ▸ Calc-U-1600: …*). The PC-1500 example:
+2. **Copy the workspace configuration:** `vscode/workspace/tasks.json` and `launch.json` go into the repository's `.vscode/`, which git ignores. If you already have your own files there, merge them in.
+   - **tasks.json** has the build tasks. `sdas: build current file` runs sdaslh5801 → sdld → makebin; `zasm: build current file` runs zasm. Their problem matchers put assembler errors in the Problems view. Set `CALCU_SDCC_BIN` / `CALCU_ZASM` if the assemblers aren't in the default checkouts.
+   - **launch.json** has three configurations: *PC-1500: memtest (stock)*, *ROM: reset and stop* and *Calc-U-1600: attach*.
+3. **Add a launch configuration for your own program** (*Add Configuration… ▸ Calc-U-1600: …*). The memtest one:
    ```jsonc
    {
-     "type": "calcu1600", "request": "attach", "name": "PC-1500: memtest", "port": 4711,
+     "type": "calcu1600", "request": "attach", "name": "PC-1500: memtest (stock)", "port": 4711,
      "preLaunchTask": "sdas: build current file", "buildTask": "sdas: build current file",
-     "preset": "${workspaceFolder}/examples/startup/default-pc1500.pc1500",
+     "preset": "${workspaceFolder}/examples/memtest_stock_debug.pc1500",
      "program": {
-       "bin": "${fileDirname}/${fileBasenameNoExtension}.bin",
-       "listing": "${fileDirname}/${fileBasenameNoExtension}.rst",
+       "bin": "${workspaceFolder}/examples/memtest.bin",
+       "listing": "${workspaceFolder}/examples/memtest.rst",
        "address": "0x40C5", "after": "stopOnEntry"
      }
    }
    ```
+   The build task assembles the file in focus, so keep `memtest.asm` in focus when pressing F5. The preset gives a stock PC-1500 with the program's bytes reserved (`NEW&417D`). A configuration with a memory module would put BASIC's free memory under &40C5, and memtest would overwrite itself. Build & Load types `CALL &40C5` without `,X`, so set **X** (the pass count) under *Registers* at the entry stop.
 4. **Start debugging** (F5). The session runs through these steps:
    1. The task builds the program.
    2. **Clean start:** the preset sets the machine up. Without a `preset` in the configuration, the model's default preset from Settings is used; without that, All Reset and a boot to the prompt.

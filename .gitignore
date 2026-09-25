@@ -63,3 +63,15 @@ roms/*.bin
 /Core/Basic/vendor/sharpdx/libsharpdx-linux.a
 /Core/Basic/vendor/sharpdx/*.lib
 /Core/Basic/vendor/sharpdx/native-libs-windows.txt
+
+# sdas/zasm build output of the VS Code build tasks run on example sources
+# (see docs/Debugger.md). The example .bin files are tracked, except
+# memtest.bin: memtest.asm's own build, identical to memtest_stock.bin.
+/examples/**/*.ihx
+/examples/**/*.lnk
+/examples/**/*.lst
+/examples/**/*.map
+/examples/**/*.rel
+/examples/**/*.rst
+/examples/**/*.sym
+/examples/memtest.bin
