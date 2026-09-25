@@ -37,7 +37,9 @@ void DapServer::onNewConnection() {
                              {QStringLiteral("body"),
                               QJsonObject{{QStringLiteral("category"), QStringLiteral("important")},
                                           {QStringLiteral("output"),
-                                           QStringLiteral("Calc-U-1600 already has a debugger attached.\n")}}}};
+                                           QStringLiteral("Calc-U-1600 already has a debugger attached. Stop that debug "
+                                                          "session (Shift+F5), or use Settings > Debugger > Disconnect "
+                                                          "in the app.\n")}}}};
             const QByteArray json = QJsonDocument(busy).toJson(QJsonDocument::Compact);
             socket->write("Content-Length: " + QByteArray::number(json.size()) + "\r\n\r\n" + json);
             socket->disconnectFromHost();

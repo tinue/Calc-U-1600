@@ -78,6 +78,16 @@ QString DebugController::serverStatus() const {
     return tr("Listening on 127.0.0.1:%1").arg(m_server->port());
 }
 
+bool DebugController::hasClient() const { return m_server->hasClient(); }
+
+void DebugController::disconnectClient() {
+    if (m_session) {
+        m_session->output(tr("Disconnected from the app (Settings > Debugger)."), QStringLiteral("important"));
+        m_session->terminated();
+    }
+    m_server->disconnectClient(); // -> onClientDisconnected(): session ends, machine runs on
+}
+
 void DebugController::onClientConnected() {
     m_session = std::make_unique<DapSession>(m_server, this);
     emit serverStatusChanged();

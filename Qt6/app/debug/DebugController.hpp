@@ -35,6 +35,10 @@ public:
     /// the --dap command-line port, which overrides them for the run).
     void refreshServer();
     static void setCommandLinePort(int port);
+    bool hasClient() const;
+    /// Drops the attached client (Settings > Debugger > Disconnect); the
+    /// machine runs on as without a debugger.
+    void disconnectClient();
     /// "Listening on 127.0.0.1:4711", "Client connected", "Port in use: …",
     /// "Off".
     QString serverStatus() const;

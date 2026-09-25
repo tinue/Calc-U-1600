@@ -318,9 +318,16 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
         addRowLabel(debugger, 2, this, sections, tr("Status:"));
         auto* status = new QLabel(this);
         status->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        debugger->addWidget(status, 2, kValueColumn, 1, 3);
+        debugger->addWidget(status, 2, kValueColumn, 1, 2);
+        auto* disconnect = makeRowButton(tr("Disconnect"), this);
+        disconnect->setToolTip(tr("Drop the attached debugger; the calculator runs on"));
+        debugger->addWidget(disconnect, 2, kResetColumn);
         DebugController* debug = m_controller->debugController();
-        auto refreshStatus = [status, debug] { status->setText(debug->serverStatus()); };
+        connect(disconnect, &QPushButton::clicked, debug, &DebugController::disconnectClient);
+        auto refreshStatus = [status, disconnect, debug] {
+            status->setText(debug->serverStatus());
+            disconnect->setEnabled(debug->hasClient());
+        };
         refreshStatus();
         connect(debug, &DebugController::serverStatusChanged, status, refreshStatus);
         connect(enable, &QCheckBox::toggled, this, [this](bool on) {

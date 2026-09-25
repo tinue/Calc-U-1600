@@ -30,6 +30,8 @@ public:
     void onMachineReplaced();
     /// Sends a console line to the client.
     void output(const QString& text, const QString& category = QStringLiteral("console"));
+    /// Tells the client its session is over (the app is dropping it).
+    void terminated() { event(QStringLiteral("terminated")); }
 
 private:
     using Handler = std::function<void(const QJsonObject& args, QJsonObject* body, QString* error)>;

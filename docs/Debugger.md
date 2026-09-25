@@ -21,6 +21,8 @@ There are two ways to use it:
 - tick **Settings ▸ Debugger ▸ Accept a debugger** (port 4711 by default); the dialog shows its live status;
 - or start the app with `--dap <port>`, which enables it for that run only and leaves Settings unchanged.
 
+To detach, stop the session in VS Code (Shift+F5), or press **Disconnect** in Settings ▸ Debugger. A second debug session started while one is attached is refused with a message saying this.
+
 The VS Code side is a small extension, `vscode/calcu1600-debug/`. It connects to the server and adds the Build & Load and reset commands.
 
 **Threads.** Each CPU is a thread: `LH5801` on the PC-1500, `Z80 (SC7852)` and `LH5803` on the PC-1600. On the PC-1600, the thread that currently owns the bus is marked `[bus]`. A stop always stops both CPUs, and names the CPU that caused it.
