@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "../CPU/DebugStop.hpp"
 #include "../CPU/LH5801/LH5801.hpp"
 #include "../Connector/Ce150Card.hpp"
 #include "../Connector/Ce158Port.hpp"
@@ -298,20 +299,25 @@ public:
     /// Size of the active capture so far (0 when none); see
     /// PC1500TraceFile::bytesWritten().
     uint64_t cpuTraceBytes() const { return m_traceFile ? m_traceFile->bytesWritten() : 0; }
-    void addBreakpoint(uint16_t addr) { m_cpu.addBreakpoint(addr); }
-    void removeBreakpoint(uint16_t addr) { m_cpu.removeBreakpoint(addr); }
-    void clearBreakpoints() { m_cpu.clearBreakpoints(); }
-    /// True once after step()/runCycles() parked on a breakpoint.
-    bool consumeBreakpointHit() { bool hit = m_breakpointStop; m_breakpointStop = false; return hit; }
-    /// Data breakpoints: runCycles() returns right after an instruction
-    /// whose data access hit one of `watches` (see WatchSet). Not owned.
-    void setWatches(WatchSet* watches) { m_watches = watches; m_cpu.setWatches(watches); }
+    // ── Debugger stops ────────────────────────────────────────────────────
+    /// step() and runCycles() latch a stop when the CPU parks on a PC
+    /// breakpoint (nothing executed) or completes an instruction whose data
+    /// access hit a watch; runCycles() then returns early. Cleared by a
+    /// reset.
+    DebugStop consumeDebugStop() { return m_debugStop.consume(); }
+    /// Memory watches of CPU 1 (the only one); nullptr turns checking off.
+    /// Not owned.
+    void setWatches(int cpu, WatchSet* watches) {
+        if (cpu != 1) return;
+        m_watches = watches;
+        m_cpu.setWatches(watches);
+    }
 
 private:
     PC1500Memory m_memory;
     LH5801       m_cpu;
     WatchSet*    m_watches{nullptr};
-    bool         m_breakpointStop{false};
+    DebugStopLatch m_debugStop;
     ExpansionConnector m_expansionConnector;
     SystemBus          m_systemBus;
     std::unique_ptr<ExpansionCard> m_attachedExpansionCard; // see attachExpansionCard()

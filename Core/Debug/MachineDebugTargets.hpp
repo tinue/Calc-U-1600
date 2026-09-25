@@ -43,9 +43,9 @@ protected:
     void enableBreakpointChecks(bool on) override;
     void resumePastBreakpoint(int thread) override;
     void attachWatches(int thread, WatchSet* watches) override;
+    DebugStop consumeMachineStop() override;
 
 private:
-    Stop latchedStop();
     PC1500Machine& m_machine;
 };
 
@@ -83,11 +83,9 @@ protected:
     void enableBreakpointChecks(bool on) override;
     void resumePastBreakpoint(int thread) override;
     void attachWatches(int thread, WatchSet* watches) override;
+    DebugStop consumeMachineStop() override;
 
 private:
-    Stop latchedStop();
-    WatchSet* m_z80Watches = nullptr;
-    WatchSet* m_lh5803Watches = nullptr;
     PC1600Machine& m_machine;
 };
 

@@ -410,6 +410,62 @@ void test_pc1600_lh5803_thread() {
     CHECK(s.kind == debug::Stop::Watch && s.thread == debug::PC1600DebugTarget::kLh5803);
 }
 
+void test_machine_step_latches_stops() {
+    // PC-1500: a stepped store into a watched byte latches a watch stop on
+    // CPU 1; a reset drops a stop nobody consumed.
+    {
+        PC1500Machine m;
+        WatchSet w;
+        w.add({0x4100, 0x4100, 0, false, true});
+        m.setWatches(1, &w);
+        const uint8_t code[] = {0xAE, 0x41, 0x00}; // sta (0x4100)
+        for (size_t i = 0; i < sizeof code; i++) m.memory().poke(uint16_t(0x4000 + i), code[i]);
+        m.cpu().setPC(0x4000);
+        m.step();
+        const DebugStop s = m.consumeDebugStop();
+        CHECK(s.kind == DebugStop::Watch && s.cpu == 1);
+        CHECK(m.consumeDebugStop().kind == DebugStop::None);
+        m.cpu().setPC(0x4000);
+        w.consumeHit();
+        m.step();
+        m.reset();
+        CHECK(m.consumeDebugStop().kind == DebugStop::None);
+        m.setWatches(1, nullptr);
+    }
+    // PC-1600: the Z-80's store latches CPU 1; after the handoff the
+    // LH5803's store latches CPU 2 -- from step(), not only runCycles().
+    {
+        PC1600Machine m;
+        std::vector<uint8_t> lower(PC1600Memory::kBankSize, 0x00), upper(PC1600Memory::kBankSize, 0x00);
+        const uint8_t z80[] = {0x32, 0x00, 0x90, 0xD3, 0x38, 0x76}; // ld (0x9000),a ; out (38h),a ; halt
+        for (size_t i = 0; i < sizeof z80; i++) lower[i] = z80[i];
+        CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+        std::vector<uint8_t> rom(16384, 0x00);
+        const uint8_t lh[] = {0xAE, 0x10, 0x00, 0x9E, 0x05}; // sta (0x1000) ; bch C000
+        for (size_t i = 0; i < sizeof lh; i++) rom[i] = lh[i];
+        rom[16384 - 2] = 0xC0; rom[16384 - 1] = 0x00;
+        CHECK(m.loadLH5803Rom(rom.data(), rom.size()));
+        m.reset();
+        WatchSet z, l;
+        z.add({0x9000, 0x9000, 0, false, true});
+        l.add({0x1000, 0x1000, 0, false, true});
+        m.setWatches(1, &z);
+        m.setWatches(2, &l);
+        m.step();
+        DebugStop s = m.consumeDebugStop();
+        CHECK(s.kind == DebugStop::Watch && s.cpu == 1);
+        z.consumeHit();
+        s = {};
+        for (int i = 0; i < 50 && s.kind == DebugStop::None; i++) {
+            m.step();
+            s = m.consumeDebugStop();
+        }
+        CHECK(s.kind == DebugStop::Watch && s.cpu == 2);
+        m.setWatches(1, nullptr);
+        m.setWatches(2, nullptr);
+    }
+}
+
 } // namespace
 
 int run_debug_target_tests() {
@@ -425,6 +481,7 @@ int run_debug_target_tests() {
     test_pc1500_target();
     test_pc1600_target();
     test_pc1600_lh5803_thread();
+    test_machine_step_latches_stops();
     std::printf("debug target tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

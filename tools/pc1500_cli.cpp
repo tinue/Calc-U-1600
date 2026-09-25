@@ -6,8 +6,7 @@
 //     repeating loop (the idle loop signature — this build does not decode
 //     the dot-matrix LCD's pixel format, so "idle" is inferred structurally
 //     rather than by reading displayed text),
-//   - a demonstration of the trace ring buffer and a breakpoint actually
-//     halting execution.
+//   - a demonstration of the trace ring buffer.
 //
 // Usage: pc1500_cli <rom-file> [maxCycles]
 //        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--wav <out.wav>]
@@ -174,10 +173,6 @@ int main(int argc, char** argv) {
         uint16_t pcBefore = machine.cpu().pc();
         int c = machine.step();
         if (c == 0) {
-            if (machine.consumeBreakpointHit()) {
-                std::printf("breakpoint hit at PC=0x%04X after %llu cycles\n", pcBefore, (unsigned long long)consumed);
-                break;
-            }
             if (machine.cpu().halted()) {
                 std::printf("CPU halted (HLT) at PC=0x%04X after %llu cycles with no pending interrupt\n", pcBefore, (unsigned long long)consumed);
                 break;

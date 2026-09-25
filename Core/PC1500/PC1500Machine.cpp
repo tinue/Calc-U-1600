@@ -25,6 +25,7 @@ void PC1500Machine::reset() {
     m_keyQueueCurrentKey.clear();
     m_keyQueuePhaseCyclesRemaining = 0;
     m_cpu.reset();
+    m_debugStop.clear();
     // A chip reset re-anchors an attached CE-150 (LH5810 latches cleared,
     // steppers/pen re-homed) but does NOT unplug it or wipe its paper --
     // real ink stays on real paper. Mirrors the CE-1600P, whose card is
@@ -138,7 +139,8 @@ void PC1500Machine::seedClock(int year, int month, int day, int hour, int minute
 int PC1500Machine::step() {
     std::lock_guard<std::mutex> lock(m_mutex);
     int c = m_cpu.step();
-    if (c == 0 && m_cpu.breakpointsEnabled() && m_cpu.consumeBreakpointHit()) m_breakpointStop = true;
+    if (c == 0 && m_cpu.breakpointsEnabled() && m_cpu.consumeBreakpointHit()) m_debugStop.latch(DebugStop::Breakpoint, 1);
+    if (m_watches && m_watches->hitPending()) m_debugStop.latch(DebugStop::Watch, 1);
     // PU/PV (SPU/RPU/SPV/RPV) never touch the bus themselves, so pushing
     // their post-instruction state here is sufficient for the next bus
     // access to see it -- see PC1500Memory::updatePUPV()'s own doc comment.
@@ -197,7 +199,10 @@ uint64_t PC1500Machine::runCycles(uint64_t maxCycles) {
         int c = m_cpu.step();
         m_memory.updatePUPV(m_cpu.pu(), m_cpu.pv());
         if (c == 0) {
-            if (m_cpu.breakpointsEnabled() && m_cpu.consumeBreakpointHit()) { m_breakpointStop = true; break; }
+            if (m_cpu.breakpointsEnabled() && m_cpu.consumeBreakpointHit()) {
+                m_debugStop.latch(DebugStop::Breakpoint, 1);
+                break;
+            }
             if (m_cpu.halted() || m_cpu.poweredOff()) {
                 // step() still ticks the timer once per call while halted
                 // (see LH5801::step()'s HLT branch) -- keep polling so a
@@ -222,7 +227,10 @@ uint64_t PC1500Machine::runCycles(uint64_t maxCycles) {
         advancePeripherals(static_cast<uint32_t>(c));
         consumed += static_cast<uint64_t>(c);
         maybeDrainTrace();
-        if (m_watches && m_watches->hitPending()) break; // the watched access's instruction has completed
+        if (m_watches && m_watches->hitPending()) { // the watched access's instruction has completed
+            m_debugStop.latch(DebugStop::Watch, 1);
+            break;
+        }
     }
     return consumed;
 }

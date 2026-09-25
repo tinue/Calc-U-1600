@@ -24,7 +24,7 @@ void loadBreakpoints(Cpu& cpu, const std::vector<uint16_t>& addrs) {
 // ── PC-1500 ───────────────────────────────────────────────────────────────
 
 PC1500DebugTarget::~PC1500DebugTarget() {
-    m_machine.setWatches(nullptr);
+    m_machine.setWatches(1, nullptr);
     m_machine.cpu().clearBreakpoints();
     setBreakpointFlag(m_machine.cpu(), false);
 }
@@ -79,34 +79,26 @@ bool PC1500DebugTarget::isHalted(int) const { return m_machine.cpu().halted() ||
 void PC1500DebugTarget::applyBreakpoints(int, const std::vector<uint16_t>& addrs) { loadBreakpoints(m_machine.cpu(), addrs); }
 void PC1500DebugTarget::enableBreakpointChecks(bool on) { setBreakpointFlag(m_machine.cpu(), on); }
 void PC1500DebugTarget::resumePastBreakpoint(int) { m_machine.cpu().resumePastBreakpoint(); }
-void PC1500DebugTarget::attachWatches(int, WatchSet* watches) { m_machine.setWatches(watches); }
-
-Stop PC1500DebugTarget::latchedStop() {
-    if (m_machine.consumeBreakpointHit()) {
-        Stop s;
-        s.kind = Stop::Breakpoint;
-        s.thread = 1;
-        return s;
-    }
-    return watchStop(1);
-}
+void PC1500DebugTarget::attachWatches(int, WatchSet* watches) { m_machine.setWatches(1, watches); }
+DebugStop PC1500DebugTarget::consumeMachineStop() { return m_machine.consumeDebugStop(); }
 
 Stop PC1500DebugTarget::runMachine(uint64_t budget) {
     const uint64_t cycles = m_machine.runCycles(budget);
-    Stop s = latchedStop();
+    Stop s = stopFor(m_machine.consumeDebugStop());
     s.cycles = cycles;
     return s;
 }
 
 Stop PC1500DebugTarget::stepMachine() {
     m_machine.step();
-    return latchedStop();
+    return stopFor(m_machine.consumeDebugStop());
 }
 
 // ── PC-1600 ───────────────────────────────────────────────────────────────
 
 PC1600DebugTarget::~PC1600DebugTarget() {
-    m_machine.setWatches(nullptr, nullptr);
+    m_machine.setWatches(kZ80, nullptr);
+    m_machine.setWatches(kLh5803, nullptr);
     m_machine.sc7852().clearBreakpoints();
     m_machine.lh5803().clearBreakpoints();
     setBreakpointFlag(m_machine.sc7852(), false);
@@ -210,34 +202,20 @@ void PC1600DebugTarget::resumePastBreakpoint(int thread) {
 }
 
 void PC1600DebugTarget::attachWatches(int thread, WatchSet* watches) {
-    (thread == kZ80 ? m_z80Watches : m_lh5803Watches) = watches;
-    m_machine.setWatches(m_z80Watches, m_lh5803Watches);
+    m_machine.setWatches(thread == kZ80 ? kZ80 : kLh5803, watches);
 }
-
-Stop PC1600DebugTarget::latchedStop() {
-    Stop s;
-    switch (m_machine.consumeDebugStop()) {
-        case PC1600Machine::DebugStop::Z80Breakpoint:    s.kind = Stop::Breakpoint; s.thread = kZ80; return s;
-        case PC1600Machine::DebugStop::Lh5803Breakpoint: s.kind = Stop::Breakpoint; s.thread = kLh5803; return s;
-        case PC1600Machine::DebugStop::Z80Watch:         return watchStop(kZ80);
-        case PC1600Machine::DebugStop::Lh5803Watch:      return watchStop(kLh5803);
-        case PC1600Machine::DebugStop::None: break;
-    }
-    // step() doesn't latch watch hits itself.
-    if (const int thread = watchHitThread()) return watchStop(thread);
-    return s;
-}
+DebugStop PC1600DebugTarget::consumeMachineStop() { return m_machine.consumeDebugStop(); }
 
 Stop PC1600DebugTarget::runMachine(uint64_t budget) {
     const uint64_t cycles = m_machine.runCycles(budget);
-    Stop s = latchedStop();
+    Stop s = stopFor(m_machine.consumeDebugStop());
     s.cycles = cycles;
     return s;
 }
 
 Stop PC1600DebugTarget::stepMachine() {
     m_machine.step();
-    return latchedStop();
+    return stopFor(m_machine.consumeDebugStop());
 }
 
 } // namespace debug

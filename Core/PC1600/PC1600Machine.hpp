@@ -15,6 +15,7 @@
 #include "../Connector/ExpansionCard.hpp"
 #include "../CPU/LH5803/LH5803.hpp"
 #include "../CPU/LH5803/LH5803SharedMemory.hpp"
+#include "../CPU/DebugStop.hpp"
 #include "../CPU/SC7852/SC7852.hpp"
 #include "../PC1500/PC1500TraceFile.hpp"
 #include "PC1600Bank.hpp"
@@ -108,27 +109,28 @@ public:
 
     /// Runs until `maxCycles` **T-states** (see kTStateHz) have been
     /// consumed across both CPUs combined, returning the number actually
-    /// consumed. A plain step-and-sum loop: unlike PC1500Machine's, no
-    /// breakpoint or stuck-HALT bailout is needed here, because the bus
-    /// arbiter always has the other CPU to dispatch to on the next call, so
-    /// this loop cannot spin without making progress. A halted SC7852 step
-    /// is charged SC7852::kHaltTickCycles, the same figure step() charges
-    /// its own timer accumulators -- one function now owns both, so they
-    /// can no longer drift apart.
+    /// consumed. A step-and-sum loop that returns early on a debugger stop
+    /// (see consumeDebugStop()). A halted step is charged its CPU's
+    /// kHaltTickCycles, the same figure step() charges its own timer
+    /// accumulators -- one function owns both, so they can't drift apart.
     uint64_t runCycles(uint64_t maxCycles);
 
     // ── Debugger stops ────────────────────────────────────────────────────
-    // runCycles() returns early when either CPU parks on a PC breakpoint
-    // (step() returns 0 then, without advancing any clock) or completes an
-    // instruction that hit a memory watch. The reason and CPU are latched
-    // here until consumed.
-    enum class DebugStop { None, Z80Breakpoint, Lh5803Breakpoint, Z80Watch, Lh5803Watch };
-    DebugStop consumeDebugStop() { DebugStop s = m_debugStop; m_debugStop = DebugStop::None; return s; }
-    /// Memory watches per CPU (each checks its own data accesses in its
-    /// own address space); nullptr turns a CPU's checking off. Not owned.
-    void setWatches(WatchSet* z80, WatchSet* lh5803) {
-        m_z80Watches = z80; m_lh5803Watches = lh5803;
-        m_sc7852.setWatches(z80); m_lh5803.setWatches(lh5803);
+    // step() and runCycles() latch a stop when either CPU parks on a PC
+    // breakpoint (step() returns 0 then, without advancing any clock) or
+    // completes an instruction that hit a memory watch; runCycles() then
+    // returns early. CPU 1 = the Z-80, 2 = the LH5803. Cleared by a reset.
+    DebugStop consumeDebugStop() { return m_debugStop.consume(); }
+    /// Memory watches of one CPU (each checks its own data accesses in its
+    /// own address space); nullptr turns its checking off. Not owned.
+    void setWatches(int cpu, WatchSet* watches) {
+        if (cpu == 1) {
+            m_z80Watches = watches;
+            m_sc7852.setWatches(watches);
+        } else {
+            m_lh5803Watches = watches;
+            m_lh5803.setWatches(watches);
+        }
     }
 
     /// Optional host callback invoked from inside runCycles() roughly every
@@ -449,7 +451,7 @@ private:
     PC1600Bank m_bank;
     PC1600Memory m_z80Mem;
     SC7852 m_sc7852;
-    DebugStop m_debugStop{DebugStop::None};
+    DebugStopLatch m_debugStop;
     WatchSet* m_z80Watches{nullptr};
     WatchSet* m_lh5803Watches{nullptr};
     LH5803SharedMemory m_lh5803Mem;

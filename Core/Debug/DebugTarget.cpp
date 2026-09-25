@@ -101,12 +101,6 @@ void DebugTarget::setWatches(int thread, const std::vector<WatchSet::Watch>& wat
     attachWatches(thread, m_armed && !set.empty() ? &set : nullptr);
 }
 
-int DebugTarget::watchHitThread() const {
-    for (const auto& [thread, set] : m_watches)
-        if (set.hitPending()) return thread;
-    return 0;
-}
-
 void DebugTarget::resumeFromStop() {
     // A CPU parked on one of its breakpoints executes that instruction on
     // resume instead of stopping again. Only CPUs actually sitting on one
@@ -117,15 +111,21 @@ void DebugTarget::resumeFromStop() {
     }
     for (auto& entry : m_watches)
         if (entry.second.hitPending()) entry.second.consumeHit();
+    consumeMachineStop(); // a stop latched but never reported is stale now
 }
 
-Stop DebugTarget::watchStop(int thread) {
+Stop DebugTarget::stopFor(const DebugStop& stop) {
     Stop s;
-    auto it = m_watches.find(thread);
-    if (it == m_watches.end() || !it->second.hitPending()) return s;
-    s.kind = Stop::Watch;
-    s.thread = thread;
-    s.hit = it->second.consumeHit();
+    if (stop.kind == DebugStop::Breakpoint) {
+        s.kind = Stop::Breakpoint;
+        s.thread = stop.cpu;
+    } else if (stop.kind == DebugStop::Watch) {
+        auto it = m_watches.find(stop.cpu);
+        if (it == m_watches.end() || !it->second.hitPending()) return s;
+        s.kind = Stop::Watch;
+        s.thread = stop.cpu;
+        s.hit = it->second.consumeHit();
+    }
     return s;
 }
 

@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "../CPU/DebugStop.hpp"
 #include "../CPU/WatchSet.hpp"
 #include "DebugExpression.hpp"
 #include "Disasm/Disassembly.hpp"
@@ -160,10 +161,11 @@ protected:
     virtual void resumePastBreakpoint(int thread) = 0;
     /// Hands the thread's watch set to its CPU (nullptr: none).
     virtual void attachWatches(int thread, WatchSet* watches) = 0;
-    /// A Stop for a pending watch hit of `thread`'s CPU, or none.
-    Stop watchStop(int thread);
-    /// The first thread with a pending watch hit, or 0.
-    int watchHitThread() const;
+    /// Consumes the machine's latched debugger stop (see DebugStop).
+    virtual DebugStop consumeMachineStop() = 0;
+    /// The Stop for a latched machine stop: a breakpoint as is, a watch
+    /// with its hit (consumed from the CPU's watch set).
+    Stop stopFor(const DebugStop& stop);
 
 private:
     std::vector<std::vector<uint16_t>> m_breakpoints; // per thread id - 1
