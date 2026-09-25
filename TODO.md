@@ -179,10 +179,9 @@ touched, not proactively:
 - `PC1600LhsWindow`/`pc1600LhsWindow()`/`PC1600Bank::lhsRemapRow()` have
   no remaining callers outside their own test — either delete all three
   plus the test, or demote the remap table to a documentation comment.
-- `Qt6/app/PresetController.cpp`'s `loadPreset` inlines the PC-1600 case
+- `Qt6/app/PresetController.cpp`'s `runPreset` inlines the PC-1600 case
   and leaves an implicit, unnamed PC-1500 path — extract two symmetric
-  private methods and reduce `loadPreset` to peek-model → pick →
-  commit-or-report.
+  private methods and reduce `runPreset` to pick → commit-or-report.
 - Converge `PC1500Memory`'s connector ownership (raw pointer, injected by
   `PC1500Machine`) onto `PC1600Memory`'s pattern (owns its connectors by
   value) next time PC-1500 connector wiring is touched.
@@ -194,14 +193,13 @@ touched, not proactively:
 
 Larger or behaviour-changing items left out of the 0.5.0 cleanup commit.
 
-- **Expansion cards have no common `tick()`.** Each card is ticked by
-  hand in each machine: `PC1500Machine.cpp` step/halt paths and
-  `PC1600Machine.cpp` both CPU branches (~lines 146/201/210 and
-  305/332). The CE-158 added five hand-placed `tick()` calls next to
-  the CE-150 ones. A missed one fails silently (e.g. UART stalls during
-  HALT). Fix: `virtual void tick(uint64_t)` on `ExpansionCard`, a
-  `SystemBus::tick()` iterating attached cards (plus an equivalent list
-  on the LH5803 side), and call that once per step.
+- **Expansion cards have no common `tick()`.** Card ticks are now in
+  one place per machine (`PC1500Machine::advancePeripherals`, the end of
+  `PC1600Machine`'s per-step peripheral advance), but each card is
+  still listed there by hand, and the PC-1600 doesn't tick an attached
+  CE-150 (its `tick()` is empty today, so no effect yet). Fix:
+  `virtual void tick(uint64_t)` on `ExpansionCard` and a
+  `SystemBus::tick()` over the attached cards.
 - **CE-158 attach plumbing is duplicated per machine.**
   `attachCE158`/`detachCE158`/`setCE158SerialLink`/
   `drainCE158ParallelOutput` + `m_ce158Card`/`m_ce158Link` are
@@ -404,10 +402,9 @@ timing — decide deliberately):
   disarm, or check `QGuiApplication::mouseButtons()` at Shift release.
 - **CE-158 ROM reads on the PC-1500 go through the generic open-bus
   path.** Every fetch at 0x8000–0x9FFF runs resolve → readOpenBus →
-  SystemBus decode → per-card `respondsToRead`; `inhibitAsserted()` (every
-  read ≥ 0xC000) also asks each card. Options: a cached "some card can
-  inhibit" flag in `SystemBus`, and/or a direct per-PU/PV ROM pointer
-  from the card.
+  SystemBus decode → per-card `respondsToRead`. (`inhibitAsserted()` is
+  already cheap: it only walks the cached `m_inhibitChain`.) Option: a
+  direct per-PU/PV ROM pointer from the card.
 - **`Ce158PrinterWidget::onFrameTick`** fetches the PTY path (mutex +
   string copy + QString) and sets button enables every frame; refresh
   the label only on link create/relink and toggle buttons only when
