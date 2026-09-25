@@ -54,9 +54,10 @@
 // point -- a preset load runs flat out, so put it last to undo the clock
 // running ahead during the load. A value may be `"double"` or `'single'`-quoted -- stripped and
 // passed through verbatim (see PresetFile.cpp's unquote()), kept for
-// preset files with quoted values that predate this fork. Tabs, flow
-// style, multiple documents, and inline `#` comments are all
-// rejected/unsupported -- deliberately scoped to exactly the shape real
+// preset files with quoted values that predate this fork. A ` # comment`
+// after a value is stripped (a `type:` payload excepted -- `#` is BASIC
+// there; see PresetFile.cpp's stripInlineComment()). Tabs, flow style and
+// multiple documents are rejected/unsupported -- deliberately scoped to exactly the shape real
 // preset files (this project's own samples) actually use, not a
 // general-purpose YAML implementation.
 //

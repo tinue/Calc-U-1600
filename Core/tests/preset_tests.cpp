@@ -58,6 +58,23 @@ void test_inline_comment_stripped_from_key_step_only() {
     CHECK(nthType(p, 1) == "CALL &4100,X   # now kept verbatim");
 }
 
+// A comment right after a block key (`keys:   # note`) leaves the key's
+// inline value empty, so it still opens its block.
+void test_comment_after_block_key() {
+    PresetFile p;
+    std::string err;
+    CHECK(parse(
+        "model: PC-1600   # the PC-1600\n"
+        "memory-expansion-1:   # slot 1\n"
+        "  - modulespec: CE-1600M   # 32 KB\n"
+        "keys:   # after the boot\n"
+        "  - key: mode\n",
+        &p, &err));
+    if (!err.empty()) std::fprintf(stderr, "  parse error: %s\n", err.c_str());
+    CHECK(p.model == "PC-1600");
+    CHECK(p.sections.size() == 1);
+}
+
 void test_hash_without_leading_space_is_kept() {
     PresetFile p;
     std::string err;
@@ -591,6 +608,7 @@ int run_preset_tests() {
     test_preset_parser_program_address_forms();
     test_preset_parser_model_rom_pc1500();
     test_inline_comment_stripped_from_key_step_only();
+    test_comment_after_block_key();
     test_hash_without_leading_space_is_kept();
     test_type_step_keeps_space_hash();
     test_type_step_fully_quoted_is_unwrapped();

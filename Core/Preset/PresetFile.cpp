@@ -74,6 +74,9 @@ std::string unquote(const std::string& s) {
 // re-reads the raw remainder for `type:` and skips this. Every other verb
 // (`key:`, `wait:`, `trace:`, ...) still runs through here.
 std::string stripInlineComment(const std::string& rest) {
+    // Nothing but a comment (`memory-expansion-1:   # slot 1`): the value is
+    // empty, so a block key keeps working with a note after it.
+    if (!rest.empty() && rest.front() == '#') return "";
     if (!rest.empty() && (rest.front() == '"' || rest.front() == '\'')) {
         size_t close = rest.find(rest.front(), 1);
         if (close != std::string::npos) return trim(rest.substr(0, close + 1));
