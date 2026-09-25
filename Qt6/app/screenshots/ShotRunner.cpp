@@ -248,11 +248,15 @@ bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void(
         m_window->runEmulation(kKeyReactSeconds);
         return true;
     case K::Type:
-        m_window->controller()->pasteText(step.text.toStdString() + "\n");
+        // Paste Text types one line and never presses ENTER -- tap it here.
+        m_window->controller()->pasteText(step.text.toStdString());
         if (!m_window->runUntilPasteDone(kTypeCapSeconds)) {
             *error = QStringLiteral("'type' still typing after %1 s").arg(kTypeCapSeconds);
             return false;
         }
+        faceplate->pressKeyByName(QStringLiteral("enter"));
+        m_window->runEmulation(kKeyHoldSeconds);
+        faceplate->releasePressedKey();
         m_window->runEmulation(kKeyReactSeconds);
         return true;
     case K::Run:

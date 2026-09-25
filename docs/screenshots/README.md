@@ -85,7 +85,7 @@ captures the whole window. More captures can go in `steps:` as
 | `key: <name>` | Tap a calculator key, as a click on the faceplate does. Key names are the preset `key:` names. |
 | `hold-key: <name>` | Press a key and keep it down. The faceplate shows the press highlight. |
 | `release` | Let go of the held key. |
-| `type: <text>` | Type a line, then ENTER, the way Edit ▸ Paste Text types. |
+| `type: <text>` | Type one line the way Edit ▸ Paste Text does, then press ENTER. |
 | `run: <seconds>` | Run that much emulated time. |
 | `settle: <ms>` | Wait wall-clock time, with the emulator still frozen. |
 | `click: <objectName>` | Click a button. |

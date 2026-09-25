@@ -133,10 +133,10 @@ SHIFT symbol:
 
   ![The image Copy Screen puts on the clipboard](images/guide/02-copy-screen.png)
 
-- **Edit ▸ Paste Text** (⌘V / Ctrl-V) types the text on the clipboard into
-  the calculator, key by key, including line breaks (ENTER). This is handy
-  for short BASIC snippets. For whole programs, see
-  [Loading a BASIC program](#4-loading-a-basic-program).
+- **Edit ▸ Paste Text** (⌘V / Ctrl-V) types the clipboard's **first line**
+  into the calculator, key by key. It stops at the line break and doesn't
+  press ENTER, so you can check the line before running it. For whole
+  programs, see [Loading a BASIC program](#4-loading-a-basic-program).
 
 ---
 
@@ -144,8 +144,10 @@ SHIFT symbol:
 
 The **CE-150** (PC-1500, 1500A and PC-1600) and the **CE-1600P** (PC-1600
 only) are pen plotters. They are attached and detached with their control-bar
-buttons. Only one plotter can be attached at a time. The CE-1600P also
-excludes the CE-158, because both use the same connector:
+buttons. Only one plotter can be attached at a time. The emulator also
+doesn't support the CE-1600P together with the CE-158 yet. The real
+CE-1600P has its own connector at the back, like the CE-150, so both could
+be connected:
 
 ![CE-1600P attached: the CE-150 and CE-158 buttons are greyed out](images/guide/03-plotter-attached.png)
 
@@ -211,8 +213,10 @@ Good to know:
 - **Where the program goes.** It goes to the same place a `LOAD` would put
   it. On a PC-1600 with a RAM module that holds BASIC's program area, it
   starts in the module and continues in internal RAM.
-- **Short snippets.** For a few lines, **Edit ▸ Paste Text** is just as good
-  (see [Getting started](#copy-screen-and-paste-text)).
+- **Single lines.** **Edit ▸ Paste Text** types one line from the clipboard
+  without pressing ENTER (see [Getting started](#copy-screen-and-paste-text)).
+  That's handy for a long command or one program line, but not for a whole
+  program.
 - **No export.** The app doesn't export programs as files. Use the machine's
   own `SAVE` to a memory module, a floppy, or over `COM1:` to your computer
   (see [COM ports](#7-com-ports)).
@@ -393,8 +397,8 @@ To avoid typing `--port` every time, store the folder once:
 ### CE-158: serial and printer port
 
 The **CE-158** button attaches the CE-158 interface, with a power cycle
-like the plotters. It works on all three models, but not together with the
-CE-1600P.
+like the plotters. It works on all three models. The emulator doesn't
+support it together with the CE-1600P yet.
 
 - **Serial port:** `calcu1600-ce158.serial` runs at 300 baud by default,
   for example `screen ~/Calc-U-1600/calcu1600-ce158.serial 300`.
@@ -468,7 +472,7 @@ memory-expansion-1:           # PC-1600 slot 1 (slot 2: memory-expansion-2:)
 - **PC-1500/1500A:** the one slot is `memory-expansion:`.
 - **Your own module definition:** `- modulespecfile: my.card.yaml`, with the
   path relative to the preset.
-- **CE-158:** `interface: ce158` attaches it (not together with the CE-1600P).
+- **CE-158:** `interface: ce158` attaches it (not yet together with the CE-1600P).
 
 ### 8.4 Loading a BASIC program
 
