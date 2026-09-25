@@ -20,13 +20,15 @@ public:
                    QObject* parent = nullptr);
 
     /// Stop the frame timer for a synchronous load (nothing else may drive
-    /// the machine meanwhile) / restart it afterwards, unless frozen.
+    /// the machine meanwhile) / restart() and start it again afterwards,
+    /// unless frozen.
     void suspend();
     void resume();
-    /// Rebase real-time pacing on "now" -- after anything that blocked the
-    /// frame timer (a rebuild's flat-out boot), so the next tick doesn't
-    /// try to catch up.
-    void restartPacing();
+    /// Paced emulation (re)starts after something ran the machine flat out
+    /// (a rebuild's boot, a load): set the clock from the host -- that run
+    /// left it off by however far emulated and wall time drifted apart --
+    /// and rebase pacing on "now", so the next tick doesn't catch up.
+    void restart();
 
     void setTurbo(bool active) { m_turbo = active; }
 
@@ -42,6 +44,7 @@ public:
 
 private:
     void onTick();
+    void restartPacing();
 
     MachineController* m_controller; // not owned
     AudioOutput* m_audio;            // not owned

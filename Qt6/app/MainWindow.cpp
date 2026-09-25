@@ -119,7 +119,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_controlBar, &ControlBar::moduleSelected, this, [this](int slot, QString moduleNameOrEmpty) {
         m_moduleManager->selectModule(slot, moduleNameOrEmpty);
         m_controller->switchModel(m_controller->currentModel(), /*keepPlotter=*/true); // rebuild -> re-attach
-        m_pacer->restartPacing(); // the rebuild's flat-out boot blocked the frame timer
+        m_pacer->restart(); // after the rebuild's flat-out boot
         m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
         refreshModuleCombos();
     });
@@ -884,7 +884,7 @@ void MainWindow::applyModelSelection(Model model) {
     // modules (onModelChanged above), no floppy. A startup preset customises it.
     m_controller->resetRomSelectionsToDefault();
     m_controller->switchModel(model);
-    m_pacer->restartPacing(); // the rebuild's flat-out boot blocked the frame timer
+    m_pacer->restart(); // after the rebuild's flat-out boot
     m_floppyManager->selectDisk(QString());
     syncUiFromController();
     applyDefaultPreset(model);
@@ -904,7 +904,7 @@ void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     m_controller->setPC1500RomRevision(revision); // rebuilds the machine
-    m_pacer->restartPacing(); // the rebuild's flat-out boot blocked the frame timer
+    m_pacer->restart(); // after the rebuild's flat-out boot
     m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
     m_controlBar->setRomRevision(revision);
     syncMachineMenuFromRomRevision(revision);
@@ -916,7 +916,7 @@ void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     m_controller->setPC1600RomVersion(version); // rebuilds the machine when a PC-1600 is active
-    m_pacer->restartPacing(); // the rebuild's flat-out boot blocked the frame timer
+    m_pacer->restart(); // after the rebuild's flat-out boot
     m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
     // The controller may have fallen back to New if the old ROM failed to load.
     m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
@@ -932,7 +932,7 @@ void MainWindow::applyCE1600PRomVersionSelection(CE1600PRomVersion version) {
     // Rebuilds the machine only when a CE-1600P is attached; otherwise just
     // records the choice for the next attach.
     if (m_controller->setCE1600PRomVersion(version)) {
-        m_pacer->restartPacing(); // the rebuild's flat-out boot blocked the frame timer
+        m_pacer->restart(); // after the rebuild's flat-out boot
         m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
         syncControlBarForModel();
         refreshModuleCombos();

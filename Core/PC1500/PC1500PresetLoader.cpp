@@ -88,48 +88,54 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
     PresetLoadResult result;
     PC1500PresetMachine adapter(machine);
 
-    if (!BundledRoms::loadPC1500Rom(machine, preset.romVariant, romDirs, &result.error)) {
-        if (log) log("ROM load FAILED: " + result.error);
-        return result;
-    }
-    if (log) log("ROM loaded: revision " + preset.romVariant);
-    // Attach before reset/boot-settle, not after -- a real module is
-    // physically present before power-on, so the ROM's own boot-time
-    // memory sizing sees it too.
-    if (!preset.memoryExpansionModuleSpecFile.empty() || !preset.memoryExpansionModuleSpecName.empty()) {
-        CardHost host = (preset.variant == PC1500Variant::PC1500A) ? CardHost::PC1500A
-                                                                   : CardHost::PC1500;
-        std::string err, specPath;
-        auto card = makePresetModuleCard(preset.memoryExpansionModuleSpecFile,
-                                         preset.memoryExpansionModuleSpecName,
-                                         presetModuleDirs(moduleDir, extraModuleDirs), host, &specPath, &err);
-        if (!card) {
-            result.error = "memory-expansion modulespec: " + err;
-            if (log) log("modulespec load FAILED: " + err);
-            return result;
+    // Arm the machine: ROM, module, peripherals -- everything that must be
+    // in place before power-on. Stops at the first failure.
+    const bool armed = [&] {
+        if (!BundledRoms::loadPC1500Rom(machine, preset.romVariant, romDirs, &result.error)) {
+            if (log) log("ROM load FAILED: " + result.error);
+            return false;
         }
-        machine.attachExpansionCard(std::move(card));
-        result.slot1ResolvedPath = specPath;
-        if (log) log("software-defined module attached: " + specPath);
-    }
-
-    // The CE-150 plotter, attached before reset -- a real peripheral is
-    // physically present at power-on, so the boot ROM's peripheral scan
-    // recognises it (the same ordering the CE-1600P uses on the PC-1600).
-    if (preset.plotter == "ce150") {
-        if (!BundledRoms::attachCE150(machine, romDirs, &result.error)) {
-            if (log) log(result.error);
-            return result;
+        if (log) log("ROM loaded: revision " + preset.romVariant);
+        // Attach before reset/boot-settle, not after -- a real module is
+        // physically present before power-on, so the ROM's own boot-time
+        // memory sizing sees it too.
+        if (!preset.memoryExpansionModuleSpecFile.empty() || !preset.memoryExpansionModuleSpecName.empty()) {
+            CardHost host = (preset.variant == PC1500Variant::PC1500A) ? CardHost::PC1500A
+                                                                       : CardHost::PC1500;
+            std::string err, specPath;
+            auto card = makePresetModuleCard(preset.memoryExpansionModuleSpecFile,
+                                             preset.memoryExpansionModuleSpecName,
+                                             presetModuleDirs(moduleDir, extraModuleDirs), host, &specPath, &err);
+            if (!card) {
+                result.error = "memory-expansion modulespec: " + err;
+                if (log) log("modulespec load FAILED: " + err);
+                return false;
+            }
+            machine.attachExpansionCard(std::move(card));
+            result.slot1ResolvedPath = specPath;
+            if (log) log("software-defined module attached: " + specPath);
         }
-        result.ce150Attached = true;
-        if (log) log("plotter: CE-150 attached");
-    }
-    if (!attachPresetInterface(machine, preset.interfaceName, romDirs, log, &result)) return result;
 
-    // Machine is now fully armed (ROM/module/plotter wired) but still
-    // powered off -- give the caller a chance to repaint that state before
-    // the boot below makes it start running.
+        // The CE-150 plotter, attached before reset -- a real peripheral is
+        // physically present at power-on, so the boot ROM's peripheral scan
+        // recognises it (the same ordering the CE-1600P uses on the PC-1600).
+        if (preset.plotter == "ce150") {
+            if (!BundledRoms::attachCE150(machine, romDirs, &result.error)) {
+                if (log) log(result.error);
+                return false;
+            }
+            result.ce150Attached = true;
+            if (log) log("plotter: CE-150 attached");
+        }
+        return attachPresetInterface(machine, preset.interfaceName, romDirs, log, &result);
+    }();
+
+    // Machine is now armed (ROM/module/plotter wired) but still powered
+    // off -- give the caller a chance to repaint that state before the
+    // boot below makes it start running. Fired on a failed arming too, so
+    // the caller always sees what did get attached.
     if (onArmed) onArmed(result);
+    if (!armed) return result;
 
     machine.reset();
     runBootToPrompt(machine);

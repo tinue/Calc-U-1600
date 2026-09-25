@@ -11,6 +11,7 @@ class MachineController;
 class MemoryModuleManager;
 class FloppyDiskManager;
 struct PresetFile;
+struct PresetLoadResult;
 
 // Orchestrates opening a preset file end to end (Core/PC1500/
 // PresetFile.hpp, PC1500PresetLoader.cpp / PC1600PresetLoader.cpp): parses
@@ -98,13 +99,20 @@ signals:
     // this fires (see loadPreset()'s onArmed lambda), so a slot connected
     // here can safely refresh module combos and plotter-paper visibility
     // and repaint before the (possibly many-seconds-long) boot and preset
-    // script run. Never fired for a preset that fails before arming (a
-    // parse error, a bad modulespec, a missing plotter ROM, ...).
+    // script run. Also fired when arming fails part way (a bad modulespec,
+    // a missing plotter ROM, ...), after the slot/floppy pickers were
+    // synced to what did attach; never for a preset that fails to parse.
     void armed();
 
 private:
-    // Shared tail of loadPreset()/loadDefaultPreset() once the file parsed.
+    // Shared tail of loadPreset()/loadDefaultPreset() once the file parsed:
+    // picks the model's run method, then reports its outcome.
     bool runPreset(const PresetFile& preset, QString* error);
+    // Per-model: build the bare machine, announce the model, apply the
+    // preset. `env` is the model-independent part (search dirs, log, saveas:).
+    struct PresetEnv;
+    PresetLoadResult runPC1500Preset(const PresetFile& preset, const PresetEnv& env);
+    PresetLoadResult runPC1600Preset(const PresetFile& preset, const PresetEnv& env);
 
     // Runs `body` with the yield hook installed on whichever machine is
     // active (the ScopedYieldHook template argument is the only thing the

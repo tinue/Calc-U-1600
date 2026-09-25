@@ -179,9 +179,6 @@ touched, not proactively:
 - `PC1600LhsWindow`/`pc1600LhsWindow()`/`PC1600Bank::lhsRemapRow()` have
   no remaining callers outside their own test — either delete all three
   plus the test, or demote the remap table to a documentation comment.
-- `Qt6/app/PresetController.cpp`'s `runPreset` inlines the PC-1600 case
-  and leaves an implicit, unnamed PC-1500 path — extract two symmetric
-  private methods and reduce `runPreset` to pick → commit-or-report.
 - Converge `PC1500Memory`'s connector ownership (raw pointer, injected by
   `PC1500Machine`) onto `PC1600Memory`'s pattern (owns its connectors by
   value) next time PC-1500 connector wiring is touched.
@@ -193,19 +190,6 @@ touched, not proactively:
 
 Larger or behaviour-changing items left out of the 0.5.0 cleanup commit.
 
-- **Preset `armedFired` flag in `PresetController.cpp`** (both
-  branches): the post-load "safety net" slot/floppy resync from
-  `result` would undo a `saveas:` retarget, so it is skipped once
-  `onArmed` fired. Fix in Core (per the fix-the-loader rule): have
-  `applyPC1500Preset`/`applyPC1600Preset` call `onArmed` (or a single
-  `onFinished`) on every exit path, including early failure, then drop
-  the safety net and the flag.
-- **Clock seeding still has a two-step flat-out/paced dance.**
-  `MachineController::seedClockFromHost()` seeds during the flat-out
-  preset run and sets `m_clockResyncPending`; `resyncClockIfSeeded()`
-  re-seeds on the first paced tick (`MainWindow.cpp` ~732). Fix: seed
-  only when paced emulation (re)starts (`restartPacing()`), keeping the
-  preset `syncclock:` step as the one explicit exception.
 - **CE-1600P ROM-version plumbing clones the PC-1600 one.**
   `CE1600PRomVersion` duplicates `PC1600RomVersion`;
   `BundledRoms::isCE1600PRomVersion` == `isPC1600RomVersion`; enum↔
@@ -276,9 +260,6 @@ for the cleanup commit.
 - **Menu re-pick guards.** dff5d13 added "already checked" guards to the
   four `apply*Selection` handlers; connecting the exclusive-group actions
   to `toggled(true)` instead of `triggered` removes all four.
-- **Machine teardown written three times** in `MachineController.cpp`
-  (`endTraceBeforeRebuild` + `m_paste.cancel` + reset both machines,
-  ~87/180/195): one `replaceMachine()` helper.
 - **`tools/make_screenshots.sh`** copies `build_and_run.sh`'s
   configure-and-build block; share it (`--build-only` or a sourced
   `tools/build_app.sh`).

@@ -77,9 +77,10 @@ struct PresetLoadResult {
 
 /// Optional callback fired exactly once, right after the machine has its ROM
 /// loaded and its modules/peripherals attached, but *before* reset -- i.e.
-/// fully "armed" yet still powered off. `armedSoFar` is the in-progress
-/// result; its resolved paths and `ce150Attached`/`ce158Attached` are already
-/// final, so a GUI can resync its slot selector and plotter-paper visibility
+/// fully "armed" yet still powered off. Also fired when arming fails part
+/// way (then `armedSoFar.error` is set and the load returns right after).
+/// `armedSoFar` is the in-progress result; its resolved paths and
+/// `ce150Attached`/`ce158Attached` are already final, so a GUI can resync its slot selector and plotter-paper visibility
 /// and repaint the armed-but-off machine before the (possibly long) boot and
 /// preset script run. Left unset (the default) costs nothing.
 using PresetArmedFn = std::function<void(const PresetLoadResult& armedSoFar)>;

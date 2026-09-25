@@ -30,8 +30,13 @@ EmulationPacer::EmulationPacer(MachineController* controller, AudioOutput* audio
 void EmulationPacer::suspend() { m_timer->stop(); }
 
 void EmulationPacer::resume() {
-    restartPacing();
+    restart();
     if (!m_frozen) m_timer->start(kFrameIntervalMs);
+}
+
+void EmulationPacer::restart() {
+    m_controller->seedClockFromHost();
+    restartPacing();
 }
 
 void EmulationPacer::restartPacing() {
@@ -63,10 +68,6 @@ void EmulationPacer::onTick() {
             m_controller->advance(cyclesPerFrame);
             QCoreApplication::processEvents();
         } while (m_turbo && std::chrono::steady_clock::now() < deadline);
-        restartPacing();
-    } else if (m_controller->resyncClockIfSeeded()) {
-        // First tick after a flat-out run that set the clock: re-seeded
-        // just now, so pace from here (see resyncClockIfSeeded()).
         restartPacing();
     } else {
         // Run exactly the wall-clock time since the last tick, carrying the

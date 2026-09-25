@@ -132,19 +132,16 @@ public:
 
     // Reset (`allReset` = ALL RESET on the PC-1600; the PC-1500 has one
     // level), then run the boot flat out until the ROM waits at the prompt
-    // -- including a plotter's power-on init -- and set the clock from the
-    // host. Synchronous: the caller stops the frame timer around it (see
-    // PresetController::resetLive()).
+    // -- including a plotter's power-on init. Synchronous: the caller stops
+    // the frame timer around it (see PresetController::resetLive()), and
+    // restarting it sets the clock.
     void resetToPrompt(bool allReset);
 
-    // Every host clock seed above happens while the machine runs flat out
-    // with the frame timer stopped; wall time keeps passing until paced
-    // emulation actually resumes (the Loading sheet closing, a late first
-    // tick capped at MainWindow's kMaxTickSeconds), which left the clock
-    // up to ~1 s behind. The first paced frame tick calls this instead: it
-    // re-seeds once if a seed is pending, and says so -- the caller then
-    // rebases its pacing on this moment rather than advancing.
-    bool resyncClockIfSeeded();
+    // Sets the live machine's clock from the host. Called when paced
+    // emulation (re)starts (EmulationPacer::restart()): every flat-out run
+    // before it -- a boot, a preset, a power cycle -- went seconds ahead of
+    // (or, with wall time passing meanwhile, behind) the host clock.
+    void seedClockFromHost();
 
     // The plotter attach/detach power cycle, flat out: OFF, wait for the
     // emulated ROM to power down, `change()` (the instantaneous attach or
@@ -365,6 +362,9 @@ private:
     // Ends an active TRACE capture on the machine about to be replaced
     // (its file closed with SESSION_END) and emits traceEndedByRebuild().
     void endTraceBeforeRebuild();
+    // Drops the live machine before a rebuild: ends its trace, cancels a
+    // paste typing into it, destroys it.
+    void discardMachine();
     void pasteOnFrame();
     MemoryModuleManager* m_moduleManager = nullptr; // not owned
     FloppyDiskManager* m_floppyManager = nullptr;   // not owned
@@ -410,9 +410,6 @@ private:
     // ROM set. A missing/incomplete old set warns and falls back to (and
     // remembers) the new one; a new-set failure quits the app.
     void makePC1600WithRomFallback();
-    void seedClockFromHost();
-    void seedClockFromHostNow();
-    bool m_clockResyncPending = false; // see resyncClockIfSeeded()
     // AppSettings::serialLinkDirOverride(), falling back to AppPaths::instanceDir().
     static QString effectiveSerialLinkDir();
     // Ensures m_serialLink exists (constructing it from the effective

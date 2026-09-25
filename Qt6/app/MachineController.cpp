@@ -83,11 +83,8 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
     const bool restoreCE1600P = keepPlotter && ce1600pAttached();
     const bool restoreCE158 = keepPlotter && ce158Attached();
     flushFloppyBeforeDetach(); // the old machine (and its disk) is going away
-    endTraceBeforeRebuild();
+    discardMachine();
     m_model = model;
-    m_paste.cancel({}); // the machine it was typing into is going away
-    m_pc1500.reset();
-    m_pc1600.reset();
 
     if (model == Model::PC1600) {
         makePC1600WithRomFallback();
@@ -120,8 +117,8 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
     }
 
     // Every rebuild is a full cold boot, run flat out to the prompt (incl. a
-    // plotter's power-on init), after which resetToPrompt() sets the clock
-    // from the host -- the boot ran seconds of emulated time ahead of it.
+    // plotter's power-on init); the caller restarts paced emulation after
+    // it, which sets the clock from the host (see seedClockFromHost()).
     // PC1500Machine has only one reset level, so only the PC-1600 gets the
     // ALL RESET; a freshly-constructed machine's RAM is cleared either way.
     resetToPrompt(/*allReset=*/model == Model::PC1600);
@@ -176,10 +173,7 @@ void MachineController::makePC1600WithRomFallback() {
 }
 
 PC1500Machine& MachineController::resetBareForPresetPC1500(PC1500Variant variant) {
-    endTraceBeforeRebuild();
-    m_paste.cancel({});
-    m_pc1500.reset();
-    m_pc1600.reset();
+    discardMachine();
     m_pc1500 = std::make_unique<PC1500Machine>(variant);
     wireNewMachine(); // a preset's `interface: ce158` picks up the link from here
     return *m_pc1500;
@@ -189,10 +183,7 @@ PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion vers
                                                            CE1600PRomVersion ce1600pVersion) {
     m_pc1600RomVersion = version;
     m_ce1600pRomVersion = ce1600pVersion;
-    endTraceBeforeRebuild();
-    m_paste.cancel({});
-    m_pc1500.reset();
-    m_pc1600.reset();
+    discardMachine();
     makePC1600WithRomFallback();
     wireNewMachine(); // see resetBareForPresetPC1500
     return *m_pc1600;
@@ -234,24 +225,11 @@ void MachineController::wireNewMachine() {
 
 void MachineController::finishPresetLoad(Model model) {
     m_model = model;
-    seedClockFromHost();
     AppSettings::setLastUsedModel(static_cast<int>(m_model));
     emit modelChanged(m_model);
 }
 
 void MachineController::seedClockFromHost() {
-    seedClockFromHostNow();
-    m_clockResyncPending = true;
-}
-
-bool MachineController::resyncClockIfSeeded() {
-    if (!m_clockResyncPending) return false;
-    m_clockResyncPending = false;
-    seedClockFromHostNow();
-    return true;
-}
-
-void MachineController::seedClockFromHostNow() {
     withMachine([](auto& machine) { seedClockFromHostTime(machine); });
 }
 
@@ -262,9 +240,6 @@ void MachineController::resetToPrompt(bool allReset) {
         else machine.reset();
         runBootToPrompt(machine);
     });
-    // After the boot, not before: it ran flat out through seconds of
-    // emulated time the clock would otherwise run ahead by.
-    seedClockFromHost();
 }
 
 namespace {
@@ -294,9 +269,6 @@ void MachineController::powerCycleAround(const std::function<void()>& change) {
         machine.setOnKeyPressed(false);
         runBootToPrompt(machine);
     });
-    // After the run, not before: it went flat out through seconds of emulated
-    // time the clock would otherwise run ahead by.
-    seedClockFromHost();
 }
 
 void MachineController::pressKey(const std::string& name) {
@@ -546,6 +518,13 @@ void MachineController::endTrace() {
 
 bool MachineController::traceActive() const {
     return withMachine(false, [](auto& machine) { return machine.cpuTraceActive(); });
+}
+
+void MachineController::discardMachine() {
+    endTraceBeforeRebuild();
+    m_paste.cancel({}); // the machine it was typing into is going away
+    m_pc1500.reset();
+    m_pc1600.reset();
 }
 
 void MachineController::endTraceBeforeRebuild() {
