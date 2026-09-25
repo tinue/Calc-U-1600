@@ -42,6 +42,14 @@ struct Register {
     std::string name;      ///< lower case, as the expression evaluator knows it
     uint32_t value = 0;
     uint8_t bits = 8;      ///< 1 (a flag or PU/PV), 8 or 16
+    bool status = false;   ///< the status register: its low byte holds the flags (T / AF)
+};
+
+/// One line of a CPU's bank state, for display: {"Page B (4000-7FFF)",
+/// "bank 3"}, {"PV", "1"}.
+struct BankField {
+    std::string name;
+    std::string value;
 };
 
 /// One entry of a CPU's instruction history (see HistoryRing.hpp).
@@ -121,6 +129,9 @@ public:
     virtual int bankAt(int, uint16_t) const { return -1; }
     bool pu(int thread) const;
     bool pv(int thread) const;
+    /// What selects the memory `thread` sees right now (PU/PV on the
+    /// LH580x; the PC-1600 adds the Z-80's page banks).
+    virtual std::vector<BankField> bankState(int thread) const;
     /// Whether code at `addr` on `thread` currently satisfies `key`.
     bool bankMatches(int thread, const BankKey& key, uint16_t addr) const;
 
@@ -188,5 +199,9 @@ private:
 /// LH580x T = c ie z v h; Z-80 F = c n pv - h - z s (an empty name marks an
 /// undocumented bit).
 const std::vector<std::string>& flagNames(CpuKind kind);
+
+/// The flags byte of a register list (live or history): the low byte of
+/// the register marked `status`. False if there is none.
+bool statusFlags(const std::vector<Register>& regs, uint8_t* flags);
 
 } // namespace debug

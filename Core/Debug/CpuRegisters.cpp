@@ -32,7 +32,7 @@ struct LhValues {
 std::vector<Register> lhList(const LhValues& v) {
     return {
         {"a", v.a, 8},  {"x", v.x, 16}, {"y", v.y, 16}, {"u", v.u, 16},
-        {"s", v.s, 16}, {"p", v.p, 16}, {"t", v.t, 8},
+        {"s", v.s, 16}, {"p", v.p, 16}, {"t", v.t, 8, true},
         {"pu", v.pu ? 1u : 0u, 1}, {"pv", v.pv ? 1u : 0u, 1},
     };
 }
@@ -45,7 +45,7 @@ struct ZValues {
 
 std::vector<Register> zList(const ZValues& v) {
     return {
-        {"af", v.af, 16}, {"bc", v.bc, 16}, {"de", v.de, 16}, {"hl", v.hl, 16},
+        {"af", v.af, 16, true}, {"bc", v.bc, 16}, {"de", v.de, 16}, {"hl", v.hl, 16},
         {"ix", v.ix, 16}, {"iy", v.iy, 16}, {"sp", v.sp, 16}, {"pc", v.pc, 16},
         {"af'", v.af2, 16}, {"bc'", v.bc2, 16}, {"de'", v.de2, 16}, {"hl'", v.hl2, 16},
         {"i", v.i, 8}, {"r", v.r, 8}, {"im", v.im, 8},

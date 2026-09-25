@@ -483,8 +483,18 @@ void test_cpu_views() {
         // An edited PV reaches the LH5803's bus at once.
         CHECK(target.writeRegister(2, "pv", 1) && m.lh5803Memory().pv());
         CHECK(target.writeRegister(2, "pv", 0) && !m.lh5803Memory().pv());
+        // The flags byte comes from the register marked as status, live
+        // and in history; the bank state is the machine's own.
+        uint8_t flags = 0;
+        CHECK(debug::statusFlags(target.registers(1), &flags) && flags == uint8_t(m.sc7852().af()));
+        CHECK(debug::statusFlags(target.registers(2), &flags) && flags == m.lh5803().statusReg());
+        const auto z80Banks = target.bankState(1);
+        CHECK(z80Banks.size() == 4 && z80Banks[1].name == "Page B (4000-7FFF)" && z80Banks[1].value.rfind("bank ", 0) == 0);
+        const auto lhBanks = target.bankState(2);
+        CHECK(lhBanks.size() == 2 && lhBanks[0].name == "PU" && lhBanks[1].name == "PV");
         // Halted: the Z-80 after HALT; the LH580x also when powered off.
         m.step();
+        CHECK(target.historySize(1) > 0 && debug::statusFlags(target.history(1, 0).registers, &flags));
         CHECK(target.halted(1));
         CHECK(!target.halted(2));
         target.setBreakpoints(1, {0x0000});

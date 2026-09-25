@@ -58,6 +58,16 @@ uint16_t DebugTarget::sp(int thread) const { return view(thread).sp(); }
 bool DebugTarget::halted(int thread) const { return view(thread).halted(); }
 bool DebugTarget::pu(int thread) const { return view(thread).pu(); }
 bool DebugTarget::pv(int thread) const { return view(thread).pv(); }
+std::vector<BankField> DebugTarget::bankState(int thread) const { return view(thread).bankState(); }
+
+bool statusFlags(const std::vector<Register>& regs, uint8_t* flags) {
+    for (const Register& r : regs)
+        if (r.status) {
+            *flags = uint8_t(r.value);
+            return true;
+        }
+    return false;
+}
 uint32_t DebugTarget::historySize(int thread) const { return view(thread).historySize(); }
 HistoryEntry DebugTarget::history(int thread, uint32_t age) const { return view(thread).history(age); }
 uint32_t DebugTarget::retired(int thread) const { return view(thread).retired(); }

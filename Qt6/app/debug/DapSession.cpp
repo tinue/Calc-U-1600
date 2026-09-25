@@ -36,15 +36,6 @@ QString registerValue(const debug::Register& r) {
 
 QString displayName(const std::string& name) { return QString::fromStdString(name).toUpper(); }
 
-// The status register of a register list: T on the LH580x, F (low byte of
-// AF) on the Z-80.
-bool statusRegister(const std::vector<debug::Register>& regs, debug::CpuKind kind, uint8_t* value) {
-    for (const auto& r : regs) {
-        if (kind == debug::CpuKind::Z80 && r.name == "af") { *value = uint8_t(r.value); return true; }
-        if (kind != debug::CpuKind::Z80 && r.name == "t") { *value = uint8_t(r.value); return true; }
-    }
-    return false;
-}
 
 QString stopReason(debug::DebugEvent::Reason r) {
     switch (r) {
@@ -565,7 +556,7 @@ QJsonArray DapSession::flagVariables(int frameId) const {
     QJsonArray list;
     const debug::CpuKind kind = m_controller->target()->kindOf(frameThread(frameId));
     uint8_t status = 0;
-    if (!statusRegister(frameRegisters(frameId), kind, &status)) return list;
+    if (!debug::statusFlags(frameRegisters(frameId), &status)) return list;
     const auto& names = debug::flagNames(kind);
     for (size_t i = names.size(); i-- > 0;)
         if (!names[i].empty())
@@ -577,23 +568,10 @@ QJsonArray DapSession::flagVariables(int frameId) const {
 
 QJsonArray DapSession::bankVariables(int frameId) const {
     QJsonArray list;
-    debug::DebugTarget* t = m_controller->target();
-    const int thread = frameThread(frameId);
-    if (t->kindOf(thread) == debug::CpuKind::Z80) {
-        static const char* const kPages[4] = {"Page A (0000-3FFF)", "Page B (4000-7FFF)", "Page C (8000-BFFF)",
-                                              "Page D (C000-FFFF)"};
-        for (int p = 0; p < 4; p++)
-            list.append(QJsonObject{{QStringLiteral("name"), QString::fromLatin1(kPages[p])},
-                                    {QStringLiteral("value"), QStringLiteral("bank %1").arg(t->bankAt(thread, uint16_t(p << 14)))},
-                                    {QStringLiteral("variablesReference"), 0}});
-    } else {
-        list.append(QJsonObject{{QStringLiteral("name"), QStringLiteral("PU")},
-                                {QStringLiteral("value"), QString::number(t->pu(thread) ? 1 : 0)},
+    for (const debug::BankField& b : m_controller->target()->bankState(frameThread(frameId)))
+        list.append(QJsonObject{{QStringLiteral("name"), QString::fromStdString(b.name)},
+                                {QStringLiteral("value"), QString::fromStdString(b.value)},
                                 {QStringLiteral("variablesReference"), 0}});
-        list.append(QJsonObject{{QStringLiteral("name"), QStringLiteral("PV")},
-                                {QStringLiteral("value"), QString::number(t->pv(thread) ? 1 : 0)},
-                                {QStringLiteral("variablesReference"), 0}});
-    }
     return list;
 }
 

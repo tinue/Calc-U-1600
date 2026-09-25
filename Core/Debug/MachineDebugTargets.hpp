@@ -54,6 +54,7 @@ public:
     bool peek(int thread, Space space, uint16_t addr, uint8_t* value) const override;
     bool poke(int thread, Space space, uint16_t addr, uint8_t value) override;
     int bankAt(int thread, uint16_t addr) const override;
+    std::vector<BankField> bankState(int thread) const override;
 };
 
 } // namespace debug

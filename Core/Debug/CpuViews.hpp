@@ -32,6 +32,7 @@ public:
     virtual uint16_t sp() const = 0;
     virtual bool pu() const { return false; }
     virtual bool pv() const { return false; }
+    virtual std::vector<BankField> bankState() const { return {}; }
     /// Stopped until an interrupt (or, on the LH580x, powered off).
     virtual bool halted() const = 0;
 
@@ -77,6 +78,9 @@ public:
     uint16_t sp() const override { return m_cpu.sp(); }
     bool pu() const override { return m_cpu.pu(); }
     bool pv() const override { return m_cpu.pv(); }
+    std::vector<BankField> bankState() const override {
+        return {{"PU", m_cpu.pu() ? "1" : "0"}, {"PV", m_cpu.pv() ? "1" : "0"}};
+    }
     bool halted() const override { return m_cpu.halted() || m_cpu.poweredOff(); }
     uint32_t historySize() const override { return m_cpu.history().size(); }
     HistoryEntry history(uint32_t age) const override { return lhHistoryEntry(m_cpu.history().recent(age)); }

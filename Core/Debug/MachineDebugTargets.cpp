@@ -107,4 +107,13 @@ int PC1600DebugTarget::bankAt(int thread, uint16_t addr) const {
     }
 }
 
+std::vector<BankField> PC1600DebugTarget::bankState(int thread) const {
+    if (thread != kZ80) return DebugTarget::bankState(thread);
+    static const char* const kPages[4] = {"Page A (0000-3FFF)", "Page B (4000-7FFF)", "Page C (8000-BFFF)",
+                                          "Page D (C000-FFFF)"};
+    std::vector<BankField> list;
+    for (int p = 0; p < 4; p++) list.push_back({kPages[p], "bank " + std::to_string(bankAt(thread, uint16_t(p << 14)))});
+    return list;
+}
+
 } // namespace debug
