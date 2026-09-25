@@ -105,9 +105,10 @@ void ShotRunner::start() {
 
     m_window->setEmulationFrozen(true);
     // A fixed spot on the primary screen, so `method: system` regions and
-    // popup placement are the same every run.
+    // popup placement are the same every run -- right under the menu bar,
+    // so a menu-bar shot has no strip of desktop between the two.
     if (QScreen* screen = QGuiApplication::primaryScreen())
-        m_window->move(screen->availableGeometry().topLeft() + QPoint(40, 40));
+        m_window->move(screen->availableGeometry().topLeft() + QPoint(40, 0));
     m_window->show();
     m_window->raise();
     m_window->activateWindow();

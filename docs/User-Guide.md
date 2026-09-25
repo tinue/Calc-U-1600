@@ -59,6 +59,11 @@ ALL RESET of their own, it clears all RAM to zero first, like taking the
 batteries out. Both run the boot at full
 speed until the prompt appears, then set the clock from the computer.
 
+The **Machine** menu also switches model and ROM, the same as the control
+bar's pickers:
+
+![The Machine ▸ Model menu on macOS](images/macos-machine-model-menu.png)
+
 ## The calculator & keyboard
 
 The host keyboard drives the calculator directly — there's no separate
