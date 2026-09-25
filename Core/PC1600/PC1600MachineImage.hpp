@@ -26,8 +26,9 @@
 // `Core/Basic/BasicBinaryImage.cpp` already recognises this framing but
 // only accepts the BASIC type byte and never surfaces the address fields;
 // this is the MACHINE-side counterpart. Length consistency is deliberately
-// NOT checked here -- the preset loader compares against the actual file
-// size and lets an explicit `length:` override a mismatch.
+// NOT checked here -- machinecode::readFile() (Core/MachineCodeFile.hpp)
+// compares against the actual file size, and a preset's explicit
+// `length:` can override a mismatch.
 
 namespace pc1600 {
 

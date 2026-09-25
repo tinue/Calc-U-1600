@@ -2,6 +2,7 @@
 #include <QMainWindow>
 #include <QElapsedTimer>
 #include <QHash>
+#include <QImage>
 #include <QString>
 #include <functional>
 #include <memory>
@@ -20,6 +21,7 @@ class ControlBar;
 class DebugPanel;
 class PlotterController;
 class PlotterPaperWidget;
+class Ce158PrinterWidget;
 class MemoryModuleManager;
 class FloppyDiskManager;
 class PresetController;
@@ -47,11 +49,43 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
+    // ── Scripted screenshots (screenshots/ShotRunner) ──────────────────
+    // The emulator normally runs off the ~60 Hz frame timer. A shot run
+    // freezes it, so every capture sees exactly the state its steps left
+    // behind (no cursor blink, no clock drift between runs), and advances
+    // it explicitly instead.
+    void setEmulationFrozen(bool frozen);
+    // Runs `seconds` of emulated time in frame-sized slices, then refreshes
+    // every view (LCD, debug log, paper) as a frame tick would.
+    void runEmulation(double seconds);
+    // Runs until a MachineController::pasteText() has been fully typed;
+    // false if it is still typing after `capSeconds` of emulated time.
+    bool runUntilPasteDone(double capSeconds);
+    // Load Preset… without the file dialog, and with a failure reported
+    // through `error` instead of a blocking warning box.
+    bool loadPresetForShots(const QString& path, QString* error);
+    // Reset / Reset All, as the Machine menu does.
+    void resetForShots(bool allReset) {
+        resetMachine(allReset);
+        refreshViewsAfterAdvance();
+    }
+    // True while runSynchronousLoad() is mid-load: it pumps the event loop
+    // (timers included), and nothing may drive the machine until it's done.
+    bool isLoading() const { return m_loading; }
+    MachineController* controller() const { return m_controller.get(); }
+    // `screen` (MachineController::currentScreenImage()) as a QImage at its
+    // physical size (dots per metre set), as Copy Screen puts it on the
+    // clipboard; null for an empty screen.
+    static QImage toQImage(const GrayImage& screen);
+    FaceplateWidget* faceplate() const { return m_faceplate; }
+    PlotterPaperWidget* plotterPaper() const { return m_plotterPaper; }
+
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
     void changeEvent(QEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     std::unique_ptr<MachineController> m_controller;
@@ -64,6 +98,8 @@ private:
     DebugPanel* m_debugPanel = nullptr;
     PlotterPaperWidget* m_plotterPaper = nullptr; // added to m_debugRowLayout only while a plotter is attached
     bool m_plotterPaperInLayout = false;
+    Ce158PrinterWidget* m_ce158Printer = nullptr; // added to m_debugRowLayout only while a CE-158 is attached
+    bool m_ce158PrinterInLayout = false;
     QWidget* m_debugRow = nullptr;
     QHBoxLayout* m_debugRowLayout = nullptr;
     QTimer* m_frameTimer = nullptr;
@@ -92,6 +128,7 @@ private:
     void applyModelSelection(Model model);
     void applyRomRevisionSelection(PC1500RomRevision revision);
     void applyPC1600RomVersionSelection(PC1600RomVersion version);
+    void applyCE1600PRomVersionSelection(CE1600PRomVersion version);
     // Loads `model`'s default preset (AppSettings::defaultPresetPath()), if
     // one is set -- run whenever a model gets selected, including at startup.
     void applyDefaultPreset(Model model);
@@ -105,12 +142,16 @@ private:
     void syncMachineMenuFromModel(Model model);
     void syncMachineMenuFromRomRevision(PC1500RomRevision revision);
     void syncMachineMenuFromPC1600RomVersion(PC1600RomVersion version);
+    void syncMachineMenuFromCE1600PRomVersion(CE1600PRomVersion version);
 
     QHash<Model, QAction*> m_modelActions;
     QHash<PC1500RomRevision, QAction*> m_romActions;
     QHash<PC1600RomVersion, QAction*> m_rom1600Actions;
     QActionGroup* m_rom1600ActionGroup = nullptr;
     QAction* m_rom1600MenuAction = nullptr; // Machine > ROM Version submenu (PC-1600 only)
+    QHash<CE1600PRomVersion, QAction*> m_ce1600pRomActions;
+    QActionGroup* m_ce1600pRomActionGroup = nullptr;
+    QAction* m_ce1600pRomMenuAction = nullptr; // Machine > CE-1600P ROM submenu (PC-1600 only)
     QActionGroup* m_modelActionGroup = nullptr;
     QActionGroup* m_romActionGroup = nullptr;
     QAction* m_romMenuAction = nullptr; // Machine > ROM Revision submenu's own action, for show/hide
@@ -138,6 +179,10 @@ private:
     // PlotterController::ce150AttachedChanged/ce1600pAttachedChanged
     // signals: they only differ in which plotter is "self" vs "other".
     void onPlotterAttachedChanged(bool isCE150, bool attached);
+    void onCe158AttachedChanged(bool attached);
+    // Enables/checks the CE-150/CE-1600P/CE-158 buttons from their attach
+    // states (shared by both handlers above).
+    void syncPeripheralButtons(bool ce150Attached, bool ce1600pAttached, bool ce158Attached);
 
     // PresetController::armed handler: the preset has attached its
     // model/cards/plotter but the machine is still powered off. Resyncs
@@ -179,5 +224,17 @@ private:
     // widget) -- the matching release would never reach us.
     void releaseHeldKeys();
 
+    // Host Shift tapped on its own (pressed and released within
+    // kShiftTapMaxMs, nothing else in between) taps the calculator's SHIFT,
+    // latching it for the next key. Armed on the Shift press; any other key
+    // press, a mouse press, or losing focus disarms it.
+    bool m_shiftTapArmed = false;
+    QElapsedTimer m_shiftTapClock;
+
     void onFrameTick();
+    // The per-frame view refresh (LCD, debug log, paper, floppy lamp,
+    // persistence) -- shared by onFrameTick() and runEmulation().
+    void refreshViewsAfterAdvance();
+    bool m_emulationFrozen = false;
+    bool m_loading = false; // see isLoading()
 };

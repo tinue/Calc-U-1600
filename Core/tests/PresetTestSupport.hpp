@@ -2,7 +2,7 @@
 #include <fstream>
 #include <string>
 
-#include "../PC1500/PresetFile.hpp"
+#include "../Preset/PresetFile.hpp"
 
 // Shared by ce155_tests.cpp/ce1638plus_tests.cpp: parsePresetFile() only
 // takes a path -- write `yaml` to a scratch file first, matching this

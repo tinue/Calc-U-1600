@@ -36,8 +36,10 @@ struct SectionGrids {
     std::vector<QLabel*> labels;
 };
 
-QGridLayout* addSection(QVBoxLayout* layout, QWidget* parent, SectionGrids& sections, const QString& title) {
+QGridLayout* addSection(QVBoxLayout* layout, QWidget* parent, SectionGrids& sections, const QString& title,
+                        const QString& objectName) {
     auto* box = new QGroupBox(title, parent);
+    box->setObjectName(objectName); // screenshot scenarios crop one section by it
     auto* grid = new QGridLayout(box);
     grid->setColumnStretch(kValueColumn, 1);
     layout->addWidget(box);
@@ -183,13 +185,14 @@ void addDefaultPresetRow(QGridLayout* grid, int row, QWidget* parent, SectionGri
 SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     : QDialog(parent), m_controller(controller) {
     setWindowTitle(tr("Settings"));
+    setObjectName(QStringLiteral("dialog.settings"));
     setMinimumWidth(kMinimumDialogWidth);
 
     auto* layout = new QVBoxLayout(this);
     SectionGrids sections;
 
     // ── General ──────────────────────────────────────────────────────────
-    QGridLayout* general = addSection(layout, this, sections, tr("General"));
+    QGridLayout* general = addSection(layout, this, sections, tr("General"), QStringLiteral("dialog.settings.general"));
     addRowLabel(general, 0, this, sections, tr("Startup device:"));
     auto* startupModelCombo = new QComboBox(this);
     // Data strings match AppSettings::startupModelPreference()'s stored
@@ -218,30 +221,31 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     // Applied whenever that model gets selected (including at startup) --
     // see MainWindow::applyDefaultPreset().
     QGridLayout* presets =
-        addSection(layout, this, sections, tr("Default presets (loaded when the model is selected)"));
+        addSection(layout, this, sections, tr("Default presets (loaded when the model is selected)"),
+                   QStringLiteral("dialog.settings.presets"));
     addDefaultPresetRow(presets, 0, this, sections, tr("PC-1500:"), Model::PC1500);
     addDefaultPresetRow(presets, 1, this, sections, tr("PC-1500A:"), Model::PC1500A);
     addDefaultPresetRow(presets, 2, this, sections, tr("PC-1600:"), Model::PC1600);
 
     // ── Storage ──────────────────────────────────────────────────────────
-    QGridLayout* storage = addSection(layout, this, sections, tr("Storage"));
+    QGridLayout* storage = addSection(layout, this, sections, tr("Storage"), QStringLiteral("dialog.settings.storage"));
     {
         PathRowSpec spec = directorySpec(this, tr("Battery-card saves:"), tr("Choose Save Directory"),
                                          [] { return AppPaths::instanceDir(); });
-        spec.display = [] { return AppPaths::instanceDir(); };
+        spec.display = [] { return AppPaths::forDisplay(AppPaths::instanceDir()); };
         spec.isOverridden = [] { return !AppSettings::instanceDirOverride().isEmpty(); };
         spec.set = [](const QString& dir) { AppSettings::setInstanceDirOverride(dir); };
         addPathRow(storage, 0, this, sections, spec);
     }
 
     // ── Tracing ──────────────────────────────────────────────────────────
-    QGridLayout* tracing = addSection(layout, this, sections, tr("Tracing"));
+    QGridLayout* tracing = addSection(layout, this, sections, tr("Tracing"), QStringLiteral("dialog.settings.tracing"));
     {
         PathRowSpec spec = directorySpec(this, tr("Trace directory:"), tr("Choose Trace Directory"),
                                          [] { return AppPaths::instanceDir(); });
         spec.display = [] {
             const QString dir = AppSettings::traceDirOverride();
-            return dir.isEmpty() ? AppPaths::instanceDir() : dir;
+            return dir.isEmpty() ? AppPaths::forDisplay(AppPaths::instanceDir()) : dir;
         };
         spec.isOverridden = [] { return !AppSettings::traceDirOverride().isEmpty(); };
         spec.set = [](const QString& dir) { AppSettings::setTraceDirOverride(dir); };
@@ -260,19 +264,25 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     // PtySerialLink is POSIX-only (macOS/Linux); on Windows it's an inert
     // stub, so this section is compiled out entirely rather than shown
     // disabled -- there is nothing for it to do there yet.
-    QGridLayout* serial = addSection(layout, this, sections, tr("Serial port (PC-1600)"));
+    // One folder for every emulated port: the PC-1600's own
+    // (calcu1600.serial) and the CE-158's (calcu1600-ce158.serial).
+    QGridLayout* serial = addSection(layout, this, sections, tr("Serial ports"), QStringLiteral("dialog.settings.serial"));
     auto* serialStatusLabel = new QLabel(this);
     serialStatusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    auto refreshSerialStatusLabel = [this, serialStatusLabel] {
+    auto* ce158StatusLabel = new QLabel(this);
+    ce158StatusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    auto refreshSerialStatusLabel = [this, serialStatusLabel, ce158StatusLabel] {
         const QString status = m_controller ? m_controller->serialLinkStatus() : QString();
-        serialStatusLabel->setText(status.isEmpty() ? tr("(PC-1600 not active)") : status);
+        serialStatusLabel->setText(status.isEmpty() ? tr("(PC-1600 not active)") : AppPaths::forDisplay(status));
+        const QString ce158 = m_controller ? m_controller->ce158SerialLinkStatus() : QString();
+        ce158StatusLabel->setText(ce158.isEmpty() ? tr("(CE-158 not attached)") : AppPaths::forDisplay(ce158));
     };
     {
         PathRowSpec spec = directorySpec(this, tr("Symlink directory:"), tr("Choose Serial Port Directory"),
                                          [] { return AppPaths::instanceDir(); });
         spec.display = [] {
             const QString dir = AppSettings::serialLinkDirOverride();
-            return dir.isEmpty() ? AppPaths::instanceDir() : dir;
+            return dir.isEmpty() ? AppPaths::forDisplay(AppPaths::instanceDir()) : dir;
         };
         spec.isOverridden = [] { return !AppSettings::serialLinkDirOverride().isEmpty(); };
         spec.set = [](const QString& dir) { AppSettings::setSerialLinkDirOverride(dir); };
@@ -282,8 +292,10 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
         };
         addPathRow(serial, 0, this, sections, spec);
     }
-    addRowLabel(serial, 1, this, sections, tr("Connect client to:"));
+    addRowLabel(serial, 1, this, sections, tr("PC-1600 port:"));
     serial->addWidget(serialStatusLabel, 1, kValueColumn, 1, 3);
+    addRowLabel(serial, 2, this, sections, tr("CE-158 port:"));
+    serial->addWidget(ce158StatusLabel, 2, kValueColumn, 1, 3);
     refreshSerialStatusLabel();
 #endif
 

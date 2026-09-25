@@ -16,12 +16,13 @@
 #include <cstdlib>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <unistd.h>   // mkdtemp
 
 #include "../PC1500/PC1500Machine.hpp"
-#include "../PC1500/PresetFile.hpp"
+#include "../Preset/PresetFile.hpp"
 #include "../PC1500/PC1500PresetLoader.hpp"
 #include "../PC1500/PC1500TraceFile.hpp"
 #include "../PC1600/PC1600Machine.hpp"
@@ -118,7 +119,6 @@ void test_trace_step_produces_wellformed_file() {
     std::string err;
     CHECK(parsePresetString(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - trace: t.bin\n"
         "  - wait: 0.3\n"
@@ -145,7 +145,7 @@ void test_trace_step_produces_wellformed_file() {
 }
 
 // A trace left running at the end of the preset is still finalised
-// (SESSION_END written, file closed) by applyPC1500Preset()'s TraceCloser guard
+// (SESSION_END written, file closed) by runPresetSections()' TraceCloser guard
 // -- mirrors Calc-U-59's auto-close of a scripted trace.
 void test_trace_left_open_is_auto_closed() {
     if (!romPresent()) {
@@ -160,7 +160,6 @@ void test_trace_left_open_is_auto_closed() {
     std::string err;
     CHECK(parsePresetString(
         "model: PC-1500A\n"
-        "firmware: A04\n"
         "keys:\n"
         "  - trace: t2.bin\n"
         "  - wait: 0.2\n",
@@ -264,7 +263,7 @@ void test_pc1600_trace_step_produces_wellformed_file() {
         "  - trace: off\n",
         dir + "/scratch.pc1600", &preset, &err));
 
-    PC1600PresetLoadResult res = applyPC1600Preset(machine, preset, {}, dir);
+    PresetLoadResult res = applyPC1600Preset(machine, preset, {}, dir);
     CHECK(res.ok);
 
     TraceSummary s = readTrace(dir + "/t.bin");
@@ -306,7 +305,7 @@ void test_pc1600_trace_left_open_is_auto_closed() {
         "  - wait: 0.2\n",
         dir + "/scratch.pc1600", &preset, &err));
 
-    PC1600PresetLoadResult res = applyPC1600Preset(machine, preset, {}, dir);
+    PresetLoadResult res = applyPC1600Preset(machine, preset, {}, dir);
     CHECK(res.ok);
 
     TraceSummary s = readTrace(dir + "/t2.bin");
@@ -320,6 +319,86 @@ void test_pc1600_trace_left_open_is_auto_closed() {
     std::remove(dir.c_str());
 }
 
+// Not a trace test, but the same ROM-driven applyPC1500Preset() setup: a
+// `format: binary` block that isn't all RAM, or runs past &FFFF, fails the
+// preset instead of dropping or wrapping bytes and reporting success.
+void test_binary_program_outside_ram_fails() {
+    if (!romPresent()) {
+        std::fprintf(stderr, "SKIP test_binary_program_outside_ram_fails: %s not found\n", kRomPath);
+        return;
+    }
+    std::string dir = makeTempDir();
+    CHECK(!dir.empty());
+    if (dir.empty()) return;
+    {
+        std::ofstream bin(dir + "/code.bin", std::ios::binary);
+        bin.write("\x01\x02\x03\x04", 4);
+    }
+    auto run = [&](const char* address) {
+        PresetFile preset;
+        std::string err;
+        CHECK(parsePresetString(std::string("model: PC-1500A\nprogram:\n  format: binary\n  path: code.bin\n"
+                                            "  address: ") + address + "\n",
+                                dir + "/scratch.pc1500a", &preset, &err));
+        PC1500Machine machine(preset.variant);
+        return applyPC1500Preset(machine, preset, {}, dir, ".", {}, {"roms"});
+    };
+    PresetLoadResult rom = run("0xC000");
+    CHECK(!rom.ok && rom.error.find("not RAM") != std::string::npos);
+    PresetLoadResult wrap = run("0xFFFE");
+    CHECK(!wrap.ok && wrap.error.find("past &FFFF") != std::string::npos);
+    CHECK(run("0x7C01").ok);
+
+    std::remove((dir + "/code.bin").c_str());
+    std::remove(dir.c_str());
+}
+
+// `format: binary` with a CE-158 header on a PC-1500: the payload (not the
+// 27 header bytes) lands at the header's load address, with no `address:`.
+// A headerless file without `address:` is refused at load time.
+void test_binary_program_ce158_header() {
+    if (!romPresent()) {
+        std::fprintf(stderr, "SKIP test_binary_program_ce158_header: %s not found\n", kRomPath);
+        return;
+    }
+    std::string dir = makeTempDir();
+    CHECK(!dir.empty());
+    if (dir.empty()) return;
+    {
+        // CE-158 header: 01 'B' "COM", 16-byte name, then big-endian load
+        // address, length - 1 and auto-run address (0 = none).
+        std::vector<char> header = {0x01, 0x42, 'C', 'O', 'M'};
+        header.resize(5 + 16, 0);
+        for (uint16_t v : {uint16_t{0x7C10}, uint16_t{4 - 1}, uint16_t{0}}) {
+            header.push_back(static_cast<char>(v >> 8));
+            header.push_back(static_cast<char>(v & 0xFF));
+        }
+        std::ofstream bin(dir + "/ce158.bin", std::ios::binary);
+        bin.write(header.data(), static_cast<std::streamsize>(header.size()));
+        bin.write("\x11\x22\x33\x44", 4);
+        std::ofstream raw(dir + "/raw.bin", std::ios::binary);
+        raw.write("\x11\x22", 2);
+    }
+    auto run = [&](const char* file) {
+        PresetFile preset;
+        std::string err;
+        CHECK(parsePresetString(std::string("model: PC-1500A\nprogram:\n  format: binary\n  path: ") + file + "\n",
+                                dir + "/scratch.pc1500a", &preset, &err));
+        PC1500Machine machine(preset.variant);
+        PresetLoadResult res = applyPC1500Preset(machine, preset, {}, dir, ".", {}, {"roms"});
+        return std::make_pair(res, std::vector<uint8_t>{machine.debugPeek(0x7C10), machine.debugPeek(0x7C13)});
+    };
+    auto [loaded, bytes] = run("ce158.bin");
+    CHECK(loaded.ok);
+    CHECK(bytes[0] == 0x11 && bytes[1] == 0x44);
+    auto [headerless, unused] = run("raw.bin");
+    (void)unused;
+    CHECK(!headerless.ok && headerless.error.find("'address' is required") != std::string::npos);
+    std::remove((dir + "/ce158.bin").c_str());
+    std::remove((dir + "/raw.bin").c_str());
+    std::remove(dir.c_str());
+}
+
 } // namespace
 
 int run_presetloader_trace_tests() {
@@ -328,6 +407,8 @@ int run_presetloader_trace_tests() {
     test_z80_frame_shares_one_file_with_lh5801_frame();
     test_pc1600_trace_step_produces_wellformed_file();
     test_pc1600_trace_left_open_is_auto_closed();
+    test_binary_program_outside_ram_fails();
+    test_binary_program_ce158_header();
 
     std::printf("presetloader_trace_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

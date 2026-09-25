@@ -69,8 +69,12 @@ public:
     /// this at startup (and after ALL RESET) from the host clock;
     /// thereafter the clock free-runs off emulated cycles (the 1 Hz
     /// accumulator in step()) and is never re-synced -- the same
-    /// crystal-driven behavior the real chip has.
-    void seedClock(int year, int month, int day, int hour, int minute, int second);
+    /// crystal-driven behavior the real chip has. `millisecond` (0-999)
+    /// is the host's sub-second phase: the chip only takes whole seconds,
+    /// so it preloads the 1 Hz accumulator instead, and the emulated
+    /// second rolls over in step with the host's (dropping it left the
+    /// clock up to ~1 s behind).
+    void seedClock(int year, int month, int day, int hour, int minute, int second, int millisecond = 0);
     /// Executes one instruction on whichever CPU currently owns the bus,
     /// completing a pending handoff first if one is due (see .cpp). Returns
     /// that CPU's own step() cycle count.
@@ -89,9 +93,9 @@ public:
     // Everything that measures emulated time derives from kTStateHz rather
     // than restating it: the timer periods below, runCycles()'s budget, and
     // (via `paceHz` on the Bridge wrapper) the GUI's batch pacing.
-    static constexpr uint32_t kTStateHz = 3580000;
+    static constexpr uint32_t kTStateHz = kPC1600TStateHz;
     static_assert(CE1600FCard::kTStateHz == kTStateHz, "CE1600FCard times seeks in SC7852 T-states");
-    static constexpr uint32_t kLH5803Hz = 1300000;
+    static constexpr uint32_t kLH5803Hz = kPC1600PhiOsHz;
 
     /// Converts a cycle count returned by whichever CPU owned the bus into
     /// this machine's canonical T-state unit. SC-7852 counts pass through;
@@ -134,7 +138,7 @@ public:
 
     // ── CE-1600P plotter (60-pin system bus) ─────────────────────────────
     //
-    // `PC1600-P1-B4-CE1600P.bin`/`-2.bin` are confirmed CE-1600P ROM (see
+    // `PC1600-P1-B4-CE1600P-{new,old}.bin`/`PC1600-P1-B5-CE1600P-OR-F-{new,old}.bin` are confirmed CE-1600P ROM (see
     // roms/README.md) -- `attachCE1600P` builds a card, loads both halves,
     // and attaches it to `m_z80Mem.ce1600pBus()`; PC1600Memory routes Page B
     // banks 4/5 and I/O ports 0x70-0x8F to that bus once attached.
@@ -206,6 +210,22 @@ public:
     uint64_t ce150PlotRevision() const;
     std::vector<std::string> drainCE150Events();
     void clearCE150Paper();
+
+    // ── CE-158 RS-232C / Centronics interface (LH5803 side, MODE 1) ──────
+    //
+    // The PC-1500's CE-158 on the LH5803: ROM at LH5803 0x8000-0x9FFF with
+    // PV=1 (PU-banked), LH5811 / UART / interrupt-ID blocks in ME1
+    // 0xD000-0xDFFF (see Ce158Card). Coexists with the CE-150; cannot be
+    // used with the CE-1600P (Machine Overview: "CE-158 and CE-162E cannot
+    // connect to the CE-1600P"), so attaching one detaches the other. Its
+    // UART is paced in SC7852 T-states. The serial link set with
+    // setCE158SerialLink() is kept across detach/attach.
+    bool attachCE158(const uint8_t* rom, size_t romSize); // 16384 bytes
+    void detachCE158();
+    bool ce158Attached() const { return m_ce158Card != nullptr; }
+    Ce158Card* ce158Card() { return m_ce158Card.get(); } // unlocked -- tests only
+    void setCE158SerialLink(SerialLink* link);             // non-owning; GUI-safe
+    std::vector<uint8_t> drainCE158ParallelOutput();       // GUI-safe
 
     // ── Access (debug / tests) ───────────────────────────────────────────
     SC7852&       sc7852() { return m_sc7852; }
@@ -283,7 +303,9 @@ public:
     /// loading a BASIC program instead). Returns false, writing nothing,
     /// if any byte in the range would land on ROM or an open-bus/
     /// unattached region -- an all-or-nothing check up front, not a
-    /// partial write on failure.
+    /// partial write on failure. Writes take the host path (poke()), and
+    /// a byte a card claims but doesn't keep (read-only module RAM, mask
+    /// ROM) restores the range and also returns false.
     bool pokeMemory(uint16_t address, const uint8_t* data, size_t size);
 
     // ── Debug reads (GUI-safe: take m_mutex, like pokeMemory()) ───────────
@@ -369,19 +391,11 @@ public:
     };
     DebugBankState debugBankState();
 
-    // ── Trace (both CPUs' trace rings drain into one
-    // TRACE.bin, tagged by cpuId; see TraceWriter.swift) ──────────────────
+    // ── Trace: both CPUs' rings drain into one TRACE.bin, tagged by cpuId ──
     //
-    // setTraceEnabled()/traceEnabled() just flip the CPU trace flags and
-    // expect an external consumer (the GUI's Swift drain at 60 Hz) to pump
-    // the rings. beginCpuTrace()/endCpuTrace() below instead capture a full
-    // instruction trace to a file entirely inside the Core -- step() drains
-    // both rings into it -- for the synchronous, tick-less
-    // PC1600PresetLoader::applyPC1600Preset() `trace:` step. Same design as
-    // PC1500Machine's own headless-trace pair; don't mix the two APIs on
-    // one machine.
-    void setTraceEnabled(bool enabled);
-    bool traceEnabled() const { return m_traceEnabled; }
+    // beginCpuTrace()/endCpuTrace() capture a full instruction trace to a
+    // file entirely inside the Core -- step() drains both rings into it.
+    // Used by the GUI's TRACE button and the preset `trace:` step.
 
     /// Begin capturing to `handle` (open for binary writing; this machine
     /// takes ownership and endCpuTrace() closes it). Sets `flags` as the
@@ -404,6 +418,13 @@ private:
     uint64_t m_yieldInterval = 0;
     uint64_t m_yieldCountdown = 0;
 
+    /// Bodies of the public detach calls; caller holds m_mutex. The
+    /// attach/detach calls take it because step() dereferences these
+    /// cards (and the buses dispatch to them) on the emulation thread.
+    void detachCE1600PLocked();
+    void detachCE150Locked();
+    void detachCE158Locked();
+
     /// Shared body of reset()/allReset(); caller holds m_mutex.
     void resetLocked();
 
@@ -417,8 +438,9 @@ private:
     std::unique_ptr<CE1600PCard> m_ce1600pCard; // see attachCE1600P()
     std::unique_ptr<CE1600FCard> m_ce1600fCard; // union-attached with m_ce1600pCard
     std::unique_ptr<Ce150Card> m_ce150Card;     // see attachCE150() -- LH5803-side plotter (MODE 1)
+    std::unique_ptr<Ce158Card> m_ce158Card;     // see attachCE158() -- LH5803-side interface (MODE 1)
+    SerialLink* m_ce158Link = nullptr;          // see setCE158SerialLink()
 
-    bool m_traceEnabled{false};
 
     // ── Headless CPU-trace file -- see beginCpuTrace() ───────────────────
     std::unique_ptr<PC1500TraceFile> m_traceFile;
@@ -431,6 +453,12 @@ private:
     static constexpr uint32_t kTraceDrainInterval = 256;
     CpuFrame m_lhTraceDrainBuf[kTraceDrainBufFrames];
     Z80CpuFrame m_z80TraceDrainBuf[kTraceDrainBufFrames];
+    /// Advance everything that runs off the shared clock regardless of
+    /// which CPU owns the bus: RTC, buzzer, UART, sub-CPU, display and the
+    /// CE-158. step() calls it from both branches with the T-states just
+    /// spent. Caller holds m_mutex.
+    void advanceSharedClocks(int tstates);
+
     /// Drain both CPU trace rings into m_traceFile. Caller holds m_mutex;
     /// safe only while m_traceFile is set. Cross-ring order is per-drain,
     /// not globally chronological -- the cpuId tag disambiguates, and
@@ -456,10 +484,16 @@ private:
     // T-states (not LH5803 cycles, a different clock domain entirely), so
     // the pulse effectively pauses while the SC7852 is parked, a real but
     // small deviation from true hardware's always-running crystal.
-    // = kTStateHz / 64 / 2 rounded to nearest (27968.75 -> 27969).
-    static constexpr int kTimer64HalfPeriodTStates = (kTStateHz + 64) / 128;
+    // The half period is kTStateHz / 128 = 27968.75 T-states. The
+    // accumulator counts quarter T-states so it can hold that exactly.
+    // Rounding it to 27969 made the 64 Hz signal drift against anything
+    // counted in whole seconds.
+    static constexpr int kTimer64AccumScale = 4;
+    static constexpr int kTimer64HalfPeriodScaled = kTStateHz * kTimer64AccumScale / 128;
+    static_assert(kTStateHz * kTimer64AccumScale % 128 == 0, "64 Hz half period must be exact");
     int m_timer64Accum{0};
     bool m_timer64State{false};
+    bool m_onWakePending{false}; // ON pressed, not yet delivered -- see setOnKeyPressed()
 
     // Sub-CPU interrupt (port 32H bit 6, INT6 pin 84). Per
     // PC-1600-CPU-SC7852-Z80.md §5.2 this one line aggregates everything
@@ -472,12 +506,12 @@ private:
     // unraised until there is something to raise them: no battery or
     // analog model, no CI line, and no serial peripheral to time out.
     //
-    // Same accumulator shape as the 1/64s timer above, but no square-wave
-    // state: that timer keeps a level because it *publishes* one (PB5, via
-    // setTimer64Bit()). Nothing observes this one's level -- the sub-CPU
-    // line is edge-only -- so it is simply one interrupt per full period.
-    static constexpr int kTimer05PeriodTStates = kTStateHz / 2; // 0.5s
-    int m_timer05Accum{0};
+    // Both signals come out of the sub-CPU's one divider chain, so 0.5 s is
+    // exactly 64 edges (32 periods) of the 64 Hz signal, at a fixed phase
+    // against it. Here it fires on a falling edge. The exact phase isn't
+    // known from any source, and nothing observed so far depends on it.
+    static constexpr int kTimer64EdgesPerHalfSecond = 64;
+    int m_timer64EdgeCount{0};
 
     // LU-57813P real-time clock: one calendar second per second of
     // emulated time. Same accumulator shape as the two timers above, but

@@ -3,7 +3,7 @@
 `libsharpdx.a` + `sharpdx.h` are the prebuilt static library and generated C
 header of the **`convert`**-verb tokenizer from
 [`SharpDataExchange`](../../../../SharpDataExchange) (crate `sharpdx`,
-version 0.2.1). Calc-U-1600 links it so a `program: format: basic-binary`
+version 0.3.0). Calc-U-1600 links it so a `program: format: basic-binary`
 preset section can point `path:` at a plain-text `.bas` listing and have it
 tokenized in-process at load time (see `Core/Basic/BasicProgramSource.cpp`).
 
@@ -32,7 +32,10 @@ command line.
 version (26.0) than being linked` warnings: those are the Rust toolchain's
 **prebuilt** `std` / `core` / `alloc` objects, which carry the toolchain's
 own min-OS and are not recompiled by `MACOSX_DEPLOYMENT_TARGET`. Harmless;
-our own crate objects are built at 15.6 by `refresh_sharpdx.sh`.
+our own crate objects are built at 15.8 by `refresh_sharpdx.sh`
+(= `CMAKE_OSX_DEPLOYMENT_TARGET` in `Qt6/CMakeLists.txt`). A rustup toolchain's
+`std` is built for macOS 11, so a lib taken from a SharpDataExchange release
+(CI-built with rustup) links without these warnings.
 
 ## Refreshing
 

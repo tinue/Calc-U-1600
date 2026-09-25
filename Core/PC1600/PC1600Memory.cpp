@@ -1,5 +1,7 @@
 #include "PC1600Memory.hpp"
 
+#include <algorithm>
+
 #include <cstring>
 
 #ifdef PC1600_POWER_PROBE
@@ -46,8 +48,43 @@ void PC1600Memory::reset() {
     // samples its (pulled-up) pin exactly here on real hardware. Keep PB5's
     // current level: it is a free-running square wave from the sub-CPU,
     // not a reset-latched line.
-    m_pbIn = static_cast<uint8_t>((m_pbIn & kPbInFreeRunning) | kPbInResetLevels);
+    m_pbIn = static_cast<uint8_t>((m_pbIn & (kPbInFreeRunning | kPbInOnKey)) | kPbInResetLevels);
+    // Interrupt cause/mask start clear; the boot ROM programs 35H itself.
+    m_intCause = 0;
+    m_intMask = 0;
+    updateIntLine();
     m_uart.reset();
+    // Port-block reset: modulation off, SDO back to its idle level.
+    m_fReg = 0;
+    m_sdo = true;
+    m_sdoAccum = 0;
+    updateBuzzerLine();
+}
+
+void PC1600Memory::advanceBuzzer(uint32_t tstates) {
+    if ((m_fReg & 0x40) == 0) {
+        m_piezo.advance(tstates);
+        return;
+    }
+    // FX = phi / (64 << F0-2); SDO toggles every half of that period.
+    // Codes 5-7 aren't in the TRM table; treat them as the slowest, /1024.
+    const int fx = std::min(m_fReg & 0x07, 4);
+    const int64_t halfPeriod = int64_t{kPC1600TStateHz} * (int64_t{64} << fx) / 2; // in T-states * kModulatorHz
+    // A 17H write can select a faster divider mid-period (no 14H reset), so
+    // the phase may already be past the new half period: that toggle is
+    // due now, not a negative time from now.
+    m_sdoAccum = std::min(m_sdoAccum, halfPeriod);
+    int64_t remaining = tstates;
+    while (m_sdoAccum + remaining * kModulatorHz >= halfPeriod) {
+        const int64_t take = (halfPeriod - m_sdoAccum + kModulatorHz - 1) / kModulatorHz;
+        m_piezo.advance(static_cast<uint32_t>(take));
+        remaining -= take;
+        m_sdoAccum += take * kModulatorHz - halfPeriod;
+        m_sdo = !m_sdo;
+        updateBuzzerLine();
+    }
+    m_sdoAccum += remaining * kModulatorHz;
+    m_piezo.advance(static_cast<uint32_t>(remaining));
 }
 
 const uint8_t* PC1600Memory::resolveConst(uint16_t addr) const {
@@ -273,7 +310,7 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
     }
     switch (port) {
         case 0x31: return m_bank.readPort31();
-        case 0x32: { uint8_t v = m_intCause; m_intCause = 0; return v; } // read-clears, see latchTimer64InterruptCause()'s own comment
+        case 0x32: { uint8_t v = intCause(); m_intCause = 0; updateIntLine(); return v; } // read-clears, see latchTimer64InterruptCause()'s own comment
         // 33H (IOR P) = the sub-CPU's answer register; 21H's write side is
         // the matching command port. See PC1600SubCpu's class comment.
         case 0x33: return m_subCpu.readAnswer();
@@ -281,7 +318,12 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
         // this port's write side. The timer ISR reads it at PC1600-P1-B3-new.bin
         // 4102H/4112H to decide which pending causes are unmasked.
         case 0x35: return m_intMask;
+        case 0x17: return m_fReg;
         case 0x18: return m_opc;
+        // MSK read: the mask in bits 0-3, and the live CL1/SD1/PB7/IRQ inputs
+        // in bits 7-4 (PC-1500 TRM p.71). Only PB7 (the ON key, bit 5) has a
+        // source here; the others read 0.
+        case 0x1A: return static_cast<uint8_t>((m_msk & 0x0F) | ((m_pbIn & kPbInOnKey) ? 0x20 : 0x00));
         case 0x1B: return m_if;
         case 0x1C: return m_dda;
         case 0x1D: return m_ddb;
@@ -349,15 +391,24 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
         // authoritative b5:b4 from this latch.
         case 0x3C: m_bank.writePort3C(value); return;
         case 0x3D: m_bank.writePort3D(value); return;
-        case 0x35: m_intMask = value; return;
+        case 0x35: m_intMask = value; updateIntLine(); return;
         case 0x39: m_im2VectorLow = value; if (m_cpu) m_cpu->setIM2VectorByte(value); return;
         case 0x38: if (m_arbiter) m_arbiter->requestSwitchFromSC7852(); return;
         case 0x18:
             // Buzzer: bit 6 = enable (BEEP ON/OFF), bit 7 = the square
             // wave the BEEP loop toggles. See m_opc.
             m_opc = value;
-            m_piezo.setLevel((value & 0xC0) == 0xC0);
+            updateBuzzerLine();
             return;
+        // 14H: divider reset -- restart the modulation clocks' phase.
+        case 0x14: m_sdoAccum = 0; return;
+        // 17H: F register -- SDO modulation (see m_fReg).
+        case 0x17:
+            m_fReg = static_cast<uint8_t>(value & 0x7F);
+            if ((m_fReg & 0x40) == 0) m_sdo = true; // normal mode: SDO = SXO = idle mark
+            updateBuzzerLine();
+            return;
+        case 0x1A: m_msk = static_cast<uint8_t>(value & 0x0F); return;
         case 0x1B: m_if = value; return;
         case 0x1C: m_dda = value; return;
         case 0x1D: m_ddb = value; return;

@@ -1,0 +1,26 @@
+# User guide, 5 Memory modules and floppy disks. Format:
+# docs/screenshots/README.md.
+out: ../../images/guide
+window: 1430x1000
+
+shots:
+  - name: 05-slot-picker
+    preset: ../presets/pc1600-modules.pc1600
+    steps:
+      - open: controlbar.slot1
+    capture: { target: controlbar, file: 05-slot-picker.png, padding: 4 }
+
+  - name: 05-floppy-picker
+    preset: ../presets/pc1600-modules.pc1600
+    steps:
+      - open: controlbar.floppy
+    capture: { target: controlbar, file: 05-floppy-picker.png, padding: 4 }
+
+  # Pick a battery-backed template in the control bar, then Name & Save.
+  - name: 05-name-and-save
+    preset: ../presets/pc1600-ready.pc1600
+    steps:
+      - select: controlbar.slot1 = CE-1600M
+      - click: controlbar.slot1.save
+      - enter-text: My programs
+    capture: { target: dialog, file: 05-name-and-save.png }

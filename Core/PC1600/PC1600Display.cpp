@@ -23,12 +23,21 @@ void PC1600Display::writeCommand(Controller& c, uint8_t value) {
 }
 
 uint8_t PC1600Display::readIO(uint8_t port) {
-    // The boot ROM busy-waits on a status read from both controllers
-    // before it will draw anything (`IN A,(59H)` / `IN A,(55H)` at
-    // 0x0807/0x080A in PC1600-P0-B0-new.bin). The busy bit (bit7) is always
-    // reported clear here -- this core has no controller-busy timing
-    // model, so there's never a real reason to report busy -- which is
-    // what lets that loop exit.
+    // The ROM busy-waits on a status read from both controllers before
+    // every access (`IN A,(59H)` / `IN A,(55H)` at 0x0807/0x080A in
+    // PC1600-P0-B0-new.bin; user code like dampflok.bas's &D000 routine
+    // does the same). Busy (bit7) is set by each command/data write and
+    // clears on the kBusyClocks-th edge of the controllers' own 216.7 kHz
+    // clock. That clock runs asynchronously to the CPU, so whether a poll
+    // ~60 T after a write still sees busy depends on the phase.
+    //
+    // Fitted 2026-09-23 to a real unit: a BEEP-bracketed loop of 100
+    // scrolling PRINTs is 3.9% slower on hardware than with busy always
+    // clear, 2.7% after the sub-CPU latency and the uniform ~0.65% residual
+    // left by every BASIC benchmark. 3 edges changes nothing, 4 edges gives
+    // 5.854 s (real 5.894 s, i.e. the residual), 5 edges overshoots to
+    // 6.257 s. Dampflok.bas drops from 1.8% to 0.87% slow with it. This is
+    // a fit, not a datasheet figure.
     //
     // Per-block offset (see class comment / writeIO's own comment for the
     // full derivation): offset 1 = status read, offset 3 = data read.
@@ -37,10 +46,9 @@ uint8_t PC1600Display::readIO(uint8_t port) {
     // below, same as an unhandled port.
     uint8_t offset = port & 0x03;
 
-    // Status byte: bit7 = busy (always clear, see above); every other bit
-    // (reset status, ON/OFF echo) is also left clear -- "ready" is the
-    // only controller state this core models timing for.
-    auto statusByte = [](const Controller&) -> uint8_t { return 0x00; };
+    // Status byte: bit7 = busy (see above); every other bit (reset
+    // status, ON/OFF echo) is left clear.
+    auto statusByte = [this](const Controller& c) -> uint8_t { return m_lcdEdges < c.busyUntilEdge ? 0x80 : 0x00; };
     // Data byte: real HD61102 hardware lags one column behind the address
     // pointer on reads -- a read returns the byte at `addressCol - 1`, NOT
     // `addressCol`, then advances the pointer (the classic "first read
@@ -83,6 +91,7 @@ void PC1600Display::writeIO(uint8_t port, uint8_t value) {
     bool isData = (offset == 2);
 
     auto apply = [&](Controller& c) {
+        if (offset == 0 || isData) c.busyUntilEdge = m_lcdEdges + kBusyClocks;
         if (!isData) {
             if (offset == 0) writeCommand(c, value);
             return; // offset 1/3: read-only, no write-side meaning

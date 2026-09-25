@@ -1,0 +1,13 @@
+# User guide, 4 Loading a BASIC program. Format: docs/screenshots/README.md.
+out: ../../images/guide
+window: 1430x1000
+
+shots:
+  # Listing after the load -- PRO mode on purpose.
+  - name: 04-hanoi-listed
+    preset: ../presets/pc1600-hanoi-list.pc1600
+    capture: { target: lcd, file: 04-hanoi-listed.png }
+
+  - name: 04-hanoi-running
+    preset: ../presets/pc1600-hanoi-run.pc1600
+    capture: { target: lcd, file: 04-hanoi-running.png }

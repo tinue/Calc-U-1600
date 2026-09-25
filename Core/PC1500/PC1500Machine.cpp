@@ -18,12 +18,19 @@ void PC1500Machine::reset() {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_memory.reset();
     m_memory.keyboard().releaseAll();
+    // Keys still queued by enqueueKey() belong to the session being reset;
+    // typing them into the rebooting ROM would feed its NEW0?/CHECK prompt.
+    m_keyQueue.clear();
+    m_keyQueuePhase = KeyQueuePhase::Idle;
+    m_keyQueueCurrentKey.clear();
+    m_keyQueuePhaseCyclesRemaining = 0;
     m_cpu.reset();
     // A chip reset re-anchors an attached CE-150 (LH5810 latches cleared,
     // steppers/pen re-homed) but does NOT unplug it or wipe its paper --
     // real ink stays on real paper. Mirrors the CE-1600P, whose card is
     // likewise left attached across PC1600Machine::reset().
     if (m_ce150Card) m_ce150Card->reset();
+    if (m_ce158Card) m_ce158Card->reset();
 }
 
 void PC1500Machine::allReset() {
@@ -38,7 +45,8 @@ bool PC1500Machine::attachCE150(const uint8_t* rom, size_t romSize) {
     if (romSize != Ce150Card::kRomSize) return false;
     auto card = std::make_unique<Ce150Card>();
     if (!card->loadRom(rom, romSize)) return false;
-    detachCE150();
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE150Locked();
     card->reset();
     m_systemBus.attach(card.get());
     m_ce150Card = std::move(card);
@@ -46,9 +54,50 @@ bool PC1500Machine::attachCE150(const uint8_t* rom, size_t romSize) {
 }
 
 void PC1500Machine::detachCE150() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE150Locked();
+}
+
+void PC1500Machine::detachCE150Locked() {
     if (!m_ce150Card) return;
     m_systemBus.detach(m_ce150Card.get());
     m_ce150Card.reset();
+}
+
+bool PC1500Machine::attachCE158(const uint8_t* rom, size_t romSize) {
+    if (romSize != Ce158Card::kRomSize) return false;
+    auto card = std::make_unique<Ce158Card>();
+    if (!card->loadRom(rom, romSize)) return false;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE158Locked();
+    card->reset();
+    card->setSerialLink(m_ce158Link);
+    m_systemBus.attach(card.get());
+    m_ce158Card = std::move(card);
+    return true;
+}
+
+void PC1500Machine::detachCE158() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachCE158Locked();
+}
+
+void PC1500Machine::detachCE158Locked() {
+    if (!m_ce158Card) return;
+    m_systemBus.detach(m_ce158Card.get());
+    m_ce158Card.reset();
+}
+
+void PC1500Machine::setCE158SerialLink(SerialLink* link) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_ce158Link = link;
+    if (m_ce158Card) m_ce158Card->setSerialLink(link);
+}
+
+std::vector<uint8_t> PC1500Machine::drainCE158ParallelOutput() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_ce158Card) return {};
+    return m_ce158Card->drainParallelOutput();
 }
 
 // The four below take m_mutex so the GUI thread can read/clear the plotter
@@ -79,7 +128,7 @@ void PC1500Machine::clearCE150Paper() {
     if (m_ce150Card) m_ce150Card->mechanism().clearPaper();
 }
 
-void PC1500Machine::seedClock(int year, int month, int day, int hour, int minute, int second) {
+void PC1500Machine::seedClock(int year, int month, int day, int hour, int minute, int second, int millisecond) {
     // Sakamoto's day-of-week: 0 = Sunday. Valid for any Gregorian date;
     // keeps this Core self-contained (no host <ctime> needed) so headless
     // tests can seed a fixed date and check the dow nibble too.
@@ -88,32 +137,38 @@ void PC1500Machine::seedClock(int year, int month, int day, int hour, int minute
     int dow = (y + y / 4 - y / 100 + y / 400 + t[month - 1] + day) % 7;
 
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_memory.seedClock(year, month, day, hour, minute, second, dow);
+    m_memory.seedClock(year, month, day, hour, minute, second, dow, millisecond);
 }
 
 int PC1500Machine::step() {
     std::lock_guard<std::mutex> lock(m_mutex);
     int c = m_cpu.step();
-    // The uPD1990AC RTC's TP output is defined in real time, not CPU
-    // cycles (it has its own independent crystal) -- this Core has no
-    // other notion of elapsed time to drive it from, so it advances here,
-    // once per instruction, the same way LH5801's own internal timer
-    // advances via tickTimer(). Advance by kHaltTickCycles (not 0) while
-    // halted, matching runCycles()'s own halted-time bookkeeping below --
-    // real time keeps passing even while the CPU is halted.
-    uint32_t rtcCycles = static_cast<uint32_t>(c > 0 ? c : LH5801::kHaltTickCycles);
-    m_memory.advanceRtc(rtcCycles);
-    m_memory.advancePiezo(rtcCycles); // buzzer time, same clock as the RTC
     // PU/PV (SPU/RPU/SPV/RPV) never touch the bus themselves, so pushing
     // their post-instruction state here is sufficient for the next bus
     // access to see it -- see PC1500Memory::updatePUPV()'s own doc comment.
     m_memory.updatePUPV(m_cpu.pu(), m_cpu.pv());
-    advanceKeyQueue(rtcCycles);
-    // Per-step hook for an attached CE-150 (no-op today -- the plotter is
-    // fully reactive; see Ce150Card::tick()).
-    if (m_ce150Card) m_ce150Card->tick(rtcCycles);
+    // Real time keeps passing while halted or powered off, budgeted at
+    // kHaltTickCycles like runCycles(). A 0 return otherwise means the CPU
+    // is parked on a breakpoint: nothing ran, so no time passes either.
+    if (c > 0) advancePeripherals(static_cast<uint32_t>(c));
+    else if (m_cpu.halted() || m_cpu.poweredOff()) advancePeripherals(LH5801::kHaltTickCycles);
     maybeDrainTrace();
     return c;
+}
+
+void PC1500Machine::advancePeripherals(uint32_t cycles) {
+    // The uPD1990AC RTC's TP output is defined in real time, not CPU
+    // cycles (it has its own independent crystal) -- this Core has no
+    // other notion of elapsed time to drive it from, so it advances here,
+    // once per instruction, the same way LH5801's own internal timer
+    // advances via tickTimer().
+    m_memory.advanceRtc(cycles);
+    m_memory.advancePiezo(cycles); // buzzer time, same clock as the RTC
+    advanceKeyQueue(cycles);
+    // Per-step hook for an attached CE-150 (no-op today -- the plotter is
+    // fully reactive; see Ce150Card::tick()).
+    if (m_ce150Card) m_ce150Card->tick(cycles);
+    if (m_ce158Card) m_ce158Card->tick(cycles); // the UART's own clock keeps running
 }
 
 void PC1500Machine::setYieldHook(std::function<void()> hook, uint64_t intervalCycles) {
@@ -163,17 +218,12 @@ uint64_t PC1500Machine::runCycles(uint64_t maxCycles) {
                 // queue both sit outside the CPU and must keep advancing
                 // regardless (design doc: "the RTC keeps advancing while
                 // powered off").
-                m_memory.advanceRtc(static_cast<uint32_t>(LH5801::kHaltTickCycles));
-                m_memory.advancePiezo(static_cast<uint32_t>(LH5801::kHaltTickCycles)); // buzzer time, same clock as the RTC
-                advanceKeyQueue(static_cast<uint32_t>(LH5801::kHaltTickCycles));
+                advancePeripherals(LH5801::kHaltTickCycles);
                 consumed += static_cast<uint64_t>(LH5801::kHaltTickCycles);
                 continue;
             }
         }
-        m_memory.advanceRtc(static_cast<uint32_t>(c));
-        m_memory.advancePiezo(static_cast<uint32_t>(c)); // buzzer time, same clock as the RTC
-        advanceKeyQueue(static_cast<uint32_t>(c));
-        if (m_ce150Card) m_ce150Card->tick(static_cast<uint32_t>(c)); // no-op today; see step()
+        advancePeripherals(static_cast<uint32_t>(c));
         consumed += static_cast<uint64_t>(c);
         maybeDrainTrace();
     }
@@ -266,11 +316,8 @@ void PC1500Machine::advanceKeyQueue(uint32_t cycles) {
     // Same cadence as PC1500BasicTyper.cpp's tapKey() -- see this
     // method's own header doc comment for why it's duplicated here
     // rather than shared.
-    constexpr double kCpuHz = 1300000.0;
-    constexpr int kFramesPerSecond = 60;
-    constexpr uint64_t kCyclesPerFrame = static_cast<uint64_t>(kCpuHz / kFramesPerSecond);
-    constexpr uint64_t kTapCycles = kCyclesPerFrame * 4;  // kTapFrames
-    constexpr uint64_t kGapCycles = kCyclesPerFrame * 4;  // kIdleFrames
+    constexpr uint64_t kTapCycles = kPC1500CyclesPerFrame * 4;  // kTapFrames
+    constexpr uint64_t kGapCycles = kPC1500CyclesPerFrame * 4;  // kIdleFrames
 
     if (m_keyQueuePhase == KeyQueuePhase::Idle) {
         if (m_keyQueue.empty()) return;

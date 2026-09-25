@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include <ctime>
 
 // Seeds a machine's real-time clock from the host's local wall-clock time.
@@ -10,7 +11,17 @@
 // that was seeded (for the loader's log line).
 template <typename Machine>
 std::tm seedClockFromHostTime(Machine& machine) {
-    const std::time_t now = std::time(nullptr);
+    const auto nowTp = std::chrono::system_clock::now();
+    std::time_t now = std::chrono::system_clock::to_time_t(nowTp);
+    // to_time_t may round rather than truncate: take the sub-second phase
+    // relative to the time_t it actually returned, borrowing a second if
+    // it rounded up, so it stays in 0-999.
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                  nowTp - std::chrono::system_clock::from_time_t(now)).count();
+    if (ms < 0) {
+        now -= 1;
+        ms += 1000;
+    }
     std::tm local{};
 #ifdef _WIN32
     localtime_s(&local, &now);
@@ -18,6 +29,6 @@ std::tm seedClockFromHostTime(Machine& machine) {
     localtime_r(&now, &local);
 #endif
     machine.seedClock(local.tm_year + 1900, local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min,
-                      local.tm_sec);
+                      local.tm_sec, static_cast<int>(ms));
     return local;
 }

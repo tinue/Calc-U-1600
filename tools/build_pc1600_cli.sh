@@ -10,13 +10,16 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/CPU/SC7852/SC7852.cpp \
   Core/CPU/LH5803/LH5803Memory.cpp \
   Core/CPU/LH5803/LH5803SharedMemory.cpp \
-  Core/PC1500/PresetFile.cpp \
+  Core/Preset/PresetFile.cpp \
+  Core/Preset/PresetRunner.cpp \
+  Core/MachineCodeFile.cpp \
   Core/PC1500/PC1500Keyboard.cpp \
   Core/PC1500/PC1500TraceFile.cpp \
   Core/Audio/PiezoSampler.cpp \
   Core/PC1600/PC1600Memory.cpp \
   Core/PC1600/PC1600SubCpu.cpp \
   Core/PC1600/TC8576F.cpp \
+  Core/Serial/PtySerialLink.cpp \
   Core/PC1600/PC1600Display.cpp \
   Core/PC1600/PC1600Keyboard.cpp \
   Core/PC1600/PC1600Machine.cpp \

@@ -1,17 +1,18 @@
 #pragma once
 #include <cstdint>
 
-// ── PC-1600 RS-232C peer ────────────────────────────────────────────────
+// ── RS-232C peer ────────────────────────────────────────────────────────
 //
-// One serial peer attached to the PC-1600's TC8576F. The chip owns a
-// non-owning `SerialLink*`; the host owns the object. When no link is
-// attached the UART keeps its standalone behaviour (TxD accepted and
-// reported "sent" at once, RxD never has data), so every existing test
-// and headless probe is unaffected.
+// One serial peer attached to an emulated UART: the PC-1600's TC8576F or
+// the CE-158's CDP1854 (Ce158Card). The chip holds a non-owning
+// `SerialLink*`; the host owns the object. When no link is attached the
+// UART keeps its standalone behaviour (TxD accepted and reported "sent",
+// RxD never has data), so every existing test and headless probe is
+// unaffected.
 //
 // **Threading.** Every method here is called only from the emulation
-// thread, from inside `TC8576F::tick()` / `TC8576F::writeRegister()`
-// (which the GUI runs under `PC1600Machine::m_mutex`). An implementation
+// thread, from inside the UART's tick / register-write paths (which the
+// GUI runs under the owning machine's `m_mutex`). An implementation
 // that talks to the host -- a pseudo-terminal, a socket -- does its own
 // internal locking between those calls and its I/O threads, exactly like
 // the CPU trace rings. It must never call back into Core.

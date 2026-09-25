@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cstdint>
@@ -96,10 +97,12 @@ inline std::vector<std::string> formatAddressedHexLines(const std::vector<uint8_
 
 // Emits the `initial-content:`/`blocks:` lines (4-space region-field
 // indent, per docs/Memory-Card-Definition-Format.md), one `- bank:`/`offset:`/
-// `encoding: addressed-hex`/`bytes: |` entry per non-uniform bank, and a
-// trailing `# Bank N: omitted, uniform 0xXX` comment for banks whose
-// every byte is identical (so the file doesn't carry a needless 16 KB of
-// repeated-byte hex for e.g. an untouched RAM chip).
+// `encoding: addressed-hex`/`bytes: |` entry per bank. Every bank is
+// written, including uniform ones: an omitted bank would reload at the
+// region's power-up-fill rather than the value it held (e.g. an erased
+// CE-163F flash bank, all 0xFF, would come back as its 0xAA fill), and
+// formatAddressedHexLines() already collapses a uniform bank to a single
+// "$0000: XX..." line, so there is nothing to save by dropping it.
 //
 // `bankCountOrNegativeForUnbanked` follows ExpansionCard::debugBankCount()'s
 // own convention: a positive count for a genuinely banked region (its
@@ -115,39 +118,10 @@ inline std::vector<std::string> formatBatteryCardInitialContentBlock(int bankCou
     const int bankCount = banked ? bankCountOrNegativeForUnbanked : 1;
 
     std::vector<std::string> lines = {"    initial-content:", "      blocks:"};
-    std::vector<std::string> omitted;
     const size_t bankSize = image.size() / static_cast<size_t>(bankCount);
-    // Whether omitting every uniform bank would leave `blocks:` empty --
-    // Core's parseInitialContent() rejects an empty blocks list, so a
-    // freshly-attached, never-written-to card (every bank at its
-    // power-up-fill) must still emit at least one explicit block rather
-    // than omitting all of them.
-    bool anyNonUniform = false;
     for (int bank = 0; bank < bankCount; ++bank) {
-        const auto begin = image.begin() + static_cast<long>(bank * static_cast<int>(bankSize));
-        const auto end = begin + static_cast<long>(bankSize);
-        const uint8_t uniform = (begin == end) ? 0 : *begin;
-        for (auto it = begin; it != end; ++it) {
-            if (*it != uniform) { anyNonUniform = true; break; }
-        }
-        if (anyNonUniform) break;
-    }
-
-    for (int bank = 0; bank < bankCount; ++bank) {
-        const auto begin = image.begin() + static_cast<long>(bank * static_cast<int>(bankSize));
-        const auto end = begin + static_cast<long>(bankSize);
-        std::vector<uint8_t> bytes(begin, end);
-        const uint8_t uniform = bytes.empty() ? 0 : bytes.front();
-        bool allSame = !bytes.empty();
-        for (uint8_t b : bytes) {
-            if (b != uniform) { allSame = false; break; }
-        }
-        if (allSame && (anyNonUniform || bank != 0)) {
-            char note[64];
-            std::snprintf(note, sizeof(note), "Bank %d: omitted, uniform 0x%02X", bank, uniform);
-            omitted.push_back(note);
-            continue;
-        }
+        const auto begin = image.begin() + static_cast<long>(static_cast<size_t>(bank) * bankSize);
+        const std::vector<uint8_t> bytes(begin, begin + static_cast<long>(bankSize));
         if (banked) {
             char bankLine[32];
             std::snprintf(bankLine, sizeof(bankLine), "        - bank: %d", bank);
@@ -160,7 +134,6 @@ inline std::vector<std::string> formatBatteryCardInitialContentBlock(int bankCou
         lines.push_back("          bytes: |");
         for (const auto& hexLine : formatAddressedHexLines(bytes)) lines.push_back("            " + hexLine);
     }
-    for (const auto& note : omitted) lines.push_back("      # " + note);
     return lines;
 }
 
@@ -243,9 +216,12 @@ inline bool spliceRegionInitialContent(std::vector<std::string>* lines,
 // formatBatteryCardInitialContentBlock) into `sourceText` under the file's
 // one region, renames the card to
 // `newModuleName`, and (re)writes a generated-instance header comment.
-// `sourceText` is either the original bundled template (first save) or
-// the previous instance file's own text (a re-save/autosave) -- either
-// way the existing `created:` timestamp, if any, is preserved. Returns
+// `sourceText` is either a template (first save) or an instance file's
+// own text (a re-save/autosave, or a save-as of an instance) -- either
+// way the existing `created:` timestamp and "generated ... from" origin,
+// if any, are preserved (`sourceModuleName` only names the origin of a
+// file that has none yet). A top-level `template:` line is dropped: the
+// result is always an instance. Returns
 // false (and fills *error) if `sourceText` doesn't contain a
 // `module-name:` line or a `regions:` list with at least one region --
 // i.e. isn't a valid card definition to begin with.
@@ -275,7 +251,9 @@ inline bool spliceBatteryCardInstance(const std::string& sourceText, const std::
 
     std::string createdAt;
     bool hadCreatedAt = false;
+    std::string originLine = kHeaderPrefix + " -- generated by Calc-U-1600 from \"" + sourceModuleName + "\".";
     if (!lines.empty() && startsWith(lines.front(), kHeaderPrefix)) {
+        originLine = lines.front();
         size_t i = 0;
         while (i < lines.size() && startsWith(lines[i], "#")) {
             if (startsWith(lines[i], kCreatedPrefix)) {
@@ -297,6 +275,9 @@ inline bool spliceBatteryCardInstance(const std::string& sourceText, const std::
         return false;
     }
     lines[static_cast<size_t>(moduleNameIdx)] = "module-name: \"" + newModuleName + "\"";
+    lines.erase(std::remove_if(lines.begin(), lines.end(),
+                               [](const std::string& l) { return startsWith(l, "template:"); }),
+                lines.end());
 
     if (!spliceRegionInitialContent(&lines, contentLines)) {
         if (error) *error = "source text has no 'regions:' list with a region item";
@@ -304,7 +285,7 @@ inline bool spliceBatteryCardInstance(const std::string& sourceText, const std::
     }
 
     std::vector<std::string> header = {
-        kHeaderPrefix + " -- generated by Calc-U-1600 from \"" + sourceModuleName + "\".",
+        originLine,
         kCreatedPrefix + (hadCreatedAt ? createdAt : nowIso8601),
         "# last-saved: " + nowIso8601,
         "",

@@ -26,18 +26,32 @@
 //
 // --wav <out.wav> records the buzzer (PC6, see PiezoSampler.hpp) for the
 // whole run -- preset script included -- as 48 kHz mono 16-bit PCM.
+//
+// CE-158 (a preset with `interface: ce158`):
+//   --ce158-pty       attach a host PTY as the RS-232C peer; its stable
+//                     symlink is ~/Library/Application Support/Calc-U-1600/
+//                     calcu1600-ce158.serial (path printed on stderr).
+//   --ce158-rx <file> scripted peer: the file's bytes are what the CE-158
+//                     receives, in order.
+//   --ce158-rx-hold <n> start sending the --ce158-rx bytes only after n
+//                     character times (the ROM flushes the receiver when
+//                     e.g. SETDEV runs, so a byte sent too early is lost).
+//   --ce158-tx <file> write every byte the CE-158 sends to <file>.
+// Anything printed on the Centronics port is dumped after the run.
 
 #include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "../Core/Audio/WavFile.hpp"
 #include "../Core/PC1500/PC1500Machine.hpp"
-#include "../Core/PC1500/PresetFile.hpp"
+#include "../Core/Preset/PresetFile.hpp"
 #include "../Core/PC1500/PC1500PresetLoader.hpp"
+#include "Ce158CliPeer.hpp"
 
 int main(int argc, char** argv) {
     // Pull an optional `--modules-dir <dir>` out of argv up front so the
@@ -47,6 +61,7 @@ int main(int argc, char** argv) {
     bool moduleDirSet = false;
     bool dumpBasic = false;
     std::string wavPath;
+    Ce158CliPeer ce158Peer;
     {
         std::vector<char*> kept;
         for (int i = 0; i < argc; ++i) {
@@ -59,6 +74,7 @@ int main(int argc, char** argv) {
                 else               { extraModuleDirs.push_back(argv[++i]); }
                 continue;
             }
+            if (ce158Peer.parseArg(argc, argv, i)) continue;
             if (std::strcmp(argv[i], "--dump-basic") == 0) {
                 dumpBasic = true; // read-only BASIC program-area / pointer dump
                 continue;
@@ -72,6 +88,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "usage: %s <rom-file> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       %s --preset <preset-file.pc1500> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       options: --modules-dir <dir>  --dump-basic  --wav <out.wav>\n");
+        std::fprintf(stderr, "                %s\n", Ce158CliPeer::kUsage);
         return 1;
     }
 
@@ -115,7 +132,11 @@ int main(int argc, char** argv) {
         size_t n;
         while ((n = machine.drainAudio(chunk, 4096)) > 0) wav.insert(wav.end(), chunk, chunk + n);
     };
-    if (!wavPath.empty()) machine.setYieldHook(drainWav, 1300000 / 20);
+    if (!wavPath.empty()) machine.setYieldHook(drainWav, PC1500Machine::kCpuHz / 20);
+
+    // The CE-158's serial peer. Set before the preset attaches the card --
+    // attachCE158() picks up whatever link the machine already holds.
+    if (!ce158Peer.attach(machine)) return 1;
 
     if (usingPreset) {
         std::string presetPath = argv[2];
@@ -209,7 +230,7 @@ int main(int argc, char** argv) {
 
     // Drain trace ring buffer and print the last few instructions executed.
     // The ring only ever retains its own fixed capacity (512, see
-    // LH5801::kRingSize) regardless of how many instructions actually ran
+    // LH5801's TraceRing<CpuFrame, 512>) regardless of how many instructions actually ran
     // -- draining fewer than that here would return the *oldest* surviving
     // entries, not the most recent ones (drainTraceEvents advances forward
     // from the oldest undrained event), so this must request the full
@@ -279,6 +300,8 @@ int main(int argc, char** argv) {
             if (a > 0xFFF0) break;
         }
     }
+
+    if (!ce158Peer.report(machine)) return 1;
 
     if (machine.ce150Attached()) {
         auto pts = machine.ce150PlotPoints();

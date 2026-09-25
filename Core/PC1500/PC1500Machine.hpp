@@ -10,8 +10,10 @@
 
 #include "../CPU/LH5801/LH5801.hpp"
 #include "../Connector/Ce150Card.hpp"
+#include "../Connector/Ce158Card.hpp"
 #include "../Connector/ExpansionConnector.hpp"
 #include "../Connector/SystemBus.hpp"
+#include "PC1500Clocks.hpp"
 #include "PC1500Display.hpp"
 #include "PC1500Memory.hpp"
 #include "PC1500TraceFile.hpp"
@@ -45,6 +47,9 @@
 // that isn't a one-off debug peek.
 class PC1500Machine {
 public:
+    /// LH5801 cycles per second -- the unit runCycles() counts (PC1500Clocks.hpp).
+    static constexpr uint32_t kCpuHz = kPC1500CpuHz;
+
     explicit PC1500Machine(PC1500Variant variant = PC1500Variant::PC1500A);
 
     PC1500Variant variant() const { return m_memory.variant(); }
@@ -65,7 +70,7 @@ public:
     /// so this one seed rides through boot -- but it is deliberately kept
     /// out of reset() so headless tests / the CLI stay deterministic; the
     /// Bridge wrapper calls this after reset() with the real host time.
-    void seedClock(int year, int month, int day, int hour, int minute, int second);
+    void seedClock(int year, int month, int day, int hour, int minute, int second, int millisecond = 0);
 
     /// Execute one instruction. Returns the cycle count consumed (0 if
     /// halted with no pending interrupt, or a breakpoint was just hit).
@@ -166,6 +171,7 @@ public:
     /// attached, or the card has no bank concept) -- for the "Dump Mem"
     /// panel's per-region label. See ExpansionCard::debugCurrentBank().
     int debugSlotCardBank() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
         return m_attachedExpansionCard ? m_attachedExpansionCard->debugCurrentBank() : -1;
     }
 
@@ -173,6 +179,7 @@ public:
     /// attached, or the card has no bank concept). See
     /// ExpansionCard::debugBankCount().
     int debugSlotCardBankCount() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
         return m_attachedExpansionCard ? m_attachedExpansionCard->debugBankCount() : -1;
     }
 
@@ -183,6 +190,7 @@ public:
     /// just whichever one is currently latched in. See
     /// ExpansionCard::debugImage(). Empty if no card is attached.
     std::vector<uint8_t> debugSlotCardImage() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
         return m_attachedExpansionCard ? m_attachedExpansionCard->debugImage() : std::vector<uint8_t>{};
     }
 
@@ -208,10 +216,12 @@ public:
     /// ExpansionConnector -- for callers (the preset loader, the CLI) with
     /// no longer-lived object of their own to hold the card. Replaces any
     /// previously-attached owned card (matches the 40-pin connector's own
-    /// single-slot semantics -- see ExpansionConnector::attach()).
+    /// single-slot semantics -- see ExpansionConnector::attach()). Takes
+    /// m_mutex: the emulation thread dispatches bus accesses to the card.
     void attachExpansionCard(std::unique_ptr<ExpansionCard> card) {
-        m_attachedExpansionCard = std::move(card);
-        m_expansionConnector.attach(m_attachedExpansionCard.get());
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_expansionConnector.attach(card.get());
+        m_attachedExpansionCard = std::move(card); // old card freed only after it's unplugged
     }
 
     // ── CE-150 plotter / printer (60-pin system bus) ─────────────────────
@@ -236,6 +246,26 @@ public:
     std::vector<std::string> drainCE150Events();
     void clearCE150Paper();
 
+    // ── CE-158 RS-232C / Centronics interface (60-pin system bus) ────────
+    //
+    // Attached to the same SystemBus chain as the CE-150, alone or together
+    // with it (on hardware it plugs into the PC-1500 directly or into the
+    // CE-150's rear connector). `attachCE158` builds a card, loads its
+    // 16 KB ROM, resets it and attaches it; the serial link set with
+    // setCE158SerialLink() is kept across detach/attach, so the host PTY
+    // stays put while the user toggles the interface.
+    bool attachCE158(const uint8_t* rom, size_t romSize);
+    void detachCE158();
+    bool ce158Attached() const { return m_ce158Card != nullptr; }
+    /// Unlocked direct access -- headless/tests only (see ce150Card()).
+    Ce158Card* ce158Card() { return m_ce158Card.get(); }
+    /// Non-owning; the caller keeps `link` alive until it sets another one
+    /// (or nullptr) or destroys the machine. GUI-safe (takes m_mutex).
+    void setCE158SerialLink(SerialLink* link);
+    /// GUI-safe: the bytes printed on the Centronics port since the last
+    /// call. Empty when no CE-158 is attached.
+    std::vector<uint8_t> drainCE158ParallelOutput();
+
     // Trace/breakpoint passthrough (Phase 2a's debugger consumes this via
     // the Bridge layer; exercised directly by headless tests since Phase
     // 1). Unlocked, like cpu()/memory() above -- LH5801 already guards its
@@ -244,17 +274,15 @@ public:
     void     setTraceFlags(uint32_t flags) { m_cpu.setTraceFlags(flags); }
     uint32_t traceFlags() const { return m_cpu.traceFlags(); }
     uint32_t drainTraceEvents(CpuFrame* out, uint32_t max, uint32_t* outLost) { return m_cpu.drainTraceEvents(out, max, outLost); }
-    uint32_t peekTraceEvents(CpuFrame* out, uint32_t max) { return m_cpu.peekTraceEvents(out, max); }
 
     // ── Headless CPU-trace file (the preset loader's `trace:` step) ──────
     //
     // Unlike the setTraceFlags()/drainTraceEvents() pair above -- which
-    // expect an external consumer (the GUI's Swift TraceWriter) to pump
-    // the ring at 60 Hz -- this captures a full instruction trace to a
-    // file entirely inside the Core: step()/runCycles() drain the ring
-    // into the file themselves. For the synchronous, tick-less
-    // PC1500PresetLoader::applyPC1500Preset() pipeline. Don't mix the two APIs
-    // on one machine.
+    // leave draining the ring to the caller -- this captures a full
+    // instruction trace to a file entirely inside the Core: step()/
+    // runCycles() drain the ring into the file themselves. Used by the
+    // GUI's TRACE button and the preset `trace:` step. Don't mix the two
+    // APIs on one machine.
 
     /// Begin capturing to `handle` (open for binary writing; this machine
     /// takes ownership and endCpuTrace() closes it). Sets `flags` as the
@@ -279,6 +307,8 @@ private:
     SystemBus          m_systemBus;
     std::unique_ptr<ExpansionCard> m_attachedExpansionCard; // see attachExpansionCard()
     std::unique_ptr<Ce150Card> m_ce150Card;                 // see attachCE150()
+    std::unique_ptr<Ce158Card> m_ce158Card;                 // see attachCE158()
+    SerialLink* m_ce158Link = nullptr;                      // see setCE158SerialLink()
     mutable std::mutex m_mutex;
 
     // See setYieldHook(). m_yieldCountdown only runs down while a hook is set.
@@ -297,6 +327,18 @@ private:
     // case (PC1500TraceFile::writeGap() covers the pathological one).
     static constexpr uint32_t kTraceDrainInterval = 256;
     CpuFrame m_traceDrainBuf[kTraceDrainBufFrames];
+    /// Bodies of the public detach calls; caller holds m_mutex. The
+    /// attach/detach calls take it because step() dispatches bus accesses
+    /// to these cards on the emulation thread.
+    void detachCE150Locked();
+    void detachCE158Locked();
+
+    /// Advances everything outside the CPU that runs on real time (RTC,
+    /// buzzer, key queue, CE-150/CE-158) by `cycles`. The one place both
+    /// step() and runCycles() feed, so they stay in step. Caller holds
+    /// m_mutex.
+    void advancePeripherals(uint32_t cycles);
+
     /// Drain the CPU trace ring into m_traceFile. Caller must hold
     /// m_mutex; safe to call only while m_traceFile is set.
     void pumpTraceFile();
@@ -329,8 +371,7 @@ private:
     /// hardware key-scan timing already proven reliable there for
     /// preset/BASIC-program typing; duplicated locally (not shared via a
     /// header) matching this project's existing convention for small,
-    /// stable, cross-file timing constants (see e.g. Upd1990ac.hpp's own
-    /// kCpuHz comment). Directly manipulates m_memory.keyboard() rather
+    /// stable, cross-file timing constants. Directly manipulates m_memory.keyboard() rather
     /// than going through pressKey()/releaseKey() -- both already lock
     /// m_mutex, and this is only ever called from within a method that's
     /// already holding it (std::mutex isn't recursive).

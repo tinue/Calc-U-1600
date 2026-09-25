@@ -146,22 +146,15 @@ public:
     /// same no-op-when-unset convention as setBusArbiter().
     void setCPU(SC7852* cpu) {
         m_cpu = cpu;
-        // The TC8576F's INT line (OR of RxRDY/TxRDY/PRRDY/PTRDY) reaches
-        // the SC-7852 on INT0 = interrupt-cause bit 0, gated by port 35H
-        // mask bit 0. The UART already applies its own per-source mask
-        // (pr[5]); this adds the SC-7852-side mask + cause latch.
-        m_uart.setInterruptHook([this] {
-            if (!commInterruptEnabled()) return;
-            latchCommInterruptCause();
-            if (m_cpu) m_cpu->requestInterrupt();
-        });
+        // The TC8576F's INT output (a level, masked per source by its own
+        // pr[5]) reaches the SC-7852 on INT0 = interrupt-cause bit 0. It is
+        // not latched: bit 0 follows the chip until the handler services
+        // the chip (e.g. reads RxD). Port 35H bit 0 gates it in
+        // updateIntLine().
+        m_uart.setInterruptHook([this](bool) { updateIntLine(); });
+        updateIntLine();
     }
 
-    /// True if interrupt-cause bit 4 (1/64s timer) is currently unmasked at
-    /// port 35H -- PC1600Machine::step() consults this before calling
-    /// SC7852::requestInterrupt() on the timer's falling edge (see
-    /// PC-1600-CPU-SC7852-Z80.md §5.2's cause/mask pair).
-    bool timer64InterruptEnabled() const { return (m_intMask & 0x10) != 0; }
     /// Raw port 35H value -- debug/test access, same convention as
     /// PC1500Machine's own cpu()/memory() unlocked accessors.
     uint8_t intMask() const { return m_intMask; }
@@ -175,8 +168,12 @@ public:
     TC8576F&             uart() { return m_uart; }
     const TC8576F&       uart() const { return m_uart; }
     /// Buzzer drive line as PCM, in SC-7852 T-states -- advanced by
-    /// PC1600Machine::step() on both CPUs' branches. See m_opc.
+    /// PC1600Machine::step() on both CPUs' branches (via advanceBuzzer()).
+    /// See m_opc and m_fReg.
     PiezoSampler&        piezo() { return m_piezo; }
+    /// Credits `tstates` of elapsed time to the buzzer: runs the F-register
+    /// modulator (toggling SDO at its exact edge times) and the sampler.
+    void advanceBuzzer(uint32_t tstates);
 
     /// Sets/clears the ON key's live state (not part of the scan matrix --
     /// see PC1600Keyboard's class comment). A press transition sets IF
@@ -184,12 +181,22 @@ public:
     /// PC-1600-Keyboard.md §8 -- confirmed distinct from the PC-1500's own
     /// ON-key wiring in bit position only, same latch-on-press-edge idea.
     /// Returns true on a press (rising) edge -- the caller
-    /// (PC1600Machine::setOnKeyPressed) uses that to also raise a real
-    /// SC7852 interrupt, the wake path out of the ROM's power-down HALT.
+    /// (PC1600Machine::setOnKeyPressed) uses that to resume whichever CPU
+    /// owns the bus from its HALT (the ROM's power-down park). ON is not a
+    /// port-32H interrupt cause.
+    ///
+    /// The key is also PB7's live level: Baum, PC-1600 Systemhandbuch
+    /// (ISBN 3-924327-31-9) p.92 ("INP &1A AND &20 oder INP &1F AND &80")
+    /// and Anhang A pp.93-94 (1 = pressed). This matches the
+    /// PC-1500 TRM p.71's MSK read layout: CL1, SD1, PB7, IRQ in bits 7-4.
+    /// The ROM polls it directly: wait-for-release at P0-B0 0775H, the
+    /// gates at 0B07H/0B66H and P1-B3 4770H, and the key scan at
+    /// P2-B6 9412H.
     bool setOnKeyPressed(bool pressed) {
-        bool risingEdge = pressed && !m_onKeyPressed;
+        const bool risingEdge = pressed && !(m_pbIn & kPbInOnKey);
         if (risingEdge) m_if |= 0x02;
-        m_onKeyPressed = pressed;
+        if (pressed) m_pbIn |= kPbInOnKey;
+        else         m_pbIn &= static_cast<uint8_t>(~kPbInOnKey);
         return risingEdge;
     }
 
@@ -244,26 +251,31 @@ public:
     /// this project's own trace evidence can distinguish from "write
     /// clears" or "cleared some other way," and is the simplest
     /// convention consistent with it.
-    void latchTimer64InterruptCause() { m_intCause |= 0x10; }
+    void latchTimer64InterruptCause() { m_intCause |= 0x10; updateIntLine(); }
 
-    /// Port 35H bit 6 -- is the aggregated sub-CPU interrupt (INT6)
-    /// unmasked? See PC1600Machine's own kTimer05PeriodTStates comment
-    /// for which of that line's several sources this core actually raises.
-    bool subCpuInterruptEnabled() const { return (m_intMask & 0x40) != 0; }
 
     /// Latches interrupt-cause register (port 32H) bit 6, the sub-CPU's
     /// aggregated interrupt line. Same falling-edge-only, read-clears
     /// convention as latchTimer64InterruptCause() above.
-    void latchSubCpuInterruptCause() { m_intCause |= 0x40; }
+    void latchSubCpuInterruptCause() { m_intCause |= 0x40; updateIntLine(); }
 
-    /// Port 35H bit 0 -- is the communication-port (TC8576F, INT0)
-    /// interrupt unmasked? Checked by the UART's interrupt hook (see
-    /// setCPU()) before latching the cause and poking the SC-7852.
-    bool commInterruptEnabled() const { return (m_intMask & 0x01) != 0; }
-    /// Latches interrupt-cause register (port 32H) bit 0 -- the
-    /// communication port received/sent data (TC8576F -> INT0, pin 81).
-    /// Same read-clears convention as latchTimer64InterruptCause().
-    void latchCommInterruptCause() { m_intCause |= 0x01; }
+    /// Latches cause bit 3, "interrupt from the LH-5801/5803 side": the
+    /// LH5803's STA #(0A038H) handback. The ROM's only handoff (P1-B3
+    /// 5C0E-5C22) unmasks just this cause (35H = 08H) before EI;HALT, and
+    /// the dispatcher's bit-3 branch (4154H) acknowledges it -- so this
+    /// INT is what ends the parked SC7852's HALT.
+    void latchLh5803InterruptCause() { m_intCause |= 0x08; updateIntLine(); }
+
+    /// Port 32H as read: the latched causes plus bit 0, the TC8576F's live
+    /// INT output (TC8576F -> INT0, pin 81).
+    uint8_t intCause() const {
+        return static_cast<uint8_t>(m_intCause | (m_uart.interruptOutput() ? 0x01 : 0x00));
+    }
+
+    /// The SC-7852's INT line is the OR of the latched causes (port 32H)
+    /// that are enabled at port 35H -- a level, so masking a cause or the
+    /// 32H read that clears it withdraws a request not yet taken.
+    void updateIntLine() { if (m_cpu) m_cpu->setIntLine((intCause() & m_intMask) != 0); }
 
     /// Loads the always-resident system ROM: `lower` backs page A
     /// (0000-3FFF, PC1600-P0-B0-new.bin) and `upper` backs page B bank 0
@@ -430,8 +442,11 @@ private:
     PC1600SystemBus m_ce1600pBus; // Page B banks 4/5 + I/O 0x80-0x8F; see ce1600pBus()
     PC1600BusArbiter* m_arbiter{nullptr};
     SC7852* m_cpu{nullptr};
-    uint8_t m_intCause{0};      // Port 32H -- bit 4 (1/64s timer) driven by setTimer64Bit();
-                                // bits 0-3/5-7 have no real interrupt source wired yet
+    uint8_t m_intCause{0};      // Port 32H latched causes, whatever the mask -- bit 3 LH5803
+                                // handback, bit 4 1/64 s timer, bit 6 sub-CPU; the rest have no
+                                // source yet. Read-clears.
+                                // Bit 0 (comm) is the UART's live level, see intCause().
+                                // INT = intCause() & mask (updateIntLine())
     uint8_t m_intMask{0};       // Port 35H
     uint8_t m_im2VectorLow{0xFF}; // Port 39H
 
@@ -452,15 +467,42 @@ private:
     // so a future cassette model shares this latch. It has to be readable
     // because the ROM does read-modify-write on it.
     uint8_t m_opc{0};
-    // TRM 7.5: SC-7852 T-states at 3.58 MHz (PC1600Machine::kTStateHz).
-    PiezoSampler m_piezo{3580000.0};
+    // F register (17H) and the modulated serial output SDO -- PC-1500 TRM
+    // 3-3-2 (9) and 3-2 D for the LH5810/5811 this block is compatible
+    // with. F6 = 1 switches SDO from normal serial data to the modulation
+    // clocks: SDO = SXO*FX + /SXO*FY. F0-2 pick FX and F3-5 pick FY, each
+    // phi/64, /128, /256, /512 or /1024. Only the idle case is modelled:
+    // no serial transmit (L, 16H), so SXO sits at mark = 1 and SDO = FX.
+    //
+    // phi, measured: dampflok.bas (Baum Systemhandbuch p.52) whistles with F = 41H
+    // (FX = /128). A real unit plays it at 2539 Hz (2533.24 Hz recorded, less
+    // the recorder's -0.22% seen in every BEEP recording), = 1.3 MHz / 512.
+    // So this block's modulator runs from phi = 1.3 MHz / 4 = 325 kHz.
+    // Baum Systemhandbuch Anhang A p.93 confirms &17: "OUT &17,65" on /
+    // "OUT &17,0" off, a continuous tone, the cassette-recording sync signal.
+    // Its "2639 Hz" is a typo: no power-of-two divider of 1.3 or 3.58 MHz
+    // gives that, while 2539 Hz is 1.3 MHz / 512. (The
+    // PC-1500's own LH5811 runs at 1.3 MHz: the CE-150 tape code writes
+    // F = 63H for its 2539 / 1270 Hz tones, /512 and /1024.)
+    //
+    // SDO reaches the buzzer through the same gate as OPC b7/b6. The line
+    // idles high and either input going low sounds it
+    // (PC-1600-CPU-SC7852-Z80.md pin 75: PC6 = NAND(..., SD0)). So the
+    // audible level is (b6 && b7) && SDO. The recording agrees: the
+    // whistle runs on unchanged through the noise routine's OPC writes, and
+    // BEEP OFF (b6 low) silences both.
+    static constexpr int64_t kModulatorHz = kPC1600PhiOsHz / 4;   // phi of the F-register dividers
+    uint8_t m_fReg{0};
+    bool    m_sdo{true};
+    int64_t m_sdoAccum{0};  // T-states * kModulatorHz into the current SDO half period
+    void updateBuzzerLine() { m_piezo.setLevel((m_opc & 0xC0) == 0xC0 && m_sdo); }
+    // Sampled in SC-7852 T-states.
+    PiezoSampler m_piezo{double(kPC1600TStateHz), PiezoSampler::Transducer::PC1600};
     // Live PB *pin* levels for the bits driven from outside the CPU, kept
     // apart from the m_opb output latch above and merged in on a read of
-    // 1FH (see readIO()). Only PB5 (the sub-CPU's 64Hz timer square wave,
-    // setTimer64Bit()) has a source today; PB7 (ON/BREAK) still reaches the
-    // ROM through the 1BH interrupt-flag latch instead (setOnKeyPressed()),
-    // so bit 7 stays 0 here -- which is also what the old latch-only model
-    // effectively returned, since the ROM only ever writes 00H/40H to OPB.
+    // 1FH (see readIO()). PB5 = the sub-CPU's 64Hz timer square wave
+    // (setTimer64Bit()); PB7 = the ON key (setOnKeyPressed(), which also
+    // sets the 1BH interrupt-flag latch on the press edge).
     ///
     /// **PB3 starts high.** Pin 78 (PCSTB) is "reset → input mode, current
     /// state latched in the PB3 flip-flop (externally pulled up on the
@@ -486,13 +528,18 @@ private:
     /// agree -- wiring a second such pin means editing one constant, not
     /// two bare literals in different functions.
     static constexpr uint8_t kPbInFreeRunning = 0x20; // PB5
+    /// PB7: the ON key's live level. Also carried across reset(): the key
+    /// is a physical input, not a reset-latched line.
+    static constexpr uint8_t kPbInOnKey = 0x80;
     uint8_t m_pbIn{kPbInResetLevels};
+    // MSK (1AH) -- interrupt mask bits 0-3 (IRQ, PB7, RD, TD enables; PC-1500
+    // TRM p.71). Stored only: nothing in this core raises those causes.
+    uint8_t m_msk{0};
     uint8_t m_if{0}; // port 1BH -- bit1 = ON/BREAK latch (PC1600Keyboard's own doc §8)
     PC1600Keyboard m_keyboard;
     PC1600Display m_display;
     PC1600SubCpu  m_subCpu;
     TC8576F       m_uart{m_subCpu}; // declared after m_subCpu -- it holds a ref
-    bool m_onKeyPressed{false};
 
     std::array<uint8_t, kBankSize> m_bank0Lower{};   // page A, fixed
     std::array<uint8_t, kBankSize> m_bank0Upper{};   // page B bank 0

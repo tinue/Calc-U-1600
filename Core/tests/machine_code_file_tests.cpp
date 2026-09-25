@@ -84,6 +84,10 @@ void test_read_ce158_length_mismatch() {
     CHECK(!f.ok);
     CHECK(f.header == File::Header::CE158);
     CHECK(!f.error.empty());
+    // The header's fields are still there for a preset's `length:` override.
+    CHECK(f.lengthMismatch);
+    CHECK(f.loadAddr == 0x40C5);
+    CHECK(f.payload.size() == kCode.size() + 1);
 }
 
 void test_read_ce158_basic_type_rejected() {

@@ -15,7 +15,7 @@
 #include "../Core/PC1600/PC1600Machine.hpp"
 #include "../Core/Resources/BundledRomCatalog.hpp"
 #include "../Core/PC1600/PC1600PresetLoader.hpp"
-#include "../Core/PC1500/PresetFile.hpp"
+#include "../Core/Preset/PresetFile.hpp"
 
 
 int main(int argc, char** argv) {
@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     PC1600Machine* mp = &machine;
-    PC1600PresetLoadResult res = applyPC1600Preset(
+    PresetLoadResult res = applyPC1600Preset(
         machine, preset,
         [mp](const std::string& l) {
             std::fprintf(stderr, "[preset] %s\n", l.c_str());

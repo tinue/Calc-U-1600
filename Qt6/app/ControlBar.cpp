@@ -23,15 +23,15 @@ QFrame* addSeparator(QHBoxLayout* layout, QWidget* parent) {
     return line;
 }
 
-// Shared by the memory-slot and floppy pickers: "–empty–", the bundled
-// names, then (after a separator) the user's saved ones, then (after
-// another) the ROM modules -- memory slots only.
-void fillPicker(QComboBox* combo, const QStringList& bundled, const QStringList& saved,
+// Shared by the memory-slot and floppy pickers: "–empty–", the templates
+// (bundled and the user's own), then (after a separator) the user's saved
+// instances, then (after another) the ROM modules -- memory slots only.
+void fillPicker(QComboBox* combo, const QStringList& templates, const QStringList& saved,
                 const QString& selectedOrEmpty, const QStringList& roms = {}) {
     const QSignalBlocker blocker(combo);
     combo->clear();
     combo->addItem(ControlBar::tr("–empty–"), QString());
-    for (const auto& name : bundled) combo->addItem(name, name);
+    for (const auto& name : templates) combo->addItem(name, name);
     if (!saved.isEmpty()) combo->insertSeparator(combo->count());
     for (const auto& name : saved) combo->addItem(name, name);
     if (!roms.isEmpty()) combo->insertSeparator(combo->count());
@@ -50,6 +50,9 @@ QStringList namesOf(const QVector<Entry>& entries, NameOf nameOf) {
 } // namespace
 
 ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
+    // objectNames ("controlbar.*") are the handles screenshot scenarios
+    // address widgets by -- see docs/screenshots/README.md.
+    setObjectName(QStringLiteral("controlbar"));
     auto* layout = new QHBoxLayout(this);
 
     // Every widget here is NoFocus: never take keyboard focus from
@@ -62,6 +65,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_modelCombo->addItem(tr("PC-1600"), static_cast<int>(Model::PC1600));
     m_modelCombo->setCurrentIndex(1); // PC-1500A, matching MachineController's default
     m_modelCombo->setFocusPolicy(Qt::NoFocus);
+    m_modelCombo->setObjectName(QStringLiteral("controlbar.model"));
     layout->addWidget(m_modelCombo);
 
     m_romCombo = new QComboBox(this);
@@ -70,14 +74,16 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_romCombo->addItem(tr("A04"), static_cast<int>(PC1500RomRevision::A04));
     m_romCombo->setCurrentIndex(2); // A04, matching MachineController's default
     m_romCombo->setFocusPolicy(Qt::NoFocus);
+    m_romCombo->setObjectName(QStringLiteral("controlbar.rom"));
     layout->addWidget(m_romCombo);
     setRomPickerVisible(false); // PC-1500A is the default model (see m_modelCombo above)
 
     m_rom1600Combo = new QComboBox(this);
-    m_rom1600Combo->addItem(tr("New ROM"), static_cast<int>(PC1600RomVersion::New));
-    m_rom1600Combo->addItem(tr("Old ROM"), static_cast<int>(PC1600RomVersion::Old));
+    m_rom1600Combo->addItem(tr("New"), static_cast<int>(PC1600RomVersion::New));
+    m_rom1600Combo->addItem(tr("Old"), static_cast<int>(PC1600RomVersion::Old));
     m_rom1600Combo->setToolTip(tr("PC-1600 BASIC ROM version"));
     m_rom1600Combo->setFocusPolicy(Qt::NoFocus);
+    m_rom1600Combo->setObjectName(QStringLiteral("controlbar.rom1600"));
     layout->addWidget(m_rom1600Combo);
     setPC1600RomPickerVisible(false);
 
@@ -93,6 +99,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
         auto* combo = new QComboBox(this);
         combo->setFocusPolicy(Qt::NoFocus);
         combo->setMinimumContentsLength(12);
+        combo->setObjectName(QStringLiteral("controlbar.slot%1").arg(slot));
         m_slot[i].combo = combo;
         layout->addWidget(combo);
 
@@ -101,6 +108,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
         saveButton->setToolTip(tr("Name & Save"));
         saveButton->setFocusPolicy(Qt::NoFocus);
         saveButton->setEnabled(false);  // always shown; see setSlotSaveEnabled()
+        saveButton->setObjectName(QStringLiteral("controlbar.slot%1.save").arg(slot));
         m_slot[i].saveButton = saveButton;
         layout->addWidget(saveButton);
 
@@ -123,15 +131,35 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_ce150Button = new QPushButton(tr("CE-150"), this);
     m_ce150Button->setCheckable(true);
     m_ce150Button->setFocusPolicy(Qt::NoFocus);
+    m_ce150Button->setObjectName(QStringLiteral("controlbar.ce150"));
     m_ce150Button->setToolTip(tr("Attach/detach the CE-150 plotter (requires a power cycle)"));
     layout->addWidget(m_ce150Button);
+
+    m_ce158Button = new QPushButton(tr("CE-158"), this);
+    m_ce158Button->setCheckable(true);
+    m_ce158Button->setFocusPolicy(Qt::NoFocus);
+    m_ce158Button->setObjectName(QStringLiteral("controlbar.ce158"));
+    m_ce158Button->setToolTip(tr("Attach/detach the CE-158 RS-232C/parallel interface (requires a power cycle)"));
+    layout->addWidget(m_ce158Button);
 
     m_ce1600pButton = new QPushButton(tr("CE-1600P"), this);
     m_ce1600pButton->setCheckable(true);
     m_ce1600pButton->setFocusPolicy(Qt::NoFocus);
+    m_ce1600pButton->setObjectName(QStringLiteral("controlbar.ce1600p"));
     m_ce1600pButton->setToolTip(tr("Attach/detach the CE-1600P plotter (requires a power cycle)"));
     layout->addWidget(m_ce1600pButton);
     setCe1600pVisible(false);
+
+    // The CE-1600P's ROM chip sits in its box, so the CE-1600F follows this
+    // choice too. Independent of the PC-1600 ROM picker above.
+    m_ce1600pRomCombo = new QComboBox(this);
+    m_ce1600pRomCombo->addItem(tr("New"), static_cast<int>(CE1600PRomVersion::New));
+    m_ce1600pRomCombo->addItem(tr("Old"), static_cast<int>(CE1600PRomVersion::Old));
+    m_ce1600pRomCombo->setToolTip(tr("CE-1600P ROM version (also used by the CE-1600F)"));
+    m_ce1600pRomCombo->setFocusPolicy(Qt::NoFocus);
+    m_ce1600pRomCombo->setObjectName(QStringLiteral("controlbar.ce1600p.rom"));
+    layout->addWidget(m_ce1600pRomCombo);
+    setCE1600PRomPickerVisible(false);
 
     // CE-1600F floppy disk picker -- attaches as a union with CE-1600P
     // (PC1600Machine::attachCE1600P()). Always shown on a PC-1600 (see
@@ -143,7 +171,8 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
 
     m_floppyCombo = new QComboBox(this);
     m_floppyCombo->setFocusPolicy(Qt::NoFocus);
-    m_floppyCombo->setMinimumContentsLength(12);
+    m_floppyCombo->setMinimumContentsLength(9);
+    m_floppyCombo->setObjectName(QStringLiteral("controlbar.floppy"));
     layout->addWidget(m_floppyCombo);
 
     // Side toggle -- the software analogue of ejecting and flipping the
@@ -152,12 +181,18 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_floppySideButton = new QPushButton(tr("A"), this);
     m_floppySideButton->setFocusPolicy(Qt::NoFocus);
     m_floppySideButton->setToolTip(tr("Eject and turn the disk over"));
+    m_floppySideButton->setObjectName(QStringLiteral("controlbar.floppy.side"));
+    // Compact: one letter / one icon, so no wider than the diskette symbol.
+    const int compactWidth = m_floppySideButton->iconSize().width() + 12;
+    m_floppySideButton->setFixedWidth(compactWidth);
     layout->addWidget(m_floppySideButton);
 
     m_floppySaveButton = new QPushButton(this);
     m_floppySaveButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
     m_floppySaveButton->setToolTip(tr("Name & Save"));
     m_floppySaveButton->setFocusPolicy(Qt::NoFocus);
+    m_floppySaveButton->setFixedWidth(compactWidth);
+    m_floppySaveButton->setObjectName(QStringLiteral("controlbar.floppy.save"));
     layout->addWidget(m_floppySaveButton);
 
     // The "green lamp" -- drive-active indicator. A plain colored dot via
@@ -165,6 +200,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     // size and needs no bundled resource.
     m_floppyLampLabel = new QLabel(this);
     m_floppyLampLabel->setFixedWidth(14);
+    m_floppyLampLabel->setObjectName(QStringLiteral("controlbar.floppy.lamp"));
     m_floppyLampLabel->setAlignment(Qt::AlignCenter);
     m_floppyLampLabel->setToolTip(tr("Drive active -- wait for this to go dark before turning the disk over"));
     m_floppyLampLabel->setText(QStringLiteral("●"));  // filled circle
@@ -189,12 +225,16 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     connect(m_rom1600Combo, &QComboBox::currentIndexChanged, this, [this](int index) {
         emit pc1600RomVersionSelected(static_cast<PC1600RomVersion>(m_rom1600Combo->itemData(index).toInt()));
     });
+    connect(m_ce1600pRomCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        emit ce1600pRomVersionSelected(static_cast<CE1600PRomVersion>(m_ce1600pRomCombo->itemData(index).toInt()));
+    });
     // Buttons are checkable so their own click already toggled the visual
     // check state -- MainWindow will resync it (via setCe150State/
     // setCe1600pState) once PlotterController confirms the actual result,
     // so no manual setChecked() here.
     connect(m_ce150Button, &QPushButton::clicked, this, [this] { emit ce150ToggleRequested(); });
     connect(m_ce1600pButton, &QPushButton::clicked, this, [this] { emit ce1600pToggleRequested(); });
+    connect(m_ce158Button, &QPushButton::clicked, this, [this] { emit ce158ToggleRequested(); });
 }
 
 void ControlBar::setModel(Model model) {
@@ -222,11 +262,11 @@ void ControlBar::setPC1600RomPickerVisible(bool visible) {
     m_rom1600Combo->setVisible(visible);
 }
 
-void ControlBar::setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& bundled,
+void ControlBar::setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& templates,
                                   const QVector<MemoryModuleManager::ModuleEntry>& instances,
                                   const QString& selectedOrEmpty) {
     QStringList ram, roms;
-    for (const auto& e : bundled) (e.rom ? roms : ram) << e.moduleName;
+    for (const auto& e : templates) (e.rom ? roms : ram) << e.moduleName;
     const auto name = [](const MemoryModuleManager::ModuleEntry& e) { return e.moduleName; };
     fillPicker(m_slot[slot - 1].combo, ram, namesOf(instances, name), selectedOrEmpty, roms);
 }
@@ -250,6 +290,12 @@ void ControlBar::setCe150State(bool attached, bool enabled) {
     m_ce150Button->setEnabled(enabled);
 }
 
+void ControlBar::setCe158State(bool attached, bool enabled) {
+    const QSignalBlocker blocker(m_ce158Button);
+    m_ce158Button->setChecked(attached);
+    m_ce158Button->setEnabled(enabled);
+}
+
 void ControlBar::setCe1600pState(bool attached, bool enabled) {
     const QSignalBlocker blocker(m_ce1600pButton);
     m_ce1600pButton->setChecked(attached);
@@ -260,11 +306,21 @@ void ControlBar::setCe1600pVisible(bool visible) {
     m_ce1600pButton->setVisible(visible);
 }
 
-void ControlBar::setFloppyCombo(const QVector<FloppyDiskManager::DiskEntry>& bundled,
+void ControlBar::setCE1600PRomVersion(CE1600PRomVersion version) {
+    const QSignalBlocker blocker(m_ce1600pRomCombo);
+    const int idx = m_ce1600pRomCombo->findData(static_cast<int>(version));
+    m_ce1600pRomCombo->setCurrentIndex(idx >= 0 ? idx : 0);
+}
+
+void ControlBar::setCE1600PRomPickerVisible(bool visible) {
+    m_ce1600pRomCombo->setVisible(visible);
+}
+
+void ControlBar::setFloppyCombo(const QVector<FloppyDiskManager::DiskEntry>& templates,
                                 const QVector<FloppyDiskManager::DiskEntry>& instances,
                                 const QString& selectedOrEmpty) {
     const auto name = [](const FloppyDiskManager::DiskEntry& e) { return e.diskName; };
-    fillPicker(m_floppyCombo, namesOf(bundled, name), namesOf(instances, name), selectedOrEmpty);
+    fillPicker(m_floppyCombo, namesOf(templates, name), namesOf(instances, name), selectedOrEmpty);
 }
 
 void ControlBar::setFloppyVisible(bool visible) {

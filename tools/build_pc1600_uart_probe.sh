@@ -18,7 +18,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 -DPC1600_POWER_PROBE \
   Core/PC1600/PC1600Display.cpp \
   Core/PC1600/PC1600SubCpu.cpp \
   Core/PC1600/TC8576F.cpp \
-  Core/PC1600/PtySerialLink.cpp \
+  Core/Serial/PtySerialLink.cpp \
   Core/PC1600/PC1600Machine.cpp \
   Core/PC1600/PC1600BasicTyper.cpp \
   Core/PC1500/PC1500TraceFile.cpp \

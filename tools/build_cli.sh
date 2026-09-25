@@ -11,14 +11,19 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/PC1500/PC1500Keyboard.cpp \
   Core/PC1500/PC1500Display.cpp \
   Core/PC1500/Upd1990ac.cpp \
-  Core/PC1500/PresetFile.cpp \
+  Core/Preset/PresetFile.cpp \
+  Core/Preset/PresetRunner.cpp \
+  Core/MachineCodeFile.cpp \
+  Core/PC1600/PC1600MachineImage.cpp \
   Core/PC1500/PC1500BasicTyper.cpp \
   Core/PC1500/PC1500BasicLoader.cpp \
   Core/PC1500/PC1500PresetLoader.cpp \
+  Core/PC1500/PC1500MachineCodeLoader.cpp \
   Core/Display/LcdScreenshot.cpp \
   Core/Basic/BasicBinaryImage.cpp \
   Core/Basic/BasicProgramSource.cpp \
   Core/PC1500/PC1500TraceFile.cpp \
+  Core/Serial/PtySerialLink.cpp \
   tools/pc1500_cli.cpp \
   Core/Basic/vendor/sharpdx/libsharpdx.a \
   -o headless/pc1500_cli

@@ -2,10 +2,9 @@
 
 #include <algorithm>
 
-// Standard Zilog Z-80A instruction set/timing. T-state (cycle) counts
-// follow the documented nominal values; "No extra wait state" in
-// SC7852.hpp's class comment covers the one open timing question (extra
-// wait states).
+// Standard Zilog Z-80A instruction set/timing. The execute*() tables return
+// the documented nominal T-state counts; step() and serviceInterrupt() add
+// the SC-7852's M1 wait state on top (see SC7852.hpp's class comment).
 
 namespace {
 constexpr uint8_t kFlagC  = 0x01;
@@ -29,8 +28,9 @@ void SC7852::reset() {
     IFF1 = false; IFF2 = false;
     IM = 0;
     m_halted = false;
-    m_irqPending = false;
     m_nmiPending = false;
+    m_eiShadow = false;
+    m_pendingPrefix = 0;
     // A/F and the general-purpose registers are left as their construction-
     // time values on a real Z-80 reset (undefined/whatever they were) —
     // this core initializes them to 0xFF/0 at construction and never
@@ -41,16 +41,20 @@ void SC7852::reset() {
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────
 
-uint8_t SC7852::fetch8() {
-    uint8_t v = bus.readMem(PC++);
+// R counts M1 cycles only (opcode and prefix fetches, interrupt
+// acknowledges), not operand or displacement reads.
+uint8_t SC7852::fetchOpcode() {
     bumpR();
-    return v;
+    return bus.readMem(PC++);
+}
+
+uint8_t SC7852::fetch8() {
+    return bus.readMem(PC++);
 }
 
 uint16_t SC7852::fetch16() {
     uint8_t lo = bus.readMem(PC++);
     uint8_t hi = bus.readMem(PC++);
-    bumpR();
     return uint16_t(lo | (hi << 8));
 }
 
@@ -383,21 +387,21 @@ bool SC7852::condTrue(int code) const {
 
 // ── Interrupts ─────────────────────────────────────────────────────────
 
-void SC7852::requestInterrupt() { m_irqPending = true; }
 void SC7852::requestNMI() { m_nmiPending = true; }
 
-int SC7852::serviceInterrupt() {
+int SC7852::serviceInterrupt(bool maskableBlocked) {
     if (m_nmiPending) {
         m_nmiPending = false;
+        bumpR(); // the acknowledge is an M1 cycle
         m_halted = false;
         IFF2 = IFF1;
         IFF1 = false;
         pushWord(PC);
         PC = 0x0066;
-        return 11;
+        return 11 + kM1WaitStates;
     }
-    if (m_irqPending && IFF1) {
-        m_irqPending = false;
+    if (m_intLine && IFF1 && !maskableBlocked) {
+        bumpR();
         m_halted = false;
         IFF1 = false;
         IFF2 = false;
@@ -424,25 +428,25 @@ int SC7852::serviceInterrupt() {
                 break;
             }
         }
-        return cost;
+        return cost + kM1WaitStates; // the acknowledge cycle is an M1
     }
-    if (m_irqPending && m_halted) {
-        // HALT always wakes on any interrupt even if IFF1 is clear; the
-        // interrupt itself just isn't serviced in that case (standard
-        // documented Z-80 behavior). Consume the pending flag either way
-        // so a masked IRQ doesn't re-wake indefinitely once already
-        // acknowledged as "woke the CPU up."
-        m_irqPending = false;
-        m_halted = false;
-    }
+    // INT with IFF1 clear is ignored, and a HALTed CPU stays HALTed (Z-80
+    // UM: only an accepted interrupt, NMI or RESET ends HALT). The line
+    // stays up as long as the device holds it.
     return -1; // nothing serviced -- step() should fetch/execute normally
 }
 
 // ── step() ────────────────────────────────────────────────────────────
 
 int SC7852::step() {
-    if (m_irqPending || m_nmiPending) {
-        int serviced = serviceInterrupt();
+    // EI enables maskable interrupts only after the instruction following
+    // it (Z-80 UM), so EI;RETI and EI;HALT complete before an IRQ that was
+    // already pending is accepted.
+    const bool eiShadow = m_eiShadow;
+    m_eiShadow = false;
+    // No interrupt is accepted between a DD/FD prefix and what follows it.
+    if (!m_pendingPrefix && (m_nmiPending || (m_intLine && IFF1 && !eiShadow))) {
+        int serviced = serviceInterrupt(eiShadow);
         if (serviced >= 0) return serviced; // interrupt ack consumes this step() call on its own; no trace frame
     }
     if (m_halted) {
@@ -450,30 +454,40 @@ int SC7852::step() {
     }
 
     uint32_t tf = traceFlags();
-    if (tf & TRACE_BREAKPOINTS) {
-        std::lock_guard<std::mutex> lock(m_traceMutex);
-        if (std::binary_search(m_breakpoints.begin(), m_breakpoints.end(), PC)) {
-            m_breakpointHit = true;
-            return 0;
+
+    uint16_t pcAtStart = m_pendingPrefix ? uint16_t(PC - 1) : PC; // a carried prefix starts the instruction
+    uint8_t opcode = m_pendingPrefix ? m_pendingPrefix : fetchOpcode();
+    m_pendingPrefix = 0;
+    int cycles = 0;
+    // A DD/FD followed by another DD, FD or ED acts as a 4 T-state NOP
+    // and the later prefix decides the instruction (DD ED B0 is LDIR,
+    // DD FD 21 is LD IY,nn), so executeDDFD() never sees a prefix byte.
+    // A following DD/FD (already fetched) is carried into the next step(),
+    // keeping each step() bounded however long a prefix run is.
+    uint8_t indexedOp = 0;
+    if (opcode == 0xDD || opcode == 0xFD) {
+        indexedOp = fetchOpcode();
+        if (indexedOp == 0xDD || indexedOp == 0xFD) {
+            m_pendingPrefix = indexedOp;
+            cycles = 4 + kM1WaitStates;
+            recordTraceFrame(tf, pcAtStart, opcode, uint8_t(cycles));
+            return cycles;
+        }
+        if (indexedOp == 0xED) {
+            cycles += 4 + kM1WaitStates;
+            opcode = 0xED;
         }
     }
-
-    uint16_t pcAtStart = PC;
-    uint8_t opcode = fetch8();
     uint16_t opcodeWord = opcode;
-    int cycles;
-    // TODO(wait-state-scope): every T-state count returned below is
-    // nominal Zilog timing with no extra wait state inserted -- the
-    // locked default for the Technical Reference Manual's unresolved "1
-    // WAIT automatically inserted in the machine cycle" note (see
-    // SC7852.hpp's class comment). Revisit only if a disassembled ROM
-    // delay loop or observed real-hardware behavior disagrees.
+    // The execute*() tables return nominal Zilog T-states; the SC-7852's
+    // M1 wait (see SC7852.hpp's class comment) is added here, once per
+    // opcode byte fetched as an M1 -- two for the prefixed forms.
     switch (opcode) {
-        case 0xCB: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xCB00 | op2); cycles = 4 + executeCB(op2); break; }
-        case 0xED: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xED00 | op2); cycles = 4 + executeED(op2); break; }
-        case 0xDD: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xDD00 | op2); cycles = 4 + executeDDFD(op2, IX); break; }
-        case 0xFD: { uint8_t op2 = fetch8(); opcodeWord = uint16_t(0xFD00 | op2); cycles = 4 + executeDDFD(op2, IY); break; }
-        default: cycles = execute(opcode); break;
+        case 0xCB: { uint8_t op2 = fetchOpcode(); opcodeWord = uint16_t(0xCB00 | op2); cycles += 4 + executeCB(op2) + 2 * kM1WaitStates; break; }
+        case 0xED: { uint8_t op2 = fetchOpcode(); opcodeWord = uint16_t(0xED00 | op2); cycles += 4 + executeED(op2) + 2 * kM1WaitStates; break; }
+        case 0xDD: { uint8_t op2 = indexedOp; opcodeWord = uint16_t(0xDD00 | op2); cycles += 4 + executeDDFD(op2, IX) + 2 * kM1WaitStates; break; }
+        case 0xFD: { uint8_t op2 = indexedOp; opcodeWord = uint16_t(0xFD00 | op2); cycles += 4 + executeDDFD(op2, IY) + 2 * kM1WaitStates; break; }
+        default: cycles += execute(opcode) + kM1WaitStates; break;
     }
 
     recordTraceFrame(tf, pcAtStart, opcodeWord, uint8_t(cycles));
@@ -680,7 +694,7 @@ int SC7852::execute(uint8_t opcode) {
         case 0xF8: if (condTrue(7)) { PC = popWord(); return 11; } return 5;
         case 0xF9: SP = hl(); return 6;
         case 0xFA: { uint16_t nn = fetch16(); if (condTrue(7)) PC = nn; return 10; }
-        case 0xFB: IFF1 = true; IFF2 = true; return 4;
+        case 0xFB: IFF1 = true; IFF2 = true; m_eiShadow = true; return 4;
         case 0xFC: { uint16_t nn = fetch16(); if (condTrue(7)) { pushWord(PC); PC = nn; return 17; } return 10; }
         case 0xFE: cp8(A, fetch8()); return 7;
         case 0xFF: pushWord(PC); PC = 0x38; return 11;
@@ -1080,7 +1094,7 @@ int SC7852::executeDDFDCB(uint8_t opcode, uint16_t ixy, int8_t d) {
     return 19; // base cost; step() already charged the DD/FD prefix's 4 T-states
 }
 
-// ── Trace / debug (mirrors LH5801's implementation exactly) ────────────
+// ── Trace ─────────────────────────────────────────────────────────────
 
 void SC7852::recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles) {
     if ((tf & (TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL)) == 0) return;
@@ -1097,57 +1111,5 @@ void SC7852::recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWo
         f.i = I; f.r = R; f.iff1 = IFF1; f.iff2 = IFF2; f.im = IM;
     }
 
-    std::lock_guard<std::mutex> lock(m_traceMutex);
-    m_ring[m_totalWritten & kRingMask] = f;
-    m_totalWritten++;
-}
-
-uint32_t SC7852::drainTraceEvents(Z80CpuFrame* out, uint32_t max, uint32_t* outLost) {
-    std::lock_guard<std::mutex> lock(m_traceMutex);
-    uint32_t available = m_totalWritten - m_drainCursor;
-    uint32_t lost = 0;
-    if (available > kRingSize) {
-        lost = available - kRingSize;
-        m_drainCursor = m_totalWritten - kRingSize;
-        available = kRingSize;
-    }
-    if (outLost) *outLost = lost;
-    uint32_t n = std::min(max, available);
-    for (uint32_t i = 0; i < n; i++) {
-        out[i] = m_ring[(m_drainCursor + i) & kRingMask];
-    }
-    m_drainCursor += n;
-    return n;
-}
-
-uint32_t SC7852::peekTraceEvents(Z80CpuFrame* out, uint32_t max) {
-    std::lock_guard<std::mutex> lock(m_traceMutex);
-    uint32_t available = std::min(m_totalWritten, kRingSize);
-    uint32_t n = std::min(max, available);
-    uint32_t start = m_totalWritten - n;
-    for (uint32_t i = 0; i < n; i++) {
-        out[i] = m_ring[(start + i) & kRingMask];
-    }
-    return n;
-}
-
-void SC7852::addBreakpoint(uint16_t addr) {
-    std::lock_guard<std::mutex> lock(m_traceMutex);
-    if (!std::binary_search(m_breakpoints.begin(), m_breakpoints.end(), addr)) {
-        m_breakpoints.insert(std::upper_bound(m_breakpoints.begin(), m_breakpoints.end(), addr), addr);
-    }
-}
-void SC7852::removeBreakpoint(uint16_t addr) {
-    std::lock_guard<std::mutex> lock(m_traceMutex);
-    auto it = std::lower_bound(m_breakpoints.begin(), m_breakpoints.end(), addr);
-    if (it != m_breakpoints.end() && *it == addr) m_breakpoints.erase(it);
-}
-void SC7852::clearBreakpoints() {
-    std::lock_guard<std::mutex> lock(m_traceMutex);
-    m_breakpoints.clear();
-}
-bool SC7852::consumeBreakpointHit() {
-    bool hit = m_breakpointHit;
-    m_breakpointHit = false;
-    return hit;
+    m_trace.push(f);
 }

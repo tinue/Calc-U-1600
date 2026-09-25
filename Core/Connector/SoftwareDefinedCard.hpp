@@ -99,7 +99,7 @@ public:
                 }
                 // off = bank*bankSize + windowOffset (see locate()) -- the flash command
                 // decoder only ever sees the window-relative address.
-                uint32_t bankBase = uint32_t(st.bank) * r.banking.bankSize;
+                uint32_t bankBase = r.banked ? uint32_t(st.bank) * r.banking.bankSize : 0;
                 flashWrite(st, r, c.flash, off - bankBase, value);
                 return true;  // claimed even when the state machine leaves the array untouched
             }
@@ -244,6 +244,14 @@ private:
         return v;
     }
 
+    // A group's offset within its slice: a memory-range window counts from
+    // its own `from` (it need be neither a power of two nor aligned), every
+    // other group uses the low log2(span) address lines.
+    static uint32_t groupOffset(const EnableGroup& g, const PinState& pins) {
+        if (g.hasMemoryRange) return pins.address - g.rangeFrom;
+        return pins.address & (g.span - 1);
+    }
+
     // Resolve (region, pins) to a byte offset into the region's backing
     // store, or return false if this region does not claim the access.
     static bool locate(const RegionState& st, const PinState& pins, uint32_t* off) {
@@ -251,7 +259,7 @@ private:
         if (!r.banked) {
             for (const EnableGroup& g : r.addressing.groups) {
                 if (!groupMatches(g, pins)) continue;
-                *off = g.mapsTo + (pins.address & (g.span - 1));
+                *off = g.mapsTo + groupOffset(g, pins);
                 return *off < st.backing.size();
             }
             return false;
@@ -266,8 +274,7 @@ private:
         if (st.bank < 0 || static_cast<uint32_t>(st.bank) >= r.banking.bankCount) return false;
         for (const EnableGroup& g : r.banking.bankWindow.groups) {
             if (!groupMatches(g, pins)) continue;
-            *off = static_cast<uint32_t>(st.bank) * r.banking.bankSize + g.mapsTo +
-                   (pins.address & (g.span - 1));
+            *off = static_cast<uint32_t>(st.bank) * r.banking.bankSize + g.mapsTo + groupOffset(g, pins);
             return *off < st.backing.size();
         }
         return false;
@@ -317,7 +324,10 @@ private:
         }
 
         using S = FlashDecoderState;
-        uint32_t bankBase = uint32_t(st.bank) * r.banking.bankSize;
+        // An unbanked region is one "bank" of `capacity` bytes.
+        const uint32_t bankSize = r.banked ? r.banking.bankSize : r.capacity;
+        const uint32_t bankCount = r.banked ? r.banking.bankCount : 1;
+        uint32_t bankBase = uint32_t(st.bank) * bankSize;
         switch (st.flash) {
             case S::Idle:
                 st.flash = (cmd == addr0 && data == data0) ? S::Unlock1 : S::Idle;
@@ -346,10 +356,9 @@ private:
                 if (cmd == addr0 && data == p.chipEraseCommand) {
                     // Clears the whole Flash content-range at once -- every
                     // flash-kind bank in this region, not just the current one.
-                    for (uint32_t b = 0; b < r.banking.bankCount; b++) {
+                    for (uint32_t b = 0; b < bankCount; b++) {
                         if (r.contentForBank(b).kind != ContentKind::Flash) continue;
-                        std::fill_n(st.backing.begin() + size_t(b) * r.banking.bankSize,
-                                   r.banking.bankSize, uint8_t(0xFF));
+                        std::fill_n(st.backing.begin() + size_t(b) * bankSize, bankSize, uint8_t(0xFF));
                     }
                 } else if (data == p.sectorEraseCommand) {
                     uint32_t base = windowOffset & ~(p.sectorSize - 1);

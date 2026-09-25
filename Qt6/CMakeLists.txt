@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
+# Minimum macOS for the .app (must precede project()). Without it the
+# compiler defaults to the build host's OS version, so the minimum silently
+# follows whatever runner/Mac built it. Matches the vendored libsharpdx
+# (SharpDataExchange's .cargo/config.toml) and tools/refresh_sharpdx.sh.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "15.8" CACHE STRING "Minimum macOS version")
 if(APPLE)
   # MacClipboardImage.mm needs Objective-C++ -- see its own doc comment for
   # why the plotter-paper clipboard export can't use Qt's cross-platform
@@ -14,6 +19,15 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC OFF)
 
+# Ensure Qt6 is found automatically in standard macOS Homebrew locations if not explicitly configured
+if(APPLE AND NOT DEFINED CMAKE_PREFIX_PATH)
+  if(EXISTS "/opt/homebrew/opt/qt")
+    list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/qt")
+  elseif(EXISTS "/usr/local/opt/qt")
+    list(APPEND CMAKE_PREFIX_PATH "/usr/local/opt/qt")
+  endif()
+endif()
+
 find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
 qt_standard_project_setup()
 
@@ -24,7 +38,7 @@ set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../Core)
 # Version.h below and the MACOSX_BUNDLE_*VERSION* properties further down
 # reference this instead of each hardcoding "0.1.0" separately, as does
 # the Windows installer (generated Version.iss below).
-set(APP_VERSION "0.4.0")
+set(APP_VERSION "0.5.0")
 
 # git describe gives a short, human-meaningful build id (tag or short hash,
 # +"-dirty" if the tree has local changes) for bug reports. Falls back to
@@ -77,7 +91,7 @@ set(CORE_SOURCES
   ${CORE_ROOT}/PC1600/PC1600Memory.cpp
   ${CORE_ROOT}/PC1600/PC1600SubCpu.cpp
   ${CORE_ROOT}/PC1600/TC8576F.cpp
-  ${CORE_ROOT}/PC1600/PtySerialLink.cpp
+  ${CORE_ROOT}/Serial/PtySerialLink.cpp
   ${CORE_ROOT}/PC1600/PC1600Display.cpp
   ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp
@@ -127,7 +141,8 @@ endif()
 
 if(EXISTS ${SHARPDX_LIB})
   list(APPEND CORE_SOURCES
-    ${CORE_ROOT}/PC1500/PresetFile.cpp
+    ${CORE_ROOT}/Preset/PresetFile.cpp
+    ${CORE_ROOT}/Preset/PresetRunner.cpp
     ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
     ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
     ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
@@ -158,6 +173,7 @@ qt_add_executable(CalcU1600Qt
   app/DebugPanel.cpp
   app/PlotterController.cpp
   app/PlotterPaperWidget.cpp
+  app/Ce158PrinterWidget.cpp
   app/PC1500KeyboardMap.cpp
   app/keylayout/PC1500KeyLayout.cpp
   app/keylayout/PC1600KeyLayout.cpp
@@ -170,12 +186,15 @@ qt_add_executable(CalcU1600Qt
   app/AboutDialog.cpp
   app/PresetController.cpp
   app/AudioOutput.cpp
+  app/screenshots/ShotScenario.cpp
+  app/screenshots/ShotCapture.cpp
+  app/screenshots/ShotRunner.cpp
   ${CORE_SOURCES}
   resources/calc-u-1600.qrc
 )
 
 if(APPLE)
-  target_sources(CalcU1600Qt PRIVATE app/MacClipboardImage.mm)
+  target_sources(CalcU1600Qt PRIVATE app/MacClipboardImage.mm app/screenshots/MacShotSupport.mm)
   target_link_libraries(CalcU1600Qt PRIVATE "-framework Cocoa")
 endif()
 

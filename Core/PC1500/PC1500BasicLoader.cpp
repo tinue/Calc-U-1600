@@ -24,8 +24,8 @@ void writeBE16(PC1500Machine& m, uint16_t addr, uint16_t value) {
     m.memory().poke(static_cast<uint16_t>(addr + 1), static_cast<uint8_t>(value & 0xFF));
 }
 
-PC1500BasicLoadResult fail(const std::string& msg) {
-    PC1500BasicLoadResult r;
+BasicLoadResult fail(const std::string& msg) {
+    BasicLoadResult r;
     r.ok = false;
     r.error = msg;
     return r;
@@ -33,8 +33,8 @@ PC1500BasicLoadResult fail(const std::string& msg) {
 
 }  // namespace
 
-PC1500BasicLoadResult loadBasicBinaryProgram(PC1500Machine& machine,
-                                             const std::vector<uint8_t>& transferFile) {
+BasicLoadResult loadBasicBinaryProgram(PC1500Machine& machine,
+                                       const std::vector<uint8_t>& transferFile) {
     basic::BasicBinaryImage img = basic::parseBasicBinaryTransfer(transferFile);
     if (!img.ok) return fail(img.error);
     if (img.model != basic::TransferModel::PC1500) {
@@ -43,8 +43,8 @@ PC1500BasicLoadResult loadBasicBinaryProgram(PC1500Machine& machine,
     return loadBasicBinaryPayload(machine, img.payload);
 }
 
-PC1500BasicLoadResult loadBasicBinaryPayload(PC1500Machine& machine,
-                                             const std::vector<uint8_t>& payload) {
+BasicLoadResult loadBasicBinaryPayload(PC1500Machine& machine,
+                                       const std::vector<uint8_t>& payload) {
     // LOAD semantics: this works off whatever BASPRG_ST/BASPRG_END are
     // currently live -- there is no NEW0 precondition. The caller (the user,
     // via the menu, or a preset's own `- type: NEW0` step) is responsible for
@@ -101,7 +101,7 @@ PC1500BasicLoadResult loadBasicBinaryPayload(PC1500Machine& machine,
 
     writeBE16(machine, kBasPrgEnd, static_cast<uint16_t>(end));
 
-    PC1500BasicLoadResult r;
+    BasicLoadResult r;
     r.ok = true;
     r.baseAddr = base;
     r.endAddr = static_cast<uint16_t>(end);

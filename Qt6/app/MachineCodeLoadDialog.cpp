@@ -14,13 +14,17 @@ MachineCodeLoadDialog::MachineCodeLoadDialog(QWidget* parent, machinecode::Targe
                                              const std::vector<machinecode::BasicArea>& basicAreas)
     : QDialog(parent), m_target(target), m_length(length), m_basicAreas(basicAreas) {
     setWindowTitle(tr("Load Machine Code"));
+    setObjectName(QStringLiteral("dialog.machinecode"));
 
     auto* layout = new QVBoxLayout(this);
     auto* form = new QFormLayout();
     layout->addLayout(form);
 
     m_addressField = new QLineEdit(this);
-    m_addressField->setPlaceholderText(tr("hex, e.g. &C0C5"));
+    // An example from the target's own map: the start of BASIC's program
+    // area on the PC-1600, the classic machine-code spot on the PC-1500.
+    m_addressField->setPlaceholderText(target == machinecode::Target::PC1600 ? tr("hex, e.g. &C0C5")
+                                                                             : tr("hex, e.g. &7C01"));
     if (defaultAddr != 0)
         m_addressField->setText(QStringLiteral("&") + QString::number(defaultAddr, 16).toUpper());
     form->addRow(tr("Start address:"), m_addressField);

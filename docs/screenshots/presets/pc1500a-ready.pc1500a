@@ -1,0 +1,8 @@
+# User-guide screenshots: a PC-1500A ready for work -- BASIC set up with
+# NEW0, RUN mode, a small calculation on the LCD.
+model: PC-1500A
+keys:
+  - key: cl
+  - type: NEW0
+  - key: mode
+  - type: 2*PI

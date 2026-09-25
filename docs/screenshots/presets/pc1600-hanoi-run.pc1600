@@ -1,0 +1,12 @@
+# User-guide screenshots: the Towers of Hanoi program running.
+model: PC-1600
+keys:
+  - key: mode
+  - type: NEW0
+program:
+  path: ../../../examples/hanoi.bas
+  format: basic-binary
+keys:
+  - key: mode
+  - type: RUN
+  - wait: 3

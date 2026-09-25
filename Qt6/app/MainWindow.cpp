@@ -9,6 +9,7 @@
 #include "PC1500KeyboardMap.hpp"
 #include "PlotterController.hpp"
 #include "PlotterPaperWidget.hpp"
+#include "Ce158PrinterWidget.hpp"
 #include "SettingsDialog.hpp"
 #include "AboutDialog.hpp"
 #include "MachineCodeLoadDialog.hpp"
@@ -59,6 +60,9 @@ constexpr double kMaxTickSeconds = 0.1;
 // popup appears (short loads finish without flashing it).
 constexpr int kLoadPumpIntervalMs = 30;
 constexpr int kLoadPopupDelayMs = 500;
+
+// Longest host-Shift press still counted as a tap (see m_shiftTapArmed).
+constexpr qint64 kShiftTapMaxMs = 400;
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
@@ -84,6 +88,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_plotterController = std::make_unique<PlotterController>(m_controller.get(), this);
     m_plotterPaper = new PlotterPaperWidget(m_controller.get(), central);
     m_plotterPaper->hide(); // added to m_debugRowLayout only once a plotter attaches
+    m_ce158Printer = new Ce158PrinterWidget(m_controller.get(), central);
+    m_ce158Printer->hide(); // added to m_debugRowLayout only once a CE-158 attaches
+    // Handles screenshot scenarios address these by (docs/screenshots/README.md).
+    m_faceplate->setObjectName(QStringLiteral("faceplate"));
+    m_faceplate->lcdWidget()->setObjectName(QStringLiteral("lcd"));
+    m_debugPanel->setObjectName(QStringLiteral("debugpanel"));
+    m_plotterPaper->setObjectName(QStringLiteral("paper"));
+    m_ce158Printer->setObjectName(QStringLiteral("ce158printer"));
 
     auto* layout = new QVBoxLayout(central);
     layout->setContentsMargins(6, 6, 6, 4);
@@ -108,6 +120,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_controlBar, &ControlBar::modelSelected, this, &MainWindow::applyModelSelection);
     connect(m_controlBar, &ControlBar::romRevisionSelected, this, &MainWindow::applyRomRevisionSelection);
     connect(m_controlBar, &ControlBar::pc1600RomVersionSelected, this, &MainWindow::applyPC1600RomVersionSelection);
+    connect(m_controlBar, &ControlBar::ce1600pRomVersionSelected, this, &MainWindow::applyCE1600PRomVersionSelection);
     connect(m_controlBar, &ControlBar::moduleSelected, this, [this](int slot, QString moduleNameOrEmpty) {
         m_moduleManager->selectModule(slot, moduleNameOrEmpty);
         m_controller->switchModel(m_controller->currentModel(), /*keepPlotter=*/true); // rebuild -> re-attach
@@ -211,6 +224,20 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             [this](bool attached) { onPlotterAttachedChanged(/*isCE150=*/true, attached); });
     connect(m_plotterController.get(), &PlotterController::ce1600pAttachedChanged, this,
             [this](bool attached) { onPlotterAttachedChanged(/*isCE150=*/false, attached); });
+    connect(m_controlBar, &ControlBar::ce158ToggleRequested, this,
+            [this] { m_plotterController->requestToggleCE158(); });
+    connect(m_plotterController.get(), &PlotterController::ce158AttachedChanged, this,
+            &MainWindow::onCe158AttachedChanged);
+    // Queued: the failure is reported from inside the power cycle, and the
+    // dialog should appear once the machine is back on, not block it off.
+    connect(
+        m_plotterController.get(), &PlotterController::attachFailed, this,
+        [this](const QString& device, const QString& reason) {
+            QMessageBox::warning(this, tr("Attach %1").arg(device),
+                                 reason.isEmpty() ? tr("The %1 could not be attached.").arg(device)
+                                                  : tr("The %1 could not be attached:\n\n%2").arg(device, reason));
+        },
+        Qt::QueuedConnection);
     connect(m_faceplate, &FaceplateWidget::keyPressed, this, [this](QString name) {
         const std::string key = name.toStdString();
         if (key == "on") {
@@ -230,6 +257,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // A key held while focus moves to another widget (a combo box, a
     // dialog) releases there, not here -- let go of it now instead.
     connect(qApp, &QApplication::focusChanged, this, [this] { releaseHeldKeys(); });
+    qApp->installEventFilter(this); // mouse presses disarm a host-Shift tap
     connect(m_faceplate->lcdWidget(), &LcdWidget::turboRequested, this,
             [this](bool active) { m_turboActive = active; });
 
@@ -257,7 +285,22 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     QTimer::singleShot(0, this, [this] { applyDefaultPreset(m_controller->currentModel()); });
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow() {
+    // The child widgets hold raw MachineController pointers, and some use
+    // them on destruction (~DebugPanel ends an active TRACE session through
+    // the controller). ~QWidget only deletes children after the unique_ptr
+    // members -- m_controller included -- are gone, so tear the widget tree
+    // down here while the controller still exists.
+    m_frameTimer->stop();
+    delete takeCentralWidget();
+    m_faceplate = nullptr;
+    m_controlBar = nullptr;
+    m_debugPanel = nullptr;
+    m_plotterPaper = nullptr;
+    m_ce158Printer = nullptr;
+    m_debugRow = nullptr;
+    m_debugRowLayout = nullptr;
+}
 
 void MainWindow::closeEvent(QCloseEvent* event) {
     AppSettings::setWindowSize(size());
@@ -270,6 +313,8 @@ void MainWindow::syncControlBarForModel() {
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     m_controlBar->setSlot2Visible(isPC1600);
     m_controlBar->setCe1600pVisible(isPC1600);
+    m_controlBar->setCE1600PRomPickerVisible(isPC1600);
+    m_ce1600pRomMenuAction->setVisible(isPC1600);
     // Always shown on a PC-1600 (never hidden alongside the CE-1600P
     // toggle) so the control bar doesn't jump around as the plotter/
     // floppy union attaches and detaches -- onPlotterAttachedChanged()
@@ -295,6 +340,7 @@ void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::functi
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     setCursor(Qt::WaitCursor);
+    m_loading = true;
 
     // The load itself blocks this thread, so pump the event loop from the
     // machine's yield hook (see PresetController::setYieldHook()): keeps the
@@ -325,6 +371,7 @@ void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::functi
 
     QString error;
     const bool ok = loadFn(&error);
+    m_loading = false;
     m_presetController->setYieldHook({});
     popup.reset();
     unsetCursor();
@@ -332,7 +379,7 @@ void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::functi
     // The load ran the machine flat out -- whatever it beeped is stale.
     m_controller->discardAudio();
     restartPacing();
-    m_frameTimer->start(kFrameIntervalMs);
+    if (!m_emulationFrozen) m_frameTimer->start(kFrameIntervalMs);
 
     if (!ok) {
         QMessageBox::warning(this, errorTitle, error);
@@ -424,13 +471,15 @@ void MainWindow::loadMachineCode() {
     box.setTextFormat(Qt::RichText);
     box.setTextInteractionFlags(Qt::TextSelectableByMouse);
     box.exec();
+
+    // Type the proposed CALL, ready to run: the user presses ENTER.
+    m_controller->pasteText(advice.callCommand);
 }
 
 void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
     const bool ce150Attached = isCE150 ? attached : m_controller->ce150Attached();
     const bool ce1600pAttached = isCE150 ? m_controller->ce1600pAttached() : attached;
-    m_controlBar->setCe150State(ce150Attached, !ce1600pAttached);
-    m_controlBar->setCe1600pState(ce1600pAttached, !ce150Attached);
+    syncPeripheralButtons(ce150Attached, ce1600pAttached, m_controller->ce158Attached());
     const bool otherAttached = isCE150 ? ce1600pAttached : ce150Attached;
     if (!isCE150) {
         // CE-1600F attaches as a union with CE-1600P (PC1600Machine::
@@ -448,6 +497,30 @@ void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
         m_debugRowLayout->removeWidget(m_plotterPaper);
         m_plotterPaper->hide();
         m_plotterPaperInLayout = false;
+    }
+}
+
+void MainWindow::syncPeripheralButtons(bool ce150Attached, bool ce1600pAttached, bool ce158Attached) {
+    // The CE-1600P excludes both the CE-150 and (on a PC-1600) the CE-158
+    // -- the CE-158 does not connect to the CE-1600P: gray out whichever
+    // buttons the attached peripherals rule out.
+    m_controlBar->setCe150State(ce150Attached, !ce1600pAttached);
+    m_controlBar->setCe1600pState(ce1600pAttached, !ce150Attached && !ce158Attached);
+    m_controlBar->setCe158State(ce158Attached, !ce1600pAttached);
+}
+
+void MainWindow::onCe158AttachedChanged(bool attached) {
+    syncPeripheralButtons(m_controller->ce150Attached(), m_controller->ce1600pAttached(), attached);
+    if (attached) {
+        // A preset attaches the card on the Core machine directly: make
+        // sure it has its host PTY before the preset script runs.
+        m_controller->syncCE158SerialLink();
+        if (!m_ce158PrinterInLayout) { m_debugRowLayout->addWidget(m_ce158Printer, 1); m_ce158PrinterInLayout = true; }
+        m_ce158Printer->show();
+    } else if (m_ce158PrinterInLayout) {
+        m_debugRowLayout->removeWidget(m_ce158Printer);
+        m_ce158Printer->hide();
+        m_ce158PrinterInLayout = false;
     }
 }
 
@@ -477,10 +550,12 @@ void MainWindow::syncUiFromController() {
     m_controlBar->setModel(model);
     m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
     m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
+    m_controlBar->setCE1600PRomVersion(m_controller->ce1600pRomVersion());
     syncControlBarForModel();
     syncMachineMenuFromModel(model);
     syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
     syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
+    syncMachineMenuFromCE1600PRomVersion(m_controller->ce1600pRomVersion());
     refreshModuleCombos();
     m_plotterController->syncFromMachineState();
 }
@@ -488,16 +563,16 @@ void MainWindow::syncUiFromController() {
 void MainWindow::refreshModuleCombos() {
     for (int slot = 1; slot <= 2; ++slot) {
         const CardHost host = MemoryModuleManager::hostForModel(slot, m_controller->currentModel());
-        const auto bundled = m_moduleManager->bundledEntries(host);
-        const auto instance = m_moduleManager->instanceEntries(host);
-        m_controlBar->setModuleCombos(slot, bundled, instance, m_moduleManager->selectedModuleName(slot));
-        m_controlBar->setSlotSaveEnabled(slot, m_moduleManager->canNameAndSave(slot, bundled, instance));
+        const MemoryModuleManager::ModuleLists lists = m_moduleManager->moduleLists(host);
+        m_controlBar->setModuleCombos(slot, lists.templates, lists.instances,
+                                      m_moduleManager->selectedModuleName(slot));
+        m_controlBar->setSlotSaveEnabled(slot, m_moduleManager->canNameAndSave(slot));
     }
 }
 
 void MainWindow::refreshFloppyCombo() {
-    m_controlBar->setFloppyCombo(m_floppyManager->bundledEntries(), m_floppyManager->instanceEntries(),
-                                 m_floppyManager->selectedDiskName());
+    const FloppyDiskManager::DiskLists lists = m_floppyManager->diskLists();
+    m_controlBar->setFloppyCombo(lists.templates, lists.instances, m_floppyManager->selectedDiskName());
     m_controlBar->setFloppySide(m_floppyManager->side());
     m_controlBar->setFloppySaveEnabled(m_floppyManager->canNameAndSave());
 }
@@ -528,9 +603,20 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
         return;
     }
 
+    // A Shift press arms the tap; any other key (letters, Cmd/Ctrl/Alt,
+    // Shift+Delete, ...) means Shift is being used as a modifier.
+    if (event->key() == Qt::Key_Shift) {
+        m_shiftTapArmed = true;
+        m_shiftTapClock.start();
+        QWidget::keyPressEvent(event);
+        return;
+    }
+    m_shiftTapArmed = false;
+
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     auto resolved = PC1500KeyboardMap::resolve(static_cast<Qt::Key>(event->key()),
-                                                event->modifiers(), event->text(), isPC1600);
+                                                event->modifiers(), event->text(), isPC1600,
+                                                event->nativeVirtualKey());
     if (!resolved) {
         QWidget::keyPressEvent(event);
         return;
@@ -582,9 +668,8 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
     event->accept();
 }
 
-void MainWindow::copyScreenToClipboard() {
-    const GrayImage screen = m_controller->currentScreenImage();
-    if (screen.width <= 0 || screen.height <= 0) return;
+QImage MainWindow::toQImage(const GrayImage& screen) {
+    if (screen.width <= 0 || screen.height <= 0) return {};
     QImage image(screen.width, screen.height, QImage::Format_Grayscale8);
     for (int y = 0; y < screen.height; ++y) {
         std::memcpy(image.scanLine(y), screen.pixels.data() + static_cast<std::size_t>(y) * screen.width,
@@ -593,6 +678,13 @@ void MainWindow::copyScreenToClipboard() {
     const int dotsPerMeter = static_cast<int>(screen.pixelsPerMeter());
     image.setDotsPerMeterX(dotsPerMeter);
     image.setDotsPerMeterY(dotsPerMeter);
+    return image;
+}
+
+void MainWindow::copyScreenToClipboard() {
+    const GrayImage screen = m_controller->currentScreenImage();
+    const QImage image = toQImage(screen);
+    if (image.isNull()) return;
 
 #ifdef Q_OS_MACOS
     // Qt's QClipboard::setImage() drops the physical size on macOS (see
@@ -617,6 +709,17 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event) {
         return;
     }
 
+    if (event->key() == Qt::Key_Shift) {
+        const bool tapped = m_shiftTapArmed && m_shiftTapClock.elapsed() <= kShiftTapMaxMs;
+        m_shiftTapArmed = false;
+        if (tapped) {
+            if (m_controller->pasteActive()) m_controller->cancelPaste();
+            m_controller->tapKey("shift");
+            event->accept();
+            return;
+        }
+    }
+
     auto it = m_physicalKeysDown.find(physicalKeyId(event));
     if (it == m_physicalKeysDown.end()) {
         QWidget::keyReleaseEvent(event);
@@ -635,6 +738,12 @@ void MainWindow::changeEvent(QEvent* event) {
 void MainWindow::releaseHeldKeys() {
     for (const std::string& key : std::as_const(m_physicalKeysDown)) m_controller->releaseKey(key);
     m_physicalKeysDown.clear();
+    m_shiftTapArmed = false; // the Shift release may land elsewhere
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::MouseButtonPress) m_shiftTapArmed = false; // a Shift-click
+    return QMainWindow::eventFilter(watched, event);
 }
 
 void MainWindow::restartPacing() {
@@ -661,6 +770,10 @@ void MainWindow::onFrameTick() {
             QCoreApplication::processEvents();
         } while (m_turboActive && std::chrono::steady_clock::now() < deadline);
         restartPacing();
+    } else if (m_controller->resyncClockIfSeeded()) {
+        // First tick after a flat-out run that set the clock: re-seeded
+        // just now, so pace from here (see resyncClockIfSeeded()).
+        restartPacing();
     } else {
         // Run exactly the wall-clock time since the last tick, carrying the
         // fractional cycle, rather than a fixed clockHz/60 per 16 ms tick
@@ -676,7 +789,10 @@ void MainWindow::onFrameTick() {
         m_controller->advance(whole);
     }
     m_audio->pump(*m_controller, /*discard=*/m_turboActive);
+    refreshViewsAfterAdvance();
+}
 
+void MainWindow::refreshViewsAfterAdvance() {
     const DisplayFrame frame = m_controller->currentDisplay();
     m_faceplate->lcdWidget()->setFrame(frame);
     m_faceplate->lcdWidget()->update();
@@ -686,6 +802,59 @@ void MainWindow::onFrameTick() {
     m_controlBar->setFloppyMotorOn(m_floppyManager->motorOn());
     m_debugPanel->onFrameTick();
     if (m_plotterPaperInLayout) m_plotterPaper->onFrameTick();
+    if (m_ce158PrinterInLayout) m_ce158Printer->onFrameTick();
+}
+
+void MainWindow::setEmulationFrozen(bool frozen) {
+    m_emulationFrozen = frozen;
+    if (frozen) {
+        m_frameTimer->stop();
+    } else {
+        restartPacing();
+        m_frameTimer->start(kFrameIntervalMs);
+    }
+}
+
+void MainWindow::runEmulation(double seconds) {
+    const double clockHz = m_controller->clockHz();
+    const auto perFrame = static_cast<std::uint64_t>(clockHz / 60.0);
+    auto remaining = static_cast<std::uint64_t>(seconds * clockHz);
+    while (remaining > 0) {
+        const std::uint64_t slice = std::min(remaining, perFrame);
+        m_controller->advance(slice);
+        remaining -= slice;
+    }
+    m_controller->discardAudio(); // not paced in real time -- nothing to play
+    refreshViewsAfterAdvance();
+}
+
+bool MainWindow::runUntilPasteDone(double capSeconds) {
+    // advance() pumps the paste queue; refresh the views once at the end.
+    const auto perFrame = static_cast<std::uint64_t>(m_controller->clockHz() / 60.0);
+    const int maxFrames = static_cast<int>(capSeconds * 60.0);
+    for (int i = 0; i < maxFrames && m_controller->pasteActive(); ++i) m_controller->advance(perFrame);
+    m_controller->discardAudio();
+    refreshViewsAfterAdvance();
+    return !m_controller->pasteActive();
+}
+
+bool MainWindow::loadPresetForShots(const QString& path, QString* error) {
+    bool ok = false;
+    runSynchronousLoad(
+        tr("Load Preset"),
+        // Report success to runSynchronousLoad() either way: its failure
+        // path is a modal warning box, which would stall the script. The
+        // real outcome goes back to the caller through `ok`/`error`.
+        [this, path, &ok, error](QString*) {
+            ok = m_presetController->loadPreset(path, error);
+            return true;
+        },
+        [this] { onPresetArmed(); });
+    // Frozen emulation means no frame tick will show the end state -- the
+    // LCD would keep the load's last throttled repaint, the paper its
+    // pre-plot points.
+    refreshViewsAfterAdvance();
+    return ok;
 }
 
 void MainWindow::buildMenuBar() {
@@ -787,6 +956,23 @@ void MainWindow::buildMenuBar() {
     addRom1600Action(PC1600RomVersion::Old, tr("Old"));
     m_rom1600MenuAction->setVisible(false);
 
+    // The CE-1600P's ROM is independent of the PC-1600's (any combination is
+    // possible); the CE-1600F in the same box follows it.
+    QMenu* ce1600pRomMenu = machineMenu->addMenu(tr("CE-1600P ROM"));
+    m_ce1600pRomMenuAction = ce1600pRomMenu->menuAction();
+    m_ce1600pRomActionGroup = new QActionGroup(this);
+    m_ce1600pRomActionGroup->setExclusive(true);
+    auto addCE1600PRomAction = [&](CE1600PRomVersion version, const QString& label) {
+        QAction* action = ce1600pRomMenu->addAction(label);
+        action->setCheckable(true);
+        m_ce1600pRomActionGroup->addAction(action);
+        m_ce1600pRomActions.insert(version, action);
+        connect(action, &QAction::triggered, this, [this, version] { applyCE1600PRomVersionSelection(version); });
+    };
+    addCE1600PRomAction(CE1600PRomVersion::New, tr("New"));
+    addCE1600PRomAction(CE1600PRomVersion::Old, tr("Old"));
+    m_ce1600pRomMenuAction->setVisible(false);
+
     machineMenu->addSeparator();
     QAction* resetAction = machineMenu->addAction(tr("Reset"));
     resetAction->setShortcut(QKeySequence(Qt::ControlModifier | Qt::Key_R));
@@ -802,6 +988,9 @@ void MainWindow::buildMenuBar() {
 }
 
 void MainWindow::applyModelSelection(Model model) {
+    // The Machine menu's QActionGroup re-emits triggered() for the item
+    // that is already checked; re-picking it must not cold-rebuild.
+    if (model == m_controller->currentModel()) return;
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     m_moduleManager->onModelChanged();
@@ -825,6 +1014,7 @@ void MainWindow::applyDefaultPreset(Model model) {
 }
 
 void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
+    if (revision == m_controller->pc1500RomRevision()) return; // see applyModelSelection()
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     m_controller->setPC1500RomRevision(revision); // rebuilds the machine
@@ -836,6 +1026,7 @@ void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
 }
 
 void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
+    if (version == m_controller->pc1600RomVersion()) return; // see applyModelSelection()
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     m_controller->setPC1600RomVersion(version); // rebuilds the machine when a PC-1600 is active
@@ -846,6 +1037,27 @@ void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
     syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
     syncControlBarForModel();
     refreshModuleCombos();
+}
+
+void MainWindow::applyCE1600PRomVersionSelection(CE1600PRomVersion version) {
+    if (version == m_controller->ce1600pRomVersion()) return; // see applyModelSelection()
+    m_moduleManager->flushPendingPersist();
+    m_floppyManager->flushPendingPersist();
+    // Rebuilds the machine only when a CE-1600P is attached; otherwise just
+    // records the choice for the next attach.
+    if (m_controller->setCE1600PRomVersion(version)) {
+        restartPacing(); // the rebuild's flat-out boot blocked the frame timer
+        m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
+        syncControlBarForModel();
+        refreshModuleCombos();
+    }
+    // The controller may have fallen back to New if the old ROM failed to load.
+    m_controlBar->setCE1600PRomVersion(m_controller->ce1600pRomVersion());
+    syncMachineMenuFromCE1600PRomVersion(m_controller->ce1600pRomVersion());
+}
+
+void MainWindow::syncMachineMenuFromCE1600PRomVersion(CE1600PRomVersion version) {
+    if (QAction* action = m_ce1600pRomActions.value(version, nullptr)) action->setChecked(true);
 }
 
 void MainWindow::syncMachineMenuFromPC1600RomVersion(PC1600RomVersion version) {

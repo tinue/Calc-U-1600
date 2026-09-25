@@ -3,8 +3,7 @@
 #  CALL &40C5,X
 # When finished, check X for the test result.
 
-model: PC-1500
-firmware: A04
+model: PC-1500:A04
 
 keys:
   - key: cl

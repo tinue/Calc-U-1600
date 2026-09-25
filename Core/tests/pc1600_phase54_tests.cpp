@@ -1,6 +1,6 @@
 // Headless C++ tests for the remaining PC-1600 ROM images:
 // PC1600-P1-B3-new.bin/PC1600-P1-B3B-new.bin/PC1600-P2-B6-new.bin wired into PC1600Machine at their
-// documented bank addresses, and PC1600-P1-B4-CE1600P.bin/PC1600-P1-B5-CE1600P-OR-F.bin
+// documented bank addresses, and PC1600-P1-B4-CE1600P-new.bin/PC1600-P1-B5-CE1600P-OR-F-new.bin
 // (confirmed CE-1600P ROM -- see roms/README.md) wired in via PC1600Machine::attachCE1600P().
 // Same no-framework, assert-and-tally style as lh5801_tests.cpp -- see that
 // file's header comment.
@@ -80,7 +80,7 @@ void test_bank6_display_timer_serial_char_rom_load() {
     CHECK(m.sc7852().a() == bank6[0]);
 }
 
-// CE-1600P ROM (PC1600-P1-B4-CE1600P.bin/PC1600-P1-B5-CE1600P-OR-F.bin,
+// CE-1600P ROM (PC1600-P1-B4-CE1600P-new.bin/PC1600-P1-B5-CE1600P-OR-F-new.bin,
 // confirmed -- see roms/README.md) exercised through real SC7852 execution reading Page B
 // banks 4/5, exactly like test_hidden_rom_latch_via_execution() above does
 // for bank 3/3b -- and confirming those banks are still open bus before
@@ -89,10 +89,10 @@ void test_bank6_display_timer_serial_char_rom_load() {
 void test_ce1600p_rom_attach_and_open_bus() {
     PC1600Machine m;
     std::vector<uint8_t> ce1, ce2;
-    if (!readRomImage("roms/PC1600-P1-B4-CE1600P.bin", &ce1) ||
-        !readRomImage("roms/PC1600-P1-B5-CE1600P-OR-F.bin", &ce2)) {
+    if (!readRomImage("roms/PC1600-P1-B4-CE1600P-new.bin", &ce1) ||
+        !readRomImage("roms/PC1600-P1-B5-CE1600P-OR-F-new.bin", &ce2)) {
         std::fprintf(stderr, "SKIP test_ce1600p_rom_attach_and_open_bus: "
-                              "roms/PC1600-P1-B4-CE1600P.bin or PC1600-P1-B5-CE1600P-OR-F.bin not found\n");
+                              "roms/PC1600-P1-B4-CE1600P-new.bin or PC1600-P1-B5-CE1600P-OR-F-new.bin not found\n");
         return;
     }
 
@@ -138,9 +138,55 @@ void test_ce1600p_rom_attach_and_open_bus() {
     CHECK(m.sc7852().a() == 0xFF); // detached: open bus again
 }
 
+// BundledRoms::attachCE1600P picks the new or old ROM pair by version,
+// independently of the PC-1600's own ROM, and rejects an unknown version.
+void test_ce1600p_rom_version_selection() {
+    std::vector<uint8_t> newB4, newB5, oldB4, oldB5;
+    if (!readRomImage("roms/PC1600-P1-B4-CE1600P-new.bin", &newB4) ||
+        !readRomImage("roms/PC1600-P1-B5-CE1600P-OR-F-new.bin", &newB5) ||
+        !readRomImage("roms/PC1600-P1-B4-CE1600P-old.bin", &oldB4) ||
+        !readRomImage("roms/PC1600-P1-B5-CE1600P-OR-F-old.bin", &oldB5)) {
+        std::fprintf(stderr, "SKIP test_ce1600p_rom_version_selection: "
+                              "roms/PC1600-P1-B{4,5}-CE1600P*-{new,old}.bin not found\n");
+        return;
+    }
+    CHECK(newB4 != oldB4);  // two genuinely different versions
+
+    // Bank 5's last two bytes are the version marker (PEEK #(5,&7FFE/F)).
+    CHECK(newB5[0x3FFE] == 5 && newB5[0x3FFF] == 18);
+    CHECK(oldB5[0x3FFE] == 4 && oldB5[0x3FFF] == 16);
+
+    for (const char* version : {"new", "old"}) {
+        PC1600Machine m;
+        std::string error;
+        CHECK(BundledRoms::attachCE1600P(m, {"roms"}, version, &error));
+        CHECK(m.ce1600pAttached());
+        const auto& b5 = std::string(version) == "old" ? oldB5 : newB5;
+
+        std::vector<uint8_t> lower(16384, 0x00), upper(16384, 0x00);
+        lower[0] = 0x3A; lower[1] = 0xFE; lower[2] = 0x7F; // LD A,(7FFEH)
+        lower[3] = 0x76;                                     // HALT
+        CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+        m.reset();
+        m.bank().writePort31(static_cast<uint8_t>(5 << 1)); // Page B bank 5
+        m.step(); m.step();
+        CHECK(m.sc7852().a() == b5[0x3FFE]);
+    }
+
+    PC1600Machine m;
+    std::string error;
+    CHECK(!BundledRoms::attachCE1600P(m, {"roms"}, "bogus", &error));
+    CHECK(error.find("new or old") != std::string::npos);
+    CHECK(!m.ce1600pAttached());
+    // The plotter-by-name entry point threads the version through.
+    CHECK(BundledRoms::attachPlotterByName(m, "ce1600p", {"roms"}, &error, nullptr, "old"));
+    CHECK(m.ce1600pAttached());
+}
+
 } // namespace
 
 int run_pc1600_phase54_tests() {
+    test_ce1600p_rom_version_selection();
     test_hidden_rom_latch_via_execution();
     test_bank6_display_timer_serial_char_rom_load();
     test_ce1600p_rom_attach_and_open_bus();

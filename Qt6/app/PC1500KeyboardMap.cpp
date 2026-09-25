@@ -60,11 +60,16 @@ std::optional<ResolvedKey> characterName(QChar c) {
 } // namespace
 
 std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
-                                    const QString& text, bool isPC1600) {
+                                    const QString& text, bool isPC1600, quint32 nativeVirtualKey) {
 #ifdef Q_OS_MACOS
     // Qt maps Cmd to ControlModifier and the Control key to MetaModifier.
     if (modifiers & (Qt::ControlModifier | Qt::MetaModifier)) return std::nullopt;
+    // macOS reports a PC keyboard's Scroll Lock as kVK_ContextualMenu
+    // (0x6E), which Qt has no Qt::Key for (it hands over the raw 0x10
+    // character code instead) -- match the physical key code directly.
+    if (nativeVirtualKey == 0x6E) return plain("rsv");
 #else
+    (void)nativeVirtualKey;
     if (modifiers & Qt::MetaModifier) return std::nullopt;
     const bool ctrl = modifiers & Qt::ControlModifier;
     const bool alt = modifiers & Qt::AltModifier;
@@ -83,9 +88,23 @@ std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
     // not hardware-documented correspondences.
     switch (key) {
     case Qt::Key_ScrollLock: return plain("rsv");
-    case Qt::Key_Home: return plain("rcl");
-    case Qt::Key_End: return plain("sml");
-    case Qt::Key_PageUp: return plain("left", true);
+#ifndef Q_OS_MACOS
+    // Insert sits where a Mac-layout keyboard's Scroll Lock is (that one
+    // is matched by its virtual key code above); on macOS, Insert arrives
+    // as Key_Help and stays unmapped.
+    case Qt::Key_Insert: return plain("rsv");
+#endif
+    case Qt::Key_Home:
+        // CTRL exists only on the PC-1600; elsewhere Shift+Home = Home.
+        if (isPC1600 && (modifiers & Qt::ShiftModifier)) return plain("ctrl");
+        return plain("rcl");
+    case Qt::Key_End:
+        // KB II exists only on the PC-1600; elsewhere Shift+End = End.
+        if (isPC1600 && (modifiers & Qt::ShiftModifier)) return plain("kbii");
+        return plain("sml");
+    case Qt::Key_PageUp:
+        if (modifiers & Qt::ShiftModifier) return plain("def");
+        return plain("left", true);
     case Qt::Key_PageDown: return plain("right", true);
     default: break;
     }
@@ -97,7 +116,7 @@ std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
     case Qt::Key_Down: return plain("down");
     case Qt::Key_Left: return plain("left");
     case Qt::Key_Right: return plain("right");
-    case Qt::Key_Delete: return plain("cl");
+    case Qt::Key_Delete: return plain("cl", modifiers & Qt::ShiftModifier);
     case Qt::Key_Tab: return plain("mode");
     default: break;
     }

@@ -33,25 +33,35 @@ FloppyDiskManager::FloppyDiskManager(MachineController* controller, QObject* par
     connect(m_debounceTimer, &QTimer::timeout, this, &FloppyDiskManager::flushPendingPersist);
 }
 
-QVector<FloppyDiskManager::DiskEntry> FloppyDiskManager::bundledEntries() const {
-    return entriesFor(AppPaths::bundledResourcesDir());
+FloppyDiskManager::DiskLists FloppyDiskManager::diskLists() const {
+    DiskLists lists;
+    for (const auto& e : scanFloppyDirectory(AppPaths::bundledResourcesDir().toStdString(), nullptr))
+        lists.templates.push_back({QString::fromStdString(e.diskName)});
+    const QVector<DiskEntry> bundled = lists.templates;
+    for (const auto& e : scanFloppyDirectory(AppPaths::instanceDir().toStdString(), nullptr)) {
+        const QString name = QString::fromStdString(e.diskName);
+        if (containsName(bundled, name)) continue;
+        (e.isTemplate ? lists.templates : lists.instances).push_back({name});
+    }
+    return lists;
 }
 
-// Leaves out saved disks that share a bundled disk's name: lookup is
-// bundled-first, so they could never be loaded.
-QVector<FloppyDiskManager::DiskEntry> FloppyDiskManager::instanceEntries() const {
-    QVector<DiskEntry> out = entriesFor(AppPaths::instanceDir());
-    const QVector<DiskEntry> bundled = bundledEntries();
-    out.erase(std::remove_if(out.begin(), out.end(),
-                             [&](const DiskEntry& e) { return containsName(bundled, e.diskName); }),
-              out.end());
-    return out;
+QVector<FloppyDiskManager::DiskEntry> FloppyDiskManager::templateEntries() const {
+    return diskLists().templates;
+}
+
+void FloppyDiskManager::classifySource(const QString& resolvedPathOrEmpty, bool isTemplate) {
+    m_isTemplate = isTemplate;
+    m_instanceFilePath.clear();
+    if (!resolvedPathOrEmpty.isEmpty() && !isTemplate &&
+        !AppPaths::isUnderDir(resolvedPathOrEmpty, AppPaths::bundledResourcesDir()))
+        m_instanceFilePath = resolvedPathOrEmpty;
 }
 
 void FloppyDiskManager::selectDisk(const QString& diskNameOrEmpty) {
     flushPendingPersist();
     m_diskName = diskNameOrEmpty;
-    m_instanceFilePath.clear();
+    classifySource(QString(), false);
     m_persistPending = false;
 
     auto* m1600 = m_controller->pc1600();
@@ -78,8 +88,7 @@ bool FloppyDiskManager::loadSelectedDisk(PC1600Machine* m1600) {
         return false;
     }
     m1600->ce1600fLoadImage(disk.image.data(), disk.image.size());
-    const QString resolved = QString::fromStdString(path);
-    if (AppPaths::isUnderDir(resolved, AppPaths::instanceDir())) m_instanceFilePath = resolved;
+    classifySource(QString::fromStdString(path), disk.isTemplate);
     return true;
 }
 
@@ -89,7 +98,11 @@ void FloppyDiskManager::insertSelectedDisk() {
 
 void FloppyDiskManager::syncFromPresetLoad(const QString& labelOrEmpty, const QString& resolvedPathOrEmpty) {
     m_diskName = labelOrEmpty;
-    m_instanceFilePath = AppPaths::isUnderDir(resolvedPathOrEmpty, AppPaths::instanceDir()) ? resolvedPathOrEmpty : QString();
+    FloppyCatalogEntry entry;
+    const bool isTemplate = !resolvedPathOrEmpty.isEmpty() &&
+                            readFloppyCatalogEntry(resolvedPathOrEmpty.toStdString(), &entry, nullptr) &&
+                            entry.isTemplate;
+    classifySource(labelOrEmpty.isEmpty() ? QString() : resolvedPathOrEmpty, isTemplate);
     m_persistPending = false;
     if (auto* m1600 = m_controller->pc1600()) m_lastSeenRevision = m1600->ce1600fRevision();
 }
@@ -100,6 +113,14 @@ bool FloppyDiskManager::nameCollides(const QString& diskName) const {
 }
 
 bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
+    return saveDiskAs(diskName, /*fromPreset=*/false, error);
+}
+
+bool FloppyDiskManager::saveAsFromPreset(const QString& diskName, QString* error) {
+    return saveDiskAs(diskName, /*fromPreset=*/true, error);
+}
+
+bool FloppyDiskManager::saveDiskAs(const QString& diskName, bool fromPreset, QString* error) {
     const QString name = diskName.trimmed();
     if (name.isEmpty()) {
         *error = tr("Name cannot be empty.");
@@ -114,7 +135,7 @@ bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
         *error = tr("There's no disk in the drive.");
         return false;
     }
-    if (hasInstanceFile()) {
+    if (!fromPreset && !m_isTemplate) {
         *error = tr("\"%1\" is already saved; changes are saved automatically.").arg(m_diskName);
         return false;
     }
@@ -122,23 +143,30 @@ bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
         *error = tr("Name cannot contain '\"'.");
         return false;
     }
-    if (containsName(bundledEntries(), name)) {
-        *error = tr("\"%1\" is a built-in disk name. Choose a different name.").arg(name);
+    if (containsName(templateEntries(), name)) {
+        *error = tr("\"%1\" is a template's name. Choose a different name.").arg(name);
         return false;
     }
-    if (nameCollides(name)) {
+    if (!fromPreset && nameCollides(name)) {
         *error = tr("A disk named \"%1\" already exists. Choose a different name.").arg(name);
         return false;
     }
 
     const QString newPath = AppPaths::floppyInstancePathFor(name);
+    FloppyCatalogEntry existing;
+    if (readFloppyCatalogEntry(newPath.toStdString(), &existing, nullptr) && existing.isTemplate) {
+        *error = tr("\"%1\" is a template file and is never overwritten. Choose a different name.").arg(newPath);
+        return false;
+    }
     if (!AppPaths::atomicWriteFile(newPath, formatFloppyFile(name.toStdString(), m1600->ce1600fDiskImage()))) {
         *error = tr("Couldn't write \"%1\".").arg(newPath);
         return false;
     }
 
+    // Retarget the drive at the saved copy: it now shows under its new name
+    // and autosaves there.
     m_diskName = name;
-    m_instanceFilePath = newPath;
+    classifySource(newPath, /*isTemplate=*/false);  // formatFloppyFile() never writes `template:`
     m_persistPending = false;
     m_lastSeenRevision = m1600->ce1600fRevision();
     return true;
@@ -166,7 +194,7 @@ void FloppyDiskManager::markDirtyAndSchedulePersist() {
 
 bool FloppyDiskManager::canNameAndSave() const {
     auto* m1600 = m_controller->pc1600();
-    return m1600 && m1600->ce1600fHasDisk() && !hasInstanceFile();
+    return m1600 && m1600->ce1600fHasDisk() && m_isTemplate;
 }
 
 int FloppyDiskManager::side() const {

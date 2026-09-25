@@ -11,6 +11,9 @@
 
 // ── CE-1600F floppy-disk file (`<name>.floppy.yaml`) ───────────────────
 //
+// Specification: docs/Floppy-Image-Format.md (other tools, e.g.
+// SharpDataExchange, implement that document -- keep the two in step).
+//
 // A saved CE-1600F diskette: an explicit `disk-name` (what the GUI picker
 // shows and a preset's `floppy:` key refers to -- the counterpart of a
 // card's `module-name`) plus both 64 KB sides as `addressed-hex` blocks
@@ -43,6 +46,11 @@ constexpr long kFloppyFormatVersion = 1;
 
 struct FloppyFile {
     std::string diskName;
+    // `template: true`: a read-only starting disk the app never writes to,
+    // wherever the file lives; Name & Save copies it into an instance
+    // (formatFloppyFile() never writes the key). No key = an instance,
+    // autosaved in place.
+    bool isTemplate = false;
     std::vector<uint8_t> image;  // CE1600FCard::kImageSize bytes, side A then side B
 };
 
@@ -51,13 +59,15 @@ namespace floppy_detail {
 constexpr const char* kFormatTag = "ce1600f-floppy";
 constexpr const char* kSideKeys[2] = {"a", "b"};
 
-// Checks `format`/`format-version` and reads `disk-name` from a parsed file.
-inline bool readHeader(const YamlNode& root, std::string* diskName, std::string* error) {
+// Checks `format`/`format-version` and reads `disk-name` and `template`
+// from a parsed file.
+inline bool readHeader(const YamlNode& root, std::string* diskName, bool* isTemplate, std::string* error) {
     if (!root.isMap()) {
         *error = "not a floppy-disk file (expected a YAML mapping)";
         return false;
     }
-    if (!root.requireOnlyKeys({"format", "format-version", "disk-name", "saved", "sides"}, error)) return false;
+    if (!root.requireOnlyKeys({"format", "format-version", "disk-name", "template", "saved", "sides"}, error))
+        return false;
     std::string format;
     const YamlNode* formatNode = root.find("format");
     if (!formatNode || !formatNode->asString(&format, error) || format != kFormatTag) {
@@ -85,6 +95,10 @@ inline bool readHeader(const YamlNode& root, std::string* diskName, std::string*
     if (diskName->empty()) {
         *error = "empty 'disk-name'";
         return false;
+    }
+    *isTemplate = false;
+    if (const YamlNode* templateNode = root.find("template")) {
+        if (!templateNode->asBool(isTemplate, error)) return false;
     }
     return true;
 }
@@ -121,7 +135,7 @@ inline std::string formatFloppyFile(const std::string& diskName, const std::vect
 inline bool parseFloppyFile(const std::string& text, FloppyFile* out, std::string* error) {
     YamlNode root;
     if (!parseYaml(text, &root, error)) return false;
-    if (!floppy_detail::readHeader(root, &out->diskName, error)) return false;
+    if (!floppy_detail::readHeader(root, &out->diskName, &out->isTemplate, error)) return false;
     const YamlNode* sides = root.find("sides");
     if (!sides || !sides->isMap()) {
         *error = "missing 'sides' mapping";
@@ -176,24 +190,36 @@ inline bool readFloppyFile(const std::string& path, FloppyFile* out, std::string
 struct FloppyCatalogEntry {
     std::string diskName;
     std::string filePath;
+    bool isTemplate = false;  // FloppyFile::isTemplate
 };
 
+namespace floppy_detail {
+
+// Parses only the header (the text before the top-level `sides:` key), so
+// a large disk costs no hex decoding.
+inline bool parseCatalogEntry(const std::string& text, const std::string& path, FloppyCatalogEntry* out,
+                              std::string* err) {
+    const size_t sides = text.find("\nsides:");
+    YamlNode root;
+    if (!parseYaml(text.substr(0, sides), &root, err) || !readHeader(root, &out->diskName, &out->isTemplate, err))
+        return false;
+    out->filePath = path;
+    return true;
+}
+
+}  // namespace floppy_detail
+
 // Every "*.floppy.yaml" in `dir` (non-recursive), sorted by disk name --
-// scanNamedFiles()'s contract. Only the header (the text before the
-// top-level `sides:` key) is parsed, so a large disk costs no hex decoding.
+// scanNamedFiles()'s contract. Header-only parse (see parseCatalogEntry()).
 inline std::vector<FloppyCatalogEntry> scanFloppyDirectory(const std::string& dir, std::string* error) {
-    return scanNamedFiles<FloppyCatalogEntry>(
-        dir, kFloppyFileSuffix, "disk",
-        [](const std::string& text, const std::string& path, FloppyCatalogEntry* out, std::string* err) {
-            const size_t sides = text.find("\nsides:");
-            YamlNode root;
-            if (!parseYaml(text.substr(0, sides), &root, err) ||
-                !floppy_detail::readHeader(root, &out->diskName, err))
-                return false;
-            out->filePath = path;
-            return true;
-        },
-        [](const FloppyCatalogEntry& e) { return e.diskName; }, error);
+    return scanNamedFiles<FloppyCatalogEntry>(dir, kFloppyFileSuffix, "disk", floppy_detail::parseCatalogEntry,
+                                              [](const FloppyCatalogEntry& e) { return e.diskName; }, error);
+}
+
+// The header-only catalogue entry for one `.floppy.yaml` file -- e.g. to
+// classify the disk a preset resolved to (template or instance).
+inline bool readFloppyCatalogEntry(const std::string& path, FloppyCatalogEntry* out, std::string* error) {
+    return readNamedFile(path, floppy_detail::parseCatalogEntry, out, error);
 }
 
 // Resolves `diskName` against `dirs` in order (bundled first, then the save

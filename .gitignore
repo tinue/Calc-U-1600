@@ -7,6 +7,12 @@
 
 build/
 
+# CLion's own out-of-source build directories for the root CMakeLists.txt
+# (cmake-build-debug, cmake-build-release, ...). CLion drops a self-ignoring
+# .gitignore inside each one, so they'd stay out of `git status` anyway --
+# listing them here makes that explicit rather than accidental.
+cmake-build-*/
+
 # Compiled object files
 *.o
 

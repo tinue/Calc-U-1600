@@ -1,27 +1,12 @@
 #include "KeyPaste.hpp"
 
 std::vector<PasteStep> buildPasteSteps(const std::string& text, TypedCharResolver resolve) {
-    std::string normalized;
-    normalized.reserve(text.size());
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        if (text[i] == '\r') {
-            normalized.push_back('\n');
-            if (i + 1 < text.size() && text[i + 1] == '\n') ++i;
-        } else {
-            normalized.push_back(text[i]);
-        }
-    }
-    if (!normalized.empty() && normalized.back() == '\n') normalized.pop_back();
+    // Only the first line is typed, and never entered: the paste stops at
+    // the first line break (CR or LF), so nothing executes on its own.
+    const std::string firstLine = text.substr(0, text.find_first_of("\r\n"));
 
     std::vector<PasteStep> steps;
-    for (char c : normalized) {
-        if (c == '\n') {
-            PasteStep step;
-            step.kind = PasteStep::Kind::Enter;
-            step.key = "enter";
-            steps.push_back(step);
-            continue;
-        }
+    for (char c : firstLine) {
         const auto uc = static_cast<unsigned char>(c);
         if (uc < 0x20 || uc >= 0x7F) continue; // tabs, other controls, UTF-8 bytes
         PasteStep step;
@@ -46,14 +31,6 @@ void KeyPasteFeeder::append(const std::vector<PasteStep>& steps) {
         m_queue.push_back(a);
     };
     for (const PasteStep& step : steps) {
-        if (step.kind == PasteStep::Kind::Enter) {
-            tap(step.key);
-            wait(m_pacing.postEnterFloorFrames);
-            Action a;
-            a.kind = Action::Kind::WaitPrompt;
-            m_queue.push_back(a);
-            continue;
-        }
         if (step.needsShift) {
             // SHIFT is a one-shot latch: tapped, not held, and consumed by
             // the next key -- never explicitly un-latched afterward.
@@ -84,14 +61,10 @@ void KeyPasteFeeder::begin(const Action& action, const KeyFn& press) {
         case Action::Kind::Wait:
             m_framesLeft = action.frames;
             break;
-        case Action::Kind::WaitPrompt:
-            m_framesLeft = m_pacing.postEnterCapFrames;
-            m_promptRun = 0;
-            break;
     }
 }
 
-bool KeyPasteFeeder::elapse(bool atPrompt, const KeyFn& release) {
+bool KeyPasteFeeder::elapse(const KeyFn& release) {
     switch (m_current.kind) {
         case Action::Kind::Tap:
             if (--m_framesLeft > 0) return false;
@@ -104,21 +77,18 @@ bool KeyPasteFeeder::elapse(bool atPrompt, const KeyFn& release) {
             return true;
         case Action::Kind::Wait:
             return --m_framesLeft <= 0;
-        case Action::Kind::WaitPrompt:
-            m_promptRun = atPrompt ? m_promptRun + 1 : 0;
-            return m_promptRun >= m_pacing.promptHoldFrames || --m_framesLeft <= 0;
     }
     return true;
 }
 
-void KeyPasteFeeder::onFrame(const KeyFn& press, const KeyFn& release, bool atPrompt) {
+void KeyPasteFeeder::onFrame(const KeyFn& press, const KeyFn& release) {
     if (m_hasCurrent) {
-        if (!elapse(atPrompt, release)) return;
+        if (!elapse(release)) return;
         m_hasCurrent = false;
     }
     if (m_queue.empty()) return;
-    // Start the next action at this frame boundary. Only a Tap/Wait/
-    // WaitPrompt with time left can be current, so one begin() suffices.
+    // Start the next action at this frame boundary. Only a Tap/Wait with
+    // time left can be current, so one begin() suffices.
     const Action next = m_queue.front();
     m_queue.pop_front();
     begin(next, press);

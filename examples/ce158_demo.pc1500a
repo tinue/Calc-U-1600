@@ -1,0 +1,37 @@
+# PC-1500A with the CE-158 RS-232C / Centronics interface attached.
+# Prints a line on the parallel port, sends one out of the serial port,
+# then waits for a line from the serial port and echoes it to the printer.
+#
+# Serial peer: the app opens a pseudo-terminal and links it as
+# calcu1600-ce158.serial in the serial-port symlink folder (Settings) --
+# e.g. `screen <folder>/calcu1600-ce158.serial 300`. Headless:
+#   ./headless/pc1500_cli --preset examples/ce158_demo.pc1500a 30000000 --ce158-pty
+
+model: PC-1500A:A04
+interface: ce158
+
+keys:
+  - key: cl
+  - type: NEW0
+
+program:
+  format: basic-text
+  text: |
+    10 OPN "LPRT"
+    20 LPRINT "HELLO FROM THE CE-158"
+    30 OPN
+    40 SETDEV PO
+    50 OUTSTAT 0
+    60 LPRINT "TYPE A LINE AND PRESS RETURN"
+    70 SETDEV KI
+    80 INPUT A$
+    90 SETDEV
+    100 OPN "LPRT"
+    110 LPRINT "RECEIVED: ";A$
+    120 OPN
+    130 END
+
+keys:
+  - key: cl
+  - key: mode
+  - type: RUN

@@ -84,6 +84,23 @@ std::vector<Entry> scanNamedFiles(const std::string& dir, const std::string& suf
     return out;
 }
 
+// Reads and parses the one file `path` with `parse` (scanNamedFiles()'s
+// signature). On failure returns false with `*error` naming the file.
+template <typename Entry, typename ParseFn>
+bool readNamedFile(const std::string& path, ParseFn parse, Entry* out, std::string* error) {
+    std::string text;
+    if (!named_file_detail::readTextFile(path, &text)) {
+        if (error) *error = "cannot read '" + path + "'";
+        return false;
+    }
+    std::string err;
+    if (!parse(text, path, out, &err)) {
+        if (error) *error = path + ": " + err;
+        return false;
+    }
+    return true;
+}
+
 // Resolves `name` against `dirs` in order, via `scan(dir, std::string* err)`:
 // the first directory holding exactly one entry with that name wins; two in
 // the SAME directory is an error (an ambiguous catalogue is a setup

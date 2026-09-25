@@ -20,24 +20,22 @@ void Upd1990ac::latchCommand(bool c0, bool c1, bool c2) {
 
     if (!c2) {
         // Group 0 (C2=0): pick one of the four register-control modes.
-        Mode oldMode = mode_;
-        switch (sel) {
-            case 0: mode_ = Mode::RegisterHold;  break;
-            case 1: mode_ = Mode::RegisterShift; break;
-            case 2: mode_ = Mode::TimeSet;       break;
-            case 3:
-                mode_ = Mode::TimeRead;
-                // Time Read snapshots the live running clock into the shift
-                // register; it's the following Register Shift that walks it
-                // out over DATA OUT via CLK pulses (see setControlPins()).
-                shiftRegister_ = liveTimeAsBcd40();
-                break;
-            default: break;
-        }
-        // Time Set pauses the live clock while new nibbles shift in;
+        const Mode oldMode = mode_;
+        static constexpr Mode kGroup0[] = {Mode::RegisterHold, Mode::RegisterShift, Mode::TimeSet,
+                                           Mode::TimeRead};
+        mode_ = kGroup0[sel];
+        // Leaving Time Set commits the shifted-in value to the live clock;
         // committing on exit (rather than bit-by-bit) is indistinguishable
         // to anything that only reads the result afterward, and simpler.
+        // The clock is effectively paused meanwhile: the commit overwrites
+        // every field and restarts the 1 Hz accumulator. It must run before
+        // a Time Read snapshot, or Time Set -> Time Read would read the old
+        // time back and drop the TIME= value.
         if (oldMode == Mode::TimeSet && mode_ != Mode::TimeSet) commitShiftRegisterToTime();
+        // Time Read snapshots the live running clock into the shift
+        // register; it's the following Register Shift that walks it out
+        // over DATA OUT via CLK pulses (see setControlPins()).
+        if (mode_ == Mode::TimeRead) shiftRegister_ = liveTimeAsBcd40();
 
         // Any Group 0 command also means WAIT/BEEP is done with TP:
         // WAIT/BEEP's own cleanup issues this ("TP=RegisterHold", the
@@ -63,11 +61,14 @@ void Upd1990ac::latchCommand(bool c0, bool c1, bool c2) {
         default: break; // test mode -- not modeled
     }
     if (tpConfigured_) {
-        // Every (re-)configure resets TP's phase to a fresh, known
-        // boundary, giving WAIT/BEEP's poll loop a clean edge to
-        // synchronize against right after each configure.
+        // TP is tapped off the chip's free-running 32.768 kHz divider
+        // chain, so a rate select doesn't restart its phase: it just
+        // starts showing the divider's current level, and edges stay on
+        // the 1/rate grid. A real unit's BEEP repeat periods are whole
+        // 64ths of a second because of this (8/64 s, 9/64 s); restarting
+        // the phase here made them 127.0 / 139.4 / 143.8 ms instead.
         elapsedSeconds_ = 0.0;
-        tpLevel_ = false;
+        tpLevel_ = tpLevelNow();
         tpEdgePending_ = false;
         // Force consumeRisingEdge() to do its own genuine fresh sample on
         // the next read rather than trusting a now-stale pre-(re-)configure
@@ -140,7 +141,8 @@ void Upd1990ac::commitShiftRegisterToTime() {
     rtcAccumSeconds_ = 0.0;
 }
 
-void Upd1990ac::seedFromHost(int year, int month, int day, int hour, int minute, int second, int dow) {
+void Upd1990ac::seedFromHost(int year, int month, int day, int hour, int minute, int second, int dow,
+                             int millisecond) {
     clkYear_  = year;
     clkMonth_ = static_cast<uint8_t>(month);
     clkDay_   = bcdPack(day);
@@ -148,7 +150,7 @@ void Upd1990ac::seedFromHost(int year, int month, int day, int hour, int minute,
     clkMin_   = bcdPack(minute);
     clkSec_   = bcdPack(second);
     clkDow_   = static_cast<uint8_t>(dow & 0x07);
-    rtcAccumSeconds_ = 0.0;
+    rtcAccumSeconds_ = millisecond / 1000.0;
 }
 
 bool Upd1990ac::dataOut() const {
@@ -163,15 +165,19 @@ bool Upd1990ac::dataOut() const {
     return (static_cast<long long>(rtcElapsedSeconds_ * 2.0) % 2) != 0; // ~1 Hz
 }
 
+bool Upd1990ac::tpLevelNow() const {
+    // Parity of the half-periods the free-running divider has counted --
+    // a pure function of elapsed cycle-time, recomputed fresh rather than
+    // incrementally accumulated, so it's exact however long it's been
+    // since the last sync.
+    double halfPeriod = 0.5 / tpRateHz_;
+    long long intervals = static_cast<long long>(rtcElapsedSeconds_ / halfPeriod);
+    return (intervals % 2) != 0;
+}
+
 void Upd1990ac::syncTp() {
     if (!tpConfigured_) return;
-    double halfPeriod = 0.5 / tpRateHz_;
-    // Parity of the number of half-periods elapsed since the last
-    // (re-)configure -- a pure function of elapsed cycle-time, recomputed
-    // fresh rather than incrementally accumulated, so it's exact
-    // regardless of how many cycles have passed since the last sync.
-    long long intervals = static_cast<long long>(elapsedSeconds_ / halfPeriod);
-    bool newLevel = (intervals % 2) != 0;
+    bool newLevel = tpLevelNow();
     if (newLevel && !tpLevel_) tpEdgePending_ = true;
     tpLevel_ = newLevel;
 }

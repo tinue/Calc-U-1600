@@ -1,6 +1,5 @@
 # Debug the Up/Down key issue
-model: PC-1500A
-firmware: A04
+model: PC-1500A:A04
 
 keys:
   - key: cl

@@ -345,6 +345,67 @@ void test_ed_ldir_block_copy() {
     CHECK(r.cpu.de() == 0x9003);
 }
 
+void test_dd_before_ed_is_ignored() {
+    // LD HL,src ; LD DE,dst ; LD BC,2 ; DD ED B0 = LDIR (the DD is a NOP)
+    Rig r({0x21, 0x00, 0x80, 0x11, 0x00, 0x90, 0x01, 0x02, 0x00, 0xDD, 0xED, 0xB0});
+    r.bus.mem[0x8000] = 0x11;
+    r.bus.mem[0x8001] = 0x22;
+    r.cpu.step(); r.cpu.step(); r.cpu.step();
+    uint8_t a = r.cpu.a();
+    r.cpu.step();
+    while (r.cpu.bc() != 0) r.cpu.step();
+    CHECK(r.bus.mem[0x9000] == 0x11);
+    CHECK(r.bus.mem[0x9001] == 0x22);
+    CHECK(r.cpu.a() == a); // not run as OR B
+    CHECK(r.cpu.pc() == 0x000C);
+}
+
+void test_last_index_prefix_wins() {
+    // DD FD 21 34 12 = LD IY,1234h ; FD DD 21 78 56 = LD IX,5678h
+    Rig r({0xDD, 0xFD, 0x21, 0x34, 0x12, 0xFD, 0xDD, 0x21, 0x78, 0x56});
+    CHECK(r.cpu.step() == 4 + SC7852::kM1WaitStates); // the ignored DD: one M1 NOP
+    CHECK(r.cpu.pc() == 0x0002);                       // FD already fetched
+    int plain = 0;
+    { Rig q({0xFD, 0x21, 0x00, 0x00}); plain = q.cpu.step(); }
+    r.cpu.setTraceFlags(TRACE_PC);
+    CHECK(r.cpu.step() == plain); // the carried FD runs exactly like a plain FD 21
+    Z80CpuFrame fr[1];
+    CHECK(r.cpu.drainTraceEvents(fr, 1, nullptr) == 1);
+    CHECK(fr[0].pc == 0x0001 && fr[0].opcode == 0xFD21); // traced at the FD, not the 21
+    r.cpu.setTraceFlags(TRACE_NONE);
+    CHECK(r.cpu.iy() == 0x1234);
+    CHECK(r.cpu.ix() == 0x0000);
+    CHECK(r.cpu.pc() == 0x0005);
+    r.cpu.step(); r.cpu.step();
+    CHECK(r.cpu.ix() == 0x5678);
+    CHECK(r.cpu.pc() == 0x000A);
+}
+
+void test_prefix_run_is_bounded_and_blocks_int() {
+    std::vector<uint8_t> code(64, 0xDD);
+    code[0] = 0xFB; // EI, then a run of DD prefixes
+    Rig r(code);
+    r.cpu.step();
+    r.cpu.setIntLine(true);
+    for (int i = 0; i < 8; i++) {
+        CHECK(r.cpu.step() == 4 + SC7852::kM1WaitStates); // one prefix per step, no INT taken
+    }
+    CHECK(r.cpu.pc() == 0x000A);
+    CHECK(r.cpu.iff1());
+}
+
+void test_r_counts_m1_cycles_only() {
+    // LD A,n ; LD HL,nn ; LD (IX+d),n ; DD CB d 06 (RLC (IX+d)) ; LD A,R
+    Rig r({0x3E, 0x01, 0x21, 0x00, 0x90, 0xDD, 0x36, 0x00, 0x11,
+           0xDD, 0xCB, 0x00, 0x06, 0xED, 0x5F});
+    r.cpu.step(); CHECK(r.cpu.r() == 1);
+    r.cpu.step(); CHECK(r.cpu.r() == 2);
+    r.cpu.step(); CHECK(r.cpu.r() == 4); // DD + opcode; d and n are operands
+    r.cpu.step(); CHECK(r.cpu.r() == 6); // DD + CB; d and op are not M1s
+    r.cpu.step(); // LD A,R: R already advanced by ED + 5F when it is read
+    CHECK(r.cpu.a() == 8);
+}
+
 void test_ed_adc_sbc_hl() {
     // SCF ; LD HL,0x0001 ; LD BC,0x0001 ; ADC HL,BC -> HL=3 (1+1+1)
     Rig r({0x37, 0x21, 0x01, 0x00, 0x01, 0x01, 0x00, 0xED, 0x4A});
@@ -382,21 +443,61 @@ void test_di_ei_and_im() {
 void test_interrupt_im1_pushes_pc_and_vectors_to_0038() {
     Rig r({0xFB, 0x00, 0x00}); // EI ; NOP ; NOP
     r.cpu.step(); // EI
-    r.cpu.requestInterrupt();
-    r.cpu.step(); // NOP step: services the pending IRQ first (IM defaults 0 -> treated as IM1 path)
+    r.cpu.setIntLine(true);
+    r.cpu.step(); // NOP: runs in the EI shadow
+    r.cpu.step(); // services the pending IRQ (IM defaults 0 -> treated as IM1 path)
     CHECK(r.cpu.pc() == 0x0038);
     CHECK(!r.cpu.iff1());
 }
 
 void test_halt_wakes_on_interrupt() {
-    Rig r({0x76}); // HALT
-    r.cpu.step();
+    Rig r({0xFB, 0x76, 0x00}); // EI ; HALT ; NOP
+    r.cpu.step(); r.cpu.step();
     CHECK(r.cpu.halted());
     int cyclesWhileHalted = r.cpu.step();
     CHECK(cyclesWhileHalted == 0);
-    r.cpu.requestInterrupt(); // IFF1 is false (never EI'd) -- HALT still wakes, just doesn't service it
+    r.cpu.setIntLine(true);
     r.cpu.step();
     CHECK(!r.cpu.halted());
+    CHECK(r.cpu.pc() == 0x0038);
+    CHECK(r.bus.mem[r.cpu.sp()] == 0x02); // returns past the HALT
+}
+
+void test_masked_int_keeps_halt() {
+    Rig r({0x76, 0x00}); // HALT (IFF1 clear: never EI'd)
+    r.cpu.step();
+    r.cpu.setIntLine(true);
+    CHECK(r.cpu.step() == 0);
+    CHECK(r.cpu.halted()); // a masked INT does not end HALT
+    r.cpu.resumeFromHalt();
+    r.cpu.setPC(0x0001);
+    r.bus.mem[0x0001] = 0xFB; // EI
+    r.bus.mem[0x0002] = 0x00; // NOP
+    r.cpu.step(); // EI
+    r.cpu.step(); // NOP (EI shadow)
+    r.cpu.step(); // the line is still held, so it is accepted now
+    CHECK(r.cpu.pc() == 0x0038);
+}
+
+void test_int_line_dropped_before_ei_is_not_taken() {
+    Rig r({0xFB, 0x00, 0x00, 0x00}); // EI ; NOP ; NOP ; NOP
+    r.cpu.setIntLine(true);
+    r.cpu.setIntLine(false); // the device withdrew it (cause masked/cleared)
+    r.cpu.step(); r.cpu.step(); r.cpu.step();
+    CHECK(r.cpu.pc() == 0x0003);
+    CHECK(r.cpu.iff1());
+}
+
+void test_ei_defers_pending_irq_by_one_instruction() {
+    Rig r({0xFB, 0x76, 0x00}); // EI ; HALT ; NOP
+    r.cpu.setIntLine(true); // already pending when EI runs
+    r.cpu.step(); // EI
+    r.cpu.step(); // HALT still executes before the IRQ is accepted
+    CHECK(r.cpu.halted());
+    r.cpu.step(); // now accepted
+    CHECK(r.cpu.pc() == 0x0038);
+    CHECK(r.bus.mem[r.cpu.sp()] == 0x02);
+    CHECK(r.bus.mem[uint16_t(r.cpu.sp() + 1)] == 0x00);
 }
 
 void test_ix_load_and_displacement_access() {
@@ -522,12 +623,19 @@ int run_sc7852_tests() {
     test_daa_after_bcd_sub();
     test_cb_rotate_and_bit_and_set_res();
     test_ed_ldir_block_copy();
+    test_r_counts_m1_cycles_only();
+    test_dd_before_ed_is_ignored();
+    test_last_index_prefix_wins();
+    test_prefix_run_is_bounded_and_blocks_int();
     test_ed_adc_sbc_hl();
     test_ed_neg();
     test_in_out_roundtrip();
     test_di_ei_and_im();
     test_interrupt_im1_pushes_pc_and_vectors_to_0038();
     test_halt_wakes_on_interrupt();
+    test_masked_int_keeps_halt();
+    test_int_line_dropped_before_ei_is_not_taken();
+    test_ei_defers_pending_irq_by_one_instruction();
     test_ix_load_and_displacement_access();
     test_ix_add_and_inc_dec();
     test_ix_plain_opcode_passthrough_when_unrelated();

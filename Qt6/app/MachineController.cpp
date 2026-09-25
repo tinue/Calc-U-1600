@@ -1,8 +1,8 @@
 #include "MachineController.hpp"
 
+#include <cstdio>
 #include <cstdlib>
 
-#include <QDateTime>
 #include <QDebug>
 #include <QMessageBox>
 #include <QTimer>
@@ -17,8 +17,9 @@
 #include "PC1600/PC1600Machine.hpp"
 #include "PC1600/PC1600Screenshot.hpp"
 #include "PC1600/PC1600TypedInput.hpp"
-#include "PC1600/PtySerialLink.hpp"
+#include "Serial/PtySerialLink.hpp"
 #include "Resources/BundledRomCatalog.hpp"
+#include "HostClock.hpp"
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
 #include "FloppyDiskManager.hpp"
@@ -81,28 +82,16 @@ MachineController::~MachineController() = default;
 void MachineController::switchModel(Model model, bool keepPlotter) {
     const bool restoreCE150 = keepPlotter && ce150Attached();
     const bool restoreCE1600P = keepPlotter && ce1600pAttached();
+    const bool restoreCE158 = keepPlotter && ce158Attached();
     flushFloppyBeforeDetach(); // the old machine (and its disk) is going away
+    endTraceBeforeRebuild();
     m_model = model;
     m_paste.cancel({}); // the machine it was typing into is going away
     m_pc1500.reset();
     m_pc1600.reset();
 
     if (model == Model::PC1600) {
-        std::string romErr;
-        for (;;) {
-            m_pc1600 = std::make_unique<PC1600Machine>();
-            if (loadPC1600RomSet(*m_pc1600, &romErr)) break;
-            // Only the old ROM set is optional (its dump may be missing or
-            // incomplete): warn, fall back to the new ROM and retry once --
-            // a new-ROM failure quits. reportMissingRomAndExit() is
-            // [[noreturn]], so the retry can't loop a third time.
-            if (m_pc1600RomVersion != PC1600RomVersion::Old) reportMissingRomAndExit(romErr);
-            QMessageBox::warning(nullptr, QObject::tr("Old ROM unavailable"),
-                                 QObject::tr("The old PC-1600 ROM could not be loaded:\n\n%1\n\n"
-                                             "Using the new ROM instead.")
-                                     .arg(QString::fromStdString(romErr)));
-            m_pc1600RomVersion = PC1600RomVersion::New;
-        }
+        makePC1600WithRomFallback();
 
         // Attach any currently-selected memory modules before the cold
         // boot -- a module's state must be visible on the very first ROM
@@ -110,6 +99,7 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
         if (m_moduleManager) m_moduleManager->attachAllToFreshMachine();
         if (restoreCE150) attachCE150();
         if (restoreCE1600P) attachCE1600P();
+        if (restoreCE158) attachCE158();
 
         attachSerialLink(*m_pc1600);
     } else {
@@ -127,6 +117,7 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
 
         if (m_moduleManager) m_moduleManager->attachAllToFreshMachine();
         if (restoreCE150) attachCE150();
+        if (restoreCE158) attachCE158();
     }
 
     // Every rebuild is a full cold boot, run flat out to the prompt (incl. a
@@ -146,6 +137,13 @@ void MachineController::setPC1600RomVersion(PC1600RomVersion version) {
     if (m_model == Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
 }
 
+bool MachineController::setCE1600PRomVersion(CE1600PRomVersion version) {
+    m_ce1600pRomVersion = version;
+    if (m_model != Model::PC1600 || !ce1600pAttached()) return false;
+    switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new CE-1600P ROM
+    return true;
+}
+
 void MachineController::setPC1500RomRevision(PC1500RomRevision revision) {
     m_pc1500RomRevision = revision;
     if (m_model != Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
@@ -160,23 +158,47 @@ bool MachineController::loadPC1600RomSet(PC1600Machine& machine, std::string* er
     return BundledRoms::loadPC1600RomSet(machine, bundledRomDirs(), version, error);
 }
 
+void MachineController::makePC1600WithRomFallback() {
+    std::string romErr;
+    for (;;) {
+        m_pc1600 = std::make_unique<PC1600Machine>();
+        if (loadPC1600RomSet(*m_pc1600, &romErr)) return;
+        // Only the old ROM set is optional (its dump may be missing or
+        // incomplete): warn, fall back to the new ROM and retry once --
+        // a new-ROM failure quits. reportMissingRomAndExit() is
+        // [[noreturn]], so the retry can't loop a third time.
+        if (m_pc1600RomVersion != PC1600RomVersion::Old) reportMissingRomAndExit(romErr);
+        QMessageBox::warning(nullptr, QObject::tr("Old ROM unavailable"),
+                             QObject::tr("The old PC-1600 ROM could not be loaded:\n\n%1\n\n"
+                                         "Using the new ROM instead.")
+                                 .arg(QString::fromStdString(romErr)));
+        m_pc1600RomVersion = PC1600RomVersion::New;
+    }
+}
+
 PC1500Machine& MachineController::resetBareForPresetPC1500(PC1500Variant variant) {
+    endTraceBeforeRebuild();
     m_paste.cancel({});
     m_pc1500.reset();
     m_pc1600.reset();
     m_pc1500 = std::make_unique<PC1500Machine>(variant);
+    // A preset's `interface: ce158` attaches the card itself; it picks up
+    // whatever link the machine holds (see syncCE158SerialLink()).
+    if (m_ce158SerialLink) m_pc1500->setCE158SerialLink(m_ce158SerialLink.get());
     return *m_pc1500;
 }
 
-PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion version) {
+PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion version,
+                                                           CE1600PRomVersion ce1600pVersion) {
     m_pc1600RomVersion = version;
+    m_ce1600pRomVersion = ce1600pVersion;
+    endTraceBeforeRebuild();
     m_paste.cancel({});
     m_pc1500.reset();
     m_pc1600.reset();
-    m_pc1600 = std::make_unique<PC1600Machine>();
-    std::string romErr;
-    if (!loadPC1600RomSet(*m_pc1600, &romErr)) reportMissingRomAndExit(romErr);
+    makePC1600WithRomFallback();
     attachSerialLink(*m_pc1600);
+    if (m_ce158SerialLink) m_pc1600->setCE158SerialLink(m_ce158SerialLink.get()); // see resetBareForPresetPC1500
     return *m_pc1600;
 }
 
@@ -193,13 +215,29 @@ void MachineController::attachSerialLink(PC1600Machine& machine) {
 }
 
 void MachineController::refreshSerialLinkDirectory() {
-    if (!m_serialLink) return;
-    m_serialLink->relink(effectiveSerialLinkDir().toStdString());
+    const std::string dir = effectiveSerialLinkDir().toStdString();
+    if (m_serialLink) m_serialLink->relink(dir);
+    if (m_ce158SerialLink) m_ce158SerialLink->relink(dir);
 }
 
 QString MachineController::serialLinkStatus() const {
     if (!m_serialLink || !m_serialLink->isOpen()) return QString();
     return QString::fromStdString(m_serialLink->preferredPath());
+}
+
+QString MachineController::ce158SerialLinkStatus() const {
+    if (!m_ce158SerialLink || !m_ce158SerialLink->isOpen()) return QString();
+    return QString::fromStdString(m_ce158SerialLink->preferredPath());
+}
+
+void MachineController::syncCE158SerialLink() {
+    if (!ce158Attached()) return;
+    if (!m_ce158SerialLink) {
+        m_ce158SerialLink = std::make_unique<PtySerialLink>(effectiveSerialLinkDir().toStdString(),
+                                                            PtySerialLink::kCE158LinkName);
+    }
+    if (m_pc1600) m_pc1600->setCE158SerialLink(m_ce158SerialLink.get());
+    else if (m_pc1500) m_pc1500->setCE158SerialLink(m_ce158SerialLink.get());
 }
 
 void MachineController::finishPresetLoad(Model model) {
@@ -210,18 +248,20 @@ void MachineController::finishPresetLoad(Model model) {
 }
 
 void MachineController::seedClockFromHost() {
-    const QDateTime now = QDateTime::currentDateTime();
-    const int year = now.date().year();
-    const int month = now.date().month();
-    const int day = now.date().day();
-    const int hour = now.time().hour();
-    const int minute = now.time().minute();
-    const int second = now.time().second();
-    if (m_pc1600) {
-        m_pc1600->seedClock(year, month, day, hour, minute, second);
-    } else if (m_pc1500) {
-        m_pc1500->seedClock(year, month, day, hour, minute, second);
-    }
+    seedClockFromHostNow();
+    m_clockResyncPending = true;
+}
+
+bool MachineController::resyncClockIfSeeded() {
+    if (!m_clockResyncPending) return false;
+    m_clockResyncPending = false;
+    seedClockFromHostNow();
+    return true;
+}
+
+void MachineController::seedClockFromHostNow() {
+    if (m_pc1600) seedClockFromHostTime(*m_pc1600);
+    else if (m_pc1500) seedClockFromHostTime(*m_pc1500);
 }
 
 void MachineController::resetToPrompt(bool allReset) {
@@ -312,6 +352,15 @@ void MachineController::tapShiftedKey(const std::string& baseName) {
     QTimer::singleShot(30 + 100 + 30, this, [this, baseName] { releaseKey(baseName); });
 }
 
+void MachineController::tapKey(const std::string& name) {
+    if (m_pc1500) {
+        m_pc1500->enqueueKey(name);
+    } else if (m_pc1600) {
+        pressKey(name);
+        QTimer::singleShot(30, this, [this, name] { releaseKey(name); });
+    }
+}
+
 void MachineController::enqueueKey(const std::string& name) {
     if (m_pc1500) {
         m_pc1500->enqueueKey(name);
@@ -357,10 +406,8 @@ void MachineController::runActive(std::uint64_t cycles) {
 }
 
 void MachineController::pasteOnFrame() {
-    const bool atPrompt = m_pc1600 ? pc1600AtBasicPrompt(*m_pc1600)
-                                   : (m_pc1500 && pc1500AtBasicPrompt(*m_pc1500));
     m_paste.onFrame([this](const std::string& key) { pressKey(key); },
-                    [this](const std::string& key) { releaseKey(key); }, atPrompt);
+                    [this](const std::string& key) { releaseKey(key); });
 }
 
 void MachineController::advance(std::uint64_t cyclesBudget) {
@@ -396,8 +443,7 @@ double MachineController::clockHz() const {
     if (m_pc1600) {
         return static_cast<double>(PC1600Machine::kTStateHz);
     }
-    // Upd1990ac::kCpuHz -- the LH5801's own clock, 1.3 MHz.
-    return 1300000.0;
+    return static_cast<double>(PC1500Machine::kCpuHz);
 }
 
 DisplayFrame MachineController::currentDisplay() const {
@@ -526,32 +572,29 @@ DebugBankStateFrame MachineController::debugBankStatePC1600() const {
     return out;
 }
 
-void MachineController::setTraceEnabled(bool enabled) {
-    if (m_pc1600) {
-        m_pc1600->setTraceEnabled(enabled);
-        return;
-    }
-    if (!m_pc1500) return;
-    const uint32_t flags = enabled ? (TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL) : TRACE_NONE;
-    if (m_pc1500->traceFlags() != flags) m_pc1500->setTraceFlags(flags);
+bool MachineController::beginTrace(const QString& path) {
+    if (!m_pc1500 && !m_pc1600) return false;
+    std::FILE* handle = std::fopen(path.toStdString().c_str(), "wb");
+    if (!handle) return false;
+    const bool ok = m_pc1600 ? m_pc1600->beginCpuTrace(handle, TRACE_FULL) : m_pc1500->beginCpuTrace(handle, TRACE_FULL);
+    if (!ok) std::fclose(handle); // a capture was already active; ownership passes only on success
+    return ok;
 }
 
-bool MachineController::traceEnabled() const {
-    if (m_pc1600) return m_pc1600->traceEnabled();
-    if (m_pc1500) return m_pc1500->traceFlags() != TRACE_NONE;
-    return false;
+void MachineController::endTrace() {
+    if (m_pc1600) m_pc1600->endCpuTrace();
+    else if (m_pc1500) m_pc1500->endCpuTrace();
 }
 
-std::uint32_t MachineController::drainPC1500Trace(CpuFrame* out, std::uint32_t max, std::uint32_t* outLost) {
-    return m_pc1500 ? m_pc1500->drainTraceEvents(out, max, outLost) : 0;
+bool MachineController::traceActive() const {
+    if (m_pc1600) return m_pc1600->cpuTraceActive();
+    return m_pc1500 && m_pc1500->cpuTraceActive();
 }
 
-std::uint32_t MachineController::drainSC7852Trace(Z80CpuFrame* out, std::uint32_t max, std::uint32_t* outLost) {
-    return m_pc1600 ? m_pc1600->sc7852().drainTraceEvents(out, max, outLost) : 0;
-}
-
-std::uint32_t MachineController::drainLH5803Trace(CpuFrame* out, std::uint32_t max, std::uint32_t* outLost) {
-    return m_pc1600 ? m_pc1600->lh5803().drainTraceEvents(out, max, outLost) : 0;
+void MachineController::endTraceBeforeRebuild() {
+    if (!traceActive()) return;
+    endTrace();
+    emit traceEndedByRebuild();
 }
 
 // ---- Plotter support ----
@@ -560,14 +603,17 @@ void MachineController::flushFloppyBeforeDetach() {
     if (m_floppyManager && ce1600pAttached()) m_floppyManager->flushPendingPersist();
 }
 
-bool MachineController::attachCE150() {
+bool MachineController::attachCE150(QString* error) {
     std::string err;
+    bool ok = false;
     if (m_pc1600) {
         flushFloppyBeforeDetach();  // Core detaches the CE-1600P/F to make room
-        return BundledRoms::attachCE150(*m_pc1600, bundledRomDirs(), &err);
+        ok = BundledRoms::attachCE150(*m_pc1600, bundledRomDirs(), &err);
+    } else if (m_pc1500) {
+        ok = BundledRoms::attachCE150(*m_pc1500, bundledRomDirs(), &err);
     }
-    if (m_pc1500) return BundledRoms::attachCE150(*m_pc1500, bundledRomDirs(), &err);
-    return false;
+    if (!ok && error) *error = QString::fromStdString(err);
+    return ok;
 }
 
 void MachineController::detachCE150() {
@@ -581,10 +627,61 @@ bool MachineController::ce150Attached() const {
     return false;
 }
 
-bool MachineController::attachCE1600P() {
-    if (!m_pc1600) return false;
+bool MachineController::attachCE158(QString* error) {
     std::string err;
-    if (!BundledRoms::attachCE1600P(*m_pc1600, bundledRomDirs(), &err)) return false;
+    bool ok = false;
+    if (m_pc1600) {
+        flushFloppyBeforeDetach(); // Core detaches the CE-1600P/F to make room
+        ok = BundledRoms::attachCE158(*m_pc1600, bundledRomDirs(), &err);
+    } else if (m_pc1500) {
+        ok = BundledRoms::attachCE158(*m_pc1500, bundledRomDirs(), &err);
+    }
+    if (!ok) {
+        if (error) *error = QString::fromStdString(err);
+        return false;
+    }
+    syncCE158SerialLink();
+    return true;
+}
+
+void MachineController::detachCE158() {
+    if (m_pc1600) m_pc1600->detachCE158();
+    else if (m_pc1500) m_pc1500->detachCE158();
+}
+
+bool MachineController::ce158Attached() const {
+    if (m_pc1600) return m_pc1600->ce158Attached();
+    return m_pc1500 && m_pc1500->ce158Attached();
+}
+
+std::vector<std::uint8_t> MachineController::drainCE158PrinterOutput() {
+    if (m_pc1600) return m_pc1600->drainCE158ParallelOutput();
+    return m_pc1500 ? m_pc1500->drainCE158ParallelOutput() : std::vector<std::uint8_t>{};
+}
+
+bool MachineController::attachCE1600P(QString* error) {
+    if (!m_pc1600) return false; // (Core drops a CE-158 to make room -- PlotterController reports it)
+    const auto versionName = [](CE1600PRomVersion v) { return v == CE1600PRomVersion::Old ? "old" : "new"; };
+    std::string err;
+    if (!BundledRoms::attachCE1600P(*m_pc1600, bundledRomDirs(), versionName(m_ce1600pRomVersion), &err)) {
+        // Like the PC-1600's own old ROM: the old set is optional (its dump
+        // may be missing), so warn and fall back to the new one. A failing
+        // new set just leaves the plotter detached.
+        if (m_ce1600pRomVersion != CE1600PRomVersion::Old) {
+            if (error) *error = QString::fromStdString(err);
+            return false;
+        }
+        QMessageBox::warning(nullptr, QObject::tr("Old CE-1600P ROM unavailable"),
+                             QObject::tr("The old CE-1600P ROM could not be loaded:\n\n%1\n\n"
+                                         "Using the new ROM instead.")
+                                 .arg(QString::fromStdString(err)));
+        m_ce1600pRomVersion = CE1600PRomVersion::New;
+        err.clear();
+        if (!BundledRoms::attachCE1600P(*m_pc1600, bundledRomDirs(), "new", &err)) {
+            if (error) *error = QString::fromStdString(err);
+            return false;
+        }
+    }
     if (m_floppyManager) m_floppyManager->insertSelectedDisk();
     return true;
 }

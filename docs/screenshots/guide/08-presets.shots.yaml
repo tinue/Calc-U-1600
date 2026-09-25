@@ -1,0 +1,9 @@
+# User guide, 8 Presets. Format: docs/screenshots/README.md.
+out: ../../images/guide
+window: 1430x1000
+
+shots:
+  # What the startup preset explained in the guide leaves on the LCD.
+  - name: 08-default-pc1600
+    preset: ../../../examples/startup/default-pc1600.pc1600
+    capture: { target: lcd, file: 08-default-pc1600.png }

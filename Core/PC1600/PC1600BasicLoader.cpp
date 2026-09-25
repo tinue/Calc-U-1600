@@ -17,6 +17,9 @@ namespace {
 // SharpPC1500Reference/PC-1600/PC-1600-BASIC-Program-Placement.md.
 constexpr uint16_t kBasPrgSt = 0xF865;
 constexpr uint16_t kBasPrgEnd = 0xF867;
+// PRGADR's start/end triples (address lo, hi, bank) -- see load() below.
+constexpr uint16_t kPrgAdrStartBank = 0xFE3E;
+constexpr uint16_t kPrgAdrEnd = 0xFE3F;
 constexpr uint16_t kRamBaseLE = 0xF5CF;  // Z-80-native base right after NEW0; stack-region, cross-check only
 
 uint16_t readBE16(PC1600Machine& m, uint16_t addr) {
@@ -28,8 +31,8 @@ uint16_t readLE16(PC1600Machine& m, uint16_t addr) {
                                  (m.debugPeek(static_cast<uint16_t>(addr + 1)) << 8));
 }
 
-PC1600BasicLoadResult fail(const std::string& msg) {
-    PC1600BasicLoadResult r;
+BasicLoadResult fail(const std::string& msg) {
+    BasicLoadResult r;
     r.ok = false;
     r.error = msg;
     return r;
@@ -43,8 +46,8 @@ bool writePlacementSegment(PC1600Machine& machine, const pc1600::PlacementWrite&
 
 }  // namespace
 
-PC1600BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,
-                                             const std::vector<uint8_t>& transferFile) {
+BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,
+                                       const std::vector<uint8_t>& transferFile) {
     basic::BasicBinaryImage img = basic::parseBasicBinaryTransfer(transferFile);
     if (!img.ok) return fail(img.error);
     if (img.model != basic::TransferModel::PC1600) {
@@ -54,8 +57,8 @@ PC1600BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,
     return loadBasicBinaryPayload(machine, img.payload);
 }
 
-PC1600BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
-                                             const std::vector<uint8_t>& payload) {
+BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
+                                       const std::vector<uint8_t>& payload) {
     // LOAD semantics: this works off whatever BASPRG_ST/BASPRG_END are
     // currently live -- no reset, no mode change, no NEW0 typed here. The
     // caller (the user, via the menu, or a preset's own `- type: NEW0` step)
@@ -163,7 +166,22 @@ PC1600BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
         return fail("could not write BASPRG_END");
     }
 
-    PC1600BasicLoadResult r;
+    // The SC7852 side keeps its own copy of the program's start/end at
+    // $FE3C-$FE41 (ROM jump table 02F4H PRGADR: "set the BASIC start/end
+    // addresses"), each 3 bytes: address low, high, bank. LIST reads the end
+    // from there, so without this a loaded program lists as empty until a
+    // MODE switch re-runs PRGADR. Measured on the ROM (internal RAM, one and
+    // two CE-1600M banks, spilling into internal RAM): each address is the
+    // LH5803-side pointer with bit 15 set, the bank byte is the one NEW0 left
+    // in the start triple ($FE3E).
+    const uint16_t endLogical = static_cast<uint16_t>(endLh | 0x8000);
+    uint8_t prgEnd[3] = {static_cast<uint8_t>(endLogical & 0xFF), static_cast<uint8_t>(endLogical >> 8),
+                         machine.debugPeek(kPrgAdrStartBank)};
+    if (!machine.pokeMemory(kPrgAdrEnd, prgEnd, 3)) {
+        return fail("could not write the program-end address ($FE3F)");
+    }
+
+    BasicLoadResult r;
     r.ok = true;
     r.baseAddr = plan.startAddr;
     r.endAddr = plan.endAddr;

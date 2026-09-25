@@ -5,6 +5,7 @@
 //
 // Build & run: see tools/run_tests.sh
 
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -344,12 +345,16 @@ void test_rti_restores_flags_and_pc() {
     r.cpu.requestMaskableInterrupt();
     r.cpu.step(); // services interrupt: pushes T (C=0,IE=1) and P, jumps to 0x9000
     CHECK(r.cpu.pc() == 0x9000);
+    CHECK(!r.cpu.flagIE()); // acceptance resets IE ...
+    r.cpu.requestMaskableInterrupt(); // ... so a second request can't re-enter the handler
     // Simulate the handler mutating flags before returning -- RTI must undo this.
     r.cpu.setFlagC(true);
-    r.cpu.step(); // rti
+    r.cpu.step(); // rti runs; the second request is still held off
     CHECK(r.cpu.pc() == returnPC);
     CHECK(!r.cpu.flagC());  // restored to the pre-interrupt value, not the handler's
-    CHECK(r.cpu.flagIE());  // still set -- unrelated to C, both came from the same pushed T
+    CHECK(r.cpu.flagIE());  // RTI restores IE from the pushed T
+    r.cpu.step(); // now the pending request is taken
+    CHECK(r.cpu.pc() == 0x9000);
 }
 
 void test_trace_ring_and_drain() {
@@ -665,6 +670,42 @@ void test_rtc_tp_rate_and_gating() {
     CHECK(ticks >= 480 && ticks <= 505); // ~492 expected, generous margin
 }
 
+void test_rtc_tp_phase_free_runs_across_configures() {
+    // TP comes off the chip's free-running divider: a rate select doesn't
+    // restart its phase, so rising edges stay on the 1/64 s grid however
+    // the configures fall. (A real unit's BEEP repeat periods measure as
+    // whole 64ths of a second.) At 1.3 MHz a 64 Hz period is 20312.5
+    // cycles and rising edges fall at odd half-periods: 10156.25 + k*20312.5.
+    PC1500Memory mem;
+    uint64_t t = 0;
+    auto advance = [&](uint32_t c) { mem.advanceRtc(c); t += c; };
+    auto nextRisingEdge = [&]() {
+        for (;;) {
+            advance(10);
+            uint8_t ifVal = mem.readME1(0xF00B);
+            if (ifVal & 0x02) { mem.writeME1(0xF00B, uint8_t(ifVal & ~0x02)); return t; }
+        }
+    };
+    auto configure64 = [&]() {
+        mem.writeME1(0xF008, 0x20);
+        mem.writeME1(0xF008, uint8_t(0x20 | 0x02));
+    };
+    auto offGrid = [](uint64_t cyc) {
+        double k = (double(cyc) - 10156.25) / 20312.5;
+        return std::abs(k - std::round(k)) * 20312.5; // cycles off the grid
+    };
+    advance(3333);
+    configure64();
+    CHECK(offGrid(nextRisingEdge()) <= 10);
+    for (uint32_t skew : {777u, 5000u, 12345u}) {
+        mem.writeME1(0xF008, 0x00); // Register Hold: TP off (WAIT/BEEP cleanup)
+        mem.writeME1(0xF008, 0x02);
+        advance(skew);
+        configure64();
+        CHECK(offGrid(nextRisingEdge()) <= 10);
+    }
+}
+
 void test_rtc_if_does_not_clear_on_read() {
     // IF's TP flag (bit 1) must not clear on an ordinary read of the
     // register: the ROM's own MI interrupt handler (LE171) reads IF to
@@ -837,6 +878,25 @@ void test_rtc_calendar_set_via_shift_and_commit() {
     CHECK(rtcReadCalendar40(mem) == want);
 }
 
+void test_rtc_calendar_time_set_straight_to_time_read() {
+    // Time Set -> Time Read with no Register Hold in between: the commit
+    // on leaving Time Set must land before Time Read's snapshot, or the
+    // read returns the old time and the TIME= value is lost.
+    PC1500Memory mem;
+    mem.seedClock(2000, 1, 1, 0, 0, 0, 6);
+    const uint64_t want = (uint64_t(0x04) << 36) | (uint64_t(0x02) << 32) | (uint64_t(0x21) << 24) |
+                          (uint64_t(0x17) << 16) | (uint64_t(0x08) << 8) | uint64_t(0x33);
+    rtcSetMode(mem, 1); // Register Shift
+    for (int i = 0; i < 40; i++) {
+        uint8_t d = uint8_t(kRegShift | ((want >> i) & 1));
+        mem.writeME1(kOpc, d);
+        mem.writeME1(kOpc, uint8_t(d | 0x04));
+        mem.writeME1(kOpc, d);
+    }
+    rtcSetMode(mem, 2); // Time Set
+    CHECK(rtcReadCalendar40(mem) == want); // starts with Time Read
+}
+
 void test_rtc_calendar_advances_one_hz_with_bcd_and_month_carry() {
     // One tick per emulated second, with BCD carry rippling sec->min->
     // hour->day and a Jan(31)->Feb month rollover. 2026 is not a leap
@@ -851,6 +911,22 @@ void test_rtc_calendar_advances_one_hz_with_bcd_and_month_carry() {
     CHECK(rtcNibble(r, 16) == 0 && rtcNibble(r, 20) == 0); // hour 00
     CHECK(rtcNibble(r, 8) == 0 && rtcNibble(r, 12) == 0);  // minute 00
     CHECK(rtcNibble(r, 0) == 1 && rtcNibble(r, 4) == 0);   // 58 -> 59 -> 00 -> 01
+}
+
+void test_rtc_seed_millisecond_aligns_next_tick() {
+    // seedClock()'s millisecond preloads the 1 Hz accumulator: seeded at
+    // .900, the next tick is 0.1 s away, not a full second.
+    PC1500Memory mem;
+    mem.seedClock(2026, 9, 23, 12, 0, 10, 3, 900);
+    mem.advanceRtc(260'000u); // 0.2 s at 1.3MHz
+    uint64_t r = rtcReadCalendar40(mem);
+    CHECK(rtcNibble(r, 0) == 1 && rtcNibble(r, 4) == 1); // 10 -> 11
+
+    PC1500Memory mem0;
+    mem0.seedClock(2026, 9, 23, 12, 0, 10, 3, 0);
+    mem0.advanceRtc(260'000u);
+    r = rtcReadCalendar40(mem0);
+    CHECK(rtcNibble(r, 0) == 0 && rtcNibble(r, 4) == 1); // still 10
 }
 
 void test_rtc_calendar_reset_is_deterministic() {
@@ -1312,6 +1388,9 @@ int run_ce150_tests();
 // Defined in pc1600_ce150_tests.cpp -- the CE-150 attached to the PC-1600's
 // LH5803 side (Phase 2).
 int run_pc1600_ce150_tests();
+// Defined in ce158_tests.cpp -- Ce158Card (ROM window, LH5811, CDP1854 UART,
+// Centronics) and the CE-158 driven by BASIC on a PC1500Machine.
+int run_ce158_tests();
 // Defined in basic_binary_image_tests.cpp -- the SharpDataExchange
 // tokenized-BASIC transfer-file parser (Core/Basic/BasicBinaryImage).
 int run_basic_binary_image_tests();
@@ -1370,13 +1449,16 @@ int main() {
     test_keyboard_name_lookup();
     test_io_chip_keyboard_wiring_through_memory();
     test_rtc_tp_rate_and_gating();
+    test_rtc_tp_phase_free_runs_across_configures();
     test_rtc_if_does_not_clear_on_read();
     test_pc1500_ram_powerup_reset_and_all_reset();
     test_rtc_opb_and_if_never_disagree_within_one_poll();
     test_rtc_calendar_seed_and_read();
     test_preset_syncclock_reseeds_rtc();
     test_rtc_calendar_set_via_shift_and_commit();
+    test_rtc_calendar_time_set_straight_to_time_read();
     test_rtc_calendar_advances_one_hz_with_bcd_and_month_carry();
+    test_rtc_seed_millisecond_aligns_next_tick();
     test_rtc_calendar_reset_is_deterministic();
     test_machine_seedclock_derives_day_of_week();
     test_on_key_press_sets_break_flag();
@@ -1417,6 +1499,7 @@ int main() {
     int ce1600fFailures = run_ce1600f_tests();
     int ce150Failures = run_ce150_tests();
     int pc1600Ce150Failures = run_pc1600_ce150_tests();
+    int ce158Failures = run_ce158_tests();
     int basicBinaryImageFailures = run_basic_binary_image_tests();
     int basicFastLoaderFailures = run_basic_fastloader_tests();
     int pc1600BasicLoaderFailures = run_pc1600_basicloader_tests();
@@ -1437,7 +1520,7 @@ int main() {
             pc1600KeyboardDisplayFailures == 0 && pc1600SlotRamFailures == 0 &&
             pc1600SlotModuleFailures == 0 && pc1600PresetFailures == 0 && ce1600pFailures == 0 &&
             ce1600fFailures == 0 &&
-            ce150Failures == 0 && pc1600Ce150Failures == 0)
+            ce150Failures == 0 && pc1600Ce150Failures == 0 && ce158Failures == 0)
                ? 0
                : 1;
 }

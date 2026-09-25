@@ -30,6 +30,7 @@
 # written into it by the PC-1600's own INIT, not baked into the module.
 
 module-name: "CE-1601M"
+template: true   # read-only starting point; Name & Save copies it
 compatible-hosts: [PC-1600-Slot-2]
 definition-terminology: PC-1600-Slot-2
 battery: true

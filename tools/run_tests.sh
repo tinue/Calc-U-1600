@@ -11,7 +11,8 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/PC1500/PC1500Keyboard.cpp \
   Core/PC1500/PC1500Display.cpp \
   Core/PC1500/Upd1990ac.cpp \
-  Core/PC1500/PresetFile.cpp \
+  Core/Preset/PresetFile.cpp \
+  Core/Preset/PresetRunner.cpp \
   Core/PC1500/PC1500BasicTyper.cpp \
   Core/PC1500/PC1500BasicLoader.cpp \
   Core/PC1500/PC1500MachineCodeLoader.cpp \
@@ -63,6 +64,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/ce1600f_tests.cpp \
   Core/tests/ce150_tests.cpp \
   Core/tests/pc1600_ce150_tests.cpp \
+  Core/tests/ce158_tests.cpp \
   Core/tests/basic_binary_image_tests.cpp \
   Core/tests/basic_fastloader_tests.cpp \
   Core/tests/pc1600_basicloader_tests.cpp \

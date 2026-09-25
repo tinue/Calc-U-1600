@@ -58,7 +58,7 @@ void test_typebasicprogram_length_guard() {
     std::string tooLong = "10 REM ";
     while (static_cast<int>(tooLong.size()) <= kMaxBasicLineLength) tooLong += 'X';
 
-    PC1600BasicTypeResult r = typeBasicProgramText(m, tooLong + "\n");
+    BasicTypeResult r = typeBasicProgramText(m, tooLong + "\n");
     CHECK(!r.ok);
     CHECK(r.rejectedLines.size() == 1);
     CHECK(!r.rejectedLines.empty() && r.rejectedLines[0] == tooLong);
@@ -79,11 +79,27 @@ void test_typebasicprogram_pro_mode_load() {
     std::string tooLong = "30 REM ";
     while (static_cast<int>(tooLong.size()) <= kMaxBasicLineLength) tooLong += 'X';
 
-    PC1600BasicTypeResult r = typeBasicProgramText(
+    BasicTypeResult r = typeBasicProgramText(
         m, "10 PRINT 12345\n20 GOTO 10\n" + tooLong + "\n40 END\n");
     CHECK(!r.ok);                                // the one over-length line
     CHECK(r.rejectedLines.size() == 1);
     CHECK(!r.rejectedLines.empty() && r.rejectedLines[0] == tooLong);
+}
+
+// ROM-gated: re-typing a line number with a same-length body replaces the
+// line without moving BASPRG_END -- that is still a stored line.
+void test_typebasicprogram_same_length_replacement_is_stored() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_typebasicprogram_same_length_replacement_is_stored: PC-1600 ROM images not found\n");
+        return;
+    }
+    tapKey(m, "mode"); // RUN -> PRO
+    m.runCycles(static_cast<uint64_t>(PC1600Machine::kTStateHz) / 2);
+
+    BasicTypeResult r = typeBasicProgramText(m, "10 A=1\n10 A=2\n");
+    CHECK(r.ok);
+    CHECK(r.rejectedLines.empty());
 }
 
 // ROM-gated: called in RUN mode (no `key: mode`), the editor stores
@@ -94,7 +110,7 @@ void test_typebasicprogram_detects_run_mode() {
         std::fprintf(stderr, "SKIP test_typebasicprogram_detects_run_mode: PC-1600 ROM images not found\n");
         return;
     }
-    PC1600BasicTypeResult r = typeBasicProgramText(m, "10 PRINT 1\n20 PRINT 2\n");
+    BasicTypeResult r = typeBasicProgramText(m, "10 PRINT 1\n20 PRINT 2\n");
     CHECK(!r.ok);
     CHECK(r.rejectedLines.size() == 2);
     CHECK(r.error.find("PRO mode") != std::string::npos);
@@ -156,6 +172,7 @@ int run_pc1600_basictyper_tests() {
     test_typeline_caret_reaches_input_buffer();
     test_typebasicprogram_length_guard();
     test_typebasicprogram_pro_mode_load();
+    test_typebasicprogram_same_length_replacement_is_stored();
     test_typebasicprogram_detects_run_mode();
     test_typeline_lowercase_reaches_input_buffer();
 

@@ -22,6 +22,14 @@
 // parked high or low (the ROM's idle / BEEP OFF levels) decays to silence
 // without a click.
 //
+// Optionally a Transducer stage follows: a biquad cascade modelling how
+// the machine's piezo disc actually sounds. The drive signal is still the
+// ROM's own square wave; this only shapes it the way the buzzer's acoustic
+// response does. Without it a low BEEP comes out as a raw square wave
+// whose fundamental dominates. On a real unit the fundamental is almost
+// inaudible and the ear hears the 1.5-4.5 kHz harmonics, so the pitch
+// seems several times higher.
+//
 // Not thread-safe on its own -- the owning machine serializes access
 // under its own mutex (step()/runCycles() on one side, drainAudio() on the
 // other).
@@ -29,7 +37,18 @@ class PiezoSampler {
 public:
     static constexpr int kDefaultSampleRate = 48000;
 
-    explicit PiezoSampler(double cpuHz, int sampleRate = kDefaultSampleRate);
+    enum class Transducer {
+        None,   // the drive line as-is (after the DC blocker)
+        PC1500, // PC-1500/1500A buzzer, fitted to a real-unit sweep (see .cpp)
+        PC1600, // PC-1600 buzzer, fitted to real-unit recordings (see .cpp)
+    };
+
+    explicit PiezoSampler(double cpuHz, Transducer transducer = Transducer::None,
+                          int sampleRate = kDefaultSampleRate);
+
+    /// Switches the acoustic model on or off. Tests that measure the drive
+    /// signal's pitch/timing turn it off; the host hears it on.
+    void setTransducer(Transducer transducer);
 
     int sampleRate() const { return m_sampleRate; }
 
@@ -66,6 +85,19 @@ public:
     void discard() { m_head = 0; m_count = 0; }
 
 private:
+    // Transposed direct form II; coefficients normalized so a0 = 1.
+    struct Biquad {
+        double b0{1}, b1{0}, b2{0}, a1{0}, a2{0};
+        double z1{0}, z2{0};
+        double process(double x) {
+            const double y = b0 * x + z1;
+            z1 = b1 * x - a1 * y + z2;
+            z2 = b2 * x - a2 * y;
+            return y;
+        }
+    };
+    static constexpr int kMaxStages = 3;
+
     void emitSample();
 
     double m_cyclesPerSample;
@@ -78,6 +110,10 @@ private:
     double m_area{0.0};    // cycles of that interval spent high
     double m_hpPrevIn{0.0};
     double m_hpPrevOut{0.0};
+
+    Biquad m_stages[kMaxStages];
+    int    m_stageCount{0};
+    double m_gain{0.0};
 
     // Fixed-capacity ring (~1 s): the oldest samples are dropped when a
     // consumer isn't draining (headless runs, a stalled UI).

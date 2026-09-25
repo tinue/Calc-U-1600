@@ -9,8 +9,11 @@
 #
 # Starting a new `- trace:` closes any open one; a trace still running when
 # the preset finishes is closed automatically.
-model: PC-1500A
-firmware: A04
+model: PC-1500A:A04
+
+keys:
+  - key: cl
+  - type: NEW0
 
 program:
   format: basic-text

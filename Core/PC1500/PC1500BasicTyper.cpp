@@ -9,11 +9,8 @@
 
 namespace {
 
-// ~2.6MHz crystal / 2 -- same documented value as Upd1990ac.hpp's own
-// kCpuHz (duplicated locally rather than shared).
-constexpr double kCpuHz = 1300000.0;
-constexpr int kFramesPerSecond = 60;
-constexpr uint64_t kCyclesPerFrame = static_cast<uint64_t>(kCpuHz / kFramesPerSecond);
+constexpr double kCpuHz = PC1500Machine::kCpuHz;
+constexpr uint64_t kCyclesPerFrame = kPC1500CyclesPerFrame;
 
 // Key-scan cadence: kTapFrames=4 hold + kIdleFrames=4 idle, ~67ms per
 // keystroke at 60fps -- see this file's header comment.
@@ -194,15 +191,6 @@ bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, 
 
 BasicTypeResult typeBasicProgramText(PC1500Machine& machine, const std::string& text) {
     BasicTypeResult result;
-
-    tapKey(machine, "cl");
-    waitIdle(machine, static_cast<uint64_t>(kCpuHz * 2));
-
-    std::string newError;
-    if (!typeLine(machine, "NEW0", /*pressEnter=*/true, &newError)) {
-        result.error = newError;
-        return result;
-    }
 
     std::istringstream lines(text);
     std::string line;

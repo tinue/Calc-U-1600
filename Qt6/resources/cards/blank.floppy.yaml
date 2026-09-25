@@ -2,6 +2,7 @@
 format: ce1600f-floppy
 format-version: 1
 disk-name: "Blank"
+template: true
 saved: 2026-09-19T10:36:00Z
 sides:
   a:

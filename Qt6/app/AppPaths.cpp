@@ -31,11 +31,32 @@ QString defaultInstanceDir() {
     return dir;
 }
 
+namespace {
+QString& isolatedInstanceDir() {
+    static QString dir;
+    return dir;
+}
+} // namespace
+
+void setIsolatedInstanceDir(const QString& dir) {
+    isolatedInstanceDir() = dir;
+}
+
+QString forDisplay(const QString& path) {
+    const QString isolated = isolatedInstanceDir();
+    if (isolated.isEmpty() || !path.startsWith(isolated)) return path;
+    return defaultInstanceDir() + path.mid(isolated.size());
+}
+
 QString instanceDir() {
     const QString override = AppSettings::instanceDirOverride();
     if (!override.isEmpty()) {
         QDir().mkpath(override);
         return override;
+    }
+    if (!isolatedInstanceDir().isEmpty()) {
+        QDir().mkpath(isolatedInstanceDir());
+        return isolatedInstanceDir();
     }
     return defaultInstanceDir();
 }
@@ -68,7 +89,9 @@ bool isUnderDir(const QString& path, const QString& dir) {
     if (path.isEmpty() || dir.isEmpty()) return false;
     const QString a = QFileInfo(path).canonicalFilePath();
     const QString b = QFileInfo(dir).canonicalFilePath();
-    return !a.isEmpty() && !b.isEmpty() && a.startsWith(b);
+    if (a.isEmpty() || b.isEmpty()) return false;
+    // Match whole path components: "<dir>-backup/x" is not under "<dir>".
+    return a == b || a.startsWith(b.endsWith(QLatin1Char('/')) ? b : b + QLatin1Char('/'));
 }
 
 bool atomicWriteFile(const QString& path, const std::string& text) {

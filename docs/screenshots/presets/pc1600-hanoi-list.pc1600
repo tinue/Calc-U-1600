@@ -1,0 +1,11 @@
+# User-guide screenshots: the Towers of Hanoi program just loaded, listed in
+# PRO mode (the one screenshot that is meant to be in PRO mode).
+model: PC-1600
+keys:
+  - key: mode
+  - type: NEW0
+program:
+  path: ../../../examples/hanoi.bas
+  format: basic-binary
+keys:
+  - type: LIST

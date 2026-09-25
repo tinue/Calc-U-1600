@@ -1,0 +1,15 @@
+# User guide, 7 COM ports. Format: docs/screenshots/README.md.
+out: ../../images/guide
+
+shots:
+  - name: 07-settings-serial
+    window: 1430x1000
+    preset: ../presets/pc1600-ready.pc1600
+    steps:
+      - action: Edit > Settings…
+    capture: { target: dialog.settings.serial, file: 07-settings-serial.png }
+
+  - name: 07-ce158-printer
+    window: 900x1000
+    preset: ../presets/pc1500a-ce158.pc1500a
+    capture: { target: ce158printer, file: 07-ce158-printer.png }

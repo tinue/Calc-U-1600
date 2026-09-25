@@ -5,6 +5,7 @@
 #include <string>
 
 #include "../LH5801/LH5801.hpp"
+#include "LH5803Rom.hpp"
 
 // ── LH5803-side memory map ────────────────────────────────────────────
 //
@@ -33,8 +34,8 @@ public:
 
     /// Loads the 16KB internal ROM at C000-FFFF (PC1600-LH5803-C000-FFFF-new.bin). Returns
     /// false (untouched) if `size` isn't exactly 16384 bytes.
-    bool loadROM(const uint8_t* data, size_t size);
-    bool loadROMFile(const std::string& path);
+    bool loadROM(const uint8_t* data, size_t size) { return m_rom.load(data, size); }
+    bool loadROMFile(const std::string& path) { return m_rom.loadFile(path); }
 
     void reset(); // clears internal RAM only; ROM untouched
 
@@ -48,10 +49,8 @@ public:
 private:
     static constexpr uint16_t kRamBase = 0x4000;
     static constexpr size_t   kRamSize = 0x4000; // 16384B
-    static constexpr uint16_t kRomBase = 0xC000;
-    static constexpr size_t   kRomSize = 0x4000; // 16384B
+    static constexpr uint16_t kRomBase = LH5803Rom::kBase;
 
     std::array<uint8_t, kRamSize> m_internalRam{};
-    std::array<uint8_t, kRomSize> m_rom{};
-    bool m_romLoaded{false};
+    LH5803Rom m_rom;
 };

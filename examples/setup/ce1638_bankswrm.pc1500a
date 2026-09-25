@@ -1,7 +1,6 @@
 # PC-1500A with the real CE-1638 memory module (128k, 8 banks of 16k).
 
-model: PC-1500A
-firmware: A04
+model: PC-1500A:A04
 
 memory-expansion:
   - modulespec: CE-1638

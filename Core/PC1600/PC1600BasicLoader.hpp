@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 
+#include "../Basic/BasicLoadResults.hpp"
+
 class PC1600Machine;
 
 // ── Fast BASIC program loading for the PC-1600 ─────────────────────────
@@ -37,21 +39,17 @@ class PC1600Machine;
 //     read only to form BASPRG_END in the same representation.
 //   * BASPRG_END ($F867) is big-endian, written as $F865's value + length.
 
-struct PC1600BasicLoadResult {
-    bool ok = false;
-    uint16_t baseAddr = 0;  // SC7852-side base the payload was written to (e.g. $C0C5)
-    uint16_t endAddr = 0;   // SC7852-side address of the 0xFF end marker
-    std::string error;
-};
-
 /// `transferFile` = a full PC-1600 transfer file, header included. Requires
 /// only that BASPRG_ST/BASPRG_END are currently valid pointers -- no reset,
-/// mode change, or NEW0 is performed. Used by the GUI `-loadBasicBinary:`
-/// action.
-PC1600BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,
-                                             const std::vector<uint8_t>& transferFile);
+/// mode change, or NEW0 is performed. Nothing in the app calls this today --
+/// the GUI and presets load `.bas` listings (loadBasicBinaryPayload() below);
+/// it stays for already-tokenized transfer files and is covered by the tests.
+BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,
+                                       const std::vector<uint8_t>& transferFile);
 
 /// Same, but takes the bare tokenized payload (no header). Used by the
-/// preset loader, which tokenizes a `.bas` listing headerless via libsharpdx.
-PC1600BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
-                                             const std::vector<uint8_t>& payload);
+/// preset runner (`format: basic-binary`) and the GUI's Load BASIC Program,
+/// which both tokenize a `.bas` listing headerless via
+/// basic::readBasicProgramSource().
+BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
+                                       const std::vector<uint8_t>& payload);

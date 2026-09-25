@@ -10,15 +10,20 @@
 #include <sys/stat.h>
 #include <termios.h>
 #include <unistd.h>
+#include <chrono>
 #include <vector>
 
 namespace {
 
-// Best-effort <dir>/calcu1600.serial -> target. When `dir` is empty the
+// How long the reader waits before re-polling when poll() would return at
+// once without anything to do: RX ring full, or no peer on the slave.
+constexpr std::chrono::milliseconds kIdleBackoff{10};
+
+// Best-effort <dir>/<name> -> target. When `dir` is empty the
 // caller supplied no folder (the headless probe, tests): fall back to
 // ~/Library/Application Support/Calc-U-1600. Returns the link path, or ""
 // if it could not be created.
-std::string makeStableSymlink(const std::string& target, const std::string& dir) {
+std::string makeStableSymlink(const std::string& target, const std::string& dir, const std::string& name) {
     std::string base = dir;
     if (base.empty()) {
         const char* home = ::getenv("HOME");
@@ -31,7 +36,7 @@ std::string makeStableSymlink(const std::string& target, const std::string& dir)
     // A folder given as "/private/tmp/" must not yield "/private/tmp//...".
     while (base.size() > 1 && base.back() == '/') base.pop_back();
     if (base == "/") base.clear();
-    const std::string link = base + "/calcu1600.serial";
+    const std::string link = base + "/" + name;
     ::unlink(link.c_str());
     if (::symlink(target.c_str(), link.c_str()) != 0) return "";
     return link;
@@ -53,7 +58,8 @@ void removeSymlinkIfOurs(const std::string& link, const std::string& slave) {
 
 } // namespace
 
-PtySerialLink::PtySerialLink(std::string linkDir) : m_linkDir(std::move(linkDir)) {
+PtySerialLink::PtySerialLink(std::string linkDir, std::string linkName)
+    : m_linkDir(std::move(linkDir)), m_linkName(std::move(linkName)) {
     m_master = ::posix_openpt(O_RDWR | O_NOCTTY);
     if (m_master < 0) {
         m_error = std::string("posix_openpt: ") + std::strerror(errno);
@@ -87,7 +93,7 @@ PtySerialLink::PtySerialLink(std::string linkDir) : m_linkDir(std::move(linkDir)
         ::tcsetattr(m_master, TCSANOW, &t);
     }
 
-    m_stablePath = makeStableSymlink(m_slavePath, m_linkDir);
+    m_stablePath = makeStableSymlink(m_slavePath, m_linkDir, m_linkName);
 
     m_reader = std::thread(&PtySerialLink::readerLoop, this);
     m_writer = std::thread(&PtySerialLink::writerLoop, this);
@@ -120,7 +126,7 @@ bool PtySerialLink::relink(std::string newDir) {
     if (newDir == m_linkDir && !m_stablePath.empty()) return true; // unchanged
     removeSymlinkIfOurs(m_stablePath, m_slavePath);
     m_linkDir = std::move(newDir);
-    m_stablePath = makeStableSymlink(m_slavePath, m_linkDir);
+    m_stablePath = makeStableSymlink(m_slavePath, m_linkDir, m_linkName);
     return !m_stablePath.empty();
 }
 
@@ -137,9 +143,16 @@ void PtySerialLink::readerLoop() {
 
         // Back-pressure: while the RX ring is deep, leave the bytes in the
         // pty buffer so a blocking sender stalls (stand-in for RTS drop).
+        // poll() stays readable meanwhile, so back off instead of spinning
+        // straight back into it.
+        bool full;
         {
             std::lock_guard<std::mutex> lk(m_rxMx);
-            if (m_rxRing.size() >= kRxHighWater) continue;
+            full = m_rxRing.size() >= kRxHighWater;
+        }
+        if (full) {
+            std::this_thread::sleep_for(kIdleBackoff);
+            continue;
         }
 
         ssize_t n = ::read(m_master, buf, sizeof buf);
@@ -147,11 +160,12 @@ void PtySerialLink::readerLoop() {
             m_peerOpen.store(true, std::memory_order_relaxed);
             std::lock_guard<std::mutex> lk(m_rxMx);
             for (ssize_t i = 0; i < n; ++i) m_rxRing.push_back(buf[i]);
-        } else if (n == 0) {
+        } else if (n == 0 || errno == EIO) {
+            // No process holds the slave open (EIO is the BSD/macOS
+            // behaviour). poll() keeps reporting the hangup at once, so
+            // back off until a peer opens the slave.
             m_peerOpen.store(false, std::memory_order_relaxed);
-        } else if (errno == EIO) {
-            // No process holds the slave open (BSD/macOS behaviour).
-            m_peerOpen.store(false, std::memory_order_relaxed);
+            std::this_thread::sleep_for(kIdleBackoff);
         } else if (errno == EAGAIN || errno == EINTR) {
             // spurious wakeup -- retry
         } else {
@@ -217,7 +231,8 @@ void PtySerialLink::getStatus(Lines& in) {
 
 #else // non-POSIX: inert stub
 
-PtySerialLink::PtySerialLink(std::string linkDir) : m_linkDir(std::move(linkDir)) {
+PtySerialLink::PtySerialLink(std::string linkDir, std::string linkName)
+    : m_linkDir(std::move(linkDir)), m_linkName(std::move(linkName)) {
     m_error = "PTY serial link not supported on this platform";
 }
 PtySerialLink::~PtySerialLink() = default;

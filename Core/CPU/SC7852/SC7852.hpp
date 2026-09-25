@@ -1,10 +1,9 @@
 #pragma once
 #include <atomic>
 #include <cstdint>
-#include <mutex>
-#include <vector>
 
 #include "../../TraceTypes.hpp"
+#include "../TraceRing.hpp"
 
 // ── Bus interface ────────────────────────────────────────────────────────
 //
@@ -41,11 +40,21 @@ public:
 // deltas -- both are just ordinary IN/OUT targets from this core's point of
 // view, decoded by whatever's on the far side of readIO()/writeIO().
 //
-// **No extra wait state inserted per M-cycle.** The Technical Reference
-// Manual's "1 WAIT automatically inserted in the machine cycle" note has
-// unresolved scope (every M-cycle vs. I/O-cycle only); this core uses
-// nominal Zilog timing throughout. Revisit only if observed ROM/trace
-// behavior disagrees.
+// **One wait state per M1 (opcode fetch) cycle.** The Technical Reference
+// Manual says "1 WAIT automatically inserted in the machine cycle" without
+// naming which one. Hardware measured 2026-09-23 settles it as M1. The ROM
+// BEEP tone loop (P1-B3 5EB9) costs 52*A+389 T-states per period at nominal
+// Zilog timing and contains 8*A+52 M1 cycles. A real unit plays A=200 at
+// 287.13 Hz and A=50 at 1038.15 Hz. Nominal timing gives 331.8 / 1197.7 Hz.
+// One wait per M1 gives 287.8 / 1040.4 Hz. That leaves the same -0.22%
+// residual at both pitches, i.e. crystal/recorder tolerance, not a timing
+// model error. It also matches TRM §3.10's 1.3M/(166+22A) formula. A wait on
+// every M-cycle would be ~3% slower still.
+// So every step() adds kM1WaitStates per opcode byte fetched as an M1:
+// one for a plain opcode and two for CB/ED/DD/FD-prefixed ones. DD/FD-CB
+// forms also count two, because their displacement and sub-opcode are
+// ordinary memory reads, not M1 fetches. Interrupt acknowledge adds one,
+// and so does each internal NOP while halted.
 class SC7852 {
 public:
     explicit SC7852(SC7852Bus& bus);
@@ -61,9 +70,14 @@ public:
     /// so PC1600Machine/PC1600BusArbiter can treat both CPUs uniformly.
     int step();
 
+    /// Wait states the SC-7852 inserts into every M1 cycle (see the class
+    /// comment).
+    static constexpr int kM1WaitStates = 1;
+
     /// T-states to credit for a step() that returned 0 because the CPU is
     /// halted. A real HALT is not free time: the Z-80 executes an internal
-    /// NOP every machine cycle while parked, burning 4 T-states apiece, so
+    /// NOP every machine cycle while parked, burning 4 T-states apiece plus
+    /// the M1 wait, so
     /// anything deriving emulated wall-clock time from step() costs must
     /// charge idle time at this rate rather than treating "halted" as "no
     /// time passed". Public for exactly that reason -- PC1600Machine's
@@ -71,7 +85,7 @@ public:
     /// have to agree: one paces wall-clock time, the other derives the
     /// 64 Hz timer from it. (Mirrors LH5801::kHaltTickCycles, whose value
     /// differs because that core's step() ticks its timer once per call.)
-    static constexpr int kHaltTickCycles = 4;
+    static constexpr int kHaltTickCycles = 4 + kM1WaitStates;
 
     // ── Register access (debug / tests) ──────────────────────────────────
     uint8_t  a() const { return A; }
@@ -90,6 +104,7 @@ public:
     bool     iff2() const { return IFF2; }
     uint8_t  im() const { return IM; }
     bool     halted() const { return m_halted; }
+    bool     intLine() const { return m_intLine; }
     /// Clears HALT without going through the interrupt path -- used by
     /// PC1600BusArbiter/PC1600Machine to resume the SC7852 when bus
     /// ownership switches back to it after parking on
@@ -115,14 +130,15 @@ public:
     bool flagN()  const { return (F & 0x02) != 0; }
     bool flagC()  const { return (F & 0x01) != 0; }
 
-    /// Maskable interrupt request (INT). Serviced at the start of the next
-    /// step() call if IFF1 is set; wakes a HALTed CPU regardless of IFF1
-    /// (matching real Z-80 behavior -- HALT always resumes on any
-    /// interrupt, IFF1 only gates whether it's actually serviced).
+    /// Drives the maskable INT line (a level, like the real pin). While it
+    /// is asserted, an interrupt is accepted at the start of a step() call
+    /// if IFF1 is set and the previous instruction was not EI; otherwise
+    /// nothing happens (a HALTed CPU stays HALTed). Accepting it does not
+    /// drop the line -- the device does, once the handler clears its cause.
     /// PC-1600's IM2 vector byte (Port 39H, low byte of the vector address;
     /// I register supplies the high byte) is the caller's responsibility to
     /// have wired up via setIM2VectorByte() before requesting.
-    void requestInterrupt();
+    void setIntLine(bool asserted) { m_intLine = asserted; }
     void setIM2VectorByte(uint8_t low) { m_im2VectorLow = low; }
 
     /// Non-maskable interrupt (NMI): always serviced, clears IFF1 (saving
@@ -133,20 +149,13 @@ public:
     /// the real chip, not because anything in this project's scope raises it.
     void requestNMI();
 
-    // ── Trace / debug API (mirrors LH5801's) ─────────
+    // ── Trace API ─────────
     // Zero overhead when disabled: step() hot path costs one atomic load;
     // falls through with no extra work when traceFlags() == TRACE_NONE.
     void     setTraceFlags(uint32_t flags) { m_traceFlags.store(flags, std::memory_order_relaxed); }
     uint32_t traceFlags() const { return m_traceFlags.load(std::memory_order_relaxed); }
 
-    uint32_t drainTraceEvents(Z80CpuFrame* out, uint32_t max, uint32_t* outLost);
-    uint32_t peekTraceEvents(Z80CpuFrame* out, uint32_t max);
-
-    void addBreakpoint(uint16_t addr);
-    void removeBreakpoint(uint16_t addr);
-    void clearBreakpoints();
-    /// Returns true once per hit; call after each step() that returned 0.
-    bool consumeBreakpointHit();
+    uint32_t drainTraceEvents(Z80CpuFrame* out, uint32_t max, uint32_t* outLost) { return m_trace.drain(out, max, outLost); }
 
 private:
     SC7852Bus& bus;
@@ -159,12 +168,15 @@ private:
     bool IFF1{false}, IFF2{false};
     uint8_t IM{0};
     bool m_halted{false};
-    bool m_irqPending{false};
+    bool m_intLine{false};    // an input driven by the board (setIntLine()); reset() leaves it
     bool m_nmiPending{false};
+    uint8_t m_pendingPrefix{0}; // a DD/FD fetched but not yet executed (see step())
+    bool m_eiShadow{false};   // set by EI: blocks INT acceptance for one instruction
     uint8_t m_im2VectorLow{0xFF};
 
     // ── Fetch helpers ────────────────────────────────────────────────────
-    uint8_t  fetch8();
+    uint8_t  fetchOpcode(); // an M1 cycle: also advances R
+    uint8_t  fetch8();      // operand/displacement byte: R untouched
     uint16_t fetch16(); // little-endian: low byte first, then high
     void     bumpR() { R = uint8_t((R & 0x80) | ((R + 1) & 0x7F)); }
 
@@ -218,38 +230,22 @@ private:
 
     /// Returns the cycle cost if an interrupt was actually serviced (PC
     /// redirected to a handler) this call, or -1 if nothing happened (no
-    /// interrupt pending, or one just woke a HALTed CPU without being
-    /// serviced because IFF1 was clear). step() uses -1 to mean "go ahead
+    /// interrupt pending, or only a maskable one that IFF1 or
+    /// `maskableBlocked` -- the EI shadow -- holds off). step() uses -1 to mean "go ahead
     /// and fetch/execute a normal opcode this call" -- servicing an
     /// interrupt and executing the next opcode never happen in the same
     /// step() call, matching real hardware (the interrupt ack cycle IS
     /// the whole "instruction" for that cycle).
-    int serviceInterrupt();
+    int serviceInterrupt(bool maskableBlocked);
 
-    // ── Trace / debug state (mirrors LH5801's exactly, Z80CpuFrame-shaped) ──
+    // ── Trace state ──
     std::atomic<uint32_t> m_traceFlags{TRACE_NONE};
     uint32_t m_traceSeqno{0};
-    // Needs to be large relative to the LH5801's ring size: at PC1600's
-    // ~1.3 MHz emulated clock and a Z80's short (~4-20 T-state)
-    // instructions, one 60 Hz GUI tick (EmulatorViewModel.tick(), which
-    // drains this ring) can correspond to several thousand instructions,
-    // and the background emulation loop (EmulatorViewModel's emulQueue, a
-    // separate ~20ms-batch timer) keeps producing frames regardless of
-    // whether the main thread's tick() is keeping up -- any stall on the
-    // main thread (rendering, other work) lets the ring wrap many times
-    // before the next drain. 65536 gives ample headroom (~1.9 MB, trivial)
-    // -- see also EmulatorViewModel.drainTraceEventsPC1600()'s matching
-    // drain-buffer size, which must stay >= this to actually empty the
-    // ring each tick.
-    static constexpr uint32_t kRingSize = 65536;
-    static constexpr uint32_t kRingMask = kRingSize - 1;
-    Z80CpuFrame m_ring[kRingSize]{};
-    uint32_t m_drainCursor{0};
-    uint32_t m_totalWritten{0};
-    mutable std::mutex m_traceMutex;
-
-    std::vector<uint16_t> m_breakpoints; // sorted ascending
-    bool m_breakpointHit{false};
+    // Large relative to the LH5801's ring: Z80 instructions are short
+    // (~4-20 T-states), so one drain interval covers many more of them.
+    // PC1600Machine's drain buffer must stay >= this to empty the ring in
+    // one pass. 65536 frames is ~1.9 MB.
+    TraceRing<Z80CpuFrame, 65536> m_trace;
 
     void recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles);
 };

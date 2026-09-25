@@ -1,5 +1,7 @@
 #pragma once
 #include <cstdint>
+#include <deque>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -194,8 +196,9 @@ public:
     /// kMaxEvents) so a caller that never drains this can't leak memory.
     /// Draining consumes -- repeated calls only return what's new.
     std::vector<std::string> drainEvents() {
-        std::vector<std::string> out;
-        out.swap(m_events);
+        std::vector<std::string> out(std::make_move_iterator(m_events.begin()),
+                                     std::make_move_iterator(m_events.end()));
+        m_events.clear();
         return out;
     }
 
@@ -326,7 +329,7 @@ private:
 
     static constexpr size_t kMaxEvents = 30000;
     void logEvent(std::string s) {
-        if (m_events.size() >= kMaxEvents) m_events.erase(m_events.begin());
+        if (m_events.size() >= kMaxEvents) m_events.pop_front();
         m_events.push_back(std::move(s));
     }
 
@@ -350,5 +353,5 @@ private:
     int m_ce150Rot = 0;           // detents at the stop; 3 -> nextColor()
     std::vector<Stroke> m_strokes;
     uint64_t m_revision = 0; // see revision()
-    std::vector<std::string> m_events; // see drainEvents()
+    std::deque<std::string> m_events;  // see drainEvents(); a deque so the cap drops the oldest in O(1)
 };

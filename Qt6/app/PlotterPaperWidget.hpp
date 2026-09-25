@@ -1,4 +1,5 @@
 #pragma once
+#include <QImage>
 #include <QWidget>
 #include <cstdint>
 #include <vector>
@@ -17,7 +18,7 @@ class MachineController;
 // MainWindow calls setKind() when the active plotter changes.
 //
 // Layout: a title header matching DebugPanel's "DEBUG LOG" header (same
-// size/coloring, showing "CE-150"/"PC-1600P" instead) and a Copy/Cut button
+// size/coloring, showing "CE-150"/"CE-1600P" instead) and a Copy/Cut button
 // row underneath the paper matching DebugPanel's TRACE/LOG row in size and
 // using the exact same ChromeColors -- so this panel reads as a sibling of
 // DebugPanel, not a separate visual language. No "Copied" toast: the
@@ -40,6 +41,10 @@ public:
     // MainWindow::onFrameTick() while a plotter is attached -- an O(1) "did
     // it change" poll before paying for the full point-vector copy.
     void onFrameTick();
+
+    // The whole plot as a physical-size image (up to 1200 DPI, true DPI
+    // embedded) -- what Copy puts on the clipboard. Null while blank.
+    QImage renderPaperImage() const;
 
 protected:
     // Re-applies theme-aware chrome colors on a live light/dark switch --
@@ -67,9 +72,12 @@ private:
     // so this forces the very first onFrameTick() to always refresh).
     std::uint64_t m_lastRevision = UINT64_MAX;
 
-    // Both bounds in one O(n) pass over m_points -- callers previously
-    // rescanned m_points once per bound needed.
-    std::pair<std::int32_t, std::int32_t> penYRange() const;
+    // Lowest/highest pen Y in m_points ({0, 0} when empty), computed once
+    // per change by setPoints() -- layout (sizeHint/minimumSizeHint) and
+    // paint read it many times per frame.
+    std::pair<std::int32_t, std::int32_t> m_penYRange{0, 0};
+    // The only writer of m_points; keeps m_penYRange in step.
+    void setPoints(std::vector<AlpsPlotterMechanism::FlatPoint> points);
     bool isNearBottom() const;
     void scrollToBottom();
     void updateButtonsEnabled();

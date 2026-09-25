@@ -203,7 +203,7 @@ script gap):
 clang++ -std=c++17 -Wall -Wextra -O0 -g \
   Core/CPU/LH5801/LH5801.cpp Core/CPU/SC7852/SC7852.cpp \
   Core/CPU/LH5803/LH5803Memory.cpp Core/CPU/LH5803/LH5803SharedMemory.cpp \
-  Core/PC1500/PresetFile.cpp Core/PC1500/PC1500Keyboard.cpp Core/PC1500/PC1500TraceFile.cpp \
+  Core/Preset/PresetFile.cpp Core/PC1500/PC1500Keyboard.cpp Core/PC1500/PC1500TraceFile.cpp \
   Core/PC1600/PC1600Memory.cpp Core/PC1600/PC1600SubCpu.cpp Core/PC1600/TC8576F.cpp \
   Core/PC1600/PC1600Display.cpp Core/PC1600/PC1600Keyboard.cpp Core/PC1600/PC1600Machine.cpp \
   Core/PC1600/PC1600BasicTyper.cpp Core/PC1600/PC1600BasicLoader.cpp \

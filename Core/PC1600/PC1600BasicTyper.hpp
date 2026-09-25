@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 
+#include "../Basic/BasicLoadResults.hpp"
+
 class PC1600Machine;
 
 // ── Keystroke-injection primitives for scripted PC-1600 input ───────────
@@ -20,8 +22,9 @@ class PC1600Machine;
 //     SC-7852-view F867H, big-endian (PC-1600-Work-Area-Map.md: "Block C
 //     is used exactly as on the PC-1500/1500A"). It advances by each
 //     stored line's size. typeBasicProgramText() waits for it to settle
-//     after each line and uses "did it advance?" to tell a stored line
-//     from an unstored one.
+//     after each line and uses "did the program change?" (BASPRG_END or
+//     the program bytes -- a same-length replacement moves only the
+//     latter) to tell a stored line from an unstored one.
 //   * BUT F867 only moves in PRO mode. After ALL RESET the machine is in
 //     RUN mode, where a typed line is a direct command, not stored.
 //     Getting into PRO mode is the PRESET AUTHOR's job (a `key: mode` step
@@ -97,12 +100,6 @@ void runBootToPrompt(PC1600Machine& machine);
 /// only for a character with no PC-1600 key (`error` names it).
 bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, std::string* error);
 
-struct PC1600BasicTypeResult {
-    bool ok = false;
-    std::vector<std::string> rejectedLines; // lines too long for the editor (see kMaxBasicLineLength)
-    std::string error; // set when ok is false for a reason other than a rejection (e.g. an unmapped character)
-};
-
 /// Types a whole BASIC program's source text through the ROM's own line
 /// editor, one line at a time -- assumes the machine is already in PRO
 /// mode and ready (see the file comment). Blank source lines are skipped.
@@ -111,4 +108,4 @@ struct PC1600BasicTypeResult {
 /// BASPRG_END (F867) -- i.e. wasn't stored, typically because the machine
 /// isn't in PRO mode -- is put there too. Does not clear a resident
 /// program and does not change mode.
-PC1600BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& text);
+BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& text);

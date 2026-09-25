@@ -207,6 +207,10 @@ void LH5801::serviceInterrupt() {
     // popped) byte, with T deepest (popped last), mirroring RTI exactly.
     pushByte(T);
     push16(P);
+    // Acceptance resets IE (RTI restores it from the pushed T). The ROM's
+    // MI handler at E171 pushes A/X/Y/U before clearing the level-held
+    // request at F00B, which only works if IE is already off on entry.
+    setFlagBit(0x02, false);
     uint8_t hi = bus.readME0(0xFFFA);
     uint8_t lo = bus.readME0(0xFFFB);
     P = (uint16_t(hi) << 8) | lo;
@@ -231,60 +235,9 @@ void LH5801::recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWo
         f.pu = PU; f.pv = PV; f.disp = DISP; f.tm = TM;
     }
 
-    std::lock_guard<std::mutex> lock(m_traceMutex);
-    m_ring[m_totalWritten & kRingMask] = f;
-    m_totalWritten++;
+    m_trace.push(f);
 }
 
-uint32_t LH5801::drainTraceEvents(CpuFrame* out, uint32_t max, uint32_t* outLost) {
-    std::lock_guard<std::mutex> lock(m_traceMutex);
-    uint32_t available = m_totalWritten - m_drainCursor;
-    uint32_t lost = 0;
-    if (available > kRingSize) {
-        lost = available - kRingSize;
-        m_drainCursor = m_totalWritten - kRingSize;
-        available = kRingSize;
-    }
-    if (outLost) *outLost = lost;
-    uint32_t n = std::min(max, available);
-    for (uint32_t i = 0; i < n; i++) {
-        out[i] = m_ring[(m_drainCursor + i) & kRingMask];
-    }
-    m_drainCursor += n;
-    return n;
-}
-
-uint32_t LH5801::peekTraceEvents(CpuFrame* out, uint32_t max) {
-    std::lock_guard<std::mutex> lock(m_traceMutex);
-    uint32_t available = std::min(m_totalWritten, kRingSize);
-    uint32_t n = std::min(max, available);
-    uint32_t start = m_totalWritten - n;
-    for (uint32_t i = 0; i < n; i++) {
-        out[i] = m_ring[(start + i) & kRingMask];
-    }
-    return n;
-}
-
-void LH5801::addBreakpoint(uint16_t addr) {
-    std::lock_guard<std::mutex> lock(m_traceMutex);
-    if (!std::binary_search(m_breakpoints.begin(), m_breakpoints.end(), addr)) {
-        m_breakpoints.insert(std::upper_bound(m_breakpoints.begin(), m_breakpoints.end(), addr), addr);
-    }
-}
-void LH5801::removeBreakpoint(uint16_t addr) {
-    std::lock_guard<std::mutex> lock(m_traceMutex);
-    auto it = std::lower_bound(m_breakpoints.begin(), m_breakpoints.end(), addr);
-    if (it != m_breakpoints.end() && *it == addr) m_breakpoints.erase(it);
-}
-void LH5801::clearBreakpoints() {
-    std::lock_guard<std::mutex> lock(m_traceMutex);
-    m_breakpoints.clear();
-}
-bool LH5801::consumeBreakpointHit() {
-    bool hit = m_breakpointHit;
-    m_breakpointHit = false;
-    return hit;
-}
 bool LH5801::consumeIllegalOpcodeHit() {
     bool hit = m_illegalOpcodeHit;
     m_illegalOpcodeHit = false;
@@ -301,14 +254,11 @@ int LH5801::step() {
     // until powerOn() (the ON key's BFI pin) restores it. See executeFD()'s
     // case 0x4C and poweredOff()'s own doc comment.
     if (m_poweredOff) return 0;
-    // requestMaskableInterrupt() always wakes HLT (m_halted cleared there,
-    // unconditionally), but *servicing* the interrupt (pushing state and
-    // vectoring) is gated on IE -- a request made while IE=0 must sit
-    // pending, letting the CPU resume normal fetch/execute right after the
-    // HLT that woke it, until IE is later set (e.g. by SIE) and a
-    // subsequent step() call finally consumes it. This IE gate on
-    // servicing (as opposed to just waking) is the masking behavior that
-    // "maskable" in requestMaskableInterrupt() refers to.
+    // Servicing a maskable interrupt (pushing state and vectoring) is gated
+    // on IE, and so is the HLT wake in requestMaskableInterrupt() -- a
+    // request made while IE=0 sits pending (a HLT stays halted) until IE
+    // is later set (e.g. by SIE or RTI) and a subsequent step() call
+    // finally consumes it.
     if (m_irqPending && flagIE()) {
         serviceInterrupt();
         // Interrupt acknowledge consumes this step() call on its own —
@@ -336,11 +286,7 @@ int LH5801::step() {
 
     uint32_t tf = traceFlags();
     if (tf & TRACE_BREAKPOINTS) {
-        std::lock_guard<std::mutex> lock(m_traceMutex);
-        if (std::binary_search(m_breakpoints.begin(), m_breakpoints.end(), P)) {
-            m_breakpointHit = true;
-            return 0;
-        }
+        if (m_breakpoints.check(P)) return 0;
     }
 
     uint16_t pcAtStart = P;

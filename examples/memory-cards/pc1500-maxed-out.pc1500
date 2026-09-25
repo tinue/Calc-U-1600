@@ -3,8 +3,7 @@
 # prints how much of it BASIC sees as free. Companion to
 # docs/User-Guide.md's "Custom YAML memory cards" walkthrough.
 
-model: PC-1500
-firmware: A04
+model: PC-1500:A04
 
 memory-expansion:
   - modulespecfile: pc1500-maxed-out.card.yaml

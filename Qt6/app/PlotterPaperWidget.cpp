@@ -23,7 +23,7 @@
 
 namespace {
 constexpr double kFollowThresholdPt = 64.0;
-constexpr double kDpiScale = 600.0 / 72.0;     // target 600 DPI (72pt/in base)
+constexpr double kDpiScale = 1200.0 / 72.0;    // target 1200 DPI (72pt/in base); full res up to ~339 mm of paper
 constexpr double kMaxTextureDimPx = 16000.0;   // GPU texture size cap
 
 // pen[color % 4] -- AlpsPlotterMechanism::PenColor's raw value order.
@@ -68,15 +68,29 @@ public:
 
     QSize sizeHint() const override {
         const int w = std::max(1, width());
-        const auto [lower, upper] = m_owner->penYRange();
+        const auto [lower, upper] = m_owner->m_penYRange;
         const double h = m_owner->m_geometry.contentHeight(0, lower, upper, w);
         return QSize(w, static_cast<int>(std::ceil(h)));
     }
 
+    // QScrollArea (widgetResizable) only grows its widget past the viewport
+    // up to the widget's *minimum* size hint, not its sizeHint -- without
+    // this the paper never exceeds the viewport and there is nothing to
+    // scroll. Height only: a width minimum would pin the paper at a stale
+    // width and it would stop fitting the pane.
+    QSize minimumSizeHint() const override { return QSize(0, sizeHint().height()); }
+
 protected:
+    // The content height depends on the width (fixed-width paper scaled to
+    // the pane), so a resize changes what the scroll area needs.
+    void resizeEvent(QResizeEvent* event) override {
+        QWidget::resizeEvent(event);
+        updateGeometry();
+    }
+
     void paintEvent(QPaintEvent*) override {
         QPainter painter(this);
-        paintPaper(painter, m_owner->m_geometry, width(), height(), m_owner->m_points, m_owner->penYRange().first);
+        paintPaper(painter, m_owner->m_geometry, width(), height(), m_owner->m_points, m_owner->m_penYRange.first);
     }
 
 private:
@@ -105,6 +119,8 @@ PlotterPaperWidget::PlotterPaperWidget(MachineController* controller, QWidget* p
     m_scrollArea->setWidget(m_plotArea);
     m_scrollArea->setWidgetResizable(true);
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    // No visible bar (the wheel/touchpad scrolls); the range still exists.
+    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     // Never take keyboard focus from MainWindow (which owns physical-
     // keyboard typing for the calculator) -- same convention as
     // ControlBar's widgets.
@@ -122,9 +138,11 @@ PlotterPaperWidget::PlotterPaperWidget(MachineController* controller, QWidget* p
     m_copyButton = new QPushButton(tr("Copy"), m_buttonBar);
     m_copyButton->setToolTip(tr("Copy the paper to the clipboard as an image."));
     m_copyButton->setFocusPolicy(Qt::NoFocus);
+    m_copyButton->setObjectName(QStringLiteral("paper.copy"));
     m_cutButton = new QPushButton(tr("Cut"), m_buttonBar);
     m_cutButton->setToolTip(tr("Copy the paper, then tear it off (clears the plot)."));
     m_cutButton->setFocusPolicy(Qt::NoFocus);
+    m_cutButton->setObjectName(QStringLiteral("paper.cut"));
     buttonBarLayout->addWidget(m_copyButton);
     buttonBarLayout->addWidget(m_cutButton);
     buttonBarLayout->addStretch(1);
@@ -147,7 +165,7 @@ void PlotterPaperWidget::changeEvent(QEvent* event) {
 void PlotterPaperWidget::applyChrome() {
     const ChromeColors c = ChromeColors::forWidget(this);
 
-    m_header->setText(m_kind == Kind::CE1600P ? tr("PC-1600P") : tr("CE-150"));
+    m_header->setText(m_kind == Kind::CE1600P ? tr("CE-1600P") : tr("CE-150"));
     m_header->setStyleSheet(ChromeStyle::header(c));
 
     m_buttonBar->setStyleSheet(ChromeStyle::buttonBar(c));
@@ -161,14 +179,7 @@ void PlotterPaperWidget::applyChrome() {
     // so a click gives clearly visible "goes down" feedback -- there is no
     // other visible change from Copy/Cut, unlike DebugPanel's dump buttons
     // where the log output itself is the feedback.
-    const QString buttonStyle =
-        QString("QPushButton { border: none; %1 }"
-                "QPushButton:hover:!disabled { background-color: %2; }"
-                "QPushButton:pressed, QPushButton:hover:pressed { background-color: %3; }"
-                "QPushButton:disabled { background-color: %4; color: %5; }")
-            .arg(ChromeStyle::pillCore(c.pillBackground, c.pillText),
-                 cssRgba(c.pillBackground.lighter(115)), cssRgba(c.pillBackground.darker(130)),
-                 cssRgba(c.pillBackgroundOff), cssRgba(c.pillText));
+    const QString buttonStyle = ChromeStyle::pillPushButton(c);
     m_copyButton->setStyleSheet(buttonStyle);
     m_cutButton->setStyleSheet(buttonStyle);
 }
@@ -176,7 +187,7 @@ void PlotterPaperWidget::applyChrome() {
 void PlotterPaperWidget::setKind(Kind kind) {
     m_kind = kind;
     m_geometry = kind == Kind::CE1600P ? PaperGeometry::ce1600p() : PaperGeometry::ce150();
-    m_points.clear();
+    setPoints({});
     m_lastRevision = UINT64_MAX;
     m_plotArea->updateGeometry();
     m_plotArea->update();
@@ -184,11 +195,15 @@ void PlotterPaperWidget::setKind(Kind kind) {
     updateButtonsEnabled();
 }
 
-std::pair<std::int32_t, std::int32_t> PlotterPaperWidget::penYRange() const {
-    if (m_points.empty()) return {0, 0};
-    const auto [lo, hi] = std::minmax_element(m_points.begin(), m_points.end(),
-                                               [](const auto& a, const auto& b) { return a.y < b.y; });
-    return {lo->y, hi->y};
+void PlotterPaperWidget::setPoints(std::vector<AlpsPlotterMechanism::FlatPoint> points) {
+    m_points = std::move(points);
+    if (m_points.empty()) {
+        m_penYRange = {0, 0};
+    } else {
+        const auto [lo, hi] = std::minmax_element(m_points.begin(), m_points.end(),
+                                                   [](const auto& a, const auto& b) { return a.y < b.y; });
+        m_penYRange = {lo->y, hi->y};
+    }
 }
 
 bool PlotterPaperWidget::isNearBottom() const {
@@ -214,18 +229,18 @@ void PlotterPaperWidget::onFrameTick() {
     m_lastRevision = rev;
 
     const bool wasNearBottom = isNearBottom();
-    m_points = m_kind == Kind::CE1600P ? m_controller->ce1600pPlotPoints() : m_controller->ce150PlotPoints();
+    setPoints(m_kind == Kind::CE1600P ? m_controller->ce1600pPlotPoints() : m_controller->ce150PlotPoints());
     m_plotArea->updateGeometry();
     m_plotArea->update();
     updateButtonsEnabled();
     if (wasNearBottom) scrollToBottom();
 }
 
-void PlotterPaperWidget::copyToClipboard() {
-    if (m_points.empty()) return;
+QImage PlotterPaperWidget::renderPaperImage() const {
+    if (m_points.empty()) return {};
 
     const double paneWidthPt = m_geometry.physicalPaneWidthPt();
-    const auto [lower, upper] = penYRange();
+    const auto [lower, upper] = m_penYRange;
     const double contentHeightPt = m_geometry.contentHeight(0, lower, upper, paneWidthPt);
     const double longestDimPt = std::max(paneWidthPt, contentHeightPt);
     const double effectiveScale = std::min(kDpiScale, longestDimPt > 0 ? kMaxTextureDimPx / longestDimPt : kDpiScale);
@@ -234,7 +249,8 @@ void PlotterPaperWidget::copyToClipboard() {
                  std::max(1, qRound(contentHeightPt * effectiveScale)),
                  QImage::Format_ARGB32);
     QPainter painter(&image);
-    painter.setRenderHint(QPainter::Antialiasing);
+    // Deliberately no anti-aliasing: at 1200 DPI the strokes are ~16 px wide,
+    // and the soft edges only made the printout look worse.
     painter.scale(effectiveScale, effectiveScale);
     paintPaper(painter, m_geometry, paneWidthPt, contentHeightPt, m_points, lower);
     painter.end();
@@ -245,6 +261,15 @@ void PlotterPaperWidget::copyToClipboard() {
     const int dotsPerMeter = qRound(effectiveScale * 72.0 / 0.0254);
     image.setDotsPerMeterX(dotsPerMeter);
     image.setDotsPerMeterY(dotsPerMeter);
+    return image;
+}
+
+void PlotterPaperWidget::copyToClipboard() {
+    const QImage image = renderPaperImage();
+    if (image.isNull()) return;
+    const double paneWidthPt = m_geometry.physicalPaneWidthPt();
+    const auto [lower, upper] = m_penYRange;
+    const double contentHeightPt = m_geometry.contentHeight(0, lower, upper, paneWidthPt);
 
 #ifdef Q_OS_MACOS
     // Qt's cross-platform QClipboard::setImage() ignores both
@@ -260,7 +285,7 @@ void PlotterPaperWidget::cutPaper() {
     copyToClipboard();
     if (m_kind == Kind::CE1600P) m_controller->clearCE1600PPaper();
     else m_controller->clearCE150Paper();
-    m_points.clear();
+    setPoints({});
     m_lastRevision = UINT64_MAX;
     m_plotArea->updateGeometry();
     m_plotArea->update();

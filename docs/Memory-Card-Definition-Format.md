@@ -33,6 +33,8 @@ same directory.
 | `compatible-hosts` | yes | List, non-empty, drawn from `PC-1500`, `PC-1500A`, `PC-1600-Slot-1`, `PC-1600-Slot-2`. The loader's **only** compatibility check (spec §1): a host not on this list is declined; a host on it gets no further test. |
 | `definition-terminology` | yes | Exactly one of the same four identifiers. Names the pin-name vocabulary every `chip-select` / `signal` / `line` field in the file is resolved against, once, at parse time (spec §1). Must appear in `compatible-hosts`. |
 | `regions` | yes | List of one or more region maps (§2). |
+| `battery` | no | `true` for battery-backed hardware. A battery-backed *template* offers the app's Name & Save; ignored by the loader otherwise. |
+| `template` | no | `true` marks a read-only **template** (§8): the app never writes to the file, wherever it is stored. Absent or `false` = an instance, autosaved in place. The app never writes this key into a saved instance. |
 | `notes` | no | Free text; ignored by the loader. |
 
 The reset-on-load behaviour (spec §2, last bullet) is a loader invariant,
@@ -112,13 +114,13 @@ directly; a single-term group may drop `all-of` and give the bare term.
 | `signal: NAME` / `signal: [..]` | Same as `chip-select`; use when the line isn't a decode strobe (e.g. `PVOUT`). |
 | `signal-negated: NAME` | Line explicitly **not** asserted. Needed to split a window by a half-select line (`PVOUT` low vs. high). |
 | `address-bits: { An: 0\|1, … }` | Specific address lines required at specific levels, AND'd into the group. Models an on-module decoder that gates on a **few** address lines alongside a chip select — *not* a full address-bus comparison. CE-155's `Y0` chip: `{ A13: 1, A12: 1, A11: 1 }` (the "`AD11–AD13 = 111`" of `PC-1500-Address-Decoding.md` §3.2). Lines not listed are not tested. Does **not** set `span` — the low, un-listed lines are the offset. |
-| `memory-range: { from, to }` | A raw address window the card magnitude-decodes itself, with **no** chip select in the group (spec §4 direct memory-range match). Fixes `span` from `to − from + 1`. Flagged distinctly because the author's host-compatibility judgement has no pin to anchor to (spec §1). |
+| `memory-range: { from, to }` | A raw address window the card magnitude-decodes itself, with **no** chip select in the group (spec §4 direct memory-range match). Fixes `span` from `to − from + 1`; the offset within the slice is `address − from`, so the window need be neither a power of two nor aligned. Flagged distinctly because the author's host-compatibility judgement has no pin to anchor to (spec §1). |
 
 ### Group keys
 
 | Key | Default | Meaning |
 |---|---|---|
-| `span` | required unless the group has a `memory-range` | Size in bytes of the storage slice behind this group. The module serves it using the low `log2(span)` address lines as the offset (`0x0800` ⇒ A0–A10); it does **not** decode any higher line except those an `address-bits` term names. |
+| `span` | required unless the group has a `memory-range` | Size in bytes of the storage slice behind this group. The module serves it using the low `log2(span)` address lines as the offset (a `memory-range` group uses `address − from` instead) (`0x0800` ⇒ A0–A10); it does **not** decode any higher line except those an `address-bits` term names. |
 | `maps-to` | groups packed in declaration order, each starting where the previous ended | Byte offset in the region's backing store (or, inside `bank-window`, the current bank's slice) that the low end of this group's slice maps to. |
 
 The groups' slices must tile `capacity` (unbanked) or `bank-size`
@@ -279,13 +281,14 @@ bytes: |
   $0000: 00...
   $0050: 00 00 00 00 00 00 11 F1  8A 26 45 33 2C 58 40 12
   $0060: F0 97 22 42 41 4E 4B 20  22 3B F1 6F 26 45 32 40
-  $0070: 13 F0 97 22 56 32 30 22  40 FF...
+  $0070: 13 F0 97 22 56 32 30 22  40 FF FF FF FF FF FF FF
+  $0080: FF...
   $3FF0: AA...
 ```
 
 - `$XXXX: <up to 16 space-separated hex byte pairs>` places those literal
   bytes starting at that address.
-- `$XXXX: XX...` means "byte `XX` repeats from this address up to (but not
+- `$XXXX: XX...` (the only token on its line) means "byte `XX` repeats from this address up to (but not
   including) the next line's address" — or up to the end of the block's
   span for the last line. This is exact, not a guess: because lines must
   partition the block's address range with no gap or overlap, a run's
@@ -364,6 +367,20 @@ memory-expansion:
   silently.
 - `modulespecfile: <path>` names a file directly and never consults the
   module directory.
+
+**Templates and instances.** What happens to a loaded card's file is decided
+by the file itself, not by where it lives:
+
+- `template: true` — a **template**. The app never writes to it. Every
+  bundled card is one, and a user can drop their own into the storage folder,
+  where it is listed with the bundled cards. A battery-backed template
+  (`battery: true`) offers **Name & Save**, which copies it (with the live
+  contents as `initial-content:`) into `<name>.card.yaml` in the storage
+  folder, without the `template` key.
+- No `template` key — an **instance**. Any write to the card is autosaved back
+  into that same file, wherever it was loaded from (never into the bundle).
+  A preset's `saveas:` can copy an instance under a new name; the copy keeps
+  the original template's name in its generated header comment.
 
 Either way the loader picks the target host from the preset (`PC-1500` /
 `PC-1500A`, or the slot number for `PC-1600`), checks it is in

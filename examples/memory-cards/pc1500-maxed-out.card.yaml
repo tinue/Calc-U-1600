@@ -18,6 +18,14 @@
 # "maxed out" on both models, with nothing dormant on either.
 
 module-name: "PC-1500 Maxed-Out (fictional)"
+# A template: the app never writes to this file, wherever it is stored.
+# Dropped into the storage folder it is listed with the bundled cards,
+# and Name & Save copies it into a new instance that autosaves.
+template: true
+# Name & Save is offered for battery-backed templates only. No real card
+# backs this one, but since it is fictional anyway, claiming a battery
+# keeps its contents across sessions.
+battery: true
 compatible-hosts: [PC-1500, PC-1500A]
 definition-terminology: PC-1500
 

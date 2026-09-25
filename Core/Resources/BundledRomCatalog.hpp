@@ -92,8 +92,14 @@ inline bool isPC1600RomVersion(const std::string& version) {
     return version == "new" || version == "old";
 }
 
+// True for the two CE-1600P ROM versions: "new" (`PEEK #(5,&7FFE)` = 5) and
+// "old" (= 4). Independent of the PC-1600 calculator ROM version.
+inline bool isCE1600PRomVersion(const std::string& version) {
+    return version == "new" || version == "old";
+}
+
 // Loads the PC-1600's six-file calculator ROM set of the given version
-// ("new"/"old") into `machine`. The CE-1600P peripheral ROMs are separate
+// ("new"/"old") into `machine`. The CE-1600P ROMs are separate
 // (attachCE1600P) and independent of the version.
 inline bool loadPC1600RomSet(PC1600Machine& machine, const std::vector<std::string>& dirs,
                              const std::string& version, std::string* error) {
@@ -157,22 +163,47 @@ inline bool attachCE150(Machine& machine, const std::vector<std::string>& dirs, 
     return true;
 }
 
+// Attaches the CE-158 RS-232C / Centronics interface to `machine` (a
+// PC-1500/1500A, or a PC-1600's LH5803 side -- same attachCE158(bytes,
+// size) shape).
+template <typename Machine>
+inline bool attachCE158(Machine& machine, const std::vector<std::string>& dirs, std::string* error) {
+    std::string path;
+    std::vector<uint8_t> rom;
+    if (!resolveBundledRomPath(dirs, "CE-158.ROM", &path, error) ||
+        !detail::readWholeFileCached(path, &rom)) {
+        if (error && error->empty()) *error = "could not read the CE-158 ROM";
+        return false;
+    }
+    if (!machine.attachCE158(rom.data(), rom.size())) {
+        if (error) *error = "CE-158 attach failed -- ROM size/shape rejected (expected 16384 bytes)";
+        return false;
+    }
+    return true;
+}
+
 // Attaches the CE-1600P plotter (and, per its union attach, the CE-1600F
 // floppy, with its drive empty -- PC1600Machine::attachCE1600P()) to a
-// PC-1600. Load a disk afterwards with PC1600Machine::ce1600fLoadImage().
+// PC-1600, using the ROM pair of the given version ("new"/"old" -- the ROM
+// chip sits in the CE-1600P box, so the CE-1600F follows the same choice).
+// Load a disk afterwards with PC1600Machine::ce1600fLoadImage().
 inline bool attachCE1600P(PC1600Machine& machine, const std::vector<std::string>& dirs,
-                          std::string* error) {
+                          const std::string& version, std::string* error) {
+    if (!isCE1600PRomVersion(version)) {
+        if (error) *error = "unknown CE-1600P ROM version '" + version + "' (expected new or old)";
+        return false;
+    }
     std::string path1, path2;
     std::vector<uint8_t> rom1, rom2;
-    if (!resolveBundledRomPath(dirs, "PC1600-P1-B4-CE1600P.bin", &path1, error) ||
+    if (!resolveBundledRomPath(dirs, "PC1600-P1-B4-CE1600P-" + version + ".bin", &path1, error) ||
         !detail::readWholeFileCached(path1, &rom1) ||
-        !resolveBundledRomPath(dirs, "PC1600-P1-B5-CE1600P-OR-F.bin", &path2, error) ||
+        !resolveBundledRomPath(dirs, "PC1600-P1-B5-CE1600P-OR-F-" + version + ".bin", &path2, error) ||
         !detail::readWholeFileCached(path2, &rom2)) {
         if (error && error->empty()) *error = "could not read the CE-1600P ROM";
         return false;
     }
     if (!machine.attachCE1600P(rom1.data(), rom1.size(), rom2.data(), rom2.size())) {
-        if (error) *error = "CE-1600P attach failed -- ROM size/shape rejected";
+        if (error) *error = "CE-1600P attach failed -- " + version + " ROM size/shape rejected";
         return false;
     }
     return true;
@@ -181,16 +212,18 @@ inline bool attachCE1600P(PC1600Machine& machine, const std::vector<std::string>
 // Attaches the plotter named by `plotterName` ("ce150"/"ce1600p"/"" for
 // none) to a PC-1600 -- the shape a preset's `plotter:` field or the GUI's
 // two toggle buttons both want. Returns true and does nothing for "".
+// `ce1600pVersion` ("new"/"old") is only consulted for "ce1600p".
 inline bool attachPlotterByName(PC1600Machine& machine, const std::string& plotterName,
                                 const std::vector<std::string>& dirs, std::string* error,
-                                bool* outCe150Attached = nullptr) {
+                                bool* outCe150Attached = nullptr,
+                                const std::string& ce1600pVersion = "new") {
     if (plotterName.empty()) return true;
     if (plotterName == "ce150") {
         if (!attachCE150(machine, dirs, error)) return false;
         if (outCe150Attached) *outCe150Attached = true;
         return true;
     }
-    if (plotterName == "ce1600p") return attachCE1600P(machine, dirs, error);
+    if (plotterName == "ce1600p") return attachCE1600P(machine, dirs, ce1600pVersion, error);
     if (error) *error = "plotter: '" + plotterName + "' is not a known plotter";
     return false;
 }

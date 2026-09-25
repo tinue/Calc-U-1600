@@ -22,7 +22,7 @@
 #include "../Connector/MemoryCardCatalog.hpp"
 #include "../Connector/MemoryCardDefinition.hpp"
 #include "../Connector/SoftwareDefinedCard.hpp"
-#include "../PC1500/PresetFile.hpp"
+#include "../Preset/PresetFile.hpp"
 #include "../PC1600/PC1600Machine.hpp"
 #include "../PC1600/PC1600PresetLoader.hpp"
 #include "../Yaml.hpp"
@@ -1342,7 +1342,7 @@ void test_ce1601m_end_to_end_through_pc1600() {
     // route. `run` asserts the vertical-bank behaviour for a loaded preset.
     auto run = [&](const PresetFile& preset, const std::string& moduleDir) {
         PC1600Machine m;
-        PC1600PresetLoadResult r = applyPC1600Preset(m, preset, {}, ".", moduleDir);
+        PresetLoadResult r = applyPC1600Preset(m, preset, {}, ".", moduleDir);
         CHECK(r.ok);
         CHECK(m.slot2Attached());
         // The slot itself reports the attached module's module-name,
@@ -1703,6 +1703,144 @@ void test_power_up_fill_defaults_per_kind() {
     CHECK(def.regions[0].contentForBank(2).powerUpFill == 0xFF);
 }
 
+// ── review fixes ─────────────────────────────────────────────────────────
+
+void test_yaml_apostrophe_inside_plain_scalar() {
+    YamlNode n;
+    std::string err;
+    CHECK(parseYaml("name: Martin's CE-1600M  # my card\nlist: [Bob's, x]\nq: 'a # b'\n", &n, &err));
+    std::string s;
+    CHECK(n.find("name") && n.find("name")->asString(&s, &err) && s == "Martin's CE-1600M");
+    const YamlNode* l = n.find("list");
+    CHECK(l && l->isSeq() && l->seq.size() == 2 && l->seq[0].scalar == "Bob's");
+    CHECK(n.find("q") && n.find("q")->asString(&s, &err) && s == "a # b");
+}
+
+void test_reject_unknown_key_inside_all_of() {
+    std::string err;
+    CHECK(rejects(std::string(kMinPrefix) +
+                      "  - name: r\n    capacity: 0x800\n    banking: none\n    content: regular\n"
+                      "    addressing:\n"
+                      "      all-of: [{chip-selct: Y0}, {address-bits: {A13: 1}}]\n"
+                      "      span: 0x800\n",
+                  &err));
+    CHECK(err.find("chip-selct") != std::string::npos);
+}
+
+// A memory-range window need be neither a power of two nor aligned: its
+// offset counts from `from`.
+void test_memory_range_offset_counts_from_range_start() {
+    const std::string yaml = std::string(kMinPrefix) +
+        "  - name: r\n    capacity: 0x1800\n    banking: none\n"
+        "    content: { kind: regular, writable: true, power-up-fill: 0x00 }\n"
+        "    addressing: { memory-range: { from: 0x4800, to: 0x5FFF } }\n"
+        "    initial-content:\n"
+        "      blocks:\n"
+        "        - { offset: 0x0000, encoding: hex, bytes: \"5A\" }\n";
+    auto sd = buildCard(yaml.c_str(), CardHost::PC1500);
+    CHECK(sd != nullptr);
+    if (!sd) return;
+    auto write = [&](uint16_t a, uint8_t d) {
+        PinState p;
+        p.forWrite = true;
+        p.address = a;
+        return sd->respondsToWrite(p, d);
+    };
+    auto read = [&](uint16_t a) {
+        uint8_t v = 0;
+        PinState p;
+        p.address = a;
+        CHECK(sd->respondsToRead(p, v));
+        return v;
+    };
+    CHECK(read(0x4800) == 0x5A);  // initial-content offset 0 lands at `from`
+    CHECK(write(0x5000, 0x11));
+    CHECK(write(0x5800, 0x22));
+    CHECK(read(0x5000) == 0x11);  // no longer aliased with 0x5800
+    CHECK(read(0x5800) == 0x22);
+    CHECK(read(0x5FFF) == 0x00);
+}
+
+const char* kUnbankedFlashYaml =
+    "module-name: T-FLASH-U\n"
+    "compatible-hosts: [PC-1500]\n"
+    "definition-terminology: PC-1500\n"
+    "regions:\n"
+    "  - name: r\n"
+    "    capacity: 0x200\n"
+    "    banking: none\n"
+    "    addressing: { chip-select: Y0, span: 0x200 }\n"
+    "    content:\n"
+    "      kind: flash\n"
+    "      protocol:\n"
+    "        unlock-sequence:\n"
+    "          - { address: 0x55, data: 0xAA }\n"
+    "          - { address: 0x2A, data: 0x55 }\n"
+    "        byte-program-command: 0xA0\n"
+    "        erase-setup-command: 0x80\n"
+    "        sector-erase-command: 0x30\n"
+    "        chip-erase-command: 0x10\n"
+    "        reset-command: 0xF0\n"
+    "        sector-size: 0x100\n";
+
+void test_flash_unbanked_chip_and_sector_erase() {
+    auto sd = buildCard(kUnbankedFlashYaml, CardHost::PC1500);
+    CHECK(sd != nullptr);
+    if (!sd) return;
+    auto write = [&](uint16_t off, uint8_t data, bool direct = false) {
+        PinState p;
+        p.pin[4] = true;
+        p.forWrite = true;
+        p.direct = direct;
+        p.address = off;
+        return sd->respondsToWrite(p, data);
+    };
+    auto read = [&](uint16_t off) {
+        uint8_t v = 0;
+        PinState p;
+        p.pin[4] = true;
+        p.address = off;
+        sd->respondsToRead(p, v);
+        return v;
+    };
+    auto eraseCommand = [&](uint16_t off, uint8_t cmd) {
+        write(0x55, 0xAA);
+        write(0x2A, 0x55);
+        write(0x55, 0x80);
+        write(0x55, 0xAA);
+        write(0x2A, 0x55);
+        write(off, cmd);
+    };
+
+    write(0x000, 0x00, true);
+    write(0x1FF, 0x00, true);
+    eraseCommand(0x155, 0x30);  // sector erase: 0x100..0x1FF only
+    CHECK(read(0x000) == 0x00);
+    CHECK(read(0x1FF) == 0xFF);
+
+    write(0x1FF, 0x00, true);
+    eraseCommand(0x55, 0x10);   // chip erase clears the whole region
+    CHECK(read(0x000) == 0xFF);
+    CHECK(read(0x1FF) == 0xFF);
+}
+
+void test_reject_unbanked_flash_sector_not_dividing_capacity() {
+    // capacity 0x180 (tiled 0x100 + 0x80) with sector-size 0x100: a sector
+    // erase at offset 0x100 would run past the backing store.
+    std::string yaml = kUnbankedFlashYaml;
+    const std::string cap = "capacity: 0x200";
+    yaml.replace(yaml.find(cap), cap.size(), "capacity: 0x180");
+    const std::string addr = "addressing: { chip-select: Y0, span: 0x200 }";
+    yaml.replace(yaml.find(addr), addr.size(),
+                 "addressing:\n"
+                 "      any-of:\n"
+                 "        - { chip-select: Y0, span: 0x100 }\n"
+                 "        - { chip-select: S1, span: 0x80 }");
+    std::string err;
+    CHECK(rejects(yaml, &err));
+    CHECK(err.find("sector-size") != std::string::npos);
+}
+
 int run_memory_card_tests() {
     test_power_up_fill_defaults_per_kind();
     test_yaml_block_map_and_scalars();
@@ -1762,6 +1900,12 @@ int run_memory_card_tests() {
     test_resolve_modulespec_by_name();
     test_resolve_modulespec_ambiguous();
     test_resolve_modulespec_multi_dir();
+
+    test_yaml_apostrophe_inside_plain_scalar();
+    test_reject_unknown_key_inside_all_of();
+    test_memory_range_offset_counts_from_range_start();
+    test_flash_unbanked_chip_and_sector_erase();
+    test_reject_unbanked_flash_sector_not_dividing_capacity();
 
     std::printf("memory_card_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

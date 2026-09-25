@@ -10,14 +10,17 @@
 #
 # Usage: tools/fetch_roms.sh
 #
-# Writes (19 files):
+# Writes (21 files):
 #   roms/PC-1500_A01.ROM, PC-1500_A03.ROM, PC-1500_A04.ROM
 #     -- from Jeff-Birt/Sharp_PC-1500_ROM_Disassembly (Original_ROMs/)
 #   roms/PC1600-*-new.bin, PC1600-*-old.bin (6 + 6 files), plus the two
-#   CE-1600P pages roms/PC1600-P1-B4-CE1600P.bin, -P1-B5-CE1600P-OR-F.bin
-#     -- from tinue/PC-1600-ROM (dumps/new, dumps/old, dumps/peripherals;
-#        uppercase .BIN upstream, renamed lowercase .bin with a -new/-old
-#        suffix here)
+#   CE-1600P pages per version roms/PC1600-P1-B4-CE1600P-{new,old}.bin and
+#   roms/PC1600-P1-B5-CE1600P-OR-F-{new,old}.bin
+#     -- from tinue/PC-1600-ROM (dumps/new, dumps/old, dumps/ce1600p/new,
+#        dumps/ce1600p/old; uppercase .BIN upstream, renamed lowercase .bin
+#        with a -new/-old suffix here)
+#   PC1600_ROM_BASE=<url> overrides that repo's dumps/ base URL (e.g. a
+#   file:// URL to a local checkout).
 #   roms/CE-158.ROM
 #     -- from Jeff-Birt/Sharp_CE-158 (CE-158_ROM_ORIG.bin)
 #   roms/CE-150.ROM
@@ -44,6 +47,13 @@ fetch_if_needed() {
   url=$1
   dest=$2
   expected_md5=$3
+
+  # A file left over with different letter case (e.g. a stale ...-old.BIN)
+  # would match `-f "$dest"` on a case-insensitive filesystem and never get
+  # renamed to the lowercase name the build globs for -- drop it first.
+  for existing in "$(dirname "$dest")"/*; do
+    [ "$existing" != "$dest" ] && [ "$(printf %s "$existing" | tr 'A-Z' 'a-z')" = "$(printf %s "$dest" | tr 'A-Z' 'a-z')" ] && rm -f "$existing"
+  done
 
   if [ -f "$dest" ] && [ "$(md5_of "$dest")" = "$expected_md5" ]; then
     log "up to date: $dest"
@@ -74,11 +84,11 @@ fetch_if_needed "$PC1500_BASE/PC-1500_A03.ROM" "$ROMS_DIR/PC-1500_A03.ROM" 4bcf7
 fetch_if_needed "$PC1500_BASE/PC-1500_A04.ROM" "$ROMS_DIR/PC-1500_A04.ROM" 8ebec8b0ef358645df14807c31df7d06
 
 # ---- PC-1600 (tinue/PC-1600-ROM) -- upstream files are uppercase .BIN in
-# dumps/new/ (current ROM), dumps/old/ (older ROM) and dumps/peripherals/
+# dumps/new/ (current ROM), dumps/old/ (older ROM) and dumps/ce1600p/{new,old}/
 # (CE-1600P). Renamed lowercase .bin here (Qt6/CMakeLists.txt globs *.bin,
-# case-sensitive) and the calculator ROMs get a -new/-old suffix so both
-# versions live side by side in the flat roms/ directory. ----
-PC1600_BASE="https://raw.githubusercontent.com/tinue/PC-1600-ROM/main/dumps"
+# case-sensitive) and every ROM gets a -new/-old suffix so both versions live
+# side by side in the flat roms/ directory. ----
+PC1600_BASE="${PC1600_ROM_BASE:-https://raw.githubusercontent.com/tinue/PC-1600-ROM/main/dumps}"
 
 # fetch_pc1600_calc VERSION BASENAME MD5
 fetch_pc1600_calc() {
@@ -101,13 +111,20 @@ fetch_pc1600_calc old PC1600-P1-B3             ded92d8280f8f83ce3498fb9cbfb9b3d
 fetch_pc1600_calc old PC1600-P1-B3B            2e8e075cac8f9696c5e833ceef130a4f
 fetch_pc1600_calc old PC1600-P2-B6             2c977fdd8c924c1492a2c23f67a20f23
 
-# CE-1600P peripheral ROMs (independent of the calculator ROM version)
-fetch_if_needed "$PC1600_BASE/peripherals/PC1600-P1-B4-CE1600P.BIN"      "$ROMS_DIR/PC1600-P1-B4-CE1600P.bin"      05548a8dda3e572d50d4bd281a650ea8
-fetch_if_needed "$PC1600_BASE/peripherals/PC1600-P1-B5-CE1600P-OR-F.BIN" "$ROMS_DIR/PC1600-P1-B5-CE1600P-OR-F.bin" a675c6dbdf7dc4c10e8d96891e196f8f
+# CE-1600P ROMs (the two pages B4/B5 travel together; version independent of
+# the calculator ROM's). New = PEEK #(5,&7FFE) 5 / 18, old = 4 / 16.
+# fetch_ce1600p VERSION BASENAME MD5
+fetch_ce1600p() {
+  fetch_if_needed "$PC1600_BASE/ce1600p/$1/$2.BIN" "$ROMS_DIR/$2-$1.bin" "$3"
+}
+fetch_ce1600p new PC1600-P1-B4-CE1600P       05548a8dda3e572d50d4bd281a650ea8
+fetch_ce1600p new PC1600-P1-B5-CE1600P-OR-F  a675c6dbdf7dc4c10e8d96891e196f8f
+fetch_ce1600p old PC1600-P1-B4-CE1600P       df41b050acbc29c83214cbaaf29bee91
+fetch_ce1600p old PC1600-P1-B5-CE1600P-OR-F  33f3ef7207eac06587cc4c6d70c6cbd0
 
 # Obsolete unsuffixed names from before the new/old split: remove so a stale
 # copy can never mask a missing versioned file.
-for f in LH5803-C000-FFFF P0-B0 P1-B0 P1-B3 P1-B3B P2-B6; do
+for f in LH5803-C000-FFFF P0-B0 P1-B0 P1-B3 P1-B3B P2-B6 P1-B4-CE1600P P1-B5-CE1600P-OR-F; do
   rm -f "$ROMS_DIR/PC1600-$f.bin"
 done
 

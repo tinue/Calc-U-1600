@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 
+#include "../Basic/BasicLoadResults.hpp"
+
 class PC1500Machine;
 
 // ── Fast BASIC program loading for the PC-1500 / PC-1500A ───────────────
@@ -29,22 +31,18 @@ class PC1500Machine;
 // ($7867, big-endian), and BASPRG_ST ($7865) is the load address (stock
 // $40C5, lower with a low-window RAM module).
 
-struct PC1500BasicLoadResult {
-    bool ok = false;
-    uint16_t baseAddr = 0;  // BASPRG_ST after NEW0 (where the payload was written)
-    uint16_t endAddr = 0;   // BASPRG_END after the load (the 0xFF marker)
-    std::string error;      // set when ok == false
-};
-
 /// Loads a pre-tokenized PC-1500 BASIC program (`transferFile` = a full
 /// CE-158 transfer file, header included) into `machine`. Requires only that
 /// BASPRG_ST/BASPRG_END are currently valid pointers -- no reset, mode
-/// change, or NEW0 is performed. Used by the GUI `-loadBasicBinary:` action.
-PC1500BasicLoadResult loadBasicBinaryProgram(PC1500Machine& machine,
-                                             const std::vector<uint8_t>& transferFile);
+/// change, or NEW0 is performed. Nothing in the app calls this today -- the
+/// GUI and presets load `.bas` listings (loadBasicBinaryPayload() below); it
+/// stays for already-tokenized transfer files and is covered by the tests.
+BasicLoadResult loadBasicBinaryProgram(PC1500Machine& machine,
+                                       const std::vector<uint8_t>& transferFile);
 
 /// Same, but takes the bare tokenized payload (no CE-158 header) -- the run
-/// of in-RAM line records. Used by the preset loader, which tokenizes a
-/// `.bas` listing headerless via libsharpdx.
-PC1500BasicLoadResult loadBasicBinaryPayload(PC1500Machine& machine,
-                                             const std::vector<uint8_t>& payload);
+/// of in-RAM line records. Used by the preset runner (`format: basic-binary`)
+/// and the GUI's Load BASIC Program, which both tokenize a `.bas` listing
+/// headerless via basic::readBasicProgramSource().
+BasicLoadResult loadBasicBinaryPayload(PC1500Machine& machine,
+                                       const std::vector<uint8_t>& payload);

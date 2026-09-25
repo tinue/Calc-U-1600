@@ -97,6 +97,28 @@ void test_display_ic2_command_and_data() {
     CHECK(!d.pixel(5, 2 * 8 + 1));
 }
 
+// Status bit 7 (busy) after a write: set until the 4th edge of the
+// controllers' 216.7 kHz clock (~16.5 T per edge), then clear. Only the
+// written controller goes busy; 50H-53H writes hit both.
+void test_display_busy_after_write() {
+    PC1600Display d;
+    CHECK(d.readIO(0x59) == 0x00);
+    CHECK(d.readIO(0x55) == 0x00);
+    d.writeIO(0x5A, 0x81);               // IC2 data write
+    CHECK((d.readIO(0x59) & 0x80) != 0);
+    CHECK((d.readIO(0x55) & 0x80) == 0); // IC3 untouched
+    d.tick(49);                          // under 3 edges: still busy
+    CHECK((d.readIO(0x59) & 0x80) != 0);
+    d.tick(18);                          // past the 4th edge (<= 66 T total)
+    CHECK((d.readIO(0x59) & 0x80) == 0);
+    d.writeIO(0x50, 0x3F);               // both controllers
+    CHECK((d.readIO(0x59) & 0x80) != 0);
+    CHECK((d.readIO(0x55) & 0x80) != 0);
+    d.tick(70);
+    CHECK(d.readIO(0x59) == 0x00);
+    CHECK(d.readIO(0x55) == 0x00);
+}
+
 void test_display_ic3_column_offset() {
     PC1600Display d;
     // Port block 0x54-0x57 = IC3-only, columns 64-127 of the panel.
@@ -354,8 +376,24 @@ void test_memory_keyboard_and_on_key_via_io() {
     CHECK((sense & 0x01) == 0);
 
     CHECK(static_cast<SC7852Bus&>(mem).readIO(0x1B) == 0x00);
+    auto& bus = static_cast<SC7852Bus&>(mem);
+    CHECK((bus.readIO(0x1F) & 0x80) == 0);
+    CHECK((bus.readIO(0x1A) & 0x20) == 0);
     mem.setOnKeyPressed(true);
-    CHECK((static_cast<SC7852Bus&>(mem).readIO(0x1B) & 0x02) != 0);
+    CHECK((bus.readIO(0x1B) & 0x02) != 0);
+    // The live level too (Baum Systemhandbuch p.92 / Anhang A): PB7 = &1F bit 7, and
+    // the MSK read's PB7 slot = &1A bit 5, both 1 while held.
+    CHECK((bus.readIO(0x1F) & 0x80) != 0);
+    CHECK((bus.readIO(0x1A) & 0x20) != 0);
+    mem.reset(); // a physical input: still held across a reset
+    CHECK((bus.readIO(0x1F) & 0x80) != 0);
+    mem.setOnKeyPressed(false);
+    CHECK((bus.readIO(0x1F) & 0x80) == 0);
+    CHECK((bus.readIO(0x1A) & 0x20) == 0);
+    CHECK((bus.readIO(0x1B) & 0x02) != 0); // the IF latch stays until the ROM clears it
+    // MSK keeps its low nibble; the upper nibble is the live inputs.
+    bus.writeIO(0x1A, 0xFF);
+    CHECK(bus.readIO(0x1A) == 0x0F);
 }
 
 void test_memory_pb6_strobe_needs_output_mode_via_io() {
@@ -664,23 +702,20 @@ void test_subcpu_interrupt_cause_bit6() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
     auto& bus = static_cast<SC7852Bus&>(mem);
+    // Bit 0 is the TC8576F's live INT output (TxRDY on a reset chip), not
+    // part of the latch under test here.
+    auto latched = [&] { return static_cast<uint8_t>(bus.readIO(0x32) & 0xFE); };
 
-    // Masked off (35H bit6 = 0): the machine layer won't latch.
+    // Masked off (35H bit6 = 0): the cause still latches; only INT is gated.
     bus.writeIO(0x35, 0x10);        // only the 1/64s timer unmasked
-    CHECK(!mem.subCpuInterruptEnabled());
-    CHECK(mem.timer64InterruptEnabled());
-
-    // Unmasked: bit6 latches and shows up on the cause register at 32H.
-    bus.writeIO(0x35, 0x40);
-    CHECK(mem.subCpuInterruptEnabled());
     mem.latchSubCpuInterruptCause();
-    CHECK(bus.readIO(0x32) == 0x40);
-    CHECK(bus.readIO(0x32) == 0x00); // read-clears, same as bit4's convention
+    CHECK(latched() == 0x40);
+    CHECK(latched() == 0x00); // read-clears, same as bit4's convention
 
     // Both causes can be pending at once without disturbing each other.
     mem.latchTimer64InterruptCause();
     mem.latchSubCpuInterruptCause();
-    CHECK(bus.readIO(0x32) == 0x50);
+    CHECK(latched() == 0x50);
 }
 
 void test_pb3_reads_high_for_the_alternate_charset_gate() {
@@ -778,6 +813,7 @@ int run_pc1600_keyboard_display_tests() {
     test_display_status_symbols_wired_to_ic3_column63();
     test_display_status_symbols_blank_when_ic3_display_off();
     test_display_clock_enable_flag();
+    test_display_busy_after_write();
     test_statusline_defaults_all_off();
     test_statusline_set_and_read();
     test_statusline_reset_clears_all();

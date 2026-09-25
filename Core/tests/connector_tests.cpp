@@ -45,6 +45,7 @@ public:
         return m_write && m_write(pins, value);
     }
     bool assertsInhibit() const override { return m_inhibit; }
+    bool mayAssertInhibit() const override { return m_inhibit; }
 
 private:
     ReadFn m_read;

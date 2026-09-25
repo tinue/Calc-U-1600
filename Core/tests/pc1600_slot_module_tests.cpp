@@ -120,6 +120,49 @@ void test_plain_ram_card_via_attach_slot_card() {
     CHECK(m.memory().isWritable(0x9000));
 }
 
+// pokeMemory() is a host poke: it lands in flash unconditionally (the
+// direct path, not the flash command decoder), and a region that claims
+// the write but keeps nothing makes it fail without changing anything.
+void test_poke_memory_uses_the_host_path_and_verifies() {
+    {
+        PC1600Machine m;
+        auto card = slotCardWithContent(
+            "{ kind: flash, protocol: { unlock-sequence: [ { address: 0x555, data: 0xAA }, "
+            "{ address: 0x2AA, data: 0x55 } ], byte-program-command: 0xA0, "
+            "erase-setup-command: 0x80, sector-erase-command: 0x30, chip-erase-command: 0x10, "
+            "reset-command: 0xF0, sector-size: 0x1000 } }");
+        CHECK(card != nullptr);
+        if (!card) return;
+        m.attachSlot1Card(std::move(card));
+        selectPageCBank(m, 0);
+        const uint8_t bytes[] = {0x12, 0x34};
+        CHECK(m.pokeMemory(0x8100, bytes, 2));
+        CHECK(m.memory().read(0x8100) == 0x12);
+        CHECK(m.memory().read(0x8101) == 0x34);
+    }
+    {
+        PC1600Machine m;
+        auto card = slotCardWithContent("{ kind: regular, writable: false, power-up-fill: 0x5A }");
+        CHECK(card != nullptr);
+        if (!card) return;
+        m.attachSlot1Card(std::move(card));
+        selectPageCBank(m, 0);
+        const uint8_t bytes[] = {0x12, 0x34};
+        CHECK(!m.pokeMemory(0x8100, bytes, 2));
+        CHECK(m.memory().read(0x8100) == 0x5A);
+        CHECK(m.memory().read(0x8101) == 0x5A);
+    }
+    {
+        // Partly writable: the range crosses from internal RAM (FFFF) into
+        // ROM (0000) -- rejected up front, the RAM byte left alone.
+        PC1600Machine m;
+        m.memory().poke(0xFFFF, 0x77);
+        const uint8_t bytes[] = {0x12, 0x34};
+        CHECK(!m.pokeMemory(0xFFFF, bytes, 2));
+        CHECK(m.memory().read(0xFFFF) == 0x77);
+    }
+}
+
 void test_slot2_plain_card_ignores_vertical_bank_through_connector() {
     // The connector selects Slot 2 regardless of the Port 28H vertical bank
     // (the vertical bank is the card's own business -- a CE-1601M-class
@@ -316,6 +359,7 @@ void test_trigger_latch_modules_in_slot2_contribute_full_16k() {
 int run_pc1600_slot_module_tests() {
     test_ce155_in_slot1_both_cpu_views();
     test_plain_ram_card_via_attach_slot_card();
+    test_poke_memory_uses_the_host_path_and_verifies();
     test_slot2_plain_card_ignores_vertical_bank_through_connector();
     test_ce1638_in_slot1_banked_window();
     test_ce163f_in_slot1_ram_and_flash_protocol();

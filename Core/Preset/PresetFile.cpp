@@ -1,6 +1,7 @@
 #include "PresetFile.hpp"
 
-#include "PC1500Keyboard.hpp"
+#include "../PC1500/PC1500Keyboard.hpp"
+#include "../MachineCodeFile.hpp"
 
 #include <cctype>
 #include <cerrno>
@@ -10,6 +11,11 @@
 #include <sstream>
 
 namespace {
+
+// ASCII-lowercases `s` in place (preset keywords/values are case-insensitive).
+void lowerAscii(std::string& s) {
+    for (char& ch : s) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+}
 
 struct RawLine {
     int indent;
@@ -68,6 +74,9 @@ std::string unquote(const std::string& s) {
 // re-reads the raw remainder for `type:` and skips this. Every other verb
 // (`key:`, `wait:`, `trace:`, ...) still runs through here.
 std::string stripInlineComment(const std::string& rest) {
+    // Nothing but a comment (`memory-expansion-1:   # slot 1`): the value is
+    // empty, so a block key keeps working with a note after it.
+    if (!rest.empty() && rest.front() == '#') return "";
     if (!rest.empty() && (rest.front() == '"' || rest.front() == '\'')) {
         size_t close = rest.find(rest.front(), 1);
         if (close != std::string::npos) return trim(rest.substr(0, close + 1));
@@ -199,7 +208,7 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
             // not contain a path separator -- WHERE it lands is the trace
             // directory's concern (see PC1500PresetLoader::applyPC1500Preset()).
             std::string lowered = value;
-            for (char& ch : lowered) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            lowerAscii(lowered);
             step.kind = PresetStep::Kind::Trace;
             if (lowered == "off") {
                 step.text = "";
@@ -233,6 +242,40 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
                 return false;
             }
             step.kind = PresetStep::Kind::SyncClock;
+        } else if (verb == "saveas") {
+            // `- saveas: s1:<name>` / `s2:<name>` / `floppy:<name>` -- the
+            // scripted counterpart of the control bar's "Name & Save" icon
+            // (see PresetFile.hpp's top-of-file doc comment). `value` is
+            // everything after the verb's own colon, e.g. "s1:CE-1601M -
+            // Progs" -- split it on ITS first colon (mirroring
+            // splitKeyValue's own rule) into target/name.
+            const size_t targetColon = value.find(':');
+            if (targetColon == std::string::npos) {
+                *error = "line " + std::to_string(line.lineNo) +
+                         ": expected 'saveas: s1:<name>', 'saveas: s2:<name>' or 'saveas: floppy:<name>'";
+                return false;
+            }
+            std::string target = trim(value.substr(0, targetColon));
+            std::string name = trim(value.substr(targetColon + 1));
+            lowerAscii(target);
+            if (target == "s1") step.saveAsTarget = PresetStep::SaveAsTarget::S1;
+            else if (target == "s2") step.saveAsTarget = PresetStep::SaveAsTarget::S2;
+            else if (target == "floppy") step.saveAsTarget = PresetStep::SaveAsTarget::Floppy;
+            else {
+                *error = "line " + std::to_string(line.lineNo) + ": 'saveas: " + value +
+                         "' -- target must be 's1', 's2' or 'floppy'";
+                return false;
+            }
+            if (name.empty()) {
+                *error = "line " + std::to_string(line.lineNo) + ": 'saveas:' needs a name";
+                return false;
+            }
+            if (name.find('"') != std::string::npos) {
+                *error = "line " + std::to_string(line.lineNo) + ": 'saveas:' name must not contain '\"'";
+                return false;
+            }
+            step.kind = PresetStep::Kind::SaveAs;
+            step.text = name;
         } else if (verb == "check") {
             *error = "line " + std::to_string(line.lineNo) + ": 'check' steps are not yet supported by this loader";
             return false;
@@ -339,18 +382,19 @@ bool parseProgramBlock(const std::vector<RawLine>& lines, size_t& idx, const std
             hasPath = true;
         } else if (key == "address") {
             if (!hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'address' requires a value"; return false; }
-            try {
-                prog.address = static_cast<uint16_t>(std::stoul(value, nullptr, 16));
-            } catch (...) {
-                *error = "line " + std::to_string(line.lineNo) + ": invalid hex 'address' value '" + value + "'";
+            uint32_t addr = 0;
+            if (!machinecode::parseHexAddress(value, &addr)) {
+                *error = "line " + std::to_string(line.lineNo) + ": invalid hex 'address' value '" + value +
+                         "' (expected 0000-FFFF, optionally prefixed 0x, & or $)";
                 return false;
             }
+            prog.address = static_cast<uint16_t>(addr);
             hasAddress = true;
             prog.hasAddress = true;
         } else if (key == "slot") {
             if (!hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'slot' requires a value"; return false; }
             std::string v = value;
-            for (char& c : v) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            lowerAscii(v);
             if (v == "s0") prog.slot = PresetProgram::Slot::S0;
             else if (v == "s1") prog.slot = PresetProgram::Slot::S1;
             else if (v == "s2") prog.slot = PresetProgram::Slot::S2;
@@ -420,24 +464,9 @@ bool parseProgramBlock(const std::vector<RawLine>& lines, size_t& idx, const std
         prog.format = PresetProgram::Format::Binary;
         if (!hasPath) { *error = "'program: format: binary' requires 'path'"; return false; }
         if (hasText) { *error = "'text' is only valid with 'format: basic-text'"; return false; }
-        if (hasSlot) {
-            // PC-1600 machine-language: bytes go linearly into the one named
-            // slot. `address` / `length` are optional -- a 16-byte PC-1600
-            // ML header supplies them -- and each overrides its header field
-            // when given. (The loader requires both when the file has no
-            // header.)
-        } else {
-            // PC-1500-style: the whole file poked at a fixed address.
-            if (!hasAddress) {
-                *error = "'program: format: binary' requires 'address' (or 'slot: S0|S1|S2' for "
-                         "a PC-1600 preset)";
-                return false;
-            }
-            if (hasLength) {
-                *error = "'length' is only valid with 'slot:' (PC-1600 machine-language loading)";
-                return false;
-            }
-        }
+        // `address` / `length` are optional: a CE-158 or PC-1600 machine-code
+        // header supplies them, and each overrides its header field when
+        // given. The loader requires `address` for a headerless file.
     } else if (formatStr == "basic-text") {
         prog.format = PresetProgram::Format::BasicText;
         if (!hasText && !hasPath) {
@@ -484,10 +513,11 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
     std::filesystem::path presetDir = std::filesystem::path(path).parent_path();
     if (presetDir.empty()) presetDir = ".";
 
-    std::string firmware;
-    bool hasFirmware = false;
-    std::string plotter;  // normalized `plotter:` value ("" / "ce1600p" / "ce150")
+    std::string modelRom;  // the ROM suffix of `model: NAME:ROM`, verbatim ("" = none given)
+    std::string plotter;  // normalized `plotter:` name ("" / "ce1600p" / "ce150"), suffix stripped
+    std::string plotterRom;  // the ROM suffix of `plotter: NAME:ROM`, lower-cased ("" = none given)
     bool hasPlotter = false;
+    std::string interfaceName;  // normalized `interface:` name ("" / "ce158")
     std::string floppy;  // `floppy:` value with any `,A`/`,B` suffix stripped
     int floppySide = 0;  // 0 = A, 1 = B, parsed from that suffix
     bool hasFloppy = false;
@@ -508,11 +538,25 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         idx++;
         if (key == "model") {
             if (!hasInline) { *error = "'model' requires a value"; return false; }
-            out->model = value;
+            // `model: NAME[:ROM]` -- the ROM revision rides on the model
+            // (`PC-1500:A01`, `PC-1600:new`). `model` stays the bare name so
+            // everything keyed off it is unaffected; the suffix is
+            // validated per model below.
+            const size_t colon = value.find(':');
+            out->model = value.substr(0, colon);
+            if (colon != std::string::npos) {
+                modelRom = value.substr(colon + 1);
+                if (modelRom.empty()) {
+                    *error = "line " + std::to_string(line.lineNo) + ": 'model: " + value +
+                             "' has an empty ROM after ':'";
+                    return false;
+                }
+            }
         } else if (key == "firmware") {
-            if (!hasInline) { *error = "'firmware' requires a value"; return false; }
-            firmware = value;
-            hasFirmware = true;
+            *error = "line " + std::to_string(line.lineNo) +
+                     ": 'firmware:' is no longer supported -- put the ROM on the model instead "
+                     "(e.g. 'model: PC-1500:A01' or 'model: PC-1600:old')";
+            return false;
         } else if (key == "program") {
             if (hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'program:' takes a block, not an inline value"; return false; }
             PresetSection section;
@@ -547,7 +591,19 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             if (!hasInline) { *error = "'plotter' requires a value"; return false; }
             hasPlotter = true;
             plotter = value;
-            for (char& ch : plotter) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            lowerAscii(plotter);
+            // `plotter: NAME[:ROM]` -- only the CE-1600P has a ROM choice
+            // (`plotter: ce1600p:old`); split it off before normalizing.
+            const size_t plotterColon = plotter.find(':');
+            if (plotterColon != std::string::npos) {
+                plotterRom = plotter.substr(plotterColon + 1);
+                plotter.resize(plotterColon);
+                if (plotterRom.empty()) {
+                    *error = "line " + std::to_string(line.lineNo) + ": 'plotter: " + value +
+                             "' has an empty ROM after ':'";
+                    return false;
+                }
+            }
             // Accept a couple of spellings; normalize to the canonical token.
             if (plotter == "ce-1600p") plotter = "ce1600p";
             else if (plotter == "ce-150") plotter = "ce150";
@@ -555,6 +611,27 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             if (!plotter.empty() && plotter != "ce1600p" && plotter != "ce150") {
                 *error = "line " + std::to_string(line.lineNo) +
                          ": 'plotter: " + value + "' is not a known plotter (expected ce1600p or ce150)";
+                return false;
+            }
+            if (!plotterRom.empty() && plotter != "ce1600p") {
+                *error = "line " + std::to_string(line.lineNo) + ": 'plotter: " + value +
+                         "' -- only the CE-1600P has a ROM choice ('plotter: ce1600p:new|old')";
+                return false;
+            }
+            if (!plotterRom.empty() && plotterRom != "new" && plotterRom != "old") {
+                *error = "line " + std::to_string(line.lineNo) + ": 'plotter: " + value +
+                         "' -- the CE-1600P ROM must be 'new' or 'old'";
+                return false;
+            }
+        } else if (key == "interface") {
+            if (!hasInline) { *error = "'interface' requires a value"; return false; }
+            interfaceName = value;
+            lowerAscii(interfaceName);
+            if (interfaceName == "ce-158") interfaceName = "ce158";
+            else if (interfaceName == "none" || interfaceName == "off") interfaceName.clear();
+            if (!interfaceName.empty() && interfaceName != "ce158") {
+                *error = "line " + std::to_string(line.lineNo) + ": 'interface: " + value +
+                         "' is not a known interface (expected ce158)";
                 return false;
             }
         } else if (key == "floppy") {
@@ -593,16 +670,19 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         // A PC-1600 preset is model + memory slots + keys only. Reject the
         // PC-1500-only pieces with a clear message rather than silently
         // ignoring them.
-        // `firmware: new|old` picks the calculator ROM version (default
-        // "new"); CE-1600P peripheral ROMs are independent of it.
+        // `model: PC-1600:new|old` picks the calculator ROM version (default
+        // "new"); the CE-1600P ROM (`plotter: ce1600p:new|old`) is
+        // independent of it.
         out->romVariant = "new";
-        if (hasFirmware) {
-            if (firmware != "new" && firmware != "old") {
-                *error = "'firmware:' for a PC-1600 preset must be 'new' or 'old'";
+        if (!modelRom.empty()) {
+            lowerAscii(modelRom);
+            if (modelRom != "new" && modelRom != "old") {
+                *error = "'model: PC-1600:" + modelRom + "' -- the PC-1600 ROM must be 'new' or 'old'";
                 return false;
             }
-            out->romVariant = firmware;
+            out->romVariant = modelRom;
         }
+        out->ce1600pRomVariant = plotterRom.empty() ? "new" : plotterRom;
         if (!out->memoryExpansionModuleSpecFile.empty() || !out->memoryExpansionModuleSpecName.empty()) {
             *error = "use 'memory-expansion-1:' / 'memory-expansion-2:' for a PC-1600 preset, not 'memory-expansion:'";
             return false;
@@ -623,6 +703,12 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             }
         }
         out->plotter = plotter;  // already validated/normalized above
+        if (!interfaceName.empty() && plotter == "ce1600p") {
+            *error = "'interface: ce158' cannot be combined with 'plotter: ce1600p' (the CE-158 does "
+                     "not connect to the CE-1600P)";
+            return false;
+        }
+        out->interfaceName = interfaceName;
         if (hasFloppy && plotter != "ce1600p") {
             *error = "'floppy:' requires 'plotter: ce1600p' (the CE-1600F attaches as a union with it)";
             return false;
@@ -645,6 +731,16 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
                      "binary' block pokes the whole file at 'address:')";
             return false;
         }
+        if (s.kind == PresetSection::Kind::Keys) {
+            for (const PresetStep& step : s.keys) {
+                if (step.kind == PresetStep::Kind::SaveAs &&
+                    step.saveAsTarget != PresetStep::SaveAsTarget::S1) {
+                    *error = "'saveas: s2:'/'saveas: floppy:' are only valid for a PC-1600 preset -- "
+                             "the PC-1500 has one expansion slot ('saveas: s1:') and no floppy drive";
+                    return false;
+                }
+            }
+        }
     }
     if (hasFloppy) {
         *error = "'floppy:' is only valid for a PC-1600 preset (the CE-1600F is a PC-1600 device)";
@@ -662,40 +758,28 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         // isn't "ce150" was already rejected by the parser.
         out->plotter = plotter; // "" or "ce150"
     }
+    out->interfaceName = interfaceName;
+    // `model: PC-1500:A01|A03|A04` / `model: PC-1500A:A04` -- the ROM
+    // revision rides on the model. WHERE the file lives is deliberately not
+    // this struct's concern (see PresetFile::romVariant's doc comment).
+    for (char& ch : modelRom) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
     if (out->model == "PC-1500A") {
         out->variant = PC1500Variant::PC1500A;
-        // The PC-1500A can only run A04 -- unconditional, not a default,
-        // regardless of whatever (if anything) the preset's own
-        // `firmware:` field said. See PresetFile::romVariant's doc
-        // comment.
+        // The PC-1500A can only run A04 (the default).
+        if (!modelRom.empty() && modelRom != "A04") {
+            *error = "'model: PC-1500A:" + modelRom + "' -- the PC-1500A can only run ROM A04";
+            return false;
+        }
         out->romVariant = "A04";
     } else if (out->model == "PC-1500") {
         out->variant = PC1500Variant::PC1500;
-        // `firmware:` may be a bare revision ("A01"/"A03"/"A04" -- the
-        // preferred form: it names *which ROM* to run without pretending
-        // to know *where* its file lives, which is environment-specific
-        // -- a CLI tool's repo-relative `roms/` convention vs. a GUI
-        // app's bundled resource, see PresetFile::romVariant's own doc
-        // comment) or a `.../PC-1500_A0N.ROM`-shaped path (kept for
-        // backward compatibility with existing preset files -- only the
-        // "A0N" is ever extracted from it, never the path itself). Defaults to "A04"
-        // (valid on both models, see AppSettings.swift's own
-        // resolvedRomRevision() default) when `firmware:` is absent or
-        // matches neither shape.
         out->romVariant = "A04";
-        if (hasFirmware) {
-            if (firmware == "A01" || firmware == "A03" || firmware == "A04") {
-                out->romVariant = firmware;
-            } else {
-                size_t marker = firmware.rfind("PC-1500_");
-                size_t romExt = firmware.rfind(".ROM");
-                if (marker != std::string::npos && romExt != std::string::npos && romExt > marker) {
-                    std::string candidate = firmware.substr(marker + 8, romExt - (marker + 8));
-                    if (candidate == "A01" || candidate == "A03" || candidate == "A04") {
-                        out->romVariant = candidate;
-                    }
-                }
+        if (!modelRom.empty()) {
+            if (modelRom != "A01" && modelRom != "A03" && modelRom != "A04") {
+                *error = "'model: PC-1500:" + modelRom + "' -- the PC-1500 ROM must be A01, A03 or A04";
+                return false;
             }
+            out->romVariant = modelRom;
         }
     } else {
         *error = "unsupported model '" + out->model + "' (must be 'PC-1500', 'PC-1500A' or 'PC-1600')";

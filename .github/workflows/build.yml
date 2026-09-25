@@ -29,12 +29,63 @@ name: Build
 # natively on a windows-11-arm runner (free for public repos, like every
 # standard runner used here) with Qt's native ARM64 kit, and fetches
 # SharpDataExchange's sharpdx-windows-aarch64 release like the other jobs.
+# The one job that doesn't package anything is core-tests, which builds the
+# repo-root CMakeLists.txt (the dev/IDE build, not the release entry point)
+# and runs Core/'s test suite via CTest -- see its own comment below.
 on:
   # Manual trigger only (Actions tab, or `gh workflow run build.yml`).
   # The eventual plan is to trigger on pre-release tag creation instead.
   workflow_dispatch: {}
 
 jobs:
+  # The only job that configures the repo-root CMakeLists.txt (every other
+  # job builds `-S Qt6`, the release entry point). That root file is the
+  # dev/IDE build -- it re-lists the same Core/ sources as tools/build_*.sh
+  # and tools/run_tests.sh, so without this job a new Core/ source would
+  # keep CI green while breaking the root build, and with it every .run/
+  # configuration, for whoever pulls next. It also gives Core/'s test suite
+  # its only presence in CI: tools/run_tests.sh is never run here.
+  core-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      # Qt is needed even though this job never runs the GUI: the root
+      # CMakeLists.txt does add_subdirectory(Qt6). zlib1g-dev is CoreTests'
+      # own find_package(ZLIB REQUIRED).
+      - name: Install Qt6 + build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build \
+            qt6-base-dev qt6-base-dev-tools qt6-multimedia-dev libgl1-mesa-dev \
+            zlib1g-dev
+
+      # CoreTests loads roms/PC-1500_A04.ROM relative to the repo root (which
+      # is also the CTest working directory), so this isn't optional here.
+      - name: Fetch ROMs
+        shell: bash
+        run: tools/fetch_roms.sh
+
+      # See linux-x86_64's identical step for what this does. Soft-fail here
+      # too: without libsharpdx the root CMakeLists.txt drops the preset/BASIC
+      # sources and the tests covering them still build.
+      - name: Fetch sharpdx (preset loading)
+        shell: bash
+        continue-on-error: true
+        run: tools/fetch_sharpdx.sh
+
+      - name: Configure (repo root)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+      # Builds every target the root file defines -- the GUI app, the CLI
+      # harnesses, the probes and CoreTests -- which is the drift check.
+      - name: Build
+        run: cmake --build build
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
   linux-x86_64:
     runs-on: ubuntu-24.04
     steps:
@@ -290,7 +341,9 @@ jobs:
           if-no-files-found: error
 
   mac-aarch64:
-    runs-on: macos-14 # Apple Silicon (arm64) hosted runner
+    # Apple Silicon (arm64). macOS 15 so Homebrew's Qt bottles (embedded by
+    # macdeployqt) are built for 15.x too, matching CMAKE_OSX_DEPLOYMENT_TARGET.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
 

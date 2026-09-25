@@ -11,6 +11,7 @@
 
 #include "../PC1600/PC1600Machine.hpp"
 #include "TestCards.hpp"
+#include "TestRoms.hpp"
 
 namespace {
 
@@ -92,7 +93,7 @@ void test_lh5803_to_sc7852_handoff() {
 
     m.step(); // LH5803: STA #(0A038H) -- requests the switch back
     CHECK(m.sc7852Owns());
-    CHECK(!m.sc7852().halted()); // resumed via resumeFromHalt(), not a real interrupt
+    CHECK(!m.sc7852().halted()); // parked with IFF1 clear: resumed directly (fallback)
     CHECK(m.sc7852().pc() == sc7852ParkedPC);
 
     m.step(); // SC7852 resumes normal execution: the NOP at its parked PC
@@ -429,6 +430,95 @@ void test_on_key_wakes_a_halted_sc7852() {
     CHECK(!m.sc7852().halted());
 }
 
+// The ROM's handoff (P1-B3 5C0E-5C22): 35H = 08H, OUT (38H), EI, HALT.
+// The LH5803's STA #(0A038H) then raises cause bit 3, and that INT -- not a
+// direct resume -- ends the SC7852's HALT.
+void test_lh5803_handback_is_a_cause_bit3_interrupt() {
+    PC1600Machine m;
+    std::vector<uint8_t> lower = makeBank(0x00);
+    std::vector<uint8_t> upper = makeBank(0x00);
+    const uint8_t park[] = {0xED, 0x56,        // IM 1 (vector 0038H)
+                            0x3E, 0x08, 0xD3, 0x35, // 35H = 08H
+                            0xD3, 0x38,        // OUT (38H),A
+                            0xFB, 0x76, 0x00}; // EI ; HALT ; NOP
+    for (size_t i = 0; i < sizeof park; i++) lower[i] = park[i];
+    CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+    std::vector<uint8_t> lh5803Rom(16384, 0x00);
+    lh5803Rom[0] = 0xFD; lh5803Rom[1] = 0xAE; lh5803Rom[2] = 0xA0; lh5803Rom[3] = 0x38; // STA #(0A038H)
+    lh5803Rom[16384 - 2] = 0xC0;
+    lh5803Rom[16384 - 1] = 0x00;
+    CHECK(m.loadLH5803Rom(lh5803Rom.data(), lh5803Rom.size()));
+    m.reset();
+
+    for (int i = 0; i < 6; i++) m.step(); // IM 1, LD, OUT (35H), OUT (38H), EI, HALT
+    CHECK(!m.sc7852Owns());
+    m.step();                             // LH5803: STA #(0A038H)
+    CHECK(m.sc7852Owns());
+    CHECK(m.sc7852().halted());           // still parked: the INT ends it, not the switch
+    CHECK(m.sc7852().intLine());
+    m.step();                             // INT accepted
+    CHECK(!m.sc7852().halted());
+    CHECK(m.sc7852().pc() == 0x0038);
+    CHECK(!m.sc7852().iff1());
+    CHECK((m.memory().readIO(0x32) & 0x08) == 0x08);
+}
+
+// An ON press that lands while the SC7852 is between OUT (38H) and HALT is
+// held until the LH5803 it hands to halts, then wakes that one.
+void test_on_press_before_handoff_halt_still_wakes() {
+    PC1600Machine m;
+    std::vector<uint8_t> lower = makeBank(0x00);
+    std::vector<uint8_t> upper = makeBank(0x00);
+    lower[0] = 0xD3; lower[1] = 0x38; // OUT (38H),A
+    lower[2] = 0x76;                  // HALT
+    CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+    std::vector<uint8_t> lh5803Rom(16384, 0x00);
+    lh5803Rom[0] = 0xFD; lh5803Rom[1] = 0xB1; // HLT
+    lh5803Rom[16384 - 2] = 0xC0;
+    lh5803Rom[16384 - 1] = 0x00;
+    CHECK(m.loadLH5803Rom(lh5803Rom.data(), lh5803Rom.size()));
+    m.reset();
+
+    m.step();                   // OUT (38H),A
+    m.setOnKeyPressed(true);    // SC7852 running: nothing to wake yet
+    m.step();                   // HALT -> bus to the LH5803
+    CHECK(!m.sc7852Owns());
+    m.step();                   // LH5803: HLT
+    CHECK(m.lh5803().halted());
+    m.step();                   // the held press wakes it
+    CHECK(!m.lh5803().halted());
+    CHECK(m.sc7852().halted()); // the parked SC7852 is left alone
+}
+
+// An ON press while the bus owner is running is a BREAK the ROM reads from
+// the 1BH latch -- it must not stay pending and later wake the machine out
+// of the next power-down park.
+void test_on_press_while_running_does_not_wake_a_later_park() {
+    PC1600Machine m;
+    std::vector<uint8_t> lower = makeBank(0x00);
+    std::vector<uint8_t> upper = makeBank(0x00);
+    lower[0] = 0x00;                  // NOP -- "running"
+    lower[1] = 0xD3; lower[2] = 0x38; // OUT (38H),A
+    lower[3] = 0x76;                  // HALT
+    CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+    std::vector<uint8_t> lh5803Rom(16384, 0x00);
+    lh5803Rom[0] = 0xFD; lh5803Rom[1] = 0xB1; // HLT
+    lh5803Rom[16384 - 2] = 0xC0;
+    lh5803Rom[16384 - 1] = 0x00;
+    CHECK(m.loadLH5803Rom(lh5803Rom.data(), lh5803Rom.size()));
+    m.reset();
+
+    m.setOnKeyPressed(true);    // BREAK while the SC7852 runs
+    m.setOnKeyPressed(false);
+    m.step();                   // NOP
+    m.step();                   // OUT (38H),A
+    m.step();                   // HALT -> bus to the LH5803
+    m.step();                   // LH5803: HLT
+    CHECK(m.lh5803().halted());
+    m.runCycles(5000);
+    CHECK(m.lh5803().halted()); // still parked
+}
+
 // Same wake requirement, but with the bus already handed to the LH5803:
 // the SC7852 issues its documented `OUT (38H),A` handoff before its own
 // power-down HALT, so the machine can be frozen with the LH5803 parked
@@ -517,7 +607,116 @@ void test_rtc_advances_while_lh5803_owns_the_bus() {
     CHECK(PC1600SubCpu::unpackBcd(dt.day) == 2);
 }
 
+// The chip only takes whole seconds, so seedClock()'s millisecond preloads
+// the 1 Hz accumulator: seeded at hh:mm:ss.900, the next tick must come
+// 0.1 s later, not a full second (which left the clock ~1 s behind after
+// every reset). Seeded at .000, it takes the full second.
+void test_seed_clock_millisecond_aligns_next_tick() {
+    PC1600Machine m;
+    std::vector<uint8_t> lower = makeBank(0x00);
+    std::vector<uint8_t> upper = makeBank(0x00);
+    lower[0] = 0x76; // HALT -- parked, just burns T-states
+    CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+    const auto tenth = static_cast<uint64_t>(PC1600Machine::kTStateHz) / 10;
+
+    m.reset();
+    m.seedClock(2026, 9, 23, 12, 0, 10, 900);
+    m.runCycles(tenth * 2);
+    CHECK(PC1600SubCpu::unpackBcd(m.memory().subCpu().dateTime().second) == 11);
+
+    m.reset();
+    m.seedClock(2026, 9, 23, 12, 0, 10, 0);
+    m.runCycles(tenth * 2);
+    CHECK(PC1600SubCpu::unpackBcd(m.memory().subCpu().dateTime().second) == 10);
+    m.runCycles(tenth * 9);
+    CHECK(PC1600SubCpu::unpackBcd(m.memory().subCpu().dateTime().second) == 11);
+}
+
 } // namespace
+
+// INT is the level (cause & mask): masking a latched cause at 35H or the
+// 32H read that clears it withdraws the request.
+void test_int_line_follows_cause_and_mask() {
+    PC1600Machine m;
+    auto& mem = m.memory();
+    CHECK(!m.sc7852().intLine());
+    mem.writeIO(0x35, 0x10);
+    mem.latchTimer64InterruptCause();
+    CHECK(m.sc7852().intLine());
+    mem.writeIO(0x35, 0x00);
+    CHECK(!m.sc7852().intLine()); // masked: withdrawn
+    mem.writeIO(0x35, 0x10);
+    CHECK(m.sc7852().intLine());  // still latched, re-enabled
+    mem.writeIO(0x23, 0xC5);                    // pr[5] = TxINTM: keep the UART's bit 0 out
+    mem.writeIO(0x22, 0x02);
+    CHECK(mem.readIO(0x32) == 0x10);
+    CHECK(!m.sc7852().intLine()); // read-clear drops it
+
+    // A cause arriving while masked is still latched; unmasking raises INT.
+    mem.writeIO(0x35, 0x00);
+    mem.latchSubCpuInterruptCause();
+    CHECK(!m.sc7852().intLine());
+    mem.writeIO(0x35, 0x40);
+    CHECK(m.sc7852().intLine());
+
+    // Bit 0 is the TC8576F's live INT output, not a latch: a 32H read
+    // leaves it (and INT) up until the chip itself is serviced.
+    mem.readIO(0x32);
+    mem.writeIO(0x23, 0xC5);                    // pr[5] = 0: TxINTM clear
+    mem.writeIO(0x22, 0x00);
+    mem.writeIO(0x35, 0x01);
+    CHECK(m.memory().uart().interruptOutput()); // TxRDY with TxINTM clear
+    CHECK(m.sc7852().intLine());
+    CHECK((mem.readIO(0x32) & 0x01) == 0x01);
+    CHECK(m.sc7852().intLine());
+    mem.writeIO(0x23, 0xC5);                    // pr[5] = TxINTM
+    mem.writeIO(0x22, 0x02);
+    CHECK(!m.sc7852().intLine());
+    CHECK((mem.readIO(0x32) & 0x01) == 0x00);
+
+    // Reset clears cause and mask, and the line with them.
+    m.reset();
+    CHECK(!m.sc7852().intLine());
+    CHECK((mem.readIO(0x32) & 0xFE) == 0x00); // bit 0: the reset chip's TxRDY, masked at 35H
+    CHECK(mem.intMask() == 0x00);
+}
+
+static int litPixels(const PC1600Machine& m) {
+    const PC1600DisplaySnapshot snap = m.displaySnapshot();
+    int n = 0;
+    for (const auto& row : snap.pixels)
+        for (bool px : row) n += px ? 1 : 0;
+    return n;
+}
+
+// ROM-gated: OFF parks the machine, it stays parked (no stray interrupt
+// brings it back), and ON restarts it -- several times over.
+void test_real_rom_off_stays_off_and_on_restarts() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_real_rom_off_stays_off_and_on_restarts: PC-1600 ROM images not found\n");
+        return;
+    }
+    const uint64_t hz = static_cast<uint64_t>(PC1600Machine::kTStateHz);
+    CHECK(litPixels(m) > 0);
+    for (int cycle = 0; cycle < 3; cycle++) {
+        m.pressKey("off");
+        m.runCycles(hz / 2);
+        m.releaseKey("off");
+        m.runCycles(hz * 3);
+        CHECK(litPixels(m) == 0);
+        m.runCycles(hz * 5); // long enough for many 64 Hz / 0.5 s edges
+        CHECK(litPixels(m) == 0);
+        CHECK(!m.sc7852Owns() || m.sc7852().halted());
+
+        m.setOnKeyPressed(true);
+        m.runCycles(hz / 4);
+        m.setOnKeyPressed(false);
+        m.runCycles(hz * 3);
+        CHECK(litPixels(m) > 0);
+        CHECK(m.sc7852Owns());
+    }
+}
 
 int run_pc1600_machine_tests() {
     test_simple_reset_keeps_internal_ram_all_reset_wipes_it();
@@ -538,8 +737,14 @@ int run_pc1600_machine_tests() {
     test_half_second_signal_toggles_off_the_05s_accumulator();
     test_runcycles_budget_is_tstates_in_either_bus_mode();
     test_on_key_wakes_a_halted_sc7852();
+    test_int_line_follows_cause_and_mask();
+    test_lh5803_handback_is_a_cause_bit3_interrupt();
+    test_on_press_before_handoff_halt_still_wakes();
+    test_on_press_while_running_does_not_wake_a_later_park();
+    test_real_rom_off_stays_off_and_on_restarts();
     test_on_key_wakes_a_halted_lh5803_owning_the_bus();
     test_rtc_advances_while_lh5803_owns_the_bus();
+    test_seed_clock_millisecond_aligns_next_tick();
 
     std::printf("pc1600_machine_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

@@ -21,9 +21,11 @@ fi
 
 cd "$SRC"
 
-# Match Calc-U-1600's minimum deployment target so `ld` doesn't warn about
-# object files built for a newer macOS than the app links against.
-export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-15.6}
+# Match Calc-U-1600's minimum deployment target (Qt6/CMakeLists.txt's
+# CMAKE_OSX_DEPLOYMENT_TARGET) so `ld` doesn't warn about object files built
+# for a newer macOS than the app links against. SharpDataExchange pins the
+# same value in its .cargo/config.toml; this export just makes it explicit.
+export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-15.8}
 
 # Library only, without the `serial` transport (the default features pull it
 # in for the `sde` binary) -- same serial-free build the release archives

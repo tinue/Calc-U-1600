@@ -50,12 +50,12 @@ still worth understanding. They say what the code actually does now.
 ### SC7852 / Z-80 — `Core/CPU/SC7852/`
 *(PC-1600 main CPU.)*
 
-- **Wait states not modelled** — every instruction uses nominal Zilog
-  T-state counts. The TRM's "1 WAIT automatically inserted in the machine
-  cycle" note has unresolved scope (every M-cycle vs. I/O-cycle only) and
-  is ignored; this matches the documentation's own stated fallback and the
-  reference emulator's choice. `SC7852.cpp:461` (`TODO(wait-state-scope)`),
-  `SC7852.hpp:46`
+- **Wait states: M1 only** — the TRM's "1 WAIT automatically inserted in
+  the machine cycle" is modelled as one wait per M1 (opcode fetch /
+  interrupt acknowledge), calibrated against real-hardware BEEP pitch (A=200
+  and A=50 both within 0.22%). Whether I/O cycles get an extra wait on top
+  of the Z-80's own is not modelled; the BEEP loop's 4 port accesses per
+  period can't resolve it (<0.05%). `SC7852.hpp` (`kM1WaitStates`)
 - **MEMPTR register not modelled** — the undocumented X/Y flag bits after
   `BIT n,(HL)` / `(IX+d)` / `(IY+d)` are approximated from the operand
   byte instead of the internal MEMPTR. `SC7852.cpp:721`, `SC7852.cpp:1054`
@@ -85,7 +85,7 @@ still worth understanding. They say what the code actually does now.
 
 ## PC-1600 serial / UART (TC8576F)
 
-`Core/PC1600/TC8576F.*`, `SerialLink.hpp`, `PtySerialLink.*`
+`Core/PC1600/TC8576F.*`, `Core/Serial/SerialLink.hpp`, `Core/Serial/PtySerialLink.*`
 
 - **RS-232C / SIO connector mux not modelled** — "RS-232C and SIO share
   the one channel and cannot be used at once… the RS-232C/SIO connector
@@ -107,7 +107,8 @@ still worth understanding. They say what the code actually does now.
   handshakes the ROM runs before any medium access (RAM disk, power-off
   clock save) and keeps headless probes deterministic. `TC8576F.hpp:44`
 - **Parallel (Centronics) printer port**: FAULT / SLCT / PE / PRIME /
-  XBUSY / IntF status lines have no model; the low printer-status bits are
+  IntF status lines have no model (XBUSY, bit 6, carries the sub-CPU's
+  still-processing state; see `PC1600SubCpu::kResponseMicros`); the low printer-status bits are
   reused to surface connector inputs. `TC8576F.cpp:78`
 - **Raw PTY carries no RS-232C modem lines** — `PtySerialLink::getStatus()`
   reports CTS and DSR permanently asserted; DCD approximates "a peer
@@ -276,10 +277,12 @@ still worth understanding. They say what the code actually does now.
 
 `Core/PC1600/PC1600Display.*`, `PC1600StatusLine.hpp`
 
-- **No controller-busy timing model** — a status/instruction read always
-  reports the busy bit (bit 7) clear. This is load-bearing, not cosmetic:
-  the boot ROM busy-waits on exactly this read before drawing.
-  `PC1600Display.cpp:37`
+- **Controller busy time is fitted, not from a datasheet**: busy (status
+  bit 7) holds until the 4th edge of the 216.7 kHz LCD clock after each
+  write. That was chosen to match a real unit's scrolling-PRINT benchmark
+  (see `PC1600Display.cpp` readIO). Status bit 5 (display on/off, Baum
+  Systemhandbuch Anhang A) still always reads 0 ("on").
+  `PC1600Display.hpp` (kBusyClocks)
 - **`displaySL` (set-display-start-line, `0xC0-0xFF`) rotating-window
   offset**: modelled on the read side for the graphics-area scroll (it was
   found to be necessary), but the right 28-dot block's *further* rotation
@@ -308,9 +311,10 @@ still worth understanding. They say what the code actually does now.
 
 - **LH5811 I/O controller: only the registers a stock PC-1500 needs are
   modelled** (DDA/OPA, DDB/OPB, and the uPD1990AC RTC bit-banged via
-  OPC/PC0-PC5). **Serial transfer and the buzzer (OPC/PC6) are out of
-  scope** — no stock boot-to-idle or BASIC-editing behaviour depends on
-  them. `PC1500Memory.hpp:52`
+  OPC/PC0-PC5), plus the buzzer on OPC/PC6. **Serial transfer and the F
+  register's modulated SDO output are out of scope**: no stock
+  boot-to-idle or BASIC-editing behaviour depends on them. The CE-150 tape
+  code would need them (F = 63H: 2539 / 1270 Hz). `PC1500Memory.hpp:52`
 - **F / G / MSK registers and the unused register-select codes**: stored
   as plain read/write bytes defaulting to `0x00`. This does *not* model
   serial transfer or MSK's real interrupt-masking effect — but a real ROM
@@ -391,13 +395,22 @@ still worth understanding. They say what the code actually does now.
 - **CE-1600P Ni-Cd pack / battery voltage** — no model (see PC-1600
   sub-CPU section above). The plotter mechanism and its floppy drive are
   now modeled; see the next section.
-- **CE-150 / CE-158 ROM windows** (`0x8000-0xBFFF` on the LH5803 side,
-  `Y2` on the PC-1500 side) — open bus, no module. `PC1500Memory.hpp:35`,
-  `LH5803SharedMemory.hpp:30`
+- **CE-158 on the PC-1600: input through `SETDEV KI` / `INPUT`** — in
+  MODE 1 the CE-158 prints (parallel `OPN "LPRT"`, serial `SETDEV PO`)
+  and `RINKEY$` reads its UART, but `SETDEV KI` + `INPUT` never reaches
+  the CE-158's ROM (no UART access at all; INPUT takes the keyboard). The
+  PC-1600 has its own native `SETDEV` (KI = F14EH b0), which likely takes
+  the command; not yet checked against real hardware.
+  `Core/Connector/Ce158Card.hpp`, `LH5803SharedMemory.cpp`
 - **Cassette (CMT)** — connector pins exist, no FSK / audio path.
   `SystemBus.hpp:27`
-- **Buzzer / piezo / sound** — out of scope on both machines.
-  `PC1500Memory.hpp:52`
+- **Buzzer: partial.** Modelled: the PC-1500 OPC/PC6 line, the PC-1600 OPC
+  b7/b6 line, and the PC-1600 F-register (17H) modulator in its idle case
+  (SDO = FX, phi = 1.3 MHz / 4, measured). The PC-1600 also has an
+  acoustic transducer model. Not modelled: serial transmit through
+  L (16H), so SXO never leaves mark and FY is never heard; the G register
+  (19H); and the buzzer's second input F from the sub-CPU (key click,
+  alarm). `PiezoSampler.hpp`, `PC1600Memory.hpp` (m_fReg)
 
 ## CE-1600P plotter / CE-1600F floppy
 
@@ -428,7 +441,7 @@ still worth understanding. They say what the code actually does now.
 
 ## Preset loader
 
-`Core/PC1500/PresetFile.cpp`, `Core/PC1600/PC1600PresetLoader.cpp`
+`Core/Preset/PresetFile.cpp`, `Core/PC1600/PC1600PresetLoader.cpp`
 
 - **`check:` steps** not yet supported. `PresetFile.cpp:178`
 - **`format: basic-tokenized`** not yet supported. `PresetFile.cpp:363`

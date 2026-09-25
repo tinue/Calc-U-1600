@@ -2,8 +2,7 @@
 #
 # Runs a memtest over all banks, 2 passes.
 
-model: PC-1500A
-firmware: A04
+model: PC-1500A:A04
 
 memory-expansion:
   - modulespec: CE-1638

@@ -58,6 +58,19 @@ void PC1600SubCpu::command(uint8_t cmd) {
         case 0x0: m_sp = 0; [[fallthrough]];
         case 0x7: push(static_cast<uint8_t>(0x0F - value)); return;
 
+        // 4FH / 4EH: the boot ROM's sub-CPU capability probe, timer IOCS
+        // 25H (romVI-6 A951). It sends B0H then B1H (complemented on the
+        // wire) and expects AAH then 55H. A sub-CPU that answers both gets
+        // F0B8H bit 0 set, and from then on command bytes go straight out.
+        // Otherwise the ROM (A9FB) holds every byte until the next 64 Hz
+        // PB5 transition. That costs up to 7.8 ms per byte, and inside the
+        // 0.5 s ISR (two bytes, ~16 ms) it swallows the PB5 edges the BEEP
+        // repeat loop counts. A real unit's BEEP repeats never slip a tick,
+        // so it takes the fast path.
+        case 0x4:
+            if (value == 0x0F) { m_answer = 0xAA; m_answerPending = true; }
+            else if (value == 0x0E) { m_answer = 0x55; m_answerPending = true; }
+            return;
         case 0x5: request(value); return;
         case 0x6: action(value);  return;
 

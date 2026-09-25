@@ -3,11 +3,8 @@
 #include <QIcon>
 #include <QWidget>
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <vector>
-
-#include "TraceTypes.hpp"
 
 class QPlainTextEdit;
 class QPushButton;
@@ -15,7 +12,6 @@ class QToolButton;
 class QLabel;
 class MachineController;
 class MemoryModuleManager;
-class PC1500TraceFile;
 
 // Docked debug/trace console: a header, a scrolling monospaced output log,
 // and a two-row button bar (Pointers / Dump Mem / Dump Card YAML / Clear,
@@ -38,8 +34,7 @@ public:
     void setModuleManager(MemoryModuleManager* mgr) { m_moduleManager = mgr; }
 
     // Called once per ~60Hz frame tick from MainWindow::onFrameTick() --
-    // drains the CPU trace ring(s) into the open trace file while TRACE is
-    // enabled.
+    // checks the trace file against its size cap while TRACE is enabled.
     void onFrameTick();
 
     // Text selected (with the mouse) in the output area, "" if none.
@@ -83,18 +78,15 @@ private:
     void refreshDebugDisplay();
 
     // ── TRACE ─────────────────────────────────────────────────────────
+    // The capture itself runs inside Core (MachineController::beginTrace());
+    // this panel only starts/stops it and enforces the
+    // AppSettings::traceMaxFileSizeMB() cap by watching the file's size.
     bool m_traceEnabled = false;
-    std::unique_ptr<PC1500TraceFile> m_traceFile;
-    // Running byte count for the AppSettings::traceMaxFileSizeMB() cap --
-    // PC1500TraceFile doesn't expose its own byte offset (it's a headless-
-    // capture writer with no size-limit concept), so this tracks it here
-    // record-by-record instead.
-    std::uint64_t m_traceBytesWritten = 0;
+    QString m_tracePath;
     std::uint64_t m_traceMaxBytes = 0;
     void setTraceEnabled(bool enabled);
+    void onTraceEndedByRebuild();
     void updateTraceButtonAppearance();
-    void drainTracePC1500();
-    void drainTracePC1600();
     void checkTraceSizeLimit();
 
     // ── LOG (cosmetic placeholder -- Core has no log statements yet) ─────

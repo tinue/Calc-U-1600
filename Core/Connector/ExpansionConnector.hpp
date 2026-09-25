@@ -21,8 +21,11 @@ class ExpansionConnector {
 public:
     explicit ExpansionConnector(PC1500Variant variant) : m_variant(variant) {}
 
-    void attach(ExpansionCard* card) { m_card = card; }
-    void detach() { m_card = nullptr; }
+    void attach(ExpansionCard* card) {
+        m_card = card;
+        m_inhibitCard = (card && card->mayAssertInhibit()) ? card : nullptr;
+    }
+    void detach() { m_card = m_inhibitCard = nullptr; }
     ExpansionCard* attachedCard() const { return m_card; }
 
     /// Consulted by PC1500Memory only for ME0 addresses whose own decode
@@ -44,11 +47,13 @@ public:
         return m_card->respondsToWrite(pins, value);
     }
 
-    bool inhibitAsserted() const { return m_card && m_card->assertsInhibit(); }
+    // Queried on every host-ROM fetch; see ExpansionCard::mayAssertInhibit().
+    bool inhibitAsserted() const { return m_inhibitCard && m_inhibitCard->assertsInhibit(); }
 
 private:
     PC1500Variant m_variant;
     ExpansionCard* m_card = nullptr;
+    ExpansionCard* m_inhibitCard = nullptr; // m_card if it may assert INHIBIT, else null
 
     // Per-variant S-block -> physical-pin routing (Expansion-Connectors.md
     // §3.1). PC-1500: pins 16/17/18/5 carry S1/S2/S3/S4. PC-1500A: the same

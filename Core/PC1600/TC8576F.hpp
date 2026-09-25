@@ -4,7 +4,7 @@
 #include <functional>
 
 #include "PC1600SubCpu.hpp"
-#include "SerialLink.hpp"
+#include "../Serial/SerialLink.hpp"
 
 // ── PC-1600 UART: Toshiba TC8576F ────────────────────────────────────────
 //
@@ -52,18 +52,23 @@
 // hardware remain a later refinement.
 class TC8576F {
 public:
-    explicit TC8576F(PC1600SubCpu& sub) : m_sub(sub) { updateCharTStates(); }
+    explicit TC8576F(PC1600SubCpu& sub) : m_sub(sub) { updateCharTStates(); refreshInterruptOutput(); }
 
-    /// Wire the UART's interrupt line (OR of RxRDY/TxRDY/PRRDY/PTRDY ->
-    /// SC-7852 INT0, cause bit 0). Invoked when an *enabled* condition
-    /// becomes true. Left unset for standalone tests.
-    void setInterruptHook(std::function<void()> hook) { m_raiseInterrupt = std::move(hook); }
+    /// Wire the UART's interrupt output (SC-7852 INT0, cause bit 0). It is
+    /// a level: RxRDY while the receiver is enabled and pr[5] b7 leaves RX
+    /// interrupts on, OR TxRDY while pr[5] b1 leaves TX interrupts on
+    /// (PRRDY/PTRDY: no Centronics device, never set). The hook is called
+    /// with the new level whenever it changes. Left unset for standalone
+    /// tests.
+    void setInterruptHook(std::function<void(bool)> hook) { m_intHook = std::move(hook); }
+    bool interruptOutput() const { return m_intOut; }
 
     /// Attach / detach the RS-232C peer. Non-owning -- the host owns the
     /// object and must outlive the chip (or detach first). `nullptr`
-    /// restores the standalone no-peer behaviour. A chip reset does NOT
-    /// clear this.
-    void setSerialLink(SerialLink* link) { m_link = link; }
+    /// restores the standalone no-peer behaviour: queued bytes are dropped,
+    /// the transmitter reports ready/empty again and the modem lines fall
+    /// back to their no-peer levels. A chip reset does NOT clear this.
+    void setSerialLink(SerialLink* link);
     SerialLink* serialLink() const { return m_link; }
 
     /// A read / write of one of ports 20H-27H. `reg` is port & 3.
@@ -83,6 +88,12 @@ public:
     uint8_t parameter(uint8_t i) const { return m_pr[i & 0x07]; }
 
 private:
+    uint8_t readRegisterImpl(uint8_t reg);
+    void    writeRegisterImpl(uint8_t reg, uint8_t value);
+    void    tickImpl(int tstates);
+    void    resetImpl();
+    // No-peer serial defaults: empty transmitter, CTS/DCD asserted.
+    void    resetSerialState();
     void writeCommandRegister(uint8_t cmd); // 23H write
     void writeParameter(uint8_t value);     // 22H write
     void loadSerialMode();                  // pr[5] -> SO/CL/PEN/...
@@ -110,7 +121,11 @@ private:
     long long charTStates() const { return m_charTStates; }
 
     PC1600SubCpu& m_sub;
-    std::function<void()> m_raiseInterrupt;
+    std::function<void(bool)> m_intHook;
+    bool m_intOut{false};
+    /// Recomputes the interrupt output and reports a change to m_intHook.
+    /// Called after every register access, tick() and reset().
+    void refreshInterruptOutput();
 
     // ── Serial peer ─────────────────────────────────────────────────
     SerialLink* m_link{nullptr};          // non-owning; nullptr => no peer
@@ -136,7 +151,6 @@ private:
     bool m_dtr{false};
     bool m_rxEnable{false};
     bool m_sendBreak{false};
-    bool m_errorReset{false};
     bool m_rts{false};
 
     // Parallel command register (23H write, b7:b6=10) decoded bits.

@@ -30,19 +30,17 @@ constexpr uint32_t kBaudRefHz = 76800;
 constexpr uint32_t kTStateHz  = PC1600Machine::kTStateHz;
 } // namespace
 
-void TC8576F::reset() {
+void TC8576F::resetImpl() {
     for (auto& b : m_pr) b = 0;
     m_par = 0;
-    m_txEnable = m_dtr = m_rxEnable = m_sendBreak = m_errorReset = m_rts = false;
+    m_txEnable = m_dtr = m_rxEnable = m_sendBreak = m_rts = false;
     m_intMask1 = m_intMask2 = false;
     m_txIntMask = m_rxIntMask = m_errIntMask = false;
     m_parityEnable = m_parityEven = false;
     m_charLength = 8;
 
-    m_dsr = m_rxBreak = m_framingError = m_overrunError = m_parityError = false;
-    m_txEmpty = true;
+    m_rxBreak = m_framingError = m_overrunError = m_parityError = false;
     m_rxReady = false;
-    m_txReady = true;
     m_rxData = 0xFF;
     m_txData = 0;
     m_parallelIn = 0xFF;
@@ -50,11 +48,27 @@ void TC8576F::reset() {
 
     // The peer attachment (m_link) is host-owned and survives a chip
     // reset; only the transient serial state clears here.
+    resetSerialState();
+    updateCharTStates();
+}
+
+void TC8576F::resetSerialState() {
     m_txFifo.clear();
     m_serialAccum = 0;
+    m_txEmpty = true;
+    m_txReady = true;
     m_cts = m_dcd = true;
+    m_dsr = false;
     m_ci = false;
-    updateCharTStates();
+}
+
+void TC8576F::setSerialLink(SerialLink* link) {
+    m_link = link;
+    if (link) return;
+    // tick() does nothing without a peer, so a non-empty FIFO would hold
+    // TxRDY low for good and hang a transmit poll.
+    resetSerialState();
+    refreshInterruptOutput();
 }
 
 uint8_t TC8576F::ssr() const {
@@ -76,7 +90,10 @@ uint8_t TC8576F::psr() const {
     // Busy across a command, back to Ready when the answer is latched) is
     // what a readiness poll between OUT (21H) and IN (33H) watches.
     // TODO(trace): confirm bit position + polarity against romIV-6 A8F0.
-    if (m_sub.busy()) v |= kPsrBUSY;
+    // Bit 6: the sub-CPU is still processing the last command byte. The ROM
+    // waits for it to clear before reading the answer (P2-B6 A98C). It is the
+    // only reader of this bit; see PC1600SubCpu::kResponseMicros.
+    if (m_sub.busy()) v |= kPsrBUSY | kPsrXBUSY;
     // FAULT/SLCT/PE/P5V/PRIME/XBUSY/IntF: parallel-printer status, no
     // Centronics device modelled -- all clear.
     //
@@ -91,11 +108,11 @@ uint8_t TC8576F::psr() const {
         if (m_dcd) v |= kPsrSLCT;  // b1 = CD  (carrier detect)
         if (m_dsr) v |= kPsrPE;    // b2 = DS  (data set ready)
     }
-    (void)kPsrP5V; (void)kPsrPRIME; (void)kPsrXBUSY; (void)kPsrIntF;
+    (void)kPsrP5V; (void)kPsrPRIME; (void)kPsrIntF;
     return v;
 }
 
-uint8_t TC8576F::readRegister(uint8_t reg) {
+uint8_t TC8576F::readRegisterImpl(uint8_t reg) {
     switch (reg & 0x03) {
         case 0x00: // 20H -- serial receive data
             m_rxReady = false;
@@ -110,7 +127,7 @@ uint8_t TC8576F::readRegister(uint8_t reg) {
     }
 }
 
-void TC8576F::writeRegister(uint8_t reg, uint8_t value) {
+void TC8576F::writeRegisterImpl(uint8_t reg, uint8_t value) {
     switch (reg & 0x03) {
         case 0x00: // 20H -- serial transmit data
             m_txData = value;
@@ -119,7 +136,6 @@ void TC8576F::writeRegister(uint8_t reg, uint8_t value) {
                 // so a polling transmit loop makes progress.
                 m_txReady = true;
                 m_txEmpty = true;
-                if (m_raiseInterrupt && !m_txIntMask) m_raiseInterrupt();
                 return;
             }
             // Peer attached: queue the byte for tick() to shift out at the
@@ -185,7 +201,9 @@ void TC8576F::writeCommandRegister(uint8_t cmd) {
         m_dtr        = cmd & 0x02;
         m_rxEnable   = cmd & 0x04;
         m_sendBreak  = cmd & 0x08;
-        m_errorReset = cmd & 0x10;
+        // b4 ER: a one-shot command, not a mode -- clears the SSR error
+        // flags (PERR/OE/FE), as on the 8251 the command word follows.
+        if (cmd & 0x10) m_parityError = m_overrunError = m_framingError = false;
         m_rts        = cmd & 0x20;
         if (m_link) m_link->setControl(m_dtr, m_rts);
     }
@@ -211,7 +229,7 @@ void TC8576F::updateCharTStates(WordFormat wf) {
     m_charTStates = t < 1 ? 1 : t;
 }
 
-void TC8576F::tick(int tstates) {
+void TC8576F::tickImpl(int tstates) {
     // Standalone (no peer): the sub-CPU handshake timeline lives in
     // PC1600SubCpu (busy()/answerReady()), advanced separately by
     // PC1600Machine::step(). Nothing in the UART itself is time-driven
@@ -247,7 +265,6 @@ void TC8576F::tick(int tstates) {
                 m_rxData = b;
                 m_rxReady = true;
             }
-            if (m_raiseInterrupt && m_rxEnable && !m_rxIntMask) m_raiseInterrupt();
         }
 
         // TX: shift one queued byte out while the transmitter is enabled
@@ -258,10 +275,37 @@ void TC8576F::tick(int tstates) {
             if (m_txFifo.empty()) {
                 m_txEmpty = true;
                 m_txReady = true;
-                if (m_raiseInterrupt && !m_txIntMask) m_raiseInterrupt();
             } else {
                 m_txReady = m_txFifo.size() < kTxFifoMax;
             }
         }
     }
+}
+
+uint8_t TC8576F::readRegister(uint8_t reg) {
+    const uint8_t v = readRegisterImpl(reg);
+    refreshInterruptOutput();
+    return v;
+}
+
+void TC8576F::writeRegister(uint8_t reg, uint8_t value) {
+    writeRegisterImpl(reg, value);
+    refreshInterruptOutput();
+}
+
+void TC8576F::tick(int tstates) {
+    tickImpl(tstates);
+    refreshInterruptOutput();
+}
+
+void TC8576F::reset() {
+    resetImpl();
+    refreshInterruptOutput();
+}
+
+void TC8576F::refreshInterruptOutput() {
+    const bool out = (m_rxReady && m_rxEnable && !m_rxIntMask) || (m_txReady && !m_txIntMask);
+    if (out == m_intOut) return;
+    m_intOut = out;
+    if (m_intHook) m_intHook(out);
 }
