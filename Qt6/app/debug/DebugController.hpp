@@ -68,6 +68,10 @@ public:
         m_presetLoader = std::move(loader);
     }
     bool loadPreset(const QString& path, QString* error);
+    /// A clean machine for a program load: `preset` if given, else the
+    /// model's default preset (Settings), else an All Reset and boot.
+    /// `how` says which it was.
+    bool cleanStart(const QString& preset, QString* how, QString* error);
 
     /// What to do once a program is loaded: nothing, type its CALL, or type
     /// its CALL and stop at its entry.
@@ -109,7 +113,6 @@ private:
     void drainQueue();
     bool m_busy = false;     // handling a message (which may itself load)
     int m_appBusy = 0;       // synchronous loads in progress
-    bool m_enterAfterPaste = false; // Build & Load typed a CALL: press ENTER once it's typed
     std::vector<QJsonObject> m_queued;
     std::function<bool(const QString&, QString*)> m_presetLoader;
 };

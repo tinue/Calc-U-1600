@@ -194,6 +194,10 @@ public:
     // in progress. Driven from advance(), so it pauses/turbos with the
     // emulation. Any machine swap or reset cancels it.
     void pasteText(const std::string& text);
+    // The inbound counterpart for tools (the debugger's auto-start): types
+    // `line` at the same cadence, then presses ENTER -- it is meant to run
+    // something. Both models. Shares the paste queue.
+    void typeCommand(const std::string& line);
     bool pasteActive() const { return m_paste.active(); }
     // Drops the rest of the paste, releasing a key it holds down.
     void cancelPaste();

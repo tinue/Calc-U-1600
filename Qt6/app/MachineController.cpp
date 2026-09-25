@@ -330,6 +330,15 @@ void MachineController::pasteText(const std::string& text) {
     }
 }
 
+void MachineController::typeCommand(const std::string& line) {
+    if (!m_pc1500 && !m_pc1600) return;
+    if (!m_paste.active()) m_pasteFrameCycles = 0;
+    std::vector<PasteStep> steps = buildPasteSteps(line, m_pc1600 ? pc1600ResolveTypedChar : pc1500ResolveTypedChar);
+    steps.push_back(PasteStep{"enter", false});
+    m_paste.setPacing(m_pc1600 ? pc1600PastePacing() : pc1500PastePacing());
+    m_paste.append(steps);
+}
+
 void MachineController::cancelPaste() {
     m_paste.cancel([this](const std::string& key) { releaseKey(key); });
 }

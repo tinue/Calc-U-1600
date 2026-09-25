@@ -136,10 +136,6 @@ void DebugController::runSlice(std::uint64_t cycles) {
         m_run->resume();
         if (m_session) m_session->onMachineReplaced();
     }
-    if (m_enterAfterPaste && !m_machines->pasteActive()) {
-        m_enterAfterPaste = false;
-        m_machines->enqueueKey("enter");
-    }
     // Breakpoints and watches act only while the debugger runs the machine;
     // a boot or load in between must not park on one.
     m_target->arm(true);
@@ -177,6 +173,20 @@ bool DebugController::loadPreset(const QString& path, QString* error) {
     return ok;
 }
 
+bool DebugController::cleanStart(const QString& preset, QString* how, QString* error) {
+    QString path = preset;
+    if (path.isEmpty()) path = AppSettings::defaultPresetPath(modelSettingsKey(m_machines->currentModel()));
+    if (!path.isEmpty()) {
+        *how = tr("preset %1").arg(path);
+        return loadPreset(path, error);
+    }
+    // No preset: the machine as Reset All leaves it, booted to the prompt.
+    *how = tr("All Reset (no default preset for this model)");
+    m_machines->resetToPrompt(/*allReset=*/true);
+    if (m_sessionActive && !m_target) createTarget();
+    return true;
+}
+
 debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request, After after) {
     debug::LoadResult r;
     if (!m_target || !m_run) {
@@ -193,10 +203,7 @@ debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request
     if (after == After::StopOnEntry) m_breakpoints.setEntry(request.thread, r.entry);
     m_breakpoints.apply(*m_target);
     m_target->arm(false);
-    // The paste types the command but never presses ENTER; runSlice() does
-    // that once the typing is done.
-    m_machines->pasteText(r.callCommand);
-    m_enterAfterPaste = true;
+    m_machines->typeCommand(r.callCommand); // typed and entered as the machine runs
     m_run->resume();
     return r;
 }
@@ -207,7 +214,6 @@ bool DebugController::resetMachine(bool allReset, bool stop, QString* error) {
         return false;
     }
     m_machines->cancelPaste();
-    m_enterAfterPaste = false;
     m_target->reset(allReset);
     if (stop) m_run->pause(debug::DebugEvent::Entry);
     else m_run->resume();

@@ -240,6 +240,17 @@ bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* e
     const DebugController::After after = afterText == QLatin1String("call")          ? DebugController::After::Call
                                          : afterText == QLatin1String("stopOnEntry") ? DebugController::After::StopOnEntry
                                                                                      : DebugController::After::None;
+    // A clean machine first -- the attach configuration's preset, else the
+    // model's default preset -- unless the load says otherwise.
+    if (d.value(QStringLiteral("cleanStart")).toBool(true)) {
+        QString how;
+        if (!m_controller->cleanStart(m_attachConfig.value(QStringLiteral("preset")).toString(), &how, error)) {
+            *error = QStringLiteral("Clean start failed: %1").arg(*error);
+            return false;
+        }
+        output(QStringLiteral("Clean start: %1").arg(how));
+        if (!ready(error)) return false;
+    }
     const debug::LoadResult r = m_controller->loadProgram(req, after);
     if (!r.ok) {
         *error = QStringLiteral("Load failed: %1").arg(QString::fromStdString(r.error));
@@ -262,9 +273,11 @@ bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* e
 }
 
 bool DapSession::prepare(const QJsonObject& args, QString* error) {
-    // 1. A preset rebuilds the machine.
+    // 1. A preset rebuilds the machine. With a program, the program's clean
+    // start (step 4) applies it instead.
     const QString preset = args.value(QStringLiteral("preset")).toString();
-    if (!preset.isEmpty()) {
+    const QJsonObject program = args.value(QStringLiteral("program")).toObject();
+    if (!preset.isEmpty() && program.isEmpty()) {
         QString err;
         if (!m_controller->loadPreset(preset, &err)) {
             *error = QStringLiteral("Preset failed: %1").arg(err);
@@ -320,7 +333,6 @@ bool DapSession::prepare(const QJsonObject& args, QString* error) {
                        .arg(b.checked),
                    QStringLiteral("important"));
     // 4. The program, bound to its own listing.
-    const QJsonObject program = args.value(QStringLiteral("program")).toObject();
     if (!program.isEmpty() && !loadProgram(program, nullptr, error)) return false;
     return true;
 }
