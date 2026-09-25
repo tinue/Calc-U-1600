@@ -173,48 +173,33 @@ obligations.
 
 ## Code cleanup backlog
 
-Smaller, contained refactors — take when the relevant area is next
-touched, not proactively:
+Refactors and internal costs, not user-facing bugs. Take them when the
+area is next touched; entries marked *(behaviour/timing)* change what the
+emulator does and need a deliberate check.
 
-- `PC1600LhsWindow`/`pc1600LhsWindow()`/`PC1600Bank::lhsRemapRow()` have
-  no remaining callers outside their own test — either delete all three
-  plus the test, or demote the remap table to a documentation comment.
-- Converge `PC1500Memory`'s connector ownership (raw pointer, injected by
-  `PC1500Machine`) onto `PC1600Memory`'s pattern (owns its connectors by
-  value) next time PC-1500 connector wiring is touched.
-- `MemorySlotConnector` and `ExpansionConnector` share ~25 lines of
-  copy-pasted dispatch shell; a small base class holding the dispatch
-  would remove the duplication.
+- **Picker and peripheral-button plumbing is written twice.**
+  - `CE1600PRomVersion` clones `PC1600RomVersion`, and
+    `BundledRoms::isCE1600PRomVersion` == `isPC1600RomVersion`.
+  - The enum↔string mapping is inlined in `MachineController.cpp`
+    (`versionName` lambda, `loadPC1600RomSet`) and `PresetController.cpp`.
+  - The old-ROM fallback `QMessageBox` is copied.
+  - MainWindow's ROM menu builder/sync and ControlBar's combo are
+    copy-pasted, and the four `apply*Selection` handlers each carry an
+    "already checked" guard (dff5d13).
+  - `ControlBar::setCe150State`/`setCe158State`, and
+    `MachineController::serialLinkStatus`/`ce158SerialLinkStatus`, are
+    pairs.
 
-### From the 0.5.0 `/simplify` review (skipped, 29de332)
-
-Larger or behaviour-changing items left out of the 0.5.0 cleanup commit.
-
-- **CE-1600P ROM-version plumbing clones the PC-1600 one.**
-  `CE1600PRomVersion` duplicates `PC1600RomVersion`;
-  `BundledRoms::isCE1600PRomVersion` == `isPC1600RomVersion`; enum↔
-  string mapping is inlined in `MachineController.cpp` (`versionName`
-  lambda, `loadPC1600RomSet`) and `PresetController.cpp`; the old-ROM
-  fallback `QMessageBox` is copied; MainWindow's menu builder/sync and
-  ControlBar's combo are copy-pasted. Fix: one `NewOldRom` enum with
-  to/from-string, one `warnOldRomFallback()`, one menu/combo builder
-  parameterised by label and slot.
-- **CLI helpers.** `tools/pc1600_cli.cpp` hand-rolls fopen/fwrite for
-  `--save-dir` and copies the CE-150 summary printf from
-  `pc1500_cli.cpp`; `Ce158CliPeer.hpp` reads `--ce158-rx` with an
-  fgetc loop though `readFile`/`BundledRoms::detail::readWholeFile`
-  exist. Fix: `tools/CliCommon.hpp` with `readFile`/`writeFile`/
-  `printCe150Report`.
-- **Duplicated status/state helpers.** `serialLinkStatus`/
-  `ce158SerialLinkStatus` could be one static helper over a
-  `PtySerialLink*`, and `ControlBar::setCe150State`/`setCe158State` one
-  setter parameterised by button.
-
-### From the second 0.5.0 `/simplify` pass (skipped)
-
-Found reviewing the commits after 29de332; too large or behaviour-changing
-for the cleanup commit.
-
+  Fix: one `NewOldRom` enum with to/from-string, one
+  `warnOldRomFallback()`, one menu/combo builder parameterised by label and
+  slot whose exclusive-group actions connect to `toggled(true)` (which
+  drops the guards), one peripheral-button setter, and one static status
+  helper over a `PtySerialLink*`.
+- **Connectors.** `MemorySlotConnector` and `ExpansionConnector` share ~25
+  lines of copy-pasted dispatch shell (a small base class would hold it),
+  and `PC1500Memory` holds its connector by raw pointer injected by
+  `PC1500Machine` where `PC1600Memory` owns its connectors by value.
+  Converge both while in there.
 - **Card/floppy template-vs-instance rules are written twice and re-parse
   files.** `MemoryModuleManager` (`moduleLists`, `classifySlot`,
   `templateNames`, `saveSlotAs`) and `FloppyDiskManager` (`diskLists`,
@@ -246,39 +231,40 @@ for the cleanup commit.
   `std::function<void(bool)>` hook's one subscriber ignores the bool.
   Make `interruptOutput()` a const expression and have `PC1600Memory`
   call `updateIntLine()` after UART access / tick / relink / reset.
-- **Menu re-pick guards.** dff5d13 added "already checked" guards to the
-  four `apply*Selection` handlers; connecting the exclusive-group actions
-  to `toggled(true)` instead of `triggered` removes all four.
-- **`tools/make_screenshots.sh`** copies `build_and_run.sh`'s
-  configure-and-build block; share it (`--build-only` or a sourced
-  `tools/build_app.sh`).
-- **`BreakpointSet` in shared `TraceRing.hpp`** now has one user (LH5801),
-  and nothing outside the tests sets a breakpoint (`pc1500_cli` and
-  `PC1500Machine` only poll `consumeBreakpointHit()`). Move it into
-  LH5801, or wire a real breakpoint UI/CLI flag.
-- `Ce158Card.hpp` still defaults its clock to the literal `1300000.0`;
-  take `kPC1500CpuHz` once Connector may include PC1500Clocks.hpp.
-
-Performance / behaviour items (each changes observable behaviour or
-timing — decide deliberately):
-
-- **Fitted timing constants absorbing one residual.**
-  `PC1600Display::kBusyClocks = 4` and
-  `PC1600SubCpu::kResponseMicros = 1660` were both fitted to real-unit
-  benchmarks on 2026-09-23 while the ~0.65 % BASIC-speed residual is
-  still open (see the "PC-1600 BASIC runs ~0.65% fast" known issue), so each may partly
-  compensate for it. The HD61102 datasheet bound on busy time should be
-  checked against the fitted 4 clocks; the 1.66 ms figure comes from
-  the 0.5 s ISR's commands but is applied to every sub-CPU command (key
-  scan, clock, IOCS). Chase the residual first, then re-fit once;
-  consider a per-command response time.
-- **PC-1600 `display().tick()` every instruction.** Called from both
-  CPU branches of `PC1600Machine::step()` (~303/331) just to keep
-  `m_lcdEdges` current, which is read only on LCD port 50H–5BH access.
-  Could keep a running T-state total and derive edges lazily in
-  `readIO`/`writeIO` (`total * 1300000 / 21480000`). Timing-sensitive —
-  verify with the scrolling-PRINT benchmark.
+- **Tool scripts and CLIs duplicate helpers.** `tools/pc1600_cli.cpp`
+  hand-rolls fopen/fwrite for `--save-dir` and copies the CE-150 summary
+  printf from `pc1500_cli.cpp`; `Ce158CliPeer.hpp` reads `--ce158-rx`
+  with an fgetc loop though `readFile`/`BundledRoms::detail::readWholeFile`
+  exist; `tools/make_screenshots.sh` copies `build_and_run.sh`'s
+  configure-and-build block. Fix: `tools/CliCommon.hpp` with
+  `readFile`/`writeFile`/`printCe150Report`, and a shared build step
+  (`--build-only` or a sourced `tools/build_app.sh`).
+- **Leftovers, one quick pass.**
+  - `PC1600LhsWindow`/`pc1600LhsWindow()`/`PC1600Bank::lhsRemapRow()` have
+    no callers outside their own test: delete all three plus the test, or
+    demote the remap table to a documentation comment.
+  - `BreakpointSet` in the shared `TraceRing.hpp` has one user (LH5801),
+    and nothing outside the tests sets a breakpoint (`pc1500_cli` and
+    `PC1500Machine` only poll `consumeBreakpointHit()`): move it into
+    LH5801, or wire a real breakpoint UI/CLI flag.
+  - `Ce158Card.hpp` defaults its clock to the literal `1300000.0`; take
+    `kPC1500CpuHz` once Connector may include PC1500Clocks.hpp.
+- **PC-1600 LCD / sub-CPU timing model** *(behaviour/timing)*.
+  `PC1600Display::kBusyClocks = 4` and `PC1600SubCpu::kResponseMicros =
+  1660` were both fitted to real-unit benchmarks on 2026-09-23 while the
+  ~0.65 % BASIC-speed residual is still open (see the "PC-1600 BASIC runs
+  ~0.65% fast" known issue), so each may partly compensate for it. The
+  HD61102 datasheet bound on busy time should be checked against the
+  fitted 4 clocks; the 1.66 ms figure comes from the 0.5 s ISR's commands
+  but is applied to every sub-CPU command (key scan, clock, IOCS). Chase
+  the residual first, then re-fit once; consider a per-command response
+  time. In the same pass: `display().tick()` runs every instruction
+  (`PC1600Machine::step()`) just to keep `m_lcdEdges` current, which is
+  read only on LCD port 50H–5BH access; keep a running T-state total and
+  derive edges lazily in `readIO`/`writeIO`
+  (`total * 1300000 / 21480000`). Verify both with the scrolling-PRINT
+  benchmark.
 - **CE-158 ROM reads on the PC-1500 go through the generic open-bus
-  path.** Every fetch at 0x8000–0x9FFF runs resolve → readOpenBus →
-  SystemBus decode → per-card `respondsToRead`. Option: a direct
-  per-PU/PV ROM pointer from the card.
+  path** *(timing-sensitive)*. Every fetch at 0x8000–0x9FFF runs resolve →
+  readOpenBus → SystemBus decode → per-card `respondsToRead`. Option: a
+  direct per-PU/PV ROM pointer from the card.
