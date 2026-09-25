@@ -181,6 +181,7 @@ qt_add_executable(CalcU1600Qt
   app/main.cpp
   app/MainWindow.cpp
   app/EmulationPacer.cpp
+  app/SyncOperations.cpp
   app/MachineController.cpp
   app/FaceplateWidget.cpp
   app/LcdWidget.cpp

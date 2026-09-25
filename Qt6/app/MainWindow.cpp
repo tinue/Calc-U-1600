@@ -1,4 +1,5 @@
 #include "MainWindow.hpp"
+#include "SyncOperations.hpp"
 #include "FaceplateWidget.hpp"
 #include "LcdWidget.hpp"
 #include "ControlBar.hpp"
@@ -52,12 +53,6 @@
 #include <functional>
 
 namespace {
-// runSynchronousLoad(): how often the blocked UI thread pumps its event
-// loop mid-load, and how long a load must run before the "Loading..."
-// popup appears (short loads finish without flashing it).
-constexpr int kLoadPumpIntervalMs = 30;
-constexpr int kLoadPopupDelayMs = 500;
-
 // Longest host-Shift press still counted as a tap (see m_shiftTapArmed).
 constexpr qint64 kShiftTapMaxMs = 400;
 } // namespace
@@ -149,18 +144,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         if (path.isEmpty()) return;
         AppSettings::rememberOpenFile(AppSettings::OpenFolder::Samples, path);
 
-        runSynchronousLoad(
-            tr("Load Preset"), [this, path](QString* error) { return m_presetController->loadPreset(path, error); },
-            // PresetController::armed (connected above to onPresetArmed())
-            // has already resynced the control bar/plotter/module combos
-            // once, mid-load, while the machine was still armed-but-off.
-            // Call it again now that loadPreset() has returned so a preset
-            // that failed before ever arming (bad modulespec, missing ROM,
-            // ...) -- which never fires armed() -- still gets the UI
-            // resynced to whatever's actually attached;
-            // resetBareForPresetPC1600/1500() already replaced the
-            // underlying machine either way.
-            [this] { onPresetArmed(); });
+        m_sync->loadPreset(path);
     };
     // Menu actions built in buildMenuBar() -- see its own doc comment.
     connect(m_openPresetAction, &QAction::triggered, this, openPresetDialog);
@@ -177,7 +161,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         if (path.isEmpty()) return;
         AppSettings::rememberOpenFile(AppSettings::OpenFolder::Basic, path);
 
-        runSynchronousLoad(tr("Load BASIC Program"), [this, path](QString* error) {
+        m_sync->run(tr("Load BASIC Program"), [this, path](QString* error) {
             return m_presetController->loadBasicProgramLive(path, error);
         });
     });
@@ -213,7 +197,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_plotterController->setPowerCycleRunner([this](const std::function<void()>& change) {
         // Flat out, like Reset: the pin header's power-on rotation isn't worth
         // watching, and the clock is re-injected afterwards.
-        runSynchronousLoad(tr("Plotter"), [this, &change](QString* error) {
+        m_sync->run(tr("Plotter"), [this, &change](QString* error) {
             return m_presetController->powerCycleLive(change, error);
         });
     });
@@ -257,15 +241,23 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         setWindowTitle(paused ? tr("Calc-U-1600 — Paused (debugger)") : tr("Calc-U-1600"));
     });
 
-    // A debugger's attach `preset:` loads the way File > Load Preset does.
-    m_controller->debugController()->setPresetLoader([this](const QString& path, QString* error) {
-        return runSynchronousLoad(
-            tr("Load Preset"), [this, path](QString* loadError) { return m_presetController->loadPreset(path, loadError); },
-            [this] { onPresetArmed(); }, error);
-    });
-
     m_audio = new AudioOutput(this);
     m_pacer = new EmulationPacer(m_controller.get(), m_audio, [this] { refreshViewsAfterAdvance(); }, this);
+    m_sync = new SyncOperations(
+        this, m_controller.get(), m_presetController.get(), m_pacer, m_moduleManager.get(), m_floppyManager.get(),
+        [this] {
+            m_faceplate->lcdWidget()->setFrame(m_controller->currentDisplay());
+            m_faceplate->lcdWidget()->update();
+        },
+        this);
+    // PresetController::armed (connected to onPresetArmed()) resyncs the
+    // control bar/plotter/module combos once, mid-load, while the machine
+    // is still armed-but-off. Again after the load, so a preset that failed
+    // before ever arming (bad modulespec, missing ROM, ...) still gets the
+    // UI resynced to whatever's actually attached.
+    m_sync->setPresetResync([this] { onPresetArmed(); });
+    // The debugger's clean starts and loads go through the same service.
+    m_controller->debugController()->setSyncOperations(m_sync);
 
     // MachineController's constructor already booted whatever model the
     // "Startup device" setting picked (see AppSettings::startupModelPreference()),
@@ -328,72 +320,9 @@ void MainWindow::syncControlBarForModel() {
     m_rom1600MenuAction->setVisible(isPC1600);
 }
 
-bool MainWindow::runSynchronousLoad(const QString& title, const std::function<bool(QString*)>& loadFn,
-                                    const std::function<void()>& afterLoad, QString* error) {
-    // Stop the frame timer for the (possibly multi-second, synchronous)
-    // duration of the load -- see PresetController's own doc comment for
-    // why: nothing else may drive the machine while a preset/BASIC-program
-    // loader is mid-script.
-    m_pacer->suspend();
-    m_controller->debugController()->setAppBusy(true); // a debugger's requests wait for the load
-    m_moduleManager->flushPendingPersist();
-    m_floppyManager->flushPendingPersist();
-    setCursor(Qt::WaitCursor);
-    m_loading = true;
+void MainWindow::resetMachine(bool allReset) { m_sync->resetToPrompt(allReset); }
 
-    // The load itself blocks this thread, so pump the event loop from the
-    // machine's yield hook (see PresetController::setYieldHook()): keeps the
-    // window painting (no beachball) and, once the load has run long enough
-    // to be noticeable, shows a "Loading..." popup. User input stays
-    // excluded -- nothing may touch the machine until the load returns.
-    QElapsedTimer sinceStart;
-    QElapsedTimer sincePump;
-    sinceStart.start();
-    sincePump.start();
-    std::unique_ptr<QProgressDialog> popup;
-    m_presetController->setYieldHook([&] {
-        if (sincePump.elapsed() < kLoadPumpIntervalMs) return;
-        sincePump.restart();
-        if (!popup && sinceStart.elapsed() >= kLoadPopupDelayMs) {
-            popup = std::make_unique<QProgressDialog>(tr("Loading…"), QString(), 0, 0, this);
-            popup->setWindowTitle(title);
-            popup->setWindowModality(Qt::WindowModal);
-            popup->setMinimumDuration(0);
-            popup->show();
-        }
-        // Let the LCD follow along too (the frame timer that normally
-        // refreshes it is stopped for the load).
-        m_faceplate->lcdWidget()->setFrame(m_controller->currentDisplay());
-        m_faceplate->lcdWidget()->update();
-        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
-    });
-
-    QString loadError;
-    const bool ok = loadFn(&loadError);
-    m_loading = false;
-    m_presetController->setYieldHook({});
-    popup.reset();
-    unsetCursor();
-    if (afterLoad) afterLoad();
-    // The load ran the machine flat out -- whatever it beeped is stale.
-    m_controller->discardAudio();
-    m_pacer->resume();
-    m_controller->debugController()->setAppBusy(false);
-
-    if (!ok) {
-        if (error) *error = loadError;
-        else QMessageBox::warning(this, title, loadError);
-    }
-    return ok;
-}
-
-void MainWindow::resetMachine(bool allReset) {
-    // Boot flat out to the prompt (incl. a plotter's power-on init) instead
-    // of watching it in real time; the clock is set from the host after.
-    runSynchronousLoad(allReset ? tr("Reset All") : tr("Reset"), [this, allReset](QString* error) {
-        return m_presetController->resetLive(allReset, error);
-    });
-}
+bool MainWindow::isLoading() const { return m_sync && m_sync->busy(); }
 
 void MainWindow::loadMachineCode() {
     const QString title = tr("Load Machine Code");
@@ -437,7 +366,7 @@ void MainWindow::loadMachineCode() {
     request.slot = static_cast<int>(slot);
 
     bool loaded = false;
-    runSynchronousLoad(title, [this, &request, &loaded](QString* error) {
+    m_sync->run(title, [this, &request, &loaded](QString* error) {
         loaded = m_presetController->loadMachineCodeLive(request, error);
         return loaded;
     });
@@ -524,9 +453,10 @@ void MainWindow::onPresetArmed() {
     // *request* a repaint (QWidget::update(), queued); repaint() forces an
     // immediate, synchronous one, and processEvents() additionally drains
     // any other pending GUI event so the window is fully up to date before
-    // this call returns into the blocking preset script below.
+    // this call returns into the blocking preset script below (user input
+    // excluded, as in SyncOperations' own pump).
     repaint();
-    QCoreApplication::processEvents();
+    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
 }
 
 // Every UI surface that mirrors machine state, pulled from the controller:
@@ -762,9 +692,7 @@ void MainWindow::refreshViewsAfterAdvance() {
 }
 
 bool MainWindow::loadPresetForShots(const QString& path, QString* error) {
-    const bool ok = runSynchronousLoad(
-        tr("Load Preset"), [this, path](QString* loadError) { return m_presetController->loadPreset(path, loadError); },
-        [this] { onPresetArmed(); }, error);
+    const bool ok = m_sync->loadPreset(path, error);
     // Frozen emulation means no frame tick will show the end state -- the
     // LCD would keep the load's last throttled repaint, the paper its
     // pre-plot points.
@@ -922,10 +850,7 @@ void MainWindow::applyModelSelection(Model model) {
 void MainWindow::applyDefaultPreset(Model model) {
     const QString path = AppSettings::defaultPresetPath(modelSettingsKey(model));
     if (path.isEmpty()) return;
-    runSynchronousLoad(
-        tr("Default Preset"),
-        [this, path, model](QString* error) { return m_presetController->loadDefaultPreset(path, model, error); },
-        [this] { onPresetArmed(); });
+    m_sync->loadDefaultPreset(path, model);
 }
 
 void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {

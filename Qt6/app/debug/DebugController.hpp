@@ -17,6 +17,7 @@
 class DapServer;
 class DapSession;
 class MachineController;
+class SyncOperations;
 
 // The app side of the debugger. Owns the DAP server (enabled in Settings)
 // and, while a client is attached, the Core debug objects for the live
@@ -65,11 +66,11 @@ public:
     /// breakpoints; returns the breakpoint statuses that changed.
     std::vector<debug::BreakpointStatus> rebindListings();
 
-    /// Loads a preset the way File > Load Preset does (MainWindow supplies
-    /// it: the frame timer stops for the synchronous load).
-    void setPresetLoader(std::function<bool(const QString& path, QString* error)> loader) {
-        m_presetLoader = std::move(loader);
-    }
+    /// The app's synchronous operations: presets, resets and loads from the
+    /// debugger run through them like the menu's, and DAP messages wait
+    /// while any of them runs (it pumps the event loop).
+    void setSyncOperations(SyncOperations* sync);
+    /// Loads a preset the way File > Load Preset does.
     bool loadPreset(const QString& path, QString* error);
     /// A clean machine for a program load: `preset` if given, else the
     /// model's default preset (Settings), else an All Reset and boot.
@@ -87,16 +88,14 @@ public:
     /// "entry"), else it runs on.
     bool resetMachine(bool allReset, bool stop, QString* error);
 
-    /// The app is running a synchronous load (preset, program): the machine
-    /// is being rebuilt or driven directly, so DAP messages wait until it
-    /// is done. Nests.
-    void setAppBusy(bool busy);
-
 signals:
     void serverStatusChanged();
     void pausedChanged(bool paused);
 
 private:
+    /// A synchronous operation started or ended: the machine is being
+    /// rebuilt or driven directly, so DAP messages wait until it is done.
+    void setAppBusy(bool busy);
     void createTarget();
     void onClientConnected();
     void onClientDisconnected();
@@ -117,5 +116,5 @@ private:
     bool m_busy = false;     // handling a message (which may itself load)
     int m_appBusy = 0;       // synchronous loads in progress
     std::vector<QJsonObject> m_queued;
-    std::function<bool(const QString&, QString*)> m_presetLoader;
+    SyncOperations* m_sync = nullptr; // not owned
 };

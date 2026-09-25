@@ -20,6 +20,7 @@ class FaceplateWidget;
 class ControlBar;
 class DebugPanel;
 class PlotterController;
+class SyncOperations;
 class PlotterPaperWidget;
 class Ce158PrinterWidget;
 class MemoryModuleManager;
@@ -64,9 +65,10 @@ public:
         resetMachine(allReset);
         refreshViewsAfterAdvance();
     }
-    // True while runSynchronousLoad() is mid-load: it pumps the event loop
-    // (timers included), and nothing may drive the machine until it's done.
-    bool isLoading() const { return m_loading; }
+    // True while a synchronous operation (SyncOperations) is running: it
+    // pumps the event loop (timers included), and nothing may drive the
+    // machine until it's done.
+    bool isLoading() const;
     MachineController* controller() const { return m_controller.get(); }
     // `screen` (MachineController::currentScreenImage()) as a QImage at its
     // physical size (dots per metre set), as Copy Screen puts it on the
@@ -97,6 +99,7 @@ private:
     QHBoxLayout* m_debugRowLayout = nullptr;
     AudioOutput* m_audio = nullptr;
     EmulationPacer* m_pacer = nullptr; // owns the frame timer; calls refreshViewsAfterAdvance()
+    SyncOperations* m_sync = nullptr;  // every synchronous load/reset (see SyncOperations)
 
     void buildMenuBar();
 
@@ -176,15 +179,6 @@ private:
     // user briefly sees the armed-but-off machine.
     void onPresetArmed();
 
-    // Shared choreography for Load Preset/Load BASIC Program: stops the
-    // frame timer and shows a wait cursor around the (synchronous) `loadFn`
-    // call so nothing else drives the machine mid-script, and runs
-    // `afterLoad` (if given) before the timer restarts. Returns `loadFn`'s
-    // result. On failure its error goes to `error` when the caller passes
-    // one (scripted callers), else into a warning dialog titled `title`.
-    bool runSynchronousLoad(const QString& title, const std::function<bool(QString*)>& loadFn,
-                            const std::function<void()>& afterLoad = {}, QString* error = nullptr);
-
     // File > Load Machine Code…: pick a .bin (Settings' Assembly folder),
     // recognise its header, ask for a start address / PC-1600 slot only when
     // needed (MachineCodeLoadDialog), write it, then show the NEW that
@@ -221,5 +215,4 @@ private:
     // The per-frame view refresh (LCD, debug log, paper, floppy lamp,
     // persistence) -- run by the pacer after each advance.
     void refreshViewsAfterAdvance();
-    bool m_loading = false; // see isLoading()
 };

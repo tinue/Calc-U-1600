@@ -11,6 +11,7 @@
 #include "MachineController.hpp"
 #include "PC1500/PC1500Machine.hpp"
 #include "PC1600/PC1600Machine.hpp"
+#include "SyncOperations.hpp"
 
 DebugController::DebugController(MachineController* machines, QObject* parent)
     : QObject(parent), m_machines(machines) {
@@ -167,12 +168,17 @@ std::vector<debug::BreakpointStatus> DebugController::rebindListings() {
     return changed;
 }
 
+void DebugController::setSyncOperations(SyncOperations* sync) {
+    m_sync = sync;
+    connect(sync, &SyncOperations::busyChanged, this, &DebugController::setAppBusy);
+}
+
 bool DebugController::loadPreset(const QString& path, QString* error) {
-    if (!m_presetLoader) {
+    if (!m_sync) {
         *error = tr("Presets can't be loaded from the debugger here");
         return false;
     }
-    const bool ok = m_presetLoader(path, error);
+    const bool ok = m_sync->loadPreset(path, error);
     // The preset rebuilt the machine: bind to it right away (paused, as a
     // fresh session is).
     if (m_sessionActive && !m_target) createTarget();
