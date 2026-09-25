@@ -193,17 +193,6 @@ touched, not proactively:
 
 Larger or behaviour-changing items left out of the 0.5.0 cleanup commit.
 
-- **CE-158 attach plumbing is duplicated per machine.**
-  `attachCE158`/`detachCE158`/`setCE158SerialLink`/
-  `drainCE158ParallelOutput` + `m_ce158Card`/`m_ce158Link` are
-  near-identical in `PC1500Machine` and `PC1600Machine` (only
-  `setClockHz`, the bus attach call and the CE-1600P exclusion differ).
-  Both `attachCE158`s also re-check `romSize` that `loadRom()` checks
-  again. Fix: a small `Ce158Port` in `Core/Connector` owning the card +
-  sticky `SerialLink*`; machines keep only their bus hookup. Same for
-  the `interface: ce158` attach block duplicated in
-  `PC1500PresetLoader.cpp` / `PC1600PresetLoader.cpp` — a templated
-  `attachPresetInterface<Machine>()` (like `BundledRoms::attachCE158`).
 - **`MachineController` branches on the model in every new method.**
   `attachCE158`, `detachCE158`, `ce158Attached`,
   `drainCE158PrinterOutput`, `tapKey`, `seedClockFromHostNow`, … are

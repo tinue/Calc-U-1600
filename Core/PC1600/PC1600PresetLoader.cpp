@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "../Connector/FloppyImageFile.hpp"
+#include "../Preset/PresetInterface.hpp"
 #include "../Resources/BundledRomCatalog.hpp"
 #include "PC1600BasicLoader.hpp"
 #include "PC1600BasicTyper.hpp"
@@ -206,14 +207,7 @@ PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& pre
         return result;
     // The CE-158 next to (or instead of) the CE-150 -- the parser already
     // refused it together with the CE-1600P.
-    if (preset.interfaceName == "ce158") {
-        if (!BundledRoms::attachCE158(machine, romDirs, &result.error)) {
-            if (log) log(result.error);
-            return result;
-        }
-        result.ce158Attached = true;
-        if (log) log("interface: CE-158 attached (LH5803 side)");
-    }
+    if (!attachPresetInterface(machine, preset.interfaceName, romDirs, log, &result)) return result;
 
     // Machine is now fully armed (model/cards/plotter wired) but still
     // powered off -- give the caller a chance to repaint that state before

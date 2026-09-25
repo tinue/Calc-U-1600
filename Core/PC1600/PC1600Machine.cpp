@@ -27,7 +27,7 @@ void PC1600Machine::resetLocked() {
     m_lh5803Mem.reset();                  // clear the internal-PIO register file (0xF00x)
     m_lh5803Mem.updatePUPV(false, false); // match the just-reset LH5803 CPU
     if (m_ce150Card) m_ce150Card->reset(); // re-anchor, keep it attached (like the CE-1600P)
-    if (m_ce158Card) m_ce158Card->reset();
+    m_ce158.reset();
 }
 
 void PC1600Machine::reset() {
@@ -200,17 +200,13 @@ void PC1600Machine::detachCE150Locked() {
 // ── CE-158 interface (LH5803 side) ─────────────────────────────────────
 
 bool PC1600Machine::attachCE158(const uint8_t* rom, size_t romSize) {
-    if (romSize != Ce158Card::kRomSize) return false;
-    auto card = std::make_unique<Ce158Card>();
-    if (!card->loadRom(rom, romSize)) return false;
     std::lock_guard<std::mutex> lock(m_mutex);
+    auto card = m_ce158.build(rom, romSize, kTStateHz); // ticked with SC7852 T-states, see step()
+    if (!card) return false;
     detachCE158Locked();
     detachCE1600PLocked(); // not usable together with the CE-1600P
-    card->setClockHz(kTStateHz); // ticked with SC7852 T-states, see step()
-    card->reset();
-    card->setSerialLink(m_ce158Link);
     m_lh5803Mem.attachCe158(card.get());
-    m_ce158Card = std::move(card);
+    m_ce158.install(std::move(card));
     return true;
 }
 
@@ -220,21 +216,19 @@ void PC1600Machine::detachCE158() {
 }
 
 void PC1600Machine::detachCE158Locked() {
-    if (!m_ce158Card) return;
+    if (!m_ce158.attached()) return;
     m_lh5803Mem.detachCe158();
-    m_ce158Card.reset();
+    m_ce158.remove();
 }
 
 void PC1600Machine::setCE158SerialLink(SerialLink* link) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_ce158Link = link;
-    if (m_ce158Card) m_ce158Card->setSerialLink(link);
+    m_ce158.setSerialLink(link);
 }
 
 std::vector<uint8_t> PC1600Machine::drainCE158ParallelOutput() {
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_ce158Card) return {};
-    return m_ce158Card->drainParallelOutput();
+    return m_ce158.drainParallelOutput();
 }
 
 std::vector<AlpsPlotterMechanism::FlatPoint> PC1600Machine::ce150PlotPoints() const {
@@ -373,7 +367,7 @@ void PC1600Machine::advanceSharedClocks(int tstates) {
     m_z80Mem.uart().tick(tstates);
     m_z80Mem.subCpu().tickByTStates(tstates);
     m_z80Mem.display().tick(tstates);
-    if (m_ce158Card) m_ce158Card->tick(static_cast<uint64_t>(tstates)); // the CE-158's own UART clock
+    m_ce158.tick(static_cast<uint64_t>(tstates)); // the CE-158's own UART clock
 }
 
 uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {

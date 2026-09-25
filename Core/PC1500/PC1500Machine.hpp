@@ -10,7 +10,7 @@
 
 #include "../CPU/LH5801/LH5801.hpp"
 #include "../Connector/Ce150Card.hpp"
-#include "../Connector/Ce158Card.hpp"
+#include "../Connector/Ce158Port.hpp"
 #include "../Connector/ExpansionConnector.hpp"
 #include "../Connector/SystemBus.hpp"
 #include "PC1500Clocks.hpp"
@@ -256,9 +256,9 @@ public:
     // stays put while the user toggles the interface.
     bool attachCE158(const uint8_t* rom, size_t romSize);
     void detachCE158();
-    bool ce158Attached() const { return m_ce158Card != nullptr; }
+    bool ce158Attached() const { return m_ce158.attached(); }
     /// Unlocked direct access -- headless/tests only (see ce150Card()).
-    Ce158Card* ce158Card() { return m_ce158Card.get(); }
+    Ce158Card* ce158Card() { return m_ce158.card(); }
     /// Non-owning; the caller keeps `link` alive until it sets another one
     /// (or nullptr) or destroys the machine. GUI-safe (takes m_mutex).
     void setCE158SerialLink(SerialLink* link);
@@ -307,8 +307,7 @@ private:
     SystemBus          m_systemBus;
     std::unique_ptr<ExpansionCard> m_attachedExpansionCard; // see attachExpansionCard()
     std::unique_ptr<Ce150Card> m_ce150Card;                 // see attachCE150()
-    std::unique_ptr<Ce158Card> m_ce158Card;                 // see attachCE158()
-    SerialLink* m_ce158Link = nullptr;                      // see setCE158SerialLink()
+    Ce158Port m_ce158;                                      // see attachCE158()
     mutable std::mutex m_mutex;
 
     // See setYieldHook(). m_yieldCountdown only runs down while a hook is set.

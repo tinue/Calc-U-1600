@@ -11,6 +11,7 @@
 
 #include "../Connector/CE1600FCard.hpp"
 #include "../Connector/CE1600PCard.hpp"
+#include "../Connector/Ce158Port.hpp"
 #include "../Connector/ExpansionCard.hpp"
 #include "../CPU/LH5803/LH5803.hpp"
 #include "../CPU/LH5803/LH5803SharedMemory.hpp"
@@ -222,8 +223,8 @@ public:
     // setCE158SerialLink() is kept across detach/attach.
     bool attachCE158(const uint8_t* rom, size_t romSize); // 16384 bytes
     void detachCE158();
-    bool ce158Attached() const { return m_ce158Card != nullptr; }
-    Ce158Card* ce158Card() { return m_ce158Card.get(); } // unlocked -- tests only
+    bool ce158Attached() const { return m_ce158.attached(); }
+    Ce158Card* ce158Card() { return m_ce158.card(); }    // unlocked -- tests only
     void setCE158SerialLink(SerialLink* link);             // non-owning; GUI-safe
     std::vector<uint8_t> drainCE158ParallelOutput();       // GUI-safe
 
@@ -438,8 +439,7 @@ private:
     std::unique_ptr<CE1600PCard> m_ce1600pCard; // see attachCE1600P()
     std::unique_ptr<CE1600FCard> m_ce1600fCard; // union-attached with m_ce1600pCard
     std::unique_ptr<Ce150Card> m_ce150Card;     // see attachCE150() -- LH5803-side plotter (MODE 1)
-    std::unique_ptr<Ce158Card> m_ce158Card;     // see attachCE158() -- LH5803-side interface (MODE 1)
-    SerialLink* m_ce158Link = nullptr;          // see setCE158SerialLink()
+    Ce158Port m_ce158;                          // see attachCE158() -- LH5803-side interface (MODE 1)
 
 
     // ── Headless CPU-trace file -- see beginCpuTrace() ───────────────────

@@ -30,7 +30,7 @@ void PC1500Machine::reset() {
     // real ink stays on real paper. Mirrors the CE-1600P, whose card is
     // likewise left attached across PC1600Machine::reset().
     if (m_ce150Card) m_ce150Card->reset();
-    if (m_ce158Card) m_ce158Card->reset();
+    m_ce158.reset();
 }
 
 void PC1500Machine::allReset() {
@@ -65,15 +65,12 @@ void PC1500Machine::detachCE150Locked() {
 }
 
 bool PC1500Machine::attachCE158(const uint8_t* rom, size_t romSize) {
-    if (romSize != Ce158Card::kRomSize) return false;
-    auto card = std::make_unique<Ce158Card>();
-    if (!card->loadRom(rom, romSize)) return false;
     std::lock_guard<std::mutex> lock(m_mutex);
+    auto card = m_ce158.build(rom, romSize, Ce158Card::kCpuHz);
+    if (!card) return false;
     detachCE158Locked();
-    card->reset();
-    card->setSerialLink(m_ce158Link);
     m_systemBus.attach(card.get());
-    m_ce158Card = std::move(card);
+    m_ce158.install(std::move(card));
     return true;
 }
 
@@ -83,21 +80,19 @@ void PC1500Machine::detachCE158() {
 }
 
 void PC1500Machine::detachCE158Locked() {
-    if (!m_ce158Card) return;
-    m_systemBus.detach(m_ce158Card.get());
-    m_ce158Card.reset();
+    if (!m_ce158.attached()) return;
+    m_systemBus.detach(m_ce158.card());
+    m_ce158.remove();
 }
 
 void PC1500Machine::setCE158SerialLink(SerialLink* link) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_ce158Link = link;
-    if (m_ce158Card) m_ce158Card->setSerialLink(link);
+    m_ce158.setSerialLink(link);
 }
 
 std::vector<uint8_t> PC1500Machine::drainCE158ParallelOutput() {
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_ce158Card) return {};
-    return m_ce158Card->drainParallelOutput();
+    return m_ce158.drainParallelOutput();
 }
 
 // The four below take m_mutex so the GUI thread can read/clear the plotter
@@ -168,7 +163,7 @@ void PC1500Machine::advancePeripherals(uint32_t cycles) {
     // Per-step hook for an attached CE-150 (no-op today -- the plotter is
     // fully reactive; see Ce150Card::tick()).
     if (m_ce150Card) m_ce150Card->tick(cycles);
-    if (m_ce158Card) m_ce158Card->tick(cycles); // the UART's own clock keeps running
+    m_ce158.tick(cycles); // the UART's own clock keeps running
 }
 
 void PC1500Machine::setYieldHook(std::function<void()> hook, uint64_t intervalCycles) {
