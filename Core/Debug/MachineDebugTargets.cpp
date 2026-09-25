@@ -1,53 +1,61 @@
 #include "MachineDebugTargets.hpp"
 
+#include <memory>
+
 #include "../PC1500/PC1500Machine.hpp"
 #include "../PC1600/PC1600Machine.hpp"
-#include "CpuRegisters.hpp"
+#include "CpuViews.hpp"
 
 namespace debug {
 
-namespace {
+// ── Shared ────────────────────────────────────────────────────────────────
 
-template <typename Cpu>
-void setBreakpointFlag(Cpu& cpu, bool on) {
-    cpu.setBreakpointsEnabled(on);
+template <typename Machine>
+MachineDebugTarget<Machine>::~MachineDebugTarget() {
+    detachAll();
 }
 
-template <typename Cpu>
-void loadBreakpoints(Cpu& cpu, const std::vector<uint16_t>& addrs) {
-    cpu.clearBreakpoints();
-    for (uint16_t a : addrs) cpu.addBreakpoint(a);
+template <typename Machine>
+Stop MachineDebugTarget<Machine>::runMachine(uint64_t budget) {
+    const uint64_t cycles = m_machine.runCycles(budget);
+    Stop s = stopFor(m_machine.consumeDebugStop());
+    s.cycles = cycles;
+    return s;
 }
 
-} // namespace
+template <typename Machine>
+Stop MachineDebugTarget<Machine>::stepMachine() {
+    m_machine.step();
+    return stopFor(m_machine.consumeDebugStop());
+}
+
+template <typename Machine>
+void MachineDebugTarget<Machine>::reset(bool allReset) {
+    if (allReset) m_machine.allReset();
+    else m_machine.reset();
+}
+
+template <typename Machine>
+void MachineDebugTarget<Machine>::attachWatches(int thread, WatchSet* watches) {
+    // Thread ids beyond the CPUs name the last one (see DebugTarget).
+    m_machine.setWatches(thread == 1 ? 1 : int(threads().size()), watches);
+}
+
+template <typename Machine>
+DebugStop MachineDebugTarget<Machine>::consumeMachineStop() {
+    return m_machine.consumeDebugStop();
+}
+
+template class MachineDebugTarget<PC1500Machine>;
+template class MachineDebugTarget<PC1600Machine>;
 
 // ── PC-1500 ───────────────────────────────────────────────────────────────
 
-PC1500DebugTarget::~PC1500DebugTarget() {
-    m_machine.setWatches(1, nullptr);
-    m_machine.cpu().clearBreakpoints();
-    setBreakpointFlag(m_machine.cpu(), false);
-}
-
-std::vector<Thread> PC1500DebugTarget::threads() const {
-    return {{1, CpuKind::LH5801, "LH5801"}};
-}
-
-std::vector<Register> PC1500DebugTarget::registers(int) const { return lhRegisters(m_machine.cpu()); }
-
-bool PC1500DebugTarget::readRegister(int, const std::string& name, uint32_t* value) const {
-    return lhReadRegister(m_machine.cpu(), name, value);
-}
-
-bool PC1500DebugTarget::writeRegister(int, const std::string& name, uint32_t value) {
-    const bool ok = lhWriteRegister(m_machine.cpu(), name, value);
+PC1500DebugTarget::PC1500DebugTarget(PC1500Machine& machine) : MachineDebugTarget(machine) {
     // PU/PV select memory banks; the bus must see an edited value at once.
-    if (ok) m_machine.memory().updatePUPV(m_machine.cpu().pu(), m_machine.cpu().pv());
-    return ok;
+    addCpu(std::make_unique<LhCpuView>(machine.cpu(), CpuKind::LH5801, "LH5801",
+                                       [&machine](bool pu, bool pv) { machine.memory().updatePUPV(pu, pv); }));
 }
-
-uint16_t PC1500DebugTarget::pc(int) const { return m_machine.cpu().pc(); }
-uint16_t PC1500DebugTarget::sp(int) const { return m_machine.cpu().sp(); }
 
 bool PC1500DebugTarget::peek(int, Space space, uint16_t addr, uint8_t* value) const {
     if (space == kSpaceMain) { *value = m_machine.memory().peek(addr); return true; }
@@ -61,79 +69,16 @@ bool PC1500DebugTarget::poke(int, Space space, uint16_t addr, uint8_t value) {
     return m_machine.memory().poke(addr, value);
 }
 
-bool PC1500DebugTarget::pu(int) const { return m_machine.cpu().pu(); }
-bool PC1500DebugTarget::pv(int) const { return m_machine.cpu().pv(); }
-uint32_t PC1500DebugTarget::historySize(int) const { return m_machine.cpu().history().size(); }
-HistoryEntry PC1500DebugTarget::history(int, uint32_t age) const {
-    return lhHistoryEntry(m_machine.cpu().history().recent(age));
-}
-uint32_t PC1500DebugTarget::retired(int) const { return m_machine.cpu().history().total(); }
-
-void PC1500DebugTarget::reset(bool allReset) {
-    if (allReset) m_machine.allReset();
-    else m_machine.reset();
-}
-
-bool PC1500DebugTarget::isHalted(int) const { return m_machine.cpu().halted() || m_machine.cpu().poweredOff(); }
-
-void PC1500DebugTarget::applyBreakpoints(int, const std::vector<uint16_t>& addrs) { loadBreakpoints(m_machine.cpu(), addrs); }
-void PC1500DebugTarget::enableBreakpointChecks(bool on) { setBreakpointFlag(m_machine.cpu(), on); }
-void PC1500DebugTarget::resumePastBreakpoint(int) { m_machine.cpu().resumePastBreakpoint(); }
-void PC1500DebugTarget::attachWatches(int, WatchSet* watches) { m_machine.setWatches(1, watches); }
-DebugStop PC1500DebugTarget::consumeMachineStop() { return m_machine.consumeDebugStop(); }
-
-Stop PC1500DebugTarget::runMachine(uint64_t budget) {
-    const uint64_t cycles = m_machine.runCycles(budget);
-    Stop s = stopFor(m_machine.consumeDebugStop());
-    s.cycles = cycles;
-    return s;
-}
-
-Stop PC1500DebugTarget::stepMachine() {
-    m_machine.step();
-    return stopFor(m_machine.consumeDebugStop());
-}
-
 // ── PC-1600 ───────────────────────────────────────────────────────────────
 
-PC1600DebugTarget::~PC1600DebugTarget() {
-    m_machine.setWatches(kZ80, nullptr);
-    m_machine.setWatches(kLh5803, nullptr);
-    m_machine.sc7852().clearBreakpoints();
-    m_machine.lh5803().clearBreakpoints();
-    setBreakpointFlag(m_machine.sc7852(), false);
-    setBreakpointFlag(m_machine.lh5803(), false);
-}
-
-std::vector<Thread> PC1600DebugTarget::threads() const {
-    return {{kZ80, CpuKind::Z80, "Z80 (SC7852)"}, {kLh5803, CpuKind::LH5803, "LH5803"}};
+PC1600DebugTarget::PC1600DebugTarget(PC1600Machine& machine) : MachineDebugTarget(machine) {
+    addCpu(std::make_unique<Z80CpuView>(machine.sc7852()));
+    // PV gates the CE-150 ROM window on the LH5803's bus.
+    addCpu(std::make_unique<LhCpuView>(machine.lh5803(), CpuKind::LH5803, "LH5803",
+                                       [&machine](bool pu, bool pv) { machine.lh5803Memory().updatePUPV(pu, pv); }));
 }
 
 int PC1600DebugTarget::busOwner() const { return m_machine.sc7852Owns() ? kZ80 : kLh5803; }
-
-std::vector<Register> PC1600DebugTarget::registers(int thread) const {
-    return thread == kZ80 ? z80Registers(m_machine.sc7852()) : lhRegisters(m_machine.lh5803());
-}
-
-bool PC1600DebugTarget::readRegister(int thread, const std::string& name, uint32_t* value) const {
-    return thread == kZ80 ? z80ReadRegister(m_machine.sc7852(), name, value)
-                          : lhReadRegister(m_machine.lh5803(), name, value);
-}
-
-bool PC1600DebugTarget::writeRegister(int thread, const std::string& name, uint32_t value) {
-    if (thread == kZ80) return z80WriteRegister(m_machine.sc7852(), name, value);
-    const bool ok = lhWriteRegister(m_machine.lh5803(), name, value);
-    if (ok) m_machine.lh5803Memory().updatePUPV(m_machine.lh5803().pu(), m_machine.lh5803().pv());
-    return ok;
-}
-
-uint16_t PC1600DebugTarget::pc(int thread) const {
-    return thread == kZ80 ? m_machine.sc7852().pc() : m_machine.lh5803().pc();
-}
-
-uint16_t PC1600DebugTarget::sp(int thread) const {
-    return thread == kZ80 ? m_machine.sc7852().sp() : m_machine.lh5803().sp();
-}
 
 bool PC1600DebugTarget::peek(int thread, Space space, uint16_t addr, uint8_t* value) const {
     if (thread == kZ80) { *value = m_machine.memory().peek(addr); return true; }
@@ -146,8 +91,9 @@ bool PC1600DebugTarget::poke(int thread, Space space, uint16_t addr, uint8_t val
     if (thread == kZ80) return m_machine.pokeMemory(addr, &value, 1);
     // The LH5803's ME0 0000-7FFF is the Z-80's 8000-FFFF; the rest is ROM
     // or I/O.
-    if (space != kSpaceMain || addr >= 0x8000) return false;
-    return m_machine.pokeMemory(uint16_t(addr + 0x8000), &value, 1);
+    uint16_t z80 = 0;
+    if (space != kSpaceMain || !LH5803SharedMemory::toZ80Address(addr, &z80)) return false;
+    return m_machine.pokeMemory(z80, &value, 1);
 }
 
 int PC1600DebugTarget::bankAt(int thread, uint16_t addr) const {
@@ -159,63 +105,6 @@ int PC1600DebugTarget::bankAt(int thread, uint16_t addr) const {
         case 2: return b.pageCBank();
         default: return b.pageDBank();
     }
-}
-
-bool PC1600DebugTarget::pu(int thread) const { return thread != kZ80 && m_machine.lh5803().pu(); }
-bool PC1600DebugTarget::pv(int thread) const { return thread != kZ80 && m_machine.lh5803().pv(); }
-
-uint32_t PC1600DebugTarget::historySize(int thread) const {
-    return thread == kZ80 ? m_machine.sc7852().history().size() : m_machine.lh5803().history().size();
-}
-
-HistoryEntry PC1600DebugTarget::history(int thread, uint32_t age) const {
-    return thread == kZ80 ? z80HistoryEntry(m_machine.sc7852().history().recent(age))
-                          : lhHistoryEntry(m_machine.lh5803().history().recent(age));
-}
-
-uint32_t PC1600DebugTarget::retired(int thread) const {
-    return thread == kZ80 ? m_machine.sc7852().history().total() : m_machine.lh5803().history().total();
-}
-
-void PC1600DebugTarget::reset(bool allReset) {
-    if (allReset) m_machine.allReset();
-    else m_machine.reset();
-}
-
-bool PC1600DebugTarget::isHalted(int thread) const {
-    return thread == kZ80 ? m_machine.sc7852().halted() : (m_machine.lh5803().halted() || m_machine.lh5803().poweredOff());
-}
-
-void PC1600DebugTarget::applyBreakpoints(int thread, const std::vector<uint16_t>& addrs) {
-    if (thread == kZ80) loadBreakpoints(m_machine.sc7852(), addrs);
-    else loadBreakpoints(m_machine.lh5803(), addrs);
-}
-
-void PC1600DebugTarget::enableBreakpointChecks(bool on) {
-    setBreakpointFlag(m_machine.sc7852(), on);
-    setBreakpointFlag(m_machine.lh5803(), on);
-}
-
-void PC1600DebugTarget::resumePastBreakpoint(int thread) {
-    if (thread == kZ80) m_machine.sc7852().resumePastBreakpoint();
-    else m_machine.lh5803().resumePastBreakpoint();
-}
-
-void PC1600DebugTarget::attachWatches(int thread, WatchSet* watches) {
-    m_machine.setWatches(thread == kZ80 ? kZ80 : kLh5803, watches);
-}
-DebugStop PC1600DebugTarget::consumeMachineStop() { return m_machine.consumeDebugStop(); }
-
-Stop PC1600DebugTarget::runMachine(uint64_t budget) {
-    const uint64_t cycles = m_machine.runCycles(budget);
-    Stop s = stopFor(m_machine.consumeDebugStop());
-    s.cycles = cycles;
-    return s;
-}
-
-Stop PC1600DebugTarget::stepMachine() {
-    m_machine.step();
-    return stopFor(m_machine.consumeDebugStop());
 }
 
 } // namespace debug

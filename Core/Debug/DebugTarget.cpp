@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "CpuViews.hpp"
 #include "Disasm/LH5801Disassembler.hpp"
 #include "Disasm/Z80Disassembler.hpp"
 
@@ -30,6 +31,47 @@ disasm::Decoded DebugTarget::decode(int thread, const HistoryEntry& entry, const
         return i < entry.len ? entry.bytes[i] : 0;
     };
     return decodeAs(kindOf(thread), entry.pc, fetch, symbols);
+}
+
+DebugTarget::~DebugTarget() = default;
+
+void DebugTarget::addCpu(std::unique_ptr<CpuView> cpu) { m_cpus.push_back(std::move(cpu)); }
+
+CpuView& DebugTarget::view(int thread) const { return thread == 1 ? *m_cpus.front() : *m_cpus.back(); }
+
+std::vector<Thread> DebugTarget::threads() const {
+    std::vector<Thread> list;
+    for (size_t i = 0; i < m_cpus.size(); i++) list.push_back({int(i + 1), m_cpus[i]->kind(), m_cpus[i]->name()});
+    return list;
+}
+
+CpuKind DebugTarget::kindOf(int thread) const { return view(thread).kind(); }
+std::vector<Register> DebugTarget::registers(int thread) const { return view(thread).registers(); }
+bool DebugTarget::readRegister(int thread, const std::string& name, uint32_t* value) const {
+    return view(thread).readRegister(name, value);
+}
+bool DebugTarget::writeRegister(int thread, const std::string& name, uint32_t value) {
+    return view(thread).writeRegister(name, value);
+}
+uint16_t DebugTarget::pc(int thread) const { return view(thread).pc(); }
+uint16_t DebugTarget::sp(int thread) const { return view(thread).sp(); }
+bool DebugTarget::halted(int thread) const { return view(thread).halted(); }
+bool DebugTarget::pu(int thread) const { return view(thread).pu(); }
+bool DebugTarget::pv(int thread) const { return view(thread).pv(); }
+uint32_t DebugTarget::historySize(int thread) const { return view(thread).historySize(); }
+HistoryEntry DebugTarget::history(int thread, uint32_t age) const { return view(thread).history(age); }
+uint32_t DebugTarget::retired(int thread) const { return view(thread).retired(); }
+
+void DebugTarget::enableBreakpointChecks(bool on) {
+    for (auto& cpu : m_cpus) cpu->enableBreakpoints(on);
+}
+
+void DebugTarget::detachAll() {
+    for (size_t i = 0; i < m_cpus.size(); i++) {
+        attachWatches(int(i + 1), nullptr);
+        m_cpus[i]->setBreakpoints({});
+        m_cpus[i]->enableBreakpoints(false);
+    }
 }
 
 ExpressionContext DebugTarget::expressionContext(int thread,
@@ -72,7 +114,7 @@ void DebugTarget::setBreakpoints(int thread, const std::vector<uint16_t>& addrs)
     list = addrs;
     std::sort(list.begin(), list.end());
     list.erase(std::unique(list.begin(), list.end()), list.end());
-    applyBreakpoints(thread, list);
+    view(thread).setBreakpoints(list);
     enableBreakpointChecks(m_armed && breakpointsActive());
 }
 
@@ -107,7 +149,7 @@ void DebugTarget::resumeFromStop() {
     // get the skip, so a parked second CPU can't lose a later stop.
     for (const Thread& t : threads()) {
         const auto& list = breakpoints(t.id);
-        if (std::binary_search(list.begin(), list.end(), pc(t.id))) resumePastBreakpoint(t.id);
+        if (std::binary_search(list.begin(), list.end(), pc(t.id))) view(t.id).resumePastBreakpoint();
     }
     for (auto& entry : m_watches)
         if (entry.second.hitPending()) entry.second.consumeHit();

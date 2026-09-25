@@ -113,6 +113,14 @@ public:
     /// latched register file.
     uint8_t debugPeek(uint16_t addr, bool me1, bool* readable) const;
 
+    /// The LH5803's ME0 0000-7FFF is the Z-80's 8000-FFFF (the shared RAM
+    /// and the slot windows); false for LH5803 addresses outside it.
+    static constexpr bool toZ80Address(uint16_t lhAddr, uint16_t* z80Addr) {
+        if (lhAddr >= 0x8000) return false;
+        *z80Addr = static_cast<uint16_t>(lhAddr + 0x8000);
+        return true;
+    }
+
     // LH5801Bus
     uint8_t readME0(uint16_t addr) override;
     void    writeME0(uint16_t addr, uint8_t value) override;

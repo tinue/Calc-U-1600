@@ -466,6 +466,40 @@ void test_machine_step_latches_stops() {
     }
 }
 
+void test_cpu_views() {
+    PC1600Machine m;
+    std::vector<uint8_t> lower(PC1600Memory::kBankSize, 0x76), upper(PC1600Memory::kBankSize, 0x00); // halt
+    CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+    std::vector<uint8_t> rom(16384, 0x38);
+    rom[16384 - 2] = 0xC0; rom[16384 - 1] = 0x00;
+    CHECK(m.loadLH5803Rom(rom.data(), rom.size()));
+    m.reset();
+    {
+        debug::PC1600DebugTarget target(m);
+        const auto threads = target.threads();
+        CHECK(threads.size() == 2 && threads[0].kind == debug::CpuKind::Z80 && threads[1].name == "LH5803");
+        // A thread id beyond the CPUs names the last one.
+        CHECK(target.kindOf(7) == debug::CpuKind::LH5803 && target.pc(7) == target.pc(2));
+        // An edited PV reaches the LH5803's bus at once.
+        CHECK(target.writeRegister(2, "pv", 1) && m.lh5803Memory().pv());
+        CHECK(target.writeRegister(2, "pv", 0) && !m.lh5803Memory().pv());
+        // Halted: the Z-80 after HALT; the LH580x also when powered off.
+        m.step();
+        CHECK(target.halted(1));
+        CHECK(!target.halted(2));
+        target.setBreakpoints(1, {0x0000});
+        target.setBreakpoints(2, {0xC000});
+        target.setWatches(2, {{0x1000, 0x1000, 0, false, true}});
+        CHECK(m.sc7852().breakpointsEnabled() && m.lh5803().breakpointsEnabled());
+    }
+    // The target took everything off the CPUs.
+    CHECK(!m.sc7852().breakpointsEnabled() && !m.lh5803().breakpointsEnabled());
+    m.lh5803().setBreakpointsEnabled(true);
+    m.lh5803().setPC(0xC000);
+    CHECK(m.lh5803().step() > 0); // no breakpoint left at C000
+    m.lh5803().setBreakpointsEnabled(false);
+}
+
 } // namespace
 
 int run_debug_target_tests() {
@@ -482,6 +516,7 @@ int run_debug_target_tests() {
     test_pc1600_target();
     test_pc1600_lh5803_thread();
     test_machine_step_latches_stops();
+    test_cpu_views();
     std::printf("debug target tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

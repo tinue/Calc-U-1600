@@ -40,7 +40,8 @@ uint8_t LH5803SharedMemory::debugPeek(uint16_t addr, bool me1, bool* readable) c
         if ((addr & 0xFFF0) == 0xF000) return m_ioRegs[addr & 0x0F];
     }
     // ME0, and the ME1 addresses readME1() aliases onto it
-    if (addr < 0x8000) return m_shared.peek(uint16_t(addr + 0x8000));
+    uint16_t z80 = 0;
+    if (toZ80Address(addr, &z80)) return m_shared.peek(z80);
     if (addr < kRomBase) return cardRead(addr, /*me1=*/false);
     return m_rom.read(addr);
 }

@@ -12,81 +12,48 @@ class PC1600Machine;
 // needs a new target.
 namespace debug {
 
-class PC1500DebugTarget final : public DebugTarget {
+/// What both machines share: run/step with the machine's debug-stop
+/// latch, reset, per-CPU watches, and taking everything off the CPUs
+/// when the target goes.
+template <typename Machine>
+class MachineDebugTarget : public DebugTarget {
 public:
-    explicit PC1500DebugTarget(PC1500Machine& machine) : m_machine(machine) {}
-    ~PC1500DebugTarget() override;
+    ~MachineDebugTarget() override;
 
-    std::vector<Thread> threads() const override;
-    int busOwner() const override { return 1; }
-    CpuKind kindOf(int) const override { return CpuKind::LH5801; }
-    std::vector<Register> registers(int thread) const override;
-    bool readRegister(int thread, const std::string& name, uint32_t* value) const override;
-    bool writeRegister(int thread, const std::string& name, uint32_t value) override;
-    uint16_t pc(int thread) const override;
-    uint16_t sp(int thread) const override;
-    bool peek(int thread, Space space, uint16_t addr, uint8_t* value) const override;
-    bool poke(int thread, Space space, uint16_t addr, uint8_t value) override;
-    int bankAt(int, uint16_t) const override { return -1; }
-    bool pu(int thread) const override;
-    bool pv(int thread) const override;
-    uint32_t historySize(int thread) const override;
-    HistoryEntry history(int thread, uint32_t age) const override;
-    uint32_t retired(int thread) const override;
-    void reset(bool allReset) override;
     Stop runMachine(uint64_t budget) override;
     Stop stepMachine() override;
+    void reset(bool allReset) override;
 
 protected:
-    bool isHalted(int thread) const override;
-    void applyBreakpoints(int thread, const std::vector<uint16_t>& addrs) override;
-    void enableBreakpointChecks(bool on) override;
-    void resumePastBreakpoint(int thread) override;
+    explicit MachineDebugTarget(Machine& machine) : m_machine(machine) {}
     void attachWatches(int thread, WatchSet* watches) override;
     DebugStop consumeMachineStop() override;
 
-private:
-    PC1500Machine& m_machine;
+    Machine& m_machine;
 };
 
-class PC1600DebugTarget final : public DebugTarget {
+extern template class MachineDebugTarget<PC1500Machine>;
+extern template class MachineDebugTarget<PC1600Machine>;
+
+class PC1500DebugTarget final : public MachineDebugTarget<PC1500Machine> {
+public:
+    explicit PC1500DebugTarget(PC1500Machine& machine);
+
+    bool peek(int thread, Space space, uint16_t addr, uint8_t* value) const override;
+    bool poke(int thread, Space space, uint16_t addr, uint8_t value) override;
+};
+
+class PC1600DebugTarget final : public MachineDebugTarget<PC1600Machine> {
 public:
     static constexpr int kZ80 = 1;
     static constexpr int kLh5803 = 2;
 
-    explicit PC1600DebugTarget(PC1600Machine& machine) : m_machine(machine) {}
-    ~PC1600DebugTarget() override;
+    explicit PC1600DebugTarget(PC1600Machine& machine);
 
-    std::vector<Thread> threads() const override;
     int busOwner() const override;
-    CpuKind kindOf(int thread) const override { return thread == kZ80 ? CpuKind::Z80 : CpuKind::LH5803; }
-    std::vector<Register> registers(int thread) const override;
-    bool readRegister(int thread, const std::string& name, uint32_t* value) const override;
-    bool writeRegister(int thread, const std::string& name, uint32_t value) override;
-    uint16_t pc(int thread) const override;
-    uint16_t sp(int thread) const override;
     bool peek(int thread, Space space, uint16_t addr, uint8_t* value) const override;
     bool poke(int thread, Space space, uint16_t addr, uint8_t value) override;
     int bankAt(int thread, uint16_t addr) const override;
-    bool pu(int thread) const override;
-    bool pv(int thread) const override;
-    uint32_t historySize(int thread) const override;
-    HistoryEntry history(int thread, uint32_t age) const override;
-    uint32_t retired(int thread) const override;
-    void reset(bool allReset) override;
-    Stop runMachine(uint64_t budget) override;
-    Stop stepMachine() override;
-
-protected:
-    bool isHalted(int thread) const override;
-    void applyBreakpoints(int thread, const std::vector<uint16_t>& addrs) override;
-    void enableBreakpointChecks(bool on) override;
-    void resumePastBreakpoint(int thread) override;
-    void attachWatches(int thread, WatchSet* watches) override;
-    DebugStop consumeMachineStop() override;
-
-private:
-    PC1600Machine& m_machine;
 };
 
 } // namespace debug

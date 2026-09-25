@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -71,27 +72,32 @@ struct Stop {
     uint64_t cycles = 0;  ///< run(): machine cycles consumed
 };
 
+class CpuView;
+
+/// The machine-wide part of a debug target; each CPU is a CpuView
+/// (CpuViews.hpp), thread 1 the first. A thread id other than 1 names the
+/// last CPU.
 class DebugTarget {
 public:
-    virtual ~DebugTarget() = default;
+    virtual ~DebugTarget();
 
-    virtual std::vector<Thread> threads() const = 0;
+    std::vector<Thread> threads() const;
     /// The thread whose CPU currently owns the bus (executes on step()).
-    virtual int busOwner() const = 0;
-    virtual CpuKind kindOf(int thread) const = 0;
+    virtual int busOwner() const { return 1; }
+    CpuKind kindOf(int thread) const;
 
     // ── Registers ─────────────────────────────────────────────────────────
     /// The CPU's registers, in display order; the status register (T / F)
     /// is one entry, its bits named by flagNames().
-    virtual std::vector<Register> registers(int thread) const = 0;
+    std::vector<Register> registers(int thread) const;
     /// Any name registers() lists, plus the 8-bit halves (Z-80 a/f/b/c/...,
     /// LH580x xl/xh/...) and single flags as <flag>f ("cf", "zf", "ief").
     /// False for an unknown name.
-    virtual bool readRegister(int thread, const std::string& name, uint32_t* value) const = 0;
-    virtual bool writeRegister(int thread, const std::string& name, uint32_t value) = 0;
-    virtual uint16_t pc(int thread) const = 0;
-    virtual uint16_t sp(int thread) const = 0;
-    bool halted(int thread) const { return isHalted(thread); }
+    bool readRegister(int thread, const std::string& name, uint32_t* value) const;
+    bool writeRegister(int thread, const std::string& name, uint32_t value);
+    uint16_t pc(int thread) const;
+    uint16_t sp(int thread) const;
+    bool halted(int thread) const;
 
     // ── Memory ────────────────────────────────────────────────────────────
     /// Reads without side effects. False: the byte can't be read without
@@ -112,18 +118,18 @@ public:
     disasm::Decoded decode(int thread, const HistoryEntry& entry, const disasm::SymbolFn& symbols = {}) const;
     /// Bank qualifiers of the code at `addr` right now: the PC-1600 page
     /// bank (0-7) for the Z-80, -1 elsewhere; PU/PV for the LH580x.
-    virtual int bankAt(int thread, uint16_t addr) const = 0;
-    virtual bool pu(int thread) const = 0;
-    virtual bool pv(int thread) const = 0;
+    virtual int bankAt(int, uint16_t) const { return -1; }
+    bool pu(int thread) const;
+    bool pv(int thread) const;
     /// Whether code at `addr` on `thread` currently satisfies `key`.
     bool bankMatches(int thread, const BankKey& key, uint16_t addr) const;
 
     // ── History ───────────────────────────────────────────────────────────
-    virtual uint32_t historySize(int thread) const = 0;
-    virtual HistoryEntry history(int thread, uint32_t age) const = 0;
+    uint32_t historySize(int thread) const;
+    HistoryEntry history(int thread, uint32_t age) const;
     /// Instructions retired so far (grows by one per instruction; reset
     /// by a machine reset). Used to tell that a CPU has moved.
-    virtual uint32_t retired(int thread) const = 0;
+    uint32_t retired(int thread) const;
 
     // ── Breakpoints and watches ───────────────────────────────────────────
     /// Replaces the thread's PC breakpoints. Checking is enabled only while
@@ -155,10 +161,12 @@ public:
     virtual void reset(bool allReset) = 0;
 
 protected:
-    virtual bool isHalted(int thread) const = 0;
-    virtual void applyBreakpoints(int thread, const std::vector<uint16_t>& addrs) = 0;
-    virtual void enableBreakpointChecks(bool on) = 0;
-    virtual void resumePastBreakpoint(int thread) = 0;
+    /// The machine target's constructor adds its CPUs in thread order.
+    void addCpu(std::unique_ptr<CpuView> cpu);
+    CpuView& view(int thread) const;
+    /// Takes every CPU's breakpoints and watches off (the machine target's
+    /// destructor, while the machine is still there).
+    void detachAll();
     /// Hands the thread's watch set to its CPU (nullptr: none).
     virtual void attachWatches(int thread, WatchSet* watches) = 0;
     /// Consumes the machine's latched debugger stop (see DebugStop).
@@ -168,6 +176,9 @@ protected:
     Stop stopFor(const DebugStop& stop);
 
 private:
+    void enableBreakpointChecks(bool on);
+
+    std::vector<std::unique_ptr<CpuView>> m_cpus;     // thread id - 1
     std::vector<std::vector<uint16_t>> m_breakpoints; // per thread id - 1
     std::map<int, WatchSet> m_watches;                // per thread id; nodes stay put for the CPUs' pointers
     bool m_armed = true;
