@@ -22,80 +22,52 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
     }
     const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     const machinecode::File file = machinecode::readFile(bytes);
-    if (!file.ok && !file.lengthMismatch) {
-        r.error = file.error;
-        return r;
-    }
-    const machinecode::Target kind = pc1600 ? machinecode::Target::PC1600 : machinecode::Target::PC1500;
-    const std::string mismatch = machinecode::headerMismatch(kind, file);
-    if (!mismatch.empty()) {
-        r.error = mismatch;
-        return r;
-    }
-    if (file.payload.empty()) {
-        r.error = req.bin + " is empty";
-        return r;
-    }
-    uint32_t addr = req.hasAddress ? req.address : file.loadAddr;
-    if (!req.hasAddress && file.header == machinecode::File::Header::None) {
-        r.error = "a headerless program needs an \"address\"";
-        return r;
-    }
-    const size_t len = file.payload.size();
-    if (addr + len > 0x10000) {
-        r.error = "the program doesn't fit below 0x10000";
-        return r;
+
+    // Build & Load's rules: a header length mismatch still loads, the
+    // request's address and slot override, LH5803 code goes to the Z-80's
+    // 8000-FFFF, and a PC-1600 slot is otherwise the BASIC area's (internal
+    // RAM always).
+    machinecode::LoadOptions options;
+    options.target = pc1600 ? machinecode::Target::PC1600 : machinecode::Target::PC1500;
+    options.acceptLengthMismatch = true;
+    options.hasAddress = req.hasAddress;
+    options.address = req.address;
+    options.lh5803 = pc1600 && req.thread == 2;
+    if (req.slot >= 0) options.slot = machinecode::Slot(req.slot);
+    else options.slotPolicy = machinecode::SlotPolicy::DeriveOrInternal;
+    const std::vector<machinecode::BasicArea> areas = pc1600 ? pc1600BasicAreas(*pc1600) : std::vector<machinecode::BasicArea>{};
+    const machinecode::LoadPlan plan = machinecode::planLoad(file, options, areas);
+    switch (plan.error) {
+        case machinecode::LoadError::None: break;
+        case machinecode::LoadError::Empty: r.error = req.bin + " is empty"; return r;
+        case machinecode::LoadError::NeedsAddress: r.error = "a headerless program needs an \"address\""; return r;
+        case machinecode::LoadError::OutsideBank0:
+        case machinecode::LoadError::PastEnd: r.error = "the program doesn't fit below 0x10000"; return r;
+        case machinecode::LoadError::LhRange: r.error = "LH5803 code must sit in 0000-7FFF (the Z-80's 8000-FFFF)"; return r;
+        default: r.error = plan.detail; return r; // BadFile, HeaderMismatch, NoSlot
     }
 
     std::string err;
-    machinecode::Slot slot = machinecode::Slot::S0;
-    uint32_t z80Addr = addr; // where the bytes go on the Z-80 side (PC-1600)
-    if (pc1500) {
-        if (!loadPC1500MachineCode(*pc1500, addr, file.payload.data(), len, &err)) {
-            r.error = err;
-            return r;
-        }
-    } else {
-        // The LH5803 sees the Z-80's 8000-FFFF at its 0000-7FFF.
-        if (req.thread == 2) {
-            if (addr + len > 0x8000) {
-                r.error = "LH5803 code must sit in 0000-7FFF (the Z-80's 8000-FFFF)";
-                return r;
-            }
-            z80Addr = addr + 0x8000;
-        }
-        if (req.slot >= 0) {
-            slot = machinecode::Slot(req.slot);
-        } else {
-            const std::vector<machinecode::BasicArea> areas = pc1600BasicAreas(*pc1600);
-            std::string why;
-            if (!machinecode::pc1600TargetFor(z80Addr, len, areas, &slot, &why)) {
-                if (z80Addr >= 0xC000) slot = machinecode::Slot::S0; // internal RAM: always writable
-                else {
-                    r.error = why;
-                    return r;
-                }
-            }
-        }
-        if (!loadPC1600MachineCode(*pc1600, int(slot), z80Addr, file.payload.data(), len, &err)) {
-            r.error = err;
-            return r;
-        }
+    const bool written = pc1500 ? loadPC1500MachineCode(*pc1500, plan.busAddr, file.payload.data(), plan.len, &err)
+                                : loadPC1600MachineCode(*pc1600, int(plan.slot), plan.busAddr, file.payload.data(), plan.len, &err);
+    if (!written) {
+        r.error = err;
+        return r;
     }
+    const uint32_t addr = plan.addr;
     r.lo = uint16_t(addr);
-    r.hi = uint16_t(addr + len - 1);
+    r.hi = uint16_t(addr + plan.len - 1);
     r.entry = req.hasEntry ? req.entry : uint16_t(file.autorunAddr ? file.autorunAddr : addr);
 
     // How BASIC starts it.
     uint32_t ramStart = 0, ramEnd = 0;
     if (pc1500) pc1500UserRam(*pc1500, &ramStart, &ramEnd);
-    const std::vector<machinecode::BasicArea> areas = pc1600 ? pc1600BasicAreas(*pc1600) : std::vector<machinecode::BasicArea>{};
     if (req.thread == 2) {
         r.callCommand = ""; // LH5803 code is entered from Z-80 code (CALLH), not from BASIC
     } else {
         // advice() starts at r.entry (the `entry` override, the header's
         // auto-run address, or the load address) and adds slot 2's bank.
-        r.callCommand = machinecode::advice(kind, slot, pc1600 ? z80Addr : addr, len, r.entry, ramStart, ramEnd, areas).callCommand;
+        r.callCommand = machinecode::advice(options.target, plan.slot, plan.busAddr, plan.len, r.entry, ramStart, ramEnd, areas).callCommand;
     }
 
     // The listing and symbols bind to the loaded range; symbols alone too.

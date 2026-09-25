@@ -88,6 +88,61 @@ struct Plan {
     Slot slot = Slot::S0;       // PC-1600 with a header: where the code goes
 };
 
+// ── One load pipeline ─────────────────────────────────────────────────────
+//
+// Every machine-code load -- Load Machine Code…, a preset's `format:
+// binary`, the debugger's Build & Load -- plans with planLoad(): the file
+// checks, the address and length, the range and (PC-1600) the slot. The
+// callers differ only in LoadOptions, then write plan.busAddr/len with their
+// own writer and word the LoadError their own way.
+
+// How a PC-1600 load picks its slot.
+enum class SlotPolicy {
+    Derive,             // pc1600TargetFor() on the BASIC program area; refuse if it has none
+    DeriveOrInternal,   // the same, but internal RAM (>= $C000) is always fine
+    Explicit,           // LoadOptions::slot as given
+};
+
+struct LoadOptions {
+    Target target = Target::PC1500;
+    bool acceptLengthMismatch = false;  // load a header whose length disagrees with the file
+    bool hasAddress = false;            // overrides the header's load address
+    uint32_t address = 0;
+    bool hasLength = false;             // overrides the payload size (at most the payload)
+    size_t length = 0;
+    bool lh5803 = false;                // PC-1600: `address` is the LH5803's (its 0000-7FFF = the Z-80's 8000-FFFF)
+    bool checkRange = true;             // refuse a range past $FFFF here (else the writer does)
+    SlotPolicy slotPolicy = SlotPolicy::Explicit;
+    Slot slot = Slot::S0;               // Explicit
+};
+
+enum class LoadError {
+    None,
+    BadFile,        // readFile() refused it (detail: its error; plan.file.lengthMismatch tells a length mismatch)
+    HeaderMismatch, // detail: headerMismatch()
+    Empty,          // no bytes to load
+    NeedsAddress,   // headerless and no address given (defaultAddr: a PC-1600 proposal)
+    LengthExceeds,  // `length` is more than the payload
+    OutsideBank0,   // the address is above $FFFF
+    LhRange,        // LH5803 code outside its 0000-7FFF
+    NoSlot,         // detail: pc1600TargetFor()'s reason
+    PastEnd,        // the code runs past $FFFF
+};
+
+struct LoadPlan {
+    LoadError error = LoadError::None;
+    std::string detail;
+    File file;
+    uint32_t addr = 0;         // in the requested CPU's address space
+    uint32_t busAddr = 0;      // where the bytes go: `addr`, or the Z-80 address of LH5803 code
+    size_t len = 0;
+    Slot slot = Slot::S0;
+    uint32_t defaultAddr = 0;  // NeedsAddress on a PC-1600
+};
+
+// `basicAreas`: PC-1600 only (see pc1600BasicAreas()).
+LoadPlan planLoad(const File& file, const LoadOptions& options, const std::vector<BasicArea>& basicAreas);
+
 // What to do with `file` on the running `target`: model mismatch errors
 // (a CE-158 file on a PC-1600, a PC-1600 file on a PC-1500), whether an
 // address must be asked, and (PC-1600) the target for a header address --

@@ -176,6 +176,69 @@ void test_plan_pc1600_target() {
     CHECK(!machinecode::plan(Target::PC1600, crossing, kSlot1First).error.empty());
 }
 
+void test_plan_load_configurations() {
+    using machinecode::LoadError;
+    using machinecode::LoadOptions;
+    using machinecode::SlotPolicy;
+    // A header whose length disagrees with the file (one byte too many).
+    std::vector<uint8_t> longer = pc1600File(kCode, 0xC0C5, 0);
+    longer.push_back(0x00);
+    const File mismatched = machinecode::readFile(longer);
+    CHECK(!mismatched.ok && mismatched.lengthMismatch);
+    const File headerless = machinecode::readFile(kCode);
+
+    // Build & Load: a mismatch loads; LH5803 addresses map to the Z-80's
+    // 8000-FFFF; internal RAM is always a place for Z-80 code.
+    LoadOptions dbg;
+    dbg.target = Target::PC1600;
+    dbg.acceptLengthMismatch = true;
+    dbg.slotPolicy = SlotPolicy::DeriveOrInternal;
+    auto p = machinecode::planLoad(mismatched, dbg, kStock);
+    CHECK(p.error == LoadError::None && p.slot == Slot::S0 && p.busAddr == 0xC0C5);
+    CHECK(machinecode::planLoad(headerless, dbg, kStock).error == LoadError::NeedsAddress);
+    LoadOptions lh = dbg;
+    lh.lh5803 = true;
+    lh.hasAddress = true;
+    lh.address = 0x1000;
+    p = machinecode::planLoad(headerless, lh, kSlot1First);
+    CHECK(p.error == LoadError::None && p.addr == 0x1000 && p.busAddr == 0x9000 && p.slot == Slot::S1);
+    CHECK(machinecode::planLoad(headerless, lh, kStock).error == LoadError::NoSlot); // 9000 with no module first
+    lh.address = 0x7FFE;
+    CHECK(machinecode::planLoad(headerless, lh, kSlot1First).error == LoadError::LhRange);
+    LoadOptions atEnd = dbg;
+    atEnd.hasAddress = true;
+    atEnd.address = 0xFFFE;
+    CHECK(machinecode::planLoad(headerless, atEnd, kStock).error == LoadError::PastEnd);
+    atEnd.address = 0x10000;
+    CHECK(machinecode::planLoad(headerless, atEnd, kStock).error == LoadError::OutsideBank0);
+
+    // Presets: `length:` trims and accepts a mismatch; the slot is as
+    // given; the range is the writer's business.
+    LoadOptions preset;
+    preset.target = Target::PC1600;
+    preset.checkRange = false;
+    preset.slot = Slot::S2;
+    CHECK(machinecode::planLoad(mismatched, preset, {}).error == LoadError::BadFile);
+    preset.hasLength = preset.acceptLengthMismatch = true; // as PresetRunner sets them
+    preset.length = 3;
+    p = machinecode::planLoad(mismatched, preset, {});
+    CHECK(p.error == LoadError::None && p.len == 3 && p.slot == Slot::S2 && p.addr == 0xC0C5);
+    preset.length = 99;
+    CHECK(machinecode::planLoad(mismatched, preset, {}).error == LoadError::LengthExceeds);
+    preset.length = 0;
+    CHECK(machinecode::planLoad(mismatched, preset, {}).error == LoadError::Empty);
+    preset.hasLength = preset.acceptLengthMismatch = false;
+    CHECK(machinecode::planLoad(headerless, preset, {}).error == LoadError::NeedsAddress);
+    preset.hasAddress = true;
+    preset.address = 0x1FFFF;
+    CHECK(machinecode::planLoad(headerless, preset, {}).error == LoadError::None);
+
+    // Load Machine Code… (plan()): a CE-158 header running past &FFFF.
+    const File past = machinecode::readFile(ce158File(kCode, 0xFFFE, 0));
+    CHECK(machinecode::plan(Target::PC1500, past, {}).error.find("runs past") != std::string::npos);
+    CHECK(machinecode::plan(Target::PC1500, mismatched, {}).error == mismatched.error);
+}
+
 // ── advice ───────────────────────────────────────────────────────────────
 
 void test_advice_pc1500() {
@@ -332,6 +395,7 @@ int run_machine_code_file_tests() {
     test_plan_model_mismatch();
     test_plan_headerless_needs_address();
     test_plan_pc1600_target();
+    test_plan_load_configurations();
     test_advice_pc1500();
     test_advice_pc1600();
     test_parse_hex_address();

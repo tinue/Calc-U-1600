@@ -183,37 +183,69 @@ std::string headerMismatch(Target target, const File& file) {
     return {};
 }
 
+LoadPlan planLoad(const File& file, const LoadOptions& o, const std::vector<BasicArea>& basicAreas) {
+    LoadPlan p;
+    p.file = file;
+    auto refuse = [&p](LoadError e, std::string detail = {}) {
+        p.error = e;
+        p.detail = std::move(detail);
+        return p;
+    };
+    if (!file.ok && !(file.lengthMismatch && o.acceptLengthMismatch)) return refuse(LoadError::BadFile, file.error);
+    const std::string mismatch = headerMismatch(o.target, file);
+    if (!mismatch.empty()) return refuse(LoadError::HeaderMismatch, mismatch);
+    if (file.payload.empty() && !o.hasLength) return refuse(LoadError::Empty);
+    if (file.header == File::Header::None && !o.hasAddress) {
+        if (o.target == Target::PC1600) p.defaultAddr = pc1600DefaultAddress(basicAreas);
+        return refuse(LoadError::NeedsAddress);
+    }
+    p.addr = o.hasAddress ? o.address : file.loadAddr;
+    p.len = o.hasLength ? o.length : file.payload.size();
+    if (p.len == 0) return refuse(LoadError::Empty);
+    if (p.len > file.payload.size()) return refuse(LoadError::LengthExceeds);
+    if (o.checkRange && p.addr > 0xFFFF) return refuse(LoadError::OutsideBank0);
+    p.busAddr = p.addr;
+    if (o.lh5803) {
+        if (p.addr + p.len > 0x8000) return refuse(LoadError::LhRange);
+        p.busAddr = p.addr + 0x8000;
+    }
+    p.slot = o.slot;
+    if (o.target == Target::PC1600 && o.slotPolicy != SlotPolicy::Explicit) {
+        std::string why;
+        if (!pc1600TargetFor(p.busAddr, p.len, basicAreas, &p.slot, &why)) {
+            if (o.slotPolicy == SlotPolicy::DeriveOrInternal && p.busAddr >= 0xC000) p.slot = Slot::S0;
+            else return refuse(LoadError::NoSlot, why);
+        }
+    }
+    if (o.checkRange && static_cast<uint64_t>(p.busAddr) + p.len > 0x10000) return refuse(LoadError::PastEnd);
+    return p;
+}
+
 Plan plan(Target target, const File& file, const std::vector<BasicArea>& basicAreas) {
+    // Load Machine Code…'s rules: the header decides, the BASIC area picks
+    // the PC-1600 slot; a headerless file asks for its address.
+    LoadOptions o;
+    o.target = target;
+    o.slotPolicy = SlotPolicy::Derive;
+    const LoadPlan lp = planLoad(file, o, basicAreas);
     Plan p;
-    if (!file.ok) {
-        p.error = file.error;
-        return p;
+    p.slot = lp.slot;
+    switch (lp.error) {
+        case LoadError::None: break;
+        case LoadError::NeedsAddress:
+            p.needsAddress = true;
+            p.defaultAddr = lp.defaultAddr;
+            break;
+        case LoadError::Empty: p.error = "The file contains no code."; break;
+        case LoadError::OutsideBank0:
+            p.error = "The header's load address " + hex(file.loadAddr) + " is outside bank 0; banked loads are not supported.";
+            break;
+        case LoadError::NoSlot: p.error = "The header's load address doesn't fit: " + lp.detail; break;
+        case LoadError::PastEnd:
+            p.error = "The code (" + std::to_string(file.payload.size()) + " bytes at " + hex(file.loadAddr) + ") runs past &FFFF.";
+            break;
+        default: p.error = lp.detail; break; // BadFile, HeaderMismatch
     }
-    if (file.payload.empty()) {
-        p.error = "The file contains no code.";
-        return p;
-    }
-    p.error = headerMismatch(target, file);
-    if (!p.error.empty()) return p;
-    if (file.header == File::Header::None) {
-        p.needsAddress = true;
-        if (target == Target::PC1600) p.defaultAddr = pc1600DefaultAddress(basicAreas);
-        return p;
-    }
-    if (target == Target::PC1500) {
-        if (static_cast<uint64_t>(file.loadAddr) + file.payload.size() > 0x10000)
-            p.error = "The code (" + std::to_string(file.payload.size()) + " bytes at " + hex(file.loadAddr) +
-                      ") runs past &FFFF.";
-        return p;
-    }
-    if (file.loadAddr > 0xFFFF) {
-        p.error = "The header's load address " + hex(file.loadAddr) +
-                  " is outside bank 0; banked loads are not supported.";
-        return p;
-    }
-    std::string why;
-    if (!pc1600TargetFor(file.loadAddr, file.payload.size(), basicAreas, &p.slot, &why))
-        p.error = "The header's load address doesn't fit: " + why;
     return p;
 }
 
