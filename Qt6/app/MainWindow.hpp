@@ -215,6 +215,8 @@ private:
     // press, a mouse press, or losing focus disarms it.
     bool m_shiftTapArmed = false;
     QElapsedTimer m_shiftTapClock;
+    void armShiftTap();
+    void disarmShiftTap();
 
     // The per-frame view refresh (LCD, debug log, paper, floppy lamp,
     // persistence) -- run by the pacer after each advance.

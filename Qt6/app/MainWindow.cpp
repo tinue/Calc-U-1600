@@ -247,7 +247,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // A key held while focus moves to another widget (a combo box, a
     // dialog) releases there, not here -- let go of it now instead.
     connect(qApp, &QApplication::focusChanged, this, [this] { releaseHeldKeys(); });
-    qApp->installEventFilter(this); // mouse presses disarm a host-Shift tap
     connect(m_faceplate->lcdWidget(), &LcdWidget::turboRequested, this,
             [this](bool active) { m_pacer->setTurbo(active); });
 
@@ -579,12 +578,11 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
     // A Shift press arms the tap; any other key (letters, Cmd/Ctrl/Alt,
     // Shift+Delete, ...) means Shift is being used as a modifier.
     if (event->key() == Qt::Key_Shift) {
-        m_shiftTapArmed = true;
-        m_shiftTapClock.start();
+        armShiftTap();
         QWidget::keyPressEvent(event);
         return;
     }
-    m_shiftTapArmed = false;
+    disarmShiftTap();
 
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     auto resolved = PC1500KeyboardMap::resolve(static_cast<Qt::Key>(event->key()),
@@ -684,7 +682,7 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event) {
 
     if (event->key() == Qt::Key_Shift) {
         const bool tapped = m_shiftTapArmed && m_shiftTapClock.elapsed() <= kShiftTapMaxMs;
-        m_shiftTapArmed = false;
+        disarmShiftTap();
         if (tapped) {
             if (m_controller->pasteActive()) m_controller->cancelPaste();
             m_controller->tapKey("shift");
@@ -711,11 +709,26 @@ void MainWindow::changeEvent(QEvent* event) {
 void MainWindow::releaseHeldKeys() {
     for (const std::string& key : std::as_const(m_physicalKeysDown)) m_controller->releaseKey(key);
     m_physicalKeysDown.clear();
-    m_shiftTapArmed = false; // the Shift release may land elsewhere
+    disarmShiftTap(); // the Shift release may land elsewhere
+}
+
+// The app-wide filter is only installed while a tap is armed (at most
+// kShiftTapMaxMs), not for the window's life: it sees every event of
+// every object, just to catch a Shift-click.
+void MainWindow::armShiftTap() {
+    if (!m_shiftTapArmed) qApp->installEventFilter(this);
+    m_shiftTapArmed = true;
+    m_shiftTapClock.start();
+}
+
+void MainWindow::disarmShiftTap() {
+    if (!m_shiftTapArmed) return;
+    m_shiftTapArmed = false;
+    qApp->removeEventFilter(this);
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
-    if (event->type() == QEvent::MouseButtonPress) m_shiftTapArmed = false; // a Shift-click
+    if (event->type() == QEvent::MouseButtonPress) disarmShiftTap(); // a Shift-click
     return QMainWindow::eventFilter(watched, event);
 }
 

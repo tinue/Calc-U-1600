@@ -278,11 +278,6 @@ timing — decide deliberately):
   Could keep a running T-state total and derive edges lazily in
   `readIO`/`writeIO` (`total * 1300000 / 21480000`). Timing-sensitive —
   verify with the scrolling-PRINT benchmark.
-- **App-wide event filter for the Shift tap.**
-  `qApp->installEventFilter(this)` in `MainWindow.cpp` (~244/703) sees
-  every event of every object, only to catch a mouse press during the
-  ≤ 400 ms a Shift tap is armed. Install on Shift press / remove on
-  disarm, or check `QGuiApplication::mouseButtons()` at Shift release.
 - **CE-158 ROM reads on the PC-1500 go through the generic open-bus
   path.** Every fetch at 0x8000–0x9FFF runs resolve → readOpenBus →
   SystemBus decode → per-card `respondsToRead`. Option: a direct
