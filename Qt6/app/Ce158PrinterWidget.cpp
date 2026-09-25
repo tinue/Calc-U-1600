@@ -65,9 +65,11 @@ Ce158PrinterWidget::Ce158PrinterWidget(MachineController* controller, QWidget* p
 
     connect(m_saveButton, &QPushButton::clicked, this, &Ce158PrinterWidget::saveToFile);
     connect(m_clearButton, &QPushButton::clicked, this, &Ce158PrinterWidget::clearOutput);
+    connect(m_controller, &MachineController::serialLinksMoved, this, &Ce158PrinterWidget::refreshSerialLabel);
 
     applyChrome();
-    onFrameTick();
+    updateButtons();
+    refreshSerialLabel();
 }
 
 void Ce158PrinterWidget::changeEvent(QEvent* event) {
@@ -95,18 +97,28 @@ void Ce158PrinterWidget::onFrameTick() {
     if (!bytes.empty()) {
         appendBytes(QByteArray(reinterpret_cast<const char*>(bytes.data()), static_cast<qsizetype>(bytes.size())));
     }
+}
+
+void Ce158PrinterWidget::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    refreshSerialLabel();
+}
+
+void Ce158PrinterWidget::refreshSerialLabel() {
     const QString path = m_controller->ce158SerialLinkStatus();
-    if (path != m_serialPath || m_serialLabel->text().isEmpty()) {
-        m_serialPath = path;
-        m_serialLabel->setText(path.isEmpty() ? tr("RS-232C: no host port (the pseudo-terminal could not be opened)")
-                                              : tr("RS-232C: %1").arg(AppPaths::displayPath(path)));
-    }
+    m_serialLabel->setText(path.isEmpty() ? tr("RS-232C: no host port (the pseudo-terminal could not be opened)")
+                                          : tr("RS-232C: %1").arg(AppPaths::displayPath(path)));
+}
+
+void Ce158PrinterWidget::updateButtons() {
     m_saveButton->setEnabled(!m_printed.isEmpty());
     m_clearButton->setEnabled(!m_printed.isEmpty());
 }
 
 void Ce158PrinterWidget::appendBytes(const QByteArray& bytes) {
+    const bool wasEmpty = m_printed.isEmpty();
     m_printed.append(bytes);
+    if (wasEmpty) updateButtons();
     const QString text = QString::fromStdString(ce158PrintableText(
         reinterpret_cast<const std::uint8_t*>(bytes.constData()), static_cast<std::size_t>(bytes.size())));
     QScrollBar* bar = m_output->verticalScrollBar();
@@ -129,6 +141,5 @@ void Ce158PrinterWidget::saveToFile() {
 void Ce158PrinterWidget::clearOutput() {
     m_printed.clear();
     m_output->clear();
-    m_saveButton->setEnabled(false);
-    m_clearButton->setEnabled(false);
+    updateButtons();
 }

@@ -205,6 +205,7 @@ void MachineController::refreshSerialLinkDirectory() {
     const std::string dir = effectiveSerialLinkDir().toStdString();
     if (m_serialLink) m_serialLink->relink(dir);
     if (PtySerialLink* ce158 = m_ce158SerialLink.link()) ce158->relink(dir);
+    emit serialLinksMoved();
 }
 
 QString MachineController::serialLinkStatus() const {

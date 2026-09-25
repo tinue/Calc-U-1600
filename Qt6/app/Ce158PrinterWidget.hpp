@@ -20,11 +20,14 @@ public:
     explicit Ce158PrinterWidget(MachineController* controller, QWidget* parent = nullptr);
 
     // Called once per ~60 Hz frame tick while the CE-158 is attached:
-    // drains the printer output and refreshes the serial-port line.
+    // drains the printer output.
     void onFrameTick();
 
 protected:
     void changeEvent(QEvent* event) override;
+    // Docking the panel (a CE-158 was attached, its PTY opened on the way)
+    // refreshes the serial-port line; so does a relink (serialLinksMoved).
+    void showEvent(QShowEvent* event) override;
 
 private:
     MachineController* m_controller; // not owned
@@ -35,9 +38,10 @@ private:
     QPushButton* m_saveButton;
     QPushButton* m_clearButton;
     QByteArray m_printed;
-    QString m_serialPath;
 
     void applyChrome();
+    void refreshSerialLabel();
+    void updateButtons(); // Save/Clear: enabled while something is printed
     void appendBytes(const QByteArray& bytes);
     void saveToFile();
     void clearOutput();

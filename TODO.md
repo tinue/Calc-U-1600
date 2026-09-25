@@ -287,7 +287,3 @@ timing — decide deliberately):
   path.** Every fetch at 0x8000–0x9FFF runs resolve → readOpenBus →
   SystemBus decode → per-card `respondsToRead`. Option: a direct
   per-PU/PV ROM pointer from the card.
-- **`Ce158PrinterWidget::onFrameTick`** fetches the PTY path (mutex +
-  string copy + QString) and sets button enables every frame; refresh
-  the label only on link create/relink and toggle buttons only when
-  the printout goes empty ↔ non-empty. Minor.

@@ -347,6 +347,8 @@ public:
 
 signals:
     void modelChanged(Model model);
+    // refreshSerialLinkDirectory() moved the PTY symlinks.
+    void serialLinksMoved();
 
 private:
     Model m_model = Model::PC1500A;
