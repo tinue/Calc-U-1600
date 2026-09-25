@@ -120,19 +120,39 @@ int FaceplateWidget::hitTest(const QPoint& pos) const {
     return -1;
 }
 
-void FaceplateWidget::mousePressEvent(QMouseEvent* event) {
-    const int idx = hitTest(event->pos());
-    if (idx < 0 || !m_layout) return;
+void FaceplateWidget::pressIndex(int idx) {
     m_pressedKey = QString::fromUtf8(m_layout->keys[idx].name);
     m_pressedIndex = idx;
     update();
     emit keyPressed(m_pressedKey);
 }
 
+void FaceplateWidget::mousePressEvent(QMouseEvent* event) {
+    const int idx = hitTest(event->pos());
+    if (idx < 0 || !m_layout) return;
+    pressIndex(idx);
+}
+
 void FaceplateWidget::mouseReleaseEvent(QMouseEvent*) {
     // Release whatever was pressed regardless of where the mouse ended up --
     // a drag-off-widget release must still clear the key, or it's stuck
     // down in the matrix.
+    releasePressedKey();
+}
+
+bool FaceplateWidget::pressKeyByName(const QString& name) {
+    if (!m_layout) return false;
+    for (std::size_t i = 0; i < m_layout->keyCount; ++i) {
+        if (name == QString::fromUtf8(m_layout->keys[i].name)) {
+            releasePressedKey();
+            pressIndex(static_cast<int>(i));
+            return true;
+        }
+    }
+    return false;
+}
+
+void FaceplateWidget::releasePressedKey() {
     if (m_pressedKey.isEmpty()) return;
     emit keyReleased(m_pressedKey);
     m_pressedKey.clear();

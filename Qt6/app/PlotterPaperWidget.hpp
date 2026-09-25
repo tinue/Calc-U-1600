@@ -1,4 +1,5 @@
 #pragma once
+#include <QImage>
 #include <QWidget>
 #include <cstdint>
 #include <vector>
@@ -40,6 +41,10 @@ public:
     // MainWindow::onFrameTick() while a plotter is attached -- an O(1) "did
     // it change" poll before paying for the full point-vector copy.
     void onFrameTick();
+
+    // The whole plot as a physical-size image (up to 1200 DPI, true DPI
+    // embedded) -- what Copy puts on the clipboard. Null while blank.
+    QImage renderPaperImage() const;
 
 protected:
     // Re-applies theme-aware chrome colors on a live light/dark switch --

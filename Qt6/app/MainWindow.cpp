@@ -90,6 +90,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_plotterPaper->hide(); // added to m_debugRowLayout only once a plotter attaches
     m_ce158Printer = new Ce158PrinterWidget(m_controller.get(), central);
     m_ce158Printer->hide(); // added to m_debugRowLayout only once a CE-158 attaches
+    // Handles screenshot scenarios address these by (docs/screenshots/README.md).
+    m_faceplate->setObjectName(QStringLiteral("faceplate"));
+    m_faceplate->lcdWidget()->setObjectName(QStringLiteral("lcd"));
+    m_debugPanel->setObjectName(QStringLiteral("debugpanel"));
+    m_plotterPaper->setObjectName(QStringLiteral("paper"));
+    m_ce158Printer->setObjectName(QStringLiteral("ce158printer"));
 
     auto* layout = new QVBoxLayout(central);
     layout->setContentsMargins(6, 6, 6, 4);
@@ -334,6 +340,7 @@ void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::functi
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     setCursor(Qt::WaitCursor);
+    m_loading = true;
 
     // The load itself blocks this thread, so pump the event loop from the
     // machine's yield hook (see PresetController::setYieldHook()): keeps the
@@ -364,6 +371,7 @@ void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::functi
 
     QString error;
     const bool ok = loadFn(&error);
+    m_loading = false;
     m_presetController->setYieldHook({});
     popup.reset();
     unsetCursor();
@@ -371,7 +379,7 @@ void MainWindow::runSynchronousLoad(const QString& errorTitle, const std::functi
     // The load ran the machine flat out -- whatever it beeped is stale.
     m_controller->discardAudio();
     restartPacing();
-    m_frameTimer->start(kFrameIntervalMs);
+    if (!m_emulationFrozen) m_frameTimer->start(kFrameIntervalMs);
 
     if (!ok) {
         QMessageBox::warning(this, errorTitle, error);
@@ -775,7 +783,10 @@ void MainWindow::onFrameTick() {
         m_controller->advance(whole);
     }
     m_audio->pump(*m_controller, /*discard=*/m_turboActive);
+    refreshViewsAfterAdvance();
+}
 
+void MainWindow::refreshViewsAfterAdvance() {
     const DisplayFrame frame = m_controller->currentDisplay();
     m_faceplate->lcdWidget()->setFrame(frame);
     m_faceplate->lcdWidget()->update();
@@ -786,6 +797,54 @@ void MainWindow::onFrameTick() {
     m_debugPanel->onFrameTick();
     if (m_plotterPaperInLayout) m_plotterPaper->onFrameTick();
     if (m_ce158PrinterInLayout) m_ce158Printer->onFrameTick();
+}
+
+void MainWindow::setEmulationFrozen(bool frozen) {
+    m_emulationFrozen = frozen;
+    if (frozen) {
+        m_frameTimer->stop();
+    } else {
+        restartPacing();
+        m_frameTimer->start(kFrameIntervalMs);
+    }
+}
+
+void MainWindow::runEmulation(double seconds) {
+    const double clockHz = m_controller->clockHz();
+    const auto perFrame = static_cast<std::uint64_t>(clockHz / 60.0);
+    auto remaining = static_cast<std::uint64_t>(seconds * clockHz);
+    while (remaining > 0) {
+        const std::uint64_t slice = std::min(remaining, perFrame);
+        m_controller->advance(slice);
+        remaining -= slice;
+    }
+    m_controller->discardAudio(); // not paced in real time -- nothing to play
+    refreshViewsAfterAdvance();
+}
+
+bool MainWindow::runUntilPasteDone(double capSeconds) {
+    const int maxFrames = static_cast<int>(capSeconds * 60.0);
+    for (int i = 0; i < maxFrames && m_controller->pasteActive(); ++i) runEmulation(1.0 / 60.0);
+    return !m_controller->pasteActive();
+}
+
+bool MainWindow::loadPresetForShots(const QString& path, QString* error) {
+    bool ok = false;
+    runSynchronousLoad(
+        tr("Load Preset"),
+        // Report success to runSynchronousLoad() either way: its failure
+        // path is a modal warning box, which would stall the script. The
+        // real outcome goes back to the caller through `ok`/`error`.
+        [this, path, &ok, error](QString*) {
+            ok = m_presetController->loadPreset(path, error);
+            return true;
+        },
+        [this] { onPresetArmed(); });
+    // Frozen emulation means no frame tick will show the end state -- the
+    // LCD would keep the load's last throttled repaint, the paper its
+    // pre-plot points.
+    refreshViewsAfterAdvance();
+    return ok;
 }
 
 void MainWindow::buildMenuBar() {

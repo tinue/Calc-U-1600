@@ -31,11 +31,32 @@ QString defaultInstanceDir() {
     return dir;
 }
 
+namespace {
+QString& isolatedInstanceDir() {
+    static QString dir;
+    return dir;
+}
+} // namespace
+
+void setIsolatedInstanceDir(const QString& dir) {
+    isolatedInstanceDir() = dir;
+}
+
+QString forDisplay(const QString& path) {
+    const QString isolated = isolatedInstanceDir();
+    if (isolated.isEmpty() || !path.startsWith(isolated)) return path;
+    return defaultInstanceDir() + path.mid(isolated.size());
+}
+
 QString instanceDir() {
     const QString override = AppSettings::instanceDirOverride();
     if (!override.isEmpty()) {
         QDir().mkpath(override);
         return override;
+    }
+    if (!isolatedInstanceDir().isEmpty()) {
+        QDir().mkpath(isolatedInstanceDir());
+        return isolatedInstanceDir();
     }
     return defaultInstanceDir();
 }

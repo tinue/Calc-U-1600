@@ -111,6 +111,10 @@ DebugPanel::DebugPanel(MachineController* controller, QWidget* parent)
     m_clearButton->setIcon(style()->standardIcon(QStyle::SP_TrashIcon));
     m_clearButton->setToolTip(tr("Clear"));
     m_clearButton->setEnabled(false);
+    m_pointersButton->setObjectName(QStringLiteral("debugpanel.pointers"));
+    m_dumpMemButton->setObjectName(QStringLiteral("debugpanel.dumpmem"));
+    m_dumpCardButton->setObjectName(QStringLiteral("debugpanel.dumpcard"));
+    m_clearButton->setObjectName(QStringLiteral("debugpanel.clear"));
     for (auto* b : {m_pointersButton, m_dumpMemButton, m_dumpCardButton, m_clearButton}) {
         b->setFocusPolicy(Qt::NoFocus);
     }
@@ -124,6 +128,7 @@ DebugPanel::DebugPanel(MachineController* controller, QWidget* parent)
     auto* row2 = new QHBoxLayout();
     row2->setSpacing(8);
     m_traceButton = new QToolButton(m_buttonBar);
+    m_traceButton->setObjectName(QStringLiteral("debugpanel.trace"));
     m_traceButton->setText(tr(" TRACE"));
     m_traceButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     m_traceButton->setCheckable(false);

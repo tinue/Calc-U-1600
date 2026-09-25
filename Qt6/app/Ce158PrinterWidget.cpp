@@ -52,9 +52,11 @@ Ce158PrinterWidget::Ce158PrinterWidget(MachineController* controller, QWidget* p
     m_saveButton = new QPushButton(tr("Save…"), m_buttonBar);
     m_saveButton->setToolTip(tr("Save the printed bytes, exactly as sent, to a file."));
     m_saveButton->setFocusPolicy(Qt::NoFocus);
+    m_saveButton->setObjectName(QStringLiteral("ce158printer.save"));
     m_clearButton = new QPushButton(tr("Clear"), m_buttonBar);
     m_clearButton->setToolTip(tr("Tear off the paper (clears the printed output)."));
     m_clearButton->setFocusPolicy(Qt::NoFocus);
+    m_clearButton->setObjectName(QStringLiteral("ce158printer.clear"));
     buttonBarLayout->addWidget(m_saveButton);
     buttonBarLayout->addWidget(m_clearButton);
     buttonBarLayout->addStretch(1);

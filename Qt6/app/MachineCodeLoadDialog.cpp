@@ -14,6 +14,7 @@ MachineCodeLoadDialog::MachineCodeLoadDialog(QWidget* parent, machinecode::Targe
                                              const std::vector<machinecode::BasicArea>& basicAreas)
     : QDialog(parent), m_target(target), m_length(length), m_basicAreas(basicAreas) {
     setWindowTitle(tr("Load Machine Code"));
+    setObjectName(QStringLiteral("dialog.machinecode"));
 
     auto* layout = new QVBoxLayout(this);
     auto* form = new QFormLayout();

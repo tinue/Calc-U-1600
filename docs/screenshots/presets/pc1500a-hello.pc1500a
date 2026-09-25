@@ -1,0 +1,4 @@
+# User-guide screenshots: a PC-1500A at the prompt with a greeting on the LCD.
+model: PC-1500A
+keys:
+  - type: PRINT "HELLO FROM THE PC-1500A"

@@ -186,12 +186,15 @@ qt_add_executable(CalcU1600Qt
   app/AboutDialog.cpp
   app/PresetController.cpp
   app/AudioOutput.cpp
+  app/screenshots/ShotScenario.cpp
+  app/screenshots/ShotCapture.cpp
+  app/screenshots/ShotRunner.cpp
   ${CORE_SOURCES}
   resources/calc-u-1600.qrc
 )
 
 if(APPLE)
-  target_sources(CalcU1600Qt PRIVATE app/MacClipboardImage.mm)
+  target_sources(CalcU1600Qt PRIVATE app/MacClipboardImage.mm app/screenshots/MacShotSupport.mm)
   target_link_libraries(CalcU1600Qt PRIVATE "-framework Cocoa")
 endif()
 

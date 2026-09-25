@@ -1,0 +1,36 @@
+# Screenshots for docs/User-Guide.md -- regenerate with
+# tools/make_screenshots.sh (format: docs/screenshots/README.md).
+out: ../images
+window: 900x1000
+
+shots:
+  - name: pc1500a-window
+    preset: presets/pc1500a-hello.pc1500a
+    capture: pc1500a-window.png
+
+  - name: pc1600-faceplate
+    preset: presets/pc1600-hello.pc1600
+    capture: { target: faceplate, file: pc1600-faceplate.png }
+
+  - name: model-dropdown
+    preset: presets/pc1500a-hello.pc1500a
+    steps:
+      - open: controlbar.model
+    capture: { target: controlbar, file: model-dropdown.png, padding: 4 }
+
+  - name: shift-held
+    preset: presets/pc1500a-hello.pc1500a
+    steps:
+      - hold-key: shift
+    capture: { target: faceplate, file: shift-held.png }
+
+  - name: settings-dialog
+    steps:
+      - action: Edit > Settings…
+    capture: { target: dialog, file: settings-dialog.png }
+
+  - name: lissajou-plot
+    preset: presets/pc1600-lissajou.pc1600
+    steps:
+      - capture: { target: plot, file: lissajou-plot.png }
+    capture: pc1600-plotter-window.png

@@ -48,6 +48,33 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
 
+    // ── Scripted screenshots (screenshots/ShotRunner) ──────────────────
+    // The emulator normally runs off the ~60 Hz frame timer. A shot run
+    // freezes it, so every capture sees exactly the state its steps left
+    // behind (no cursor blink, no clock drift between runs), and advances
+    // it explicitly instead.
+    void setEmulationFrozen(bool frozen);
+    // Runs `seconds` of emulated time in frame-sized slices, then refreshes
+    // every view (LCD, debug log, paper) as a frame tick would.
+    void runEmulation(double seconds);
+    // Runs until a MachineController::pasteText() has been fully typed;
+    // false if it is still typing after `capSeconds` of emulated time.
+    bool runUntilPasteDone(double capSeconds);
+    // Load Preset… without the file dialog, and with a failure reported
+    // through `error` instead of a blocking warning box.
+    bool loadPresetForShots(const QString& path, QString* error);
+    // Reset / Reset All, as the Machine menu does.
+    void resetForShots(bool allReset) {
+        resetMachine(allReset);
+        refreshViewsAfterAdvance();
+    }
+    // True while runSynchronousLoad() is mid-load: it pumps the event loop
+    // (timers included), and nothing may drive the machine until it's done.
+    bool isLoading() const { return m_loading; }
+    MachineController* controller() const { return m_controller.get(); }
+    FaceplateWidget* faceplate() const { return m_faceplate; }
+    PlotterPaperWidget* plotterPaper() const { return m_plotterPaper; }
+
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
@@ -200,4 +227,9 @@ private:
     QElapsedTimer m_shiftTapClock;
 
     void onFrameTick();
+    // The per-frame view refresh (LCD, debug log, paper, floppy lamp,
+    // persistence) -- shared by onFrameTick() and runEmulation().
+    void refreshViewsAfterAdvance();
+    bool m_emulationFrozen = false;
+    bool m_loading = false; // see isLoading()
 };

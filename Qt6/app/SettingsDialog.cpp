@@ -183,6 +183,7 @@ void addDefaultPresetRow(QGridLayout* grid, int row, QWidget* parent, SectionGri
 SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     : QDialog(parent), m_controller(controller) {
     setWindowTitle(tr("Settings"));
+    setObjectName(QStringLiteral("dialog.settings"));
     setMinimumWidth(kMinimumDialogWidth);
 
     auto* layout = new QVBoxLayout(this);
@@ -228,7 +229,7 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     {
         PathRowSpec spec = directorySpec(this, tr("Battery-card saves:"), tr("Choose Save Directory"),
                                          [] { return AppPaths::instanceDir(); });
-        spec.display = [] { return AppPaths::instanceDir(); };
+        spec.display = [] { return AppPaths::forDisplay(AppPaths::instanceDir()); };
         spec.isOverridden = [] { return !AppSettings::instanceDirOverride().isEmpty(); };
         spec.set = [](const QString& dir) { AppSettings::setInstanceDirOverride(dir); };
         addPathRow(storage, 0, this, sections, spec);
@@ -241,7 +242,7 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
                                          [] { return AppPaths::instanceDir(); });
         spec.display = [] {
             const QString dir = AppSettings::traceDirOverride();
-            return dir.isEmpty() ? AppPaths::instanceDir() : dir;
+            return dir.isEmpty() ? AppPaths::forDisplay(AppPaths::instanceDir()) : dir;
         };
         spec.isOverridden = [] { return !AppSettings::traceDirOverride().isEmpty(); };
         spec.set = [](const QString& dir) { AppSettings::setTraceDirOverride(dir); };
@@ -269,16 +270,16 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     ce158StatusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     auto refreshSerialStatusLabel = [this, serialStatusLabel, ce158StatusLabel] {
         const QString status = m_controller ? m_controller->serialLinkStatus() : QString();
-        serialStatusLabel->setText(status.isEmpty() ? tr("(PC-1600 not active)") : status);
+        serialStatusLabel->setText(status.isEmpty() ? tr("(PC-1600 not active)") : AppPaths::forDisplay(status));
         const QString ce158 = m_controller ? m_controller->ce158SerialLinkStatus() : QString();
-        ce158StatusLabel->setText(ce158.isEmpty() ? tr("(CE-158 not attached)") : ce158);
+        ce158StatusLabel->setText(ce158.isEmpty() ? tr("(CE-158 not attached)") : AppPaths::forDisplay(ce158));
     };
     {
         PathRowSpec spec = directorySpec(this, tr("Symlink directory:"), tr("Choose Serial Port Directory"),
                                          [] { return AppPaths::instanceDir(); });
         spec.display = [] {
             const QString dir = AppSettings::serialLinkDirOverride();
-            return dir.isEmpty() ? AppPaths::instanceDir() : dir;
+            return dir.isEmpty() ? AppPaths::forDisplay(AppPaths::instanceDir()) : dir;
         };
         spec.isOverridden = [] { return !AppSettings::serialLinkDirOverride().isEmpty(); };
         spec.set = [](const QString& dir) { AppSettings::setSerialLinkDirOverride(dir); };

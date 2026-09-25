@@ -10,7 +10,19 @@
 // reverse-DNS identifier.
 namespace AppSettings {
 
-inline QSettings backingStore() { return QSettings(QStringLiteral("Calc-U-1600"), QStringLiteral("Calc-U-1600")); }
+// Non-empty: an INI file every read/write goes to instead of the user's
+// real settings. Set once at startup for scripted screenshot runs
+// (`--shots`, see main.cpp) so the user's default presets, last model,
+// folders etc. neither leak into the images nor get overwritten.
+inline QString& isolatedStorePath() {
+    static QString path;
+    return path;
+}
+
+inline QSettings backingStore() {
+    if (!isolatedStorePath().isEmpty()) return QSettings(isolatedStorePath(), QSettings::IniFormat);
+    return QSettings(QStringLiteral("Calc-U-1600"), QStringLiteral("Calc-U-1600"));
+}
 
 // Key: "storage/instanceDirOverride" -- empty/absent means "use the
 // ~/Calc-U-1600 default" (see AppPaths::instanceDir()), not "use

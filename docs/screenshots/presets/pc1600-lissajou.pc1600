@@ -1,0 +1,13 @@
+# User-guide screenshots: a PC-1600 with the CE-1600P that has just plotted
+# the Lissajous demo (examples/lissajou-1600.bas).
+model: PC-1600
+plotter: ce1600p
+keys:
+  - key: mode
+program:
+  path: ../../../examples/lissajou-1600.bas
+  format: basic-binary
+keys:
+  - key: mode
+  - type: RUN
+  - wait:

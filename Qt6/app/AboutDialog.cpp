@@ -7,6 +7,7 @@
 
 AboutDialog::AboutDialog(QWidget* parent) : QDialog(parent) {
     setWindowTitle(tr("About Calc-U-1600"));
+    setObjectName(QStringLiteral("dialog.about"));
 
     auto* layout = new QVBoxLayout(this);
 

@@ -1,0 +1,4 @@
+# User-guide screenshots: a PC-1600 at the prompt with a greeting on the LCD.
+model: PC-1600
+keys:
+  - type: PRINT "HELLO FROM THE PC-1600"

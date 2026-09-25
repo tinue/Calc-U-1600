@@ -138,9 +138,11 @@ PlotterPaperWidget::PlotterPaperWidget(MachineController* controller, QWidget* p
     m_copyButton = new QPushButton(tr("Copy"), m_buttonBar);
     m_copyButton->setToolTip(tr("Copy the paper to the clipboard as an image."));
     m_copyButton->setFocusPolicy(Qt::NoFocus);
+    m_copyButton->setObjectName(QStringLiteral("paper.copy"));
     m_cutButton = new QPushButton(tr("Cut"), m_buttonBar);
     m_cutButton->setToolTip(tr("Copy the paper, then tear it off (clears the plot)."));
     m_cutButton->setFocusPolicy(Qt::NoFocus);
+    m_cutButton->setObjectName(QStringLiteral("paper.cut"));
     buttonBarLayout->addWidget(m_copyButton);
     buttonBarLayout->addWidget(m_cutButton);
     buttonBarLayout->addStretch(1);
@@ -234,8 +236,8 @@ void PlotterPaperWidget::onFrameTick() {
     if (wasNearBottom) scrollToBottom();
 }
 
-void PlotterPaperWidget::copyToClipboard() {
-    if (m_points.empty()) return;
+QImage PlotterPaperWidget::renderPaperImage() const {
+    if (m_points.empty()) return {};
 
     const double paneWidthPt = m_geometry.physicalPaneWidthPt();
     const auto [lower, upper] = m_penYRange;
@@ -259,6 +261,15 @@ void PlotterPaperWidget::copyToClipboard() {
     const int dotsPerMeter = qRound(effectiveScale * 72.0 / 0.0254);
     image.setDotsPerMeterX(dotsPerMeter);
     image.setDotsPerMeterY(dotsPerMeter);
+    return image;
+}
+
+void PlotterPaperWidget::copyToClipboard() {
+    const QImage image = renderPaperImage();
+    if (image.isNull()) return;
+    const double paneWidthPt = m_geometry.physicalPaneWidthPt();
+    const auto [lower, upper] = m_penYRange;
+    const double contentHeightPt = m_geometry.contentHeight(0, lower, upper, paneWidthPt);
 
 #ifdef Q_OS_MACOS
     // Qt's cross-platform QClipboard::setImage() ignores both

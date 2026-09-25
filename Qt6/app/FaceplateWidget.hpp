@@ -26,6 +26,14 @@ public:
 
     LcdWidget* lcdWidget() const { return m_lcd; }
 
+    // Presses `name` exactly as a mouse click on it would -- highlight
+    // overlay plus keyPressed() -- and keeps it down until
+    // releasePressedKey(). For scripted screenshots (`hold-key:`). False
+    // if the current model's layout has no key of that name.
+    bool pressKeyByName(const QString& name);
+    // Releases whatever key is down (mouse or pressKeyByName()).
+    void releasePressedKey();
+
 signals:
     void keyPressed(QString name);
     void keyReleased(QString name);
@@ -46,5 +54,6 @@ private:
     int m_pressedIndex = -1; // index into m_keyRects/m_layout->keys, or -1; drives the press-highlight overlay
 
     void relayout();
+    void pressIndex(int idx); // highlight + keyPressed() for m_layout->keys[idx]
     int hitTest(const QPoint& pos) const; // index into m_layout->keys, or -1
 };
