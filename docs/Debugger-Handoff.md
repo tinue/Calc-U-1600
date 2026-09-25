@@ -22,6 +22,8 @@ All work is committed on `dev-0.6.0`:
 | 92e927a | Extension installed as a `.vsix` (`tools/install_vscode_extension.sh`) |
 | a930b14 | Settings ▸ Debugger ▸ Disconnect; clearer "already attached" message |
 | ddef5ea | Numeric memory references (disassembly view), Banks under Registers |
+| d240b90 | Cleanup pass: shared helpers, dead code, cheaper lookups |
+| 7dcfd61 … 263baec | The restructuring in `docs/Debugger-Restructuring-Plan.md`, phases R1–R12 (see below) |
 
 **Verified:**
 - **CoreTests:** fully green, including the new suites:
@@ -52,36 +54,46 @@ Other user-facing notes from the session:
 - **Installing the extension:** current VS Code ignores extensions symlinked into `~/.vscode/extensions`. Install with `tools/install_vscode_extension.sh`, which packages the `.vsix` into `headless/`, then reload the window.
 - **"LH5801/PC-1500"** in VS Code's debugger list comes from the separate `pchambre.lh5801-asm` extension, not from ours.
 
+## Restructuring (2026-09-25)
+
+Done as planned in `docs/Debugger-Restructuring-Plan.md`, one commit per phase:
+- **R1–R4:** `runMachine`/`stepMachine` are the execution API; the breakpoint enable is CPU state (`TRACE_BREAKPOINTS` is gone) with a lock-free 64K-bit `BreakpointSet`; one `DebugStop` latch for both machines; per-CPU `CpuView`s under a shared `MachineDebugTarget<Machine>`.
+- **R5–R8:** status register and bank state reported by the target; table-driven register reads, bitmap `WatchSet`; conditions / hit conditions / log messages compiled once (`CompiledExpression`, checked against a test-only copy of the old evaluator); symbols and function breakpoints per CPU (`findSymbol`, `loadListingWithSymbols`).
+- **R9:** one machine-code load pipeline, `machinecode::planLoad()` with per-caller `LoadOptions`.
+- **R10–R12:** `SyncOperations` (Qt6/app) runs every synchronous load/reset for the GUI and the debugger and owns the busy state; the debug target rebinds once from `MachineController::wireNewMachine()`; the debugger's clean start (default preset with the model check), Build & Load and resets go through the service.
+
+Checked: CoreTests and `tools/run_tests.sh` green; `tools/dap_smoke.py` (now also restart and All Reset & Stop) passes; plotter output identical before/after (CE-150 demo, lissajou on both machines, CE-1600P); memtest presets identical. Headless speed: a bare-ROM PC-1600 run measured up to ~5 % slower after R9, but R9 touched no hot code, and with forced 64-byte function alignment both builds time the same -- a code-layout effect, not added work.
+
 ## Where the code is
 
 - **`Core/CPU/`:**
   - `HistoryRing.hpp`: the per-CPU history, recorded in `step()`;
-  - `WatchSet.hpp`: memory watches;
+  - `WatchSet.hpp`: memory watches; `BreakpointSet.hpp`; `DebugStop.hpp`: the machines' stop latch;
   - breakpoint / skip-once / watch hooks in `LH5801` and `SC7852`.
 - **`Core/Debug/`:**
   - `Disasm/`;
-  - `DebugTarget` + `MachineDebugTargets`: the PC-1500 / PC-1600 adapters;
+  - `DebugTarget` + `CpuViews` + `MachineDebugTargets`: the machine-wide part, one view per CPU, the PC-1500 / PC-1600 adapters;
   - `CpuRegisters`;
   - `DebugExpression`;
   - `Listing/`: the `listingFormats()` table is the extension point for TASM or library listings later;
   - `SourceMap`, `BreakpointTable`, `RunControl`;
-  - `ProgramLoader`: Build & Load.
+  - `ProgramLoader`: Build & Load (planning in `Core/MachineCodeFile`'s `planLoad()`).
 - **`Qt6/app/debug/`:**
   - `DapServer`: transport;
   - `DapSession`: the requests;
   - `DebugController`: owned by `MachineController`.
 - **Hooks elsewhere:**
   - `MachineController::runActive()`: routes each frame through `runSlice()` while attached;
-  - `discardMachine()`;
+  - `discardMachine()` / `wireNewMachine()`: `machineAboutToChange()` / `machineReplaced()`;
   - `typeCommand()`;
-  - `MainWindow::runSynchronousLoad()`: `setAppBusy`;
+  - `Qt6/app/SyncOperations`: every synchronous load/reset; `busyChanged` drives the DAP queue;
   - `main.cpp`: `--dap`, `macDisableWindowRestoration()`.
 - **`vscode/calcu1600-debug/`:** the extension. Install with `tools/install_vscode_extension.sh`.
 
 ## Design rules learned the hard way
 
 - **Arming:** breakpoints and watches are armed only inside `DebugController::runSlice()`. A boot (`runBootToPrompt`), a preset or a load drives the machine directly and must never park on a breakpoint; those loops would hang.
-- **Queueing:** DAP messages wait while the app runs a synchronous load (`setAppBusy`). An attach that arrived during the startup preset once rebuilt the machine under the running loader and aborted the app.
+- **Queueing:** DAP messages wait while the app runs a synchronous operation (`SyncOperations::busyChanged`). An attach that arrived during the startup preset once rebuilt the machine under the running loader and aborted the app.
 - **Typing:** the GUI paste never presses ENTER; that's deliberate. Tools use `typeCommand()`, which does. `enqueueKey()` is PC-1500 only.
 - **Build & Load order:** clean start (the configuration's `preset`, else the model's default preset, else All Reset), then a direct load (no dialog or popup), then auto-start. `cleanStart: false` skips the clean start.
 - **Memory references:** must stay numeric; see `DapSession::memoryReference()`.

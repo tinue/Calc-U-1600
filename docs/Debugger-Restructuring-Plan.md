@@ -1,5 +1,7 @@
 # Debugger restructuring plan
 
+**Status (2026-09-25):** implemented, phases R1–R12 committed on `dev-0.6.0` (7dcfd61 … 263baec). Deviations: the clean start without a default preset isn't in the smoke test (it would need the user's Settings changed); the plan's `Core/MachineCodeLoad.*` became `planLoad()` inside `Core/MachineCodeFile.*`, with each caller keeping its own writer. See `docs/Debugger-Handoff.md`.
+
 ## Context
 
 The /simplify pass over `dev-0.6.0` (commit d240b90) left a set of findings that were too big for a cleanup pass. This plan fixes them:
