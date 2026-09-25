@@ -135,7 +135,7 @@ def program_run(port):
     body = dap.request("calcu1600/load", bin=os.path.join(REPO, "examples/memtest_stock.bin"),
                        listing=os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest.rst"),
                        address="0x40C5", after="stopOnEntry")
-    check(body.get("start") == "1:40C5", f"calcu1600/load -> {body}")
+    check(body.get("start") == "0x40C5", f"calcu1600/load -> {body}")
     stop = dap.wait_event("stopped", timeout=30)
     check(stop.get("reason") == "entry" and top_frame(dap, 1).get("line") == 74, "reloaded and stopped at the entry again")
     dap.request("stepOut", threadId=1)
@@ -168,7 +168,9 @@ def pc1600_run(port):
     dap.wait_event("stopped")
     check(top_frame(dap, 1).get("line", 0) > (line or 0), f"next: line {line} -> {top_frame(dap, 1).get('line')}")
     scopes = dap.request("scopes", frameId=1000)["scopes"]
-    banks = dap.request("variables", variablesReference=scopes[1]["variablesReference"])["variables"]
+    regs = dap.request("variables", variablesReference=scopes[0]["variablesReference"])["variables"]
+    bank_var = [v for v in regs if v["name"] == "Banks"][0]
+    banks = dap.request("variables", variablesReference=bank_var["variablesReference"])["variables"]
     check(len(banks) == 4, "banks: " + ", ".join(f"{b['name'][:6]} {b['value']}" for b in banks))
     dap.request("continue", threadId=1)
     dap.request("disconnect")
@@ -187,7 +189,7 @@ def rom_run(port):
     stop = dap.wait_event("stopped")
     tid = stop["threadId"]
     top = top_frame(dap, tid)
-    check(stop.get("reason") == "entry" and top["instructionPointerReference"] in ("1:E000", "1:0000"),
+    check(stop.get("reason") == "entry" and top["instructionPointerReference"] in ("0xE000", "0x0000"),
           f"reset stops at the vector: {top['name']}")
     for _ in range(5):
         dap.request("stepIn", threadId=tid, granularity="instruction")
@@ -237,8 +239,9 @@ def main():
             bits = dap.request("variables", variablesReference=flags[0]["variablesReference"])["variables"]
             check(len(bits) >= 4, "flags: " + " ".join(f"{b['name']}{b['value']}" for b in bits))
 
-        dis = dap.request("disassemble", memoryReference=pc_ref, instructionOffset=-4, instructionCount=10)["instructions"]
-        check(len(dis) == 10 and any(i["address"] == pc_ref for i in dis),
+        dis = dap.request("disassemble", memoryReference=pc_ref, offset=0, instructionOffset=-4, instructionCount=10)["instructions"]
+        # VS Code's disassembly view parses addresses as numbers.
+        check(len(dis) == 10 and any(i["address"] == pc_ref for i in dis) and all(int(i["address"], 16) >= 0 for i in dis),
               f"disassemble around {pc_ref}: " + "; ".join(i["instruction"] for i in dis[3:6]))
 
         mem = dap.request("readMemory", memoryReference=pc_ref, count=16)

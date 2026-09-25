@@ -425,27 +425,25 @@ QString DapSession::instructionText(int thread, uint16_t pc) const {
     return QString::fromStdString(d.text);
 }
 
+// Memory references must be plain numbers: VS Code's disassembly view
+// parses them (and every instruction address) as one. Thread 1 -- the
+// PC-1500's LH5801, the PC-1600's Z-80 -- is the bare 16-bit address; other
+// threads sit above it (thread << 16), and an LH580x's ME1 adds 0x100000.
 QString DapSession::memoryReference(int thread, uint16_t addr, bool me1) const {
-    return QStringLiteral("%1:%2%3").arg(thread).arg(addr, 4, 16, QLatin1Char('0')).toUpper().arg(me1 ? QStringLiteral(":me1") : QString());
+    const uint32_t v = uint32_t(addr) | (thread > 1 ? uint32_t(thread) << 16 : 0u) | (me1 ? 0x100000u : 0u);
+    return QStringLiteral("0x%1").arg(v, 4, 16, QLatin1Char('0')).toUpper().replace(QStringLiteral("0X"), QStringLiteral("0x"));
 }
 
 bool DapSession::parseMemoryReference(const QString& ref, int* thread, uint16_t* addr, bool* me1) const {
-    *thread = 1;
-    *me1 = false;
     QString a = ref.trimmed();
-    const QStringList parts = a.split(':');
-    if (parts.size() >= 2) {
-        bool ok = false;
-        *thread = parts[0].toInt(&ok);
-        if (!ok) return false;
-        a = parts[1];
-        *me1 = parts.size() >= 3 && parts[2].compare(QLatin1String("me1"), Qt::CaseInsensitive) == 0;
-    }
-    if (a.startsWith(QLatin1String("0x"), Qt::CaseInsensitive)) a = a.mid(2);
+    if (!a.startsWith(QLatin1String("0x"), Qt::CaseInsensitive)) return false;
     bool ok = false;
-    const uint v = a.toUInt(&ok, 16);
-    if (!ok || v > 0xFFFF) return false;
-    *addr = uint16_t(v);
+    const qulonglong v = a.mid(2).toULongLong(&ok, 16);
+    if (!ok || v > 0x1FFFFF) return false;
+    *addr = uint16_t(v & 0xFFFF);
+    *thread = int((v >> 16) & 0xF);
+    if (*thread == 0) *thread = 1;
+    *me1 = (v & 0x100000) != 0;
     return true;
 }
 
@@ -515,10 +513,6 @@ void DapSession::scopes(const QJsonObject& args, QJsonObject* body, QString* err
                             {QStringLiteral("presentationHint"), QStringLiteral("registers")},
                             {QStringLiteral("variablesReference"), frameId * 4 + kVarRegisters},
                             {QStringLiteral("expensive"), false}});
-    if (frameIndex(frameId) == 0)
-        list.append(QJsonObject{{QStringLiteral("name"), QStringLiteral("Banks")},
-                                {QStringLiteral("variablesReference"), frameId * 4 + kVarBanks},
-                                {QStringLiteral("expensive"), false}});
     body->insert(QStringLiteral("scopes"), list);
 }
 
@@ -549,6 +543,16 @@ QJsonArray DapSession::registerVariables(int frameId) const {
         list.append(QJsonObject{{QStringLiteral("name"), QStringLiteral("Flags")},
                                 {QStringLiteral("value"), summary.trimmed()},
                                 {QStringLiteral("variablesReference"), frameId * 4 + kVarFlags}});
+    }
+    // The live frame's bank state, expandable like Flags.
+    if (frameIndex(frameId) == 0) {
+        QStringList parts;
+        for (const QJsonValue& b : bankVariables(frameId))
+            parts << QStringLiteral("%1 %2").arg(b.toObject().value(QStringLiteral("name")).toString().left(6),
+                                             b.toObject().value(QStringLiteral("value")).toString());
+        list.append(QJsonObject{{QStringLiteral("name"), QStringLiteral("Banks")},
+                                {QStringLiteral("value"), parts.join(QStringLiteral(", "))},
+                                {QStringLiteral("variablesReference"), frameId * 4 + kVarBanks}});
     }
     return list;
 }

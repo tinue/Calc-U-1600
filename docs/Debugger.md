@@ -54,7 +54,12 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
   - `[addr]` (byte), `w[addr]` (word, in the CPU's byte order) and `#[addr]` (a byte from the LH580x's ME1)
   - C operators
 
-**Memory.** The memory view reads without side effects. Device registers that can't be read without disturbing them are shown as unreadable, for example the UART on the PC-1600's LH5803 side and a card's I/O window. Memory references look like `1:40C5`, `2:4200`, or `2:F00B:me1` for an LH580x's ME1.
+**Memory.** The memory view reads without side effects. Device registers that can't be read without disturbing them are shown as unreadable, for example the UART on the PC-1600's LH5803 side and a card's I/O window. Memory references are plain numbers, because VS Code's disassembly view reads them as numbers. The main CPU's addresses appear as they are (`0x40C5`). The PC-1600's LH5803 carries its thread number above the 16-bit address (`0x24200`), and an LH580x's ME1 adds `0x100000` (`0x12F00B`).
+
+**Where to look in VS Code.**
+- **Call Stack:** each CPU with its live frame and history. Click a frame to select it.
+- **Variables ▸ Registers:** the selected frame's registers, plus two expandable entries: *Flags* and, for the live frame, *Banks* (PC-1600 page banks, or PU/PV).
+- **Disassembly:** right-click a frame and choose **Open Disassembly View**. It opens by itself where there's no source.
 
 ## Using VS Code
 
