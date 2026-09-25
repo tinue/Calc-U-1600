@@ -117,6 +117,20 @@ public:
     /// can no longer drift apart.
     uint64_t runCycles(uint64_t maxCycles);
 
+    // ── Debugger stops ────────────────────────────────────────────────────
+    // runCycles() returns early when either CPU parks on a PC breakpoint
+    // (step() returns 0 then, without advancing any clock) or completes an
+    // instruction that hit a memory watch. The reason and CPU are latched
+    // here until consumed.
+    enum class DebugStop { None, Z80Breakpoint, Lh5803Breakpoint, Z80Watch, Lh5803Watch };
+    DebugStop consumeDebugStop() { DebugStop s = m_debugStop; m_debugStop = DebugStop::None; return s; }
+    /// Memory watches per CPU (each checks its own data accesses in its
+    /// own address space); nullptr turns a CPU's checking off. Not owned.
+    void setWatches(WatchSet* z80, WatchSet* lh5803) {
+        m_z80Watches = z80; m_lh5803Watches = lh5803;
+        m_sc7852.setWatches(z80); m_lh5803.setWatches(lh5803);
+    }
+
     /// Optional host callback invoked from inside runCycles() roughly every
     /// `intervalTStates` T-states of emulated time (counted across calls, so many
     /// short runCycles() calls still add up). Lets a UI thread that drives
@@ -435,6 +449,9 @@ private:
     PC1600Bank m_bank;
     PC1600Memory m_z80Mem;
     SC7852 m_sc7852;
+    DebugStop m_debugStop{DebugStop::None};
+    WatchSet* m_z80Watches{nullptr};
+    WatchSet* m_lh5803Watches{nullptr};
     LH5803SharedMemory m_lh5803Mem;
     LH5803 m_lh5803;
     PC1600BusArbiter m_arbiter;

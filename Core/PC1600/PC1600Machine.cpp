@@ -270,6 +270,8 @@ int PC1600Machine::step() {
     }
     if (m_arbiter.sc7852Owns()) {
         int c = m_sc7852.step();
+        // Parked on a breakpoint: nothing executed, so no time passes.
+        if (c == 0 && m_sc7852.consumeBreakpointHit()) { m_debugStop = DebugStop::Z80Breakpoint; return 0; }
         // A halted SC7852::step() returns 0 (this core's convention for
         // "made no forward progress"), but real HALT still burns 4 T-states
         // per internal NOP cycle -- without crediting that, a CPU parked in
@@ -319,6 +321,7 @@ int PC1600Machine::step() {
         return c;
     }
     int c = m_lh5803.step();
+    if (c == 0 && m_lh5803.consumeBreakpointHit()) { m_debugStop = DebugStop::Lh5803Breakpoint; return 0; }
     // Push the LH5803's post-instruction PU/PV so the next LH5803-side bus
     // access sees it (PV gates the CE-150 ROM window). Mirrors
     // PC1500Machine::step()'s updatePUPV for the LH5801.
@@ -378,6 +381,7 @@ uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {
         // whichever CPU actually executed, i.e. the owner on entry.
         const bool z80Owns = sc7852Owns();
         const int c = step(); // takes m_mutex per step, as PC1500Machine does
+        if (m_debugStop != DebugStop::None) break; // parked on a breakpoint: no time passed
         // The halted-step fallback must match whichever CPU actually owned
         // the bus -- step()'s own internal accounting (what its LH5803
         // branch hands advanceSharedClocks(), which feeds m_rtcAccum among
@@ -393,6 +397,9 @@ uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {
             c > 0 ? c : (z80Owns ? SC7852::kHaltTickCycles : LH5801::kHaltTickCycles));
         const uint64_t tstates = toTStates(cycles, z80Owns);
         consumed += tstates;
+        // The watched access's instruction has completed.
+        if (m_z80Watches && m_z80Watches->hitPending()) { m_debugStop = DebugStop::Z80Watch; break; }
+        if (m_lh5803Watches && m_lh5803Watches->hitPending()) { m_debugStop = DebugStop::Lh5803Watch; break; }
         // See setYieldHook(). step() takes m_mutex per call, so it isn't
         // held here.
         if (m_yieldHook) {

@@ -301,11 +301,17 @@ public:
     void addBreakpoint(uint16_t addr) { m_cpu.addBreakpoint(addr); }
     void removeBreakpoint(uint16_t addr) { m_cpu.removeBreakpoint(addr); }
     void clearBreakpoints() { m_cpu.clearBreakpoints(); }
-    bool consumeBreakpointHit() { return m_cpu.consumeBreakpointHit(); }
+    /// True once after step()/runCycles() parked on a breakpoint.
+    bool consumeBreakpointHit() { bool hit = m_breakpointStop; m_breakpointStop = false; return hit; }
+    /// Data breakpoints: runCycles() returns right after an instruction
+    /// whose data access hit one of `watches` (see WatchSet). Not owned.
+    void setWatches(WatchSet* watches) { m_watches = watches; m_cpu.setWatches(watches); }
 
 private:
     PC1500Memory m_memory;
     LH5801       m_cpu;
+    WatchSet*    m_watches{nullptr};
+    bool         m_breakpointStop{false};
     ExpansionConnector m_expansionConnector;
     SystemBus          m_systemBus;
     std::unique_ptr<ExpansionCard> m_attachedExpansionCard; // see attachExpansionCard()

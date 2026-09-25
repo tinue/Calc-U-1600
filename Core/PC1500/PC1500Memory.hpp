@@ -90,6 +90,13 @@ public:
     uint8_t peek(uint16_t addr) const;
     bool    poke(uint16_t addr, uint8_t value);
 
+    /// Debugger view of ME1 without bus side effects. The LH5810's
+    /// registers come back as their latched values (OPB as written, IF
+    /// without taking a pending RTC edge); a card's I/O window can't be
+    /// read without disturbing it, so `*readable` is false there and 0xFF
+    /// is returned. Everything else reads as readME1() would.
+    uint8_t debugPeekME1(uint16_t addr, bool* readable) const;
+
     /// Whether the attached expansion card actually decodes `addr` (vs.
     /// this being genuine open bus) -- for the "Dump Mem" panel's
     /// per-region emptiness check: a card's own pin decode may not extend

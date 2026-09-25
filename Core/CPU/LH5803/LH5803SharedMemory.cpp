@@ -28,6 +28,23 @@ bool LH5803SharedMemory::isUartShadow(uint16_t addr, uint8_t* reg, bool* isSubCp
     return false;
 }
 
+uint8_t LH5803SharedMemory::debugPeek(uint16_t addr, bool me1, bool* readable) const {
+    *readable = true;
+    if (me1) {
+        uint8_t reg; bool answer;
+        if ((m_ce158 && isCe158Io(addr)) || isUartShadow(addr, &reg, &answer) ||
+            (addr >= 0x8000 && addr < kRomBase)) {
+            *readable = false;
+            return 0xFF;
+        }
+        if ((addr & 0xFFF0) == 0xF000) return m_ioRegs[addr & 0x0F];
+    }
+    // ME0, and the ME1 addresses readME1() aliases onto it
+    if (addr < 0x8000) return m_shared.peek(uint16_t(addr + 0x8000));
+    if (addr < kRomBase) return cardRead(addr, /*me1=*/false);
+    return m_rom.read(addr);
+}
+
 uint8_t LH5803SharedMemory::readME1(uint16_t addr) {
     // CE-158 register blocks: terminal -- falling through would serve ROM
     // bytes (0xD000+ >= kRomBase) as I/O.

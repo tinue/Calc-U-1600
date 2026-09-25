@@ -159,16 +159,16 @@ uint8_t LH5801::bcdSub(uint8_t a, uint8_t operand, uint8_t carryIn) {
 
 // ── Stack ─────────────────────────────────────────────────────────────────
 
-void LH5801::pushByte(uint8_t v) { bus.writeME0(S, v); S = uint16_t(S - 1); }
-uint8_t LH5801::popByte() { S = uint16_t(S + 1); return bus.readME0(S); }
+void LH5801::pushByte(uint8_t v) { storeME0(S, v); S = uint16_t(S - 1); }
+uint8_t LH5801::popByte() { S = uint16_t(S + 1); return dataME0(S); }
 void LH5801::push16(uint16_t v) { pushByte(uint8_t(v)); pushByte(uint8_t(v >> 8)); } // low first onto stack top-down: PL then PH per guide's SJP description
 uint16_t LH5801::pop16() { uint8_t hi = popByte(); uint8_t lo = popByte(); return (uint16_t(hi) << 8) | lo; }
 
 void LH5801::vectorCall(uint8_t index) {
     push16(P);
     uint16_t base = uint16_t(0xFF00 + index);
-    uint8_t hi = bus.readME0(base);
-    uint8_t lo = bus.readME0(uint16_t(base + 1));
+    uint8_t hi = dataME0(base);
+    uint8_t lo = dataME0(uint16_t(base + 1));
     P = (uint16_t(hi) << 8) | lo;
     setFlagBit(0x04, false); // Z forced reset per guide
 }
@@ -214,8 +214,8 @@ void LH5801::serviceInterrupt() {
     // MI handler at E171 pushes A/X/Y/U before clearing the level-held
     // request at F00B, which only works if IE is already off on entry.
     setFlagBit(0x02, false);
-    uint8_t hi = bus.readME0(0xFFFA);
-    uint8_t lo = bus.readME0(0xFFFB);
+    uint8_t hi = dataME0(0xFFFA);
+    uint8_t lo = dataME0(0xFFFB);
     P = (uint16_t(hi) << 8) | lo;
 }
 
@@ -300,7 +300,8 @@ int LH5801::step() {
 
     uint32_t tf = traceFlags();
     if (tf & TRACE_BREAKPOINTS) {
-        if (m_breakpoints.check(P)) return 0;
+        if (m_skipBreakpointOnce) m_skipBreakpointOnce = false;
+        else if (m_breakpoints.check(P)) return 0;
     }
 
     uint16_t pcAtStart = P;
@@ -364,10 +365,10 @@ int LH5801::execute(uint8_t op) {
         case 0x90: A = aluSub(A, YH, T & 1); return 6;
         case 0xA0: A = aluSub(A, UH, T & 1); return 6;
         // SBC (Rreg) / (pp), ME0
-        case 0x01: A = aluSub(A, bus.readME0(x()), T & 1); return 7;
-        case 0x11: A = aluSub(A, bus.readME0(y()), T & 1); return 7;
-        case 0x21: A = aluSub(A, bus.readME0(u()), T & 1); return 7;
-        case 0xA1: { uint16_t pp = fetch16(); A = aluSub(A, bus.readME0(pp), T & 1); return 13; }
+        case 0x01: A = aluSub(A, dataME0(x()), T & 1); return 7;
+        case 0x11: A = aluSub(A, dataME0(y()), T & 1); return 7;
+        case 0x21: A = aluSub(A, dataME0(u()), T & 1); return 7;
+        case 0xA1: { uint16_t pp = fetch16(); A = aluSub(A, dataME0(pp), T & 1); return 13; }
 
         // ── ADC (reg forms) ──────────────────────────────────────────────
         case 0x02: A = aluAdd(A, XL, T & 1); return 6;
@@ -376,10 +377,10 @@ int LH5801::execute(uint8_t op) {
         case 0x82: A = aluAdd(A, XH, T & 1); return 6;
         case 0x92: A = aluAdd(A, YH, T & 1); return 6;
         case 0xA2: A = aluAdd(A, UH, T & 1); return 6;
-        case 0x03: A = aluAdd(A, bus.readME0(x()), T & 1); return 7;
-        case 0x13: A = aluAdd(A, bus.readME0(y()), T & 1); return 7;
-        case 0x23: A = aluAdd(A, bus.readME0(u()), T & 1); return 7;
-        case 0xA3: { uint16_t pp = fetch16(); A = aluAdd(A, bus.readME0(pp), T & 1); return 13; }
+        case 0x03: A = aluAdd(A, dataME0(x()), T & 1); return 7;
+        case 0x13: A = aluAdd(A, dataME0(y()), T & 1); return 7;
+        case 0x23: A = aluAdd(A, dataME0(u()), T & 1); return 7;
+        case 0xA3: { uint16_t pp = fetch16(); A = aluAdd(A, dataME0(pp), T & 1); return 13; }
 
         // ── LDA (reg forms) ──────────────────────────────────────────────
         case 0x04: A = XL; setZFlagFrom(A); return 5;
@@ -388,10 +389,10 @@ int LH5801::execute(uint8_t op) {
         case 0x84: A = XH; setZFlagFrom(A); return 5;
         case 0x94: A = YH; setZFlagFrom(A); return 5;
         case 0xA4: A = UH; setZFlagFrom(A); return 5;
-        case 0x05: A = bus.readME0(x()); setZFlagFrom(A); return 6;
-        case 0x15: A = bus.readME0(y()); setZFlagFrom(A); return 6;
-        case 0x25: A = bus.readME0(u()); setZFlagFrom(A); return 6;
-        case 0xA5: { uint16_t pp = fetch16(); A = bus.readME0(pp); setZFlagFrom(A); return 12; }
+        case 0x05: A = dataME0(x()); setZFlagFrom(A); return 6;
+        case 0x15: A = dataME0(y()); setZFlagFrom(A); return 6;
+        case 0x25: A = dataME0(u()); setZFlagFrom(A); return 6;
+        case 0xA5: { uint16_t pp = fetch16(); A = dataME0(pp); setZFlagFrom(A); return 12; }
 
         // ── CPA (reg forms) ──────────────────────────────────────────────
         // CPA always uses a *forced* carry-in of 1 (i.e. as if `sec` ran
@@ -407,10 +408,10 @@ int LH5801::execute(uint8_t op) {
         case 0x86: aluSub(A, XH, 1); return 6;
         case 0x96: aluSub(A, YH, 1); return 6;
         case 0xA6: aluSub(A, UH, 1); return 6;
-        case 0x07: aluSub(A, bus.readME0(x()), 1); return 7;
-        case 0x17: aluSub(A, bus.readME0(y()), 1); return 7;
-        case 0x27: aluSub(A, bus.readME0(u()), 1); return 7;
-        case 0xA7: { uint16_t pp = fetch16(); aluSub(A, bus.readME0(pp), 1); return 13; }
+        case 0x07: aluSub(A, dataME0(x()), 1); return 7;
+        case 0x17: aluSub(A, dataME0(y()), 1); return 7;
+        case 0x27: aluSub(A, dataME0(u()), 1); return 7;
+        case 0xA7: { uint16_t pp = fetch16(); aluSub(A, dataME0(pp), 1); return 13; }
 
         // ── STA ───────────────────────────────────────────────────────────
         case 0x08: XH = A; return 5;
@@ -419,56 +420,56 @@ int LH5801::execute(uint8_t op) {
         case 0x0A: XL = A; return 5;
         case 0x1A: YL = A; return 5;
         case 0x2A: UL = A; return 5;
-        case 0x0E: bus.writeME0(x(), A); return 6;
-        case 0x1E: bus.writeME0(y(), A); return 6;
-        case 0x2E: bus.writeME0(u(), A); return 6;
-        case 0xAE: { uint16_t pp = fetch16(); bus.writeME0(pp, A); return 12; }
+        case 0x0E: storeME0(x(), A); return 6;
+        case 0x1E: storeME0(y(), A); return 6;
+        case 0x2E: storeME0(u(), A); return 6;
+        case 0xAE: { uint16_t pp = fetch16(); storeME0(pp, A); return 12; }
 
         // ── AND ───────────────────────────────────────────────────────────
-        case 0x09: A &= bus.readME0(x()); setZFlagFrom(A); return 7;
-        case 0x19: A &= bus.readME0(y()); setZFlagFrom(A); return 7;
-        case 0x29: A &= bus.readME0(u()); setZFlagFrom(A); return 7;
-        case 0xA9: { uint16_t pp = fetch16(); A &= bus.readME0(pp); setZFlagFrom(A); return 13; }
+        case 0x09: A &= dataME0(x()); setZFlagFrom(A); return 7;
+        case 0x19: A &= dataME0(y()); setZFlagFrom(A); return 7;
+        case 0x29: A &= dataME0(u()); setZFlagFrom(A); return 7;
+        case 0xA9: { uint16_t pp = fetch16(); A &= dataME0(pp); setZFlagFrom(A); return 13; }
 
         // ── ORA ───────────────────────────────────────────────────────────
-        case 0x0B: A |= bus.readME0(x()); setZFlagFrom(A); return 7;
-        case 0x1B: A |= bus.readME0(y()); setZFlagFrom(A); return 7;
-        case 0x2B: A |= bus.readME0(u()); setZFlagFrom(A); return 7;
-        case 0xAB: { uint16_t pp = fetch16(); A |= bus.readME0(pp); setZFlagFrom(A); return 13; }
+        case 0x0B: A |= dataME0(x()); setZFlagFrom(A); return 7;
+        case 0x1B: A |= dataME0(y()); setZFlagFrom(A); return 7;
+        case 0x2B: A |= dataME0(u()); setZFlagFrom(A); return 7;
+        case 0xAB: { uint16_t pp = fetch16(); A |= dataME0(pp); setZFlagFrom(A); return 13; }
 
         // ── EOR ───────────────────────────────────────────────────────────
-        case 0x0D: A ^= bus.readME0(x()); setZFlagFrom(A); return 7;
-        case 0x1D: A ^= bus.readME0(y()); setZFlagFrom(A); return 7;
-        case 0x2D: A ^= bus.readME0(u()); setZFlagFrom(A); return 7;
-        case 0xAD: { uint16_t pp = fetch16(); A ^= bus.readME0(pp); setZFlagFrom(A); return 13; }
+        case 0x0D: A ^= dataME0(x()); setZFlagFrom(A); return 7;
+        case 0x1D: A ^= dataME0(y()); setZFlagFrom(A); return 7;
+        case 0x2D: A ^= dataME0(u()); setZFlagFrom(A); return 7;
+        case 0xAD: { uint16_t pp = fetch16(); A ^= dataME0(pp); setZFlagFrom(A); return 13; }
 
         // ── BIT ───────────────────────────────────────────────────────────
-        case 0x0F: setZFlagFrom(uint8_t(A & bus.readME0(x()))); return 7;
-        case 0x1F: setZFlagFrom(uint8_t(A & bus.readME0(y()))); return 7;
-        case 0x2F: setZFlagFrom(uint8_t(A & bus.readME0(u()))); return 7;
-        case 0xAF: { uint16_t pp = fetch16(); setZFlagFrom(uint8_t(A & bus.readME0(pp))); return 13; }
+        case 0x0F: setZFlagFrom(uint8_t(A & dataME0(x()))); return 7;
+        case 0x1F: setZFlagFrom(uint8_t(A & dataME0(y()))); return 7;
+        case 0x2F: setZFlagFrom(uint8_t(A & dataME0(u()))); return 7;
+        case 0xAF: { uint16_t pp = fetch16(); setZFlagFrom(uint8_t(A & dataME0(pp))); return 13; }
 
         // ── DCA / DCS ─────────────────────────────────────────────────────
-        case 0x8C: A = bcdAdd(A, bus.readME0(x()), T & 1); return 15;
-        case 0x9C: A = bcdAdd(A, bus.readME0(y()), T & 1); return 15;
-        case 0xAC: A = bcdAdd(A, bus.readME0(u()), T & 1); return 15;
-        case 0x0C: A = bcdSub(A, bus.readME0(x()), T & 1); return 13;
-        case 0x1C: A = bcdSub(A, bus.readME0(y()), T & 1); return 13;
-        case 0x2C: A = bcdSub(A, bus.readME0(u()), T & 1); return 13;
+        case 0x8C: A = bcdAdd(A, dataME0(x()), T & 1); return 15;
+        case 0x9C: A = bcdAdd(A, dataME0(y()), T & 1); return 15;
+        case 0xAC: A = bcdAdd(A, dataME0(u()), T & 1); return 15;
+        case 0x0C: A = bcdSub(A, dataME0(x()), T & 1); return 13;
+        case 0x1C: A = bcdSub(A, dataME0(y()), T & 1); return 13;
+        case 0x2C: A = bcdSub(A, dataME0(u()), T & 1); return 13;
 
         // ── SIN / SDE / LIN / LDE ─────────────────────────────────────────
-        case 0x41: bus.writeME0(x(), A); setX(uint16_t(x() + 1)); return 6;
-        case 0x51: bus.writeME0(y(), A); setY(uint16_t(y() + 1)); return 6;
-        case 0x61: bus.writeME0(u(), A); setU(uint16_t(u() + 1)); return 6;
-        case 0x43: bus.writeME0(x(), A); setX(uint16_t(x() - 1)); return 6;
-        case 0x53: bus.writeME0(y(), A); setY(uint16_t(y() - 1)); return 6;
-        case 0x63: bus.writeME0(u(), A); setU(uint16_t(u() - 1)); return 6;
-        case 0x45: A = bus.readME0(x()); setZFlagFrom(A); setX(uint16_t(x() + 1)); return 6;
-        case 0x55: A = bus.readME0(y()); setZFlagFrom(A); setY(uint16_t(y() + 1)); return 6;
-        case 0x65: A = bus.readME0(u()); setZFlagFrom(A); setU(uint16_t(u() + 1)); return 6;
-        case 0x47: A = bus.readME0(x()); setZFlagFrom(A); setX(uint16_t(x() - 1)); return 6;
-        case 0x57: A = bus.readME0(y()); setZFlagFrom(A); setY(uint16_t(y() - 1)); return 6;
-        case 0x67: A = bus.readME0(u()); setZFlagFrom(A); setU(uint16_t(u() - 1)); return 6;
+        case 0x41: storeME0(x(), A); setX(uint16_t(x() + 1)); return 6;
+        case 0x51: storeME0(y(), A); setY(uint16_t(y() + 1)); return 6;
+        case 0x61: storeME0(u(), A); setU(uint16_t(u() + 1)); return 6;
+        case 0x43: storeME0(x(), A); setX(uint16_t(x() - 1)); return 6;
+        case 0x53: storeME0(y(), A); setY(uint16_t(y() - 1)); return 6;
+        case 0x63: storeME0(u(), A); setU(uint16_t(u() - 1)); return 6;
+        case 0x45: A = dataME0(x()); setZFlagFrom(A); setX(uint16_t(x() + 1)); return 6;
+        case 0x55: A = dataME0(y()); setZFlagFrom(A); setY(uint16_t(y() + 1)); return 6;
+        case 0x65: A = dataME0(u()); setZFlagFrom(A); setU(uint16_t(u() + 1)); return 6;
+        case 0x47: A = dataME0(x()); setZFlagFrom(A); setX(uint16_t(x() - 1)); return 6;
+        case 0x57: A = dataME0(y()); setZFlagFrom(A); setY(uint16_t(y() - 1)); return 6;
+        case 0x67: A = dataME0(u()); setZFlagFrom(A); setU(uint16_t(u() - 1)); return 6;
 
         // ── LDI ───────────────────────────────────────────────────────────
         case 0xB5: A = fetch8(); setZFlagFrom(A); return 6;
@@ -483,27 +484,27 @@ int LH5801::execute(uint8_t op) {
 
         // ── ADI ───────────────────────────────────────────────────────────
         case 0xB3: A = aluAdd(A, fetch8(), T & 1); return 7;
-        case 0x4F: { uint8_t n = fetch8(); bus.writeME0(x(), aluAdd(bus.readME0(x()), n, 0)); return 13; }
-        case 0x5F: { uint8_t n = fetch8(); bus.writeME0(y(), aluAdd(bus.readME0(y()), n, 0)); return 13; }
-        case 0x6F: { uint8_t n = fetch8(); bus.writeME0(u(), aluAdd(bus.readME0(u()), n, 0)); return 13; }
-        case 0xEF: { uint16_t pp = fetch16(); uint8_t n = fetch8(); bus.writeME0(pp, aluAdd(bus.readME0(pp), n, 0)); return 19; }
+        case 0x4F: { uint8_t n = fetch8(); storeME0(x(), aluAdd(dataME0(x()), n, 0)); return 13; }
+        case 0x5F: { uint8_t n = fetch8(); storeME0(y(), aluAdd(dataME0(y()), n, 0)); return 13; }
+        case 0x6F: { uint8_t n = fetch8(); storeME0(u(), aluAdd(dataME0(u()), n, 0)); return 13; }
+        case 0xEF: { uint16_t pp = fetch16(); uint8_t n = fetch8(); storeME0(pp, aluAdd(dataME0(pp), n, 0)); return 19; }
 
         // ── SBI ───────────────────────────────────────────────────────────
         case 0xB1: A = aluSub(A, fetch8(), T & 1); return 7;
 
         // ── ANI ───────────────────────────────────────────────────────────
         case 0xB9: A &= fetch8(); setZFlagFrom(A); return 7;
-        case 0x49: { uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME0(x()) & n); bus.writeME0(x(), r); setZFlagFrom(r); return 13; }
-        case 0x59: { uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME0(y()) & n); bus.writeME0(y(), r); setZFlagFrom(r); return 13; }
-        case 0x69: { uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME0(u()) & n); bus.writeME0(u(), r); setZFlagFrom(r); return 13; }
-        case 0xE9: { uint16_t pp = fetch16(); uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME0(pp) & n); bus.writeME0(pp, r); setZFlagFrom(r); return 19; }
+        case 0x49: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME0(x()) & n); storeME0(x(), r); setZFlagFrom(r); return 13; }
+        case 0x59: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME0(y()) & n); storeME0(y(), r); setZFlagFrom(r); return 13; }
+        case 0x69: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME0(u()) & n); storeME0(u(), r); setZFlagFrom(r); return 13; }
+        case 0xE9: { uint16_t pp = fetch16(); uint8_t n = fetch8(); uint8_t r = uint8_t(dataME0(pp) & n); storeME0(pp, r); setZFlagFrom(r); return 19; }
 
         // ── ORI ───────────────────────────────────────────────────────────
         case 0xBB: A |= fetch8(); setZFlagFrom(A); return 7;
-        case 0x4B: { uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME0(x()) | n); bus.writeME0(x(), r); setZFlagFrom(r); return 13; }
-        case 0x5B: { uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME0(y()) | n); bus.writeME0(y(), r); setZFlagFrom(r); return 13; }
-        case 0x6B: { uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME0(u()) | n); bus.writeME0(u(), r); setZFlagFrom(r); return 13; }
-        case 0xEB: { uint16_t pp = fetch16(); uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME0(pp) | n); bus.writeME0(pp, r); setZFlagFrom(r); return 19; }
+        case 0x4B: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME0(x()) | n); storeME0(x(), r); setZFlagFrom(r); return 13; }
+        case 0x5B: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME0(y()) | n); storeME0(y(), r); setZFlagFrom(r); return 13; }
+        case 0x6B: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME0(u()) | n); storeME0(u(), r); setZFlagFrom(r); return 13; }
+        case 0xEB: { uint16_t pp = fetch16(); uint8_t n = fetch8(); uint8_t r = uint8_t(dataME0(pp) | n); storeME0(pp, r); setZFlagFrom(r); return 19; }
 
         // ── EAI ───────────────────────────────────────────────────────────
         case 0xBD: A ^= fetch8(); setZFlagFrom(A); return 7;
@@ -535,14 +536,14 @@ int LH5801::execute(uint8_t op) {
 
         // ── BII ───────────────────────────────────────────────────────────
         case 0xBF: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(A & n)); return 7; }
-        case 0x4D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(bus.readME0(x()) & n)); return 10; }
-        case 0x5D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(bus.readME0(y()) & n)); return 10; }
-        case 0x6D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(bus.readME0(u()) & n)); return 10; }
-        case 0xED: { uint16_t pp = fetch16(); uint8_t n = fetch8(); setZFlagFrom(uint8_t(bus.readME0(pp) & n)); return 16; }
+        case 0x4D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(dataME0(x()) & n)); return 10; }
+        case 0x5D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(dataME0(y()) & n)); return 10; }
+        case 0x6D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(dataME0(u()) & n)); return 10; }
+        case 0xED: { uint16_t pp = fetch16(); uint8_t n = fetch8(); setZFlagFrom(uint8_t(dataME0(pp) & n)); return 16; }
 
         // ── TIN / CIN ────────────────────────────────────────────────────
-        case 0xF5: { uint8_t v = bus.readME0(x()); bus.writeME0(y(), v); setX(uint16_t(x() + 1)); setY(uint16_t(y() + 1)); return 7; }
-        case 0xF7: { aluSub(A, bus.readME0(x()), 1); setX(uint16_t(x() + 1)); return 7; }
+        case 0xF5: { uint8_t v = dataME0(x()); storeME0(y(), v); setX(uint16_t(x() + 1)); setY(uint16_t(y() + 1)); return 7; }
+        case 0xF7: { aluSub(A, dataME0(x()), 1); setX(uint16_t(x() + 1)); return 7; }
 
         // ── Rotate / shift / digit-rotate / nibble-swap ─────────────────
         // ROL/SHL also set H/Z besides C; ROR/SHR force V=0 but still set
@@ -588,17 +589,17 @@ int LH5801::execute(uint8_t op) {
         // A's old opposite nibble. A's other old nibble is discarded, not
         // conserved anywhere.
         case 0xD7: { // drl (x)
-            uint8_t memOld = bus.readME0(x());
+            uint8_t memOld = dataME0(x());
             uint8_t memNew = drlMerge(memOld, A);
             A = memOld;
-            bus.writeME0(x(), memNew);
+            storeME0(x(), memNew);
             return 12;
         }
         case 0xD3: { // drr (x)
-            uint8_t memOld = bus.readME0(x());
+            uint8_t memOld = dataME0(x());
             uint8_t memNew = drrMerge(memOld, A);
             A = memOld;
-            bus.writeME0(x(), memNew);
+            storeME0(x(), memNew);
             return 12;
         }
         case 0xF1: A = uint8_t(((A & 0x0F) << 4) | ((A >> 4) & 0x0F)); return 6;
@@ -676,72 +677,72 @@ int LH5801::execute(uint8_t op) {
 int LH5801::executeFD(uint8_t op) {
     switch (op) {
         // ── ADC / SBC / AND / ORA / EOR / CPA / BIT — ME1 (Rreg) and (pp) ──
-        case 0x03: A = aluAdd(A, bus.readME1(x()), T & 1); return 11;
-        case 0x13: A = aluAdd(A, bus.readME1(y()), T & 1); return 11;
-        case 0x23: A = aluAdd(A, bus.readME1(u()), T & 1); return 11;
-        case 0xA3: { uint16_t pp = fetch16(); A = aluAdd(A, bus.readME1(pp), T & 1); return 17; }
+        case 0x03: A = aluAdd(A, dataME1(x()), T & 1); return 11;
+        case 0x13: A = aluAdd(A, dataME1(y()), T & 1); return 11;
+        case 0x23: A = aluAdd(A, dataME1(u()), T & 1); return 11;
+        case 0xA3: { uint16_t pp = fetch16(); A = aluAdd(A, dataME1(pp), T & 1); return 17; }
         // sbc #(x)/#(y)/#(u): 11 cycles, matching every other ME1 (Rreg)
         // form.
-        case 0x01: A = aluSub(A, bus.readME1(x()), T & 1); return 11;
-        case 0x11: A = aluSub(A, bus.readME1(y()), T & 1); return 11;
-        case 0x21: A = aluSub(A, bus.readME1(u()), T & 1); return 11;
-        case 0xA1: { uint16_t pp = fetch16(); A = aluSub(A, bus.readME1(pp), T & 1); return 17; }
-        case 0x09: A &= bus.readME1(x()); setZFlagFrom(A); return 11;
-        case 0x19: A &= bus.readME1(y()); setZFlagFrom(A); return 11;
-        case 0x29: A &= bus.readME1(u()); setZFlagFrom(A); return 11;
-        case 0xA9: { uint16_t pp = fetch16(); A &= bus.readME1(pp); setZFlagFrom(A); return 17; }
-        case 0x0B: A |= bus.readME1(x()); setZFlagFrom(A); return 11;
-        case 0x1B: A |= bus.readME1(y()); setZFlagFrom(A); return 11;
-        case 0x2B: A |= bus.readME1(u()); setZFlagFrom(A); return 11;
-        case 0xAB: { uint16_t pp = fetch16(); A |= bus.readME1(pp); setZFlagFrom(A); return 17; }
-        case 0x0D: A ^= bus.readME1(x()); setZFlagFrom(A); return 11;
-        case 0x1D: A ^= bus.readME1(y()); setZFlagFrom(A); return 11;
-        case 0x2D: A ^= bus.readME1(u()); setZFlagFrom(A); return 11;
-        case 0xAD: { uint16_t pp = fetch16(); A ^= bus.readME1(pp); setZFlagFrom(A); return 17; }
-        case 0x07: aluSub(A, bus.readME1(x()), 1); return 11;
-        case 0x17: aluSub(A, bus.readME1(y()), 1); return 11;
-        case 0x27: aluSub(A, bus.readME1(u()), 1); return 11;
-        case 0xA7: { uint16_t pp = fetch16(); aluSub(A, bus.readME1(pp), 1); return 17; }
-        case 0x0F: setZFlagFrom(uint8_t(A & bus.readME1(x()))); return 11;
-        case 0x1F: setZFlagFrom(uint8_t(A & bus.readME1(y()))); return 11;
-        case 0x2F: setZFlagFrom(uint8_t(A & bus.readME1(u()))); return 11;
-        case 0xAF: { uint16_t pp = fetch16(); setZFlagFrom(uint8_t(A & bus.readME1(pp))); return 17; }
+        case 0x01: A = aluSub(A, dataME1(x()), T & 1); return 11;
+        case 0x11: A = aluSub(A, dataME1(y()), T & 1); return 11;
+        case 0x21: A = aluSub(A, dataME1(u()), T & 1); return 11;
+        case 0xA1: { uint16_t pp = fetch16(); A = aluSub(A, dataME1(pp), T & 1); return 17; }
+        case 0x09: A &= dataME1(x()); setZFlagFrom(A); return 11;
+        case 0x19: A &= dataME1(y()); setZFlagFrom(A); return 11;
+        case 0x29: A &= dataME1(u()); setZFlagFrom(A); return 11;
+        case 0xA9: { uint16_t pp = fetch16(); A &= dataME1(pp); setZFlagFrom(A); return 17; }
+        case 0x0B: A |= dataME1(x()); setZFlagFrom(A); return 11;
+        case 0x1B: A |= dataME1(y()); setZFlagFrom(A); return 11;
+        case 0x2B: A |= dataME1(u()); setZFlagFrom(A); return 11;
+        case 0xAB: { uint16_t pp = fetch16(); A |= dataME1(pp); setZFlagFrom(A); return 17; }
+        case 0x0D: A ^= dataME1(x()); setZFlagFrom(A); return 11;
+        case 0x1D: A ^= dataME1(y()); setZFlagFrom(A); return 11;
+        case 0x2D: A ^= dataME1(u()); setZFlagFrom(A); return 11;
+        case 0xAD: { uint16_t pp = fetch16(); A ^= dataME1(pp); setZFlagFrom(A); return 17; }
+        case 0x07: aluSub(A, dataME1(x()), 1); return 11;
+        case 0x17: aluSub(A, dataME1(y()), 1); return 11;
+        case 0x27: aluSub(A, dataME1(u()), 1); return 11;
+        case 0xA7: { uint16_t pp = fetch16(); aluSub(A, dataME1(pp), 1); return 17; }
+        case 0x0F: setZFlagFrom(uint8_t(A & dataME1(x()))); return 11;
+        case 0x1F: setZFlagFrom(uint8_t(A & dataME1(y()))); return 11;
+        case 0x2F: setZFlagFrom(uint8_t(A & dataME1(u()))); return 11;
+        case 0xAF: { uint16_t pp = fetch16(); setZFlagFrom(uint8_t(A & dataME1(pp))); return 17; }
 
         // ── LDA / STA — ME1 ────────────────────────────────────────────────
-        case 0x05: A = bus.readME1(x()); setZFlagFrom(A); return 10;
-        case 0x15: A = bus.readME1(y()); setZFlagFrom(A); return 10;
-        case 0x25: A = bus.readME1(u()); setZFlagFrom(A); return 10;
-        case 0xA5: { uint16_t pp = fetch16(); A = bus.readME1(pp); setZFlagFrom(A); return 16; }
-        case 0x0E: bus.writeME1(x(), A); return 10;
-        case 0x1E: bus.writeME1(y(), A); return 10;
-        case 0x2E: bus.writeME1(u(), A); return 10;
-        case 0xAE: { uint16_t pp = fetch16(); bus.writeME1(pp, A); return 16; }
+        case 0x05: A = dataME1(x()); setZFlagFrom(A); return 10;
+        case 0x15: A = dataME1(y()); setZFlagFrom(A); return 10;
+        case 0x25: A = dataME1(u()); setZFlagFrom(A); return 10;
+        case 0xA5: { uint16_t pp = fetch16(); A = dataME1(pp); setZFlagFrom(A); return 16; }
+        case 0x0E: storeME1(x(), A); return 10;
+        case 0x1E: storeME1(y(), A); return 10;
+        case 0x2E: storeME1(u(), A); return 10;
+        case 0xAE: { uint16_t pp = fetch16(); storeME1(pp, A); return 16; }
 
         // ── ADI / ANI / ORI / BII — ME1 ────────────────────────────────────
-        case 0x4F: { uint8_t n = fetch8(); bus.writeME1(x(), aluAdd(bus.readME1(x()), n, 0)); return 17; }
-        case 0x5F: { uint8_t n = fetch8(); bus.writeME1(y(), aluAdd(bus.readME1(y()), n, 0)); return 17; }
-        case 0x6F: { uint8_t n = fetch8(); bus.writeME1(u(), aluAdd(bus.readME1(u()), n, 0)); return 17; }
-        case 0xEF: { uint16_t pp = fetch16(); uint8_t n = fetch8(); bus.writeME1(pp, aluAdd(bus.readME1(pp), n, 0)); return 23; }
-        case 0x49: { uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME1(x()) & n); bus.writeME1(x(), r); setZFlagFrom(r); return 17; }
-        case 0x59: { uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME1(y()) & n); bus.writeME1(y(), r); setZFlagFrom(r); return 17; }
-        case 0x69: { uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME1(u()) & n); bus.writeME1(u(), r); setZFlagFrom(r); return 17; }
-        case 0xE9: { uint16_t pp = fetch16(); uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME1(pp) & n); bus.writeME1(pp, r); setZFlagFrom(r); return 23; }
-        case 0x4B: { uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME1(x()) | n); bus.writeME1(x(), r); setZFlagFrom(r); return 17; }
-        case 0x5B: { uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME1(y()) | n); bus.writeME1(y(), r); setZFlagFrom(r); return 17; }
-        case 0x6B: { uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME1(u()) | n); bus.writeME1(u(), r); setZFlagFrom(r); return 17; }
-        case 0xEB: { uint16_t pp = fetch16(); uint8_t n = fetch8(); uint8_t r = uint8_t(bus.readME1(pp) | n); bus.writeME1(pp, r); setZFlagFrom(r); return 23; }
-        case 0x4D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(bus.readME1(x()) & n)); return 14; }
-        case 0x5D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(bus.readME1(y()) & n)); return 14; }
-        case 0x6D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(bus.readME1(u()) & n)); return 14; }
-        case 0xED: { uint16_t pp = fetch16(); uint8_t n = fetch8(); setZFlagFrom(uint8_t(bus.readME1(pp) & n)); return 20; }
+        case 0x4F: { uint8_t n = fetch8(); storeME1(x(), aluAdd(dataME1(x()), n, 0)); return 17; }
+        case 0x5F: { uint8_t n = fetch8(); storeME1(y(), aluAdd(dataME1(y()), n, 0)); return 17; }
+        case 0x6F: { uint8_t n = fetch8(); storeME1(u(), aluAdd(dataME1(u()), n, 0)); return 17; }
+        case 0xEF: { uint16_t pp = fetch16(); uint8_t n = fetch8(); storeME1(pp, aluAdd(dataME1(pp), n, 0)); return 23; }
+        case 0x49: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME1(x()) & n); storeME1(x(), r); setZFlagFrom(r); return 17; }
+        case 0x59: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME1(y()) & n); storeME1(y(), r); setZFlagFrom(r); return 17; }
+        case 0x69: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME1(u()) & n); storeME1(u(), r); setZFlagFrom(r); return 17; }
+        case 0xE9: { uint16_t pp = fetch16(); uint8_t n = fetch8(); uint8_t r = uint8_t(dataME1(pp) & n); storeME1(pp, r); setZFlagFrom(r); return 23; }
+        case 0x4B: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME1(x()) | n); storeME1(x(), r); setZFlagFrom(r); return 17; }
+        case 0x5B: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME1(y()) | n); storeME1(y(), r); setZFlagFrom(r); return 17; }
+        case 0x6B: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME1(u()) | n); storeME1(u(), r); setZFlagFrom(r); return 17; }
+        case 0xEB: { uint16_t pp = fetch16(); uint8_t n = fetch8(); uint8_t r = uint8_t(dataME1(pp) | n); storeME1(pp, r); setZFlagFrom(r); return 23; }
+        case 0x4D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(dataME1(x()) & n)); return 14; }
+        case 0x5D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(dataME1(y()) & n)); return 14; }
+        case 0x6D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(dataME1(u()) & n)); return 14; }
+        case 0xED: { uint16_t pp = fetch16(); uint8_t n = fetch8(); setZFlagFrom(uint8_t(dataME1(pp) & n)); return 20; }
 
         // ── DCA / DCS — ME1 ────────────────────────────────────────────────
-        case 0x8C: A = bcdAdd(A, bus.readME1(x()), T & 1); return 19;
-        case 0x9C: A = bcdAdd(A, bus.readME1(y()), T & 1); return 19;
-        case 0xAC: A = bcdAdd(A, bus.readME1(u()), T & 1); return 19;
-        case 0x0C: A = bcdSub(A, bus.readME1(x()), T & 1); return 17;
-        case 0x1C: A = bcdSub(A, bus.readME1(y()), T & 1); return 17;
-        case 0x2C: A = bcdSub(A, bus.readME1(u()), T & 1); return 17;
+        case 0x8C: A = bcdAdd(A, dataME1(x()), T & 1); return 19;
+        case 0x9C: A = bcdAdd(A, dataME1(y()), T & 1); return 19;
+        case 0xAC: A = bcdAdd(A, dataME1(u()), T & 1); return 19;
+        case 0x0C: A = bcdSub(A, dataME1(x()), T & 1); return 17;
+        case 0x1C: A = bcdSub(A, dataME1(y()), T & 1); return 17;
+        case 0x2C: A = bcdSub(A, dataME1(u()), T & 1); return 17;
 
         // ── ADR (16-bit: Rreg = Rreg + A) ───────────────────────────────────
         //
@@ -807,17 +808,17 @@ int LH5801::executeFD(uint8_t op) {
 
         // ── DRL / DRR — ME1 (see the ME0 forms' comment for provenance) ──
         case 0xD7: {
-            uint8_t memOld = bus.readME1(x());
+            uint8_t memOld = dataME1(x());
             uint8_t memNew = drlMerge(memOld, A);
             A = memOld;
-            bus.writeME1(x(), memNew);
+            storeME1(x(), memNew);
             return 16;
         }
         case 0xD3: {
-            uint8_t memOld = bus.readME1(x());
+            uint8_t memOld = dataME1(x());
             uint8_t memNew = drrMerge(memOld, A);
             A = memOld;
-            bus.writeME1(x(), memNew);
+            storeME1(x(), memNew);
             return 16;
         }
 

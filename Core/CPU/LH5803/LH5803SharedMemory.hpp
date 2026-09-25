@@ -106,6 +106,13 @@ public:
     /// PC1500Memory::reset()'s scope). Called from PC1600Machine::reset*().
     void reset() { m_ioRegs.fill(0); }
 
+    /// Debugger view of the LH5803's ME0/ME1 without bus side effects.
+    /// The CE-158's registers, the UART / sub-CPU block and the cards' ME1
+    /// I/O windows can't be read without disturbing them: `*readable` is
+    /// false there and 0xFF is returned. The internal PIO reads as its
+    /// latched register file.
+    uint8_t debugPeek(uint16_t addr, bool me1, bool* readable) const;
+
     // LH5801Bus
     uint8_t readME0(uint16_t addr) override;
     void    writeME0(uint16_t addr, uint8_t value) override;

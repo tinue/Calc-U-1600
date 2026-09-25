@@ -1,0 +1,132 @@
+#include "DebugTarget.hpp"
+
+#include <algorithm>
+
+#include "Disasm/LH5801Disassembler.hpp"
+#include "Disasm/Z80Disassembler.hpp"
+
+namespace debug {
+
+CpuKind DebugTarget::kindOf(int thread) const {
+    for (const Thread& t : threads())
+        if (t.id == thread) return t.kind;
+    return CpuKind::LH5801;
+}
+
+disasm::Decoded DebugTarget::decode(int thread, uint16_t addr, const disasm::SymbolFn& symbols) const {
+    auto fetch = [this, thread](uint16_t a) -> uint8_t {
+        uint8_t v = 0xFF;
+        peek(thread, kSpaceMain, a, &v); // code is fetched from ME0 / Z-80 memory
+        return v;
+    };
+    return kindOf(thread) == CpuKind::Z80 ? disasm::decodeZ80(addr, fetch, symbols)
+                                          : disasm::decodeLH5801(addr, fetch, symbols);
+}
+
+ExpressionContext DebugTarget::expressionContext(int thread,
+                                                std::function<bool(const std::string&, int64_t*)> symbols) const {
+    ExpressionContext ctx;
+    ctx.lookup = [this, thread, symbols](const std::string& name, int64_t* value) {
+        uint32_t reg = 0;
+        if (readRegister(thread, name, &reg)) { *value = reg; return true; }
+        return symbols ? symbols(name, value) : false;
+    };
+    ctx.readByte = [this, thread](uint16_t addr, bool me1, uint8_t* value) {
+        return peek(thread, me1 ? kSpaceME1 : kSpaceMain, addr, value);
+    };
+    ctx.bigEndian = kindOf(thread) != CpuKind::Z80;
+    return ctx;
+}
+
+void DebugTarget::setBreakpoints(int thread, const std::vector<uint16_t>& addrs) {
+    if (thread < 1) return;
+    if (m_breakpoints.size() < size_t(thread)) m_breakpoints.resize(size_t(thread));
+    std::vector<uint16_t>& list = m_breakpoints[size_t(thread - 1)];
+    list = addrs;
+    std::sort(list.begin(), list.end());
+    list.erase(std::unique(list.begin(), list.end()), list.end());
+    applyBreakpoints(thread, list);
+    enableBreakpointChecks(breakpointsActive());
+}
+
+const std::vector<uint16_t>& DebugTarget::breakpoints(int thread) const {
+    static const std::vector<uint16_t> kNone;
+    if (thread < 1 || size_t(thread) > m_breakpoints.size()) return kNone;
+    return m_breakpoints[size_t(thread - 1)];
+}
+
+bool DebugTarget::breakpointsActive() const {
+    for (const auto& list : m_breakpoints)
+        if (!list.empty()) return true;
+    return false;
+}
+
+void DebugTarget::setWatches(int thread, const std::vector<WatchSet::Watch>& watches) {
+    WatchSet& set = m_watches[thread];
+    set.clear();
+    for (const auto& w : watches) set.add(w);
+    attachWatches(thread, set.empty() ? nullptr : &set);
+}
+
+int DebugTarget::watchHitThread() const {
+    for (const auto& [thread, set] : m_watches)
+        if (set.hitPending()) return thread;
+    return 0;
+}
+
+void DebugTarget::prepareResume() {
+    // A CPU parked on one of its breakpoints executes that instruction on
+    // resume instead of stopping again. Only CPUs actually sitting on one
+    // get the skip, so a parked second CPU can't lose a later stop.
+    for (const Thread& t : threads()) {
+        const auto& list = breakpoints(t.id);
+        if (std::binary_search(list.begin(), list.end(), pc(t.id))) resumePastBreakpoint(t.id);
+    }
+    for (auto& entry : m_watches)
+        if (entry.second.hitPending()) entry.second.consumeHit();
+}
+
+Stop DebugTarget::watchStop(int thread) {
+    Stop s;
+    auto it = m_watches.find(thread);
+    if (it == m_watches.end() || !it->second.hitPending()) return s;
+    s.kind = Stop::Watch;
+    s.thread = thread;
+    s.hit = it->second.consumeHit();
+    return s;
+}
+
+Stop DebugTarget::run(uint64_t budget) {
+    prepareResume();
+    return runMachine(budget);
+}
+
+Stop DebugTarget::step() {
+    prepareResume();
+    return stepMachine();
+}
+
+Stop DebugTarget::runUntil(uint64_t maxSteps, const std::function<bool()>& done) {
+    prepareResume();
+    for (uint64_t i = 0; i < maxSteps; i++) {
+        Stop s = stepMachine();
+        if (s.kind != Stop::None) return s;
+        if (done()) return {};
+    }
+    Stop s;
+    s.kind = Stop::Budget;
+    return s;
+}
+
+Stop DebugTarget::stepInstruction(int thread, uint64_t maxSteps) {
+    const uint32_t before = retired(thread);
+    return runUntil(maxSteps, [this, thread, before] { return retired(thread) != before; });
+}
+
+const std::vector<std::string>& flagNames(CpuKind kind) {
+    static const std::vector<std::string> kLh = {"c", "ie", "z", "v", "h"};
+    static const std::vector<std::string> kZ80 = {"c", "n", "pv", "", "h", "", "z", "s"};
+    return kind == CpuKind::Z80 ? kZ80 : kLh;
+}
+
+} // namespace debug

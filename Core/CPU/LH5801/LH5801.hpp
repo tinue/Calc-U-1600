@@ -4,6 +4,7 @@
 
 #include "../../TraceTypes.hpp"
 #include "../HistoryRing.hpp"
+#include "../WatchSet.hpp"
 #include "../TraceRing.hpp"
 
 // ── Bus interface ────────────────────────────────────────────────────────
@@ -177,6 +178,14 @@ public:
     using History = HistoryRing<LH5801HistoryFrame, 32>;
     const History& history() const { return m_history; }
 
+    /// Data breakpoints: every data access (not opcode/operand fetches) is
+    /// checked against `watches` while it is non-null. Not owned.
+    void setWatches(WatchSet* watches) { m_watches = watches; }
+
+    /// Continue from a breakpoint: the next instruction executes even if
+    /// its address is a breakpoint (once).
+    void resumePastBreakpoint() { m_skipBreakpointOnce = true; }
+
     void addBreakpoint(uint16_t addr) { m_breakpoints.add(addr); }
     void removeBreakpoint(uint16_t addr) { m_breakpoints.remove(addr); }
     void clearBreakpoints() { m_breakpoints.clear(); }
@@ -227,6 +236,12 @@ private:
     void     setLowOf(int pair, uint8_t v);
     void     setHighOf(int pair, uint8_t v);
 
+    // ── Data access (checked against m_watches) ──────────────────────────
+    uint8_t dataME0(uint16_t a) { uint8_t v = bus.readME0(a); if (m_watches) m_watches->check(a, v, false, 0); return v; }
+    uint8_t dataME1(uint16_t a) { uint8_t v = bus.readME1(a); if (m_watches) m_watches->check(a, v, false, 1); return v; }
+    void storeME0(uint16_t a, uint8_t v) { if (m_watches) m_watches->check(a, v, true, 0); bus.writeME0(a, v); }
+    void storeME1(uint16_t a, uint8_t v) { if (m_watches) m_watches->check(a, v, true, 1); bus.writeME1(a, v); }
+
     // ── Fetch helpers ────────────────────────────────────────────────────
     uint8_t  fetch8();
     uint16_t fetch16(); // big-endian: high byte first, then low
@@ -270,6 +285,8 @@ private:
     TraceRing<CpuFrame, 512> m_trace;
     BreakpointSet m_breakpoints;
     History m_history;
+    WatchSet* m_watches{nullptr};
+    bool m_skipBreakpointOnce{false};
     uint8_t m_fetchLen{0}; // bytes fetched by the current step(), mirrored into m_history.next()
 
     bool     m_illegalOpcodeHit{false};

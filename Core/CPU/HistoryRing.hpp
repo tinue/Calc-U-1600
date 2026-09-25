@@ -64,6 +64,10 @@ public:
     /// `age` 0 is the most recent frame; valid for age < size().
     const Frame& recent(uint32_t age) const { return m_ring[(m_head - 1 - age) & kMask]; }
 
+    /// Frames recorded since the last clear() -- grows by one per retired
+    /// instruction, so a debugger can tell that a CPU has moved on.
+    uint32_t total() const { return m_head; }
+
     void clear() { m_head = 0; }
 
 private:

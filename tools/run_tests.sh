@@ -8,6 +8,10 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/Debug/Disasm/Disassembly.cpp \
   Core/Debug/Disasm/LH5801Disassembler.cpp \
   Core/Debug/Disasm/Z80Disassembler.cpp \
+  Core/Debug/DebugTarget.cpp \
+  Core/Debug/DebugExpression.cpp \
+  Core/Debug/CpuRegisters.cpp \
+  Core/Debug/MachineDebugTargets.cpp \
   Core/Audio/PiezoSampler.cpp \
   Core/PC1500/PC1500Memory.cpp \
   Core/PC1500/PC1500Machine.cpp \
@@ -79,6 +83,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/lcd_screenshot_tests.cpp \
   Core/tests/machine_code_file_tests.cpp \
   Core/tests/disasm_tests.cpp \
+  Core/tests/debug_target_tests.cpp \
   Core/Basic/vendor/sharpdx/libsharpdx.a \
   -lz \
   -o /tmp/lh5801_tests

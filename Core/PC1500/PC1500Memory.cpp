@@ -168,6 +168,30 @@ bool PC1500Memory::poke(uint16_t addr, uint8_t value) {
     return m_systemBus && m_systemBus->write(addr, m_pu, m_pv, value).stored;
 }
 
+uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
+    *readable = true;
+    if (m_systemBus && addr >= kCe150IoBase && addr <= kCe150IoEnd) {
+        *readable = false;
+        return 0xFF;
+    }
+    if (isIoChipAddress(addr)) {
+        switch (addr & 0xF) {
+            case 0xC: return m_dda;
+            case 0xE: return m_opa;
+            case 0xD: return m_ddb;
+            case 0xF: return m_opb;
+            case 0x8: return m_opc;
+            case 0xB: return m_if;
+            default: return m_ioScratchRegs[addr & 0xF];
+        }
+    }
+    if (m_systemBus) {
+        uint8_t v;
+        if (m_systemBus->readME1(addr, m_pu, m_pv, v)) return v;
+    }
+    return peek(addr);
+}
+
 uint8_t PC1500Memory::readME1(uint16_t addr) {
     // A CE-150 (or any 60-pin card) claiming the LH5810 window shadows the
     // internal I/O chip that also aliases it -- see kCe150IoBase's comment.
