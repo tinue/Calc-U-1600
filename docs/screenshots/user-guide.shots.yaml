@@ -18,6 +18,7 @@ shots:
 
   # The calculator & keyboard.
   - name: faceplate-pc1600
+    window: 1430x1000  # the PC-1600's minimum width
     preset: presets/pc1600-hello.pc1600
     capture: { target: faceplate, file: faceplate-pc1600.png }
 
@@ -29,18 +30,24 @@ shots:
 
   # Memory modules & plotter.
   - name: slot-dropdown
+    window: 1430x1000  # the PC-1600's minimum width
     preset: presets/pc1600-hello.pc1600
     steps:
       - open: controlbar.slot1
     capture: { target: controlbar, file: slot-dropdown.png, padding: 4 }
 
+  # Taller than the rest: the PC-1600 window can't be narrower than its
+  # control bar (~1430), and the faceplate takes its share of the height
+  # first -- the paper needs the rest to show the whole figure.
   - name: plotter
+    window: 1430x1280
     preset: presets/pc1600-lissajou.pc1600
     capture: plotter-window.png
 
   # Settings (Edit > Settings…; on macOS the item lives in the app menu,
-  # but the action is found either way).
+  # but the action is found either way). No preset: still the PC-1600.
   - name: settings
+    window: 1430x1000  # the PC-1600's minimum width
     steps:
       - action: Edit > Settings…
     capture: { target: dialog, file: settings-dialog.png }

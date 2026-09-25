@@ -1,4 +1,9 @@
 # User-guide screenshots: a PC-1500A at the prompt with a greeting on the LCD.
+# Cold boot leaves PRO mode and the "NEW0?" state: NEW0 sets up the BASIC
+# pointers (Debug panel > Pointers is wrong without it), MODE goes to RUN.
 model: PC-1500A
 keys:
+  - key: cl
+  - type: NEW0
+  - key: mode
   - type: PRINT "HELLO FROM THE PC-1500A"

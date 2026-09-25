@@ -1,4 +1,8 @@
 # User-guide screenshots: a PC-1600 at the prompt with a greeting on the LCD.
+# NEW0 (only accepted in PRO mode) sets up the BASIC pointers, then back to RUN.
 model: PC-1600
 keys:
+  - key: mode
+  - type: NEW0
+  - key: mode
   - type: PRINT "HELLO FROM THE PC-1600"

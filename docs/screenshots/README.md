@@ -55,6 +55,7 @@ settle: 150             # ms to let the UI settle after each UI step (default 15
 
 shots:
   - name: model-dropdown                       # unique; used by --shots-only
+    window: 900x1000                           # optional: this shot's size (default: the scenario's)
     preset: presets/pc1500a-hello.pc1500a      # optional: load it first
     steps:                                     # optional
       - open: controlbar.model
@@ -62,6 +63,14 @@ shots:
 ```
 
 A shot without `preset:` continues from where the previous one left off.
+
+The window is set to the shot's size when the shot starts, and again after
+each `preset:` or `reset`, since a model switch changes the minimum size.
+Two limits apply. A window can't be narrower than its layout: the PC-1600's
+control bar needs about 1430. It also can't be taller than the screen. If
+the real size differs from the requested one, the capture logs a
+`note: window is …`. Give the shot a `window:` that fits: the plotter shot
+uses `1430x1280`, so the paper panel shows the whole figure.
 `capture:` on the shot is a final capture step. `capture: name.png` alone
 captures the whole window. More captures can go in `steps:` as
 `- capture: {...}`.
@@ -151,6 +160,16 @@ wrong picture. These shots live in their own scenario,
 ## Presets
 
 [presets/](presets/) holds the presets written for screenshots, so the
-pictures don't change when an example preset does. They are ordinary
+pictures don't change when an example preset does.
+
+**Leave the calculator in RUN mode.** PRO mode is only right when the shot
+shows a LIST or program entry. A capture taken in PRO mode logs a note. Start
+from a clean `NEW0`, or the BASIC pointers (and so Debug ▸ Pointers, MEM
+and so on) are garbage:
+
+- PC-1500/1500A cold boot lands in PRO mode, so use `key: cl`, `type: NEW0`,
+  then `key: mode`.
+- The PC-1600 boots in RUN mode, and `NEW0` is only accepted in PRO mode,
+  so use `key: mode`, `type: NEW0`, then `key: mode`. They are ordinary
 presets (see [Preset files](../User-Guide.md#preset-files)) and may point at
 files elsewhere in the repo, e.g. `../../../examples/lissajou-1600.bas`.

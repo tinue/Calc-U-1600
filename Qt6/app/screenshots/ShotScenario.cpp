@@ -209,6 +209,8 @@ bool parseStep(const YamlNode& node, const QDir& baseDir, const ShotScenario& sc
     return true;
 }
 
+bool parseSize(const YamlNode& node, QSize* out, QString* error);
+
 bool parseShot(const YamlNode& node, const QDir& baseDir, const ShotScenario& scenario, Shot* out,
                QString* error) {
     out->line = node.line;
@@ -217,7 +219,7 @@ bool parseShot(const YamlNode& node, const QDir& baseDir, const ShotScenario& sc
         return false;
     }
     std::string err;
-    if (!node.requireOnlyKeys({"name", "preset", "steps", "capture"}, &err)) {
+    if (!node.requireOnlyKeys({"name", "window", "preset", "steps", "capture"}, &err)) {
         *error = QString::fromStdString(err);
         return false;
     }
@@ -225,6 +227,9 @@ bool parseShot(const YamlNode& node, const QDir& baseDir, const ShotScenario& sc
     if (!name || !scalarString(*name, &out->name, error) || out->name.isEmpty()) {
         if (error->isEmpty()) *error = lineError(node.line, QStringLiteral("shot needs a 'name'"));
         return false;
+    }
+    if (const YamlNode* window = node.find("window")) {
+        if (!parseSize(*window, &out->windowSize, error)) return false;
     }
     // `preset:` first, then the steps, then the shot-level `capture:` --
     // sugar for a leading `- preset:` / trailing `- capture:` step.

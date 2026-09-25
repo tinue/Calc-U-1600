@@ -104,7 +104,6 @@ void ShotRunner::start() {
         QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
 
     m_window->setEmulationFrozen(true);
-    if (m_scenario.windowSize.isValid()) m_window->resize(m_scenario.windowSize);
     // A fixed spot on the primary screen, so `method: system` regions and
     // popup placement are the same every run.
     if (QScreen* screen = QGuiApplication::primaryScreen())
@@ -132,7 +131,10 @@ void ShotRunner::runNextStep() {
         return;
     }
     const Shot& shot = currentShot();
-    if (m_stepIdx == 0) log(QStringLiteral("shot '%1'").arg(shot.name));
+    if (m_stepIdx == 0) {
+        log(QStringLiteral("shot '%1'").arg(shot.name));
+        applyWindowSize();
+    }
     if (m_stepIdx >= shot.steps.size()) {
         m_window->faceplate()->releasePressedKey();
         closeAllTransient();
@@ -164,6 +166,21 @@ void ShotRunner::runNextStep() {
     } else {
         scheduleNext(delay);
     }
+}
+
+QSize ShotRunner::wantedWindowSize() const {
+    const Shot& shot = currentShot();
+    return shot.windowSize.isValid() ? shot.windowSize : m_scenario.windowSize;
+}
+
+void ShotRunner::applyWindowSize() {
+    const QSize wanted = wantedWindowSize();
+    if (!wanted.isValid()) return;
+    // Let a model switch's new minimum size (the PC-1600 control bar is
+    // much wider) reach the layout first, or it still pins the old one.
+    QCoreApplication::processEvents();
+    m_window->resize(wanted);
+    QCoreApplication::processEvents();
 }
 
 void ShotRunner::failStep(const QString& message, int line) {
@@ -201,10 +218,12 @@ bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void(
     switch (step.kind) {
     case K::Preset:
         if (!m_window->loadPresetForShots(step.text, error)) return false;
+        applyWindowSize(); // the preset may have switched model
         *delayMs = settle;
         return true;
     case K::Reset:
         m_window->resetForShots(step.number == 1);
+        applyWindowSize();
         *delayMs = settle;
         return true;
     case K::Key:
@@ -446,6 +465,21 @@ void ShotRunner::closeAllTransient() {
 bool ShotRunner::capture(const ShotCaptureSpec& spec, QString* error) {
     const QString file = QDir(m_outDir).absoluteFilePath(spec.file);
     QCoreApplication::processEvents(); // pending layout/paint from the last step
+    // Screenshots normally show RUN mode; PRO is only right for LIST or
+    // program entry, so point it out rather than fail.
+    for (const auto& [symbol, on] : m_window->controller()->currentDisplay().statusSymbols) {
+        if (on && symbol == "PRO") log(QStringLiteral("  note: the calculator is in PRO mode"));
+    }
+    // The window can't go below its layout's minimum (the PC-1600 control
+    // bar is wide) or past the screen -- say so, the framing is then not
+    // what the scenario asked for.
+    const QSize wanted = wantedWindowSize();
+    if (wanted.isValid() && m_window->size() != wanted)
+        log(QStringLiteral("  note: window is %1x%2, not the %3x%4 asked for")
+                .arg(m_window->width())
+                .arg(m_window->height())
+                .arg(wanted.width())
+                .arg(wanted.height()));
 
     QWidget* target = nullptr;
     if (spec.target == QLatin1String("window") || spec.target == QLatin1String("screen-region")) {

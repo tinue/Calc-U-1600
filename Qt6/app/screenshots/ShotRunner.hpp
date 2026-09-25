@@ -1,5 +1,6 @@
 #pragma once
 #include <QObject>
+#include <QSize>
 #include <QString>
 #include <QStringList>
 #include <functional>
@@ -69,7 +70,9 @@ private:
     // after the next step has been scheduled -- see the class comment.
     bool runStep(const ShotStep& step, int* delayMs, std::function<void()>* deferred, QString* error);
     void failStep(const QString& message, int line);
-    void beginShot();
+    // The current shot's `window:`, else the scenario's (invalid = none).
+    QSize wantedWindowSize() const;
+    void applyWindowSize();
     void finishAll();
 
     QWidget* findWidget(const QString& objectName, QString* error) const;

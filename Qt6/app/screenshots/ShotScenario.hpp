@@ -54,6 +54,7 @@ struct ShotStep {
 struct Shot {
     QString name;
     int line = 0;
+    QSize windowSize;  // invalid = the scenario's
     QList<ShotStep> steps;
 };
 
