@@ -7,6 +7,9 @@
 #include "AppLogging.hpp"
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
+#ifdef __APPLE__
+#include "MacAppSupport.h"
+#endif
 #include "MainWindow.hpp"
 #include "debug/DebugController.hpp"
 #include "screenshots/ShotRunner.hpp"
@@ -14,6 +17,9 @@
 
 int main(int argc, char** argv) {
     AppLogging::install();
+#ifdef __APPLE__
+    macDisableWindowRestoration(); // see MacAppSupport.h: the restore prompt deadlocks the startup preset
+#endif
     QApplication app(argc, argv);
     // Without this, the running window's title-bar/taskbar icon is
     // whatever the platform defaults to (e.g. a generic AppImage icon on

@@ -212,7 +212,7 @@ qt_add_executable(CalcU1600Qt
 )
 
 if(APPLE)
-  target_sources(CalcU1600Qt PRIVATE app/MacClipboardImage.mm app/screenshots/MacShotSupport.mm)
+  target_sources(CalcU1600Qt PRIVATE app/MacClipboardImage.mm app/MacAppSupport.mm app/screenshots/MacShotSupport.mm)
   target_link_libraries(CalcU1600Qt PRIVATE "-framework Cocoa")
 endif()
 
