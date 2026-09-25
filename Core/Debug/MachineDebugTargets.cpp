@@ -49,6 +49,14 @@ DebugStop MachineDebugTarget<Machine>::consumeMachineStop() {
 template class MachineDebugTarget<PC1500Machine>;
 template class MachineDebugTarget<PC1600Machine>;
 
+std::unique_ptr<DebugTarget> makeDebugTarget(PC1500Machine& machine) {
+    return std::make_unique<PC1500DebugTarget>(machine);
+}
+
+std::unique_ptr<DebugTarget> makeDebugTarget(PC1600Machine& machine) {
+    return std::make_unique<PC1600DebugTarget>(machine);
+}
+
 // ── PC-1500 ───────────────────────────────────────────────────────────────
 
 PC1500DebugTarget::PC1500DebugTarget(PC1500Machine& machine) : MachineDebugTarget(machine) {

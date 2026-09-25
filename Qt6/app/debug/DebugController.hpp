@@ -50,8 +50,10 @@ public:
     bool paused() const;
     void runSlice(std::uint64_t cycles);
 
-    /// Called by MachineController before it destroys the live machine.
+    /// Called by MachineController before it destroys the live machine,
+    /// and once its successor exists.
     void machineAboutToChange();
+    void machineReplaced();
 
     // ── For DapSession ────────────────────────────────────────────────────
     /// Creates the target / run control for the live machine; false if
@@ -111,6 +113,7 @@ private:
     debug::BreakpointTable m_breakpoints;
     bool m_sessionActive = false;
     bool m_lastPaused = false;
+    bool m_replacedPending = false; // machineReplaced(): resume + re-bind on the next frame
     void dispatch(const QJsonObject& message);
     void drainQueue();
     bool m_busy = false;     // handling a message (which may itself load)

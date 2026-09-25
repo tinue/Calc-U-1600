@@ -105,17 +105,18 @@ void DebugController::onClientDisconnected() {
 void DebugController::createTarget() {
     m_run.reset();
     m_target.reset();
-    if (PC1500Machine* m = m_machines->pc1500()) m_target = std::make_unique<debug::PC1500DebugTarget>(*m);
-    else if (PC1600Machine* m = m_machines->pc1600()) m_target = std::make_unique<debug::PC1600DebugTarget>(*m);
-    if (m_target) m_run = std::make_unique<debug::RunControl>(*m_target, m_map, m_breakpoints);
+    m_machines->withMachine([this](auto& machine) { m_target = debug::makeDebugTarget(machine); });
+    if (!m_target) return;
+    m_target->arm(false); // armed only inside runSlice()
+    m_run = std::make_unique<debug::RunControl>(*m_target, m_map, m_breakpoints);
 }
 
 bool DebugController::beginSession() {
     m_map.clear();
     m_breakpoints.clear();
+    m_replacedPending = false;
     createTarget();
     m_sessionActive = m_target != nullptr;
-    if (m_target) m_target->arm(false);
     return m_sessionActive;
 }
 
@@ -138,12 +139,12 @@ bool DebugController::attached() const { return m_sessionActive; }
 bool DebugController::paused() const { return m_sessionActive && m_run && m_run->paused(); }
 
 void DebugController::runSlice(std::uint64_t cycles) {
-    if (!m_sessionActive) return;
-    if (!m_target) {
-        // The machine was rebuilt (or reset flat out) since the last frame:
-        // bind to the new one now that nothing else drives it.
-        createTarget();
-        if (!m_target) return;
+    if (!m_sessionActive || !m_target) return;
+    if (m_replacedPending) {
+        // The machine was rebuilt since the last frame (the target bound to
+        // it then). Now that it has booted and nothing else drives it, the
+        // listings can be checked against it and the breakpoints armed.
+        m_replacedPending = false;
         m_run->resume();
         if (m_session) m_session->onMachineReplaced();
     }
@@ -179,9 +180,9 @@ bool DebugController::loadPreset(const QString& path, QString* error) {
         return false;
     }
     const bool ok = m_sync->loadPreset(path, error);
-    // The preset rebuilt the machine: bind to it right away (paused, as a
-    // fresh session is).
-    if (m_sessionActive && !m_target) createTarget();
+    // The preset rebuilt the machine and the target rebound to it; it stays
+    // paused, as a fresh session is -- the caller re-binds the listings.
+    m_replacedPending = false;
     return ok;
 }
 
@@ -195,7 +196,6 @@ bool DebugController::cleanStart(const QString& preset, QString* how, QString* e
     // No preset: the machine as Reset All leaves it, booted to the prompt.
     *how = tr("All Reset (no default preset for this model)");
     m_machines->resetToPrompt(/*allReset=*/true);
-    if (m_sessionActive && !m_target) createTarget();
     return true;
 }
 
@@ -232,7 +232,7 @@ bool DebugController::resetMachine(bool allReset, bool stop, QString* error) {
 }
 
 void DebugController::machineAboutToChange() {
-    // The target refers to the machine that is about to go; runSlice()
+    // The target refers to the machine that is about to go; machineReplaced()
     // binds to its successor.
     m_run.reset();
     m_target.reset();
@@ -240,4 +240,12 @@ void DebugController::machineAboutToChange() {
         m_lastPaused = false;
         emit pausedChanged(false);
     }
+}
+
+void DebugController::machineReplaced() {
+    if (!m_sessionActive) return;
+    createTarget();
+    // The new machine hasn't booted yet; the next frame resumes it and
+    // re-binds the listings (see runSlice()).
+    m_replacedPending = true;
 }

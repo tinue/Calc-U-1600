@@ -225,6 +225,7 @@ QString MachineController::ce158SerialLinkStatus() const {
 void MachineController::wireNewMachine() {
     withMachine([this](auto& machine) { machine.setCE158SerialLink(&m_ce158SerialLink); });
     if (m_pc1600) attachSerialLink(*m_pc1600);
+    if (m_debug) m_debug->machineReplaced();
 }
 
 void MachineController::finishPresetLoad(Model model) {

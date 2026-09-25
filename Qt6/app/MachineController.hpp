@@ -355,6 +355,20 @@ public:
     // this while waiting for a synthetic OFF keypress to actually land.
     bool isMachinePoweredOn() const;
 
+    // Runs `f` on whichever machine is live (both share the method names
+    // used here); the second form returns `none` when there is none.
+    template <class F>
+    void withMachine(F&& f) const {
+        if (m_pc1600) f(*m_pc1600);
+        else if (m_pc1500) f(*m_pc1500);
+    }
+    template <class R, class F>
+    R withMachine(R none, F&& f) const {
+        if (m_pc1600) return f(*m_pc1600);
+        if (m_pc1500) return f(*m_pc1500);
+        return none;
+    }
+
 signals:
     void modelChanged(Model model);
     // refreshSerialLinkDirectory() moved the PTY symlinks.
@@ -396,23 +410,11 @@ private:
         return std::make_unique<PtySerialLink>(effectiveSerialLinkDir().toStdString(),
                                                PtySerialLink::kCE158LinkName);
     }};
-    // Hands a just-built m_pc1500/m_pc1600 its host serial links. Called
-    // at every point that constructs one, before anything is attached.
+    // Hands a just-built m_pc1500/m_pc1600 its host serial links and tells
+    // the debugger (pairs with discardMachine()). Called at every point
+    // that constructs one, before anything is attached.
     void wireNewMachine();
 
-    // Runs `f` on whichever machine is live (both share the method names
-    // used here); the second form returns `none` when there is none.
-    template <class F>
-    void withMachine(F&& f) const {
-        if (m_pc1600) f(*m_pc1600);
-        else if (m_pc1500) f(*m_pc1500);
-    }
-    template <class R, class F>
-    R withMachine(R none, F&& f) const {
-        if (m_pc1600) return f(*m_pc1600);
-        if (m_pc1500) return f(*m_pc1500);
-        return none;
-    }
 
     // Where Core's BundledRomCatalog should look for bundled ROM files --
     // AppPaths::bundledResourcesDir(), the same directory the .card.yaml

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "DebugTarget.hpp"
 
 class PC1500Machine;
@@ -56,5 +58,9 @@ public:
     int bankAt(int thread, uint16_t addr) const override;
     std::vector<BankField> bankState(int thread) const override;
 };
+
+/// The target for a machine (for callers that visit either one).
+std::unique_ptr<DebugTarget> makeDebugTarget(PC1500Machine& machine);
+std::unique_ptr<DebugTarget> makeDebugTarget(PC1600Machine& machine);
 
 } // namespace debug
