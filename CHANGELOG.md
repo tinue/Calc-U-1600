@@ -7,6 +7,9 @@
 - **Settings** Folder and serial-port paths show as `~/Calc-U-1600/…`
   (and `~/…` elsewhere under the home folder), as the User Guide writes
   them.
+- **Plotter paper** Copy / Cut stay at 1200 DPI up to about 136 mm of
+  CE-1600P paper and scale down beyond that (was ~339 mm), so a long plot
+  no longer needs gigabytes of memory to copy.
 
 ### Fixed
 

@@ -302,12 +302,6 @@ timing — decide deliberately):
   the 0.5 s ISR's commands but is applied to every sub-CPU command (key
   scan, clock, IOCS). Chase the residual first, then re-fit once;
   consider a per-command response time.
-- **Plotter paper Copy at 1200 DPI allocates huge images on the GUI
-  thread.** `PlotterPaperWidget.cpp` (~26/249): ~9 900 px wide ×
-  paper length; a ~300 mm plot is ~550 MB ARGB32, plus the clipboard
-  copy. `kMaxTextureDimPx` caps only the longest side. Options: put a
-  vector PDF on the macOS pasteboard (exact physical size, no DPI
-  trade-off), or cap total pixels (~64 MP) and use RGB32.
 - **PC-1600 `display().tick()` every instruction.** Called from both
   CPU branches of `PC1600Machine::step()` (~303/331) just to keep
   `m_lcdEdges` current, which is read only on LCD port 50H–5BH access.

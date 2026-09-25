@@ -23,8 +23,14 @@
 
 namespace {
 constexpr double kFollowThresholdPt = 64.0;
-constexpr double kDpiScale = 1200.0 / 72.0;    // target 1200 DPI (72pt/in base); full res up to ~339 mm of paper
+constexpr double kDpiScale = 1200.0 / 72.0;    // target 1200 DPI (72pt/in base)
 constexpr double kMaxTextureDimPx = 16000.0;   // GPU texture size cap
+// Total-pixel cap for the export. Copy holds the image, the pasteboard's
+// bitmap and its TIFF/PNG encodings at once, so 64 MP (256 MB a copy) is
+// already a lot; uncapped, a long roll ran past 2 GB. Full 1200 DPI up to
+// ~136 mm of CE-1600P paper, scaled down beyond that. The narrow CE-150
+// roll hits the long-side cap first (~339 mm) and stays under this one.
+constexpr double kMaxExportPixels = 64.0e6;
 
 // pen[color % 4] -- AlpsPlotterMechanism::PenColor's raw value order.
 const QColor kPenColors[4] = {Qt::black, Qt::blue, Qt::darkGreen, Qt::red};
@@ -243,11 +249,16 @@ QImage PlotterPaperWidget::renderPaperImage() const {
     const auto [lower, upper] = m_penYRange;
     const double contentHeightPt = m_geometry.contentHeight(0, lower, upper, paneWidthPt);
     const double longestDimPt = std::max(paneWidthPt, contentHeightPt);
-    const double effectiveScale = std::min(kDpiScale, longestDimPt > 0 ? kMaxTextureDimPx / longestDimPt : kDpiScale);
+    const double areaPt = paneWidthPt * contentHeightPt;
+    double effectiveScale = kDpiScale;
+    if (longestDimPt > 0) effectiveScale = std::min(effectiveScale, kMaxTextureDimPx / longestDimPt);
+    if (areaPt > 0) effectiveScale = std::min(effectiveScale, std::sqrt(kMaxExportPixels / areaPt));
 
+    // RGBA8888: the byte order macSetClipboardImage() hands to Cocoa, so
+    // its conversion is a no-op rather than a second full-size copy.
     QImage image(std::max(1, qRound(paneWidthPt * effectiveScale)),
                  std::max(1, qRound(contentHeightPt * effectiveScale)),
-                 QImage::Format_ARGB32);
+                 QImage::Format_RGBA8888);
     QPainter painter(&image);
     // Deliberately no anti-aliasing: at 1200 DPI the strokes are ~16 px wide,
     // and the soft edges only made the printout look worse.
@@ -257,7 +268,7 @@ QImage PlotterPaperWidget::renderPaperImage() const {
 
     // Embed true DPI so a direct file save (or a non-macOS clipboard path)
     // carries physical size too, even when effectiveScale backed off from
-    // 600 DPI to respect the texture cap (long rolls).
+    // 1200 DPI to respect the caps (long rolls).
     const int dotsPerMeter = qRound(effectiveScale * 72.0 / 0.0254);
     image.setDotsPerMeterX(dotsPerMeter);
     image.setDotsPerMeterY(dotsPerMeter);
