@@ -64,7 +64,7 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
   - **Opening it:** while paused, hover over a 16-bit register under *Registers*, or a Watch entry, and click the binary-data icon (**View Binary Data**). A Watch entry can be any address or expression, e.g. `0x7600` or `x+0x10`.
   - **Offsets are relative.** The offset column counts from the address you opened, which only the breadcrumb shows. The row labelled `00000000` is that address, and you can't scroll above it.
   - **Real addresses:** open the view from a Watch entry `0`. Offsets then equal addresses, and **Cmd+G** (Go to offset) jumps anywhere.
-  - **Edits** in the hex editor are written to the machine.
+  - **Editing:** switch the hex editor to *Replace* mode first (the status-bar toggle, or **Hex Editor: Switch Edit Mode**). The edits reach the machine when you save (**Cmd+S**). An insert or a delete can't be saved: the hex editor then tries to rewrite the whole range and reports *Not supported*. Undo it with **File: Revert File**.
   - **Which CPU:** a Watch entry opens memory as the selected frame's CPU sees it. Select an LH5803 frame first to see the PC-1600's LH5803 side. ME1 can't be opened from a Watch entry.
 
 ## Using VS Code
