@@ -8,14 +8,15 @@ The debug adapter runs inside the emulator itself, as a DAP server on 127.0.0.1.
 
 ## Install
 
-- **For development:** symlink this folder into your extensions folder and reload VS Code:
-  ```sh
-  ln -s "$PWD" ~/.vscode/extensions/calcu1600-debug
-  ```
-- **As a package:** build a `.vsix` and install it with *Extensions: Install from VSIX…*:
-  ```sh
-  npx @vscode/vsce package
-  ```
+From the repository root:
+
+```sh
+tools/install_vscode_extension.sh
+```
+
+This packages the extension as `headless/calcu1600-debug.vsix` and installs it with `code --install-extension`. Afterwards reload the VS Code window. Re-run the script whenever the extension changes.
+
+Don't copy or symlink this folder into `~/.vscode/extensions`: current VS Code marks such extensions as removed and never loads them.
 
 In the emulator, turn on **Settings > Debugger > Accept a debugger** (port 4711 by default). Alternatively, start the app with `--dap 4711`.
 

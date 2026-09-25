@@ -56,7 +56,7 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
 
 ## Using VS Code
 
-1. **Install the extension.** Symlink `vscode/calcu1600-debug` into `~/.vscode/extensions`, or build a `.vsix`; see the extension's README.
+1. **Install the extension:** run `tools/install_vscode_extension.sh`, then reload the VS Code window. The script packages a `.vsix` and installs it; a symlink into `~/.vscode/extensions` doesn't work with current VS Code.
 2. **Add the build tasks** from that README to `.vscode/tasks.json`:
    - `sdas: build current file` runs sdaslh5801 → sdld → makebin;
    - `zasm: build current file` runs zasm.

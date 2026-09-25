@@ -4,7 +4,7 @@
   "description": "Debug LH5801 / LH5803 / Z80 programs on the Calc-U-1600 PC-1500 / PC-1600 emulator over DAP.",
   "version": "0.1.0",
   "publisher": "calcu1600",
-  "license": "MIT",
+  "license": "GPL-3.0-only",
   "engines": { "vscode": "^1.80.0" },
   "categories": ["Debuggers"],
   "main": "./extension.js",
