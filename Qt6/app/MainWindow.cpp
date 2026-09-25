@@ -512,9 +512,6 @@ void MainWindow::syncPeripheralButtons(bool ce150Attached, bool ce1600pAttached,
 void MainWindow::onCe158AttachedChanged(bool attached) {
     syncPeripheralButtons(m_controller->ce150Attached(), m_controller->ce1600pAttached(), attached);
     if (attached) {
-        // A preset attaches the card on the Core machine directly: make
-        // sure it has its host PTY before the preset script runs.
-        m_controller->syncCE158SerialLink();
         if (!m_ce158PrinterInLayout) { m_debugRowLayout->addWidget(m_ce158Printer, 1); m_ce158PrinterInLayout = true; }
         m_ce158Printer->show();
     } else if (m_ce158PrinterInLayout) {

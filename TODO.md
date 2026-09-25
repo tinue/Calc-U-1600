@@ -193,21 +193,6 @@ touched, not proactively:
 
 Larger or behaviour-changing items left out of the 0.5.0 cleanup commit.
 
-- **`MachineController` branches on the model in every new method.**
-  `attachCE158`, `detachCE158`, `ce158Attached`,
-  `drainCE158PrinterOutput`, `tapKey`, `seedClockFromHostNow`, … are
-  all `if (m_pc1600) … else if (m_pc1500) …`. Fix: one
-  `template<class F> auto withMachine(F&&)` visitor (both machines
-  already share the method names), then write each operation once.
-- **CE-158 host PTY is wired from several places.** The link is created
-  lazily in `syncCE158SerialLink()`, which is called from
-  `resetBareForPreset*` (hand-over only), `attachCE158`, and
-  `MainWindow::onCe158AttachedChanged` (a UI slot doing I/O wiring, so a
-  preset-attached card gets its PTY). Fix: hand every newly built
-  machine its CE-158 link at one construction hook (as
-  `attachSerialLink(*m_pc1600)` does for the PC-1600 port); open the
-  PTY lazily inside the link or on first attach there; drop the other
-  sync calls.
 - **CE-158 / CE-1600P exclusion is encoded in several layers.** Core
   (`PC1600Machine` attach detaches the other), the parser
   (`PresetFile.cpp`), `PlotterController` (`hadCE158`/`hadCE1600P`

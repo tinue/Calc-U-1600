@@ -13,13 +13,14 @@
 #include "Display/LcdScreenshot.hpp"
 #include "KeyPaste.hpp"
 #include "PC1500/PC1500Variant.hpp"
+#include "Serial/LazySerialLink.hpp"
+#include "Serial/PtySerialLink.hpp"
 #include "TraceTypes.hpp"
 
 class PC1500Machine;
 class PC1600Machine;
 class MemoryModuleManager;
 class FloppyDiskManager;
-class PtySerialLink;
 
 namespace MachineControllerNS {
 enum class Model { PC1500, PC1500A, PC1600 };
@@ -332,10 +333,6 @@ public:
     bool ce158Attached() const;
     // What the CE-158 printed on its parallel port since the last call.
     std::vector<std::uint8_t> drainCE158PrinterOutput();
-    // Gives an attached CE-158 its host PTY (created on first use, then
-    // kept for the app's life). Called after every point that can attach a
-    // CE-158 behind this class's back -- a preset, a machine rebuild.
-    void syncCE158SerialLink();
 
     std::vector<AlpsPlotterMechanism::FlatPoint> ce150PlotPoints() const;
     std::uint64_t ce150PlotRevision() const;
@@ -378,9 +375,31 @@ private:
     // host-visible symlink shouldn't disappear/reappear just because the
     // user switched models or loaded a preset.
     std::unique_ptr<PtySerialLink> m_serialLink;
-    // The CE-158's PTY: created the first time a CE-158 is attached, then
-    // kept like m_serialLink (see syncCE158SerialLink()).
-    std::unique_ptr<PtySerialLink> m_ce158SerialLink;
+    // The CE-158's link, handed to every machine as it is built (see
+    // wireNewMachine()). Its PTY only opens once a CE-158 -- attached from
+    // the GUI or by a preset -- first talks to it, then stays for the app's
+    // life like m_serialLink.
+    LazySerialLink<PtySerialLink> m_ce158SerialLink{[] {
+        return std::make_unique<PtySerialLink>(effectiveSerialLinkDir().toStdString(),
+                                               PtySerialLink::kCE158LinkName);
+    }};
+    // Hands a just-built m_pc1500/m_pc1600 its host serial links. Called
+    // at every point that constructs one, before anything is attached.
+    void wireNewMachine();
+
+    // Runs `f` on whichever machine is live (both share the method names
+    // used here); the second form returns `none` when there is none.
+    template <class F>
+    void withMachine(F&& f) const {
+        if (m_pc1600) f(*m_pc1600);
+        else if (m_pc1500) f(*m_pc1500);
+    }
+    template <class R, class F>
+    R withMachine(R none, F&& f) const {
+        if (m_pc1600) return f(*m_pc1600);
+        if (m_pc1500) return f(*m_pc1500);
+        return none;
+    }
 
     // Where Core's BundledRomCatalog should look for bundled ROM files --
     // AppPaths::bundledResourcesDir(), the same directory the .card.yaml
