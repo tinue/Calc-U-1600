@@ -5,6 +5,7 @@
 #include <QTimer>
 #include <QVector>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "MachineController.hpp"
@@ -131,9 +132,10 @@ private:
         bool battery = false;      // that file declares `battery: true`
         QString instanceFilePath;  // == sourcePath for an instance (autosaved there), else empty
         bool persistPending = false;
-        // The card image as last attached from / written to
-        // instanceFilePath; empty = unknown, so the next persist writes.
-        std::vector<uint8_t> persistedImage;
+        // The card's contentRevision() when it was last attached from /
+        // written to instanceFilePath; unset = unknown, so the next persist
+        // writes.
+        std::optional<uint64_t> persistedRevision;
     };
     // Records `resolvedPath` as the slot's source and classifies it from the
     // file's own `template:` key. Empty path = no file (clears the source).
@@ -144,6 +146,7 @@ private:
 
     CardHost hostFor(int slot) const;
     bool currentSlotImage(int slot, int* bankCount, std::vector<uint8_t>* image) const;
+    uint64_t currentSlotRevision(int slot) const;  // the attached card's contentRevision()
     void writeInstance(int slot);  // re-splice + rewrite slot's instance file, if the card changed
 
     // Reads `sourcePath`, splices the card `image` (`bankCount` banks) into it as

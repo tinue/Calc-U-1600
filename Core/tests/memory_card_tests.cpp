@@ -1453,6 +1453,28 @@ void test_ce1601m_slot2map_remap() {
     CHECK(mem.read(0x0000) == 0xFF);      // no ROM loaded -> open bus, not Slot 2
 }
 
+// contentRevision() moves only when the stored content changes: a guest
+// write of a new value, a debugImageWrite(); not a write of the value
+// already there (what the GUI's card autosave relies on to skip a copy).
+void test_card_content_revision() {
+    PC1600Bank bank;
+    PC1600Memory mem(bank);
+    CHECK(mem.slot1CardRevision() == 0); // empty slot
+    mem.attachSlot1Card(plainRamCard(0x8000));
+    mem.writeIO(0x31, 0 << 4); // page-C bank 0
+    mem.write(0x8000, 0x42);
+    const uint64_t r1 = mem.slot1CardRevision();
+    CHECK(r1 != 0);
+    mem.write(0x8000, 0x42); // same value: no change
+    CHECK(mem.slot1CardRevision() == r1);
+    mem.write(0x8001, 0x43);
+    const uint64_t r2 = mem.slot1CardRevision();
+    CHECK(r2 != r1);
+    const uint8_t b = 0x44;
+    CHECK(mem.slot1CardImageWrite(0x10, &b, 1));
+    CHECK(mem.slot1CardRevision() != r2);
+}
+
 // SLOT2MAP with an empty Slot 2: the redirect must be inert, never divert a
 // page-A/B ROM fetch into nothing.
 void test_slot2map_remap_no_card_is_inert() {
@@ -1842,6 +1864,7 @@ void test_reject_unbanked_flash_sector_not_dividing_capacity() {
 }
 
 int run_memory_card_tests() {
+    test_card_content_revision();
     test_power_up_fill_defaults_per_kind();
     test_yaml_block_map_and_scalars();
     test_yaml_hex_ints();

@@ -77,10 +77,7 @@ void MemoryModuleManager::attachOneSlot(int slotIndex, CardHost host, AttachFn a
             attach(std::move(card));
             // Freshly loaded from the file -- identical to it until the
             // machine writes to the card.
-            if (!st.instanceFilePath.isEmpty()) {
-                int bankCount = 0;
-                currentSlotImage(slotIndex + 1, &bankCount, &st.persistedImage);
-            }
+            if (!st.instanceFilePath.isEmpty()) st.persistedRevision = currentSlotRevision(slotIndex + 1);
             return;
         }
     }
@@ -266,6 +263,7 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
     // preset save-as) an instance; either way its layout is the card's.
     int bankCount = 0;
     std::vector<uint8_t> image;
+    const uint64_t revision = currentSlotRevision(slot);
     if (!currentSlotImage(slot, &bankCount, &image)) {
         *error = tr("Couldn't read the live card contents.");
         return false;
@@ -285,7 +283,7 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
     st.isTemplate = false;  // the splice never writes `template:`; `battery` carries over
     st.instanceFilePath = newPath;
     st.persistPending = false;
-    st.persistedImage = std::move(image);
+    st.persistedRevision = revision;
     emit moduleChanged(slot);
     return true;
 }
@@ -294,19 +292,30 @@ void MemoryModuleManager::writeInstance(int slot) {
     SlotState& st = m_slots[slot - 1];
     if (st.instanceFilePath.isEmpty()) return;
 
+    // Runs on every debounce: skip the image copy, file read and rewrite
+    // unless the card's content changed since it was last attached from or
+    // written to the file.
+    const uint64_t revision = currentSlotRevision(slot);
+    if (st.persistedRevision == revision) return;
     int bankCount = 0;
     std::vector<uint8_t> image;
     if (!currentSlotImage(slot, &bankCount, &image)) return;
-    // Nothing reports card writes, so this runs on every debounce: skip
-    // the file read + rewrite unless the card changed since it was last
-    // attached from or written to the file.
-    if (image == st.persistedImage) return;
 
     std::string spliced;
     if (!spliceCardImageInto(bankCount, image, st.instanceFilePath, st.moduleName, st.moduleName, &spliced,
                              nullptr))
         return;
-    if (AppPaths::atomicWriteFile(st.instanceFilePath, spliced)) st.persistedImage = std::move(image);
+    if (AppPaths::atomicWriteFile(st.instanceFilePath, spliced)) st.persistedRevision = revision;
+}
+
+uint64_t MemoryModuleManager::currentSlotRevision(int slot) const {
+    if (auto* m1500 = m_controller->pc1500()) {
+        auto* card = m1500->expansionConnector().attachedCard();
+        return card ? card->contentRevision() : 0;
+    }
+    if (auto* m1600 = m_controller->pc1600())
+        return slot == 1 ? m1600->memory().slot1CardRevision() : m1600->memory().slot2CardRevision();
+    return 0;
 }
 
 void MemoryModuleManager::markDirtyAndSchedulePersist() {

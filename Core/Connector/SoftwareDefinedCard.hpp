@@ -94,7 +94,7 @@ public:
             if (c.kind == ContentKind::Rom) return WriteResult::refused();
             if (c.kind == ContentKind::Flash) {
                 if (pins.direct) {
-                    st.backing[off] = value;  // poke/preset loader: unconditional
+                    store(st.backing[off], value);  // poke/preset loader: unconditional
                     return WriteResult::taken();
                 }
                 // off = bank*bankSize + windowOffset (see locate()) -- the flash command
@@ -105,7 +105,7 @@ public:
             }
             bool protectedNow = c.hasWriteProtect && c.writeProtectDefaultProtected;
             if (!c.writable || protectedNow) return WriteResult::refused();  // the card claims the write either way
-            st.backing[off] = value;
+            store(st.backing[off], value);
             return WriteResult::taken();
         }
         return WriteResult::ignored();
@@ -121,6 +121,8 @@ public:
     const MemoryCardDefinition& definition() const { return m_def; }
 
     std::string moduleName() const override { return m_def.moduleName; }
+
+    uint64_t contentRevision() const override { return m_contentRevision; }
 
     /// First banked region's current bank, for the GUI "Dump Mem" column
     /// label; -1 when no region banks (a purely unbanked definition).
@@ -169,6 +171,7 @@ public:
                 const size_t local = off - base;
                 const size_t take = std::min(n, st.backing.size() - local);
                 std::copy(data, data + take, st.backing.begin() + local);
+                ++m_contentRevision;
                 data += take;
                 n -= take;
                 off += take;
@@ -180,6 +183,14 @@ public:
     }
 
 private:
+    // Stores `value` into a backing cell, counting it as a content change
+    // only when the cell actually takes a new value (see contentRevision()).
+    void store(uint8_t& cell, uint8_t value) {
+        if (cell == value) return;
+        cell = value;
+        ++m_contentRevision;
+    }
+
     // Whether [off, off+n) of the concatenated backing (debugImage()'s
     // address space) touches a byte of a `rom` range.
     bool touchesRom(size_t off, size_t n) const {
@@ -303,8 +314,8 @@ private:
     // and returned from without touching `st.flash`: the command decoder
     // is its own state machine, independent of the bank-select latch, even
     // though real firmware interleaves writes to both in quick succession.
-    static void flashWrite(RegionState& st, const Region& r, const FlashProtocol& p,
-                           uint32_t windowOffset, uint8_t data) {
+    void flashWrite(RegionState& st, const Region& r, const FlashProtocol& p,
+                    uint32_t windowOffset, uint8_t data) {
         const uint32_t mask = p.commandAddressMask;
         const uint32_t cmd = windowOffset & mask;
         const uint32_t addr0 = p.unlockSequence[0].address & mask;
@@ -344,7 +355,8 @@ private:
                 else st.flash = S::Idle;
                 return;
             case S::ProgramArmed:
-                st.backing[bankBase + windowOffset] &= data;  // NOR: can only clear bits
+                store(st.backing[bankBase + windowOffset],
+                      uint8_t(st.backing[bankBase + windowOffset] & data));  // NOR: can only clear bits
                 st.flash = S::Idle;
                 return;
             case S::EraseSetup:
@@ -365,6 +377,7 @@ private:
                     uint32_t base = windowOffset & ~(p.sectorSize - 1);
                     std::fill_n(st.backing.begin() + bankBase + base, p.sectorSize, uint8_t(0xFF));
                 }
+                ++m_contentRevision;
                 st.flash = S::Idle;
                 return;
         }
@@ -372,6 +385,7 @@ private:
 
     MemoryCardDefinition m_def;
     std::vector<RegionState> m_regions;
+    uint64_t m_contentRevision = 0; // see contentRevision()
 };
 
 /// Build the universal card from a definition file for a specific target

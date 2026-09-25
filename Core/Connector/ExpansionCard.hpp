@@ -135,6 +135,12 @@ public:
     /// whole number of 16 KB banks (the slot cards) labels them bank 0..N.
     virtual std::vector<uint8_t> debugImage() const { return {}; }
 
+    /// Bumped whenever debugImage()'s content changes -- a stored byte that
+    /// took a new value, a flash erase, a debugImageWrite() -- so a host
+    /// that persists the card compares one number instead of the whole
+    /// image. Stays 0 for a card with no writable storage.
+    virtual uint64_t contentRevision() const { return 0; }
+
     /// The write counterpart of debugImage(): overwrite `n` bytes of the
     /// backing store starting at concatenated offset `off` (same address
     /// space debugImage() returns). For a host-side debug / program-loader

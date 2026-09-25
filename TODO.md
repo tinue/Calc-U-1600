@@ -230,10 +230,6 @@ for the cleanup commit.
   - a header-only card catalogue parse (as `scanFloppyDirectory` does);
   - a shared `NamedFileCatalog`-level helper for lists / classify /
     save-name validation, leaving the managers only Qt glue.
-- **Instance autosave compares full card images.** `writeInstance()`
-  copies the whole card (up to 512 KB) every 500 ms and keeps a second
-  copy per slot. A card write-revision counter (like
-  `ce1600fRevision()`) would make it one integer compare.
 - **GUI TRACE size check `stat()`s every frame.** `DebugPanel::
   checkTraceSizeLimit()` calls `QFileInfo(path).size()` at 60 Hz and lags
   by stdio's buffer. Have `PC1500TraceFile` count bytes written and read
