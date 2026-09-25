@@ -1,5 +1,14 @@
 # DAP debug server for Calc-U-1600
 
+> **Status (2026-09-25): implemented** in phases 1–6 (a7b062b … d340fc4). The user documentation is `docs/Debugger.md`. The implementation differs from this plan in these places:
+> - **Watches:** each CPU has its own watch set, because the PC-1600's two CPUs have separate address spaces.
+> - **Arming:** breakpoints and watches are armed only inside the debugger's frame slices, so a boot, a preset or a load can never park on one.
+> - **Run control lives in Core:** `debug::BreakpointTable` and `debug::RunControl` are there and unit-tested; the Qt layer is thin.
+> - **Build & Load order:** clean start (preset / default preset / All Reset), then a direct load, then auto-start through `MachineController::typeCommand()`. The GUI paste still never presses ENTER.
+> - **Message queueing:** DAP messages wait while the app runs a synchronous load.
+> - **Added:** `calcu1600/quit` and the `--dap <port>` option for scripted runs.
+> - **Still open:** the manual VS Code check and the CLion setup.
+
 ## Context
 Machine-code work on the PC-1500 (LH5801) and PC-1600 (Z80 SC7852 + LH5803) is debugged today only by the TRACE file and CLI poking. We want the emulator to offer a **Debug Adapter Protocol** server over TCP. VS Code attaches to it (CLion later) and gets breakpoints (including conditional ones), stepping, registers, memory and disassembly. When a listing from an earlier assembly run exists, VS Code also shows the original `.asm` source.
 
