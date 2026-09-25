@@ -32,6 +32,8 @@ void SC7852::reset() {
     m_eiShadow = false;
     m_pendingPrefix = 0;
     m_history.clear();
+    m_breakpoints.clearHit();
+    m_skipBreakpointOnce = false;
     m_historyFrame = &m_history.next();
     // A/F and the general-purpose registers are left as their construction-
     // time values on a real Z-80 reset (undefined/whatever they were) —
@@ -467,7 +469,7 @@ int SC7852::step() {
     }
 
     uint32_t tf = traceFlags();
-    if ((tf & TRACE_BREAKPOINTS) && !m_pendingPrefix) {
+    if (m_breakpointsEnabled && !m_pendingPrefix) {
         if (m_skipBreakpointOnce) m_skipBreakpointOnce = false;
         else if (m_breakpoints.check(PC)) return 0;
     }

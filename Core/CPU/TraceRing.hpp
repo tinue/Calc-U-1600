@@ -64,38 +64,3 @@ private:
     uint32_t m_totalWritten{0};  // write count so far; also gives the next write index and overflow accounting
     mutable std::mutex m_mutex;
 };
-
-// Sorted PC breakpoint list, safe to edit from another thread while the
-// emulation thread checks it.
-class BreakpointSet {
-public:
-    void add(uint16_t addr) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (!std::binary_search(m_addrs.begin(), m_addrs.end(), addr)) {
-            m_addrs.insert(std::upper_bound(m_addrs.begin(), m_addrs.end(), addr), addr);
-        }
-    }
-    void remove(uint16_t addr) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        auto it = std::lower_bound(m_addrs.begin(), m_addrs.end(), addr);
-        if (it != m_addrs.end() && *it == addr) m_addrs.erase(it);
-    }
-    void clear() {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_addrs.clear();
-    }
-    /// True (and latches a hit for consumeHit()) if `pc` is a breakpoint.
-    bool check(uint16_t pc) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (!std::binary_search(m_addrs.begin(), m_addrs.end(), pc)) return false;
-        m_hit.store(true, std::memory_order_relaxed);
-        return true;
-    }
-    /// Returns true once per hit.
-    bool consumeHit() { return m_hit.exchange(false, std::memory_order_relaxed); }
-
-private:
-    std::vector<uint16_t> m_addrs; // sorted ascending
-    std::atomic<bool> m_hit{false};
-    mutable std::mutex m_mutex;
-};

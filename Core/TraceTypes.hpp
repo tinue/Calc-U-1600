@@ -13,7 +13,6 @@ enum : uint32_t {
     TRACE_PC          = 0x0001,  ///< (seqno, pc, opcode, cycles) only — cheapest tier
     TRACE_REGS_LIGHT  = 0x0002,  ///< adds A, XL/XH, YL/YH, UL/UH, S, T — all general registers
     TRACE_REGS_FULL   = 0x0004,  ///< adds PU, PV, DISP, TM — full CPU state
-    TRACE_BREAKPOINTS = 0x0008,  ///< breakpoint-list check on every step(); stop-the-world
     /// Every register tier: what a file capture (GUI TRACE, preset `trace:`) records.
     TRACE_FULL        = TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL,
 };

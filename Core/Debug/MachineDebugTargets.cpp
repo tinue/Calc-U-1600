@@ -10,8 +10,7 @@ namespace {
 
 template <typename Cpu>
 void setBreakpointFlag(Cpu& cpu, bool on) {
-    const uint32_t f = cpu.traceFlags();
-    cpu.setTraceFlags(on ? (f | TRACE_BREAKPOINTS) : (f & ~uint32_t(TRACE_BREAKPOINTS)));
+    cpu.setBreakpointsEnabled(on);
 }
 
 template <typename Cpu>

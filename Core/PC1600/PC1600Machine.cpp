@@ -271,7 +271,7 @@ int PC1600Machine::step() {
     if (m_arbiter.sc7852Owns()) {
         int c = m_sc7852.step();
         // Parked on a breakpoint: nothing executed, so no time passes.
-        if (c == 0 && m_sc7852.consumeBreakpointHit()) { m_debugStop = DebugStop::Z80Breakpoint; return 0; }
+        if (c == 0 && m_sc7852.breakpointsEnabled() && m_sc7852.consumeBreakpointHit()) { m_debugStop = DebugStop::Z80Breakpoint; return 0; }
         // A halted SC7852::step() returns 0 (this core's convention for
         // "made no forward progress"), but real HALT still burns 4 T-states
         // per internal NOP cycle -- without crediting that, a CPU parked in
@@ -321,7 +321,7 @@ int PC1600Machine::step() {
         return c;
     }
     int c = m_lh5803.step();
-    if (c == 0 && m_lh5803.consumeBreakpointHit()) { m_debugStop = DebugStop::Lh5803Breakpoint; return 0; }
+    if (c == 0 && m_lh5803.breakpointsEnabled() && m_lh5803.consumeBreakpointHit()) { m_debugStop = DebugStop::Lh5803Breakpoint; return 0; }
     // Push the LH5803's post-instruction PU/PV so the next LH5803-side bus
     // access sees it (PV gates the CE-150 ROM window). Mirrors
     // PC1500Machine::step()'s updatePUPV for the LH5801.
@@ -605,9 +605,8 @@ bool PC1600Machine::beginCpuTrace(std::FILE* handle, uint32_t flags) {
     if (!handle || m_traceFile) return false;
     m_traceFile = std::make_unique<PC1500TraceFile>(handle);
     m_traceDrainCounter = 0;
-    // The debugger's breakpoints stay armed across a capture.
-    m_sc7852.setTraceFlags(flags | (m_sc7852.traceFlags() & TRACE_BREAKPOINTS));
-    m_lh5803.setTraceFlags(flags | (m_lh5803.traceFlags() & TRACE_BREAKPOINTS));
+    m_sc7852.setTraceFlags(flags);
+    m_lh5803.setTraceFlags(flags);
     // Discard whatever is already in either ring (and its overflow
     // accounting) so the file starts clean even if tracing was already on.
     uint32_t staleLost = 0;
@@ -622,8 +621,8 @@ void PC1600Machine::endCpuTrace() {
     pumpTraceFile();
     m_traceFile->finish();
     m_traceFile.reset();
-    m_sc7852.setTraceFlags(m_sc7852.traceFlags() & TRACE_BREAKPOINTS); // only the capture's flags go
-    m_lh5803.setTraceFlags(m_lh5803.traceFlags() & TRACE_BREAKPOINTS);
+    m_sc7852.setTraceFlags(TRACE_NONE);
+    m_lh5803.setTraceFlags(TRACE_NONE);
     m_traceDrainCounter = 0;
 }
 

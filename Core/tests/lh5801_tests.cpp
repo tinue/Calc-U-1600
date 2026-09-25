@@ -433,7 +433,7 @@ void test_trace_ring_peek_does_not_consume() {
 
 void test_breakpoint_halts_step() {
     Rig r({0xB5, 0x01, 0xB5, 0x02, 0xB5, 0x03});
-    r.cpu.setTraceFlags(TRACE_BREAKPOINTS);
+    r.cpu.setBreakpointsEnabled(true);
     r.cpu.addBreakpoint(0x8002);
     int c = r.cpu.step(); // executes ldi a,0x01 (pc was 0x8000, not the breakpoint)
     CHECK(c != 0);

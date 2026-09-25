@@ -5,6 +5,7 @@
 #include "../../TraceTypes.hpp"
 #include "../HistoryRing.hpp"
 #include "../WatchSet.hpp"
+#include "../BreakpointSet.hpp"
 #include "../TraceRing.hpp"
 
 // ── Bus interface ────────────────────────────────────────────────────────
@@ -186,6 +187,10 @@ public:
     /// its address is a breakpoint (once).
     void resumePastBreakpoint() { m_skipBreakpointOnce = true; }
 
+    /// PC breakpoints, checked at the start of each instruction while
+    /// enabled. A hit makes step() return 0 without executing anything.
+    void setBreakpointsEnabled(bool on) { m_breakpointsEnabled = on; }
+    bool breakpointsEnabled() const { return m_breakpointsEnabled; }
     void addBreakpoint(uint16_t addr) { m_breakpoints.add(addr); }
     void removeBreakpoint(uint16_t addr) { m_breakpoints.remove(addr); }
     void clearBreakpoints() { m_breakpoints.clear(); }
@@ -286,6 +291,7 @@ private:
     BreakpointSet m_breakpoints;
     History m_history;
     WatchSet* m_watches{nullptr};
+    bool m_breakpointsEnabled{false};
     bool m_skipBreakpointOnce{false};
     uint8_t m_fetchLen{0}; // bytes fetched by the current step(), mirrored into m_history.next()
 

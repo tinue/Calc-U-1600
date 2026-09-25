@@ -5,6 +5,7 @@
 #include "../../TraceTypes.hpp"
 #include "../HistoryRing.hpp"
 #include "../WatchSet.hpp"
+#include "../BreakpointSet.hpp"
 #include "../TraceRing.hpp"
 
 // ── Bus interface ────────────────────────────────────────────────────────
@@ -176,8 +177,10 @@ public:
 
     // ── Debugger hooks ────────────────────────────────────────────────────
     /// PC breakpoints, checked at the start of each instruction (never
-    /// between a DD/FD prefix and its opcode) while TRACE_BREAKPOINTS is
-    /// set. A hit makes step() return 0 without executing anything.
+    /// between a DD/FD prefix and its opcode) while enabled. A hit makes
+    /// step() return 0 without executing anything.
+    void setBreakpointsEnabled(bool on) { m_breakpointsEnabled = on; }
+    bool breakpointsEnabled() const { return m_breakpointsEnabled; }
     void addBreakpoint(uint16_t addr) { m_breakpoints.add(addr); }
     void removeBreakpoint(uint16_t addr) { m_breakpoints.remove(addr); }
     void clearBreakpoints() { m_breakpoints.clear(); }
@@ -300,6 +303,7 @@ private:
     History m_history;
     BreakpointSet m_breakpoints;
     WatchSet* m_watches{nullptr};
+    bool m_breakpointsEnabled{false};
     bool m_skipBreakpointOnce{false};
     Z80HistoryFrame* m_historyFrame{&m_history.next()}; // the frame the current step() fills
     uint8_t m_fetchLen{0}; // bytes fetched by the current step(), mirrored into *m_historyFrame

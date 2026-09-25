@@ -121,7 +121,7 @@ int main(int argc, char** argv) {
     // BREAK, and any post-load-keys -- is traced too, not just whatever
     // the tail loop executes afterward. That script is usually the whole
     // point of a debug preset.
-    machine.setTraceFlags(TRACE_PC | TRACE_REGS_LIGHT | TRACE_BREAKPOINTS);
+    machine.setTraceFlags(TRACE_PC | TRACE_REGS_LIGHT);
 
     // --wav: drain the buzzer audio as the run goes (the sampler only
     // buffers ~1 s). The yield hook covers the preset script's own

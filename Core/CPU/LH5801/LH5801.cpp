@@ -72,6 +72,8 @@ void LH5801::reset() {
     m_poweredOff = false;
     m_irqPending = false;
     m_history.clear();
+    m_breakpoints.clearHit();
+    m_skipBreakpointOnce = false;
     // 16-bit big-endian reset vector at ME0 0xFFFE/0xFFFF (confirmed against
     // PC-1500_A04.ROM: bytes E0,00 -> 0xE000, which decodes as RIE; LDI A,0;
     // AM0; RDP; ... — a plausible reset-init sequence).
@@ -297,11 +299,12 @@ int LH5801::step() {
         return 0; // remains halted until an interrupt wakes it (see requestMaskableInterrupt)
     }
 
-    uint32_t tf = traceFlags();
-    if (tf & TRACE_BREAKPOINTS) {
+    if (m_breakpointsEnabled) {
         if (m_skipBreakpointOnce) m_skipBreakpointOnce = false;
         else if (m_breakpoints.check(P)) return 0;
     }
+
+    uint32_t tf = traceFlags();
 
     uint16_t pcAtStart = P;
     m_fetchLen = 0;

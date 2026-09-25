@@ -110,10 +110,10 @@ void test_z80_breakpoint_and_skip_once() {
     SC7852 cpu(bus);
     cpu.reset();
     cpu.addBreakpoint(0x0001);
-    cpu.step();                 // no check without TRACE_BREAKPOINTS
+    cpu.step();                 // no check until enabled
     cpu.step();
     CHECK(cpu.pc() == 0x0002);
-    cpu.setTraceFlags(TRACE_BREAKPOINTS);
+    cpu.setBreakpointsEnabled(true);
     cpu.step();                 // jr 0x0000
     cpu.step();                 // nop at 0
     CHECK(cpu.step() == 0 && cpu.pc() == 0x0001);
@@ -132,7 +132,7 @@ void test_z80_breakpoint_not_between_prefix_and_opcode() {
     for (size_t i = 0; i < sizeof code; i++) bus.mem[i] = code[i];
     SC7852 cpu(bus);
     cpu.reset();
-    cpu.setTraceFlags(TRACE_BREAKPOINTS);
+    cpu.setBreakpointsEnabled(true);
     cpu.addBreakpoint(0x0001); // the carried FD's address
     cpu.step();                // DD: carries FD into the next step
     CHECK(cpu.step() > 0);     // mid-prefix: no breakpoint check
@@ -145,13 +145,74 @@ void test_lh5801_skip_once() {
     bus.mem[0x4000] = 0x38; bus.mem[0x4001] = 0x9E; bus.mem[0x4002] = 0x03; // nop; bch 0x4000
     LH5801 cpu(bus);
     cpu.reset();
-    cpu.setTraceFlags(TRACE_BREAKPOINTS);
+    cpu.setBreakpointsEnabled(true);
     cpu.addBreakpoint(0x4000);
     CHECK(cpu.step() == 0 && cpu.consumeBreakpointHit());
     cpu.resumePastBreakpoint();
     CHECK(cpu.step() > 0 && cpu.pc() == 0x4001);
     cpu.step();
     CHECK(cpu.pc() == 0x4000 && cpu.step() == 0);
+}
+
+void test_breakpoint_set() {
+    BreakpointSet set;
+    set.add(0x0000);
+    set.add(0xFFFF);
+    set.add(0x0040);
+    CHECK(set.contains(0x0000) && set.contains(0xFFFF) && set.contains(0x0040));
+    CHECK(!set.contains(0x0001) && !set.contains(0xFFFE) && !set.contains(0x003F) && !set.contains(0x0041));
+    CHECK(!set.consumeHit() && !set.check(0x1234) && !set.consumeHit());
+    CHECK(set.check(0xFFFF) && set.consumeHit() && !set.consumeHit());
+    set.remove(0xFFFF);
+    CHECK(!set.contains(0xFFFF) && set.contains(0x0000));
+    set.clear();
+    CHECK(!set.contains(0x0000) && !set.contains(0x0040));
+}
+
+void test_trace_flags_leave_breakpoints_alone() {
+    // Trace flags alone never check breakpoints.
+    LhBus bus;
+    bus.mem[0xFFFE] = 0x40; bus.mem[0xFFFF] = 0x00;
+    bus.mem[0x4000] = 0x38; bus.mem[0x4001] = 0x9E; bus.mem[0x4002] = 0x03; // nop; bch 0x4000
+    LH5801 cpu(bus);
+    cpu.reset();
+    cpu.addBreakpoint(0x4000);
+    cpu.setTraceFlags(TRACE_FULL);
+    CHECK(cpu.step() > 0);
+    // A trace capture starting and ending leaves the debugger's enable as it was.
+    PC1500Machine machine;
+    machine.cpu().setBreakpointsEnabled(true);
+    std::FILE* f = std::tmpfile();
+    CHECK(f && machine.beginCpuTrace(f, TRACE_FULL));
+    CHECK(machine.cpu().breakpointsEnabled());
+    machine.endCpuTrace();
+    CHECK(machine.cpu().breakpointsEnabled() && machine.cpu().traceFlags() == TRACE_NONE);
+}
+
+void test_reset_clears_breakpoint_state() {
+    LhBus bus;
+    bus.mem[0xFFFE] = 0x40; bus.mem[0xFFFF] = 0x00;
+    bus.mem[0x4000] = 0x38;
+    LH5801 cpu(bus);
+    cpu.reset();
+    cpu.setBreakpointsEnabled(true);
+    cpu.addBreakpoint(0x4000);
+    CHECK(cpu.step() == 0);            // hit latched, not consumed
+    cpu.resumePastBreakpoint();        // and a pending skip
+    cpu.reset();
+    CHECK(!cpu.consumeBreakpointHit());
+    CHECK(cpu.step() == 0 && cpu.consumeBreakpointHit()); // the skip didn't survive
+
+    ZBus zbus;
+    SC7852 z(zbus);
+    z.reset();
+    z.setBreakpointsEnabled(true);
+    z.addBreakpoint(0x0000);
+    CHECK(z.step() == 0);
+    z.resumePastBreakpoint();
+    z.reset();
+    CHECK(!z.consumeBreakpointHit());
+    CHECK(z.step() == 0 && z.consumeBreakpointHit());
 }
 
 void test_lh5801_watches_skip_fetches() {
@@ -232,7 +293,7 @@ void test_pc1500_target() {
     CHECK(s.kind == debug::Stop::Breakpoint && target.pc(1) == 0xD0B0);
     target.setBreakpoints(1, {});
     CHECK(!target.breakpointsActive());
-    CHECK((machine.cpu().traceFlags() & TRACE_BREAKPOINTS) == 0);
+    CHECK(!machine.cpu().breakpointsEnabled());
 
     // Step one instruction.
     const uint32_t before = target.retired(1);
@@ -285,7 +346,7 @@ void test_pc1600_target() {
     s = debugtest::runFrom(target, 2000000);
     CHECK(s.kind == debug::Stop::Breakpoint && target.pc(1) == pc);
     target.setBreakpoints(1, {});
-    CHECK((machine.sc7852().traceFlags() & TRACE_BREAKPOINTS) == 0);
+    CHECK(!machine.sc7852().breakpointsEnabled());
 
     const uint32_t before = target.retired(1);
     s = debugtest::stepInstruction(target, 1, 100);
@@ -356,6 +417,9 @@ int run_debug_target_tests() {
     test_z80_breakpoint_and_skip_once();
     test_z80_breakpoint_not_between_prefix_and_opcode();
     test_lh5801_skip_once();
+    test_breakpoint_set();
+    test_trace_flags_leave_breakpoints_alone();
+    test_reset_clears_breakpoint_state();
     test_lh5801_watches_skip_fetches();
     test_z80_watches();
     test_pc1500_target();
