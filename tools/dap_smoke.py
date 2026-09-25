@@ -130,15 +130,47 @@ def program_run(port):
     ev = dap.request("evaluate", expression="[ERR_FLAG]", frameId=1000, context="watch")
     check(ev["result"].startswith("0x00"), f"evaluate [ERR_FLAG] = {ev['result']}")
     dap.request("setBreakpoints", source={"path": MEMTEST_ASM}, breakpoints=[])
-    # Rebuild & reload: the listing is re-bound, the breakpoint re-resolved.
+    # Build & Load again (what the extension sends): clean start, load,
+    # auto-start, stop at the entry.
     body = dap.request("calcu1600/load", bin=os.path.join(REPO, "examples/memtest_stock.bin"),
                        listing=os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest.rst"),
-                       address="0x40C5")
+                       address="0x40C5", after="stopOnEntry")
     check(body.get("start") == "1:40C5", f"calcu1600/load -> {body}")
+    stop = dap.wait_event("stopped", timeout=30)
+    check(stop.get("reason") == "entry" and top_frame(dap, 1).get("line") == 74, "reloaded and stopped at the entry again")
     dap.request("stepOut", threadId=1)
     stop = dap.wait_event("stopped", timeout=10)
     top = top_frame(dap, 1)
     check(stop.get("reason") == "step" and "source" not in top, f"stepOut back into the ROM: {top['name']}")
+    dap.request("disconnect")
+    dap.sock.close()
+
+
+def pc1600_run(port):
+    """PC-1600: the zasm ROM dumper with its listing; two CPU threads."""
+    print("PC-1600 run:")
+    dumper = os.path.join(REPO, "Core/tests/fixtures/listings/zasm/pc1600-rom-dumper")
+    dap = Dap(port)
+    dap.request("initialize", adapterID="calcu1600")
+    dap.wait_event("initialized")
+    dap.request("attach", preset=os.path.join(REPO, "examples/startup/default-pc1600.pc1600"),
+                program={"bin": dumper + ".bin", "listing": dumper + ".lst", "address": "0xC0C5",
+                         "after": "stopOnEntry"})
+    dap.request("configurationDone")
+    stop = dap.wait_event("stopped", timeout=60)
+    top = top_frame(dap, stop["threadId"])
+    check(stop.get("reason") == "entry" and top.get("source", {}).get("name") == "pc1600-rom-dumper.asm",
+          f"stopped at the entry: {top.get('source', {}).get('name')}:{top.get('line')} ({top['name']})")
+    names = [t["name"] for t in dap.request("threads")["threads"]]
+    check(len(names) == 2 and any("LH5803" in n for n in names), f"threads: {names}")
+    line = top.get("line")
+    dap.request("next", threadId=1)
+    dap.wait_event("stopped")
+    check(top_frame(dap, 1).get("line", 0) > (line or 0), f"next: line {line} -> {top_frame(dap, 1).get('line')}")
+    scopes = dap.request("scopes", frameId=1000)["scopes"]
+    banks = dap.request("variables", variablesReference=scopes[1]["variablesReference"])["variables"]
+    check(len(banks) == 4, "banks: " + ", ".join(f"{b['name'][:6]} {b['value']}" for b in banks))
+    dap.request("continue", threadId=1)
     dap.request("disconnect")
     dap.sock.close()
 
@@ -245,6 +277,7 @@ def main():
         dap.sock.close()
 
         program_run(args.port)
+        pc1600_run(args.port)
         rom_run(args.port)
         print("done:", "all passed" if check.failures == 0 else f"{check.failures} failed")
     finally:

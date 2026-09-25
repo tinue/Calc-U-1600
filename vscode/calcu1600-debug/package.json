@@ -1,0 +1,137 @@
+{
+  "name": "calcu1600-debug",
+  "displayName": "Calc-U-1600 Debugger",
+  "description": "Debug LH5801 / LH5803 / Z80 programs on the Calc-U-1600 PC-1500 / PC-1600 emulator over DAP.",
+  "version": "0.1.0",
+  "publisher": "calcu1600",
+  "license": "MIT",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Debuggers"],
+  "main": "./extension.js",
+  "activationEvents": ["onDebug", "onCommand:calcu1600.buildAndLoad"],
+  "contributes": {
+    "breakpoints": [
+      { "language": "lh5801-asm" },
+      { "language": "asm" },
+      { "language": "z80-asm" },
+      { "language": "z80-macroasm" },
+      { "language": "asm-collection" },
+      { "language": "plaintext" }
+    ],
+    "commands": [
+      { "command": "calcu1600.buildAndLoad", "title": "Build & Load", "category": "Calc-U-1600" },
+      { "command": "calcu1600.resetAndStop", "title": "Reset & Stop", "category": "Calc-U-1600" },
+      { "command": "calcu1600.allResetAndStop", "title": "All Reset & Stop", "category": "Calc-U-1600" }
+    ],
+    "keybindings": [
+      { "command": "calcu1600.buildAndLoad", "key": "ctrl+alt+l", "mac": "cmd+alt+l", "when": "debugType == 'calcu1600'" }
+    ],
+    "problemMatchers": [
+      {
+        "name": "calcu1600-sdas",
+        "owner": "calcu1600",
+        "source": "sdas",
+        "fileLocation": ["relative", "${fileDirname}"],
+        "pattern": {
+          "regexp": "^(.*?):(\\d+): (Error|Warning): (.*)$",
+          "file": 1, "line": 2, "severity": 3, "message": 4
+        }
+      },
+      {
+        "name": "calcu1600-zasm",
+        "owner": "calcu1600",
+        "source": "zasm",
+        "fileLocation": ["relative", "${fileDirname}"],
+        "severity": "error",
+        "pattern": [
+          { "regexp": "^in file (.*):$", "file": 1 },
+          { "regexp": "^(\\d+): .*$", "line": 1 },
+          { "regexp": "^\\s*\\^ (.*)$", "message": 1 }
+        ]
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "calcu1600",
+        "label": "Calc-U-1600",
+        "languages": ["lh5801-asm", "asm", "z80-asm", "z80-macroasm"],
+        "configurationAttributes": {
+          "attach": {
+            "properties": {
+              "port": { "type": "number", "default": 4711, "description": "The app's debug server port (Settings > Debugger)." },
+              "preset": { "type": "string", "description": "A .pc1500/.pc1500a/.pc1600 preset loaded first (it rebuilds the machine)." },
+              "reset": { "enum": ["none", "reset", "allReset"], "default": "none", "description": "Reset the machine on attach, without the boot run." },
+              "stopOnEntry": { "type": "boolean", "default": false, "description": "Stop right after attaching (after a reset: before the first instruction)." },
+              "program": {
+                "type": "object",
+                "description": "A program to load, with its listing (Build & Load).",
+                "properties": {
+                  "bin": { "type": "string" },
+                  "listing": { "type": "string", "description": ".rst / .lst (sdas) or .lst (zasm)" },
+                  "source": { "type": "string", "description": "The listing's main source if it isn't <listing>.asm" },
+                  "symbols": { "type": "array", "items": { "type": "string" } },
+                  "cpu": { "enum": ["lh5801", "z80", "lh5803"] },
+                  "address": { "type": ["string", "number"], "description": "Load address (headerless files), e.g. \"0x40C5\"" },
+                  "slot": { "enum": ["S0", "S1", "S2"] },
+                  "entry": { "type": ["string", "number"] },
+                  "after": { "enum": ["none", "call", "stopOnEntry"], "default": "stopOnEntry" },
+                  "cleanStart": { "type": "boolean", "default": true, "description": "Before each load: apply 'preset' (else the model's default preset, else All Reset)." },
+                  "bank": { "type": "number", "description": "PC-1600 Z80 page bank 0-7" },
+                  "me": { "type": "number" }, "pu": { "type": "number" }, "pv": { "type": "number" }
+                },
+                "required": ["bin"]
+              },
+              "listings": {
+                "type": "array",
+                "description": "Static listings (e.g. of ROM code), with optional bank qualifiers.",
+                "items": {
+                  "type": ["string", "object"],
+                  "properties": {
+                    "path": { "type": "string" }, "source": { "type": "string" },
+                    "cpu": { "enum": ["lh5801", "z80", "lh5803"] },
+                    "bank": { "type": "number" }, "me": { "type": "number" }, "pu": { "type": "number" }, "pv": { "type": "number" }
+                  }
+                }
+              },
+              "symbols": { "type": "array", "items": { "type": "string" }, "description": ".SYMBOLS: tables" },
+              "buildTask": { "type": "string", "description": "The task 'Build & Load' runs before reloading the program." }
+            }
+          }
+        },
+        "initialConfigurations": [
+          { "type": "calcu1600", "request": "attach", "name": "Calc-U-1600: attach", "port": 4711 }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "Calc-U-1600: PC-1500 program (sdaslh5801)",
+            "body": {
+              "type": "calcu1600", "request": "attach", "name": "PC-1500: ${1:program}", "port": 4711,
+              "preLaunchTask": "sdas: build current file", "buildTask": "sdas: build current file",
+              "program": {
+                "bin": "^\"\\${fileDirname}/\\${fileBasenameNoExtension}.bin\"",
+                "listing": "^\"\\${fileDirname}/\\${fileBasenameNoExtension}.rst\"",
+                "address": "0x40C5", "after": "stopOnEntry"
+              }
+            }
+          },
+          {
+            "label": "Calc-U-1600: PC-1600 program (zasm)",
+            "body": {
+              "type": "calcu1600", "request": "attach", "name": "PC-1600: ${1:program}", "port": 4711,
+              "preLaunchTask": "zasm: build current file", "buildTask": "zasm: build current file",
+              "program": {
+                "bin": "^\"\\${fileDirname}/\\${fileBasenameNoExtension}.bin\"",
+                "listing": "^\"\\${fileDirname}/\\${fileBasenameNoExtension}.lst\"",
+                "after": "stopOnEntry"
+              }
+            }
+          },
+          {
+            "label": "Calc-U-1600: ROM research (reset and stop)",
+            "body": { "type": "calcu1600", "request": "attach", "name": "ROM: reset and stop", "port": 4711, "reset": "reset", "stopOnEntry": true }
+          }
+        ]
+      }
+    ]
+  }
+}

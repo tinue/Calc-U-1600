@@ -332,6 +332,12 @@ After loading, the app tells you two things:
 To load code into a program module or a RAM disk, or to load several files
 in one go, use a preset (see [Machine code in a preset](#86-machine-code)).
 
+**Debugging.** With **Settings ▸ Debugger** turned on, VS Code can attach
+to the emulator and debug the program. It can build, load and start the
+program; stop at breakpoints in your `.asm` source; step through it; and
+show registers and memory. It also works for ROM code. See
+[Debugger.md](Debugger.md).
+
 ---
 
 ## 7. COM ports
@@ -626,6 +632,10 @@ elsewhere. Changes apply immediately; there is only **Close**.
 - **Tracing:** where CPU traces go, and the size at which a trace stops.
 - **Serial ports:** where the serial port files go, and their current paths
   (see [COM ports](#7-com-ports)).
+- **Debugger:** lets VS Code attach on 127.0.0.1 at the given port (4711
+  by default), with the server's current status (see
+  [Debugger.md](Debugger.md)).
+
 
 ### 9.2 Debug panel
 

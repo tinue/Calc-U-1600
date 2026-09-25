@@ -243,10 +243,6 @@ emulator does and need a deliberate check.
   - `PC1600LhsWindow`/`pc1600LhsWindow()`/`PC1600Bank::lhsRemapRow()` have
     no callers outside their own test: delete all three plus the test, or
     demote the remap table to a documentation comment.
-  - `BreakpointSet` in the shared `TraceRing.hpp` has one user (LH5801),
-    and nothing outside the tests sets a breakpoint (`pc1500_cli` and
-    `PC1500Machine` only poll `consumeBreakpointHit()`): move it into
-    LH5801, or wire a real breakpoint UI/CLI flag.
   - `Ce158Card.hpp` defaults its clock to the literal `1300000.0`; take
     `kPC1500CpuHz` once Connector may include PC1500Clocks.hpp.
 - **PC-1600 LCD / sub-CPU timing model** *(behaviour/timing)*.
