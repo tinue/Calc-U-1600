@@ -3,6 +3,8 @@
 
 #include "Listing.hpp"
 
+#include "../../HexFormat.hpp"
+
 // zasm listings (`zasm -uwy src.asm src.lst src.bin`):
 //
 //   C0EE: CD6601   [17]     call KEYGET          code: address, bytes, T-states, source
@@ -23,13 +25,8 @@ namespace debug {
 namespace {
 
 bool hex4(const std::string& s, size_t pos, uint16_t* v) {
-    if (pos + 4 > s.size()) return false;
     uint32_t r = 0;
-    for (size_t i = pos; i < pos + 4; i++) {
-        const char c = s[i];
-        if (!std::isxdigit(static_cast<unsigned char>(c))) return false;
-        r = r * 16 + uint32_t(std::isdigit(static_cast<unsigned char>(c)) ? c - '0' : std::toupper(c) - 'A' + 10);
-    }
+    if (!parseHexField(s, pos, 4, &r)) return false;
     *v = uint16_t(r);
     return true;
 }

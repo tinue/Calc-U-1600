@@ -300,5 +300,5 @@ private:
         if (tf & (TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL)) pushTraceFrame(tf, pcAtStart, opcodeWord, cycles);
     }
     void pushTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles);
-    void recordHistory(uint16_t pcAtStart, uint8_t cycles, bool interrupt);
+    void recordHistory(uint16_t pcAtStart, bool interrupt);
 };

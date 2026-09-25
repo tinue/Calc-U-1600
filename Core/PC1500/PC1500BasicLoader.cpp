@@ -4,6 +4,7 @@
 
 #include "../Basic/BasicBinaryImage.hpp"
 #include "PC1500Machine.hpp"
+#include "PC1500MachineCodeLoader.hpp"
 
 namespace {
 
@@ -11,8 +12,6 @@ namespace {
 constexpr uint16_t kBasPrgSt = 0x7865;
 constexpr uint16_t kBasPrgEnd = 0x7867;
 constexpr uint16_t kVarStart = 0x7899;
-constexpr uint16_t kRamStPage = 0x7863;   // high byte of the first valid user-RAM page
-constexpr uint16_t kRamEndPage = 0x7864;  // high byte of the first invalid page
 
 uint16_t readBE16(PC1500Machine& m, uint16_t addr) {
     return static_cast<uint16_t>((m.memory().peek(addr) << 8) |
@@ -52,8 +51,8 @@ BasicLoadResult loadBasicBinaryPayload(PC1500Machine& machine,
     // loader validates them, erases the resident program between them, pokes
     // the new payload in from BASPRG_ST, and fixes up BASPRG_END.
     uint16_t base = readBE16(machine, kBasPrgSt);
-    uint16_t ramStart = static_cast<uint16_t>(machine.memory().peek(kRamStPage)) << 8;
-    uint32_t ramTop = static_cast<uint32_t>(machine.memory().peek(kRamEndPage)) << 8;
+    uint32_t ramStart = 0, ramTop = 0;
+    pc1500UserRam(machine, &ramStart, &ramTop);
 
     // BASPRG_ST always lands in the $C5 reserve area at the bottom of
     // whatever user RAM is currently mapped in -- $00C5 with a 16K card in
@@ -66,7 +65,7 @@ BasicLoadResult loadBasicBinaryPayload(PC1500Machine& machine,
         char buf[176];
         std::snprintf(buf, sizeof(buf),
                       "BASPRG_ST is $%04X, outside user RAM $%04X-$%04X -- run NEW before loading",
-                      base, ramStart, static_cast<unsigned>(ramTop));
+                      base, static_cast<unsigned>(ramStart), static_cast<unsigned>(ramTop));
         return fail(buf);
     }
 

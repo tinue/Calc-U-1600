@@ -1,5 +1,7 @@
 #include "Listing.hpp"
 
+#include "../../HexFormat.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -192,13 +194,7 @@ bool loadSymbolFile(const std::string& path, Listing* out, std::string* error, S
         const size_t sp = t.find(' ');
         if (sp != 4) continue;
         uint32_t v = 0;
-        bool hex = true;
-        for (size_t i = 0; i < 4; i++) {
-            const char c = t[i];
-            if (!std::isxdigit(static_cast<unsigned char>(c))) { hex = false; break; }
-            v = v * 16 + uint32_t(std::isdigit(static_cast<unsigned char>(c)) ? c - '0' : std::tolower(c) - 'a' + 10);
-        }
-        if (!hex) continue;
+        if (!parseHexField(t, 0, 4, &v)) continue;
         std::string name = t.substr(5);
         const size_t end = name.find_first_of(" ;");
         if (end != std::string::npos) name.resize(end);

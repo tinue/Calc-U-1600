@@ -239,11 +239,10 @@ void LH5801::pushTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord
     m_trace.push(f);
 }
 
-void LH5801::recordHistory(uint16_t pcAtStart, uint8_t cycles, bool interrupt) {
+void LH5801::recordHistory(uint16_t pcAtStart, bool interrupt) {
     LH5801HistoryFrame& h = m_history.next(); // bytes[] already filled by fetch8()
     h.pc = pcAtStart;
     h.len = interrupt ? 0 : uint8_t(m_fetchLen < sizeof(h.bytes) ? m_fetchLen : sizeof(h.bytes));
-    h.cycles = cycles;
     h.interrupt = interrupt;
     h.a = A; h.x = x(); h.y = y(); h.u = u(); h.s = S; h.p = P; h.t = T;
     h.pu = PU; h.pv = PV;
@@ -274,7 +273,7 @@ int LH5801::step() {
     if (m_irqPending && flagIE()) {
         const uint16_t interruptedP = P;
         serviceInterrupt();
-        recordHistory(interruptedP, uint8_t(kInterruptAckCycles), true);
+        recordHistory(interruptedP, true);
         // Interrupt acknowledge consumes this step() call on its own —
         // the handler's first instruction executes on the *next* step(),
         // starting cleanly at the vector address. Keeps one step() ==
@@ -325,7 +324,7 @@ int LH5801::step() {
     }
 
     recordTraceFrame(tf, pcAtStart, opcodeWord, uint8_t(cycles));
-    recordHistory(pcAtStart, uint8_t(cycles), false);
+    recordHistory(pcAtStart, false);
     tickTimer(cycles);
     return cycles;
 }

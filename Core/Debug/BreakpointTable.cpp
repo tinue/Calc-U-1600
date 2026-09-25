@@ -24,6 +24,16 @@ std::string valueText(int64_t v) {
     return buf;
 }
 
+BreakpointStatus verifiedStatus(int id, int thread, uint16_t addr) {
+    BreakpointStatus st;
+    st.id = id;
+    st.verified = true;
+    st.hasAddress = true;
+    st.thread = thread;
+    st.addr = addr;
+    return st;
+}
+
 bool sameStatus(const BreakpointStatus& a, const BreakpointStatus& b) {
     return a.verified == b.verified && a.line == b.line && a.message == b.message && a.addr == b.addr &&
            a.thread == b.thread;
@@ -78,19 +88,16 @@ std::vector<BreakpointStatus> BreakpointTable::resolveSource(Source& s, const So
                         m_sourceArmed.end());
     for (size_t i = 0; i < s.requests.size(); i++) {
         const SourceRequest& r = s.requests[i];
-        BreakpointStatus st;
-        st.id = s.ids[i];
         int resolved = 0;
         const std::vector<SourceMap::CodeAddress> addrs = map.addressesFor(s.file, r.line, &resolved);
+        BreakpointStatus st;
         if (addrs.empty()) {
+            st.id = s.ids[i];
             st.line = r.line;
             st.message = "No code at or after this line in a loaded listing";
         } else {
-            st.verified = true;
+            st = verifiedStatus(s.ids[i], addrs[0].thread, addrs[0].addr);
             st.line = resolved;
-            st.hasAddress = true;
-            st.thread = addrs[0].thread;
-            st.addr = addrs[0].addr;
             std::string banks;
             for (const auto& a : addrs) {
                 Armed armed;
@@ -119,10 +126,7 @@ std::vector<BreakpointStatus> BreakpointTable::setSource(const std::string& file
     // Drop the file's old breakpoints, then set the new ones with fresh ids.
     it->requests.clear();
     resolveSource(*it, map);
-    for (int id : it->ids)
-        m_lastStatus.erase(std::remove_if(m_lastStatus.begin(), m_lastStatus.end(),
-                                          [id](const BreakpointStatus& s) { return s.id == id; }),
-                           m_lastStatus.end());
+    for (int id : it->ids) forgetStatus(id);
     it->requests = requests;
     it->ids.clear();
     for (size_t i = 0; i < requests.size(); i++) it->ids.push_back(m_nextId++);
@@ -141,13 +145,7 @@ std::vector<BreakpointStatus> BreakpointTable::setInstructions(const std::vector
         a.thread = r.thread;
         a.addr = r.addr;
         m_instructionArmed.push_back(a);
-        BreakpointStatus st;
-        st.id = a.id;
-        st.verified = true;
-        st.hasAddress = true;
-        st.thread = r.thread;
-        st.addr = r.addr;
-        out.push_back(st);
+        out.push_back(verifiedStatus(a.id, r.thread, r.addr));
     }
     return out;
 }
@@ -156,8 +154,6 @@ std::vector<BreakpointStatus> BreakpointTable::resolveFunctions(const SourceMap&
     m_functionArmed.clear();
     std::vector<BreakpointStatus> out;
     for (const Function& f : m_functions) {
-        BreakpointStatus st;
-        st.id = f.id;
         uint16_t addr = 0;
         if (map.symbolValue(f.request.name, &addr)) {
             Armed a;
@@ -166,24 +162,20 @@ std::vector<BreakpointStatus> BreakpointTable::resolveFunctions(const SourceMap&
             a.thread = thread;
             a.addr = addr;
             m_functionArmed.push_back(a);
-            st.verified = true;
-            st.hasAddress = true;
-            st.thread = thread;
-            st.addr = addr;
+            out.push_back(verifiedStatus(f.id, thread, addr));
         } else {
+            BreakpointStatus st;
+            st.id = f.id;
             st.message = "Unknown symbol '" + f.request.name + "'";
+            out.push_back(st);
         }
-        out.push_back(st);
     }
     return out;
 }
 
 std::vector<BreakpointStatus> BreakpointTable::setFunctions(const std::vector<FunctionRequest>& requests,
                                                             const SourceMap& map, int thread) {
-    for (const Function& f : m_functions)
-        m_lastStatus.erase(std::remove_if(m_lastStatus.begin(), m_lastStatus.end(),
-                                          [&f](const BreakpointStatus& s) { return s.id == f.id; }),
-                           m_lastStatus.end());
+    for (const Function& f : m_functions) forgetStatus(f.id);
     m_functions.clear();
     for (const FunctionRequest& r : requests) m_functions.push_back({r, m_nextId++});
     std::vector<BreakpointStatus> out = resolveFunctions(map, thread);
@@ -199,15 +191,15 @@ std::vector<BreakpointStatus> BreakpointTable::setData(const std::vector<DataBre
         static_cast<DataBreakpointSpec&>(d) = r;
         d.id = m_nextId++;
         m_data.push_back(d);
-        BreakpointStatus st;
-        st.id = d.id;
-        st.verified = true;
-        st.thread = r.thread;
-        st.addr = r.addr;
-        st.hasAddress = true;
-        out.push_back(st);
+        out.push_back(verifiedStatus(d.id, r.thread, r.addr));
     }
     return out;
+}
+
+void BreakpointTable::forgetStatus(int id) {
+    m_lastStatus.erase(std::remove_if(m_lastStatus.begin(), m_lastStatus.end(),
+                                      [id](const BreakpointStatus& s) { return s.id == id; }),
+                       m_lastStatus.end());
 }
 
 void BreakpointTable::setEntry(int thread, uint16_t addr) {
@@ -272,29 +264,31 @@ void BreakpointTable::apply(DebugTarget& target) const {
 
 // ── Deciding ──────────────────────────────────────────────────────────────
 
-bool BreakpointTable::passes(BreakpointSpec& spec, int& hits, int thread, DebugTarget& target,
+void BreakpointTable::passes(const BreakpointSpec& spec, int& hits, int thread, DebugTarget& target,
                              const SymbolLookup& symbols, HitDecision* decision, int id) {
-    const ExpressionContext ctx = target.expressionContext(thread, symbols);
-    if (!trim(spec.condition).empty()) {
+    const bool hasCondition = !trim(spec.condition).empty();
+    // Only a condition or a log message evaluates anything.
+    const ExpressionContext ctx = hasCondition || !spec.logMessage.empty() ? target.expressionContext(thread, symbols)
+                                                                            : ExpressionContext{};
+    if (hasCondition) {
         const ExpressionResult r = evaluate(spec.condition, ctx);
         if (!r.ok) {
             // A broken condition stops, and says why, rather than silently never firing.
             decision->log.push_back("Breakpoint condition '" + spec.condition + "': " + r.error);
             decision->stop = true;
             decision->ids.push_back(id);
-            return false;
+            return;
         }
-        if (r.value == 0) return false;
+        if (r.value == 0) return;
     }
     hits++;
-    if (!hitConditionMet(spec.hitCondition, hits)) return false;
+    if (!hitConditionMet(spec.hitCondition, hits)) return;
     if (!spec.logMessage.empty()) {
         decision->log.push_back(interpolateLog(spec.logMessage, ctx));
-        return false;
+        return;
     }
     decision->stop = true;
     decision->ids.push_back(id);
-    return true;
 }
 
 HitDecision BreakpointTable::onBreakpoint(int thread, uint16_t pc, DebugTarget& target, const SymbolLookup& symbols) {
@@ -323,13 +317,6 @@ HitDecision BreakpointTable::onWatch(int thread, const WatchHit& hit, DebugTarge
         passes(w, w.hits, thread, target, symbols, &d, w.id);
     }
     return d;
-}
-
-bool BreakpointTable::hasBreakpointAt(int thread, uint16_t pc) const {
-    for (const auto* list : {&m_sourceArmed, &m_instructionArmed, &m_functionArmed})
-        for (const Armed& a : *list)
-            if (a.thread == thread && a.addr == pc && a.logMessage.empty()) return true;
-    return false;
 }
 
 } // namespace debug

@@ -17,7 +17,6 @@ struct LH5801HistoryFrame {
     uint16_t pc{};        ///< P at the start of the instruction (pre-execution)
     uint8_t  bytes[5]{};  ///< the bytes fetched, prefix included (longest form: FD EF pp pp n)
     uint8_t  len{};       ///< number of valid bytes; 0 for an interrupt entry
-    uint8_t  cycles{};
     bool     interrupt{}; ///< interrupt acknowledge: `pc` is the interrupted P, no bytes
 
     // Post-execution registers
@@ -32,7 +31,6 @@ struct Z80HistoryFrame {
     uint16_t pc{};        ///< PC at the start of the instruction, a carried prefix included
     uint8_t  bytes[4]{};  ///< the bytes fetched (longest forms: DD CB d op, ED 43 nn nn, DD 21 nn nn)
     uint8_t  len{};       ///< number of valid bytes; 0 for an interrupt entry
-    uint8_t  cycles{};
     bool     interrupt{}; ///< interrupt acknowledge: `pc` is the interrupted PC, no bytes
 
     // Post-execution registers
@@ -50,13 +48,11 @@ class HistoryRing {
 public:
     static constexpr uint32_t kSize = N;
 
-    /// The slot the next push() fills -- written in place by the CPU, then
+    /// The slot the next frame fills -- written in place by the CPU, then
     /// committed with commit(). Avoids building a frame on the stack and
     /// copying it.
     Frame& next() { return m_ring[m_head & kMask]; }
     void commit() { m_head++; }
-
-    void push(const Frame& f) { next() = f; commit(); }
 
     /// Number of frames held (at most N).
     uint32_t size() const { return m_head < N ? m_head : N; }

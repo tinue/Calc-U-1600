@@ -77,7 +77,7 @@ public:
     virtual std::vector<Thread> threads() const = 0;
     /// The thread whose CPU currently owns the bus (executes on step()).
     virtual int busOwner() const = 0;
-    CpuKind kindOf(int thread) const;
+    virtual CpuKind kindOf(int thread) const = 0;
 
     // ── Registers ─────────────────────────────────────────────────────────
     /// The CPU's registers, in display order; the status register (T / F)
@@ -106,6 +106,9 @@ public:
 
     // ── Code ──────────────────────────────────────────────────────────────
     disasm::Decoded decode(int thread, uint16_t addr, const disasm::SymbolFn& symbols = {}) const;
+    /// Decodes a history entry from its recorded bytes (the instruction as
+    /// it ran, even if memory has changed since).
+    disasm::Decoded decode(int thread, const HistoryEntry& entry, const disasm::SymbolFn& symbols = {}) const;
     /// Bank qualifiers of the code at `addr` right now: the PC-1600 page
     /// bank (0-7) for the Z-80, -1 elsewhere; PU/PV for the LH580x.
     virtual int bankAt(int thread, uint16_t addr) const = 0;
@@ -135,7 +138,6 @@ public:
     /// whenever something other than the debugger drives the machine (a
     /// boot to the prompt, a program load), which must not park on one.
     void arm(bool on);
-    bool armed() const { return m_armed; }
 
     // ── Execution ─────────────────────────────────────────────────────────
     /// Free run for up to `budget` machine cycles (the machine's own

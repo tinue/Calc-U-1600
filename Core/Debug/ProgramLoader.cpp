@@ -1,6 +1,5 @@
 #include "ProgramLoader.hpp"
 
-#include <cstdio>
 #include <fstream>
 #include <iterator>
 
@@ -12,16 +11,6 @@
 #include "Listing/Listing.hpp"
 
 namespace debug {
-
-namespace {
-
-std::string hexAddr(uint32_t a) {
-    char buf[8];
-    std::snprintf(buf, sizeof buf, "&%04X", unsigned(a));
-    return buf;
-}
-
-} // namespace
 
 LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadRequest& req, SourceMap& map,
                        const DebugTarget& target) {
@@ -99,17 +88,14 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
 
     // How BASIC starts it.
     uint32_t ramStart = 0, ramEnd = 0;
-    if (pc1500) {
-        ramStart = uint32_t(pc1500->memory().peek(0x7863)) << 8;
-        ramEnd = uint32_t(pc1500->memory().peek(0x7864)) << 8;
-    }
+    if (pc1500) pc1500UserRam(*pc1500, &ramStart, &ramEnd);
     const std::vector<machinecode::BasicArea> areas = pc1600 ? pc1600BasicAreas(*pc1600) : std::vector<machinecode::BasicArea>{};
     if (req.thread == 2) {
         r.callCommand = ""; // LH5803 code is entered from Z-80 code (CALLH), not from BASIC
     } else {
-        const machinecode::Advice advice = machinecode::advice(kind, slot, pc1600 ? z80Addr : addr, len, r.entry, ramStart, ramEnd, areas);
-        r.callCommand = advice.callCommand.empty() ? "CALL " + hexAddr(r.entry) : advice.callCommand;
-        if (req.hasEntry && r.entry != addr) r.callCommand = "CALL " + hexAddr(r.entry);
+        // advice() starts at r.entry (the `entry` override, the header's
+        // auto-run address, or the load address) and adds slot 2's bank.
+        r.callCommand = machinecode::advice(kind, slot, pc1600 ? z80Addr : addr, len, r.entry, ramStart, ramEnd, areas).callCommand;
     }
 
     if (!req.listing.empty()) {

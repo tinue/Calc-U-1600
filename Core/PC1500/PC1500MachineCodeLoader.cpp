@@ -28,3 +28,8 @@ bool loadPC1500MachineCode(PC1500Machine& machine, uint32_t addr, const uint8_t*
     *error = b;
     return false;
 }
+
+void pc1500UserRam(PC1500Machine& machine, uint32_t* start, uint32_t* end) {
+    *start = static_cast<uint32_t>(machine.memory().peek(kPc1500RamStPage)) << 8;
+    *end = static_cast<uint32_t>(machine.memory().peek(kPc1500RamEndPage)) << 8;
+}

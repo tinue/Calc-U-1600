@@ -76,7 +76,6 @@ public:
     /// A one-shot stop at `addr` (Build & Load's stopOnEntry): it stops
     /// once, with reason "entry", then disappears.
     void setEntry(int thread, uint16_t addr);
-    void clearEntry() { m_entryArmed = false; }
 
     /// Re-resolves source and function breakpoints after the source map
     /// changed (a new load, a stale listing). Returns the ones whose status
@@ -90,10 +89,6 @@ public:
     HitDecision onBreakpoint(int thread, uint16_t pc, DebugTarget& target, const SymbolLookup& symbols);
     /// A memory watch fired.
     HitDecision onWatch(int thread, const WatchHit& hit, DebugTarget& target, const SymbolLookup& symbols);
-
-    /// Whether any breakpoint (not a logpoint) sits at `pc` on `thread`
-    /// with its bank qualifier satisfied -- used by line stepping.
-    bool hasBreakpointAt(int thread, uint16_t pc) const;
 
 private:
     struct Armed : BreakpointSpec {
@@ -119,7 +114,8 @@ private:
 
     std::vector<BreakpointStatus> resolveSource(Source& s, const SourceMap& map);
     std::vector<BreakpointStatus> resolveFunctions(const SourceMap& map, int thread);
-    bool passes(BreakpointSpec& spec, int& hits, int thread, DebugTarget& target, const SymbolLookup& symbols,
+    void forgetStatus(int id);
+    void passes(const BreakpointSpec& spec, int& hits, int thread, DebugTarget& target, const SymbolLookup& symbols,
                 HitDecision* decision, int id);
 
     std::vector<Source> m_sources;

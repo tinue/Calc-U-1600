@@ -163,11 +163,7 @@ std::vector<debug::BreakpointStatus> DebugController::rebindListings() {
     if (!m_run) return {};
     for (const auto& b : m_map.bindings()) m_map.verify(b.id, m_run->bankMatch(), m_run->codePeek());
     auto changed = m_breakpoints.reresolve(m_map, 1);
-    if (m_target) {
-        const bool armed = m_target->armed();
-        m_breakpoints.apply(*m_target);
-        m_target->arm(armed);
-    }
+    if (m_target) m_breakpoints.apply(*m_target);
     return changed;
 }
 
@@ -212,7 +208,6 @@ debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request
     }
     if (after == After::StopOnEntry) m_breakpoints.setEntry(request.thread, r.entry);
     m_breakpoints.apply(*m_target);
-    m_target->arm(false);
     m_machines->typeCommand(r.callCommand); // typed and entered as the machine runs
     m_run->resume();
     return r;

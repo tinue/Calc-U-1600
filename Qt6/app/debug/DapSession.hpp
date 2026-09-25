@@ -82,13 +82,15 @@ private:
     QString instructionText(int thread, uint16_t pc) const;
     QString memoryReference(int thread, uint16_t addr, bool me1 = false) const;
     bool parseMemoryReference(const QString& ref, int* thread, uint16_t* addr, bool* me1) const;
+    /// A request's memoryReference + offset; false (with `error`) if unreadable.
+    bool memoryArgs(const QJsonObject& args, int* thread, uint16_t* addr, bool* me1, QString* error) const;
+    /// The thread a configuration's `cpu` names ("z80", "lh5801", "lh5803"); 1 by default.
+    int threadForCpu(const QString& cpu) const;
     void sendBreakpointChanges(const std::vector<debug::BreakpointStatus>& changed);
 
     DapServer* m_server;
     DebugController* m_controller;
     int m_seq = 1;
-    bool m_attached = false;
     bool m_stopOnEntry = false;
-    bool m_configured = false;
     QJsonObject m_attachConfig; // for restart
 };

@@ -361,6 +361,10 @@ signals:
     void serialLinksMoved();
 
 private:
+    // pasteText() / typeCommand(): queues `text` at the model's paste
+    // cadence, then ENTER if asked.
+    void enqueueTyped(const std::string& text, bool pressEnter);
+
     Model m_model = Model::PC1500A;
     PC1500RomRevision m_pc1500RomRevision = PC1500RomRevision::A04;
     PC1600RomVersion m_pc1600RomVersion = PC1600RomVersion::New;

@@ -40,6 +40,12 @@ struct SourceLocation {
 
 class SourceMap {
 public:
+    /// Lookup tables of one binding, built when it is added.
+    struct Index {
+        std::map<uint16_t, size_t> byAddr;                  // line start -> index into listing.lines
+        std::map<int, std::map<int, uint16_t>> byFileLine;  // file index -> line -> first address
+        std::map<uint16_t, std::string> labels;             // value -> name
+    };
     struct Binding {
         int id = 0;
         int thread = 1;
@@ -50,6 +56,7 @@ public:
         Listing listing;
         bool stale = false;
         int checked = 0, mismatched = 0; ///< last verification
+        Index index;
     };
 
     int addStatic(int thread, Listing listing, const BankKey& key, const std::string& name);
@@ -91,17 +98,19 @@ public:
     std::string symbolAt(int thread, uint16_t addr) const;
 
 private:
-    struct Index {
-        std::map<uint16_t, size_t> byAddr;                  // line start -> index into listing.lines
-        std::map<int, std::map<int, uint16_t>> byFileLine;  // file index -> line -> first address
-        std::map<uint16_t, std::string> labels;             // value -> name
-    };
-    void build(Binding& b);
-    const Index& indexOf(const Binding& b) const { return m_index.at(b.id); }
-    std::vector<const Binding*> ordered() const;
+    int add(Binding b);
+    /// Calls `f` on each binding in lookup order -- loaded ones newest
+    /// first, then static ones -- until it returns true.
+    template <typename F>
+    bool firstOf(F f) const {
+        for (size_t i = m_bindings.size(); i-- > 0;)
+            if (m_bindings[i].loaded && f(m_bindings[i])) return true;
+        for (const Binding& b : m_bindings)
+            if (!b.loaded && f(b)) return true;
+        return false;
+    }
 
     std::vector<Binding> m_bindings;
-    std::map<int, Index> m_index;
     int m_nextId = 1;
 };
 

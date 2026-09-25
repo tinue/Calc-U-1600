@@ -19,6 +19,7 @@ public:
 
     std::vector<Thread> threads() const override;
     int busOwner() const override { return 1; }
+    CpuKind kindOf(int) const override { return CpuKind::LH5801; }
     std::vector<Register> registers(int thread) const override;
     bool readRegister(int thread, const std::string& name, uint32_t* value) const override;
     bool writeRegister(int thread, const std::string& name, uint32_t value) override;
@@ -58,6 +59,7 @@ public:
 
     std::vector<Thread> threads() const override;
     int busOwner() const override;
+    CpuKind kindOf(int thread) const override { return thread == kZ80 ? CpuKind::Z80 : CpuKind::LH5803; }
     std::vector<Register> registers(int thread) const override;
     bool readRegister(int thread, const std::string& name, uint32_t* value) const override;
     bool writeRegister(int thread, const std::string& name, uint32_t value) override;

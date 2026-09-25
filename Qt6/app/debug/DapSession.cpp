@@ -9,8 +9,6 @@
 
 #include "DapServer.hpp"
 #include "DebugController.hpp"
-#include "Debug/Disasm/LH5801Disassembler.hpp"
-#include "Debug/Disasm/Z80Disassembler.hpp"
 #include "Debug/Listing/Listing.hpp"
 #include "MachineCodeFile.hpp"
 
@@ -22,7 +20,14 @@ constexpr int kVarRegisters = 1, kVarFlags = 2, kVarBanks = 3;
 int frameThread(int frameId) { return frameId / 1000; }
 int frameIndex(int frameId) { return frameId % 1000; }
 
-QString hex(uint32_t v, int digits) { return QStringLiteral("0x%1").arg(v, digits, 16, QLatin1Char('0')).toUpper().replace(QStringLiteral("0X"), QStringLiteral("0x")); }
+QString hex(uint32_t v, int digits) { return QStringLiteral("0x") + QStringLiteral("%1").arg(v, digits, 16, QLatin1Char('0')).toUpper(); }
+
+// The condition / hit condition / log message every breakpoint kind shares.
+void readSpec(const QJsonObject& o, debug::BreakpointSpec* spec) {
+    spec->condition = o.value(QStringLiteral("condition")).toString().toStdString();
+    spec->hitCondition = o.value(QStringLiteral("hitCondition")).toString().toStdString();
+    spec->logMessage = o.value(QStringLiteral("logMessage")).toString().toStdString();
+}
 
 QString registerValue(const debug::Register& r) {
     if (r.bits == 1) return QString::number(r.value);
@@ -48,7 +53,6 @@ QString stopReason(debug::DebugEvent::Reason r) {
         case debug::DebugEvent::Step: return QStringLiteral("step");
         case debug::DebugEvent::Pause: return QStringLiteral("pause");
         case debug::DebugEvent::Entry: return QStringLiteral("entry");
-        case debug::DebugEvent::Goto: return QStringLiteral("goto");
     }
     return QStringLiteral("pause");
 }
@@ -172,7 +176,6 @@ void DapSession::initialize(const QJsonObject&, QJsonObject* body, QString* erro
 
 void DapSession::attach(const QJsonObject& args, QJsonObject*, QString* error) {
     if (!ready(error)) return;
-    m_attached = true;
     m_attachConfig = args;
     m_stopOnEntry = args.value(QStringLiteral("stopOnEntry")).toBool(false);
     prepare(args, error);
@@ -214,8 +217,7 @@ bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* e
     if (!source.isEmpty()) req.source = debug::absolutePath(source.toStdString());
     for (const QJsonValue& s : d.value(QStringLiteral("symbols")).toArray())
         req.symbols.push_back(debug::absolutePath(s.toString().toStdString()));
-    const QString cpu = d.value(QStringLiteral("cpu")).toString().toLower();
-    req.thread = cpu == QLatin1String("lh5803") ? 2 : 1;
+    req.thread = threadForCpu(d.value(QStringLiteral("cpu")).toString());
     req.key = bankKeyOf(d);
     if (d.contains(QStringLiteral("address"))) {
         req.hasAddress = parseAddress(d.value(QStringLiteral("address")), &req.address);
@@ -293,15 +295,6 @@ bool DapSession::prepare(const QJsonObject& args, QString* error) {
     // 3. Static listings and symbols (ROM listings and the like).
     debug::SourceMap& map = m_controller->sourceMap();
     map.clear();
-    const auto threadForCpu = [this](const QString& cpu) {
-        const QString c = cpu.toLower();
-        if (c == QLatin1String("lh5803")) return 2;
-        for (const auto& t : m_controller->target()->threads())
-            if ((c == QLatin1String("z80") && t.kind == debug::CpuKind::Z80) ||
-                (c == QLatin1String("lh5801") && t.kind == debug::CpuKind::LH5801))
-                return t.id;
-        return 1;
-    };
     for (const QJsonValue& v : args.value(QStringLiteral("listings")).toArray()) {
         const QJsonObject o = v.isString() ? QJsonObject{{QStringLiteral("path"), v.toString()}} : v.toObject();
         debug::Listing listing;
@@ -364,7 +357,6 @@ void DapSession::customReset(const QJsonObject& args, QJsonObject*, QString* err
 
 void DapSession::configurationDone(const QJsonObject&, QJsonObject*, QString* error) {
     if (!ready(error)) return;
-    m_configured = true;
     if (m_stopOnEntry) m_controller->runControl()->pause(debug::DebugEvent::Entry);
     else m_controller->runControl()->resume();
 }
@@ -430,8 +422,27 @@ QString DapSession::instructionText(int thread, uint16_t pc) const {
 // PC-1500's LH5801, the PC-1600's Z-80 -- is the bare 16-bit address; other
 // threads sit above it (thread << 16), and an LH580x's ME1 adds 0x100000.
 QString DapSession::memoryReference(int thread, uint16_t addr, bool me1) const {
-    const uint32_t v = uint32_t(addr) | (thread > 1 ? uint32_t(thread) << 16 : 0u) | (me1 ? 0x100000u : 0u);
-    return QStringLiteral("0x%1").arg(v, 4, 16, QLatin1Char('0')).toUpper().replace(QStringLiteral("0X"), QStringLiteral("0x"));
+    return hex(uint32_t(addr) | (thread > 1 ? uint32_t(thread) << 16 : 0u) | (me1 ? 0x100000u : 0u), 4);
+}
+
+bool DapSession::memoryArgs(const QJsonObject& args, int* thread, uint16_t* addr, bool* me1, QString* error) const {
+    if (!parseMemoryReference(args.value(QStringLiteral("memoryReference")).toString(), thread, addr, me1)) {
+        *error = QStringLiteral("Bad memory reference");
+        return false;
+    }
+    *addr = uint16_t(*addr + args.value(QStringLiteral("offset")).toInt(0));
+    return true;
+}
+
+int DapSession::threadForCpu(const QString& cpu) const {
+    const QString c = cpu.toLower();
+    if (c == QLatin1String("lh5803")) return 2;
+    if (const debug::DebugTarget* t = m_controller->target())
+        for (const auto& th : t->threads())
+            if ((c == QLatin1String("z80") && th.kind == debug::CpuKind::Z80) ||
+                (c == QLatin1String("lh5801") && th.kind == debug::CpuKind::LH5801))
+                return th.id;
+    return 1;
 }
 
 bool DapSession::parseMemoryReference(const QString& ref, int* thread, uint16_t* addr, bool* me1) const {
@@ -479,14 +490,9 @@ void DapSession::stackTrace(const QJsonObject& args, QJsonObject* body, QString*
             if (h.interrupt) {
                 text = QStringLiteral("interrupt at %1").arg(QStringLiteral("%1").arg(pc, 4, 16, QLatin1Char('0')).toUpper());
             } else {
-                const disasm::FetchFn fetch = [&h](uint16_t a) -> uint8_t {
-                    const uint16_t k = uint16_t(a - h.pc);
-                    return k < h.len ? h.bytes[k] : 0;
-                };
                 const debug::SourceMap& map = m_controller->sourceMap();
                 const disasm::SymbolFn symbols = [&map, thread](uint16_t a) { return map.symbolAt(thread, a); };
-                const disasm::Decoded d = t->kindOf(thread) == debug::CpuKind::Z80 ? disasm::decodeZ80(h.pc, fetch, symbols)
-                                                                                 : disasm::decodeLH5801(h.pc, fetch, symbols);
+                const disasm::Decoded d = t->decode(thread, h, symbols);
                 text = QStringLiteral("after %1  %2")
                            .arg(QStringLiteral("%1").arg(pc, 4, 16, QLatin1Char('0')).toUpper(), QString::fromStdString(d.text));
                 debug::SourceLocation loc;
@@ -526,7 +532,6 @@ std::vector<debug::Register> DapSession::frameRegisters(int frameId) const {
 
 QJsonArray DapSession::registerVariables(int frameId) const {
     QJsonArray list;
-    const debug::CpuKind kind = m_controller->target()->kindOf(frameThread(frameId));
     for (const debug::Register& r : frameRegisters(frameId)) {
         QJsonObject v{{QStringLiteral("name"), displayName(r.name)},
                       {QStringLiteral("value"), registerValue(r)},
@@ -534,14 +539,13 @@ QJsonArray DapSession::registerVariables(int frameId) const {
         if (r.bits == 16) v.insert(QStringLiteral("memoryReference"), memoryReference(frameThread(frameId), uint16_t(r.value)));
         list.append(v);
     }
-    uint8_t status = 0;
-    if (statusRegister(frameRegisters(frameId), kind, &status)) {
-        QString summary;
-        const auto& names = debug::flagNames(kind);
-        for (size_t i = names.size(); i-- > 0;)
-            if (!names[i].empty()) summary += QStringLiteral("%1%2 ").arg(QString::fromStdString(names[i]).toUpper()).arg((status >> i) & 1);
+    const QJsonArray flags = flagVariables(frameId);
+    if (!flags.isEmpty()) {
+        QStringList summary;
+        for (const QJsonValue& f : flags)
+            summary << f.toObject().value(QStringLiteral("name")).toString() + f.toObject().value(QStringLiteral("value")).toString();
         list.append(QJsonObject{{QStringLiteral("name"), QStringLiteral("Flags")},
-                                {QStringLiteral("value"), summary.trimmed()},
+                                {QStringLiteral("value"), summary.join(QLatin1Char(' '))},
                                 {QStringLiteral("variablesReference"), frameId * 4 + kVarFlags}});
     }
     // The live frame's bank state, expandable like Flags.
@@ -672,9 +676,7 @@ void DapSession::setBreakpoints(const QJsonObject& args, QJsonObject* body, QStr
         const QJsonObject o = v.toObject();
         debug::BreakpointTable::SourceRequest r;
         r.line = o.value(QStringLiteral("line")).toInt();
-        r.condition = o.value(QStringLiteral("condition")).toString().toStdString();
-        r.hitCondition = o.value(QStringLiteral("hitCondition")).toString().toStdString();
-        r.logMessage = o.value(QStringLiteral("logMessage")).toString().toStdString();
+        readSpec(o, &r);
         requests.push_back(r);
     }
     const auto statuses = m_controller->breakpoints().setSource(pathKey(path), requests, m_controller->sourceMap());
@@ -695,8 +697,7 @@ void DapSession::setFunctionBreakpoints(const QJsonObject& args, QJsonObject* bo
         const QJsonObject o = v.toObject();
         debug::BreakpointTable::FunctionRequest r;
         r.name = o.value(QStringLiteral("name")).toString().toStdString();
-        r.condition = o.value(QStringLiteral("condition")).toString().toStdString();
-        r.hitCondition = o.value(QStringLiteral("hitCondition")).toString().toStdString();
+        readSpec(o, &r);
         requests.push_back(r);
     }
     const auto statuses = m_controller->breakpoints().setFunctions(requests, m_controller->sourceMap(), 1);
@@ -721,8 +722,7 @@ void DapSession::setInstructionBreakpoints(const QJsonObject& args, QJsonObject*
         if (!ok) continue;
         r.thread = thread;
         r.addr = uint16_t(addr + o.value(QStringLiteral("offset")).toInt(0));
-        r.condition = o.value(QStringLiteral("condition")).toString().toStdString();
-        r.hitCondition = o.value(QStringLiteral("hitCondition")).toString().toStdString();
+        readSpec(o, &r);
         requests.push_back(r);
     }
     const auto statuses = m_controller->breakpoints().setInstructions(requests);
@@ -785,8 +785,7 @@ void DapSession::setDataBreakpoints(const QJsonObject& args, QJsonObject* body, 
         d.access = access == QLatin1String("read") ? debug::DataAccess::Read
                    : access == QLatin1String("readWrite") ? debug::DataAccess::ReadWrite
                                                           : debug::DataAccess::Write;
-        d.condition = o.value(QStringLiteral("condition")).toString().toStdString();
-        d.hitCondition = o.value(QStringLiteral("hitCondition")).toString().toStdString();
+        readSpec(o, &d);
         requests.push_back(d);
     }
     const auto statuses = m_controller->breakpoints().setData(requests);
@@ -822,13 +821,9 @@ void DapSession::disassemble(const QJsonObject& args, QJsonObject* body, QString
     int thread = 1;
     uint16_t base = 0;
     bool me1 = false;
-    if (!parseMemoryReference(args.value(QStringLiteral("memoryReference")).toString(), &thread, &base, &me1)) {
-        *error = QStringLiteral("Bad memory reference");
-        return;
-    }
+    if (!memoryArgs(args, &thread, &base, &me1, error)) return;
     debug::DebugTarget* t = m_controller->target();
     debug::RunControl* rc = m_controller->runControl();
-    base = uint16_t(base + args.value(QStringLiteral("offset")).toInt(0));
     const int instructionOffset = args.value(QStringLiteral("instructionOffset")).toInt(0);
     const int count = args.value(QStringLiteral("instructionCount")).toInt(0);
 
@@ -889,11 +884,7 @@ void DapSession::readMemory(const QJsonObject& args, QJsonObject* body, QString*
     int thread = 1;
     uint16_t addr = 0;
     bool me1 = false;
-    if (!parseMemoryReference(args.value(QStringLiteral("memoryReference")).toString(), &thread, &addr, &me1)) {
-        *error = QStringLiteral("Bad memory reference");
-        return;
-    }
-    addr = uint16_t(addr + args.value(QStringLiteral("offset")).toInt(0));
+    if (!memoryArgs(args, &thread, &addr, &me1, error)) return;
     const int count = std::min(args.value(QStringLiteral("count")).toInt(0), 0x10000);
     QByteArray data;
     int unreadable = 0;
@@ -915,11 +906,7 @@ void DapSession::writeMemory(const QJsonObject& args, QJsonObject* body, QString
     int thread = 1;
     uint16_t addr = 0;
     bool me1 = false;
-    if (!parseMemoryReference(args.value(QStringLiteral("memoryReference")).toString(), &thread, &addr, &me1)) {
-        *error = QStringLiteral("Bad memory reference");
-        return;
-    }
-    addr = uint16_t(addr + args.value(QStringLiteral("offset")).toInt(0));
+    if (!memoryArgs(args, &thread, &addr, &me1, error)) return;
     const QByteArray data = QByteArray::fromBase64(args.value(QStringLiteral("data")).toString().toLatin1());
     int written = 0;
     for (char c : data) {

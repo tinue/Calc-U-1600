@@ -20,6 +20,7 @@
 #include "AppSettings.hpp"
 #include "MacClipboardImage.h"
 #include "PC1500/PC1500Machine.hpp"
+#include "PC1500/PC1500MachineCodeLoader.hpp"
 #include "PC1600/PC1600Machine.hpp"
 #include "PC1600/PC1600MachineCodeLoader.hpp"
 
@@ -446,8 +447,8 @@ void MainWindow::loadMachineCode() {
     uint32_t ramStart = 0, ramEnd = 0;
     if (!isPC1600) {
         if (PC1500Machine* pc1500 = m_controller->pc1500()) {
-            ramStart = static_cast<uint32_t>(pc1500->debugPeek(0x7863)) << 8;  // RAM_ST page
-            ramEnd = static_cast<uint32_t>(pc1500->debugPeek(0x7864)) << 8;    // RAM_END page
+            ramStart = static_cast<uint32_t>(pc1500->debugPeek(kPc1500RamStPage)) << 8;
+            ramEnd = static_cast<uint32_t>(pc1500->debugPeek(kPc1500RamEndPage)) << 8;
         }
     }
     const size_t len = request.payload.size();

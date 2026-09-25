@@ -7,11 +7,13 @@
 
 namespace debug {
 
-CpuKind DebugTarget::kindOf(int thread) const {
-    for (const Thread& t : threads())
-        if (t.id == thread) return t.kind;
-    return CpuKind::LH5801;
+namespace {
+
+disasm::Decoded decodeAs(CpuKind kind, uint16_t addr, const disasm::FetchFn& fetch, const disasm::SymbolFn& symbols) {
+    return kind == CpuKind::Z80 ? disasm::decodeZ80(addr, fetch, symbols) : disasm::decodeLH5801(addr, fetch, symbols);
 }
+
+} // namespace
 
 disasm::Decoded DebugTarget::decode(int thread, uint16_t addr, const disasm::SymbolFn& symbols) const {
     auto fetch = [this, thread](uint16_t a) -> uint8_t {
@@ -19,8 +21,15 @@ disasm::Decoded DebugTarget::decode(int thread, uint16_t addr, const disasm::Sym
         peek(thread, kSpaceMain, a, &v); // code is fetched from ME0 / Z-80 memory
         return v;
     };
-    return kindOf(thread) == CpuKind::Z80 ? disasm::decodeZ80(addr, fetch, symbols)
-                                          : disasm::decodeLH5801(addr, fetch, symbols);
+    return decodeAs(kindOf(thread), addr, fetch, symbols);
+}
+
+disasm::Decoded DebugTarget::decode(int thread, const HistoryEntry& entry, const disasm::SymbolFn& symbols) const {
+    auto fetch = [&entry](uint16_t a) -> uint8_t {
+        const uint16_t i = uint16_t(a - entry.pc);
+        return i < entry.len ? entry.bytes[i] : 0;
+    };
+    return decodeAs(kindOf(thread), entry.pc, fetch, symbols);
 }
 
 ExpressionContext DebugTarget::expressionContext(int thread,

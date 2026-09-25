@@ -303,5 +303,5 @@ private:
     bool m_skipBreakpointOnce{false};
     Z80HistoryFrame* m_historyFrame{&m_history.next()}; // the frame the current step() fills
     uint8_t m_fetchLen{0}; // bytes fetched by the current step(), mirrored into *m_historyFrame
-    void recordHistory(uint16_t pcAtStart, uint8_t cycles, bool interrupt);
+    void recordHistory(uint16_t pcAtStart, bool interrupt);
 };

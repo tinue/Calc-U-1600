@@ -2,9 +2,6 @@
 
 #include <algorithm>
 
-#include "Disasm/LH5801Disassembler.hpp"
-#include "Disasm/Z80Disassembler.hpp"
-
 namespace debug {
 
 BreakpointTable::SymbolLookup RunControl::symbols() const {
@@ -48,8 +45,7 @@ void RunControl::step(int thread, StepKind kind, bool line) {
     m_stepRetired = m_target.retired(thread);
     m_stepSp = m_target.sp(thread);
     m_inCall = false;
-    m_stepFromMapped = line && locate(thread, m_target.pc(thread), &m_stepFrom);
-    m_stepLine = m_stepFromMapped;
+    m_stepLine = line && locate(thread, m_target.pc(thread), &m_stepFrom);
 }
 
 bool RunControl::isCallKind(int thread, uint16_t pc) const {
@@ -104,12 +100,7 @@ bool RunControl::stepDone() const {
             if (m_target.historySize(t) == 0) return false;
             const HistoryEntry last = m_target.history(t, 0);
             if (last.interrupt || last.len == 0) return false;
-            const disasm::FetchFn fetch = [&last](uint16_t a) -> uint8_t {
-                const uint16_t i = uint16_t(a - last.pc);
-                return i < last.len ? last.bytes[i] : 0;
-            };
-            const disasm::Decoded dec = m_target.kindOf(t) == CpuKind::Z80 ? disasm::decodeZ80(last.pc, fetch)
-                                                                           : disasm::decodeLH5801(last.pc, fetch);
+            const disasm::Decoded dec = m_target.decode(t, last);
             return (dec.flow == disasm::Flow::Return || dec.flow == disasm::Flow::CondReturn) && m_target.sp(t) > m_stepSp;
         }
         case StepKind::Instruction:

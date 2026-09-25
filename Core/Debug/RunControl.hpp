@@ -28,7 +28,7 @@ namespace debug {
 struct DebugEvent {
     enum Kind : uint8_t { Stopped, Output };
     Kind kind = Stopped;
-    enum Reason : uint8_t { Breakpoint, DataBreakpoint, Step, Pause, Entry, Goto };
+    enum Reason : uint8_t { Breakpoint, DataBreakpoint, Step, Pause, Entry };
     Reason reason = Pause;
     int thread = 0;
     std::vector<int> breakpointIds;
@@ -43,7 +43,6 @@ public:
     RunControl(DebugTarget& target, SourceMap& map, BreakpointTable& breakpoints)
         : m_target(target), m_map(map), m_breakpoints(breakpoints) {}
 
-    State state() const { return m_state; }
     bool paused() const { return m_state == State::Paused; }
 
     /// Stops now (reason Pause, or Entry after a reset); the event comes
@@ -68,7 +67,6 @@ public:
     bool locate(int thread, uint16_t pc, SourceLocation* out) const;
 
 private:
-    enum class Phase : uint8_t { Start, Running };
     /// Handles a Stop from the target. True if execution must halt (an
     /// event was queued).
     bool handleStop(const Stop& stop, std::vector<DebugEvent>* events);
@@ -89,7 +87,6 @@ private:
     StepKind m_stepKind = StepKind::Instruction;
     bool m_stepLine = false;
     SourceLocation m_stepFrom;   // the line a line step started on
-    bool m_stepFromMapped = false;
     uint16_t m_stepSp = 0;       // SP at the start (Over/Out) or of the call being stepped over
     uint32_t m_stepRetired = 0;  // instructions retired at the start
     bool m_inCall = false;       // Over: running a Call-kind instruction to its return

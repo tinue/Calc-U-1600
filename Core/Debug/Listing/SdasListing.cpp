@@ -3,6 +3,8 @@
 
 #include "Listing.hpp"
 
+#include "../../HexFormat.hpp"
+
 // sdas (ASxxxx) listings: sdaslh5801 / sdasz80 `.lst`, and the `.rst` the
 // linker rewrites with relocated addresses and bytes. Fixed columns, in
 // one of two layouts. sdaslh5801 prints 16-bit addresses:
@@ -54,12 +56,8 @@ const Layout& layoutOf(const std::vector<std::string>& text) {
 
 // The low 16 bits of a 4- or 8-digit hex field.
 bool parseHex16(const std::string& s, uint16_t* v) {
-    if (s.size() != 4 && s.size() != 8) return false;
     uint32_t r = 0;
-    for (char c : s) {
-        if (!std::isxdigit(static_cast<unsigned char>(c))) return false;
-        r = r * 16 + uint32_t(std::isdigit(static_cast<unsigned char>(c)) ? c - '0' : std::toupper(c) - 'A' + 10);
-    }
+    if ((s.size() != 4 && s.size() != 8) || !parseHexField(s, 0, s.size(), &r)) return false;
     *v = uint16_t(r);
     return true;
 }

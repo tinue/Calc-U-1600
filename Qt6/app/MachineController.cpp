@@ -318,23 +318,15 @@ void MachineController::enqueueShiftedKey(const std::string& baseName) {
     enqueueKey(baseName);
 }
 
-void MachineController::pasteText(const std::string& text) {
-    if (!m_pc1500 && !m_pc1600) return;
-    if (!m_paste.active()) m_pasteFrameCycles = 0;
-    if (m_pc1600) {
-        m_paste.setPacing(pc1600PastePacing());
-        m_paste.append(buildPasteSteps(text, pc1600ResolveTypedChar));
-    } else {
-        m_paste.setPacing(pc1500PastePacing());
-        m_paste.append(buildPasteSteps(text, pc1500ResolveTypedChar));
-    }
-}
+void MachineController::pasteText(const std::string& text) { enqueueTyped(text, /*pressEnter=*/false); }
 
-void MachineController::typeCommand(const std::string& line) {
+void MachineController::typeCommand(const std::string& line) { enqueueTyped(line, /*pressEnter=*/true); }
+
+void MachineController::enqueueTyped(const std::string& text, bool pressEnter) {
     if (!m_pc1500 && !m_pc1600) return;
     if (!m_paste.active()) m_pasteFrameCycles = 0;
-    std::vector<PasteStep> steps = buildPasteSteps(line, m_pc1600 ? pc1600ResolveTypedChar : pc1500ResolveTypedChar);
-    steps.push_back(PasteStep{"enter", false});
+    std::vector<PasteStep> steps = buildPasteSteps(text, m_pc1600 ? pc1600ResolveTypedChar : pc1500ResolveTypedChar);
+    if (pressEnter) steps.push_back(PasteStep{"enter", false});
     m_paste.setPacing(m_pc1600 ? pc1600PastePacing() : pc1500PastePacing());
     m_paste.append(steps);
 }

@@ -61,7 +61,6 @@ public:
     debug::RunControl* runControl() const { return m_run.get(); }
     debug::SourceMap& sourceMap() { return m_map; }
     debug::BreakpointTable& breakpoints() { return m_breakpoints; }
-    MachineController* machines() const { return m_machines; }
     /// Verifies every listing binding against memory and re-resolves the
     /// breakpoints; returns the breakpoint statuses that changed.
     std::vector<debug::BreakpointStatus> rebindListings();

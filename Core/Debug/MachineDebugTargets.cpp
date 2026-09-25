@@ -8,12 +8,8 @@ namespace debug {
 
 namespace {
 
-void setBreakpointFlag(LH5801& cpu, bool on) {
-    const uint32_t f = cpu.traceFlags();
-    cpu.setTraceFlags(on ? (f | TRACE_BREAKPOINTS) : (f & ~uint32_t(TRACE_BREAKPOINTS)));
-}
-
-void setBreakpointFlag(SC7852& cpu, bool on) {
+template <typename Cpu>
+void setBreakpointFlag(Cpu& cpu, bool on) {
     const uint32_t f = cpu.traceFlags();
     cpu.setTraceFlags(on ? (f | TRACE_BREAKPOINTS) : (f & ~uint32_t(TRACE_BREAKPOINTS)));
 }
@@ -165,9 +161,13 @@ bool PC1600DebugTarget::poke(int thread, Space space, uint16_t addr, uint8_t val
 
 int PC1600DebugTarget::bankAt(int thread, uint16_t addr) const {
     if (thread != kZ80) return -1;
-    const PC1600Machine::DebugBankState b = m_machine.debugBankState();
-    const uint8_t banks[4] = {b.pageABank, b.pageBBank, b.pageCBank, b.pageDBank};
-    return banks[addr >> 14];
+    const PC1600Bank& b = m_machine.bank();
+    switch (addr >> 14) {
+        case 0: return b.pageABank();
+        case 1: return b.pageBBank();
+        case 2: return b.pageCBank();
+        default: return b.pageDBank();
+    }
 }
 
 bool PC1600DebugTarget::pu(int thread) const { return thread != kZ80 && m_machine.lh5803().pu(); }
