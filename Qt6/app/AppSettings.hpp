@@ -136,6 +136,18 @@ inline void setTraceMaxFileSizeMB(int mb) {
     backingStore().setValue(QStringLiteral("trace/maxFileSizeMB"), mb);
 }
 
+// Keys: "debug/dapEnabled" (default off) and "debug/dapPort" (default 4711)
+// -- the Debug Adapter Protocol server VS Code attaches to (see
+// debug/DebugController). It listens on 127.0.0.1 only.
+constexpr int kDefaultDapPort = 4711;
+inline bool dapEnabled() { return backingStore().value(QStringLiteral("debug/dapEnabled"), false).toBool(); }
+inline void setDapEnabled(bool on) { backingStore().setValue(QStringLiteral("debug/dapEnabled"), on); }
+inline int dapPort() {
+    const int port = backingStore().value(QStringLiteral("debug/dapPort"), kDefaultDapPort).toInt();
+    return port >= 1024 && port <= 65535 ? port : kDefaultDapPort;
+}
+inline void setDapPort(int port) { backingStore().setValue(QStringLiteral("debug/dapPort"), port); }
+
 // Key: "serial/linkDirectory" -- directory PtySerialLink creates its stable
 // `calcu1600.serial` symlink in. Empty/absent means AppPaths::instanceDir()
 // (the same ~/Calc-U-1600 default everything else uses); MachineController

@@ -28,7 +28,7 @@ if(APPLE AND NOT DEFINED CMAKE_PREFIX_PATH)
   endif()
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia Network)
 qt_standard_project_setup()
 
 set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../Core)
@@ -200,6 +200,9 @@ qt_add_executable(CalcU1600Qt
   app/AboutDialog.cpp
   app/PresetController.cpp
   app/AudioOutput.cpp
+  app/debug/DapServer.cpp
+  app/debug/DapSession.cpp
+  app/debug/DebugController.cpp
   app/screenshots/ShotScenario.cpp
   app/screenshots/ShotCapture.cpp
   app/screenshots/ShotRunner.cpp
@@ -221,7 +224,7 @@ if(WIN32)
 endif()
 
 target_include_directories(CalcU1600Qt PRIVATE ${CORE_ROOT} app ${CMAKE_CURRENT_BINARY_DIR}/generated)
-target_link_libraries(CalcU1600Qt PRIVATE Qt6::Widgets Qt6::Multimedia)
+target_link_libraries(CalcU1600Qt PRIVATE Qt6::Widgets Qt6::Multimedia Qt6::Network)
 
 if(EXISTS ${SHARPDX_LIB})
   # See the CORE_SOURCES SHARPDX_LIB block above.

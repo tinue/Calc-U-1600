@@ -130,6 +130,12 @@ public:
     /// Replaces the thread's memory watches (in its own address space);
     /// empty turns its checking off.
     void setWatches(int thread, const std::vector<WatchSet::Watch>& watches);
+    /// Armed (the default), breakpoints and watches act on the CPUs;
+    /// disarmed, the lists are kept but the CPUs don't check them -- for
+    /// whenever something other than the debugger drives the machine (a
+    /// boot to the prompt, a program load), which must not park on one.
+    void arm(bool on);
+    bool armed() const { return m_armed; }
 
     // ── Execution ─────────────────────────────────────────────────────────
     /// Free run for up to `budget` machine cycles (the machine's own
@@ -173,6 +179,7 @@ protected:
 private:
     std::vector<std::vector<uint16_t>> m_breakpoints; // per thread id - 1
     std::map<int, WatchSet> m_watches;                // per thread id; nodes stay put for the CPUs' pointers
+    bool m_armed = true;
 };
 
 /// Flag bit names of the status register, least significant first:

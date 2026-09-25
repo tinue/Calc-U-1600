@@ -64,7 +64,13 @@ void DebugTarget::setBreakpoints(int thread, const std::vector<uint16_t>& addrs)
     std::sort(list.begin(), list.end());
     list.erase(std::unique(list.begin(), list.end()), list.end());
     applyBreakpoints(thread, list);
-    enableBreakpointChecks(breakpointsActive());
+    enableBreakpointChecks(m_armed && breakpointsActive());
+}
+
+void DebugTarget::arm(bool on) {
+    m_armed = on;
+    enableBreakpointChecks(on && breakpointsActive());
+    for (auto& [thread, set] : m_watches) attachWatches(thread, on && !set.empty() ? &set : nullptr);
 }
 
 const std::vector<uint16_t>& DebugTarget::breakpoints(int thread) const {
@@ -83,7 +89,7 @@ void DebugTarget::setWatches(int thread, const std::vector<WatchSet::Watch>& wat
     WatchSet& set = m_watches[thread];
     set.clear();
     for (const auto& w : watches) set.add(w);
-    attachWatches(thread, set.empty() ? nullptr : &set);
+    attachWatches(thread, m_armed && !set.empty() ? &set : nullptr);
 }
 
 int DebugTarget::watchHitThread() const {

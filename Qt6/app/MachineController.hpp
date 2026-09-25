@@ -20,6 +20,7 @@
 class PC1500Machine;
 class PC1600Machine;
 class MemoryModuleManager;
+class DebugController;
 class FloppyDiskManager;
 
 namespace MachineControllerNS {
@@ -243,6 +244,11 @@ public:
     // link is created lazily on first PC-1600 activation and then kept
     // alive across model switches (see attachSerialLink() in the .cpp).
     void refreshSerialLinkDirectory();
+
+    // The debugger (DAP server + session), see debug/DebugController.
+    DebugController* debugController() const { return m_debug.get(); }
+    // Starts, stops or rebinds the DAP server after a Settings change.
+    void refreshDebugServer();
     // The path a serial client should open (the stable symlink, or the raw
     // PTY slave if no symlink could be made), or empty when no PC-1600 has
     // ever been activated yet / the PTY failed to open.
@@ -411,6 +417,9 @@ private:
     void makePC1600WithRomFallback();
     // AppSettings::serialLinkDirOverride(), falling back to AppPaths::instanceDir().
     static QString effectiveSerialLinkDir();
+    // Declared after the machines so it goes first on destruction: its
+    // debug target still refers to the live machine.
+    std::unique_ptr<DebugController> m_debug;
     // Ensures m_serialLink exists (constructing it from the effective
     // AppSettings directory on first call) and attaches it to `machine` --
     // called after every point that (re)constructs m_pc1600.

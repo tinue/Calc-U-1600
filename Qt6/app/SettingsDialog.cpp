@@ -2,7 +2,9 @@
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
 #include "MachineController.hpp"
+#include "debug/DebugController.hpp"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
@@ -298,6 +300,40 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     serial->addWidget(ce158StatusLabel, 2, kValueColumn, 1, 3);
     refreshSerialStatusLabel();
 #endif
+
+    // ── Debugger ─────────────────────────────────────────────────────────
+    // The Debug Adapter Protocol server VS Code attaches to (localhost only).
+    if (m_controller) {
+        QGridLayout* debugger =
+            addSection(layout, this, sections, tr("Debugger"), QStringLiteral("dialog.settings.debugger"));
+        addRowLabel(debugger, 0, this, sections, tr("Debug server:"));
+        auto* enable = new QCheckBox(tr("Accept a debugger (VS Code) on 127.0.0.1"), this);
+        enable->setChecked(AppSettings::dapEnabled());
+        debugger->addWidget(enable, 0, kValueColumn, 1, 3, Qt::AlignLeft);
+        addRowLabel(debugger, 1, this, sections, tr("Port:"));
+        auto* port = new QSpinBox(this);
+        port->setRange(1024, 65535);
+        port->setValue(AppSettings::dapPort());
+        debugger->addWidget(port, 1, kValueColumn, Qt::AlignLeft);
+        addRowLabel(debugger, 2, this, sections, tr("Status:"));
+        auto* status = new QLabel(this);
+        status->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        debugger->addWidget(status, 2, kValueColumn, 1, 3);
+        DebugController* debug = m_controller->debugController();
+        auto refreshStatus = [status, debug] { status->setText(debug->serverStatus()); };
+        refreshStatus();
+        connect(debug, &DebugController::serverStatusChanged, status, refreshStatus);
+        connect(enable, &QCheckBox::toggled, this, [this](bool on) {
+            AppSettings::setDapEnabled(on);
+            m_controller->refreshDebugServer();
+        });
+        // Rebind once editing settles, not on every keystroke.
+        connect(port, &QSpinBox::editingFinished, this, [this, port] {
+            if (port->value() == AppSettings::dapPort()) return;
+            AppSettings::setDapPort(port->value());
+            m_controller->refreshDebugServer();
+        });
+    }
 
     alignLabelColumns(sections);
 

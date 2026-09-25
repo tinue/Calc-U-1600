@@ -16,6 +16,7 @@
 #include "PresetController.hpp"
 #include "AudioOutput.hpp"
 #include "EmulationPacer.hpp"
+#include "debug/DebugController.hpp"
 #include "AppSettings.hpp"
 #include "MacClipboardImage.h"
 #include "PC1500/PC1500Machine.hpp"
@@ -249,6 +250,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(qApp, &QApplication::focusChanged, this, [this] { releaseHeldKeys(); });
     connect(m_faceplate->lcdWidget(), &LcdWidget::turboRequested, this,
             [this](bool active) { m_pacer->setTurbo(active); });
+
+    // The debugger's pause shows in the title bar.
+    connect(m_controller->debugController(), &DebugController::pausedChanged, this, [this](bool paused) {
+        setWindowTitle(paused ? tr("Calc-U-1600 — Paused (debugger)") : tr("Calc-U-1600"));
+    });
 
     m_audio = new AudioOutput(this);
     m_pacer = new EmulationPacer(m_controller.get(), m_audio, [this] { refreshViewsAfterAdvance(); }, this);

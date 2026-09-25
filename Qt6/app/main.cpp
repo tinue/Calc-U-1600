@@ -8,6 +8,7 @@
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
 #include "MainWindow.hpp"
+#include "debug/DebugController.hpp"
 #include "screenshots/ShotRunner.hpp"
 #include "screenshots/ShotScenario.hpp"
 
@@ -34,10 +35,15 @@ int main(int argc, char** argv) {
                                              QStringLiteral("names"));
     const QCommandLineOption shotsFailFastOption(QStringLiteral("shots-fail-fast"),
                                                  QStringLiteral("Stop at the first failing shot."));
-    parser.addOptions({shotsOption, shotsOutOption, shotsOnlyOption, shotsFailFastOption});
+    const QCommandLineOption dapOption(QStringLiteral("dap"),
+                                       QStringLiteral("Accept a debugger on 127.0.0.1:<port> for this run (Settings unchanged)."),
+                                       QStringLiteral("port"));
+    parser.addOptions({shotsOption, shotsOutOption, shotsOnlyOption, shotsFailFastOption, dapOption});
     // parse(), not process(): a normal launch must survive whatever extra
     // arguments macOS or an IDE add (`-NSDocumentRevisionsDebugMode YES`).
     const bool parsed = parser.parse(QCoreApplication::arguments());
+
+    if (parser.isSet(dapOption)) DebugController::setCommandLinePort(parser.value(dapOption).toInt());
 
     if (!parser.isSet(shotsOption)) {
         MainWindow window;

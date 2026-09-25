@@ -22,6 +22,7 @@
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
 #include "FloppyDiskManager.hpp"
+#include "debug/DebugController.hpp"
 #include "MemoryModuleManager.hpp"
 
 namespace {
@@ -73,7 +74,9 @@ Model initialModel() {
 } // namespace
 
 MachineController::MachineController(QObject* parent) : QObject(parent) {
+    m_debug = std::make_unique<DebugController>(this);
     switchModel(initialModel());
+    m_debug->refreshServer();
 }
 
 MachineController::~MachineController() = default;
@@ -338,8 +341,16 @@ GrayImage MachineController::currentScreenImage() const {
 }
 
 void MachineController::runActive(std::uint64_t cycles) {
+    // With a debugger attached, the frame's budget goes through its run
+    // control (pause, stepping, breakpoints).
+    if (m_debug && m_debug->attached()) {
+        m_debug->runSlice(cycles);
+        return;
+    }
     withMachine([&](auto& machine) { machine.runCycles(cycles); });
 }
+
+void MachineController::refreshDebugServer() { m_debug->refreshServer(); }
 
 void MachineController::pasteOnFrame() {
     m_paste.onFrame([this](const std::string& key) { pressKey(key); },
@@ -526,6 +537,7 @@ bool MachineController::traceActive() const {
 }
 
 void MachineController::discardMachine() {
+    if (m_debug) m_debug->machineAboutToChange();
     endTrace();
     m_paste.cancel({}); // the machine it was typing into is going away
     m_pc1500.reset();
