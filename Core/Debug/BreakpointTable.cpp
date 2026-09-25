@@ -41,41 +41,87 @@ bool sameStatus(const BreakpointStatus& a, const BreakpointStatus& b) {
 
 } // namespace
 
-bool hitConditionMet(const std::string& hitCondition, int hits, bool* valid) {
-    std::string t = trim(hitCondition);
-    if (valid) *valid = true;
-    if (t.empty()) return true;
-    std::string op = "==";
-    for (const char* candidate : {"==", ">=", "<=", "!=", ">", "<", "%", "="}) {
-        const size_t n = std::char_traits<char>::length(candidate);
-        if (t.compare(0, n, candidate) == 0) { op = candidate; t = trim(t.substr(n)); break; }
+HitCondition HitCondition::parse(const std::string& text) {
+    HitCondition h;
+    std::string t = trim(text);
+    if (t.empty()) return h;
+    Op op = Eq;
+    struct Spelling { const char* text; Op op; };
+    static const Spelling kOps[] = {{"==", Eq}, {">=", Ge}, {"<=", Le}, {"!=", Ne}, {">", Gt}, {"<", Lt}, {"%", Mod}, {"=", Eq}};
+    for (const Spelling& s : kOps) {
+        const size_t n = std::char_traits<char>::length(s.text);
+        if (t.compare(0, n, s.text) == 0) { op = s.op; t = trim(t.substr(n)); break; }
     }
     char* end = nullptr;
     const long long n = std::strtoll(t.c_str(), &end, 0);
     if (t.empty() || !end || *end != '\0') {
-        if (valid) *valid = false;
-        return true; // an unreadable hit condition doesn't hide the breakpoint
+        h.valid = false; // an unreadable hit condition doesn't hide the breakpoint
+        return h;
     }
-    if (op == "==" || op == "=") return hits == n;
-    if (op == ">=") return hits >= n;
-    if (op == "<=") return hits <= n;
-    if (op == "!=") return hits != n;
-    if (op == ">") return hits > n;
-    if (op == "<") return hits < n;
-    return n > 0 && hits % n == 0; // "%"
+    h.op = op;
+    h.n = n;
+    return h;
+}
+
+bool HitCondition::met(int hits) const {
+    switch (op) {
+        case Always: return true;
+        case Eq: return hits == n;
+        case Ne: return hits != n;
+        case Ge: return hits >= n;
+        case Le: return hits <= n;
+        case Gt: return hits > n;
+        case Lt: return hits < n;
+        case Mod: return n > 0 && hits % n == 0;
+    }
+    return true;
+}
+
+bool hitConditionMet(const std::string& hitCondition, int hits, bool* valid) {
+    const HitCondition h = HitCondition::parse(hitCondition);
+    if (valid) *valid = h.valid;
+    return h.met(hits);
+}
+
+LogTemplate LogTemplate::parse(const std::string& message) {
+    LogTemplate t;
+    std::string text;
+    for (size_t i = 0; i < message.size(); i++) {
+        if (message[i] != '{') { text += message[i]; continue; }
+        const size_t close = message.find('}', i);
+        if (close == std::string::npos) { text += message.substr(i); break; }
+        if (!text.empty()) t.m_parts.push_back({text, false, {}});
+        text.clear();
+        const std::string expr = message.substr(i + 1, close - i - 1);
+        t.m_parts.push_back({expr, true, CompiledExpression::compile(expr)});
+        i = close;
+    }
+    if (!text.empty()) t.m_parts.push_back({text, false, {}});
+    return t;
+}
+
+std::string LogTemplate::render(const ExpressionContext& ctx) const {
+    std::string out;
+    for (const Part& p : m_parts) {
+        if (!p.expression) { out += p.text; continue; }
+        const ExpressionResult r = p.compiled.run(ctx);
+        out += r.ok ? valueText(r.value) : "{" + r.error + "}";
+    }
+    return out;
 }
 
 std::string interpolateLog(const std::string& message, const ExpressionContext& ctx) {
-    std::string out;
-    for (size_t i = 0; i < message.size(); i++) {
-        if (message[i] != '{') { out += message[i]; continue; }
-        const size_t close = message.find('}', i);
-        if (close == std::string::npos) { out += message.substr(i); break; }
-        const ExpressionResult r = evaluate(message.substr(i + 1, close - i - 1), ctx);
-        out += r.ok ? valueText(r.value) : "{" + r.error + "}";
-        i = close;
-    }
-    return out;
+    return LogTemplate::parse(message).render(ctx);
+}
+
+std::shared_ptr<const BreakpointTable::Compiled> BreakpointTable::compile(const BreakpointSpec& spec) {
+    auto c = std::make_shared<Compiled>();
+    c->hasCondition = !trim(spec.condition).empty();
+    if (c->hasCondition) c->condition = CompiledExpression::compile(spec.condition);
+    c->hit = HitCondition::parse(spec.hitCondition);
+    c->hasLog = !spec.logMessage.empty();
+    if (c->hasLog) c->log = LogTemplate::parse(spec.logMessage);
+    return c;
 }
 
 // ── Setting ───────────────────────────────────────────────────────────────
@@ -99,9 +145,11 @@ std::vector<BreakpointStatus> BreakpointTable::resolveSource(Source& s, const So
             st = verifiedStatus(s.ids[i], addrs[0].thread, addrs[0].addr);
             st.line = resolved;
             std::string banks;
+            const std::shared_ptr<const Compiled> compiled = compile(r);
             for (const auto& a : addrs) {
                 Armed armed;
                 static_cast<BreakpointSpec&>(armed) = r;
+                armed.compiled = compiled;
                 armed.id = st.id;
                 armed.thread = a.thread;
                 armed.addr = a.addr;
@@ -141,6 +189,7 @@ std::vector<BreakpointStatus> BreakpointTable::setInstructions(const std::vector
     for (const InstructionRequest& r : requests) {
         Armed a;
         static_cast<BreakpointSpec&>(a) = r;
+        a.compiled = compile(r);
         a.id = m_nextId++;
         a.thread = r.thread;
         a.addr = r.addr;
@@ -158,6 +207,7 @@ std::vector<BreakpointStatus> BreakpointTable::resolveFunctions(const SourceMap&
         if (map.symbolValue(f.request.name, &addr)) {
             Armed a;
             static_cast<BreakpointSpec&>(a) = f.request;
+            a.compiled = compile(f.request);
             a.id = f.id;
             a.thread = thread;
             a.addr = addr;
@@ -189,6 +239,7 @@ std::vector<BreakpointStatus> BreakpointTable::setData(const std::vector<DataBre
     for (const DataBreakpointSpec& r : requests) {
         Data d;
         static_cast<DataBreakpointSpec&>(d) = r;
+        d.compiled = compile(r);
         d.id = m_nextId++;
         m_data.push_back(d);
         out.push_back(verifiedStatus(d.id, r.thread, r.addr));
@@ -264,14 +315,13 @@ void BreakpointTable::apply(DebugTarget& target) const {
 
 // ── Deciding ──────────────────────────────────────────────────────────────
 
-void BreakpointTable::passes(const BreakpointSpec& spec, int& hits, int thread, DebugTarget& target,
-                             const SymbolLookup& symbols, HitDecision* decision, int id) {
-    const bool hasCondition = !trim(spec.condition).empty();
+void BreakpointTable::passes(const BreakpointSpec& spec, const Compiled& compiled, int& hits, int thread,
+                             DebugTarget& target, const SymbolLookup& symbols, HitDecision* decision, int id) {
     // Only a condition or a log message evaluates anything.
-    const ExpressionContext ctx = hasCondition || !spec.logMessage.empty() ? target.expressionContext(thread, symbols)
-                                                                            : ExpressionContext{};
-    if (hasCondition) {
-        const ExpressionResult r = evaluate(spec.condition, ctx);
+    const ExpressionContext ctx = compiled.hasCondition || compiled.hasLog ? target.expressionContext(thread, symbols)
+                                                                           : ExpressionContext{};
+    if (compiled.hasCondition) {
+        const ExpressionResult r = compiled.condition.run(ctx);
         if (!r.ok) {
             // A broken condition stops, and says why, rather than silently never firing.
             decision->log.push_back("Breakpoint condition '" + spec.condition + "': " + r.error);
@@ -282,9 +332,9 @@ void BreakpointTable::passes(const BreakpointSpec& spec, int& hits, int thread, 
         if (r.value == 0) return;
     }
     hits++;
-    if (!hitConditionMet(spec.hitCondition, hits)) return;
-    if (!spec.logMessage.empty()) {
-        decision->log.push_back(interpolateLog(spec.logMessage, ctx));
+    if (!compiled.hit.met(hits)) return;
+    if (compiled.hasLog) {
+        decision->log.push_back(compiled.log.render(ctx));
         return;
     }
     decision->stop = true;
@@ -303,7 +353,7 @@ HitDecision BreakpointTable::onBreakpoint(int thread, uint16_t pc, DebugTarget& 
         for (Armed& a : *list) {
             if (a.thread != thread || a.addr != pc) continue;
             if (a.key.any() && !target.bankMatches(thread, a.key, pc)) continue;
-            passes(a, a.hits, thread, target, symbols, &d, a.id);
+            passes(a, *a.compiled, a.hits, thread, target, symbols, &d, a.id);
         }
     return d;
 }
@@ -314,7 +364,7 @@ HitDecision BreakpointTable::onWatch(int thread, const WatchHit& hit, DebugTarge
         if (w.thread != thread || w.space != hit.space) continue;
         if (hit.addr < w.addr || hit.addr > uint16_t(w.addr + (w.length ? w.length - 1 : 0))) continue;
         if (hit.write ? w.access == DataAccess::Read : w.access == DataAccess::Write) continue;
-        passes(w, w.hits, thread, target, symbols, &d, w.id);
+        passes(w, *w.compiled, w.hits, thread, target, symbols, &d, w.id);
     }
     return d;
 }

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 // ── Debugger expressions ─────────────────────────────────────────────────
 //
@@ -36,6 +37,29 @@ struct ExpressionResult {
     std::string error; ///< set when !ok, e.g. "unknown name 'foo'"
 };
 
+/// An expression parsed once, to be run many times (breakpoint conditions,
+/// logpoint parts). Running it gives exactly what evaluate() gives for the
+/// same text and context -- the same value, or the same first error:
+/// syntax errors are kept in the program at the point where they occurred,
+/// so an error from evaluating something before them still wins.
+class CompiledExpression {
+public:
+    static CompiledExpression compile(const std::string& text);
+    ExpressionResult run(const ExpressionContext& ctx) const;
+
+private:
+    enum class Code : uint8_t { Const, Name, Mem, Unary, Binary, Fail };
+    struct Op {
+        Code code = Code::Const;
+        char sub = 0;       ///< Unary: ! ~ - ; Binary: the operator (see compile()); Mem: 'b', 'w' or '#'
+        int64_t value = 0;  ///< Const; Name / Fail: index into m_strings
+    };
+    friend class ExpressionCompiler;
+    std::vector<Op> m_ops;
+    std::vector<std::string> m_strings; ///< Name: the name as written, then lower-cased; Fail: the message
+};
+
+/// compile(text).run(ctx).
 ExpressionResult evaluate(const std::string& text, const ExpressionContext& ctx);
 
 } // namespace debug

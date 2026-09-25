@@ -14,11 +14,13 @@
 
 #include "../CPU/LH5801/LH5801.hpp"
 #include "../CPU/SC7852/SC7852.hpp"
+#include "../Debug/BreakpointTable.hpp"
 #include "../Debug/CpuRegisters.hpp"
 #include "../Debug/DebugExpression.hpp"
 #include "../Debug/MachineDebugTargets.hpp"
 #include "../PC1500/PC1500Machine.hpp"
 #include "DebugTargetTestSupport.hpp"
+#include "LegacyExpression.hpp"
 #include "TestRoms.hpp"
 
 namespace {
@@ -560,6 +562,101 @@ void test_watch_set() {
     CHECK(!w.hitPending() && w.empty());
 }
 
+void test_compiled_expressions_match_legacy() {
+    static std::map<std::string, int64_t> names = {{"a", 0x10}, {"hl", 0x7A00}, {"cf", 1}, {"LOOP", 0x40C5}, {"Mixed", 7}};
+    static uint8_t mem[65536] = {};
+    mem[0x7A00] = 0x34; mem[0x7A01] = 0x12; mem[0x0010] = 0x99;
+    debug::ExpressionContext full;
+    full.lookup = [](const std::string& n, int64_t* v) {
+        auto it = names.find(n);
+        if (it == names.end()) return false;
+        *v = it->second;
+        return true;
+    };
+    full.readByte = [](uint16_t addr, bool me1, uint8_t* v) {
+        if (addr == 0x1234 || (me1 && addr >= 0x8000)) return false;
+        *v = mem[addr];
+        return true;
+    };
+    debug::ExpressionContext bigEndian = full;
+    bigEndian.bigEndian = true;
+    debug::ExpressionContext noMemory = full;
+    noMemory.readByte = nullptr;
+    debug::ExpressionContext nothing;
+    const debug::ExpressionContext* contexts[] = {&full, &bigEndian, &noMemory, &nothing};
+
+    int mismatches = 0;
+    auto same = [&](const std::string& text) {
+        for (const debug::ExpressionContext* ctx : contexts) {
+            const debug::ExpressionResult want = legacy::evaluate(text, *ctx);
+            const debug::ExpressionResult got = debug::evaluate(text, *ctx);
+            if (want.ok != got.ok || want.error != got.error || (want.ok && want.value != got.value)) {
+                if (mismatches++ < 10)
+                    std::fprintf(stderr, "  expr \"%s\": legacy ok=%d %lld '%s', compiled ok=%d %lld '%s'\n", text.c_str(),
+                                 want.ok, (long long)want.value, want.error.c_str(), got.ok, (long long)got.value,
+                                 got.error.c_str());
+            }
+        }
+    };
+    const char* const corpus[] = {
+        "", "  ", "1", "0x10", "$ff", "&7A00", "0x", "$", "12+3*4", "(1+2)*3", "-5 % 3", "~0", "!0", "!!7", "+3",
+        "1<<4", "256>>2", "1<2", "2<=2", "3>2", "3>=4", "1==1", "1!=1", "6&3", "6|3", "6^3", "1&&0", "0||2",
+        "a", "A", "hl", "Mixed", "mixed", "LOOP", "loop", "foo", "foo +", "foo bar", "a b", "1 2", "1/0", "1/0*",
+        "1%0", "1/foo", "foo/0", "[hl]", "w[hl]", "#[0x10]", "#[0x9000]", "[0x1234]", "w[0x1233]", "[hl", "w[",
+        "#[", "(1+2", "1+2)", "1+", "*2", "!=3", "a == 0x10 && cf", "[hl] == 0x34 || foo", "(foo", "[foo]",
+        "[1/0]", "1 + [0x1234] + foo", "foo + [0x1234]", "0x7FFFFFFFFFFFFFFF+1", "-(-9223372036854775807-1)",
+        "1<<64", "1<<63", "-1>>1", "a&&&cf", "a|||cf", "a<<<1", "a===1", "_x.y$'", "w [hl]", "W[hl]", "#(1)",
+        "((((((1))))))", "1 ? 2", "@", "a @", "[hl] @", "1 +\t2",
+    };
+    for (const char* text : corpus) same(text);
+
+    // Seeded random token soup: every mixture of valid and broken input.
+    const char* const tokens[] = {"a", "hl", "foo", "LOOP", "Mixed", "0x10", "$ff", "&7A00", "12", "0", "[", "]", "w[",
+                                  "#[", "(", ")", "+", "-", "*", "/", "%", "<<", ">>", "<", "<=", ">", ">=", "==",
+                                  "!=", "&&", "||", "&", "|", "^", "!", "~", " ", "0x", "$", "0x1234", "@"};
+    const size_t kTokens = sizeof tokens / sizeof tokens[0];
+    uint32_t seed = 12345;
+    auto next = [&seed] { seed = seed * 1103515245u + 12345u; return (seed >> 16) & 0x7FFF; };
+    for (int i = 0; i < 20000; i++) {
+        std::string text;
+        const int n = 1 + int(next() % 9);
+        for (int k = 0; k < n; k++) text += tokens[next() % kTokens];
+        same(text);
+    }
+    CHECK(mismatches == 0);
+}
+
+void test_hit_conditions_and_log_templates_match_legacy() {
+    const char* const hits[] = {"", "  ", "5", "== 5", "=5", ">= 3", "<=2", "!= 4", "> 1", "<3", "% 3", "%0", "% -2",
+                                "0x10", ">= 0x2", "abc", "5x", "==", " % ", "-1", "= 3 "};
+    int mismatches = 0;
+    for (const char* h : hits)
+        for (int n = 0; n <= 20; n++) {
+            bool wantValid = false, gotValid = false;
+            const bool want = legacy::hitConditionMet(h, n, &wantValid);
+            const bool got = debug::hitConditionMet(h, n, &gotValid);
+            if (want != got || wantValid != gotValid) {
+                if (mismatches++ < 5) std::fprintf(stderr, "  hit \"%s\" at %d: legacy %d/%d, now %d/%d\n", h, n, want, wantValid, got, gotValid);
+            }
+        }
+    debug::ExpressionContext ctx;
+    ctx.lookup = [](const std::string& n, int64_t* v) {
+        if (n != "a" && n != "x") return false;
+        *v = n == "a" ? 0x42 : 0x1234;
+        return true;
+    };
+    ctx.readByte = [](uint16_t addr, bool, uint8_t* v) { *v = uint8_t(addr); return addr != 7; };
+    const char* const logs[] = {"", "plain", "a={a}", "{a}{x}", "x={x} a={a}!", "{foo}", "{[7]}", "{[8]}",
+                                "{-1}", "{1/0}", "open {a", "}{a}", "{}", "{{a}}", "a={a} b={", "{ a + 1 }"};
+    for (const char* m : logs)
+        if (legacy::interpolateLog(m, ctx) != debug::interpolateLog(m, ctx)) {
+            if (mismatches++ < 10)
+                std::fprintf(stderr, "  log \"%s\": legacy '%s', now '%s'\n", m, legacy::interpolateLog(m, ctx).c_str(),
+                             debug::interpolateLog(m, ctx).c_str());
+        }
+    CHECK(mismatches == 0);
+}
+
 } // namespace
 
 int run_debug_target_tests() {
@@ -579,6 +676,8 @@ int run_debug_target_tests() {
     test_cpu_views();
     test_register_reads();
     test_watch_set();
+    test_compiled_expressions_match_legacy();
+    test_hit_conditions_and_log_templates_match_legacy();
     std::printf("debug target tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

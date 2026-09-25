@@ -4,34 +4,48 @@
 
 namespace debug {
 
-namespace {
-
-// Recursive-descent parser that evaluates as it goes. The first error
-// sticks; later results are ignored.
-class Parser {
+// Recursive-descent compiler to a postfix program. Operands are emitted in
+// the order they are parsed and an operator after its operands, so running
+// the program evaluates everything in the order a parse-and-evaluate pass
+// would. The first syntax error becomes a Fail op and ends the program.
+class ExpressionCompiler {
 public:
-    Parser(const std::string& text, const ExpressionContext& ctx) : m_s(text), m_ctx(ctx) {}
+    explicit ExpressionCompiler(const std::string& text) : m_s(text) {}
 
-    ExpressionResult run() {
-        ExpressionResult r;
+    CompiledExpression compile() {
         skipSpace();
-        if (m_pos >= m_s.size()) { r.error = "empty expression"; return r; }
-        const int64_t v = parseOr();
+        if (m_pos >= m_s.size()) {
+            fail("empty expression");
+            return std::move(m_out);
+        }
+        parseOr();
         skipSpace();
-        if (m_error.empty() && m_pos < m_s.size()) fail("unexpected '" + m_s.substr(m_pos, 1) + "'");
-        if (!m_error.empty()) { r.error = m_error; return r; }
-        r.ok = true;
-        r.value = v;
-        return r;
+        if (m_pos < m_s.size()) fail("unexpected '" + m_s.substr(m_pos, 1) + "'");
+        return std::move(m_out);
     }
 
 private:
-    const std::string& m_s;
-    const ExpressionContext& m_ctx;
-    size_t m_pos = 0;
-    std::string m_error;
+    using Code = CompiledExpression::Code;
 
-    void fail(const std::string& msg) { if (m_error.empty()) m_error = msg; }
+    const std::string& m_s;
+    size_t m_pos = 0;
+    bool m_failed = false;
+    CompiledExpression m_out;
+
+    void emit(Code code, char sub = 0, int64_t value = 0) {
+        if (!m_failed) m_out.m_ops.push_back({code, sub, value});
+    }
+    int64_t addString(std::string s) {
+        m_out.m_strings.push_back(std::move(s));
+        return int64_t(m_out.m_strings.size() - 1);
+    }
+    void fail(const std::string& msg) {
+        if (m_failed) return;
+        emit(Code::Fail, 0, addString(msg));
+        m_failed = true;
+    }
+    void binary(char op) { emit(Code::Binary, op); }
+
     void skipSpace() { while (m_pos < m_s.size() && std::isspace(static_cast<unsigned char>(m_s[m_pos]))) m_pos++; }
     bool accept(const char* op) {
         skipSpace();
@@ -49,97 +63,85 @@ private:
         return true;
     }
 
-    int64_t parseOr() {
-        int64_t v = parseAnd();
-        while (accept("||")) { const int64_t r = parseAnd(); v = (v || r) ? 1 : 0; }
-        return v;
+    // Binary operator codes: 'O' ||, 'A' &&, '|', '^', '&', 'E' ==, 'N' !=,
+    // 'l' <=, 'g' >=, '<', '>', 'L' <<, 'R' >>, '+', '-', '*', '/', '%'.
+    void parseOr() {
+        parseAnd();
+        while (accept("||")) { parseAnd(); binary('O'); }
     }
-    int64_t parseAnd() {
-        int64_t v = parseBitOr();
-        while (accept("&&")) { const int64_t r = parseBitOr(); v = (v && r) ? 1 : 0; }
-        return v;
+    void parseAnd() {
+        parseBitOr();
+        while (accept("&&")) { parseBitOr(); binary('A'); }
     }
-    int64_t parseBitOr() {
-        int64_t v = parseBitXor();
-        while (accept("|")) v |= parseBitXor();
-        return v;
+    void parseBitOr() {
+        parseBitXor();
+        while (accept("|")) { parseBitXor(); binary('|'); }
     }
-    int64_t parseBitXor() {
-        int64_t v = parseBitAnd();
-        while (accept("^")) v ^= parseBitAnd();
-        return v;
+    void parseBitXor() {
+        parseBitAnd();
+        while (accept("^")) { parseBitAnd(); binary('^'); }
     }
-    int64_t parseBitAnd() {
-        int64_t v = parseEquality();
-        while (accept("&")) v &= parseEquality();
-        return v;
+    void parseBitAnd() {
+        parseEquality();
+        while (accept("&")) { parseEquality(); binary('&'); }
     }
-    int64_t parseEquality() {
-        int64_t v = parseRelational();
+    void parseEquality() {
+        parseRelational();
         for (;;) {
-            if (accept("==")) v = (v == parseRelational()) ? 1 : 0;
-            else if (accept("!=")) v = (v != parseRelational()) ? 1 : 0;
-            else return v;
+            if (accept("==")) { parseRelational(); binary('E'); }
+            else if (accept("!=")) { parseRelational(); binary('N'); }
+            else return;
         }
     }
-    int64_t parseRelational() {
-        int64_t v = parseShift();
+    void parseRelational() {
+        parseShift();
         for (;;) {
-            if (accept("<=")) v = (v <= parseShift()) ? 1 : 0;
-            else if (accept(">=")) v = (v >= parseShift()) ? 1 : 0;
-            else if (accept("<")) v = (v < parseShift()) ? 1 : 0;
-            else if (accept(">")) v = (v > parseShift()) ? 1 : 0;
-            else return v;
+            if (accept("<=")) { parseShift(); binary('l'); }
+            else if (accept(">=")) { parseShift(); binary('g'); }
+            else if (accept("<")) { parseShift(); binary('<'); }
+            else if (accept(">")) { parseShift(); binary('>'); }
+            else return;
         }
     }
-    int64_t parseShift() {
-        int64_t v = parseAdditive();
+    void parseShift() {
+        parseAdditive();
         for (;;) {
-            if (accept("<<")) v = int64_t(uint64_t(v) << (parseAdditive() & 63));
-            else if (accept(">>")) v >>= (parseAdditive() & 63);
-            else return v;
+            if (accept("<<")) { parseAdditive(); binary('L'); }
+            else if (accept(">>")) { parseAdditive(); binary('R'); }
+            else return;
         }
     }
-    int64_t parseAdditive() {
-        int64_t v = parseMultiplicative();
+    void parseAdditive() {
+        parseMultiplicative();
         for (;;) {
-            if (accept("+")) v += parseMultiplicative();
-            else if (accept("-")) v -= parseMultiplicative();
-            else return v;
+            if (accept("+")) { parseMultiplicative(); binary('+'); }
+            else if (accept("-")) { parseMultiplicative(); binary('-'); }
+            else return;
         }
     }
-    int64_t parseMultiplicative() {
-        int64_t v = parseUnary();
+    void parseMultiplicative() {
+        parseUnary();
         for (;;) {
-            if (accept("*")) v *= parseUnary();
+            if (accept("*")) { parseUnary(); binary('*'); }
             else if (accept("/") || accept("%")) {
-                const bool div = m_s[m_pos - 1] == '/';
-                const int64_t r = parseUnary();
-                if (r == 0) { fail("division by zero"); return 0; }
-                v = div ? v / r : v % r;
-            } else return v;
+                const char op = m_s[m_pos - 1];
+                parseUnary();
+                binary(op);
+            } else return;
         }
     }
-    int64_t parseUnary() {
-        if (accept("!")) return parseUnary() ? 0 : 1;
-        if (accept("~")) return ~parseUnary();
-        if (accept("-")) return -parseUnary();
-        if (accept("+")) return parseUnary();
-        return parsePrimary();
+    void parseUnary() {
+        if (accept("!")) { parseUnary(); emit(Code::Unary, '!'); return; }
+        if (accept("~")) { parseUnary(); emit(Code::Unary, '~'); return; }
+        if (accept("-")) { parseUnary(); emit(Code::Unary, '-'); return; }
+        if (accept("+")) { parseUnary(); return; }
+        parsePrimary();
     }
 
-    int64_t readMemory(bool word, bool me1) {
-        const int64_t addr = parseOr();
-        if (!accept("]")) { fail("missing ']'"); return 0; }
-        if (!m_ctx.readByte) { fail("memory not available"); return 0; }
-        const uint16_t a = uint16_t(addr);
-        uint8_t b0 = 0, b1 = 0;
-        if (!m_ctx.readByte(a, me1, &b0) || (word && !m_ctx.readByte(uint16_t(a + 1), me1, &b1))) {
-            fail("memory at " + std::to_string(a) + " is not readable");
-            return 0;
-        }
-        if (!word) return b0;
-        return m_ctx.bigEndian ? (int64_t(b0) << 8) | b1 : (int64_t(b1) << 8) | b0;
+    void memory(char kind) {
+        parseOr();
+        if (!accept("]")) { fail("missing ']'"); return; }
+        emit(Code::Mem, kind);
     }
 
     static int hexDigit(char c) {
@@ -149,33 +151,34 @@ private:
         return -1;
     }
 
-    int64_t parseHex() {
+    void parseHex() {
         int64_t v = 0;
-        size_t start = m_pos;
+        const size_t start = m_pos;
         while (m_pos < m_s.size() && hexDigit(m_s[m_pos]) >= 0) v = v * 16 + hexDigit(m_s[m_pos++]);
         if (m_pos == start) fail("missing hex digits");
-        return v;
+        emit(Code::Const, 0, v);
     }
 
-    int64_t parsePrimary() {
+    void parsePrimary() {
         skipSpace();
-        if (m_pos >= m_s.size()) { fail("unexpected end of expression"); return 0; }
+        if (m_pos >= m_s.size()) { fail("unexpected end of expression"); return; }
         const char c = m_s[m_pos];
         if (c == '(') {
             m_pos++;
-            const int64_t v = parseOr();
+            parseOr();
             if (!accept(")")) fail("missing ')'");
-            return v;
+            return;
         }
-        if (c == '[') { m_pos++; return readMemory(false, false); }
-        if (c == '#' && m_pos + 1 < m_s.size() && m_s[m_pos + 1] == '[') { m_pos += 2; return readMemory(false, true); }
-        if ((c == 'w' || c == 'W') && m_pos + 1 < m_s.size() && m_s[m_pos + 1] == '[') { m_pos += 2; return readMemory(true, false); }
-        if (c == '$' || c == '&') { m_pos++; return parseHex(); }
-        if (c == '0' && m_pos + 1 < m_s.size() && (m_s[m_pos + 1] == 'x' || m_s[m_pos + 1] == 'X')) { m_pos += 2; return parseHex(); }
+        if (c == '[') { m_pos++; memory('b'); return; }
+        if (c == '#' && m_pos + 1 < m_s.size() && m_s[m_pos + 1] == '[') { m_pos += 2; memory('#'); return; }
+        if ((c == 'w' || c == 'W') && m_pos + 1 < m_s.size() && m_s[m_pos + 1] == '[') { m_pos += 2; memory('w'); return; }
+        if (c == '$' || c == '&') { m_pos++; parseHex(); return; }
+        if (c == '0' && m_pos + 1 < m_s.size() && (m_s[m_pos + 1] == 'x' || m_s[m_pos + 1] == 'X')) { m_pos += 2; parseHex(); return; }
         if (std::isdigit(static_cast<unsigned char>(c))) {
             int64_t v = 0;
             while (m_pos < m_s.size() && std::isdigit(static_cast<unsigned char>(m_s[m_pos]))) v = v * 10 + (m_s[m_pos++] - '0');
-            return v;
+            emit(Code::Const, 0, v);
+            return;
         }
         if (std::isalpha(static_cast<unsigned char>(c)) || c == '_' || c == '.') {
             std::string name;
@@ -184,20 +187,106 @@ private:
                 name += m_s[m_pos++];
             std::string lower = name;
             for (char& ch : lower) ch = char(std::tolower(static_cast<unsigned char>(ch)));
-            int64_t v = 0;
-            if (m_ctx.lookup && (m_ctx.lookup(lower, &v) || (lower != name && m_ctx.lookup(name, &v)))) return v;
-            fail("unknown name '" + name + "'");
-            return 0;
+            const int64_t index = addString(name);
+            addString(lower);
+            emit(Code::Name, 0, index);
+            return;
         }
         fail(std::string("unexpected '") + c + "'");
-        return 0;
     }
 };
 
-} // namespace
+CompiledExpression CompiledExpression::compile(const std::string& text) { return ExpressionCompiler(text).compile(); }
+
+ExpressionResult CompiledExpression::run(const ExpressionContext& ctx) const {
+    ExpressionResult r;
+    std::vector<int64_t> stack;
+    stack.reserve(8);
+    auto pop = [&stack] {
+        const int64_t v = stack.back();
+        stack.pop_back();
+        return v;
+    };
+    for (const Op& op : m_ops) {
+        switch (op.code) {
+            case Code::Const:
+                stack.push_back(op.value);
+                break;
+            case Code::Name: {
+                const std::string& name = m_strings[size_t(op.value)];
+                const std::string& lower = m_strings[size_t(op.value) + 1];
+                int64_t v = 0;
+                if (!ctx.lookup || !(ctx.lookup(lower, &v) || (lower != name && ctx.lookup(name, &v)))) {
+                    r.error = "unknown name '" + name + "'";
+                    return r;
+                }
+                stack.push_back(v);
+                break;
+            }
+            case Code::Mem: {
+                const uint16_t a = uint16_t(pop());
+                if (!ctx.readByte) {
+                    r.error = "memory not available";
+                    return r;
+                }
+                const bool word = op.sub == 'w', me1 = op.sub == '#';
+                uint8_t b0 = 0, b1 = 0;
+                if (!ctx.readByte(a, me1, &b0) || (word && !ctx.readByte(uint16_t(a + 1), me1, &b1))) {
+                    r.error = "memory at " + std::to_string(a) + " is not readable";
+                    return r;
+                }
+                stack.push_back(!word ? b0 : ctx.bigEndian ? (int64_t(b0) << 8) | b1 : (int64_t(b1) << 8) | b0);
+                break;
+            }
+            case Code::Unary: {
+                const int64_t v = pop();
+                stack.push_back(op.sub == '!' ? (v ? 0 : 1) : op.sub == '~' ? ~v : -v);
+                break;
+            }
+            case Code::Binary: {
+                const int64_t b = pop(), a = pop();
+                int64_t v = 0;
+                switch (op.sub) {
+                    case 'O': v = (a || b) ? 1 : 0; break;
+                    case 'A': v = (a && b) ? 1 : 0; break;
+                    case '|': v = a | b; break;
+                    case '^': v = a ^ b; break;
+                    case '&': v = a & b; break;
+                    case 'E': v = a == b ? 1 : 0; break;
+                    case 'N': v = a != b ? 1 : 0; break;
+                    case 'l': v = a <= b ? 1 : 0; break;
+                    case 'g': v = a >= b ? 1 : 0; break;
+                    case '<': v = a < b ? 1 : 0; break;
+                    case '>': v = a > b ? 1 : 0; break;
+                    case 'L': v = int64_t(uint64_t(a) << (b & 63)); break;
+                    case 'R': v = a >> (b & 63); break;
+                    case '+': v = a + b; break;
+                    case '-': v = a - b; break;
+                    case '*': v = a * b; break;
+                    case '/':
+                    case '%':
+                        if (b == 0) {
+                            r.error = "division by zero";
+                            return r;
+                        }
+                        v = op.sub == '/' ? a / b : a % b;
+                        break;
+                }
+                stack.push_back(v);
+                break;
+            }
+            case Code::Fail:
+                r.error = m_strings[size_t(op.value)];
+                return r;
+        }
+    }
+    r.ok = true;
+    r.value = stack.empty() ? 0 : stack.back();
+    return r;
+}
 
 ExpressionResult evaluate(const std::string& text, const ExpressionContext& ctx) {
-    return Parser(text, ctx).run();
+    return CompiledExpression::compile(text).run(ctx);
 }
 
 } // namespace debug

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -23,6 +24,36 @@ struct BreakpointSpec {
     std::string condition;     ///< expression; empty = always
     std::string hitCondition;  ///< "5", "== 5", ">= 5", "% 3"; empty = always
     std::string logMessage;    ///< non-empty: a logpoint (never stops); {expr} is interpolated
+};
+
+/// A parsed hit condition: "5" / "== 5", ">= 5", "% 3", ... An unreadable
+/// one is `valid == false` and always met, so it doesn't hide the
+/// breakpoint.
+struct HitCondition {
+    enum Op : uint8_t { Always, Eq, Ne, Ge, Le, Gt, Lt, Mod };
+    Op op = Always;
+    long long n = 0;
+    bool valid = true;
+
+    static HitCondition parse(const std::string& text);
+    /// `hits` counts this hit.
+    bool met(int hits) const;
+};
+
+/// A log message split once into text and compiled {expr} parts.
+class LogTemplate {
+public:
+    static LogTemplate parse(const std::string& message);
+    /// Unevaluable parts become "{error}".
+    std::string render(const ExpressionContext& ctx) const;
+
+private:
+    struct Part {
+        std::string text;             ///< literal text, or the expression's source
+        bool expression = false;
+        CompiledExpression compiled;
+    };
+    std::vector<Part> m_parts;
 };
 
 /// What the client gets back for each breakpoint it set.
@@ -91,12 +122,24 @@ public:
     HitDecision onWatch(int thread, const WatchHit& hit, DebugTarget& target, const SymbolLookup& symbols);
 
 private:
+    /// A spec's condition, hit condition and log message, parsed once when
+    /// the breakpoint is set; shared by every address it arms.
+    struct Compiled {
+        bool hasCondition = false;
+        CompiledExpression condition;
+        HitCondition hit;
+        bool hasLog = false;
+        LogTemplate log;
+    };
+    static std::shared_ptr<const Compiled> compile(const BreakpointSpec& spec);
+
     struct Armed : BreakpointSpec {
         int id = 0;
         int thread = 1;
         uint16_t addr = 0;
         BankKey key;
         int hits = 0;
+        std::shared_ptr<const Compiled> compiled;
     };
     struct Source {
         std::string file;
@@ -110,13 +153,14 @@ private:
     struct Data : DataBreakpointSpec {
         int id = 0;
         int hits = 0;
+        std::shared_ptr<const Compiled> compiled;
     };
 
     std::vector<BreakpointStatus> resolveSource(Source& s, const SourceMap& map);
     std::vector<BreakpointStatus> resolveFunctions(const SourceMap& map, int thread);
     void forgetStatus(int id);
-    void passes(const BreakpointSpec& spec, int& hits, int thread, DebugTarget& target, const SymbolLookup& symbols,
-                HitDecision* decision, int id);
+    void passes(const BreakpointSpec& spec, const Compiled& compiled, int& hits, int thread, DebugTarget& target,
+                const SymbolLookup& symbols, HitDecision* decision, int id);
 
     std::vector<Source> m_sources;
     std::vector<Armed> m_sourceArmed;       // from m_sources
