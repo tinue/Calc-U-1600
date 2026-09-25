@@ -153,6 +153,45 @@ VS Code ──DAP/TCP 127.0.0.1:port──► Qt6/app/debug/DapServer (QTcpServe
 
 ---
 
+## Toolchain
+Settled before implementation. Both assemblers and the parsers come from here. The listing parsers support exactly these tools and nothing else.
+
+| CPU | Assembler | Listing parsers | Disassembler (debug API) |
+|---|---|---|---|
+| Z80 (SC7852) | **zasm** (primary), sdasz80 | `ZasmListing`, `SdasListing` | own `Z80Disassembler` |
+| LH5801 / LH5803 | **sdaslh5801** | `SdasListing` | own `LH5801Disassembler` |
+
+**Assemblers**
+- **zasm**: a local checkout of `github.com/Megatokio/zasm`, run as `~/Development/sharp/zasm/zasm`. It's maintained (4.5.0), and the PC-1600 rom-dumper already uses it (`zasm -uwy src.asm src.lst src.bin`). The listing shows the object code next to the source, and the `-y` symbol table gives each label's `file:line`. That anchors include files for `ZasmListing`.
+- **sdasz80 / sdaslh5801**: a local checkout of `github.com/pchambre/sdcc-pc1500`, run from `~/Development/sharp/sdcc-pc1500/sdcc/bin/`. Both CPUs share one `.lst`/`.rst`/`.sym` format and therefore one parser. `sdld` writes the relocated `.rst`. Use the checkout's own `sdasz80`, not Homebrew's, so both CPUs build with the same SDAS version. The build recipe (`sdas -plosgff` → `sdld` → `makebin -p`) is the one in `examples/memtest.asm`.
+- **Not supported:**
+  - tasm is retired.
+  - lhasm (lhTools) has its own dialect and listing format.
+  - z80asm (Bas Wijnen's 1.8 from 2007) is used by no source here.
+  
+  Each one would need its own parser and gain nothing.
+
+**Disassemblers: our own, not an external tool.**
+- The debug API needs structured decodes: the length, the flow kind and the target (for step over/out), plus symbol names.
+- It decodes through side-effect-free peeks in the *currently mapped* bank.
+- It must resync backwards for a `disassemble` request with a negative offset.
+- A file-to-file CLI such as z80dasm or lhunasm can do none of this, and both are GPL, so they can't be linked in.
+- The opcode tables come from the Zilog Z80 manual and the Sharp LH5801 TRM (see the source rule above).
+- z80dasm remains an optional offline tool for static listings of whole ROM banks. It isn't a build or test dependency.
+
+**Tool locations:** nothing is hardcoded in the repo. Tasks and launch configurations get the paths from two variables, with the checkouts above as defaults:
+- `CALCU_ZASM`: the zasm binary.
+- `CALCU_SDCC_BIN`: the sdcc-pc1500 `bin` directory.
+
+**Editor integration**
+- **VS Code:** ship `tasks.json` snippets with the extension (`vscode/calcu1600-debug/`). There is one build task per assembler, each with a problem matcher taken from real output:
+  - **sdas:** a single-line matcher for `file.asm:LINE: Error: <x> message`.
+  - **zasm:** a multi-line matcher. Errors come out as `LINE: <source>` followed by a caret line, `   ^ message`, and they don't name the file. The matcher takes the file from the task's `${file}`.
+  - A `calcu1600` attach configuration uses the matching task as its `preLaunchTask` and passes the resulting `.lst`/`.rst` (and `.sym`) as `listings`/`symbols`.
+- **CLion** (later): the same commands as External Tools or Shell Script run configurations, used as a "Before launch" step of the attach configuration.
+
+---
+
 ## Phases
 Each phase is committed to `dev-0.6.0` and I continue to the next without stopping.
 1. **Trace-frame instruction bytes and both disassemblers**, with tests: a full opcode-table sweep and known ROM sequences.
