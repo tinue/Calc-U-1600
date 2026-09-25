@@ -243,9 +243,11 @@ void test_source_map() {
     CHECK(map.lookup(1, 0x40CC, match, &loc, peek));             // other lines still match
     CHECK(map.verify(id, match, peek) == 1 && map.binding(id)->stale);
     CHECK(!map.lookup(1, 0x40CC, match, &loc));
+    CHECK(!map.symbolValue("ERR_FLAG", &v));                     // a stale listing's symbols don't count
     CHECK(map.addressesFor(asmFile, 89, &resolved).empty());
     mem[0x40CE] = 0xAE;
     CHECK(map.verify(id, match, peek) == 0);
+    CHECK(map.symbolValue("ERR_FLAG", &v) && v == 0x40C7);
 
     // A static listing with a PV qualifier, underneath the loaded one.
     const int rom = map.addStatic(1, memtest, {-1, -1, -1, 1}, "rom-at-pv1");
@@ -268,6 +270,34 @@ void test_source_map() {
     CHECK(loads.bindings().size() == 2);
 }
 
+void test_symbols_per_binding() {
+    // Symbols carry the thread and bank key of the binding that defines
+    // them; a stale binding's symbols don't count.
+    auto reader = [](const std::string& path, std::vector<std::string>* lines) {
+        if (path.find("lh.sym") != std::string::npos) *lines = {".SYMBOLS:", "C003 LOOP", "C010 ONLY_LH"};
+        else if (path.find("z.sym") != std::string::npos) *lines = {".SYMBOLS:", "0100 LOOP"};
+        else return false;
+        return true;
+    };
+    debug::Listing lh, z;
+    std::vector<std::string> warnings;
+    CHECK(debug::loadListingWithSymbols({}, {}, {"/x/lh.sym"}, &lh, &warnings, reader) && warnings.empty());
+    CHECK(debug::loadListingWithSymbols({}, {}, {"/x/z.sym", "/x/missing.sym"}, &z, &warnings, reader));
+    CHECK(warnings.size() == 1 && lh.symbols.size() == 2 && z.symbols.size() == 1);
+    debug::Listing none;
+    CHECK(!debug::loadListingWithSymbols({}, {}, {"/x/missing.sym"}, &none, &warnings, reader));
+
+    debug::SourceMap map;
+    map.addStatic(2, lh, {-1, -1, -1, 1}, "lh.sym");
+    const int zid = map.addLoaded(1, z, {}, 0x0100, 0x01FF, "z.sym");
+    debug::SourceMap::SymbolInfo info;
+    CHECK(map.findSymbol("LOOP", &info) && info.thread == 1 && info.value == 0x0100 && info.binding == zid); // loaded first
+    CHECK(map.findSymbol("ONLY_LH", &info) && info.thread == 2 && info.value == 0xC010 && info.key.pv == 1);
+    // A symbols-only binding has no lines, so it is never stale.
+    CHECK(map.verify(zid, {}, [](int, uint16_t, uint8_t*) { return false; }) == 0 && !map.binding(zid)->stale);
+    CHECK(!map.findSymbol("NOPE", &info));
+}
+
 } // namespace
 
 int run_listing_tests() {
@@ -279,6 +309,7 @@ int run_listing_tests() {
     test_symbols_file();
     test_include_target();
     test_source_map();
+    test_symbols_per_binding();
     std::printf("listing tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

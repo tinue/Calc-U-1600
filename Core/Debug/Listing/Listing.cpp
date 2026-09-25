@@ -207,4 +207,32 @@ bool loadSymbolFile(const std::string& path, Listing* out, std::string* error, S
     return true;
 }
 
+bool loadListingWithSymbols(const std::string& listingPath, const std::string& source,
+                            const std::vector<std::string>& symbolFiles, Listing* out,
+                            std::vector<std::string>* warnings, SourceReader reader) {
+    std::string err;
+    *out = Listing();
+    bool loaded = false;
+    if (!listingPath.empty()) {
+        if (!loadListing(listingPath, out, &err, source, reader)) {
+            warnings->push_back("listing not loaded: " + err);
+            return false;
+        }
+        for (const std::string& w : out->warnings) warnings->push_back(listingPath + ": " + w);
+        loaded = true;
+    } else {
+        out->format = "symbols";
+    }
+    for (const std::string& path : symbolFiles) {
+        Listing symbols;
+        if (loadSymbolFile(path, &symbols, &err, reader)) {
+            out->symbols.insert(symbols.symbols.begin(), symbols.symbols.end());
+            loaded = true;
+        } else {
+            warnings->push_back(err);
+        }
+    }
+    return loaded;
+}
+
 } // namespace debug

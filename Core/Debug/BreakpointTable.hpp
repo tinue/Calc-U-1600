@@ -98,10 +98,9 @@ public:
                                             const SourceMap& map);
     std::vector<BreakpointStatus> setInstructions(const std::vector<InstructionRequest>& requests);
     /// Function breakpoints resolve their name through the source map's
-    /// symbols; each is armed on `thread` (the CPU its listing belongs to
-    /// isn't known for a plain symbol, so the caller picks).
-    std::vector<BreakpointStatus> setFunctions(const std::vector<FunctionRequest>& requests, const SourceMap& map,
-                                               int thread);
+    /// symbols; each is armed on the CPU of the binding that defines it,
+    /// with that binding's bank qualifier.
+    std::vector<BreakpointStatus> setFunctions(const std::vector<FunctionRequest>& requests, const SourceMap& map);
     std::vector<BreakpointStatus> setData(const std::vector<DataBreakpointSpec>& requests);
     void clear();
     /// A one-shot stop at `addr` (Build & Load's stopOnEntry): it stops
@@ -111,7 +110,7 @@ public:
     /// Re-resolves source and function breakpoints after the source map
     /// changed (a new load, a stale listing). Returns the ones whose status
     /// changed, for "breakpoint changed" events.
-    std::vector<BreakpointStatus> reresolve(const SourceMap& map, int functionThread);
+    std::vector<BreakpointStatus> reresolve(const SourceMap& map);
 
     /// Arms the PC breakpoints and memory watches on the target.
     void apply(DebugTarget& target) const;
@@ -157,7 +156,7 @@ private:
     };
 
     std::vector<BreakpointStatus> resolveSource(Source& s, const SourceMap& map);
-    std::vector<BreakpointStatus> resolveFunctions(const SourceMap& map, int thread);
+    std::vector<BreakpointStatus> resolveFunctions(const SourceMap& map);
     void forgetStatus(int id);
     void passes(const BreakpointSpec& spec, const Compiled& compiled, int& hits, int thread, DebugTarget& target,
                 const SymbolLookup& symbols, HitDecision* decision, int id);

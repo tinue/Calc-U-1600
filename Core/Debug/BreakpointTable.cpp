@@ -199,20 +199,23 @@ std::vector<BreakpointStatus> BreakpointTable::setInstructions(const std::vector
     return out;
 }
 
-std::vector<BreakpointStatus> BreakpointTable::resolveFunctions(const SourceMap& map, int thread) {
+std::vector<BreakpointStatus> BreakpointTable::resolveFunctions(const SourceMap& map) {
     m_functionArmed.clear();
     std::vector<BreakpointStatus> out;
     for (const Function& f : m_functions) {
-        uint16_t addr = 0;
-        if (map.symbolValue(f.request.name, &addr)) {
+        SourceMap::SymbolInfo sym;
+        if (map.findSymbol(f.request.name, &sym)) {
             Armed a;
             static_cast<BreakpointSpec&>(a) = f.request;
             a.compiled = compile(f.request);
             a.id = f.id;
-            a.thread = thread;
-            a.addr = addr;
+            a.thread = sym.thread;
+            a.addr = sym.value;
+            a.key = sym.key;
             m_functionArmed.push_back(a);
-            out.push_back(verifiedStatus(f.id, thread, addr));
+            BreakpointStatus st = verifiedStatus(f.id, sym.thread, sym.value);
+            if (sym.key.any()) st.message = "Only while " + sym.key.describe();
+            out.push_back(st);
         } else {
             BreakpointStatus st;
             st.id = f.id;
@@ -224,11 +227,11 @@ std::vector<BreakpointStatus> BreakpointTable::resolveFunctions(const SourceMap&
 }
 
 std::vector<BreakpointStatus> BreakpointTable::setFunctions(const std::vector<FunctionRequest>& requests,
-                                                            const SourceMap& map, int thread) {
+                                                            const SourceMap& map) {
     for (const Function& f : m_functions) forgetStatus(f.id);
     m_functions.clear();
     for (const FunctionRequest& r : requests) m_functions.push_back({r, m_nextId++});
-    std::vector<BreakpointStatus> out = resolveFunctions(map, thread);
+    std::vector<BreakpointStatus> out = resolveFunctions(map);
     m_lastStatus.insert(m_lastStatus.end(), out.begin(), out.end());
     return out;
 }
@@ -270,13 +273,13 @@ void BreakpointTable::clear() {
     m_lastStatus.clear();
 }
 
-std::vector<BreakpointStatus> BreakpointTable::reresolve(const SourceMap& map, int functionThread) {
+std::vector<BreakpointStatus> BreakpointTable::reresolve(const SourceMap& map) {
     std::vector<BreakpointStatus> now;
     for (Source& s : m_sources) {
         std::vector<BreakpointStatus> r = resolveSource(s, map);
         now.insert(now.end(), r.begin(), r.end());
     }
-    std::vector<BreakpointStatus> f = resolveFunctions(map, functionThread);
+    std::vector<BreakpointStatus> f = resolveFunctions(map);
     now.insert(now.end(), f.begin(), f.end());
     std::vector<BreakpointStatus> changed;
     for (const BreakpointStatus& st : now) {

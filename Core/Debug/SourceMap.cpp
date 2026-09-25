@@ -140,13 +140,21 @@ bool SourceMap::knowsFile(const std::string& file) const {
     });
 }
 
-bool SourceMap::symbolValue(const std::string& name, uint16_t* value) const {
+bool SourceMap::findSymbol(const std::string& name, SymbolInfo* info) const {
     return firstOf([&](const Binding& b) {
+        if (b.stale) return false;
         auto it = b.listing.symbols.find(name);
         if (it == b.listing.symbols.end()) return false;
-        *value = it->second;
+        *info = {it->second, b.thread, b.key, b.id};
         return true;
     });
+}
+
+bool SourceMap::symbolValue(const std::string& name, uint16_t* value) const {
+    SymbolInfo info;
+    if (!findSymbol(name, &info)) return false;
+    *value = info.value;
+    return true;
 }
 
 std::string SourceMap::symbolAt(int thread, uint16_t addr) const {

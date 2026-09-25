@@ -286,28 +286,22 @@ bool DapSession::prepare(const QJsonObject& args, QString* error) {
     // 3. Static listings and symbols (ROM listings and the like).
     debug::SourceMap& map = m_controller->sourceMap();
     map.clear();
-    for (const QJsonValue& v : args.value(QStringLiteral("listings")).toArray()) {
+    // Each entry of `listings` and `symbols` is a path, or an object with
+    // `path` and optionally `cpu` and bank qualifiers.
+    const auto bindStatic = [this, &map](const QJsonValue& v, bool isListing) {
         const QJsonObject o = v.isString() ? QJsonObject{{QStringLiteral("path"), v.toString()}} : v.toObject();
-        debug::Listing listing;
-        std::string err;
         const std::string path = o.value(QStringLiteral("path")).toString().toStdString();
-        if (!debug::loadListing(path, &listing, &err, o.value(QStringLiteral("source")).toString().toStdString())) {
-            output(QStringLiteral("Listing not loaded: %1").arg(QString::fromStdString(err)), QStringLiteral("important"));
-            continue;
-        }
-        for (const std::string& w : listing.warnings) output(QString::fromStdString(path + ": " + w));
-        map.addStatic(threadForCpu(o.value(QStringLiteral("cpu")).toString()), std::move(listing), bankKeyOf(o), path);
-    }
-    for (const QJsonValue& v : args.value(QStringLiteral("symbols")).toArray()) {
-        debug::Listing symbols;
-        std::string err;
-        const std::string path = v.toString().toStdString();
-        if (!debug::loadSymbolFile(path, &symbols, &err)) {
-            output(QStringLiteral("Symbols not loaded: %1").arg(QString::fromStdString(err)), QStringLiteral("important"));
-            continue;
-        }
-        map.addStatic(1, std::move(symbols), {}, path);
-    }
+        debug::Listing listing;
+        std::vector<std::string> warnings;
+        const bool ok = isListing ? debug::loadListingWithSymbols(path, o.value(QStringLiteral("source")).toString().toStdString(),
+                                                                  {}, &listing, &warnings)
+                                  : debug::loadListingWithSymbols({}, {}, {path}, &listing, &warnings);
+        for (const std::string& w : warnings)
+            output(QString::fromStdString(w), ok ? QStringLiteral("console") : QStringLiteral("important"));
+        if (ok) map.addStatic(threadForCpu(o.value(QStringLiteral("cpu")).toString()), std::move(listing), bankKeyOf(o), path);
+    };
+    for (const QJsonValue& v : args.value(QStringLiteral("listings")).toArray()) bindStatic(v, true);
+    for (const QJsonValue& v : args.value(QStringLiteral("symbols")).toArray()) bindStatic(v, false);
     sendBreakpointChanges(m_controller->rebindListings());
     for (const auto& b : map.bindings())
         if (b.stale)
@@ -678,7 +672,7 @@ void DapSession::setFunctionBreakpoints(const QJsonObject& args, QJsonObject* bo
         readSpec(o, &r);
         requests.push_back(r);
     }
-    const auto statuses = m_controller->breakpoints().setFunctions(requests, m_controller->sourceMap(), 1);
+    const auto statuses = m_controller->breakpoints().setFunctions(requests, m_controller->sourceMap());
     m_controller->breakpoints().apply(*m_controller->target());
     QJsonArray list;
     for (const auto& st : statuses) list.append(statusObject(st));

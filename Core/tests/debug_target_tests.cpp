@@ -657,6 +657,35 @@ void test_hit_conditions_and_log_templates_match_legacy() {
     CHECK(mismatches == 0);
 }
 
+void test_function_breakpoint_on_lh5803_symbol() {
+    // A function breakpoint arms on the CPU whose binding defines the
+    // symbol: here the LH5803 (thread 2).
+    PC1600Machine m;
+    std::vector<uint8_t> lower(PC1600Memory::kBankSize, 0x00), upper(PC1600Memory::kBankSize, 0x00);
+    lower[0] = 0xD3; lower[1] = 0x38; lower[2] = 0x76; // out (38h),a ; halt
+    CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+    std::vector<uint8_t> rom(16384, 0x00);
+    const uint8_t code[] = {0xAE, 0x10, 0x00, 0x38, 0x9E, 0x06}; // sta (0x1000) ; nop ; bch C000
+    for (size_t i = 0; i < sizeof code; i++) rom[i] = code[i];
+    rom[16384 - 2] = 0xC0; rom[16384 - 1] = 0x00;
+    CHECK(m.loadLH5803Rom(rom.data(), rom.size()));
+    m.reset();
+
+    debug::PC1600DebugTarget target(m);
+    debug::SourceMap map;
+    debug::Listing symbols;
+    symbols.symbols["LOOP"] = 0xC003;
+    map.addStatic(debug::PC1600DebugTarget::kLh5803, symbols, {}, "lh.sym");
+    debug::BreakpointTable table;
+    debug::BreakpointTable::FunctionRequest r;
+    r.name = "LOOP";
+    const auto statuses = table.setFunctions({r}, map);
+    CHECK(statuses.size() == 1 && statuses[0].verified && statuses[0].thread == 2 && statuses[0].addr == 0xC003);
+    table.apply(target);
+    const debug::Stop s = debugtest::runFrom(target, 100000);
+    CHECK(s.kind == debug::Stop::Breakpoint && s.thread == 2 && target.pc(2) == 0xC003);
+}
+
 } // namespace
 
 int run_debug_target_tests() {
@@ -678,6 +707,7 @@ int run_debug_target_tests() {
     test_watch_set();
     test_compiled_expressions_match_legacy();
     test_hit_conditions_and_log_templates_match_legacy();
+    test_function_breakpoint_on_lh5803_symbol();
     std::printf("debug target tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

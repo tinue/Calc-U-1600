@@ -48,6 +48,7 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
 
 **Breakpoints.**
 - **Source, function and instruction breakpoints** accept a condition such as `a == 0x10 && [0x7A00] != 0`, a hit condition (`5`, `>= 5`, `% 3`) and a log message (`x={x}`).
+- **Function breakpoints** name a symbol. They stop on the CPU whose listing or symbol table defines it, and only while that listing's bank qualifier holds. A program's `symbols` load with the program even without a `listing`.
 - **Data breakpoints** watch memory reads and/or writes. Opcode and operand fetches never trigger them. The machine stops right after the instruction that made the access. Registers can't be watched; use a conditional breakpoint instead.
 - **Expressions** (conditions, the watch window, hovers, the debug console, register edits) accept:
   - registers and flags (`cf`, `zf` …) and symbols from the listings
@@ -105,7 +106,7 @@ The attach settings:
 | `stopOnEntry` | stop right after attaching; after a reset, that is before the first instruction |
 | `program` | Build & Load: `bin`, `listing`, `source`, `symbols`, `cpu` (`lh5801` / `z80` / `lh5803`), `address`, `slot` (`S0`–`S2`), `entry`, `after` (`none` / `call` / `stopOnEntry`), `cleanStart` (default `true`), and the bank qualifiers below |
 | `listings` | static listings, e.g. of ROM code: `{path, source, cpu, bank, me, pu, pv}` |
-| `symbols` | `.SYMBOLS:` tables |
+| `symbols` | `.SYMBOLS:` tables: a path (main CPU), or `{path, cpu, bank, me, pu, pv}` like `listings` |
 | `buildTask` | the task Build & Load runs |
 
 **ROM research.** Attach with `"reset": "reset", "stopOnEntry": true` to stop on the first instruction after reset:

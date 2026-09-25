@@ -162,7 +162,7 @@ void DebugController::runSlice(std::uint64_t cycles) {
 std::vector<debug::BreakpointStatus> DebugController::rebindListings() {
     if (!m_run) return {};
     for (const auto& b : m_map.bindings()) m_map.verify(b.id, m_run->bankMatch(), m_run->codePeek());
-    auto changed = m_breakpoints.reresolve(m_map, 1);
+    auto changed = m_breakpoints.reresolve(m_map);
     if (m_target) m_breakpoints.apply(*m_target);
     return changed;
 }

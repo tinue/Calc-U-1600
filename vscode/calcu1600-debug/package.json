@@ -93,7 +93,18 @@
                   }
                 }
               },
-              "symbols": { "type": "array", "items": { "type": "string" }, "description": ".SYMBOLS: tables" },
+              "symbols": {
+                "type": "array",
+                "description": ".SYMBOLS: tables: a path (main CPU), or an object with the CPU and bank qualifiers.",
+                "items": {
+                  "type": ["string", "object"],
+                  "properties": {
+                    "path": { "type": "string" },
+                    "cpu": { "enum": ["lh5801", "z80", "lh5803"] },
+                    "bank": { "type": "number" }, "me": { "type": "number" }, "pu": { "type": "number" }, "pv": { "type": "number" }
+                  }
+                }
+              },
               "buildTask": { "type": "string", "description": "The task 'Build & Load' runs before reloading the program." }
             }
           }

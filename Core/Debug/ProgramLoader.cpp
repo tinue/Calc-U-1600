@@ -98,26 +98,17 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
         r.callCommand = machinecode::advice(kind, slot, pc1600 ? z80Addr : addr, len, r.entry, ramStart, ramEnd, areas).callCommand;
     }
 
-    if (!req.listing.empty()) {
-        Listing listing;
-        if (!loadListing(req.listing, &listing, &err, req.source)) {
-            r.warnings.push_back("listing not loaded: " + err);
-        } else {
-            for (const std::string& w : listing.warnings) r.warnings.push_back(req.listing + ": " + w);
-            for (const std::string& path : req.symbols) {
-                Listing symbols;
-                if (loadSymbolFile(path, &symbols, &err))
-                    listing.symbols.insert(symbols.symbols.begin(), symbols.symbols.end());
-                else
-                    r.warnings.push_back(err);
-            }
-            r.binding = map.addLoaded(req.thread, std::move(listing), req.key, r.lo, r.hi, req.listing);
-            const int bad = map.verify(
-                r.binding, [&target](int t, const BankKey& k, uint16_t a) { return target.bankMatches(t, k, a); },
-                [&target](int t, uint16_t a, uint8_t* v) { return target.peek(t, kSpaceMain, a, v); });
-            if (bad > 0)
-                r.warnings.push_back(std::to_string(bad) + " listing lines don't match the loaded bytes -- is the listing from this build?");
-        }
+    // The listing and symbols bind to the loaded range; symbols alone too.
+    Listing listing;
+    if ((!req.listing.empty() || !req.symbols.empty()) &&
+        loadListingWithSymbols(req.listing, req.source, req.symbols, &listing, &r.warnings)) {
+        const std::string& name = req.listing.empty() ? req.symbols.front() : req.listing;
+        r.binding = map.addLoaded(req.thread, std::move(listing), req.key, r.lo, r.hi, name);
+        const int bad = map.verify(
+            r.binding, [&target](int t, const BankKey& k, uint16_t a) { return target.bankMatches(t, k, a); },
+            [&target](int t, uint16_t a, uint8_t* v) { return target.peek(t, kSpaceMain, a, v); });
+        if (bad > 0)
+            r.warnings.push_back(std::to_string(bad) + " listing lines don't match the loaded bytes -- is the listing from this build?");
     }
     r.ok = true;
     return r;

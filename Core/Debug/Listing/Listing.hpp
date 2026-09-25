@@ -66,6 +66,14 @@ bool loadListing(const std::string& path, Listing* out, std::string* error,
 /// A `.SYMBOLS:` table (lines of `HHHH name`) -- symbols only, no lines.
 bool loadSymbolFile(const std::string& path, Listing* out, std::string* error, SourceReader reader = diskReader());
 
+/// A listing (`listingPath` may be empty: symbols only) with the symbols
+/// of `symbolFiles` merged in. Problems go to `warnings`, each naming its
+/// file. False if nothing could be loaded (the listing, or with no listing
+/// every symbol file, failed).
+bool loadListingWithSymbols(const std::string& listingPath, const std::string& source,
+                            const std::vector<std::string>& symbolFiles, Listing* out,
+                            std::vector<std::string>* warnings, SourceReader reader = diskReader());
+
 // Format parsers (listingFormats() entries), exposed for tests.
 bool detectSdas(const std::vector<std::string>& text);
 bool parseSdas(const ListingInput& in, Listing* out, std::string* error);

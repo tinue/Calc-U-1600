@@ -92,7 +92,16 @@ public:
     /// Whether any live binding has code from `file`.
     bool knowsFile(const std::string& file) const;
 
-    /// A symbol's value: loaded bindings newest first, then static ones.
+    /// A symbol and the binding that defines it: loaded bindings newest
+    /// first, then static ones; stale bindings don't count.
+    struct SymbolInfo {
+        uint16_t value = 0;
+        int thread = 1;
+        BankKey key;
+        int binding = 0;
+    };
+    bool findSymbol(const std::string& name, SymbolInfo* info) const;
+    /// findSymbol()'s value.
     bool symbolValue(const std::string& name, uint16_t* value) const;
     /// A label whose value is exactly `addr` in a binding of `thread`, or "".
     std::string symbolAt(int thread, uint16_t addr) const;
