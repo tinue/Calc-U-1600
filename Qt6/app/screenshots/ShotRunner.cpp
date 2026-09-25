@@ -3,6 +3,7 @@
 #include "MacShotSupport.h"
 
 #include "../FaceplateWidget.hpp"
+#include "../EmulationPacer.hpp"
 #include "../MainWindow.hpp"
 #include "../MachineController.hpp"
 #include "../PlotterPaperWidget.hpp"
@@ -106,7 +107,7 @@ void ShotRunner::start() {
         QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
 #endif
 
-    m_window->setEmulationFrozen(true);
+    m_window->pacer()->setFrozen(true);
     // A fixed spot on the primary screen, so `method: system` regions and
     // popup placement are the same every run -- right under the menu bar,
     // so a menu-bar shot has no strip of desktop between the two.
@@ -216,7 +217,7 @@ bool ShotRunner::menuScriptError(QString* error) {
 
 void ShotRunner::releaseKey() {
     m_window->faceplate()->releasePressedKey();
-    m_window->runEmulation(kKeyReactSeconds);
+    m_window->pacer()->runFor(kKeyReactSeconds);
 }
 
 bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void()>* deferred, QString* error) {
@@ -241,7 +242,7 @@ bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void(
             *error = QStringLiteral("this model has no key named '%1'").arg(step.text);
             return false;
         }
-        m_window->runEmulation(kKeyHoldSeconds);
+        m_window->pacer()->runFor(kKeyHoldSeconds);
         if (step.kind == K::Key) releaseKey();
         return true;
     case K::ReleaseKeys:
@@ -250,16 +251,16 @@ bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void(
     case K::Type:
         // Paste Text types one line and never presses ENTER -- tap it here.
         m_window->controller()->pasteText(step.text.toStdString());
-        if (!m_window->runUntilPasteDone(kTypeCapSeconds)) {
+        if (!m_window->pacer()->runUntilPasteDone(kTypeCapSeconds)) {
             *error = QStringLiteral("'type' still typing after %1 s").arg(kTypeCapSeconds);
             return false;
         }
         faceplate->pressKeyByName(QStringLiteral("enter"));
-        m_window->runEmulation(kKeyHoldSeconds);
+        m_window->pacer()->runFor(kKeyHoldSeconds);
         releaseKey();
         return true;
     case K::Run:
-        m_window->runEmulation(step.number);
+        m_window->pacer()->runFor(step.number);
         return true;
     case K::Settle:
         *delayMs = static_cast<int>(step.number);
@@ -532,32 +533,41 @@ bool ShotRunner::capture(const ShotCaptureSpec& spec, QString* error) {
                 .arg(wanted.width())
                 .arg(wanted.height()));
 
+    using Target = ShotCaptureSpec::Target;
     QWidget* target = nullptr;
-    if (spec.target == QLatin1String("window") || spec.target == QLatin1String("screen-region")) {
-        target = m_window;
-    } else if (spec.target == QLatin1String("dialog")) {
-        target = topmostDialog();
-        if (!target) {
-            *error = QStringLiteral("no dialog is open");
-            return false;
+    switch (spec.target) {
+        case Target::Window:
+        case Target::ScreenRegion:
+            target = m_window;
+            break;
+        case Target::Dialog:
+            target = topmostDialog();
+            if (!target) {
+                *error = QStringLiteral("no dialog is open");
+                return false;
+            }
+            break;
+        case Target::LcdImage: {
+            // What Edit > Copy Screen puts on the clipboard: the dot matrix at
+            // its physical size (see MainWindow::copyScreenToClipboard()).
+            const QImage image = MainWindow::toQImage(m_window->controller()->currentScreenImage());
+            if (!ShotCapture::savePng(image, file, error)) return false;
+            break;
         }
-    } else if (spec.target == QLatin1String("lcd-image")) {
-        // What Edit > Copy Screen puts on the clipboard: the dot matrix at
-        // its physical size (see MainWindow::copyScreenToClipboard()).
-        const QImage image = MainWindow::toQImage(m_window->controller()->currentScreenImage());
-        if (!ShotCapture::savePng(image, file, error)) return false;
-    } else if (spec.target == QLatin1String("plot")) {
-        if (!ShotCapture::savePng(m_window->plotterPaper()->renderPaperImage(), file, error)) {
-            if (error->startsWith(QLatin1String("nothing"))) *error = QStringLiteral("the plotter paper is blank");
-            return false;
-        }
-    } else {
-        target = findWidget(spec.target, error);
-        if (!target) return false;
-        if (!target->isVisible()) {
-            *error = QStringLiteral("'%1' is not visible").arg(spec.target);
-            return false;
-        }
+        case Target::Plot:
+            if (!ShotCapture::savePng(m_window->plotterPaper()->renderPaperImage(), file, error)) {
+                if (error->startsWith(QLatin1String("nothing"))) *error = QStringLiteral("the plotter paper is blank");
+                return false;
+            }
+            break;
+        case Target::Widget:
+            target = findWidget(spec.objectName, error);
+            if (!target) return false;
+            if (!target->isVisible()) {
+                *error = QStringLiteral("'%1' is not visible").arg(spec.objectName);
+                return false;
+            }
+            break;
     }
 
     if (target) {
@@ -568,12 +578,12 @@ bool ShotRunner::capture(const ShotCaptureSpec& spec, QString* error) {
         if (spec.method == ShotCaptureSpec::Method::Qt) {
             ok = ShotCapture::savePng(ShotCapture::renderComposite(target, extras, spec.padding, spec.scale), file,
                                       error);
-        } else if (spec.target == QLatin1String("window") || spec.target == QLatin1String("dialog")) {
+        } else if (spec.target == Target::Window || spec.target == Target::Dialog) {
             ok = ShotCapture::systemCaptureWindow(target, file, error);
         } else {
             QRect area;
 #ifdef Q_OS_MACOS
-            if (spec.target == QLatin1String("screen-region")) {
+            if (spec.target == Target::ScreenRegion) {
                 // With a menu-bar menu open: just the open menus, extended
                 // up to the top of the screen so their titles in the menu
                 // bar are in the picture too. Otherwise every window we own.

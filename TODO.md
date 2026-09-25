@@ -273,20 +273,6 @@ for the cleanup commit.
   `std::function<void(bool)>` hook's one subscriber ignores the bool.
   Make `interruptOutput()` a const expression and have `PC1600Memory`
   call `updateIntLine()` after UART access / tick / relink / reset.
-- **Screenshot runner hooks into MainWindow.** `loadPresetForShots`
-  reports success to `runSynchronousLoad` on failure just to dodge its
-  modal warning, and MainWindow grew `runEmulation`/`runUntilPasteDone`/
-  `resetForShots`/`isLoading`/widget accessors. Fix: `runSynchronousLoad`
-  returns ok/error and only interactive callers show the box; move frame
-  pacing (frozen vs 60 Hz, advance N s, refresh) into a small pacer
-  object both `onFrameTick` and `ShotRunner` drive.
-- **`AppPaths::forDisplay()`** rewrites the `--shots` temp dir at each
-  path label (`SettingsDialog` x5, `Ce158PrinterWidget`); a new label
-  that forgets it leaks the temp path into the docs images. Point the
-  default-storage root at the temp dir in `--shots` mode and keep one
-  general `~`-abbreviating `displayPath()`.
-- **`ShotCaptureSpec::target` is a free-form string** compared 7 times in
-  `ShotRunner::capture()`. Parse once into an enum + `objectName`.
 - **Menu re-pick guards.** dff5d13 added "already checked" guards to the
   four `apply*Selection` handlers; connecting the exclusive-group actions
   to `toggled(true)` instead of `triggered` removes all four.

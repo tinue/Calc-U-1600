@@ -2,6 +2,18 @@
 
 ## [0.6.0] - work in progress
 
+### Changed
+
+- **Settings** Folder and serial-port paths show as `~/Calc-U-1600/…`
+  (and `~/…` elsewhere under the home folder), as the User Guide writes
+  them.
+
+### Fixed
+
+- **Presets** On the PC-1500, a `program:` line that replaces a line of
+  the same length (`10 A=1`, then `10 A=2`) is no longer reported as
+  rejected.
+
 ## [0.5.0] - 2026-09-25
 
 ### New

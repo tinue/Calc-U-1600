@@ -48,7 +48,18 @@ bool parseCapture(const YamlNode& node, double defaultScale, ShotCaptureSpec* ou
             if (key == "file") {
                 if (!scalarString(value, &out->file, error)) return false;
             } else if (key == "target") {
-                if (!scalarString(value, &out->target, error)) return false;
+                QString t;
+                if (!scalarString(value, &t, error)) return false;
+                using T = ShotCaptureSpec::Target;
+                if (t == QLatin1String("window")) out->target = T::Window;
+                else if (t == QLatin1String("dialog")) out->target = T::Dialog;
+                else if (t == QLatin1String("plot")) out->target = T::Plot;
+                else if (t == QLatin1String("lcd-image")) out->target = T::LcdImage;
+                else if (t == QLatin1String("screen-region")) out->target = T::ScreenRegion;
+                else {
+                    out->target = T::Widget;
+                    out->objectName = t;
+                }
             } else if (key == "method") {
                 QString m;
                 if (!scalarString(value, &m, error)) return false;
@@ -83,7 +94,7 @@ bool parseCapture(const YamlNode& node, double defaultScale, ShotCaptureSpec* ou
         return false;
     }
     if (out->scale <= 0) out->scale = defaultScale;
-    if (out->target == QLatin1String("screen-region") && out->method != ShotCaptureSpec::Method::System) {
+    if (out->target == ShotCaptureSpec::Target::ScreenRegion && out->method != ShotCaptureSpec::Method::System) {
         *error = lineError(node.line, QStringLiteral("target 'screen-region' needs 'method: system'"));
         return false;
     }

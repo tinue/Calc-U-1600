@@ -18,8 +18,11 @@
 struct ShotCaptureSpec {
     enum class Method { Qt, System };
     Method method = Method::Qt;
-    // window | dialog | plot | lcd-image | screen-region | <objectName>
-    QString target = QStringLiteral("window");
+    // `target:` -- window | dialog | plot | lcd-image | screen-region, or
+    // any other word: the objectName of a widget (Widget).
+    enum class Target { Window, Dialog, Plot, LcdImage, ScreenRegion, Widget };
+    Target target = Target::Window;
+    QString objectName; // Target::Widget only
     QString file;      // relative to the output directory
     int padding = 0;   // logical px of margin around the captured area
     double scale = 0;  // device pixels per logical px; 0 = the scenario's

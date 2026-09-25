@@ -26,6 +26,7 @@ class MemoryModuleManager;
 class FloppyDiskManager;
 class PresetController;
 class AudioOutput;
+class EmulationPacer;
 
 // Top-level window: FaceplateWidget (stretch) over ControlBar (fixed) over
 // the debug row (fixed), all inside a central QWidget (QMainWindow requires
@@ -50,17 +51,11 @@ public:
     ~MainWindow();
 
     // ── Scripted screenshots (screenshots/ShotRunner) ──────────────────
-    // The emulator normally runs off the ~60 Hz frame timer. A shot run
-    // freezes it, so every capture sees exactly the state its steps left
+    // The emulator normally runs off the pacer's ~60 Hz frame timer. A shot
+    // run freezes it, so every capture sees exactly the state its steps left
     // behind (no cursor blink, no clock drift between runs), and advances
-    // it explicitly instead.
-    void setEmulationFrozen(bool frozen);
-    // Runs `seconds` of emulated time in frame-sized slices, then refreshes
-    // every view (LCD, debug log, paper) as a frame tick would.
-    void runEmulation(double seconds);
-    // Runs until a MachineController::pasteText() has been fully typed;
-    // false if it is still typing after `capSeconds` of emulated time.
-    bool runUntilPasteDone(double capSeconds);
+    // it explicitly instead (see EmulationPacer).
+    EmulationPacer* pacer() const { return m_pacer; }
     // Load Preset… without the file dialog, and with a failure reported
     // through `error` instead of a blocking warning box.
     bool loadPresetForShots(const QString& path, QString* error);
@@ -100,15 +95,8 @@ private:
     Ce158PrinterWidget* m_ce158Printer = nullptr; // added to m_debugRowLayout only while a CE-158 is attached
     QWidget* m_debugRow = nullptr;
     QHBoxLayout* m_debugRowLayout = nullptr;
-    QTimer* m_frameTimer = nullptr;
-    bool m_turboActive = false; // press-and-hold on the LCD: run unthrottled
     AudioOutput* m_audio = nullptr;
-    // Real-time pacing for onFrameTick(): each tick runs exactly the
-    // emulated time that has passed on the wall clock since the previous
-    // one (restartPacing() rebases it whenever the frame timer (re)starts).
-    QElapsedTimer m_paceClock;
-    double m_cycleCarry = 0.0;
-    void restartPacing();
+    EmulationPacer* m_pacer = nullptr; // owns the frame timer; calls refreshViewsAfterAdvance()
 
     void buildMenuBar();
 
@@ -190,11 +178,12 @@ private:
 
     // Shared choreography for Load Preset/Load BASIC Program: stops the
     // frame timer and shows a wait cursor around the (synchronous) `loadFn`
-    // call so nothing else drives the machine mid-script, runs `afterLoad`
-    // (if given) before the timer restarts, then reports `loadFn`'s error
-    // via a warning dialog titled `errorTitle` on failure.
-    void runSynchronousLoad(const QString& errorTitle, const std::function<bool(QString*)>& loadFn,
-                             const std::function<void()>& afterLoad = {});
+    // call so nothing else drives the machine mid-script, and runs
+    // `afterLoad` (if given) before the timer restarts. Returns `loadFn`'s
+    // result. On failure its error goes to `error` when the caller passes
+    // one (scripted callers), else into a warning dialog titled `title`.
+    bool runSynchronousLoad(const QString& title, const std::function<bool(QString*)>& loadFn,
+                            const std::function<void()>& afterLoad = {}, QString* error = nullptr);
 
     // File > Load Machine Code…: pick a .bin (Settings' Assembly folder),
     // recognise its header, ask for a start address / PC-1600 slot only when
@@ -227,10 +216,8 @@ private:
     bool m_shiftTapArmed = false;
     QElapsedTimer m_shiftTapClock;
 
-    void onFrameTick();
     // The per-frame view refresh (LCD, debug log, paper, floppy lamp,
-    // persistence) -- shared by onFrameTick() and runEmulation().
+    // persistence) -- run by the pacer after each advance.
     void refreshViewsAfterAdvance();
-    bool m_emulationFrozen = false;
     bool m_loading = false; // see isLoading()
 };

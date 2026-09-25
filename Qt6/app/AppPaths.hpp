@@ -24,23 +24,23 @@ namespace AppPaths {
 // BundledRomCatalog (empty catalogue / resolve failure).
 QString bundledResourcesDir();
 
-// ~/Calc-U-1600 (home dir, non-dotted), created if missing.
+// ~/Calc-U-1600 (home dir, non-dotted) -- or, in a screenshot run, the
+// throwaway folder set by setIsolatedInstanceDir() -- created if missing.
 QString defaultInstanceDir();
 
-// Screenshot runs (`--shots`, main.cpp) point instanceDir() at a throwaway
-// folder, so the user's saved cards/disks stay out of the pictures and
-// untouched. Not a setting: Settings keeps showing the default, see
-// forDisplay().
+// Screenshot runs (`--shots`, main.cpp) make a throwaway folder the
+// default storage root, so the user's saved cards/disks stay out of the
+// pictures and untouched. Not a setting.
 void setIsolatedInstanceDir(const QString& dir);
 
-// `path` as the Settings dialog shows it: inside the isolated folder of a
-// screenshot run, mapped back onto defaultInstanceDir(), so the images show
-// what a fresh install shows. Otherwise unchanged.
-QString forDisplay(const QString& path);
+// `path` the way every label shows one: under defaultInstanceDir() as
+// "~/Calc-U-1600/...", else under the home folder as "~/...", else as is.
+// A screenshot run's throwaway root thus reads like a fresh install's.
+QString displayPath(const QString& path);
 
-// AppSettings::instanceDirOverride() if non-empty, else the isolated
-// folder of a screenshot run if set, else defaultInstanceDir(). The single source of truth every other class
-// calls to find "where battery-card instances live right now".
+// AppSettings::instanceDirOverride() if non-empty, else
+// defaultInstanceDir(). The single source of truth every other class calls
+// to find "where battery-card instances live right now".
 QString instanceDir();
 
 // Strips path separators so a user-typed instance name can't escape the
