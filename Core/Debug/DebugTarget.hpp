@@ -51,6 +51,16 @@ struct HistoryEntry {
     std::vector<Register> registers; ///< after the instruction
 };
 
+/// Bank qualifier of a listing or breakpoint; -1 = don't care. `bank`: the
+/// PC-1600 Z-80's page bank (0-7) at the address (vertical banks are not
+/// modelled). `me`: LH580x ME0/ME1 -- code is always fetched from ME0.
+/// `pu` / `pv`: the LH580x PU/PV flags.
+struct BankKey {
+    int bank = -1, me = -1, pu = -1, pv = -1;
+    bool any() const { return bank >= 0 || me >= 0 || pu >= 0 || pv >= 0; }
+    std::string describe() const; ///< "bank 3", "pv=1", "" when unqualified
+};
+
 /// Why a run or step came back.
 struct Stop {
     enum Kind : uint8_t { None, Breakpoint, Watch, Budget };
@@ -100,6 +110,8 @@ public:
     virtual int bankAt(int thread, uint16_t addr) const = 0;
     virtual bool pu(int thread) const = 0;
     virtual bool pv(int thread) const = 0;
+    /// Whether code at `addr` on `thread` currently satisfies `key`.
+    bool bankMatches(int thread, const BankKey& key, uint16_t addr) const;
 
     // ── History ───────────────────────────────────────────────────────────
     virtual uint32_t historySize(int thread) const = 0;

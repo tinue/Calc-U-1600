@@ -84,6 +84,10 @@ set(CORE_SOURCES
   ${CORE_ROOT}/Debug/DebugExpression.cpp
   ${CORE_ROOT}/Debug/CpuRegisters.cpp
   ${CORE_ROOT}/Debug/MachineDebugTargets.cpp
+  ${CORE_ROOT}/Debug/SourceMap.cpp
+  ${CORE_ROOT}/Debug/Listing/Listing.cpp
+  ${CORE_ROOT}/Debug/Listing/SdasListing.cpp
+  ${CORE_ROOT}/Debug/Listing/ZasmListing.cpp
   ${CORE_ROOT}/CPU/LH5801/LH5801.cpp
   ${CORE_ROOT}/CPU/SC7852/SC7852.cpp
   ${CORE_ROOT}/CPU/LH5803/LH5803Memory.cpp

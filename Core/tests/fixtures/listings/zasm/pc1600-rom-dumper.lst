@@ -1,0 +1,1353 @@
+                        ; --------------------------------------
+                        ; zasm: assemble "pc1600-rom-dumper.asm"
+                        ; date: 2026-09-25 16:23:36
+                        ; --------------------------------------
+
+
+                        ; ============================================================================
+                        ; PC-1600 ROM Bank Dumper
+                        ;
+                        ; Menu-driven Z-80 ML program for the Sharp PC-1600:
+                        ;
+                        ;   1 = SWEEP -- pages every known Z-80-addressable ROM bank into the CPU's
+                        ;       address space in turn and shows a short hex sample on the LCD,
+                        ;       pausing for a keypress between screens. Diagnostic tool: confirms
+                        ;       which banks hold real ROM vs. open bus, and lets you eyeball a
+                        ;       bank's content before committing to a full dump.
+                        ;
+                        ;   2 = DUMP+SEND -- pages in the 7 banks confirmed to hold real ROM content
+                        ;       (see dump_table below), shows a 16-bit checksum per page, and on a
+                        ;       keypress sends the full 16KB page out over COM1: via the serial
+                        ;       IOCS (CSNDA). Press S to skip a page instead of sending it. COM1:
+                        ;       itself must already be configured (SETCOM/OUTSTAT/SNDSTAT/RCVSTAT/
+                        ;       INIT) from BASIC before this program is CALLed -- see the
+                        ;       accompanying .pc1600 preset / README for the exact sequence. This
+                        ;       program only calls CSNDA; it never touches CWCOM/CESND/CCLRSB.
+                        ;
+                        ;   3 = LH5803 ROM -- dumps the LH-5803 co-processor's own private 16KB ROM
+                        ;       (LH-5803 view C000H-FFFFH), which no Z-80 bank-switching combination
+                        ;       can reach -- it's the *other* half of the same physical chip as
+                        ;       Bank 6/CS123, addressed only from the LH-5803's own side. Reached
+                        ;       via the CALLH bridge (CALL 01C6H): a 2-byte LH-5801 stub (`lda (x)`
+                        ;       / `rtn`) placed in the shared 4000-7FFF/C000-FFFF RAM fetches one
+                        ;       byte per round-trip, using X as the source pointer and A/PARA as
+                        ;       the return path. Same checksum-then-keypress-then-send UX as
+                        ;       DUMP+SEND, but as a single fixed 16KB region rather than 7 banks.
+                        ;
+                        ; Runs entirely from C000-FFFF (page 3, bank 0 -- never touched by this
+                        ; program) so paging banks into 4000-7FFF/8000-BFFF never disturbs the code
+                        ; that is doing the paging. All display/IOCS calls used here live in the
+                        ; always-resident bank 0 (0000-3FFF), so they too are unaffected.
+                        ;
+                        ; Assumes the machine is already NEW'd with enough S0: space to hold this
+                        ; program; the .pc1600 preset / load sequence handles that.
+                        ;
+                        ; Hardware note -- Port 3DH (hidden-BASIC-ROM sub-bank select, bit b2):
+                        ; clearing b2 selects Bank 3b instead of Bank 3 at 4000-7FFF. This port is
+                        ; write-only. Getting a correct read of Bank 3/3b requires two things this
+                        ; program does everywhere it touches the port:
+                        ;   1. BANKSET before the Port 3DH write, not after (the ROM's own BANKSET
+                        ;      routine does not preserve an out-of-order Port 3DH state).
+                        ;   2. Interrupts briefly disabled (DI/EI) around the write and the read
+                        ;      that follows it. The PC-1600's own interrupt handlers (keyboard
+                        ;      scan / the 1/64s timer tick) do not preserve Port 3DH's state, so a
+                        ;      read landing between the write and the actual memory access can
+                        ;      silently see the wrong bank. For the serial send specifically (too
+                        ;      long, ~17s at 9600 baud, to run under one DI), Port 3DH is instead
+                        ;      re-asserted before every byte, each reassert individually DI/EI-
+                        ;      guarded.
+                        ; ============================================================================
+                        
+                        #target bin
+                        
+                        ; ---- IOCS entry points (TRM, all in Bank 0 / always resident) ----
+0190:                   BANKSET     equ 0x0190      ; A=bank, B=page(0-3) -> set bank
+0193:                   BANKREAD    equ 0x0193      ; B=page -> A=current bank
+018D:                   MEMORYCHK   equ 0x018D      ; D=bank, E=addr high byte -> CF=1/A=00 none, CF=0/A=01 RAM, CF=0/A=03 ROM
+0112:                   CLS         equ 0x0112
+0115:                   CRSRSET     equ 0x0115      ; D=X(0-25), E=Y(0-3)
+00EB:                   PRTASTR     equ 0x00EB      ; DE=addr, A=terminator byte -> prints until terminator
+0166:                   KEYGET      equ 0x0166      ; waits for a key; CF=0 -> A=key code
+                        
+                        ; ---- Serial IOCS gateway (PC-1600-Serial-Commands.md Part 2) ----
+01D8:                   SERIAL      equ 0x01D8      ; C=routine#, D=channel(1=COM1:) as needed -> dispatch
+0003:                   S_CSNDA     equ 0x03        ; A=byte to send -> CF=1/A=error byte on failure
+                        
+003D:                   PORT3D      equ 0x3D        ; hidden-BASIC-ROM sub-bank select (bit 2; not readable via IN)
+                        
+                        ; ---- Z-80 -> LH-5803 bridge (PC-1600-CPU-LH5803-Compat.md Part 3) ----
+01C6:                   CALLH       equ 0x01C6      ; hands off to an LH-5803 subroutine, returns when it RTNs
+F002:                   CMDZ        equ 0xF002      ; 20H = no params in, 30H = load PARA..PARUH before entry
+F005:                   PARA        equ 0xF005      ; -> LH-5803 A on entry; <- LH-5803 A on return
+F006:                   PARXL       equ 0xF006      ; -> LH-5803 XL (low byte of the X reg pair)
+F007:                   PARXH       equ 0xF007      ; -> LH-5803 XH (high byte)
+F00C:                   PARPCL      equ 0xF00C      ; subroutine entry address, low byte (LH-5803-view)
+F00D:                   PARPCH      equ 0xF00D      ; subroutine entry address, high byte
+F00E:                   PARBAN      equ 0xF00E      ; subroutine bank: 00H = PV(0), 01H = PV(1)
+                        
+C0C5:                   #code CODE, 0xC0C5
+                        
+                        ; ============================================================================
+                        ; Entry point: menu -- 1 = sweep, 2 = dump+send, 3 = LH5803 ROM.
+C0C5:                   start:
+C0C5: CD1201   [17]             call CLS
+C0C8: 2116C6   [27]             ld   hl, lbl_menu1
+C0CB: CDBCC4   [44]             call show_label
+C0CE: 1600     [51]             ld   d, 0
+C0D0: 1E01     [58]             ld   e, 1
+C0D2: CD1501   [75]             call CRSRSET
+C0D5: 2128C6   [85]             ld   hl, lbl_menu2
+C0D8: 54       [89]             ld   d, h
+C0D9: 5D       [93]             ld   e, l
+C0DA: AF       [97]             xor  a
+C0DB: CDEB00   [114]            call PRTASTR
+                        
+C0DE: 1600     [121]            ld   d, 0
+C0E0: 1E02     [128]            ld   e, 2
+C0E2: CD1501   [145]            call CRSRSET
+C0E5: 213DC6   [155]            ld   hl, lbl_menu3
+C0E8: 54       [159]            ld   d, h
+C0E9: 5D       [163]            ld   e, l
+C0EA: AF       [167]            xor  a
+C0EB: CDEB00   [184]            call PRTASTR
+                        
+C0EE:                   menu_wait:
+C0EE: CD6601   [17]             call KEYGET
+C0F1: FE31     [24]             cp   '1'
+C0F3: CA02C1   [34|34]          jp   z, sweep_start
+C0F6: FE32     [41]             cp   '2'
+C0F8: CA80C1   [51|51]          jp   z, dump_start
+C0FB: FE33     [58]             cp   '3'
+C0FD: CA72C3   [68|68]          jp   z, lh5803_dump_start
+C100: 18EC     [80]             jr   menu_wait
+                        
+                        ; ============================================================================
+                        ; Sweep: walk every known bank, page 0/1/2, showing a hex sample on the LCD.
+C102:                   sweep_start:
+C102: CD1201   [17]             call CLS
+                        
+                                ; ---- Page 0 sample: bank 0 is always resident, no BANKSET needed ----
+C105: 21DFC7   [27]             ld   hl, lbl_page0
+C108: CDBCC4   [44]             call show_label
+C10B: 3E00     [51]             ld   a, 0                  ; "bank 0" for the BR=/CHK= line (informational only)
+C10D: 1600     [58]             ld   d, 0
+C10F: 1E00     [65]             ld   e, 0x00
+C111: CDCCC4   [82]             call show_status           ; MEMORYCHK D=0,E=00 -- page-0 bank 0
+C114: 3E04     [89]             ld   a, 0x04                ; page 0 doesn't involve Port 3DH
+C116: 3262C9   [102]            ld   (cur_port3d), a
+C119: 210000   [112]            ld   hl, 0x0000
+C11C: 1131C9   [122]            ld   de, line_buf
+C11F: CD3DC5   [139]            call BUILD_HEX_LINE
+C122: 1600     [146]            ld   d, 0
+C124: 1E02     [153]            ld   e, 2
+C126: 2131C9   [163]            ld   hl, line_buf
+C129: CD5DC5   [180]            call DISPLAY_LINE_AT
+C12C: CD87C5   [197]            call wait_key
+                        
+                                ; ---- Page 1 sweep ----
+C12F: DD218BC5 [211]            ld   ix, page1_table
+C133:                   p1_loop:
+C133: DD7E00   [19]             ld   a, (ix+0)
+C136: FEFF     [26]             cp   0xFF
+C138: CA4AC1   [36|36]          jp   z, p2_start
+C13B: CD08C4   [53]             call run_page1_entry
+C13E: DDE5     [68]             push ix
+C140: E1       [78]             pop  hl
+C141: 110500   [88]             ld   de, 5      ; page1_table record size: bank,port3d,mode,lbl_lo,lbl_hi
+C144: 19       [99]             add  hl, de
+C145: E5       [110]            push hl
+C146: DDE1     [124]            pop  ix
+C148: 18E9     [136]            jr   p1_loop
+                        
+                        ; ============================================================================
+C14A:                   p2_start:
+                                ; ---- Page 2 sweep ----
+C14A: DD21B9C5 [14]             ld   ix, page2_table
+C14E:                   p2_loop:
+C14E: DD7E00   [19]             ld   a, (ix+0)
+C151: FEFF     [26]             cp   0xFF
+C153: CA65C1   [36|36]          jp   z, all_done
+C156: CD7DC4   [53]             call run_page2_entry
+C159: DDE5     [68]             push ix
+C15B: E1       [78]             pop  hl
+C15C: 110400   [88]             ld   de, 4      ; page2_table record size: bank,mode,lbl_lo,lbl_hi
+C15F: 19       [99]             add  hl, de
+C160: E5       [110]            push hl
+C161: DDE1     [124]            pop  ix
+C163: 18E9     [136]            jr   p2_loop
+                        
+                        ; ============================================================================
+C165:                   all_done:
+                                ; Restore known-good defaults before returning to BASIC:
+                                ; page 1 -> bank 0, page 2 -> bank 6 (system ROM), hidden-BASIC off.
+C165: AF       [ 4]             xor  a
+C166: 0601     [11]             ld   b, 1
+C168: CD9001   [28]             call BANKSET
+C16B: 3E06     [35]             ld   a, 6
+C16D: 0602     [42]             ld   b, 2
+C16F: CD9001   [59]             call BANKSET
+C172: 3E04     [66]             ld   a, 0x04
+C174: D33D     [77]             out  (PORT3D), a
+                        
+C176: CD1201   [94]             call CLS
+C179: 21F3C7   [104]            ld   hl, lbl_done
+C17C: CDBCC4   [121]            call show_label
+C17F: C9       [131]            ret
+                        
+                        ; ============================================================================
+                        ; Dump+send: page in each of the 7 confirmed-ROM banks in turn, show a
+                        ; checksum, wait for a keypress (S = skip, anything else = send), then send
+                        ; the full 16KB page over COM1:.
+C180:                   dump_start:
+C180: CD1201   [17]             call CLS
+                        
+C183: DD21D6C5 [31]             ld   ix, dump_table
+C187:                   dump_loop:
+C187: DD7E00   [19]             ld   a, (ix+0)
+C18A: FEFF     [26]             cp   0xFF
+C18C: CAD4C1   [36|36]          jp   z, dump_done
+C18F: CDEFC1   [53]             call run_dump_entry
+C192: 3006     [60|65]          jr   nc, dump_next
+C194: 3261C9   [73]             ld   (send_err_code), a     ; CSNDA reported an error -- save the error
+C197: C3A6C1   [83]             jp   dump_error             ; byte before CLS/show_label clobber A
+C19A:                   dump_next:
+C19A: DDE5     [15]             push ix
+C19C: E1       [25]             pop  hl
+C19D: 110900   [35]             ld   de, 9      ; dump_table record size: bank,port3d,page,base_hi,
+                                                 ; base_lo,lbl_lo,lbl_hi,fn_lo,fn_hi
+C1A0: 19       [46]             add  hl, de
+C1A1: E5       [57]             push hl
+C1A2: DDE1     [71]             pop  ix
+C1A4: 18E1     [83]             jr   dump_loop
+                        
+                        ; ============================================================================
+C1A6:                   dump_error:
+C1A6: CD1201   [17]             call CLS
+C1A9: 214AC6   [27]             ld   hl, lbl_error
+C1AC: CDBCC4   [44]             call show_label
+C1AF: 2119C9   [54]             ld   hl, status_buf
+C1B2: 364523   [70]             ld   (hl), 'E' \ inc hl
+C1B5: 365223   [86]             ld   (hl), 'R' \ inc hl
+C1B8: 363D23   [102]            ld   (hl), '=' \ inc hl
+C1BB: 3A61C9   [115]            ld   a, (send_err_code)
+C1BE: CD71C5   [132]            call hex_byte
+C1C1: 3600     [142]            ld   (hl), 0
+C1C3: 1600     [149]            ld   d, 0
+C1C5: 1E01     [156]            ld   e, 1
+C1C7: CD1501   [173]            call CRSRSET
+C1CA: 2119C9   [183]            ld   hl, status_buf
+C1CD: 54       [187]            ld   d, h
+C1CE: 5D       [191]            ld   e, l
+C1CF: AF       [195]            xor  a
+C1D0: CDEB00   [212]            call PRTASTR
+C1D3: C9       [222]            ret
+                        
+                        ; ============================================================================
+C1D4:                   dump_done:
+                                ; Restore known-good defaults before returning to BASIC, same as
+                                ; Stage 1's all_done:.
+C1D4: AF       [ 4]             xor  a
+C1D5: 0601     [11]             ld   b, 1
+C1D7: CD9001   [28]             call BANKSET
+C1DA: 3E06     [35]             ld   a, 6
+C1DC: 0602     [42]             ld   b, 2
+C1DE: CD9001   [59]             call BANKSET
+C1E1: 3E04     [66]             ld   a, 0x04
+C1E3: D33D     [77]             out  (PORT3D), a
+                        
+C1E5: CD1201   [94]             call CLS
+C1E8: 21F3C7   [104]            ld   hl, lbl_done
+C1EB: CDBCC4   [121]            call show_label
+C1EE: C9       [131]            ret
+                        
+                        ; ============================================================================
+                        ; run_dump_entry: (ix) = { bank, port3d, page, base_hi, base_lo, lbl_lo,
+                        ;                           lbl_hi, fn_lo, fn_hi }
+                        ;   port3d = 0xFF means "don't touch" (page 0/page 2 entries).
+                        ;   page = 0 means "always resident, no BANKSET call" (the page-0 entry).
+                        ; Returns: CF/A as SEND_PAGE (CF=1, A=error byte, on a CSNDA failure).
+C1EF:                   run_dump_entry:
+C1EF: DD7E02   [19]             ld   a, (ix+2)              ; page number
+C1F2: B7       [23]             or   a
+C1F3: 2808     [30|35]          jr   z, rde_no_bankset      ; page 0 -- always resident, nothing to switch
+C1F5: 4F       [34]             ld   c, a                   ; c = page number
+C1F6: DD7E00   [53]             ld   a, (ix+0)              ; a = bank number
+C1F9: 41       [57]             ld   b, c                   ; b = page number
+C1FA: CD9001   [74]             call BANKSET
+C1FD:                   rde_no_bankset:
+C1FD: DD7E01   [19]             ld   a, (ix+1)              ; port3d value, or 0xFF = don't touch
+C200: FEFF     [26]             cp   0xFF
+C202: 2002     [33|38]          jr   nz, rde_have_port3d
+C204: 3E04     [40]             ld   a, 0x04                ; "don't touch" -> the safe/normal default
+C206:                   rde_have_port3d:
+C206: 3262C9   [13]             ld   (cur_port3d), a        ; SEND_PAGE reasserts this every byte later
+                        
+C209: F3       [17]             di
+C20A: D33D     [28]             out  (PORT3D), a
+                        
+                                ; checksum over the 16KB page, base address = (ix+3):(ix+4) --
+                                ; the actual hardware read, done immediately, interrupts disabled.
+C20C: DD6E04   [47]             ld   l, (ix+4)
+C20F: DD6603   [66]             ld   h, (ix+3)
+C212: CD9FC2   [83]             call COMPUTE_CHECKSUM       ; HL preserved, DE = checksum
+C215: FB       [87]             ei
+C216: D5       [98]             push de                     ; stash across the display calls below
+                        
+C217: CD1201   [115]            call CLS
+C21A: DD6E05   [134]            ld   l, (ix+5)
+C21D: DD6606   [153]            ld   h, (ix+6)
+C220: CDBCC4   [170]            call show_label
+                        
+                                ; filename hint on line 1
+C223: 1600     [177]            ld   d, 0
+C225: 1E01     [184]            ld   e, 1
+C227: CD1501   [201]            call CRSRSET
+C22A: DD6E07   [220]            ld   l, (ix+7)
+C22D: DD6608   [239]            ld   h, (ix+8)
+C230: 54       [243]            ld   d, h
+C231: 5D       [247]            ld   e, l
+C232: AF       [251]            xor  a
+C233: CDEB00   [268]            call PRTASTR
+                        
+C236: D1       [278]            pop  de                     ; recover the checksum computed above
+C237: 2119C9   [288]            ld   hl, status_buf
+C23A: 364323   [304]            ld   (hl), 'C' \ inc hl
+C23D: 364823   [320]            ld   (hl), 'H' \ inc hl
+C240: 364B23   [336]            ld   (hl), 'K' \ inc hl
+C243: 363D23   [352]            ld   (hl), '=' \ inc hl
+C246: 7A       [356]            ld   a, d
+C247: CD71C5   [373]            call hex_byte
+C24A: 7B       [377]            ld   a, e
+C24B: CD71C5   [394]            call hex_byte
+C24E: 3600     [404]            ld   (hl), 0
+C250: 1600     [411]            ld   d, 0
+C252: 1E02     [418]            ld   e, 2
+C254: CD1501   [435]            call CRSRSET
+C257: 2119C9   [445]            ld   hl, status_buf
+C25A: 54       [449]            ld   d, h
+C25B: 5D       [453]            ld   e, l
+C25C: AF       [457]            xor  a
+C25D: CDEB00   [474]            call PRTASTR
+                        
+C260: 1600     [481]            ld   d, 0
+C262: 1E03     [488]            ld   e, 3
+C264: CD1501   [505]            call CRSRSET
+C267: 215FC6   [515]            ld   hl, lbl_press_key
+C26A: 54       [519]            ld   d, h
+C26B: 5D       [523]            ld   e, l
+C26C: AF       [527]            xor  a
+C26D: CDEB00   [544]            call PRTASTR
+C270: CD6601   [561]            call KEYGET
+                        
+C273: FE53     [568]            cp   'S'                      ; skip this page -- no re-send of an
+C275: 2826     [575|580]        jr   z, rde_skip              ; already-captured page (no display
+C277: FE73     [582]            cp   's'                      ; hint needed; any other key sends)
+C279: 2822     [589|594]        jr   z, rde_skip
+                        
+                                ; Re-assert bank/Port 3DH immediately before the actual send: the
+                                ; checksum above was read under DI, but the display/keypress wait
+                                ; since then ran with interrupts enabled and may have disturbed
+                                ; Port 3DH again. SEND_PAGE itself reasserts before every byte too
+                                ; (the send is far too long to cover with a single DI), so this is
+                                ; just what gets the very first bytes right before its first
+                                ; reassert point.
+C27B: DD7E02   [608]            ld   a, (ix+2)              ; page number
+C27E: B7       [612]            or   a
+C27F: 2808     [619|624]        jr   z, rde_no_bankset2
+C281: 4F       [623]            ld   c, a
+C282: DD7E00   [642]            ld   a, (ix+0)              ; bank number
+C285: 41       [646]            ld   b, c
+C286: CD9001   [663]            call BANKSET
+C289:                   rde_no_bankset2:
+C289: DD7E01   [19]             ld   a, (ix+1)              ; port3d value, or 0xFF = don't touch
+C28C: FEFF     [26]             cp   0xFF
+C28E: 2804     [33|38]          jr   z, rde_no_port3d2
+C290: F3       [37]             di
+C291: D33D     [48]             out  (PORT3D), a
+C293: FB       [52]             ei
+C294:                   rde_no_port3d2:
+                        
+C294: DD6E04   [19]             ld   l, (ix+4)               ; reload base address -- clobbered above
+C297: DD6603   [38]             ld   h, (ix+3)
+C29A: C3B4C2   [48]             jp   SEND_PAGE                ; tail call: CF/A propagate to caller
+                        
+C29D:                   rde_skip:
+C29D: AF       [ 4]             xor  a                       ; success, nothing sent, CF=0
+C29E: C9       [14]             ret
+                        
+                        ; ============================================================================
+                        ; COMPUTE_CHECKSUM: HL = base address of a 16KB (0x4000-byte) page.
+                        ; Returns DE = 16-bit additive checksum (sum of all bytes, mod 65536).
+                        ; HL is preserved.
+C29F:                   COMPUTE_CHECKSUM:
+C29F: E5       [11]             push hl
+C2A0: 010040   [21]             ld   bc, 0x4000
+C2A3: 110000   [31]             ld   de, 0x0000
+C2A6:                   cs_loop:
+C2A6: 7E       [ 7]             ld   a, (hl)
+C2A7: 83       [11]             add  a, e
+C2A8: 5F       [15]             ld   e, a
+C2A9: 3001     [22|27]          jr   nc, cs_noc
+C2AB: 14       [26]             inc  d
+C2AC:                   cs_noc:
+C2AC: 23       [ 6]             inc  hl
+C2AD: 0B       [12]             dec  bc
+C2AE: 78       [16]             ld   a, b
+C2AF: B1       [20]             or   c
+C2B0: 20F4     [27|32]          jr   nz, cs_loop
+C2B2: E1       [37]             pop  hl
+C2B3: C9       [47]             ret
+                        
+                        ; ============================================================================
+                        ; SEND_PAGE: HL = base address of a 16KB (0x4000-byte) page. Sends every
+                        ; byte over COM1: via CSNDA. On success returns CF=0. On a CSNDA error,
+                        ; stops immediately and returns CF=1, A=CSNDA's error byte (b0=timeout,
+                        ; b1=BREAK pressed) -- no channel parameter needed, per the IOCS table.
+                        ;
+                        ; Port 3DH is re-asserted from cur_port3d before every byte (each reassert
+                        ; individually DI/EI-guarded; CSNDA itself runs with interrupts enabled,
+                        ; since the send is too long -- ~17s at 9600 baud -- to cover with a
+                        ; single DI without starving whatever the serial IOCS needs interrupts
+                        ; for).
+C2B4:                   SEND_PAGE:
+C2B4: 010040   [10]             ld   bc, 0x4000
+C2B7:                   sp_loop:
+C2B7: F3       [ 4]             di
+C2B8: 3A62C9   [17]             ld   a, (cur_port3d)
+C2BB: D33D     [28]             out  (PORT3D), a
+C2BD: FB       [32]             ei
+C2BE: 7E       [39]             ld   a, (hl)
+C2BF: E5       [50]             push hl
+C2C0: C5       [61]             push bc
+C2C1: 0E03     [68]             ld   c, S_CSNDA
+C2C3: CDD801   [85]             call SERIAL
+C2C6: C1       [95]             pop  bc
+C2C7: E1       [105]            pop  hl
+C2C8: 3808     [112|117]        jr   c, sp_error
+C2CA: 23       [118]            inc  hl
+C2CB: 0B       [124]            dec  bc
+C2CC: 78       [128]            ld   a, b
+C2CD: B1       [132]            or   c
+C2CE: 20E7     [139|144]        jr   nz, sp_loop
+C2D0: AF       [143]            xor  a                      ; success: A=0, CF=0
+C2D1: C9       [153]            ret
+C2D2:                   sp_error:
+C2D2: 37       [ 4]             scf                          ; CF=1; A already holds CSNDA's error byte
+C2D3: C9       [14]             ret
+                        
+                        ; ============================================================================
+                        ; LH5803_FETCH_BYTE: HL = LH-5803-view source address to read. Returns the
+                        ; fetched byte in A. Runs the 2-byte `lda (x) / rtn` stub (lh5803_stub) on
+                        ; the LH-5803 via CALLH, with X preloaded from HL (CMDZ=30H) and A read back
+                        ; from PARA on return.
+                        ;
+                        ; CALLH clobbers all Z-80 registers (documented) -- callers must not expect
+                        ; anything but A to survive a call here, and must keep their own loop state
+                        ; (address/counter/accumulator) in memory, not registers, across it.
+C2D4:                   LH5803_FETCH_BYTE:
+C2D4: 3E30     [ 7]             ld   a, 0x30                ; CMDZ=30H: load PARA..PARUH before entry
+C2D6: 3202F0   [20]             ld   (CMDZ), a
+C2D9: 2206F0   [36]             ld   (PARXL), hl            ; HL -> PARXL/PARXH (L=low, H=high)
+C2DC: 211749   [46]             ld   hl, lh5803_stub - 0x8000  ; stub's LH-5803-view entry address
+C2DF: 220CF0   [62]             ld   (PARPCL), hl
+C2E2: AF       [66]             xor  a
+C2E3: 320EF0   [79]             ld   (PARBAN), a            ; PV(0) -- neither the stub's home (4000-7FFF)
+                                                             ; nor the ROM being read (C000-FFFF) is
+                                                             ; documented as PV-banked
+C2E6: F3       [83]             di
+C2E7: CDC601   [100]            call CALLH
+C2EA: FB       [104]            ei
+C2EB: 3A05F0   [117]            ld   a, (PARA)
+C2EE: C9       [127]            ret
+                        
+                        ; ============================================================================
+                        ; LH5803_SELFTEST: fetches LH-5803 address C000H twice in a row and compares
+                        ; the two results. Returns CF=0 if they agree, CF=1 if they don't. Mirrors
+                        ; the double-fetch check that originally caught the Port 3DH interrupt bug --
+                        ; run once before trusting a full LH5803 dump.
+C2EF:                   LH5803_SELFTEST:
+C2EF: 2100C0   [10]             ld   hl, 0xC000
+C2F2: CDD4C2   [27]             call LH5803_FETCH_BYTE
+C2F5: 3269C9   [40]             ld   (lh5803_selftest_tmp), a
+C2F8: 2100C0   [50]             ld   hl, 0xC000
+C2FB: CDD4C2   [67]             call LH5803_FETCH_BYTE
+C2FE: 47       [71]             ld   b, a
+C2FF: 3A69C9   [84]             ld   a, (lh5803_selftest_tmp)
+C302: B8       [88]             cp   b
+C303: 2802     [95|100]         jr   z, lh5803_selftest_ok
+C305: 37       [99]             scf
+C306: C9       [109]            ret
+C307:                   lh5803_selftest_ok:
+C307: B7       [ 4]             or   a                      ; clear carry
+C308: C9       [14]             ret
+                        
+                        ; ============================================================================
+                        ; LH5803_COMPUTE_CHECKSUM: sums all 16384 bytes of LH-5803 C000H-FFFFH via
+                        ; LH5803_FETCH_BYTE. Returns DE = 16-bit additive checksum (mod 65536). All
+                        ; loop state lives in memory (lh5803_addr/lh5803_count/lh5803_chk), not
+                        ; registers, since LH5803_FETCH_BYTE's CALLH clobbers everything.
+C309:                   LH5803_COMPUTE_CHECKSUM:
+C309: 2100C0   [10]             ld   hl, 0xC000
+C30C: 2263C9   [26]             ld   (lh5803_addr), hl
+C30F: 210040   [36]             ld   hl, 0x4000
+C312: 2265C9   [52]             ld   (lh5803_count), hl
+C315: 210000   [62]             ld   hl, 0x0000
+C318: 2267C9   [78]             ld   (lh5803_chk), hl
+C31B:                   lcs_loop:
+C31B: 2A63C9   [16]             ld   hl, (lh5803_addr)
+C31E: CDD4C2   [33]             call LH5803_FETCH_BYTE      ; A = byte
+C321: 2A67C9   [49]             ld   hl, (lh5803_chk)
+C324: 85       [53]             add  a, l
+C325: 6F       [57]             ld   l, a
+C326: 3001     [64|69]          jr   nc, lcs_noc
+C328: 24       [68]             inc  h
+C329:                   lcs_noc:
+C329: 2267C9   [16]             ld   (lh5803_chk), hl
+C32C: 2A63C9   [32]             ld   hl, (lh5803_addr)
+C32F: 23       [38]             inc  hl
+C330: 2263C9   [54]             ld   (lh5803_addr), hl
+C333: 2A65C9   [70]             ld   hl, (lh5803_count)
+C336: 2B       [76]             dec  hl
+C337: 2265C9   [92]             ld   (lh5803_count), hl
+C33A: 7C       [96]             ld   a, h
+C33B: B5       [100]            or   l
+C33C: 20DD     [107|112]        jr   nz, lcs_loop
+C33E: ED5B67C9 [127]            ld   de, (lh5803_chk)
+C342: C9       [137]            ret
+                        
+                        ; ============================================================================
+                        ; LH5803_SEND: sends all 16384 bytes of LH-5803 C000H-FFFFH over COM1: via
+                        ; CSNDA, fetching each one through LH5803_FETCH_BYTE. Same CF/A error-return
+                        ; convention as SEND_PAGE. No Port 3DH involvement at all -- this path never
+                        ; touches Z-80 bank switching.
+C343:                   LH5803_SEND:
+C343: 2100C0   [10]             ld   hl, 0xC000
+C346: 2263C9   [26]             ld   (lh5803_addr), hl
+C349: 210040   [36]             ld   hl, 0x4000
+C34C: 2265C9   [52]             ld   (lh5803_count), hl
+C34F:                   lsend_loop:
+C34F: 2A63C9   [16]             ld   hl, (lh5803_addr)
+C352: CDD4C2   [33]             call LH5803_FETCH_BYTE      ; A = byte
+C355: 0E03     [40]             ld   c, S_CSNDA
+C357: CDD801   [57]             call SERIAL
+C35A: 3814     [64|69]          jr   c, lsend_error
+C35C: 2A63C9   [80]             ld   hl, (lh5803_addr)
+C35F: 23       [86]             inc  hl
+C360: 2263C9   [102]            ld   (lh5803_addr), hl
+C363: 2A65C9   [118]            ld   hl, (lh5803_count)
+C366: 2B       [124]            dec  hl
+C367: 2265C9   [140]            ld   (lh5803_count), hl
+C36A: 7C       [144]            ld   a, h
+C36B: B5       [148]            or   l
+C36C: 20E1     [155|160]        jr   nz, lsend_loop
+C36E: AF       [159]            xor  a                      ; success: A=0, CF=0
+C36F: C9       [169]            ret
+C370:                   lsend_error:
+C370: 37       [ 4]             scf                          ; CF=1; A already holds CSNDA's error byte
+C371: C9       [14]             ret
+                        
+                        ; ============================================================================
+                        ; lh5803_dump_start: menu option 3. Self-test, then checksum (with a
+                        ; "COMPUTING..." message -- 16384 CALLH round-trips may take a visible
+                        ; moment), then the usual checksum/press-key/send UX.
+C372:                   lh5803_dump_start:
+C372: CD1201   [17]             call CLS
+C375: 2171C6   [27]             ld   hl, lbl_lh5803
+C378: CDBCC4   [44]             call show_label
+C37B: 1600     [51]             ld   d, 0
+C37D: 1E01     [58]             ld   e, 1
+C37F: CD1501   [75]             call CRSRSET
+C382: 2186C6   [85]             ld   hl, lbl_computing
+C385: 54       [89]             ld   d, h
+C386: 5D       [93]             ld   e, l
+C387: AF       [97]             xor  a
+C388: CDEB00   [114]            call PRTASTR
+                        
+C38B: CDEFC2   [131]            call LH5803_SELFTEST
+C38E: 386E     [138|143]        jr   c, lh5803_unstable
+                        
+C390: CD09C3   [155]            call LH5803_COMPUTE_CHECKSUM   ; DE = checksum
+C393: D5       [166]            push de                        ; stash across the display calls below
+                        
+C394: CD1201   [183]            call CLS
+C397: 2171C6   [193]            ld   hl, lbl_lh5803
+C39A: CDBCC4   [210]            call show_label
+                        
+C39D: 1600     [217]            ld   d, 0
+C39F: 1E01     [224]            ld   e, 1
+C3A1: CD1501   [241]            call CRSRSET
+C3A4: 21A9C6   [251]            ld   hl, fn_lh5803
+C3A7: 54       [255]            ld   d, h
+C3A8: 5D       [259]            ld   e, l
+C3A9: AF       [263]            xor  a
+C3AA: CDEB00   [280]            call PRTASTR
+                        
+C3AD: D1       [290]            pop  de                        ; recover the checksum computed above
+C3AE: 2119C9   [300]            ld   hl, status_buf
+C3B1: 364323   [316]            ld   (hl), 'C' \ inc hl
+C3B4: 364823   [332]            ld   (hl), 'H' \ inc hl
+C3B7: 364B23   [348]            ld   (hl), 'K' \ inc hl
+C3BA: 363D23   [364]            ld   (hl), '=' \ inc hl
+C3BD: 7A       [368]            ld   a, d
+C3BE: CD71C5   [385]            call hex_byte
+C3C1: 7B       [389]            ld   a, e
+C3C2: CD71C5   [406]            call hex_byte
+C3C5: 3600     [416]            ld   (hl), 0
+C3C7: 1600     [423]            ld   d, 0
+C3C9: 1E02     [430]            ld   e, 2
+C3CB: CD1501   [447]            call CRSRSET
+C3CE: 2119C9   [457]            ld   hl, status_buf
+C3D1: 54       [461]            ld   d, h
+C3D2: 5D       [465]            ld   e, l
+C3D3: AF       [469]            xor  a
+C3D4: CDEB00   [486]            call PRTASTR
+                        
+C3D7: 1600     [493]            ld   d, 0
+C3D9: 1E03     [500]            ld   e, 3
+C3DB: CD1501   [517]            call CRSRSET
+C3DE: 215FC6   [527]            ld   hl, lbl_press_key
+C3E1: 54       [531]            ld   d, h
+C3E2: 5D       [535]            ld   e, l
+C3E3: AF       [539]            xor  a
+C3E4: CDEB00   [556]            call PRTASTR
+C3E7: CD6601   [573]            call KEYGET
+                        
+C3EA: FE53     [580]            cp   'S'
+C3EC: 280F     [587|592]        jr   z, lh5803_done
+C3EE: FE73     [594]            cp   's'
+C3F0: 280B     [601|606]        jr   z, lh5803_done
+                        
+C3F2: CD43C3   [618]            call LH5803_SEND
+C3F5: 3006     [625|630]        jr   nc, lh5803_done
+C3F7: 3261C9   [638]            ld   (send_err_code), a        ; CSNDA reported an error -- save the
+C3FA: C3A6C1   [648]            jp   dump_error                ; error byte before CLS/show_label clobber A
+                        
+C3FD:                   lh5803_done:
+C3FD: C9       [10]             ret
+                        
+C3FE:                   lh5803_unstable:
+C3FE: CD1201   [17]             call CLS
+C401: 2193C6   [27]             ld   hl, lbl_lh5803_unstable
+C404: CDBCC4   [44]             call show_label
+C407: C9       [54]             ret
+                        
+                        ; ============================================================================
+                        ; run_page1_entry: (ix) = { bank, port3d, mode, lo(label), hi(label) }
+                        ;   mode: 0 = normal sample at 4000H, 1 = bank-5 style, samples at 5000H/6000H
+C408:                   run_page1_entry:
+C408: DD7E00   [19]             ld   a, (ix+0)             ; bank number
+C40B: 0601     [26]             ld   b, 1                  ; page 1 = 4000-7FFF
+C40D: CD9001   [43]             call BANKSET
+                        
+C410: DD7E01   [62]             ld   a, (ix+1)             ; port3d value
+C413: 3262C9   [75]             ld   (cur_port3d), a
+C416: F3       [79]             di
+C417: D33D     [90]             out  (PORT3D), a
+                        
+C419: DD7E02   [109]            ld   a, (ix+2)             ; mode
+C41C: FE01     [116]            cp   1
+C41E: 280B     [123|128]        jr   z, p1_bank5_read
+                        
+C420: 210040   [133]            ld   hl, 0x4000
+C423: 1131C9   [143]            ld   de, line_buf
+C426: CD3DC5   [160]            call BUILD_HEX_LINE
+C429: 1812     [172]            jr   p1_reads_done
+                        
+C42B:                   p1_bank5_read:
+C42B: 210050   [10]             ld   hl, 0x5000
+C42E: 1131C9   [20]             ld   de, line_buf
+C431: CD3DC5   [37]             call BUILD_HEX_LINE
+C434: 210060   [47]             ld   hl, 0x6000
+C437: 1149C9   [57]             ld   de, line_buf2
+C43A: CD3DC5   [74]             call BUILD_HEX_LINE
+                        
+C43D:                   p1_reads_done:
+C43D: FB       [ 4]             ei
+                        
+C43E:                   p1_display:
+C43E: CD1201   [17]             call CLS
+C441: DD6E03   [36]             ld   l, (ix+3)
+C444: DD6604   [55]             ld   h, (ix+4)
+C447: CDBCC4   [72]             call show_label
+                        
+C44A: DD7E00   [91]             ld   a, (ix+0)
+C44D: 57       [95]             ld   d, a
+C44E: 1E40     [102]            ld   e, 0x40
+C450: CDCCC4   [119]            call show_status
+                        
+C453: DD7E02   [138]            ld   a, (ix+2)             ; mode
+C456: FE01     [145]            cp   1
+C458: 280C     [152|157]        jr   z, p1_bank5_show
+                        
+C45A: 1600     [159]            ld   d, 0
+C45C: 1E02     [166]            ld   e, 2
+C45E: 2131C9   [176]            ld   hl, line_buf
+C461: CD5DC5   [193]            call DISPLAY_LINE_AT
+C464: 1814     [205]            jr   p1_entry_done
+                        
+C466:                   p1_bank5_show:
+C466: 1600     [ 7]             ld   d, 0
+C468: 1E02     [14]             ld   e, 2
+C46A: 2131C9   [24]             ld   hl, line_buf
+C46D: CD5DC5   [41]             call DISPLAY_LINE_AT
+C470: 1600     [48]             ld   d, 0
+C472: 1E03     [55]             ld   e, 3
+C474: 2149C9   [65]             ld   hl, line_buf2
+C477: CD5DC5   [82]             call DISPLAY_LINE_AT
+                        
+C47A:                   p1_entry_done:
+C47A: C387C5   [10]             jp   wait_key
+                        
+                        ; ============================================================================
+                        ; run_page2_entry: (ix) = { bank, mode, lo(label), hi(label) }
+                        ;   mode: 0 = MEMORYCHK only, 1 = full hex sample too
+C47D:                   run_page2_entry:
+C47D: DD7E00   [19]             ld   a, (ix+0)
+C480: 0602     [26]             ld   b, 2                  ; page 2 = 8000-BFFF
+C482: CD9001   [43]             call BANKSET
+                        
+C485: CD1201   [60]             call CLS
+C488: DD6E02   [79]             ld   l, (ix+2)
+C48B: DD6603   [98]             ld   h, (ix+3)
+C48E: CDBCC4   [115]            call show_label
+                        
+C491: DD7E00   [134]            ld   a, (ix+0)
+C494: 57       [138]            ld   d, a
+C495: 1E80     [145]            ld   e, 0x80
+C497: CDCCC4   [162]            call show_status
+                        
+C49A: DD7E01   [181]            ld   a, (ix+1)
+C49D: FE01     [188]            cp   1
+C49F: 2018     [195|200]        jr   nz, p2_entry_done
+                        
+C4A1: 3E04     [202]            ld   a, 0x04                ; page 2 doesn't involve Port 3DH
+C4A3: 3262C9   [215]            ld   (cur_port3d), a
+C4A6: 210080   [225]            ld   hl, 0x8000
+C4A9: 1131C9   [235]            ld   de, line_buf
+C4AC: CD3DC5   [252]            call BUILD_HEX_LINE
+C4AF: 1600     [259]            ld   d, 0
+C4B1: 1E02     [266]            ld   e, 2
+C4B3: 2131C9   [276]            ld   hl, line_buf
+C4B6: CD5DC5   [293]            call DISPLAY_LINE_AT
+                        
+C4B9:                   p2_entry_done:
+C4B9: C387C5   [10]             jp   wait_key
+                        
+                        ; ============================================================================
+                        ; show_label: HL = zero-terminated string; shown on line Y=0
+C4BC:                   show_label:
+C4BC: E5       [11]             push hl
+C4BD: 1600     [18]             ld   d, 0
+C4BF: 1E00     [25]             ld   e, 0
+C4C1: CD1501   [42]             call CRSRSET
+C4C4: E1       [52]             pop  hl
+C4C5: 54       [56]             ld   d, h
+C4C6: 5D       [60]             ld   e, l
+C4C7: AF       [64]             xor  a
+C4C8: CDEB00   [81]             call PRTASTR
+C4CB: C9       [91]             ret
+                        
+                        ; ============================================================================
+                        ; show_status: D=bank, E=addr-high-byte for MEMORYCHK; builds/shows the
+                        ; "BR=xx CHK=X(xx)" line on Y=1. BR = BANKREAD confirmation for whichever
+                        ; page was just set (page number inferred from E: 0x40->page1, 0x80->page2,
+                        ; 0x00->page0); CHK = MEMORYCHK result (tag letter + raw hex byte). Note:
+                        ; MEMORYCHK does not report bank presence reliably on this firmware
+                        ; (confirmed on real hardware) -- treat its output as informational only;
+                        ; the hex-sample inspection is the reliable signal for bank content.
+C4CC:                   show_status:
+C4CC: D5       [11]             push de
+C4CD: 7B       [15]             ld   a, e
+C4CE: FE80     [22]             cp   0x80
+C4D0: 280C     [29|34]          jr   z, ss_p2
+C4D2: FE40     [36]             cp   0x40
+C4D4: 2804     [43|48]          jr   z, ss_p1
+C4D6: 0600     [50]             ld   b, 0                  ; page 0
+C4D8: 1806     [62]             jr   ss_bankread
+C4DA: 0601     [ 7]     ss_p1:  ld   b, 1
+C4DC: 1802     [19]             jr   ss_bankread
+C4DE: 0602     [ 7]     ss_p2:  ld   b, 2
+C4E0:                   ss_bankread:
+C4E0: CD9301   [17]             call BANKREAD              ; A = current bank for page B
+                        
+C4E3: 2119C9   [27]             ld   hl, status_buf
+C4E6: 364223   [43]             ld   (hl), 'B' \ inc hl
+C4E9: 365223   [59]             ld   (hl), 'R' \ inc hl
+C4EC: 363D23   [75]             ld   (hl), '=' \ inc hl
+C4EF: CD71C5   [92]             call hex_byte
+C4F2: 362023   [108]            ld   (hl), ' ' \ inc hl
+C4F5: 364323   [124]            ld   (hl), 'C' \ inc hl
+C4F8: 364823   [140]            ld   (hl), 'H' \ inc hl
+C4FB: 364B23   [156]            ld   (hl), 'K' \ inc hl
+C4FE: 363D23   [172]            ld   (hl), '=' \ inc hl
+                        
+C501: D1       [182]            pop  de                    ; D=bank, E=addr-high, restored for MEMORYCHK
+C502: E5       [193]            push hl
+C503: CD8D01   [210]            call MEMORYCHK             ; CF/A set per bank presence
+C506: 380C     [217|222]        jr   c, ss_none
+C508: FE01     [224]            cp   1
+C50A: 280C     [231|236]        jr   z, ss_ram
+C50C: FE03     [238]            cp   3
+C50E: 280C     [245|250]        jr   z, ss_rom
+C510: 0E3F     [252]            ld   c, '?'
+C512: 180A     [264]            jr   ss_tag
+C514: 0E4E     [ 7]     ss_none: ld  c, 'N'
+C516: 1806     [19]             jr   ss_tag
+C518: 0E52     [ 7]     ss_ram: ld   c, 'R'
+C51A: 1802     [19]             jr   ss_tag
+C51C: 0E4D     [ 7]     ss_rom: ld   c, 'M'
+C51E:                   ss_tag:
+C51E: E1       [10]             pop  hl
+C51F: 7123     [23]             ld   (hl), c \ inc hl
+C521: 362823   [39]             ld   (hl), '(' \ inc hl
+C524: CD71C5   [56]             call hex_byte
+C527: 362923   [72]             ld   (hl), ')' \ inc hl
+C52A: 3600     [82]             ld   (hl), 0
+                        
+C52C: 1600     [89]             ld   d, 0
+C52E: 1E01     [96]             ld   e, 1
+C530: CD1501   [113]            call CRSRSET
+C533: 2119C9   [123]            ld   hl, status_buf
+C536: 54       [127]            ld   d, h
+C537: 5D       [131]            ld   e, l
+C538: AF       [135]            xor  a
+C539: CDEB00   [152]            call PRTASTR
+C53C: C9       [162]            ret
+                        
+                        ; ============================================================================
+                        ; BUILD_HEX_LINE: HL = base address to sample 8 bytes from, DE = dest
+                        ; buffer. Fills DE with "AAAA:xxxxxxxxxxxxxxxx" (null-terminated). Pure
+                        ; computation -- no IOCS calls -- so it can run immediately after a Port
+                        ; 3DH/BANKSET write with nothing else in between.
+C53D:                   BUILD_HEX_LINE:
+C53D: E5       [11]             push hl
+C53E: 7C       [15]             ld   a, h
+C53F: CD69C5   [32]             call hex_byte_to_de
+C542: 7D       [36]             ld   a, l
+C543: CD69C5   [53]             call hex_byte_to_de
+C546: 3E3A     [60]             ld   a, ':'
+C548: 12       [67]             ld   (de), a
+C549: 13       [73]             inc  de
+C54A: E1       [83]             pop  hl
+                        
+C54B: 0608     [90]             ld   b, 8
+C54D:                   bhl_loop:
+C54D: 7E       [ 7]             ld   a, (hl)
+C54E: E5       [18]             push hl
+C54F: C5       [29]             push bc
+C550: EB       [33]             ex   de, hl
+C551: CD71C5   [50]             call hex_byte
+C554: EB       [54]             ex   de, hl
+C555: C1       [64]             pop  bc
+C556: E1       [74]             pop  hl
+C557: 23       [80]             inc  hl
+C558: 10F3     [88|93]          djnz bhl_loop
+                        
+C55A: AF       [92]             xor  a
+C55B: 12       [99]             ld   (de), a
+C55C: C9       [109]            ret
+                        
+                        ; ============================================================================
+                        ; DISPLAY_LINE_AT: D=x, E=y (set by caller), HL = buffer to display
+                        ; (already built by BUILD_HEX_LINE). Just CRSRSET + PRTASTR.
+C55D:                   DISPLAY_LINE_AT:
+C55D: E5       [11]             push hl
+C55E: CD1501   [28]             call CRSRSET
+C561: E1       [38]             pop  hl
+C562: 54       [42]             ld   d, h
+C563: 5D       [46]             ld   e, l
+C564: AF       [50]             xor  a
+C565: CDEB00   [67]             call PRTASTR
+C568: C9       [77]             ret
+                        
+                        ; hex_byte_to_de: A=byte, DE=dest ptr (advanced by 2) -- same as hex_byte but
+                        ; writes through DE instead of HL, for the address prefix above.
+C569:                   hex_byte_to_de:
+C569: E5       [11]             push hl
+C56A: EB       [15]             ex   de, hl
+C56B: CD71C5   [32]             call hex_byte
+C56E: EB       [36]             ex   de, hl
+C56F: E1       [46]             pop  hl
+C570: C9       [56]             ret
+                        
+                        ; ============================================================================
+                        ; hex_byte: A=byte to convert, HL=dest ptr; writes 2 ASCII hex chars, HL+=2
+C571:                   hex_byte:
+C571: F5       [11]             push af
+C572: 0F       [15]             rrca
+C573: 0F       [19]             rrca
+C574: 0F       [23]             rrca
+C575: 0F       [27]             rrca
+C576: CD7AC5   [44]             call hex_nibble
+C579: F1       [54]             pop  af
+C57A:                   hex_nibble:
+C57A: E60F     [ 7]             and  0x0F
+C57C: FE0A     [14]             cp   10
+C57E: 3802     [21|26]          jr   c, hn1
+C580: C607     [28]             add  a, 7
+C582:                   hn1:
+C582: C630     [ 7]             add  a, '0'
+C584: 77       [14]             ld   (hl), a
+C585: 23       [20]             inc  hl
+C586: C9       [30]             ret
+                        
+                        ; ============================================================================
+C587:                   wait_key:
+C587: CD6601   [17]             call KEYGET
+C58A: C9       [27]             ret
+                        
+                        ; ============================================================================
+                        ; Page-1 sweep table: { bank, port3d, mode, label_lo, label_hi }, 0xFF ends it
+C58B:                   page1_table:
+C58B: 00040009                  db 0, 0x04, 0, lo(lbl_p1_b0), hi(lbl_p1_b0)
+C58F: C8                
+C590: 01040018                  db 1, 0x04, 0, lo(lbl_p1_b1), hi(lbl_p1_b1)
+C594: C8                
+C595: 02040027                  db 2, 0x04, 0, lo(lbl_p1_b2), hi(lbl_p1_b2)
+C599: C8                
+C59A: 03040036                  db 3, 0x04, 0, lo(lbl_p1_b3), hi(lbl_p1_b3)
+C59E: C8                
+C59F: 03000045                  db 3, 0x00, 0, lo(lbl_p1_b3b), hi(lbl_p1_b3b)
+C5A3: C8                
+C5A4: 04040055                  db 4, 0x04, 0, lo(lbl_p1_b4), hi(lbl_p1_b4)
+C5A8: C8                
+C5A9: 0504016C                  db 5, 0x04, 1, lo(lbl_p1_b5), hi(lbl_p1_b5)
+C5AD: C8                
+C5AE: 06040084                  db 6, 0x04, 0, lo(lbl_p1_b6), hi(lbl_p1_b6)
+C5B2: C8                
+C5B3: 07040093                  db 7, 0x04, 0, lo(lbl_p1_b7), hi(lbl_p1_b7)
+C5B7: C8                
+C5B8: FF                        db 0xFF
+                        
+                        ; Page-2 sweep table: { bank, mode, label_lo, label_hi }, 0xFF ends it
+C5B9:                   page2_table:
+C5B9: 0000A2C8                  db 0, 0, lo(lbl_p2_b0), hi(lbl_p2_b0)
+C5BD: 0100B1C8                  db 1, 0, lo(lbl_p2_b1), hi(lbl_p2_b1)
+C5C1: 0200C0C8                  db 2, 0, lo(lbl_p2_b2), hi(lbl_p2_b2)
+C5C5: 0300CFC8                  db 3, 0, lo(lbl_p2_b3), hi(lbl_p2_b3)
+C5C9: 0400DEC8                  db 4, 0, lo(lbl_p2_b4), hi(lbl_p2_b4)
+C5CD: 0601F3C8                  db 6, 1, lo(lbl_p2_b6), hi(lbl_p2_b6)
+C5D1: 070008C9                  db 7, 0, lo(lbl_p2_b7), hi(lbl_p2_b7)
+C5D5: FF                        db 0xFF
+                        
+                        ; ============================================================================
+                        ; Dump table: { bank, port3d, page, base_hi, base_lo, lbl_lo, lbl_hi, fn_lo,
+                        ; fn_hi }, 0xFF ends it. port3d=0xFF means don't touch; page=0 means no
+                        ; BANKSET (page-0 bank-0 is always resident). Covers the 7 banks confirmed
+                        ; to hold real ROM content: bank 0 (both page-0 and page-1 windows -- one
+                        ; physical chip), bank 3 + bank 3b (CS24's two halves), bank 4 + bank 5
+                        ; (CE-1600P peripheral ROM), and page-2 bank 6 (CS123's Z-80-visible half).
+C5D6:                   dump_table:
+C5D6: 00FF0000                  db 0, 0xFF, 0, 0x00,0x00, lo(lbl_d_p0b0),hi(lbl_d_p0b0),   lo(fn_p0b0),hi(fn_p0b0)
+C5DA: 00C5C652          
+C5DE: C7                
+C5DF: 00040140                  db 0, 0x04, 1, 0x40,0x00, lo(lbl_d_p1b0),hi(lbl_d_p1b0),   lo(fn_p1b0),hi(fn_p1b0)
+C5E3: 00D9C663          
+C5E7: C7                
+C5E8: 03040140                  db 3, 0x04, 1, 0x40,0x00, lo(lbl_d_p1b3),hi(lbl_d_p1b3),   lo(fn_p1b3),hi(fn_p1b3)
+C5EC: 00EDC674          
+C5F0: C7                
+C5F1: 03000140                  db 3, 0x00, 1, 0x40,0x00, lo(lbl_d_p1b3b),hi(lbl_d_p1b3b), lo(fn_p1b3b),hi(fn_p1b3b)
+C5F5: 0001C785          
+C5F9: C7                
+C5FA: 04040140                  db 4, 0x04, 1, 0x40,0x00, lo(lbl_d_p1b4),hi(lbl_d_p1b4),   lo(fn_p1b4),hi(fn_p1b4)
+C5FE: 0016C797          
+C602: C7                
+C603: 05040140                  db 5, 0x04, 1, 0x40,0x00, lo(lbl_d_p1b5),hi(lbl_d_p1b5),   lo(fn_p1b5),hi(fn_p1b5)
+C607: 002AC7B0          
+C60B: C7                
+C60C: 06FF0280                  db 6, 0xFF, 2, 0x80,0x00, lo(lbl_d_p2b6),hi(lbl_d_p2b6),   lo(fn_p2b6),hi(fn_p2b6)
+C610: 003EC7CE          
+C614: C7                
+C615: FF                        db 0xFF
+                        
+                        ; ============================================================================
+C616: 50433136          lbl_menu1:      db "PC1600 ROM DUMPER", 0
+C61A: 30302052          
+C61E: 4F4D2044          
+C622: 554D5045          
+C626: 5200              
+C628: 313D5357          lbl_menu2:      db "1=SWEEP  2=DUMP+SEND", 0
+C62C: 45455020          
+C630: 20323D44          
+C634: 554D502B          
+C638: 53454E44          
+C63C: 00                
+C63D: 333D4C48          lbl_menu3:      db "3=LH5803 ROM", 0
+C641: 35383033          
+C645: 20524F4D          
+C649: 00                
+C64A: 53454E44          lbl_error:      db "SEND ERROR - ABORTED", 0
+C64E: 20455252          
+C652: 4F52202D          
+C656: 2041424F          
+C65A: 52544544          
+C65E: 00                
+C65F: 50524553          lbl_press_key:  db "PRESS KEY TO SEND", 0
+C663: 53204B45          
+C667: 5920544F          
+C66B: 2053454E          
+C66F: 4400              
+                        
+C671: 4C483538          lbl_lh5803:            db "LH5803 ROM C000-FFFF", 0
+C675: 30332052          
+C679: 4F4D2043          
+C67D: 3030302D          
+C681: 46464646          
+C685: 00                
+C686: 434F4D50          lbl_computing:          db "COMPUTING...", 0
+C68A: 5554494E          
+C68E: 472E2E2E          
+C692: 00                
+C693: 4C483538          lbl_lh5803_unstable:    db "LH5803 FETCH UNSTABLE", 0
+C697: 30332046          
+C69B: 45544348          
+C69F: 20554E53          
+C6A3: 5441424C          
+C6A7: 4500              
+C6A9: 50433136          fn_lh5803:              db "PC1600-LH5803-C000-FFFF.BIN", 0
+C6AD: 30302D4C          
+C6B1: 48353830          
+C6B5: 332D4330          
+C6B9: 30302D46          
+C6BD: 4646462E          
+C6C1: 42494E00          
+                        
+C6C5: 44554D50          lbl_d_p0b0:  db "DUMP P0 0000H BANK0", 0
+C6C9: 20503020          
+C6CD: 30303030          
+C6D1: 48204241          
+C6D5: 4E4B3000          
+C6D9: 44554D50          lbl_d_p1b0:  db "DUMP P1 4000H BANK0", 0
+C6DD: 20503120          
+C6E1: 34303030          
+C6E5: 48204241          
+C6E9: 4E4B3000          
+C6ED: 44554D50          lbl_d_p1b3:  db "DUMP P1 4000H BANK3", 0
+C6F1: 20503120          
+C6F5: 34303030          
+C6F9: 48204241          
+C6FD: 4E4B3300          
+C701: 44554D50          lbl_d_p1b3b: db "DUMP P1 4000H BANK3B", 0
+C705: 20503120          
+C709: 34303030          
+C70D: 48204241          
+C711: 4E4B3342          
+C715: 00                
+C716: 44554D50          lbl_d_p1b4:  db "DUMP P1 4000H BANK4", 0
+C71A: 20503120          
+C71E: 34303030          
+C722: 48204241          
+C726: 4E4B3400          
+C72A: 44554D50          lbl_d_p1b5:  db "DUMP P1 4000H BANK5", 0
+C72E: 20503120          
+C732: 34303030          
+C736: 48204241          
+C73A: 4E4B3500          
+C73E: 44554D50          lbl_d_p2b6:  db "DUMP P2 8000H BANK6", 0
+C742: 20503220          
+C746: 38303030          
+C74A: 48204241          
+C74E: 4E4B3600          
+                        
+C752: 50433136          fn_p0b0:     db "PC1600-P0-B0.BIN", 0
+C756: 30302D50          
+C75A: 302D4230          
+C75E: 2E42494E          
+C762: 00                
+C763: 50433136          fn_p1b0:     db "PC1600-P1-B0.BIN", 0
+C767: 30302D50          
+C76B: 312D4230          
+C76F: 2E42494E          
+C773: 00                
+C774: 50433136          fn_p1b3:     db "PC1600-P1-B3.BIN", 0
+C778: 30302D50          
+C77C: 312D4233          
+C780: 2E42494E          
+C784: 00                
+C785: 50433136          fn_p1b3b:    db "PC1600-P1-B3B.BIN", 0
+C789: 30302D50          
+C78D: 312D4233          
+C791: 422E4249          
+C795: 4E00              
+C797: 50433136          fn_p1b4:     db "PC1600-P1-B4-CE1600P.BIN", 0
+C79B: 30302D50          
+C79F: 312D4234          
+C7A3: 2D434531          
+C7A7: 36303050          
+C7AB: 2E42494E          
+C7AF: 00                
+C7B0: 50433136          fn_p1b5:     db "PC1600-P1-B5-CE1600P-OR-F.BIN", 0
+C7B4: 30302D50          
+C7B8: 312D4235          
+C7BC: 2D434531          
+C7C0: 36303050          
+C7C4: 2D4F522D          
+C7C8: 462E4249          
+C7CC: 4E00              
+C7CE: 50433136          fn_p2b6:     db "PC1600-P2-B6.BIN", 0
+C7D2: 30302D50          
+C7D6: 322D4236          
+C7DA: 2E42494E          
+C7DE: 00                
+                        
+                        ; ============================================================================
+C7DF: 50414745          lbl_page0:   db "PAGE0 (0000H) BANK0", 0
+C7E3: 30202830          
+C7E7: 30303048          
+C7EB: 29204241          
+C7EF: 4E4B3000          
+C7F3: 444F4E45          lbl_done:    db "DONE - BASIC RESTORED", 0
+C7F7: 202D2042          
+C7FB: 41534943          
+C7FF: 20524553          
+C803: 544F5245          
+C807: 4400              
+                        
+C809: 50312034          lbl_p1_b0:   db "P1 4000H BANK0", 0
+C80D: 30303048          
+C811: 2042414E          
+C815: 4B3000            
+C818: 50312034          lbl_p1_b1:   db "P1 4000H BANK1", 0
+C81C: 30303048          
+C820: 2042414E          
+C824: 4B3100            
+C827: 50312034          lbl_p1_b2:   db "P1 4000H BANK2", 0
+C82B: 30303048          
+C82F: 2042414E          
+C833: 4B3200            
+C836: 50312034          lbl_p1_b3:   db "P1 4000H BANK3", 0
+C83A: 30303048          
+C83E: 2042414E          
+C842: 4B3300            
+C845: 50312034          lbl_p1_b3b:  db "P1 4000H BANK3B", 0
+C849: 30303048          
+C84D: 2042414E          
+C851: 4B334200          
+C855: 50312034          lbl_p1_b4:   db "P1 4000H BANK4 CE1600P", 0
+C859: 30303048          
+C85D: 2042414E          
+C861: 4B342043          
+C865: 45313630          
+C869: 305000            
+C86C: 50312042          lbl_p1_b5:   db "P1 BANK5 CE1600P FD/CAS", 0
+C870: 414E4B35          
+C874: 20434531          
+C878: 36303050          
+C87C: 2046442F          
+C880: 43415300          
+C884: 50312034          lbl_p1_b6:   db "P1 4000H BANK6", 0
+C888: 30303048          
+C88C: 2042414E          
+C890: 4B3600            
+C893: 50312034          lbl_p1_b7:   db "P1 4000H BANK7", 0
+C897: 30303048          
+C89B: 2042414E          
+C89F: 4B3700            
+                        
+C8A2: 50322038          lbl_p2_b0:   db "P2 8000H BANK0", 0
+C8A6: 30303048          
+C8AA: 2042414E          
+C8AE: 4B3000            
+C8B1: 50322038          lbl_p2_b1:   db "P2 8000H BANK1", 0
+C8B5: 30303048          
+C8B9: 2042414E          
+C8BD: 4B3100            
+C8C0: 50322038          lbl_p2_b2:   db "P2 8000H BANK2", 0
+C8C4: 30303048          
+C8C8: 2042414E          
+C8CC: 4B3200            
+C8CF: 50322038          lbl_p2_b3:   db "P2 8000H BANK3", 0
+C8D3: 30303048          
+C8D7: 2042414E          
+C8DB: 4B3300            
+C8DE: 50322038          lbl_p2_b4:   db "P2 8000H BANK4 KANJI", 0
+C8E2: 30303048          
+C8E6: 2042414E          
+C8EA: 4B34204B          
+C8EE: 414E4A49          
+C8F2: 00                
+C8F3: 50322038          lbl_p2_b6:   db "P2 8000H BANK6 CS123", 0
+C8F7: 30303048          
+C8FB: 2042414E          
+C8FF: 4B362043          
+C903: 53313233          
+C907: 00                
+C908: 50322038          lbl_p2_b7:   db "P2 8000H BANK7", 0
+C90C: 30303048          
+C910: 2042414E          
+C914: 4B3700            
+                        
+                        ; ============================================================================
+                        ; lh5803_stub: the LH-5801 machine code run on the LH-5803 via CALLH.
+                        ;   lda (x)  -- opcode 0x05 -- A = byte at the address in X (ME0)
+                        ;   rtn      -- opcode 0x9A -- return to the Z-80 side
+                        ; X is preloaded from PARXL/PARXH (CMDZ=30H) before this runs, so that's
+                        ; the whole program. Lives here, inside the same C000-FFFF RAM this program
+                        ; already owns while running -- its LH-5803-view address is computed at
+                        ; assemble time in LH5803_FETCH_BYTE as (lh5803_stub - 0x8000).
+C917: 059A              lh5803_stub: db 0x05, 0x9A
+                        
+                        ; ---- scratch buffers ----
+C919: 00000000          status_buf:             ds 24
+C91D: 00...             
+C931: 00000000          line_buf:               ds 24
+C935: 00...             
+C949: 00000000          line_buf2:              ds 24
+C94D: 00...             
+C961: 00                send_err_code:          ds 1
+C962: 00                cur_port3d:             ds 1
+C963: 0000              lh5803_addr:            ds 2
+C965: 0000              lh5803_count:           ds 2
+C967: 0000              lh5803_chk:             ds 2
+C969: 00                lh5803_selftest_tmp:    ds 1
+                        
+                        #end
+
+
+; +++ segments +++
+
+#CODE CODE     = $C0C5 = 49349,  size = $08A5 =  2213
+
+; +++ global symbols +++
+
+BANKREAD         = $0193 =   403          pc1600-rom-dumper.asm:59
+BANKSET          = $0190 =   400          pc1600-rom-dumper.asm:58
+BUILD_HEX_LINE   = $C53D = 50493  CODE    pc1600-rom-dumper.asm:816
+CALLH            = $01C6 =   454          pc1600-rom-dumper.asm:73
+CLS              = $0112 =   274          pc1600-rom-dumper.asm:61
+CMDZ             = $F002 = 61442          pc1600-rom-dumper.asm:74
+CODE             = $C0C5 = 49349  CODE    pc1600-rom-dumper.asm:82 (unused)
+CODE_end         = $C96A = 51562  CODE    pc1600-rom-dumper.asm:82 (unused)
+CODE_size        = $08A5 =  2213  CODE    pc1600-rom-dumper.asm:82 (unused)
+COMPUTE_CHECKSUM = $C29F = 49823  CODE    pc1600-rom-dumper.asm:376
+CRSRSET          = $0115 =   277          pc1600-rom-dumper.asm:62
+DISPLAY_LINE_AT  = $C55D = 50525  CODE    pc1600-rom-dumper.asm:847
+KEYGET           = $0166 =   358          pc1600-rom-dumper.asm:64
+LH5803_COMPUTE_CHECKSUM = $C309 = 49929  CODE    pc1600-rom-dumper.asm:483
+LH5803_FETCH_BYTE = $C2D4 = 49876  CODE    pc1600-rom-dumper.asm:441
+LH5803_SELFTEST  = $C2EF = 49903  CODE    pc1600-rom-dumper.asm:462
+LH5803_SEND      = $C343 = 49987  CODE    pc1600-rom-dumper.asm:517
+MEMORYCHK        = $018D =   397          pc1600-rom-dumper.asm:60
+PARA             = $F005 = 61445          pc1600-rom-dumper.asm:75
+PARBAN           = $F00E = 61454          pc1600-rom-dumper.asm:80
+PARPCH           = $F00D = 61453          pc1600-rom-dumper.asm:79 (unused)
+PARPCL           = $F00C = 61452          pc1600-rom-dumper.asm:78
+PARXH            = $F007 = 61447          pc1600-rom-dumper.asm:77 (unused)
+PARXL            = $F006 = 61446          pc1600-rom-dumper.asm:76
+PORT3D           = $003D =    61          pc1600-rom-dumper.asm:70
+PRTASTR          = $00EB =   235          pc1600-rom-dumper.asm:63
+SEND_PAGE        = $C2B4 = 49844  CODE    pc1600-rom-dumper.asm:406
+SERIAL           = $01D8 =   472          pc1600-rom-dumper.asm:67
+S_CSNDA          = $0003 =     3          pc1600-rom-dumper.asm:68
+all_done         = $C165 = 49509  CODE    pc1600-rom-dumper.asm:174
+bhl_loop         = $C54D = 50509  CODE    pc1600-rom-dumper.asm:828
+cs_loop          = $C2A6 = 49830  CODE    pc1600-rom-dumper.asm:380
+cs_noc           = $C2AC = 49836  CODE    pc1600-rom-dumper.asm:386
+cur_port3d       = $C962 = 51554  CODE    pc1600-rom-dumper.asm:1000
+dump_done        = $C1D4 = 49620  CODE    pc1600-rom-dumper.asm:240
+dump_error       = $C1A6 = 49574  CODE    pc1600-rom-dumper.asm:218
+dump_loop        = $C187 = 49543  CODE    pc1600-rom-dumper.asm:199
+dump_next        = $C19A = 49562  CODE    pc1600-rom-dumper.asm:207
+dump_start       = $C180 = 49536  CODE    pc1600-rom-dumper.asm:195
+dump_table       = $C5D6 = 50646  CODE    pc1600-rom-dumper.asm:925
+fn_lh5803        = $C6A9 = 50857  CODE    pc1600-rom-dumper.asm:945
+fn_p0b0          = $C752 = 51026  CODE    pc1600-rom-dumper.asm:955
+fn_p1b0          = $C763 = 51043  CODE    pc1600-rom-dumper.asm:956
+fn_p1b3          = $C774 = 51060  CODE    pc1600-rom-dumper.asm:957
+fn_p1b3b         = $C785 = 51077  CODE    pc1600-rom-dumper.asm:958
+fn_p1b4          = $C797 = 51095  CODE    pc1600-rom-dumper.asm:959
+fn_p1b5          = $C7B0 = 51120  CODE    pc1600-rom-dumper.asm:960
+fn_p2b6          = $C7CE = 51150  CODE    pc1600-rom-dumper.asm:961
+hex_byte         = $C571 = 50545  CODE    pc1600-rom-dumper.asm:869
+hex_byte_to_de   = $C569 = 50537  CODE    pc1600-rom-dumper.asm:859
+hex_nibble       = $C57A = 50554  CODE    pc1600-rom-dumper.asm:877
+hn1              = $C582 = 50562  CODE    pc1600-rom-dumper.asm:882
+lbl_computing    = $C686 = 50822  CODE    pc1600-rom-dumper.asm:943
+lbl_d_p0b0       = $C6C5 = 50885  CODE    pc1600-rom-dumper.asm:947
+lbl_d_p1b0       = $C6D9 = 50905  CODE    pc1600-rom-dumper.asm:948
+lbl_d_p1b3       = $C6ED = 50925  CODE    pc1600-rom-dumper.asm:949
+lbl_d_p1b3b      = $C701 = 50945  CODE    pc1600-rom-dumper.asm:950
+lbl_d_p1b4       = $C716 = 50966  CODE    pc1600-rom-dumper.asm:951
+lbl_d_p1b5       = $C72A = 50986  CODE    pc1600-rom-dumper.asm:952
+lbl_d_p2b6       = $C73E = 51006  CODE    pc1600-rom-dumper.asm:953
+lbl_done         = $C7F3 = 51187  CODE    pc1600-rom-dumper.asm:965
+lbl_error        = $C64A = 50762  CODE    pc1600-rom-dumper.asm:939
+lbl_lh5803       = $C671 = 50801  CODE    pc1600-rom-dumper.asm:942
+lbl_lh5803_unstable = $C693 = 50835  CODE    pc1600-rom-dumper.asm:944
+lbl_menu1        = $C616 = 50710  CODE    pc1600-rom-dumper.asm:936
+lbl_menu2        = $C628 = 50728  CODE    pc1600-rom-dumper.asm:937
+lbl_menu3        = $C63D = 50749  CODE    pc1600-rom-dumper.asm:938
+lbl_p1_b0        = $C809 = 51209  CODE    pc1600-rom-dumper.asm:967
+lbl_p1_b1        = $C818 = 51224  CODE    pc1600-rom-dumper.asm:968
+lbl_p1_b2        = $C827 = 51239  CODE    pc1600-rom-dumper.asm:969
+lbl_p1_b3        = $C836 = 51254  CODE    pc1600-rom-dumper.asm:970
+lbl_p1_b3b       = $C845 = 51269  CODE    pc1600-rom-dumper.asm:971
+lbl_p1_b4        = $C855 = 51285  CODE    pc1600-rom-dumper.asm:972
+lbl_p1_b5        = $C86C = 51308  CODE    pc1600-rom-dumper.asm:973
+lbl_p1_b6        = $C884 = 51332  CODE    pc1600-rom-dumper.asm:974
+lbl_p1_b7        = $C893 = 51347  CODE    pc1600-rom-dumper.asm:975
+lbl_p2_b0        = $C8A2 = 51362  CODE    pc1600-rom-dumper.asm:977
+lbl_p2_b1        = $C8B1 = 51377  CODE    pc1600-rom-dumper.asm:978
+lbl_p2_b2        = $C8C0 = 51392  CODE    pc1600-rom-dumper.asm:979
+lbl_p2_b3        = $C8CF = 51407  CODE    pc1600-rom-dumper.asm:980
+lbl_p2_b4        = $C8DE = 51422  CODE    pc1600-rom-dumper.asm:981
+lbl_p2_b6        = $C8F3 = 51443  CODE    pc1600-rom-dumper.asm:982
+lbl_p2_b7        = $C908 = 51464  CODE    pc1600-rom-dumper.asm:983
+lbl_page0        = $C7DF = 51167  CODE    pc1600-rom-dumper.asm:964
+lbl_press_key    = $C65F = 50783  CODE    pc1600-rom-dumper.asm:940
+lcs_loop         = $C31B = 49947  CODE    pc1600-rom-dumper.asm:490
+lcs_noc          = $C329 = 49961  CODE    pc1600-rom-dumper.asm:498
+lh5803_addr      = $C963 = 51555  CODE    pc1600-rom-dumper.asm:1001
+lh5803_chk       = $C967 = 51559  CODE    pc1600-rom-dumper.asm:1003
+lh5803_count     = $C965 = 51557  CODE    pc1600-rom-dumper.asm:1002
+lh5803_done      = $C3FD = 50173  CODE    pc1600-rom-dumper.asm:619
+lh5803_dump_start = $C372 = 50034  CODE    pc1600-rom-dumper.asm:547
+lh5803_selftest_ok = $C307 = 49927  CODE    pc1600-rom-dumper.asm:474
+lh5803_selftest_tmp = $C969 = 51561  CODE    pc1600-rom-dumper.asm:1004
+lh5803_stub      = $C917 = 51479  CODE    pc1600-rom-dumper.asm:993
+lh5803_unstable  = $C3FE = 50174  CODE    pc1600-rom-dumper.asm:622
+line_buf         = $C931 = 51505  CODE    pc1600-rom-dumper.asm:997
+line_buf2        = $C949 = 51529  CODE    pc1600-rom-dumper.asm:998
+lsend_error      = $C370 = 50032  CODE    pc1600-rom-dumper.asm:539
+lsend_loop       = $C34F = 49999  CODE    pc1600-rom-dumper.asm:522
+menu_wait        = $C0EE = 49390  CODE    pc1600-rom-dumper.asm:108
+p1_bank5_read    = $C42B = 50219  CODE    pc1600-rom-dumper.asm:650
+p1_bank5_show    = $C466 = 50278  CODE    pc1600-rom-dumper.asm:682
+p1_display       = $C43E = 50238  CODE    pc1600-rom-dumper.asm:661 (unused)
+p1_entry_done    = $C47A = 50298  CODE    pc1600-rom-dumper.asm:692
+p1_loop          = $C133 = 49459  CODE    pc1600-rom-dumper.asm:143
+p1_reads_done    = $C43D = 50237  CODE    pc1600-rom-dumper.asm:658
+p2_entry_done    = $C4B9 = 50361  CODE    pc1600-rom-dumper.asm:727
+p2_loop          = $C14E = 49486  CODE    pc1600-rom-dumper.asm:160
+p2_start         = $C14A = 49482  CODE    pc1600-rom-dumper.asm:157
+page1_table      = $C58B = 50571  CODE    pc1600-rom-dumper.asm:895
+page2_table      = $C5B9 = 50617  CODE    pc1600-rom-dumper.asm:908
+rde_have_port3d  = $C206 = 49670  CODE    pc1600-rom-dumper.asm:276
+rde_no_bankset   = $C1FD = 49661  CODE    pc1600-rom-dumper.asm:271
+rde_no_bankset2  = $C289 = 49801  CODE    pc1600-rom-dumper.asm:355
+rde_no_port3d2   = $C294 = 49812  CODE    pc1600-rom-dumper.asm:362
+rde_skip         = $C29D = 49821  CODE    pc1600-rom-dumper.asm:368
+run_dump_entry   = $C1EF = 49647  CODE    pc1600-rom-dumper.asm:263
+run_page1_entry  = $C408 = 50184  CODE    pc1600-rom-dumper.asm:631
+run_page2_entry  = $C47D = 50301  CODE    pc1600-rom-dumper.asm:698
+send_err_code    = $C961 = 51553  CODE    pc1600-rom-dumper.asm:999
+show_label       = $C4BC = 50364  CODE    pc1600-rom-dumper.asm:732
+show_status      = $C4CC = 50380  CODE    pc1600-rom-dumper.asm:752
+sp_error         = $C2D2 = 49874  CODE    pc1600-rom-dumper.asm:428
+sp_loop          = $C2B7 = 49847  CODE    pc1600-rom-dumper.asm:408
+ss_bankread      = $C4E0 = 50400  CODE    pc1600-rom-dumper.asm:764
+ss_none          = $C514 = 50452  CODE    pc1600-rom-dumper.asm:788
+ss_p1            = $C4DA = 50394  CODE    pc1600-rom-dumper.asm:761
+ss_p2            = $C4DE = 50398  CODE    pc1600-rom-dumper.asm:763
+ss_ram           = $C518 = 50456  CODE    pc1600-rom-dumper.asm:790
+ss_rom           = $C51C = 50460  CODE    pc1600-rom-dumper.asm:792
+ss_tag           = $C51E = 50462  CODE    pc1600-rom-dumper.asm:793
+start            = $C0C5 = 49349  CODE    pc1600-rom-dumper.asm:86 (unused)
+status_buf       = $C919 = 51481  CODE    pc1600-rom-dumper.asm:996
+sweep_start      = $C102 = 49410  CODE    pc1600-rom-dumper.asm:120
+wait_key         = $C587 = 50567  CODE    pc1600-rom-dumper.asm:889
+
+
+total time: 0.0034 sec.
+no errors

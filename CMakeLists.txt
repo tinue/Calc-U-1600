@@ -55,6 +55,10 @@ set(CORE_COMMON_SOURCES
   ${CORE_ROOT}/Debug/DebugExpression.cpp
   ${CORE_ROOT}/Debug/CpuRegisters.cpp
   ${CORE_ROOT}/Debug/MachineDebugTargets.cpp
+  ${CORE_ROOT}/Debug/SourceMap.cpp
+  ${CORE_ROOT}/Debug/Listing/Listing.cpp
+  ${CORE_ROOT}/Debug/Listing/SdasListing.cpp
+  ${CORE_ROOT}/Debug/Listing/ZasmListing.cpp
   ${CORE_ROOT}/CPU/LH5801/LH5801.cpp
   ${CORE_ROOT}/CPU/SC7852/SC7852.cpp
   ${CORE_ROOT}/CPU/LH5803/LH5803Memory.cpp
@@ -302,6 +306,7 @@ set(TEST_SOURCES
   ${CORE_ROOT}/tests/machine_code_file_tests.cpp
   ${CORE_ROOT}/tests/disasm_tests.cpp
   ${CORE_ROOT}/tests/debug_target_tests.cpp
+  ${CORE_ROOT}/tests/listing_tests.cpp
 )
 
 add_executable(CoreTests ${TEST_SOURCES})

@@ -1418,6 +1418,7 @@ int run_lcd_screenshot_tests();
 int run_machine_code_file_tests();
 int run_disasm_tests();
 int run_debug_target_tests();
+int run_listing_tests();
 
 int main() {
     test_reset_vector();
@@ -1514,7 +1515,8 @@ int main() {
     int machineCodeFileFailures = run_machine_code_file_tests();
     int disasmFailures = run_disasm_tests();
     int debugTargetFailures = run_debug_target_tests();
-    return (g_fail == 0 && machineCodeFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && basicBinaryImageFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && pc1600MachineImageFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
+    int listingFailures = run_listing_tests();
+    return (g_fail == 0 && machineCodeFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && basicBinaryImageFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && pc1600MachineImageFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
             ce163fFailures == 0 && memoryCardFailures == 0 && batteryCardInstanceFailures == 0 &&
             presetFailures == 0 &&
             basicTyperFailures == 0 && pc1600BasicTyperFailures == 0 &&

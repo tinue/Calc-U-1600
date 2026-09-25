@@ -1,0 +1,24 @@
+                                      1 ; Tiny SC7852 sample for the listing-parser fixture (sdasz80 dialect):
+                                      2 ; a relocatable area linked to 0xC0C5, so the .rst holds the final
+                                      3 ; addresses while the .lst holds area offsets.
+                                      4 	.module blink
+                                      5 	.area	CODE (REL)
+                                      6 
+    00000000                          7 start::
+    00000000 21r13r00         [10]    8 	ld	hl,#counter
+    00000003 06 0A            [ 7]    9 	ld	b,#10
+    00000005                         10 loop:
+    00000005 34               [11]   11 	inc	(hl)
+    00000006 CDr0Cr00         [17]   12 	call	delay
+    00000009 10 FA            [13]   13 	djnz	loop
+    0000000B C9               [10]   14 	ret
+                                     15 
+    0000000C                         16 delay:
+    0000000C C5               [11]   17 	push	bc
+    0000000D 06 00            [ 7]   18 	ld	b,#0
+    0000000F 10 FE            [13]   19 1$:	djnz	1$
+    00000011 C1               [10]   20 	pop	bc
+    00000012 C9               [10]   21 	ret
+                                     22 
+    00000013                         23 counter:
+    00000013 00                      24 	.db	0

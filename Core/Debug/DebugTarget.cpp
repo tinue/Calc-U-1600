@@ -38,6 +38,24 @@ ExpressionContext DebugTarget::expressionContext(int thread,
     return ctx;
 }
 
+std::string BankKey::describe() const {
+    std::string s;
+    auto add = [&s](const std::string& part) { s += (s.empty() ? "" : ", ") + part; };
+    if (bank >= 0) add("bank " + std::to_string(bank));
+    if (me >= 0) add("me" + std::to_string(me));
+    if (pu >= 0) add("pu=" + std::to_string(pu));
+    if (pv >= 0) add("pv=" + std::to_string(pv));
+    return s;
+}
+
+bool DebugTarget::bankMatches(int thread, const BankKey& key, uint16_t addr) const {
+    if (key.me == 1) return false; // code runs from ME0 only
+    if (key.bank >= 0 && bankAt(thread, addr) != key.bank) return false;
+    if (key.pu >= 0 && pu(thread) != (key.pu != 0)) return false;
+    if (key.pv >= 0 && pv(thread) != (key.pv != 0)) return false;
+    return true;
+}
+
 void DebugTarget::setBreakpoints(int thread, const std::vector<uint16_t>& addrs) {
     if (thread < 1) return;
     if (m_breakpoints.size() < size_t(thread)) m_breakpoints.resize(size_t(thread));

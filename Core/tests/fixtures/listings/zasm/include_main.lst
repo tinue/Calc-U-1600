@@ -1,0 +1,42 @@
+                        ; --------------------------------------
+                        ; zasm: assemble "include_main.asm"
+                        ; date: 2026-09-25 16:23:27
+                        ; --------------------------------------
+
+
+                        #target bin
+C0C5:                   #code CODE, 0xC0C5
+C0C5: CDC8C0   [17]     start:	call helper
+                        #include "include_part.asm"
+C0C8: 00       [ 4]     helper:	nop
+C0C9: C9       [14]     	ret
+C0CA: 01020304          after:	db 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+C0CE: 05060708          
+C0D2: 090A0B0C          
+C0D6: 0D0E0F            
+C0D9: 68656C6C          	db "hello world, a long string", 0
+C0DD: 6F20776F          
+C0E1: 726C642C          
+C0E5: 2061206C          
+C0E9: 6F6E6720          
+C0ED: 73747269          
+C0F1: 6E6700            
+C0F4: 18CF     [12]     	jr start
+
+
+; +++ segments +++
+
+#CODE CODE     = $C0C5 = 49349,  size = $0031 =    49
+
+; +++ global symbols +++
+
+CODE      = $C0C5 = 49349  CODE    include_main.asm:2 (unused)
+CODE_end  = $C0F6 = 49398  CODE    include_main.asm:2 (unused)
+CODE_size = $0031 =    49  CODE    include_main.asm:2 (unused)
+after     = $C0CA = 49354  CODE    include_main.asm:5 (unused)
+helper    = $C0C8 = 49352  CODE    include_part.asm:1
+start     = $C0C5 = 49349  CODE    include_main.asm:3
+
+
+total time: 0.0003 sec.
+no errors

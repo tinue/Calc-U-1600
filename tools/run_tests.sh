@@ -12,6 +12,10 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/Debug/DebugExpression.cpp \
   Core/Debug/CpuRegisters.cpp \
   Core/Debug/MachineDebugTargets.cpp \
+  Core/Debug/SourceMap.cpp \
+  Core/Debug/Listing/Listing.cpp \
+  Core/Debug/Listing/SdasListing.cpp \
+  Core/Debug/Listing/ZasmListing.cpp \
   Core/Audio/PiezoSampler.cpp \
   Core/PC1500/PC1500Memory.cpp \
   Core/PC1500/PC1500Machine.cpp \
@@ -84,6 +88,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/machine_code_file_tests.cpp \
   Core/tests/disasm_tests.cpp \
   Core/tests/debug_target_tests.cpp \
+  Core/tests/listing_tests.cpp \
   Core/Basic/vendor/sharpdx/libsharpdx.a \
   -lz \
   -o /tmp/lh5801_tests

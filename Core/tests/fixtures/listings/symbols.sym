@@ -1,0 +1,6 @@
+; Symbol table fixture (.SYMBOLS: format, as in the CE-163F sources)
+.SYMBOLS:
+5808 BANKSEL_1500
+7864 RAM_END_H
+00C5	FIRMWARE_START
+bad line
