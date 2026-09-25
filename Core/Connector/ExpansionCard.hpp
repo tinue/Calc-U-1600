@@ -32,7 +32,7 @@ struct PinState {
     //   pin[4]  PC-1500 Y0 (CS &0000-&3FFF) / PC-1600 RAM2 (Slot 1) or RAM1 (Slot 2) CS
     //   pin[5]  PC-1500 S4        / PC-1600 PVOUT
     //   pin[6]  PC-1500 DME0      / PC-1600 MREQ
-    //   pin[15] INHIBIT / INH (see ExpansionCard::assertsInhibit -- output from the card)
+    //   pin[15] INHIBIT / INH (see InhibitSource -- output from the card)
     //   pin[16] PC-1500 S1 (PC-1500A S3) / PC-1600 S1 (Slot 1) or K0 (Slot 2)
     //   pin[17] PC-1500 S2 (PC-1500A S4) / PC-1600 S2 (Slot 1) or K1 (Slot 2)
     //   pin[18] PC-1500 S3 (PC-1500A S5) / PC-1600 S3 (Slot 1) or K2 (Slot 2)
@@ -62,6 +62,38 @@ struct PinState {
     bool ioWrite = false;
 };
 
+// What a card did with a write. Converts to bool as "claimed" (the bus
+// stops looking for another responder), which is all a guest-CPU store
+// needs; a host poke() also asks whether the byte was actually stored.
+struct WriteResult {
+    bool claimed = false;
+    bool stored = false;
+
+    /// Not this card's access.
+    static constexpr WriteResult ignored() { return {false, false}; }
+    /// Claimed, but the value went nowhere (mask ROM, write-protected
+    /// RAM, a read-only register).
+    static constexpr WriteResult refused() { return {true, false}; }
+    /// Claimed and acted on (stored, or latched into a register).
+    static constexpr WriteResult taken() { return {true, true}; }
+
+    constexpr operator bool() const { return claimed; }
+};
+
+// A card that can drive INHIBIT (Expansion-Connectors.md's INHIBIT/INH
+// pin, pin 15) to suppress the host's internal ROM and substitute its own
+// content derives from this too. Connectors look for it once, when the
+// card is attached, so the (usual) cards without it cost nothing on each
+// host-ROM fetch -- and a card can't answer assertsInhibit() without
+// declaring the capability. Polarity-free at this interface: "true =
+// suppress ROM"; the connector applies the host's electrical polarity (the
+// PC-1500 pulls the pin low, the PC-1600 drives it high).
+class InhibitSource {
+public:
+    virtual ~InhibitSource() = default;
+    virtual bool assertsInhibit() const = 0;
+};
+
 class ExpansionCard {
 public:
     virtual ~ExpansionCard() = default;
@@ -70,22 +102,9 @@ public:
     /// Returning false leaves the bus open (0xFF).
     virtual bool respondsToRead(const PinState& pins, uint8_t& outValue) const = 0;
 
-    /// Return true if this card claims (and thus acts on) this write.
-    virtual bool respondsToWrite(const PinState& pins, uint8_t value) = 0;
-
-    /// Asserted (Expansion-Connectors.md's INHIBIT/INH pin, pin 15) to
-    /// suppress the host's internal ROM, letting the card substitute its
-    /// own content. Polarity-free at this interface -- "true = suppress
-    /// ROM"; the connector applies the host's electrical polarity (the
-    /// PC-1500 pulls the pin low, the PC-1600 drives it high). Most cards
-    /// never assert this.
-    virtual bool assertsInhibit() const { return false; }
-
-    /// Whether this card can ever assert INHIBIT. Asked once, when the card
-    /// is attached, so a connector can skip the assertsInhibit() call on
-    /// every host-ROM fetch for the (usual) cards that never do. A card
-    /// that overrides assertsInhibit() must override this to return true.
-    virtual bool mayAssertInhibit() const { return false; }
+    /// Whether this card claims this write, and whether it stored it
+    /// (see WriteResult).
+    virtual WriteResult respondsToWrite(const PinState& pins, uint8_t value) = 0;
 
     /// The bank index this card currently exposes through its main banked
     /// window, for the GUI debug "Dump Mem" panel's per-column labels.

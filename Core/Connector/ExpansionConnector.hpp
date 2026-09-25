@@ -23,9 +23,12 @@ public:
 
     void attach(ExpansionCard* card) {
         m_card = card;
-        m_inhibitCard = (card && card->mayAssertInhibit()) ? card : nullptr;
+        m_inhibitCard = dynamic_cast<const InhibitSource*>(card);
     }
-    void detach() { m_card = m_inhibitCard = nullptr; }
+    void detach() {
+        m_card = nullptr;
+        m_inhibitCard = nullptr;
+    }
     ExpansionCard* attachedCard() const { return m_card; }
 
     /// Consulted by PC1500Memory only for ME0 addresses whose own decode
@@ -40,20 +43,20 @@ public:
     /// host/debug/preset-loader path); forwarded to the card via
     /// PinState::direct so a lock-gating card (CE-163F flash) can let it
     /// bypass its runtime write protocol.
-    bool write(uint16_t addr, bool pu, bool pv, uint8_t value, bool direct = false) {
-        if (!m_card) return false;
+    WriteResult write(uint16_t addr, bool pu, bool pv, uint8_t value, bool direct = false) {
+        if (!m_card) return WriteResult::ignored();
         PinState pins = decode(addr, /*forWrite=*/true, pu, pv);
         pins.direct = direct;
         return m_card->respondsToWrite(pins, value);
     }
 
-    // Queried on every host-ROM fetch; see ExpansionCard::mayAssertInhibit().
+    // Queried on every host-ROM fetch; see InhibitSource.
     bool inhibitAsserted() const { return m_inhibitCard && m_inhibitCard->assertsInhibit(); }
 
 private:
     PC1500Variant m_variant;
     ExpansionCard* m_card = nullptr;
-    ExpansionCard* m_inhibitCard = nullptr; // m_card if it may assert INHIBIT, else null
+    const InhibitSource* m_inhibitCard = nullptr; // m_card if it can assert INHIBIT, else null
 
     // Per-variant S-block -> physical-pin routing (Expansion-Connectors.md
     // §3.1). PC-1500: pins 16/17/18/5 carry S1/S2/S3/S4. PC-1500A: the same

@@ -55,8 +55,8 @@ public:
     /// `direct` = true for a host poke() (debug / preset loader) rather than
     /// a guest-CPU store -- forwarded via PinState::direct so a lock-gating
     /// card can bypass its runtime write protocol.
-    bool write(uint16_t addr, uint8_t value, bool direct = false) {
-        if (!selected(addr)) return false;
+    WriteResult write(uint16_t addr, uint8_t value, bool direct = false) {
+        if (!selected(addr)) return WriteResult::ignored();
         PinState pins = decode(addr, /*forWrite=*/true);
         pins.direct = direct;
         return m_card->respondsToWrite(pins, value);
@@ -75,8 +75,8 @@ public:
         if (!m_card) return false;
         return m_card->respondsToRead(remapPins(offset, pvoutHigh, /*forWrite=*/false), out);
     }
-    bool writeRemapped(uint16_t offset, bool pvoutHigh, uint8_t value, bool direct) {
-        if (!m_card) return false;
+    WriteResult writeRemapped(uint16_t offset, bool pvoutHigh, uint8_t value, bool direct) {
+        if (!m_card) return WriteResult::ignored();
         PinState p = remapPins(offset, pvoutHigh, /*forWrite=*/true);
         p.direct = direct;
         return m_card->respondsToWrite(p, value);

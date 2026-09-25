@@ -51,13 +51,14 @@ public:
     void attach(ExpansionCard* card) {
         if (card && std::find(m_chain.begin(), m_chain.end(), card) == m_chain.end()) {
             m_chain.push_back(card);
-            if (card->mayAssertInhibit()) m_inhibitChain.push_back(card);
+            if (auto* source = dynamic_cast<const InhibitSource*>(card)) m_inhibitChain.push_back(source);
         }
     }
     void detach(ExpansionCard* card) {
         m_chain.erase(std::remove(m_chain.begin(), m_chain.end(), card), m_chain.end());
-        m_inhibitChain.erase(std::remove(m_inhibitChain.begin(), m_inhibitChain.end(), card),
-                             m_inhibitChain.end());
+        if (auto* source = dynamic_cast<const InhibitSource*>(card))
+            m_inhibitChain.erase(std::remove(m_inhibitChain.begin(), m_inhibitChain.end(), source),
+                                 m_inhibitChain.end());
     }
     const std::vector<ExpansionCard*>& chain() const { return m_chain; }
 
@@ -72,13 +73,13 @@ public:
         return false;
     }
 
-    bool write(uint16_t addr, bool pu, bool pv, uint8_t value) {
-        if (m_chain.empty()) return false;
+    WriteResult write(uint16_t addr, bool pu, bool pv, uint8_t value) {
+        if (m_chain.empty()) return WriteResult::ignored();
         PinState pins = decode(addr, /*forWrite=*/true, pu, pv);
         for (ExpansionCard* card : m_chain) {
-            if (card->respondsToWrite(pins, value)) return true;
+            if (const WriteResult r = card->respondsToWrite(pins, value)) return r;
         }
-        return false;
+        return WriteResult::ignored();
     }
 
     /// ME1-space access -- only the 60-pin connector exposes DME1/ME1, so
@@ -106,16 +107,16 @@ public:
         return false;
     }
 
-    // Queried on every host-ROM fetch; see ExpansionCard::mayAssertInhibit().
+    // Queried on every host-ROM fetch; see InhibitSource.
     bool inhibitAsserted() const {
-        for (ExpansionCard* card : m_inhibitChain) if (card->assertsInhibit()) return true;
+        for (const InhibitSource* source : m_inhibitChain) if (source->assertsInhibit()) return true;
         return false;
     }
 
 private:
     PC1500Variant m_variant;
     std::vector<ExpansionCard*> m_chain;
-    std::vector<ExpansionCard*> m_inhibitChain; // the cards in m_chain that may assert INHIBIT
+    std::vector<const InhibitSource*> m_inhibitChain; // the cards in m_chain that can assert INHIBIT
 
     // S-block -> physical-pin routing. The 60-pin connector's own S-pin
     // positions aren't transcribed in the research corpus, so this assumes

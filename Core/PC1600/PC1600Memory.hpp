@@ -413,9 +413,11 @@ public:
     // Debug/test access, identical semantics to read()/write() — kept as a
     // separate name for symmetry with PC1500Memory's peek()/poke() and to
     // make call sites' intent explicit. poke() takes the host/debug path
-    // (PinState::direct) into a lock-gating card.
+    // (PinState::direct) into a lock-gating card, and returns whether the
+    // byte was stored (false: ROM, open bus, or a card that claimed the
+    // write but dropped it).
     uint8_t peek(uint16_t addr) const { return read(addr); }
-    void    poke(uint16_t addr, uint8_t value) { writeImpl(addr, value, /*direct=*/true); }
+    bool    poke(uint16_t addr, uint8_t value) { return writeImpl(addr, value, /*direct=*/true); }
 
     // SC7852Bus
     uint8_t readMem(uint16_t addr) override { return read(addr); }
@@ -613,5 +615,6 @@ private:
 
     // Shared body of write()/poke(): internal RAM first, then the two slot
     // connectors (`direct` distinguishes a host poke from a guest store).
-    void writeImpl(uint16_t addr, uint8_t value, bool direct);
+    // Returns whether the byte was stored.
+    bool writeImpl(uint16_t addr, uint8_t value, bool direct);
 };

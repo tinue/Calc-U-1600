@@ -93,14 +93,14 @@ public:
         return true;
     }
 
-    bool respondsToWrite(const PinState& pins, uint8_t value) override {
+    WriteResult respondsToWrite(const PinState& pins, uint8_t value) override {
         const Access a = decodeAccess(pins);
         if (a.me1 && a.addr >= kIoBase && a.addr <= kIoEnd) {
             const uint8_t sel = static_cast<uint8_t>(a.addr & 0x0F);
             writeReg(sel, value);
-            return true;
+            return WriteResult::taken();
         }
-        return false;                                      // ROM window read-only
+        return WriteResult::ignored();                     // ROM window read-only
     }
 
 private:

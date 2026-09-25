@@ -257,17 +257,6 @@ for the cleanup commit.
   `MachineController::traceActive()`, kept in step by the
   `traceEndedByRebuild` signal/slot; reading `traceActive()` would drop
   all three.
-- **Machine-code poke verifies by reading back.** `PC1600Machine::
-  pokeMemory` (write, read back, roll back) and
-  `PC1500MachineCodeLoader.cpp` (write, read back, no rollback) guess
-  writability by reading, which would also trigger any card register's
-  read side effects. Fix: cards report whether a host write was stored;
-  `poke()` returns `bool stored`.
-- **`ExpansionCard::mayAssertInhibit()` must be overridden together with
-  `assertsInhibit()`** or the card silently never inhibits (the cached
-  `m_inhibitCard`/`m_inhibitChain` skip it). No production card overrides
-  either. Make INHIBIT a declared capability (a constructor flag) instead
-  of a second virtual.
 - **Banked/unbanked split re-derived per access.**
   `r.banked ? r.banking.bankSize : r.capacity` and `? bankCount : 1`
   recur in `SoftwareDefinedCard.hpp` and `MemoryCardDefinition.hpp` (the

@@ -263,7 +263,7 @@ uint8_t PC1600Memory::read(uint16_t addr) const {
     return trace(0xFF, 4); // open bus
 }
 
-void PC1600Memory::writeImpl(uint16_t addr, uint8_t value, bool direct) {
+bool PC1600Memory::writeImpl(uint16_t addr, uint8_t value, bool direct) {
 #ifdef PC1600_POWER_PROBE
     const auto traceW = [&](int claimed) {
         pc1600probe::onSlotWrite(addr, value, claimed, m_bank.readPort31(),
@@ -273,21 +273,26 @@ void PC1600Memory::writeImpl(uint16_t addr, uint8_t value, bool direct) {
     const auto traceW = [](int) {};
 #endif
     const SlotRemap r = resolveSlotRemap(addr);
-    if (r.hit1 && m_slot1Conn.writeRemapped(r.off1, r.pvoutHigh1, value, direct)) {
-        traceW(5);
-        return;
+    if (r.hit1) {
+        if (const WriteResult w = m_slot1Conn.writeRemapped(r.off1, r.pvoutHigh1, value, direct)) {
+            traceW(5);
+            return w.stored;
+        }
     }
-    if (r.hit2 && m_slot2Conn.writeRemapped(r.off2, r.pvoutHigh2, value, direct)) {
-        traceW(0);
-        return;
+    if (r.hit2) {
+        if (const WriteResult w = m_slot2Conn.writeRemapped(r.off2, r.pvoutHigh2, value, direct)) {
+            traceW(0);
+            return w.stored;
+        }
     }
-    if (isRom(addr)) { traceW(1); return; } // ROM / unbacked: ignored
-    if (uint8_t* p = resolveMutable(addr)) { *p = value; traceW(1); return; }
+    if (isRom(addr)) { traceW(1); return false; } // ROM / unbacked: ignored
+    if (uint8_t* p = resolveMutable(addr)) { *p = value; traceW(1); return true; }
     if (isSlotWindow(addr)) {
-        if (m_slot1Conn.write(addr, value, direct)) { traceW(2); return; }
-        if (m_slot2Conn.write(addr, value, direct)) { traceW(3); return; }
+        if (const WriteResult w = m_slot1Conn.write(addr, value, direct)) { traceW(2); return w.stored; }
+        if (const WriteResult w = m_slot2Conn.write(addr, value, direct)) { traceW(3); return w.stored; }
     }
     traceW(4); // open bus / unattached slot: nothing to write
+    return false;
 }
 
 uint8_t PC1600Memory::readIO(uint8_t port) {

@@ -149,7 +149,7 @@ bool PC1500Memory::debugSlotResponds(uint16_t addr) const {
     return m_expansionConnector && m_expansionConnector->read(addr, m_pu, m_pv, v);
 }
 
-void PC1500Memory::poke(uint16_t addr, uint8_t value) {
+bool PC1500Memory::poke(uint16_t addr, uint8_t value) {
     // Same address decode as writeME0(), but flagged `direct` on the
     // connector path: this is the host/debug/preset-loader write, not a
     // guest-CPU store, so a card that gates runtime writes (the CE-163F's
@@ -157,13 +157,15 @@ void PC1500Memory::poke(uint16_t addr, uint8_t value) {
     // unconditionally. The preset loader has no concept of a bank or a lock
     // -- it just pokes the currently-selected bank -- which is exactly the
     // semantics a debug poke wants too.
-    if (uint8_t* p = resolve(addr, /*forWrite=*/true)) { *p = value; return; }
-    if (m_expansionConnector &&
-        m_expansionConnector->write(addr, m_pu, m_pv, value, /*direct=*/true)) return;
+    if (uint8_t* p = resolve(addr, /*forWrite=*/true)) { *p = value; return true; }
+    if (m_expansionConnector) {
+        if (const WriteResult r = m_expansionConnector->write(addr, m_pu, m_pv, value, /*direct=*/true))
+            return r.stored;
+    }
     // SystemBus (60-pin) carries no lock-gating card today, so a plain
     // write is enough -- PinState::direct defaults false, matching the
     // pre-`direct` behavior.
-    if (m_systemBus && m_systemBus->write(addr, m_pu, m_pv, value)) return;
+    return m_systemBus && m_systemBus->write(addr, m_pu, m_pv, value).stored;
 }
 
 uint8_t PC1500Memory::readME1(uint16_t addr) {

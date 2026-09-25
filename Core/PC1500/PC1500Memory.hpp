@@ -84,9 +84,11 @@ public:
     // context (peek) or without implying bus semantics (poke). poke() also
     // bypasses a card's runtime write-gating (e.g. the CE-163F's flash-bank
     // JEDEC unlock protocol) -- it's the host/debug/preset-loader path, and
-    // an unconditional write is the right semantics there.
+    // an unconditional write is the right semantics there. Returns whether
+    // the byte was stored (false: ROM, open bus, or a card that claimed the
+    // write but dropped it).
     uint8_t peek(uint16_t addr) const;
-    void    poke(uint16_t addr, uint8_t value);
+    bool    poke(uint16_t addr, uint8_t value);
 
     /// Whether the attached expansion card actually decodes `addr` (vs.
     /// this being genuine open bus) -- for the "Dump Mem" panel's

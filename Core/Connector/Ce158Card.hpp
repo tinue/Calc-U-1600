@@ -202,12 +202,12 @@ public:
         return true;
     }
 
-    bool respondsToWrite(const PinState& pins, uint8_t value) override {
-        if (!pins.me1) return false; // ROM window is read-only
+    WriteResult respondsToWrite(const PinState& pins, uint8_t value) override {
+        if (!pins.me1) return WriteResult::ignored(); // ROM window is read-only
         const uint16_t addr = pins.address;
         if (addr >= kPioBase && addr <= kPioEnd) {
             writePio(uint8_t(addr & 0x0F), value);
-            return true;
+            return WriteResult::taken();
         }
         if (addr >= kUartBase && addr <= kUartEnd) {
             if (addr & 1) {
@@ -220,10 +220,10 @@ public:
                 m_txPending = true;
                 m_uartStatus &= uint8_t(~(kStatusTHRE | kStatusTSRE));
             }
-            return true;
+            return WriteResult::taken();
         }
-        if (addr >= kIntIdBase && addr <= kIntIdEnd) return true; // read-only; claimed
-        return false;
+        if (addr >= kIntIdBase && addr <= kIntIdEnd) return WriteResult::refused(); // read-only; claimed
+        return WriteResult::ignored();
     }
 
 private:

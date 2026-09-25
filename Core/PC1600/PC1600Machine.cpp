@@ -462,25 +462,22 @@ bool PC1600Machine::pokeMemory(uint16_t address, const uint8_t* data, size_t siz
     std::lock_guard<std::mutex> lock(m_mutex);
     // All-or-nothing: reject ROM / open bus up front, then write through
     // the host path (poke(): flash takes the byte directly instead of via
-    // its command decoder) and read every byte back. isWritable() can't
-    // see inside a card -- any region that answers a read passes it, even
-    // one that drops the write (mask ROM, read-only RAM) -- so a byte that
-    // didn't stick puts the old contents back and fails the call.
+    // its command decoder). isWritable() can't see inside a card -- any
+    // region that answers a read passes it, even one that drops the write
+    // (mask ROM, read-only RAM) -- so a byte poke() reports as not stored
+    // puts the bytes written so far back and fails the call.
     std::vector<uint8_t> old(size);
     for (size_t i = 0; i < size; i++) {
         uint16_t addr = static_cast<uint16_t>(address + i); // wraps at 0xFFFF, matching real Z-80 address arithmetic
         if (!m_z80Mem.isWritable(addr)) return false;
         old[i] = m_z80Mem.read(addr);
     }
-    bool stuck = true;
     for (size_t i = 0; i < size; i++) {
-        uint16_t addr = static_cast<uint16_t>(address + i);
-        m_z80Mem.poke(addr, data[i]);
-        if (m_z80Mem.read(addr) != data[i]) stuck = false;
+        if (m_z80Mem.poke(static_cast<uint16_t>(address + i), data[i])) continue;
+        for (size_t j = 0; j < i; j++) m_z80Mem.poke(static_cast<uint16_t>(address + j), old[j]);
+        return false;
     }
-    if (stuck) return true;
-    for (size_t i = 0; i < size; i++) m_z80Mem.poke(static_cast<uint16_t>(address + i), old[i]);
-    return false;
+    return true;
 }
 
 uint8_t PC1600Machine::debugPeek(uint16_t addr) {

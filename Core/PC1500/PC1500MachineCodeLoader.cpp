@@ -12,16 +12,19 @@ bool loadPC1500MachineCode(PC1500Machine& machine, uint32_t addr, const uint8_t*
         *error = b;
         return false;
     }
-    for (size_t i = 0; i < len; i++) machine.memory().poke(static_cast<uint16_t>(addr + i), data[i]);
+    bool allStored = true;
+    uint16_t firstMiss = 0;
     for (size_t i = 0; i < len; i++) {
         const uint16_t at = static_cast<uint16_t>(addr + i);
-        if (machine.memory().peek(at) != data[i]) {
-            char b[160];
-            std::snprintf(b, sizeof(b), "&%X is not RAM (ROM or no memory there) -- the code at &%X-&%X did not load",
-                          at, addr, static_cast<unsigned>(addr + len - 1));
-            *error = b;
-            return false;
+        if (!machine.memory().poke(at, data[i]) && allStored) {
+            allStored = false;
+            firstMiss = at;
         }
     }
-    return true;
+    if (allStored) return true;
+    char b[160];
+    std::snprintf(b, sizeof(b), "&%X is not RAM (ROM or no memory there) -- the code at &%X-&%X did not load",
+                  firstMiss, addr, static_cast<unsigned>(addr + len - 1));
+    *error = b;
+    return false;
 }

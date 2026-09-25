@@ -30,7 +30,7 @@ int g_fail = 0;
 // describe exactly the enable-condition shape it wants (mirroring
 // docs/Memory-Card-Definition-Spec.md §4's AND/OR addressing model) without
 // a new subclass per test.
-class StubCard : public ExpansionCard {
+class StubCard : public ExpansionCard, public InhibitSource {
 public:
     using ReadFn = std::function<bool(const PinState&, uint8_t&)>;
     using WriteFn = std::function<bool(const PinState&, uint8_t)>;
@@ -41,11 +41,10 @@ public:
     bool respondsToRead(const PinState& pins, uint8_t& outValue) const override {
         return m_read && m_read(pins, outValue);
     }
-    bool respondsToWrite(const PinState& pins, uint8_t value) override {
-        return m_write && m_write(pins, value);
+    WriteResult respondsToWrite(const PinState& pins, uint8_t value) override {
+        return m_write && m_write(pins, value) ? WriteResult::taken() : WriteResult::ignored();
     }
     bool assertsInhibit() const override { return m_inhibit; }
-    bool mayAssertInhibit() const override { return m_inhibit; }
 
 private:
     ReadFn m_read;

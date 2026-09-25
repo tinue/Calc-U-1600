@@ -64,7 +64,7 @@ public:
         return false;
     }
 
-    bool respondsToWrite(const PinState& pins, uint8_t value) override {
+    WriteResult respondsToWrite(const PinState& pins, uint8_t value) override {
         // 1. A port/pin write that latches a bank number.
         for (RegionState& st : m_regions) {
             if (!st.def->banked) continue;
@@ -72,16 +72,16 @@ public:
             if (b.triggerKind == TriggerKind::IoPort) {
                 if (pins.ioWrite && (pins.address & 0xFF) == b.triggerPort) {
                     st.bank = static_cast<int>(extractBits(value, b.sampledBits));
-                    return true;
+                    return WriteResult::taken();
                 }
             } else {  // TriggerKind::Pin -- a memory-write strobe
                 if (!pins.ioWrite && pins.pin[b.triggerPin]) {
                     st.bank = static_cast<int>(extractBits(pins.address, b.sampledBits));
-                    return true;
+                    return WriteResult::taken();
                 }
             }
         }
-        if (pins.ioWrite) return false;  // an I/O write that is not our trigger
+        if (pins.ioWrite) return WriteResult::ignored();  // an I/O write that is not our trigger
 
         // 2. A data write into a mapped slice.
         for (RegionState& st : m_regions) {
@@ -91,23 +91,24 @@ public:
             const RegionContent& c = r.contentForBank(r.banked ? uint32_t(st.bank) : 0);
             // A mask ROM takes no write from anyone -- not even a host poke.
             // Claimed, so the bus doesn't fall through to open bus.
-            if (c.kind == ContentKind::Rom) return true;
+            if (c.kind == ContentKind::Rom) return WriteResult::refused();
             if (c.kind == ContentKind::Flash) {
                 if (pins.direct) {
                     st.backing[off] = value;  // poke/preset loader: unconditional
-                    return true;
+                    return WriteResult::taken();
                 }
                 // off = bank*bankSize + windowOffset (see locate()) -- the flash command
                 // decoder only ever sees the window-relative address.
                 uint32_t bankBase = r.banked ? uint32_t(st.bank) * r.banking.bankSize : 0;
                 flashWrite(st, r, c.flash, off - bankBase, value);
-                return true;  // claimed even when the state machine leaves the array untouched
+                return WriteResult::taken();  // the chip took the command, even one that leaves the array untouched
             }
             bool protectedNow = c.hasWriteProtect && c.writeProtectDefaultProtected;
-            if (c.writable && !protectedNow) st.backing[off] = value;
-            return true;  // the card claims the write either way
+            if (!c.writable || protectedNow) return WriteResult::refused();  // the card claims the write either way
+            st.backing[off] = value;
+            return WriteResult::taken();
         }
-        return false;
+        return WriteResult::ignored();
     }
 
     // Test-only introspection.
