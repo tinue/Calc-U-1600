@@ -220,14 +220,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             return m_presetController->powerCycleLive(change, error);
         });
     });
-    connect(m_plotterController.get(), &PlotterController::ce150AttachedChanged, this,
-            [this](bool attached) { onPlotterAttachedChanged(/*isCE150=*/true, attached); });
-    connect(m_plotterController.get(), &PlotterController::ce1600pAttachedChanged, this,
-            [this](bool attached) { onPlotterAttachedChanged(/*isCE150=*/false, attached); });
+    connect(m_plotterController.get(), &PlotterController::attachStateChanged, this, &MainWindow::syncPeripherals);
     connect(m_controlBar, &ControlBar::ce158ToggleRequested, this,
             [this] { m_plotterController->requestToggleCE158(); });
-    connect(m_plotterController.get(), &PlotterController::ce158AttachedChanged, this,
-            &MainWindow::onCe158AttachedChanged);
     // Queued: the failure is reported from inside the power cycle, and the
     // dialog should appear once the machine is back on, not block it off.
     connect(
@@ -317,7 +312,7 @@ void MainWindow::syncControlBarForModel() {
     m_ce1600pRomMenuAction->setVisible(isPC1600);
     // Always shown on a PC-1600 (never hidden alongside the CE-1600P
     // toggle) so the control bar doesn't jump around as the plotter/
-    // floppy union attaches and detaches -- onPlotterAttachedChanged()
+    // floppy union attaches and detaches -- syncPeripherals()
     // grays the row out instead via setFloppyEnabled().
     m_controlBar->setFloppyVisible(isPC1600);
     if (isPC1600) refreshFloppyCombo();
@@ -476,48 +471,38 @@ void MainWindow::loadMachineCode() {
     m_controller->pasteText(advice.callCommand);
 }
 
-void MainWindow::onPlotterAttachedChanged(bool isCE150, bool attached) {
-    const bool ce150Attached = isCE150 ? attached : m_controller->ce150Attached();
-    const bool ce1600pAttached = isCE150 ? m_controller->ce1600pAttached() : attached;
-    syncPeripheralButtons(ce150Attached, ce1600pAttached, m_controller->ce158Attached());
-    const bool otherAttached = isCE150 ? ce1600pAttached : ce150Attached;
-    if (!isCE150) {
-        // CE-1600F attaches as a union with CE-1600P (PC1600Machine::
-        // attachCE1600P()); whoever attached it (PlotterController or a
-        // preset) already put its disk in. Gray the picker in/out alongside
-        // it (it stays visible either way -- see syncControlBarForModel()).
-        m_controlBar->setFloppyEnabled(attached);
-        refreshFloppyCombo();
-    }
-    if (attached) {
-        m_plotterPaper->setKind(isCE150 ? PlotterPaperWidget::Kind::CE150 : PlotterPaperWidget::Kind::CE1600P);
-        if (!m_plotterPaperInLayout) { m_debugRowLayout->addWidget(m_plotterPaper, 1); m_plotterPaperInLayout = true; }
-        m_plotterPaper->show();
-    } else if (!otherAttached && m_plotterPaperInLayout) {
-        m_debugRowLayout->removeWidget(m_plotterPaper);
-        m_plotterPaper->hide();
-        m_plotterPaperInLayout = false;
-    }
-}
-
-void MainWindow::syncPeripheralButtons(bool ce150Attached, bool ce1600pAttached, bool ce158Attached) {
+void MainWindow::syncPeripherals() {
+    const bool ce150Attached = m_controller->ce150Attached();
+    const bool ce1600pAttached = m_controller->ce1600pAttached();
+    const bool ce158Attached = m_controller->ce158Attached();
     // The CE-1600P excludes both the CE-150 and (on a PC-1600) the CE-158
     // -- the CE-158 does not connect to the CE-1600P: gray out whichever
     // buttons the attached peripherals rule out.
     m_controlBar->setCe150State(ce150Attached, !ce1600pAttached);
     m_controlBar->setCe1600pState(ce1600pAttached, !ce150Attached && !ce158Attached);
     m_controlBar->setCe158State(ce158Attached, !ce1600pAttached);
+    // CE-1600F attaches as a union with CE-1600P (PC1600Machine::
+    // attachCE1600P()); whoever attached it (PlotterController or a
+    // preset) already put its disk in. Gray the picker in/out alongside
+    // it (it stays visible either way -- see syncControlBarForModel()).
+    m_controlBar->setFloppyEnabled(ce1600pAttached);
+    refreshFloppyCombo();
+    // Re-kind on every sync, not just on a change: it also drops the paper's
+    // cached plot revision, which a rebuilt machine's plotter restarts.
+    if (ce150Attached || ce1600pAttached)
+        m_plotterPaper->setKind(ce150Attached ? PlotterPaperWidget::Kind::CE150 : PlotterPaperWidget::Kind::CE1600P);
+    setDockedPane(m_plotterPaper, ce150Attached || ce1600pAttached);
+    setDockedPane(m_ce158Printer, ce158Attached);
 }
 
-void MainWindow::onCe158AttachedChanged(bool attached) {
-    syncPeripheralButtons(m_controller->ce150Attached(), m_controller->ce1600pAttached(), attached);
-    if (attached) {
-        if (!m_ce158PrinterInLayout) { m_debugRowLayout->addWidget(m_ce158Printer, 1); m_ce158PrinterInLayout = true; }
-        m_ce158Printer->show();
-    } else if (m_ce158PrinterInLayout) {
-        m_debugRowLayout->removeWidget(m_ce158Printer);
-        m_ce158Printer->hide();
-        m_ce158PrinterInLayout = false;
+void MainWindow::setDockedPane(QWidget* pane, bool show) {
+    const bool docked = m_debugRowLayout->indexOf(pane) >= 0;
+    if (show) {
+        if (!docked) m_debugRowLayout->addWidget(pane, 1);
+        pane->show();
+    } else if (docked) {
+        m_debugRowLayout->removeWidget(pane);
+        pane->hide();
     }
 }
 
@@ -798,8 +783,8 @@ void MainWindow::refreshViewsAfterAdvance() {
     m_floppyManager->markDirtyAndSchedulePersist();
     m_controlBar->setFloppyMotorOn(m_floppyManager->motorOn());
     m_debugPanel->onFrameTick();
-    if (m_plotterPaperInLayout) m_plotterPaper->onFrameTick();
-    if (m_ce158PrinterInLayout) m_ce158Printer->onFrameTick();
+    if (m_debugRowLayout->indexOf(m_plotterPaper) >= 0) m_plotterPaper->onFrameTick();
+    if (m_debugRowLayout->indexOf(m_ce158Printer) >= 0) m_ce158Printer->onFrameTick();
 }
 
 void MainWindow::setEmulationFrozen(bool frozen) {

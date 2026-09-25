@@ -97,9 +97,7 @@ private:
     ControlBar* m_controlBar = nullptr;
     DebugPanel* m_debugPanel = nullptr;
     PlotterPaperWidget* m_plotterPaper = nullptr; // added to m_debugRowLayout only while a plotter is attached
-    bool m_plotterPaperInLayout = false;
     Ce158PrinterWidget* m_ce158Printer = nullptr; // added to m_debugRowLayout only while a CE-158 is attached
-    bool m_ce158PrinterInLayout = false;
     QWidget* m_debugRow = nullptr;
     QHBoxLayout* m_debugRowLayout = nullptr;
     QTimer* m_frameTimer = nullptr;
@@ -175,14 +173,12 @@ private:
     // (manual, module-driven rebuild, or preset load).
     void syncControlBarForModel();
 
-    // CE-150/CE-1600P attach-state handler, shared by both
-    // PlotterController::ce150AttachedChanged/ce1600pAttachedChanged
-    // signals: they only differ in which plotter is "self" vs "other".
-    void onPlotterAttachedChanged(bool isCE150, bool attached);
-    void onCe158AttachedChanged(bool attached);
-    // Enables/checks the CE-150/CE-1600P/CE-158 buttons from their attach
-    // states (shared by both handlers above).
-    void syncPeripheralButtons(bool ce150Attached, bool ce1600pAttached, bool ce158Attached);
+    // PlotterController::attachStateChanged handler: reads the CE-150/
+    // CE-1600P/CE-158 attach states from MachineController and matches the
+    // control-bar buttons, the floppy picker and the docked panes to them.
+    void syncPeripherals();
+    // Docks `pane` into (or takes it out of) the debug row.
+    void setDockedPane(QWidget* pane, bool show);
 
     // PresetController::armed handler: the preset has attached its
     // model/cards/plotter but the machine is still powered off. Resyncs

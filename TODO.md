@@ -193,14 +193,6 @@ touched, not proactively:
 
 Larger or behaviour-changing items left out of the 0.5.0 cleanup commit.
 
-- **CE-158 / CE-1600P exclusion is encoded in several layers.** Core
-  (`PC1600Machine` attach detaches the other), the parser
-  (`PresetFile.cpp`), `PlotterController` (`hadCE158`/`hadCE1600P`
-  delta bookkeeping) and MainWindow (now one
-  `syncPeripheralButtons()`). Fix: keep the rule in Core; after any
-  toggle, have `PlotterController` call `syncFromMachineState()` and
-  MainWindow read all three attach states from the controller instead
-  of being passed "self" state by the signal.
 - **Preset `armedFired` flag in `PresetController.cpp`** (both
   branches): the post-load "safety net" slot/floppy resync from
   `result` would undo a `saveas:` retarget, so it is skipped once
@@ -229,12 +221,10 @@ Larger or behaviour-changing items left out of the 0.5.0 cleanup commit.
   fgetc loop though `readFile`/`BundledRoms::detail::readWholeFile`
   exist. Fix: `tools/CliCommon.hpp` with `readFile`/`writeFile`/
   `printCe150Report`.
-- **MainWindow docked panes.** Plotter paper and CE-158 printer each
-  repeat add/show/remove/hide + an `m_*InLayout` bool; could be one
-  `setDockedPane(QWidget*, bool show)` using
-  `m_debugRowLayout->indexOf(w) >= 0`. Same for
-  `serialLinkStatus`/`ce158SerialLinkStatus` (one static helper over a
-  `PtySerialLink*`) and `ControlBar::setCe150State`/`setCe158State`.
+- **Duplicated status/state helpers.** `serialLinkStatus`/
+  `ce158SerialLinkStatus` could be one static helper over a
+  `PtySerialLink*`, and `ControlBar::setCe150State`/`setCe158State` one
+  setter parameterised by button.
 
 ### From the second 0.5.0 `/simplify` pass (skipped)
 
