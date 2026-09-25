@@ -276,19 +276,6 @@ for the cleanup commit.
 - **Menu re-pick guards.** dff5d13 added "already checked" guards to the
   four `apply*Selection` handlers; connecting the exclusive-group actions
   to `toggled(true)` instead of `triggered` removes all four.
-- **Per-machine preset adapters still duplicate small helpers.**
-  `screenText()` (differs only by 0x7BB0 vs 0xFBB0), `tapBreak()`, the
-  one-line `waitUntilBasicIdle`/`typeLine`/`typeBasicProgram`/
-  `loadBasicPayload` forwards, and two `PresetProgram::Slot` ternaries
-  (`PresetRunner.cpp`, `PC1600PresetMachine::loadMachineCode`).
-  `PresetMachineBase` can't host the forwards without including both
-  machines' headers (qualified `::` calls need the declarations);
-  consider `PresetProgram` holding a `machinecode::Slot` so
-  `slotName()` applies.
-- **Preset auto-run builds `CALL &%X` by hand** (`PresetRunner.cpp`
-  ~218) and ignores `program.slot`, while `machinecode::advice().
-  callCommand` produces `CALL #2,&xxxx` for S2. Use it (behaviour change
-  for S1/S2 presets with auto-run).
 - **Machine teardown written three times** in `MachineController.cpp`
   (`endTraceBeforeRebuild` + `m_paste.cancel` + reset both machines,
   ~87/180/195): one `replaceMachine()` helper.

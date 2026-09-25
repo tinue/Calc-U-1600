@@ -21,24 +21,14 @@ namespace {
 constexpr uint64_t kTStateHz = PC1600Machine::kTStateHz;
 constexpr uint64_t kFrameTStates = kTStateHz / 60;
 
-// ON (BREAK) hold/idle -- tapKey() (PC1600BasicTyper) drives the key
-// matrix, but ON isn't a matrix key, so this stays local.
+// ON (BREAK) hold, and the idle after it -- see presetTapOn().
 constexpr uint64_t kHoldTStates = kFrameTStates * 4;
-constexpr uint64_t kIdleTStates = kFrameTStates * 4;
 
 // The console input line, as ASCII, at the PC-1600 work-area buffer
 // FBB0H-FBFFH (PC-1600-Work-Area-Map.md; the same window
 // pc1600_preset_tests.cpp reads). Logged after each step so a stuck load
 // can be lined up against the LCD's edit line.
-std::string screenText(PC1600Machine& machine) {
-    std::string s;
-    for (uint16_t a = 0xFBB0; a <= 0xFBFF; ++a) {
-        uint8_t b = machine.memory().peek(a);
-        if (b == 0x0D) break;
-        s += (b >= 0x20 && b < 0x7F) ? static_cast<char>(b) : '.';
-    }
-    return s;
-}
+std::string screenText(PC1600Machine& machine) { return presetInputLine(machine, 0xFBB0); }
 
 std::string stepTag(PC1600Machine& machine) {
     // Whichever CPU currently owns the bus -- the LH5803 (BASIC-compat)
@@ -49,13 +39,6 @@ std::string stepTag(PC1600Machine& machine) {
     else
         std::snprintf(pc, sizeof(pc), " pc=L:$%04X", machine.lh5803().pc());
     return "  screen=\"" + screenText(machine) + "\"" + pc;
-}
-
-void tapBreak(PC1600Machine& machine) {
-    machine.setOnKeyPressed(true);
-    machine.runCycles(kHoldTStates);
-    machine.setOnKeyPressed(false);
-    machine.runCycles(kIdleTStates);
 }
 
 // Attach the plotter the preset's `plotter:` asks for, before the cold
@@ -115,7 +98,7 @@ public:
         // is out of its key-scan loop for a bit. No-op without a plotter.
         waitForKeyboardScanLoop(m_machine);
         if (name == "break" || name == "on") {
-            tapBreak(m_machine);
+            presetTapOn(m_machine, kHoldTStates);
             return true;
         }
         if (PC1600Keyboard::keyFromName(name) == PC1600Keyboard::Key::Unknown) {
@@ -151,10 +134,7 @@ public:
     // no ADTBL scatter applies (unlike the BASIC fast loader).
     bool loadMachineCode(const PresetProgram& program, uint32_t addr, const uint8_t* data, size_t len,
                          std::string* error) override {
-        const int slot = program.slot == PresetProgram::Slot::S1   ? 1
-                         : program.slot == PresetProgram::Slot::S2 ? 2
-                                                                   : 0;
-        return loadPC1600MachineCode(m_machine, slot, addr, data, len, error);
+        return loadPC1600MachineCode(m_machine, static_cast<int>(program.slot), addr, data, len, error);
     }
 };
 

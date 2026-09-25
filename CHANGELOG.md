@@ -13,6 +13,9 @@
 - **Presets** On the PC-1500, a `program:` line that replaces a line of
   the same length (`10 A=1`, then `10 A=2`) is no longer reported as
   rejected.
+- **Presets** A machine-code header's auto-run into slot S2 now types
+  `CALL #2,&<addr>`, as Load Machine Code proposes, instead of
+  `CALL &<addr>`, which ran whatever bank 0 maps there.
 
 ## [0.5.0] - 2026-09-25
 

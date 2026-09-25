@@ -127,6 +127,31 @@ public:
                                  std::string* error) = 0;
 };
 
+/// The ROM's typed-input line buffer (80 bytes from `base`, up to its CR)
+/// as printable ASCII -- logged after each preset step so a load that goes
+/// wrong can be lined up against the LCD's edit line.
+template <class Machine>
+std::string presetInputLine(Machine& machine, uint16_t base) {
+    std::string s;
+    for (uint16_t i = 0; i < 80; i++) {
+        const uint8_t b = machine.memory().peek(static_cast<uint16_t>(base + i));
+        if (b == 0x0D) break;
+        s += (b >= 0x20 && b < 0x7F) ? static_cast<char>(b) : '.';
+    }
+    return s;
+}
+
+/// BREAK (the ON key) isn't part of either key matrix, so it can't go
+/// through tapKey(): press and release the ON line directly, holding each
+/// state for `holdCycles`.
+template <class Machine>
+void presetTapOn(Machine& machine, uint64_t holdCycles) {
+    machine.setOnKeyPressed(true);
+    machine.runCycles(holdCycles);
+    machine.setOnKeyPressed(false);
+    machine.runCycles(holdCycles);
+}
+
 /// The parts of PresetMachine every machine forwards the same way.
 template <class Machine>
 class PresetMachineBase : public PresetMachine {

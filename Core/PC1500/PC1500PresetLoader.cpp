@@ -22,36 +22,14 @@ constexpr uint64_t kCyclesPerFrame = kPC1500CyclesPerFrame;
 constexpr uint64_t kBootSettleCycles = static_cast<uint64_t>(kCpuHz * 2);
 constexpr uint64_t kIdleCap = static_cast<uint64_t>(kCpuHz * 5);
 
-// The ROM's typed-input line buffer (same base/length tools/pc1500_cli.cpp
-// reads for its "Display input-line text" dump) -- lets each preset step be
-// logged with what actually ended up on the LCD's edit line, so a load
-// that goes wrong can be lined up against the calculator's own display.
-std::string screenText(PC1500Machine& machine) {
-    static constexpr uint16_t kBase = 0x7BB0;
-    std::string s;
-    for (int i = 0; i < 80; i++) {
-        uint8_t b = machine.memory().peek(static_cast<uint16_t>(kBase + i));
-        if (b == 0x0D) break;
-        s += (b >= 0x20 && b < 0x7F) ? static_cast<char>(b) : '.';
-    }
-    return s;
-}
+// The ROM's typed-input line buffer (same base tools/pc1500_cli.cpp reads
+// for its "Display input-line text" dump).
+std::string screenText(PC1500Machine& machine) { return presetInputLine(machine, 0x7BB0); }
 
 std::string hex4(uint16_t v) {
     char b[8];
     std::snprintf(b, sizeof(b), "$%04X", v);
     return b;
-}
-
-// BREAK (the ON key) isn't part of the physical key matrix -- see
-// PC1500Keyboard.hpp's own doc comment -- so it can't go through
-// tapKey()/pressKey("break"), which would silently no-op. Scriptable
-// equivalent of a plain ON press+release.
-void tapBreak(PC1500Machine& machine) {
-    machine.setOnKeyPressed(true);
-    machine.runCycles(kCyclesPerFrame * 4);
-    machine.setOnKeyPressed(false);
-    machine.runCycles(kCyclesPerFrame * 4);
 }
 
 class PC1500PresetMachine final : public PresetMachineBase<PC1500Machine> {
@@ -71,7 +49,7 @@ public:
 
     // The parser already rejected unknown key names.
     bool key(const std::string& name, std::string*) override {
-        if (name == "break" || name == "on") tapBreak(m_machine);
+        if (name == "break" || name == "on") presetTapOn(m_machine, kCyclesPerFrame * 4);
         else tapKey(m_machine, name);
         return true;
     }

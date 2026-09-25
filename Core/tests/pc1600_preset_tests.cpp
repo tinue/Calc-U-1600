@@ -118,7 +118,7 @@ void test_parser_pc1600_machine_binary() {
         CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: s0\n  path: x.bin\n", &p, &err));
         CHECK(p.sections.size() == 1);
         CHECK(p.sections[0].program.format == PresetProgram::Format::Binary);
-        CHECK(p.sections[0].program.slot == PresetProgram::Slot::S0);
+        CHECK(p.sections[0].program.hasSlot && p.sections[0].program.slot == machinecode::Slot::S0);
         CHECK(!p.sections[0].program.hasAddress);
         CHECK(!p.sections[0].program.hasLength);
     }
@@ -129,7 +129,7 @@ void test_parser_pc1600_machine_binary() {
         CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S2\n  path: x.bin\n"
                     "  address: 0x8100\n  length: 0x40\n",
                     &p, &err));
-        CHECK(p.sections[0].program.slot == PresetProgram::Slot::S2);
+        CHECK(p.sections[0].program.slot == machinecode::Slot::S2);
         CHECK(p.sections[0].program.hasAddress && p.sections[0].program.address == 0x8100);
         CHECK(p.sections[0].program.hasLength && p.sections[0].program.length == 0x40);
     }
@@ -362,6 +362,34 @@ void test_loader_machine_binary_autorun() {
     CHECK(r.ok);
     CHECK(r.error.empty());
     CHECK(m.debugPeek(0xD300) == 0xC9);
+}
+
+// ROM-gated: a header auto-run into slot 2 must CALL through global bank 2
+// (`CALL #2,&8100`), not `CALL &8100` -- that would run whatever bank 0
+// maps there. The code stores a marker in internal RAM, so it only lands
+// if the right CALL ran it.
+void test_loader_machine_binary_autorun_slot2() {
+    PC1600Machine m;
+    if (!loadPC1600Roms(m)) {
+        std::fprintf(stderr, "SKIP test_loader_machine_binary_autorun_slot2: PC-1600 ROM images not found\n");
+        return;
+    }
+    const std::string bin = "/tmp/pc1600_ml_autorun_s2.bin";
+    // LD A,5AH / LD (D300H),A / RET
+    CHECK(writeFile(bin, mlFile({0x3E, 0x5A, 0x32, 0x00, 0xD3, 0xC9}, /*load=*/0x8100, /*autorun=*/0x8100,
+                                /*declared=*/6)));
+
+    PresetFile p;
+    std::string err;
+    CHECK(parse("model: PC-1600\nmemory-expansion-2:\n  - modulespec: CE-1600M\n"
+                "program:\n  format: binary\n  slot: S2\n  path: " + bin + "\n",
+                &p, &err));
+    std::string logText;
+    PresetLoadResult r = applyPC1600Preset(m, p, [&](const std::string& line) { logText += line + "\n"; }, ".",
+                                           "Qt6/resources/cards");
+    CHECK(r.ok);
+    CHECK(logText.find("auto-run CALL #2,&8100") != std::string::npos);
+    CHECK(m.debugPeek(0xD300) == 0x5A);
 }
 
 void test_parser_accepts_basic_text_program() {
@@ -870,6 +898,7 @@ int run_pc1600_preset_tests() {
     test_loader_machine_binary_headerless();
     test_loader_machine_binary_headerless_address_only_and_ce158();
     test_loader_machine_binary_autorun();
+    test_loader_machine_binary_autorun_slot2();
     test_loader_rejects_unknown_key_defensively();
     test_loader_ce150_plotter_needs_rom_path();
     test_loader_ce150_plotter_attaches_with_rom_path();

@@ -395,14 +395,15 @@ bool parseProgramBlock(const std::vector<RawLine>& lines, size_t& idx, const std
             if (!hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'slot' requires a value"; return false; }
             std::string v = value;
             lowerAscii(v);
-            if (v == "s0") prog.slot = PresetProgram::Slot::S0;
-            else if (v == "s1") prog.slot = PresetProgram::Slot::S1;
-            else if (v == "s2") prog.slot = PresetProgram::Slot::S2;
+            if (v == "s0") prog.slot = machinecode::Slot::S0;
+            else if (v == "s1") prog.slot = machinecode::Slot::S1;
+            else if (v == "s2") prog.slot = machinecode::Slot::S2;
             else {
                 *error = "line " + std::to_string(line.lineNo) + ": 'slot' must be S0, S1, or S2";
                 return false;
             }
             hasSlot = true;
+            prog.hasSlot = true;
         } else if (key == "length") {
             if (!hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'length' requires a value"; return false; }
             bool bad = value.empty();
@@ -696,7 +697,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             // must name its target slot.
             if (s.kind == PresetSection::Kind::Program &&
                 s.program.format == PresetProgram::Format::Binary &&
-                s.program.slot == PresetProgram::Slot::None) {
+                !s.program.hasSlot) {
                 *error = "'program: format: binary' requires 'slot: S0|S1|S2' for a PC-1600 preset "
                          "(S0 = internal RAM, S1/S2 = the memory slots)";
                 return false;
@@ -726,7 +727,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
     }
     for (const PresetSection& s : out->sections) {
         if (s.kind == PresetSection::Kind::Program &&
-            s.program.slot != PresetProgram::Slot::None) {
+            s.program.hasSlot) {
             *error = "'program: slot:' is only valid for a PC-1600 preset (a PC-1500 'format: "
                      "binary' block pokes the whole file at 'address:')";
             return false;

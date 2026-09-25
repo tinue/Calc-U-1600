@@ -195,10 +195,7 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
         return false;
     }
     if (log) {
-        const char* slot = program.slot == PresetProgram::Slot::S0   ? ", slot S0"
-                           : program.slot == PresetProgram::Slot::S1 ? ", slot S1"
-                           : program.slot == PresetProgram::Slot::S2 ? ", slot S2"
-                                                                     : "";
+        const std::string slot = program.hasSlot ? std::string(", slot ") + machinecode::slotName(program.slot) : "";
         char range[40];
         std::snprintf(range, sizeof(range), "$%04X..$%04X", addr, static_cast<uint32_t>(addr + len - 1));
         log(tag + "binary " + program.path + " (" + std::to_string(len) + " bytes" + (hasHeader ? ", header" : "") +
@@ -215,15 +212,18 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
             *error = tag + b;
             return false;
         }
-        char line[24];
-        std::snprintf(line, sizeof(line), "CALL &%X", file.autorunAddr);
+        // The same CALL Load Machine Code proposes: `CALL #2,&<addr>` for
+        // code in slot 2 (global bank 2), `CALL &<addr>` otherwise.
+        const std::string line = machinecode::advice(machine.codeTarget(), program.slot, addr, len,
+                                                     file.autorunAddr, 0, 0, {})
+                                     .callCommand;
         std::string typeError;
         if (!machine.typeLine(line, &typeError)) {
             *error = tag + "auto-run '" + line + "' failed: " + typeError;
             return false;
         }
         machine.waitUntilBasicIdle(static_cast<uint64_t>(machine.cyclesPerSecond()) * kSecondsPerHour);
-        if (log) log("  auto-run " + std::string(line) + machine.stepTag());
+        if (log) log("  auto-run " + line + machine.stepTag());
     }
     return true;
 }

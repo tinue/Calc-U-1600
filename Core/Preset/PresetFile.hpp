@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "../MachineCodeFile.hpp"
 #include "../PC1500/PC1500Variant.hpp"
 
 // ── Preset file model + parser (the "common loader": file open, parse, ──
@@ -151,8 +152,8 @@ struct PresetProgram {
     //                `address` (its length defaults to the whole file). A
     //                PC-1600 preset also gives `slot: S0|S1|S2` and loads
     //                linearly into that one slot. A non-zero auto-run
-    //                address in the header makes the loader type
-    //                `CALL &<addr>` afterwards, so the machine must be in RUN
+    //                address in the header makes the loader type the
+    //                `CALL` for it afterwards (`CALL #2,&<addr>` for S2), so the machine must be in RUN
     //                mode at the end of the block (it is by default after
     //                boot; a preceding `keys:` block that went to PRO must
     //                `- key: mode` back first).
@@ -181,10 +182,10 @@ struct PresetProgram {
     // RAM ($C000-$FFFF), `S1`/`S2` = the two 40-pin memory slots
     // ($8000-$BFFF window). `length` (bytes) overrides the header's length
     // field, or the whole-file length of a headerless file. `hasAddress` /
-    // `hasLength` record whether the field was present in the preset (0 is
-    // a legal explicit value).
-    enum class Slot { None, S0, S1, S2 };
-    Slot slot = Slot::None;
+    // `hasLength` / `hasSlot` record whether the field was present in the
+    // preset (0 / S0 are legal explicit values).
+    machinecode::Slot slot = machinecode::Slot::S0;
+    bool hasSlot = false;
     uint32_t length = 0;
     bool hasAddress = false;
     bool hasLength = false;
