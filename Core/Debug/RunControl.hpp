@@ -40,8 +40,9 @@ public:
     enum class State : uint8_t { Paused, Running, Stepping };
     enum class StepKind : uint8_t { Instruction, In, Over, Out };
 
-    RunControl(DebugTarget& target, SourceMap& map, BreakpointTable& breakpoints)
-        : m_target(target), m_map(map), m_breakpoints(breakpoints) {}
+    RunControl(DebugTarget& target, SourceMap& map, BreakpointTable& breakpoints);
+    RunControl(const RunControl&) = delete; // its lookups capture `this`
+    RunControl& operator=(const RunControl&) = delete;
 
     bool paused() const { return m_state == State::Paused; }
 
@@ -58,11 +59,11 @@ public:
     std::vector<DebugEvent> slice(uint64_t budget, uint64_t maxSteps = 20000);
 
     /// Symbols for conditions and logpoints (the source map's).
-    BreakpointTable::SymbolLookup symbols() const;
+    const BreakpointTable::SymbolLookup& symbols() const { return m_symbols; }
     /// The target's bank predicate, for source lookups.
-    BankMatch bankMatch() const;
+    const BankMatch& bankMatch() const { return m_bankMatch; }
     /// Side-effect-free code reads, for source lookups that check bytes.
-    CodePeek codePeek() const;
+    const CodePeek& codePeek() const { return m_codePeek; }
     /// Source location of `thread`'s PC right now (false: no source).
     bool locate(int thread, uint16_t pc, SourceLocation* out) const;
 
@@ -78,6 +79,10 @@ private:
     DebugTarget& m_target;
     SourceMap& m_map;
     BreakpointTable& m_breakpoints;
+    // Built once: every source lookup and breakpoint hit uses them.
+    BreakpointTable::SymbolLookup m_symbols;
+    BankMatch m_bankMatch;
+    CodePeek m_codePeek;
     State m_state = State::Paused;
     bool m_pendingPause = false;
     DebugEvent::Reason m_pendingReason = DebugEvent::Pause;

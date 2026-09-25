@@ -14,6 +14,7 @@
 
 #include "../CPU/LH5801/LH5801.hpp"
 #include "../CPU/SC7852/SC7852.hpp"
+#include "../Debug/CpuRegisters.hpp"
 #include "../Debug/DebugExpression.hpp"
 #include "../Debug/MachineDebugTargets.hpp"
 #include "../PC1500/PC1500Machine.hpp"
@@ -510,6 +511,55 @@ void test_cpu_views() {
     m.lh5803().setBreakpointsEnabled(false);
 }
 
+void test_register_reads() {
+    // Every listed register reads back its listed value, plus the halves
+    // and aliases the list doesn't show.
+    LhBus bus;
+    LH5801 lh(bus);
+    lh.reset();
+    lh.setX(0x1234); lh.setY(0x5678); lh.setU(0x9ABC); lh.setA(0x42); lh.setStatusReg(0x15); lh.setPV(true);
+    uint32_t v = 0;
+    for (const debug::Register& r : debug::lhRegisters(lh))
+        CHECK(debug::lhReadRegister(lh, r.name, &v) && v == r.value);
+    CHECK(debug::lhReadRegister(lh, "xh", &v) && v == 0x12 && debug::lhReadRegister(lh, "ul", &v) && v == 0xBC);
+    CHECK(debug::lhReadRegister(lh, "zf", &v) && !debug::lhReadRegister(lh, "q", &v));
+
+    ZBus zbus;
+    SC7852 z(zbus);
+    z.reset();
+    z.setAF(0x1234); z.setBC(0x5678); z.setIX(0xABCD); z.setAF2(0x4321); z.setI(0x3F);
+    for (const debug::Register& r : debug::z80Registers(z))
+        CHECK(debug::z80ReadRegister(z, r.name, &v) && v == r.value);
+    CHECK(debug::z80ReadRegister(z, "af2", &v) && v == 0x4321);
+    CHECK(debug::z80ReadRegister(z, "a", &v) && v == 0x12 && debug::z80ReadRegister(z, "f", &v) && v == 0x34);
+    CHECK(debug::z80ReadRegister(z, "ixl", &v) && v == 0xCD && debug::z80ReadRegister(z, "c", &v) && v == 0x78);
+    CHECK(debug::z80ReadRegister(z, "zf", &v) && !debug::z80ReadRegister(z, "q", &v));
+}
+
+void test_watch_set() {
+    WatchSet w;
+    w.add({0x0000, 0x0001, 0, true, false});   // read, ME0
+    w.add({0xFFFF, 0xFFFF, 1, false, true});   // write, ME1
+    w.add({0xFFF0, 0x000F, 0, true, true});    // wrapped: never matches
+    w.check(0x0002, 0, false, 0);
+    CHECK(!w.hitPending());
+    w.check(0x0001, 0, true, 0);               // a write where only reads are watched
+    CHECK(!w.hitPending());
+    w.check(0xFFFF, 0, true, 0);               // the right address in the wrong space
+    w.check(0xFFF5, 0, false, 0);              // inside the wrapped range
+    CHECK(!w.hitPending());
+    w.check(0x0001, 0x5A, false, 0);
+    w.check(0xFFFF, 0x77, true, 1);            // later hits don't replace the first
+    CHECK(w.hitPending());
+    const WatchHit hit = w.consumeHit();
+    CHECK(hit.addr == 0x0001 && hit.value == 0x5A && !hit.write && hit.space == 0 && !w.hitPending());
+    w.check(0xFFFF, 0x77, true, 1);
+    CHECK(w.hitPending() && w.consumeHit().space == 1);
+    w.clear();
+    w.check(0x0001, 0, false, 0);
+    CHECK(!w.hitPending() && w.empty());
+}
+
 } // namespace
 
 int run_debug_target_tests() {
@@ -527,6 +577,8 @@ int run_debug_target_tests() {
     test_pc1600_lh5803_thread();
     test_machine_step_latches_stops();
     test_cpu_views();
+    test_register_reads();
+    test_watch_set();
     std::printf("debug target tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

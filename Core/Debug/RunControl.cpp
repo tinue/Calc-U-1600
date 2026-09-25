@@ -4,21 +4,16 @@
 
 namespace debug {
 
-BreakpointTable::SymbolLookup RunControl::symbols() const {
-    return [this](const std::string& name, int64_t* value) {
+RunControl::RunControl(DebugTarget& target, SourceMap& map, BreakpointTable& breakpoints)
+    : m_target(target), m_map(map), m_breakpoints(breakpoints) {
+    m_symbols = [this](const std::string& name, int64_t* value) {
         uint16_t v = 0;
         if (!m_map.symbolValue(name, &v)) return false;
         *value = v;
         return true;
     };
-}
-
-BankMatch RunControl::bankMatch() const {
-    return [this](int thread, const BankKey& key, uint16_t addr) { return m_target.bankMatches(thread, key, addr); };
-}
-
-CodePeek RunControl::codePeek() const {
-    return [this](int thread, uint16_t addr, uint8_t* value) { return m_target.peek(thread, kSpaceMain, addr, value); };
+    m_bankMatch = [this](int thread, const BankKey& key, uint16_t addr) { return m_target.bankMatches(thread, key, addr); };
+    m_codePeek = [this](int thread, uint16_t addr, uint8_t* value) { return m_target.peek(thread, kSpaceMain, addr, value); };
 }
 
 bool RunControl::locate(int thread, uint16_t pc, SourceLocation* out) const {

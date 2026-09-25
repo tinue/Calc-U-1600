@@ -72,12 +72,28 @@ std::vector<Register> lhRegisters(const LH5801& cpu) {
 }
 
 bool lhReadRegister(const LH5801& cpu, const std::string& name, uint32_t* value) {
-    for (const Register& r : lhRegisters(cpu))
-        if (r.name == name) { *value = r.value; return true; }
-    static const char* const kHalves[6] = {"xl", "xh", "yl", "yh", "ul", "uh"};
-    const uint8_t halves[6] = {cpu.xl(), cpu.xh(), cpu.yl(), cpu.yh(), cpu.ul(), cpu.uh()};
-    for (int i = 0; i < 6; i++)
-        if (name == kHalves[i]) { *value = halves[i]; return true; }
+    // Every name lhRegisters() lists, then the 8-bit halves.
+    struct Getter { const char* name; uint32_t (*get)(const LH5801&); };
+    static const Getter kGetters[] = {
+        {"a", [](const LH5801& c) -> uint32_t { return c.a(); }},
+        {"x", [](const LH5801& c) -> uint32_t { return c.x(); }},
+        {"y", [](const LH5801& c) -> uint32_t { return c.y(); }},
+        {"u", [](const LH5801& c) -> uint32_t { return c.u(); }},
+        {"s", [](const LH5801& c) -> uint32_t { return c.sp(); }},
+        {"p", [](const LH5801& c) -> uint32_t { return c.pc(); }},
+        {"t", [](const LH5801& c) -> uint32_t { return c.statusReg(); }},
+        {"pu", [](const LH5801& c) -> uint32_t { return c.pu() ? 1u : 0u; }},
+        {"pv", [](const LH5801& c) -> uint32_t { return c.pv() ? 1u : 0u; }},
+        {"tm", [](const LH5801& c) -> uint32_t { return c.timer(); }},
+        {"xl", [](const LH5801& c) -> uint32_t { return c.xl(); }},
+        {"xh", [](const LH5801& c) -> uint32_t { return c.xh(); }},
+        {"yl", [](const LH5801& c) -> uint32_t { return c.yl(); }},
+        {"yh", [](const LH5801& c) -> uint32_t { return c.yh(); }},
+        {"ul", [](const LH5801& c) -> uint32_t { return c.ul(); }},
+        {"uh", [](const LH5801& c) -> uint32_t { return c.uh(); }},
+    };
+    for (const Getter& g : kGetters)
+        if (name == g.name) { *value = g.get(cpu); return true; }
     const int bit = flagBit(CpuKind::LH5801, name);
     if (bit >= 0) { *value = (cpu.statusReg() >> bit) & 1u; return true; }
     return false;
@@ -128,18 +144,47 @@ std::vector<Register> z80Registers(const SC7852& cpu) {
                   cpu.af2(), cpu.bc2(), cpu.de2(), cpu.hl2(), cpu.i(), cpu.r(), cpu.im(), cpu.iff1(), cpu.iff2()});
 }
 
-bool z80ReadRegister(const SC7852& cpu, const std::string& raw, uint32_t* value) {
-    const std::string name = canonicalZ80(raw);
-    for (const Register& r : z80Registers(cpu))
-        if (r.name == name) { *value = r.value; return true; }
-    struct Half { const char* name; uint16_t pair; bool high; };
-    const Half halves[] = {
-        {"a", cpu.af(), true}, {"f", cpu.af(), false}, {"b", cpu.bc(), true}, {"c", cpu.bc(), false},
-        {"d", cpu.de(), true}, {"e", cpu.de(), false}, {"h", cpu.hl(), true}, {"l", cpu.hl(), false},
-        {"ixh", cpu.ix(), true}, {"ixl", cpu.ix(), false}, {"iyh", cpu.iy(), true}, {"iyl", cpu.iy(), false},
+bool z80ReadRegister(const SC7852& cpu, const std::string& name, uint32_t* value) {
+    // Every name z80Registers() lists (the alternate set also as af2..hl2),
+    // then the 8-bit halves.
+    struct Getter { const char* name; uint32_t (*get)(const SC7852&); };
+    static const Getter kGetters[] = {
+        {"af", [](const SC7852& c) -> uint32_t { return c.af(); }},
+        {"bc", [](const SC7852& c) -> uint32_t { return c.bc(); }},
+        {"de", [](const SC7852& c) -> uint32_t { return c.de(); }},
+        {"hl", [](const SC7852& c) -> uint32_t { return c.hl(); }},
+        {"ix", [](const SC7852& c) -> uint32_t { return c.ix(); }},
+        {"iy", [](const SC7852& c) -> uint32_t { return c.iy(); }},
+        {"sp", [](const SC7852& c) -> uint32_t { return c.sp(); }},
+        {"pc", [](const SC7852& c) -> uint32_t { return c.pc(); }},
+        {"af'", [](const SC7852& c) -> uint32_t { return c.af2(); }},
+        {"bc'", [](const SC7852& c) -> uint32_t { return c.bc2(); }},
+        {"de'", [](const SC7852& c) -> uint32_t { return c.de2(); }},
+        {"hl'", [](const SC7852& c) -> uint32_t { return c.hl2(); }},
+        {"af2", [](const SC7852& c) -> uint32_t { return c.af2(); }},
+        {"bc2", [](const SC7852& c) -> uint32_t { return c.bc2(); }},
+        {"de2", [](const SC7852& c) -> uint32_t { return c.de2(); }},
+        {"hl2", [](const SC7852& c) -> uint32_t { return c.hl2(); }},
+        {"i", [](const SC7852& c) -> uint32_t { return c.i(); }},
+        {"r", [](const SC7852& c) -> uint32_t { return c.r(); }},
+        {"im", [](const SC7852& c) -> uint32_t { return c.im(); }},
+        {"iff1", [](const SC7852& c) -> uint32_t { return c.iff1() ? 1u : 0u; }},
+        {"iff2", [](const SC7852& c) -> uint32_t { return c.iff2() ? 1u : 0u; }},
+        {"a", [](const SC7852& c) -> uint32_t { return c.af() >> 8; }},
+        {"f", [](const SC7852& c) -> uint32_t { return c.af() & 0xFF; }},
+        {"b", [](const SC7852& c) -> uint32_t { return c.bc() >> 8; }},
+        {"c", [](const SC7852& c) -> uint32_t { return c.bc() & 0xFF; }},
+        {"d", [](const SC7852& c) -> uint32_t { return c.de() >> 8; }},
+        {"e", [](const SC7852& c) -> uint32_t { return c.de() & 0xFF; }},
+        {"h", [](const SC7852& c) -> uint32_t { return c.hl() >> 8; }},
+        {"l", [](const SC7852& c) -> uint32_t { return c.hl() & 0xFF; }},
+        {"ixh", [](const SC7852& c) -> uint32_t { return c.ix() >> 8; }},
+        {"ixl", [](const SC7852& c) -> uint32_t { return c.ix() & 0xFF; }},
+        {"iyh", [](const SC7852& c) -> uint32_t { return c.iy() >> 8; }},
+        {"iyl", [](const SC7852& c) -> uint32_t { return c.iy() & 0xFF; }},
     };
-    for (const Half& h : halves)
-        if (name == h.name) { *value = h.high ? uint32_t(h.pair >> 8) : uint32_t(h.pair & 0xFF); return true; }
+    for (const Getter& g : kGetters)
+        if (name == g.name) { *value = g.get(cpu); return true; }
     const int bit = flagBit(CpuKind::Z80, name);
     if (bit >= 0) { *value = (cpu.f() >> bit) & 1u; return true; }
     return false;
