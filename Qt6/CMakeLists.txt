@@ -77,6 +77,9 @@ file(CONFIGURE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/generated/Version.iss
 # PC1500Machine.hpp/PC1600Machine.hpp #include several of its headers.
 set(CORE_SOURCES
   ${CORE_ROOT}/Debug/BasicPointerTable.cpp
+  ${CORE_ROOT}/Debug/Disasm/Disassembly.cpp
+  ${CORE_ROOT}/Debug/Disasm/LH5801Disassembler.cpp
+  ${CORE_ROOT}/Debug/Disasm/Z80Disassembler.cpp
   ${CORE_ROOT}/CPU/LH5801/LH5801.cpp
   ${CORE_ROOT}/CPU/SC7852/SC7852.cpp
   ${CORE_ROOT}/CPU/LH5803/LH5803Memory.cpp

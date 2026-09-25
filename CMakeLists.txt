@@ -48,6 +48,9 @@ endif()
 # Core sources used by tools and tests
 set(CORE_COMMON_SOURCES
   ${CORE_ROOT}/Debug/BasicPointerTable.cpp
+  ${CORE_ROOT}/Debug/Disasm/Disassembly.cpp
+  ${CORE_ROOT}/Debug/Disasm/LH5801Disassembler.cpp
+  ${CORE_ROOT}/Debug/Disasm/Z80Disassembler.cpp
   ${CORE_ROOT}/CPU/LH5801/LH5801.cpp
   ${CORE_ROOT}/CPU/SC7852/SC7852.cpp
   ${CORE_ROOT}/CPU/LH5803/LH5803Memory.cpp
@@ -293,6 +296,7 @@ set(TEST_SOURCES
   ${CORE_ROOT}/tests/key_paste_tests.cpp
   ${CORE_ROOT}/tests/lcd_screenshot_tests.cpp
   ${CORE_ROOT}/tests/machine_code_file_tests.cpp
+  ${CORE_ROOT}/tests/disasm_tests.cpp
 )
 
 add_executable(CoreTests ${TEST_SOURCES})

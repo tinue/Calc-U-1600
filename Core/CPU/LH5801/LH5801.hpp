@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "../../TraceTypes.hpp"
+#include "../HistoryRing.hpp"
 #include "../TraceRing.hpp"
 
 // ── Bus interface ────────────────────────────────────────────────────────
@@ -170,6 +171,12 @@ public:
     /// (and thus the next unfrozen drainTraceEvents() call) is untouched.
     uint32_t peekTraceEvents(CpuFrame* out, uint32_t max) { return m_trace.peek(out, max); }
 
+    /// The debugger's always-on history of the last retired instructions
+    /// (see HistoryRing.hpp). Recorded on every step() regardless of the
+    /// TRACE_* flags; cleared by reset().
+    using History = HistoryRing<LH5801HistoryFrame, 32>;
+    const History& history() const { return m_history; }
+
     void addBreakpoint(uint16_t addr) { m_breakpoints.add(addr); }
     void removeBreakpoint(uint16_t addr) { m_breakpoints.remove(addr); }
     void clearBreakpoints() { m_breakpoints.clear(); }
@@ -262,11 +269,19 @@ private:
     uint32_t m_traceSeqno{0};
     TraceRing<CpuFrame, 512> m_trace;
     BreakpointSet m_breakpoints;
+    History m_history;
+    uint8_t m_fetchLen{0}; // bytes fetched by the current step(), mirrored into m_history.next()
 
     bool     m_illegalOpcodeHit{false};
     uint16_t m_lastIllegalOpcodePC{0};
     uint16_t m_lastIllegalOpcode{0};
     uint8_t  m_cpuIdTag{CPU_ID_UNSPECIFIED};
 
-    void recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles);
+    /// Records a TRACE frame if `tf` asks for one. The flag test is inline
+    /// so the untraced hot path pays no call.
+    void recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles) {
+        if (tf & (TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL)) pushTraceFrame(tf, pcAtStart, opcodeWord, cycles);
+    }
+    void pushTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles);
+    void recordHistory(uint16_t pcAtStart, uint8_t cycles, bool interrupt);
 };

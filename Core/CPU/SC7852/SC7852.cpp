@@ -31,6 +31,8 @@ void SC7852::reset() {
     m_nmiPending = false;
     m_eiShadow = false;
     m_pendingPrefix = 0;
+    m_history.clear();
+    m_historyFrame = &m_history.next();
     // A/F and the general-purpose registers are left as their construction-
     // time values on a real Z-80 reset (undefined/whatever they were) —
     // this core initializes them to 0xFF/0 at construction and never
@@ -43,18 +45,25 @@ void SC7852::reset() {
 
 // R counts M1 cycles only (opcode and prefix fetches, interrupt
 // acknowledges), not operand or displacement reads.
+uint8_t SC7852::readCode() {
+    uint8_t v = bus.readMem(PC++);
+    m_historyFrame->bytes[m_fetchLen & 3] = v; // at most 4 per instruction; never overruns
+    m_fetchLen++;
+    return v;
+}
+
 uint8_t SC7852::fetchOpcode() {
     bumpR();
-    return bus.readMem(PC++);
+    return readCode();
 }
 
 uint8_t SC7852::fetch8() {
-    return bus.readMem(PC++);
+    return readCode();
 }
 
 uint16_t SC7852::fetch16() {
-    uint8_t lo = bus.readMem(PC++);
-    uint8_t hi = bus.readMem(PC++);
+    uint8_t lo = readCode();
+    uint8_t hi = readCode();
     return uint16_t(lo | (hi << 8));
 }
 
@@ -446,8 +455,12 @@ int SC7852::step() {
     m_eiShadow = false;
     // No interrupt is accepted between a DD/FD prefix and what follows it.
     if (!m_pendingPrefix && (m_nmiPending || (m_intLine && IFF1 && !eiShadow))) {
+        const uint16_t interruptedPC = PC;
         int serviced = serviceInterrupt(eiShadow);
-        if (serviced >= 0) return serviced; // interrupt ack consumes this step() call on its own; no trace frame
+        if (serviced >= 0) { // interrupt ack consumes this step() call on its own; no trace frame
+            recordHistory(interruptedPC, uint8_t(serviced), true);
+            return serviced;
+        }
     }
     if (m_halted) {
         return 0;
@@ -456,6 +469,8 @@ int SC7852::step() {
     uint32_t tf = traceFlags();
 
     uint16_t pcAtStart = m_pendingPrefix ? uint16_t(PC - 1) : PC; // a carried prefix starts the instruction
+    m_fetchLen = 0;
+    if (m_pendingPrefix) { m_historyFrame->bytes[0] = m_pendingPrefix; m_fetchLen = 1; }
     uint8_t opcode = m_pendingPrefix ? m_pendingPrefix : fetchOpcode();
     m_pendingPrefix = 0;
     int cycles = 0;
@@ -465,17 +480,25 @@ int SC7852::step() {
     // A following DD/FD (already fetched) is carried into the next step(),
     // keeping each step() bounded however long a prefix run is.
     uint8_t indexedOp = 0;
+    uint16_t histPc = pcAtStart;
     if (opcode == 0xDD || opcode == 0xFD) {
         indexedOp = fetchOpcode();
         if (indexedOp == 0xDD || indexedOp == 0xFD) {
             m_pendingPrefix = indexedOp;
             cycles = 4 + kM1WaitStates;
             recordTraceFrame(tf, pcAtStart, opcode, uint8_t(cycles));
+            m_fetchLen = 1; // the carried prefix belongs to the next frame
+            recordHistory(pcAtStart, uint8_t(cycles), false);
             return cycles;
         }
         if (indexedOp == 0xED) {
             cycles += 4 + kM1WaitStates;
             opcode = 0xED;
+            // The history frame keeps only the ED instruction (at most four
+            // bytes); the ignored prefix is dropped from it.
+            histPc = uint16_t(histPc + 1);
+            m_historyFrame->bytes[0] = 0xED;
+            m_fetchLen = 1;
         }
     }
     uint16_t opcodeWord = opcode;
@@ -491,6 +514,7 @@ int SC7852::step() {
     }
 
     recordTraceFrame(tf, pcAtStart, opcodeWord, uint8_t(cycles));
+    recordHistory(histPc, uint8_t(cycles), false);
     return cycles;
 }
 
@@ -1096,9 +1120,7 @@ int SC7852::executeDDFDCB(uint8_t opcode, uint16_t ixy, int8_t d) {
 
 // ── Trace ─────────────────────────────────────────────────────────────
 
-void SC7852::recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles) {
-    if ((tf & (TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL)) == 0) return;
-
+void SC7852::pushTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles) {
     Z80CpuFrame f{};
     f.seqno = m_traceSeqno++;
     f.pc = pcAtStart;
@@ -1112,4 +1134,19 @@ void SC7852::recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWo
     }
 
     m_trace.push(f);
+}
+
+void SC7852::recordHistory(uint16_t pcAtStart, uint8_t cycles, bool interrupt) {
+    Z80HistoryFrame& h = *m_historyFrame; // bytes[] already filled by readCode()
+    h.pc = pcAtStart;
+    h.len = interrupt ? 0 : m_fetchLen;
+    h.cycles = cycles;
+    h.interrupt = interrupt;
+    h.af = af(); h.bc = bc(); h.de = de(); h.hl = hl();
+    h.af2 = uint16_t(A2 << 8) | F2; h.bc2 = uint16_t(B2 << 8) | C2;
+    h.de2 = uint16_t(D2 << 8) | E2; h.hl2 = uint16_t(H2 << 8) | L2;
+    h.ix = IX; h.iy = IY; h.sp = SP; h.pcAfter = PC;
+    h.i = I; h.r = R; h.im = IM; h.iff1 = IFF1; h.iff2 = IFF2;
+    m_history.commit();
+    m_historyFrame = &m_history.next();
 }

@@ -5,6 +5,9 @@ set -e
 cd "$(dirname "$0")/.."
 clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/CPU/LH5801/LH5801.cpp \
+  Core/Debug/Disasm/Disassembly.cpp \
+  Core/Debug/Disasm/LH5801Disassembler.cpp \
+  Core/Debug/Disasm/Z80Disassembler.cpp \
   Core/Audio/PiezoSampler.cpp \
   Core/PC1500/PC1500Memory.cpp \
   Core/PC1500/PC1500Machine.cpp \
@@ -75,6 +78,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/key_paste_tests.cpp \
   Core/tests/lcd_screenshot_tests.cpp \
   Core/tests/machine_code_file_tests.cpp \
+  Core/tests/disasm_tests.cpp \
   Core/Basic/vendor/sharpdx/libsharpdx.a \
   -lz \
   -o /tmp/lh5801_tests

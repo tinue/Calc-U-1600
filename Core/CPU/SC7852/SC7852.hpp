@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "../../TraceTypes.hpp"
+#include "../HistoryRing.hpp"
 #include "../TraceRing.hpp"
 
 // ── Bus interface ────────────────────────────────────────────────────────
@@ -157,6 +158,12 @@ public:
 
     uint32_t drainTraceEvents(Z80CpuFrame* out, uint32_t max, uint32_t* outLost) { return m_trace.drain(out, max, outLost); }
 
+    /// The debugger's always-on history of the last retired instructions
+    /// (see HistoryRing.hpp). Recorded on every step() regardless of the
+    /// TRACE_* flags; cleared by reset().
+    using History = HistoryRing<Z80HistoryFrame, 32>;
+    const History& history() const { return m_history; }
+
 private:
     SC7852Bus& bus;
 
@@ -178,6 +185,7 @@ private:
     uint8_t  fetchOpcode(); // an M1 cycle: also advances R
     uint8_t  fetch8();      // operand/displacement byte: R untouched
     uint16_t fetch16(); // little-endian: low byte first, then high
+    uint8_t  readCode();    // the one PC-relative read all three use; mirrors the byte into the history frame
     void     bumpR() { R = uint8_t((R & 0x80) | ((R + 1) & 0x7F)); }
 
     // ── Flag helpers ─────────────────────────────────────────────────────
@@ -247,5 +255,15 @@ private:
     // one pass. 65536 frames is ~1.9 MB.
     TraceRing<Z80CpuFrame, 65536> m_trace;
 
-    void recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles);
+    /// Records a TRACE frame if `tf` asks for one. The flag test is inline
+    /// so the untraced hot path pays no call.
+    void recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles) {
+        if (tf & (TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL)) pushTraceFrame(tf, pcAtStart, opcodeWord, cycles);
+    }
+    void pushTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles);
+
+    History m_history;
+    Z80HistoryFrame* m_historyFrame{&m_history.next()}; // the frame the current step() fills
+    uint8_t m_fetchLen{0}; // bytes fetched by the current step(), mirrored into *m_historyFrame
+    void recordHistory(uint16_t pcAtStart, uint8_t cycles, bool interrupt);
 };
