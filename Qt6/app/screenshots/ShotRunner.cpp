@@ -182,8 +182,20 @@ void ShotRunner::finishAll() {
     emit finished(m_failures > 0 ? 1 : 0);
 }
 
+bool ShotRunner::menuScriptError(QString* error) {
+    if (m_nativeMenuDepth == 0 || !m_menuScript || m_menuScript->state() != QProcess::NotRunning) return false;
+    if (m_menuScript->exitStatus() == QProcess::NormalExit && m_menuScript->exitCode() == 0) return false;
+    *error = QStringLiteral("could not open the native menu (%1). The app launching this run needs the "
+                            "Automation (System Events) and Accessibility permissions (System Settings > "
+                            "Privacy & Security).")
+                 .arg(QString::fromLocal8Bit(m_menuScript->readAllStandardError()).trimmed());
+    m_nativeMenuDepth = 0;
+    return true;
+}
+
 bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void()>* deferred, QString* error) {
     using K = ShotStep::Kind;
+    if (menuScriptError(error)) return false;
     const int settle = m_scenario.settleMs;
     FaceplateWidget* faceplate = m_window->faceplate();
     switch (step.kind) {
@@ -367,7 +379,11 @@ bool ShotRunner::openMenu(const QString& path, std::function<void()>* deferred, 
         }
         script += QStringLiteral("end tell\n");
         m_nativeMenuDepth = static_cast<int>(parts.size());
-        *deferred = [script] { QProcess::startDetached(QStringLiteral("/usr/bin/osascript"), {QStringLiteral("-e"), script}); };
+        if (m_menuScript) m_menuScript->deleteLater();
+        m_menuScript = new QProcess(this);
+        *deferred = [process = m_menuScript, script] {
+            process->start(QStringLiteral("/usr/bin/osascript"), {QStringLiteral("-e"), script});
+        };
         return true;
 #else
         *error = QStringLiteral("native menu bars can only be opened on macOS");

@@ -8,6 +8,7 @@
 
 class MainWindow;
 class QAction;
+class QProcess;
 class QWidget;
 
 // Plays a ShotScenario against the live MainWindow and writes its captures.
@@ -54,6 +55,11 @@ private:
     // Native (macOS menu-bar) menus opened by `menu:` -- how many levels
     // deep, so `close` knows how many Escapes to send.
     int m_nativeMenuDepth = 0;
+    // The osascript that opened them. It only exits once the menu closes,
+    // so an early non-zero exit means it failed (usually a missing
+    // Automation/Accessibility permission) -- see menuScriptError().
+    QProcess* m_menuScript = nullptr;
+    bool menuScriptError(QString* error);
 
     const Shot& currentShot() const { return m_scenario.shots[m_shotOrder[m_shotPos]]; }
     void scheduleNext(int delayMs);
