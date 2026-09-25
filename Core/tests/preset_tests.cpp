@@ -102,7 +102,7 @@ void test_type_step_keeps_space_hash() {
 }
 
 // A `type:` value wrapped entirely in matching quotes is still unwrapped
-// (upstream pc1500preset quotes colon-bearing type steps); a `#` inside
+// (the older pc1500preset files quote colon-bearing type steps); a `#` inside
 // survives, and with nothing after the closing quote it round-trips clean.
 void test_type_step_fully_quoted_is_unwrapped() {
     PresetFile p;
@@ -431,7 +431,7 @@ void test_preset_parser_unquotes_single_and_double_quoted_values() {
     // PRINT of a string literal) needs quoting under pc1500preset's own
     // full YAML parser, or its embedded colon would be misread as a second
     // key/value split there -- this loader's first-colon-only split never
-    // needed that, but preset files are shared with that upstream loader,
+    // needed that, but preset files are shared with that older loader,
     // so it still has to strip whichever quote style shows up rather than
     // typing the literal quote characters into the emulator (see
     // ce163_bankswrm.pc1500a for a real preset that hit this).
@@ -453,8 +453,8 @@ void test_preset_parser_unquotes_single_and_double_quoted_values() {
 }
 
 void test_preset_parser_sequential_keys_and_program_blocks() {
-    // The fork from the upstream format (PresetFile.hpp's top-of-file
-    // comment): a preset is an ORDERED sequence of `keys:`/`program:`
+    // The sequential-blocks rule (PresetFile.hpp's top-of-file comment):
+    // a preset is an ORDERED sequence of `keys:`/`program:`
     // blocks, applied in file order -- not a fixed pre-load-keys/program/
     // post-load-keys triple. Two of each here, interleaved, must come back
     // as four sections in exactly this order.

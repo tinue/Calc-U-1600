@@ -54,7 +54,7 @@
 // point -- a preset load runs flat out, so put it last to undo the clock
 // running ahead during the load. A value may be `"double"` or `'single'`-quoted -- stripped and
 // passed through verbatim (see PresetFile.cpp's unquote()), kept for
-// preset files with quoted values that predate this fork. A ` # comment`
+// older preset files that quote their values. A ` # comment`
 // after a value is stripped (a `type:` payload excepted -- `#` is BASIC
 // there; see PresetFile.cpp's stripInlineComment()). Tabs, flow style and
 // multiple documents are rejected/unsupported -- deliberately scoped to exactly the shape real
@@ -233,7 +233,7 @@ struct PresetFile {
     // applyPC1500Preset() (PC1500PresetLoader.hpp) to resolve.
     std::string romVariant;
     // `keys:`/`program:` blocks, in file order -- see PresetSection above
-    // and the fork note at the top of this file. Applied in this exact
+    // and the sequential-blocks note at the top of this file. Applied in this exact
     // order by PC1500PresetLoader.cpp's applyPC1500Preset().
     std::vector<PresetSection> sections;
     // The pen-plotter/printer on the 60-pin system bus. `""` (key absent)
