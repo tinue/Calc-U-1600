@@ -23,8 +23,9 @@ class PC1600Machine;
 //     is used exactly as on the PC-1500/1500A"). It advances by each
 //     stored line's size. typeBasicProgramText() waits for it to settle
 //     after each line and uses "did the program change?" (BASPRG_END or
-//     the program bytes -- a same-length replacement moves only the
-//     latter) to tell a stored line from an unstored one.
+//     the typed line's own record -- a same-length replacement moves only
+//     the latter; basic::LineStoreCheck) to tell a stored line from an
+//     unstored one.
 //   * BUT F867 only moves in PRO mode. After ALL RESET the machine is in
 //     RUN mode, where a typed line is a direct command, not stored.
 //     Getting into PRO mode is the PRESET AUTHOR's job (a `key: mode` step
@@ -104,8 +105,9 @@ bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, 
 /// editor, one line at a time -- assumes the machine is already in PRO
 /// mode and ready (see the file comment). Blank source lines are skipped.
 /// A line longer than kMaxBasicLineLength is put in `rejectedLines`
-/// without being typed; a line that is typed but doesn't advance
-/// BASPRG_END (F867) -- i.e. wasn't stored, typically because the machine
-/// isn't in PRO mode -- is put there too. Does not clear a resident
+/// without being typed; a line that is typed but leaves the program
+/// unchanged (BASPRG_END (F867) put and its own line, if resident, not
+/// rewritten) -- i.e. wasn't stored, typically because the machine isn't
+/// in PRO mode -- is put there too. Does not clear a resident
 /// program and does not change mode.
 BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& text);

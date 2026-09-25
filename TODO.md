@@ -276,17 +276,6 @@ Larger or behaviour-changing items left out of the 0.5.0 cleanup commit.
 Found reviewing the commits after 29de332; too large or behaviour-changing
 for the cleanup commit.
 
-- **PC-1500 typer doesn't recognise a same-length line replacement as
-  stored.** 5f0bd59 taught `PC1600BasicTyper` to snapshot the program
-  bytes; `PC1500BasicTyper.cpp` (~201-220) still only checks whether
-  `kProgramEndPtr` moved, so `10 A=1` then `10 A=2` in a `program:` block
-  is reported as rejected on the PC-1500. Fix: one shared "line stored"
-  check both typers call.
-- **`PC1600BasicTyper::programSnapshot()` is quadratic.** It copies the
-  whole program area through `peek()` into a new vector before and after
-  every typed line (~20M peeks for a 500-line, 20 KB program). Compare
-  F867H first; only if it didn't move, compare the saved bytes in place,
-  or snapshot just the typed line's own bytes.
 - **Card/floppy template-vs-instance rules are written twice and re-parse
   files.** `MemoryModuleManager` (`moduleLists`, `classifySlot`,
   `templateNames`, `saveSlotAs`) and `FloppyDiskManager` (`diskLists`,

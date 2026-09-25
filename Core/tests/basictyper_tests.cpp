@@ -11,7 +11,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <vector>
 
+#include "../Basic/BasicLineStoreCheck.hpp"
 #include "../PC1500/PC1500BasicTyper.hpp"
 #include "../PC1500/PC1500Machine.hpp"
 
@@ -181,6 +183,48 @@ void test_typebasicprogram_long_data_then_short_line_tail() {
 // would start against a still-running program and collide with it, as
 // happens with the CE163F firmware-bootstrap preset's trailing `RUN` /
 // `CALL` steps.
+// ROM-gated: re-typing a line number with a same-length body replaces the
+// line without moving BASPRG_END -- that is still a stored line.
+void test_typebasicprogram_same_length_replacement_is_stored() {
+    PC1500Machine machine;
+    if (!bootMachine(machine)) {
+        std::fprintf(stderr, "SKIP test_typebasicprogram_same_length_replacement_is_stored: roms/PC-1500_A04.ROM "
+                              "not found relative to cwd (run tests from the repo root)\n");
+        return;
+    }
+    BasicTypeResult result = typeFreshProgram(machine, "10 A=1\n10 A=2\n");
+    CHECK(result.ok);
+    CHECK(result.rejectedLines.empty());
+}
+
+// No ROM: LineStoreCheck over a hand-built program area.
+void test_line_store_check() {
+    // 10 A=1 / 20 B=2, records [no hi][no lo][len][content][0D].
+    std::vector<uint8_t> mem = {0x00, 0x0A, 0x04, 'A', '=', '1', 0x0D,
+                                0x00, 0x14, 0x04, 'B', '=', '2', 0x0D, 0xFF};
+    auto peek = [&](uint32_t a) { return a < mem.size() ? mem[a] : uint8_t{0}; };
+    const uint32_t end = 14;
+
+    // Same-length rewrite of the typed line's record: changed.
+    auto c20 = basic::LineStoreCheck::capture(peek, 0, end, "20 B=3");
+    CHECK(!c20.changed(peek, end));
+    mem[12] = '3';
+    CHECK(c20.changed(peek, end));
+
+    // A different line rewritten in place isn't the typed line's doing.
+    auto c10 = basic::LineStoreCheck::capture(peek, 0, end, " 10 A=1");
+    mem[12] = '4';
+    CHECK(!c10.changed(peek, end));
+
+    // A new line number (no resident record) counts only if the end moves;
+    // so does a line with no number at all.
+    auto c30 = basic::LineStoreCheck::capture(peek, 0, end, "30 C=3");
+    CHECK(!c30.changed(peek, end));
+    CHECK(c30.changed(peek, end + 7));
+    auto direct = basic::LineStoreCheck::capture(peek, 0, end, "PRINT 1");
+    CHECK(!direct.changed(peek, end));
+}
+
 void test_typeline_waits_for_run_to_finish() {
     PC1500Machine machine;
     if (!bootMachine(machine)) {
@@ -256,6 +300,8 @@ int run_basictyper_tests() {
     test_typeline_still_types_uppercase_directly();
     test_typebasicprogram_consecutive_long_lines();
     test_typebasicprogram_long_data_then_short_line_tail();
+    test_typebasicprogram_same_length_replacement_is_stored();
+    test_line_store_check();
     test_typeline_waits_for_run_to_finish();
     test_wait_until_basic_idle_confirms_prompt_loop_hold();
 

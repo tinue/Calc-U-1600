@@ -3,6 +3,7 @@
 #include <cctype>
 #include <sstream>
 
+#include "../Basic/BasicLineStoreCheck.hpp"
 #include "PC1500Keyboard.hpp"
 #include "PC1500Machine.hpp"
 #include "PC1500TypedInput.hpp"
@@ -17,8 +18,10 @@ constexpr uint64_t kCyclesPerFrame = kPC1500CyclesPerFrame;
 constexpr int kTapFrames = 4;
 constexpr int kIdleFrames = 4;
 
-// Program-end pointer: 2 bytes, big-endian, updated whenever the BASIC
-// program area changes.
+// Program start/end pointers (BASPRG_ST/BASPRG_END): 2 bytes each,
+// big-endian; the end pointer is updated whenever the BASIC program area
+// changes size.
+constexpr uint16_t kProgramStartPtr = 0x7865;
 constexpr uint16_t kProgramEndPtr = 0x7867;
 
 uint16_t readBE16(PC1500Machine& machine, uint16_t addr) {
@@ -198,7 +201,9 @@ BasicTypeResult typeBasicProgramText(PC1500Machine& machine, const std::string& 
         while (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.empty()) continue; // blank source lines are just skipped, matching a human not typing an empty statement
 
-        uint16_t before = readBE16(machine, kProgramEndPtr);
+        auto peek = [&](uint32_t a) { return machine.memory().peek(static_cast<uint16_t>(a)); };
+        const basic::LineStoreCheck before = basic::LineStoreCheck::capture(
+            peek, readBE16(machine, kProgramStartPtr), readBE16(machine, kProgramEndPtr), line);
 
         std::string typeError;
         if (!typeLine(machine, line, /*pressEnter=*/true, &typeError)) {
@@ -211,10 +216,11 @@ BasicTypeResult typeBasicProgramText(PC1500Machine& machine, const std::string& 
         // comment) -- reading the pointer here would then both misreport the
         // line as rejected AND let the next line's keystrokes collide with
         // the still-running tokeniser. Wait for the pointer to actually
-        // settle before judging acceptance or moving on.
+        // settle before judging acceptance or moving on. A same-length
+        // replacement leaves the pointer put and only rewrites its line,
+        // which LineStoreCheck also compares.
         settleUntilProgramPtrStable(machine);
-        uint16_t after = readBE16(machine, kProgramEndPtr);
-        if (after == before) {
+        if (!before.changed(peek, readBE16(machine, kProgramEndPtr))) {
             result.rejectedLines.push_back(line);
         }
     }

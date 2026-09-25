@@ -91,7 +91,7 @@ bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, 
 /// resets anything first: the lines are added to whatever program is
 /// resident, and the caller must have left the machine ready to store
 /// lines (on a cold-booted machine, CL then NEW0 -- a preset's own
-/// `- key: cl` / `- type: NEW0` steps). A line that doesn't grow the
-/// program's stored size is collected into the result as rejected rather
-/// than aborting the load.
+/// `- key: cl` / `- type: NEW0` steps). A line that leaves the program
+/// unchanged (BASPRG_END put and its own line, if resident, not rewritten)
+/// is collected into the result as rejected rather than aborting the load.
 BasicTypeResult typeBasicProgramText(PC1500Machine& machine, const std::string& text);

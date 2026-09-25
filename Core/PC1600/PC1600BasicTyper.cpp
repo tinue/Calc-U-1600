@@ -2,8 +2,8 @@
 
 #include <cctype>
 #include <sstream>
-#include <vector>
 
+#include "../Basic/BasicLineStoreCheck.hpp"
 #include "PC1600Display.hpp"
 #include "PC1600Keyboard.hpp"
 #include "PC1600Machine.hpp"
@@ -53,21 +53,26 @@ uint16_t readBE16(PC1600Machine& machine, uint16_t addr) {
     return static_cast<uint16_t>((hi << 8) | lo);
 }
 
-// BASPRG_END plus the program bytes BASPRG_ST..BASPRG_END, as the SC-7852
-// sees them. F865/F867 hold LH5803-side addresses; the LH5803's
-// $0000-$7FFF aliases the SC-7852's $8000-$FFFF (same mapping as
-// pc1600_cli --dump-basic). A line that replaces one of the same
-// tokenised length leaves BASPRG_END put but changes these bytes.
-std::vector<uint8_t> programSnapshot(PC1600Machine& machine) {
-    constexpr uint16_t kProgramStartPtr = 0xF865;
-    auto toZ80 = [](uint16_t a) -> uint32_t { return a < 0x8000 ? a + 0x8000u : a; };
-    const uint16_t endPtr = readBE16(machine, kProgramEndPtr);
-    const uint32_t st = toZ80(readBE16(machine, kProgramStartPtr));
-    const uint32_t end = toZ80(endPtr);
-    std::vector<uint8_t> snap{static_cast<uint8_t>(endPtr >> 8), static_cast<uint8_t>(endPtr)};
-    for (uint32_t a = st; a < end && a <= 0xFFFF; a++)
-        snap.push_back(machine.memory().peek(static_cast<uint16_t>(a)));
-    return snap;
+// F865/F867 (BASPRG_ST/BASPRG_END) hold LH5803-side addresses; the
+// LH5803's $0000-$7FFF aliases the SC-7852's $8000-$FFFF (same mapping as
+// pc1600_cli --dump-basic).
+constexpr uint16_t kProgramStartPtr = 0xF865;
+
+uint32_t toZ80(uint16_t a) { return a < 0x8000 ? a + 0x8000u : a; }
+
+uint8_t peekZ80(PC1600Machine& machine, uint32_t a) {
+    return machine.memory().peek(static_cast<uint16_t>(a));
+}
+
+basic::LineStoreCheck captureProgram(PC1600Machine& machine, const std::string& line) {
+    return basic::LineStoreCheck::capture([&](uint32_t a) { return peekZ80(machine, a); },
+                                          toZ80(readBE16(machine, kProgramStartPtr)),
+                                          toZ80(readBE16(machine, kProgramEndPtr)), line);
+}
+
+bool programChanged(PC1600Machine& machine, const basic::LineStoreCheck& check) {
+    return check.changed([&](uint32_t a) { return peekZ80(machine, a); },
+                         toZ80(readBE16(machine, kProgramEndPtr)));
 }
 
 // Run frames until the program-end pointer has held the same value for a
@@ -239,7 +244,7 @@ BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& 
             continue;
         }
 
-        const std::vector<uint8_t> before = programSnapshot(machine);
+        const basic::LineStoreCheck before = captureProgram(machine, line);
 
         std::string typeError;
         if (!typeLine(machine, line, /*pressEnter=*/true, &typeError)) {
@@ -251,13 +256,13 @@ BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& 
         // Wait for the editor to finish linking the line, then check it
         // actually landed: a stored line moves F867 (BASPRG_END,
         // big-endian) or, replacing a line of the same tokenised length,
-        // rewrites the program bytes. A line that changed neither was not
+        // rewrites that line's record. A line that changed neither was not
         // stored -- almost always because the machine isn't in PRO mode (a
         // preset must `key: mode` into it before the program: block).
         // Re-typing a line identical to the stored one also changes
         // nothing and is reported the same way.
         settleUntilProgramPtrStable(machine);
-        if (programSnapshot(machine) != before) storedCount++;
+        if (programChanged(machine, before)) storedCount++;
         else result.rejectedLines.push_back(line);
     }
 
