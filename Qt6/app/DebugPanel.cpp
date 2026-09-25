@@ -1,7 +1,6 @@
 #include "DebugPanel.hpp"
 
 #include <QEvent>
-#include <QFileInfo>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -150,9 +149,8 @@ DebugPanel::DebugPanel(MachineController* controller, QWidget* parent)
     connect(m_dumpMemButton, &QPushButton::clicked, this, &DebugPanel::debugDumpMemory);
     connect(m_dumpCardButton, &QPushButton::clicked, this, &DebugPanel::debugDumpModuleCardAsYaml);
     connect(m_clearButton, &QPushButton::clicked, this, &DebugPanel::clearDebug);
-    connect(m_traceButton, &QToolButton::clicked, this, [this] { setTraceEnabled(!m_traceEnabled); });
+    connect(m_traceButton, &QToolButton::clicked, this, [this] { setTraceEnabled(!m_controller->traceActive()); });
     connect(m_logButton, &QToolButton::clicked, this, &DebugPanel::toggleDebugLevel);
-    connect(m_controller, &MachineController::traceEndedByRebuild, this, &DebugPanel::onTraceEndedByRebuild);
 
     applyChrome();
 }
@@ -163,7 +161,7 @@ QString DebugPanel::selectedOutputText() const {
 }
 
 DebugPanel::~DebugPanel() {
-    if (m_traceEnabled) m_controller->endTrace();
+    m_controller->endTrace();
 }
 
 bool DebugPanel::isDarkMode() const {
@@ -256,16 +254,14 @@ void DebugPanel::clearDebug() {
 // ── TRACE ─────────────────────────────────────────────────────────────
 
 void DebugPanel::setTraceEnabled(bool enabled) {
-    if (m_traceEnabled == enabled) return;
-    m_traceEnabled = enabled;
+    if (m_controller->traceActive() == enabled) return;
 
     if (enabled) {
         const QString dir = AppSettings::traceDirOverride().isEmpty() ? AppPaths::instanceDir()
                                                                         : AppSettings::traceDirOverride();
-        m_tracePath = dir + "/TRACE.bin";
-        if (!m_controller->beginTrace(m_tracePath)) {
-            m_traceEnabled = false;
-            ringWriteAll({fmt("TRACE: couldn't start a capture to %s.", m_tracePath.toStdString().c_str())});
+        const QString path = dir + "/TRACE.bin";
+        if (!m_controller->beginTrace(path)) {
+            ringWriteAll({fmt("TRACE: couldn't start a capture to %s.", path.toStdString().c_str())});
             updateTraceButtonAppearance();
             return;
         }
@@ -277,32 +273,26 @@ void DebugPanel::setTraceEnabled(bool enabled) {
     updateTraceButtonAppearance();
 }
 
-void DebugPanel::onTraceEndedByRebuild() {
-    if (!m_traceEnabled) return;
-    m_traceEnabled = false;
-    ringWriteAll({"TRACE stopped: the machine was rebuilt (model, ROM, module or preset change). "
-                  "Re-enable TRACE to start a new session."});
-    updateTraceButtonAppearance();
-}
-
-void DebugPanel::checkTraceSizeLimit() {
-    // Core writes the file; its size on disk (short of stdio's buffer) is
-    // the running byte count.
-    if (static_cast<std::uint64_t>(QFileInfo(m_tracePath).size()) < m_traceMaxBytes) return;
+void DebugPanel::onFrameTick() {
+    if (!m_traceShownActive) return;
+    if (!m_controller->traceActive()) {
+        // Nothing here stopped it: a machine rebuild did.
+        ringWriteAll({"TRACE stopped: the machine was rebuilt (model, ROM, module or preset change). "
+                      "Re-enable TRACE to start a new session."});
+        updateTraceButtonAppearance();
+        return;
+    }
+    if (m_controller->traceBytes() < m_traceMaxBytes) return;
     ringWriteAll({fmt("TRACE stopped: reached the %llu MB size limit. Re-enable TRACE to start a new session.",
                        static_cast<unsigned long long>(m_traceMaxBytes / 1'000'000))});
     setTraceEnabled(false);
 }
 
-void DebugPanel::onFrameTick() {
-    if (!m_traceEnabled) return;
-    checkTraceSizeLimit();
-}
-
 void DebugPanel::updateTraceButtonAppearance() {
     const bool available = m_controller->hasLiveMachine();
+    m_traceShownActive = m_controller->traceActive();
     const QColor dot = !available ? QColor(255, 0, 0, 128)
-                                   : (m_traceEnabled ? QColor(255, 165, 0) : QColor(128, 128, 128, 128));
+                                   : (m_traceShownActive ? QColor(255, 165, 0) : QColor(128, 128, 128, 128));
     m_traceButton->setIcon(dotIcon(dot));
     m_traceButton->setEnabled(available);
     const QColor bg = available ? m_pillOnColor : m_pillOffColor;

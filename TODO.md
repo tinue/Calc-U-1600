@@ -230,13 +230,6 @@ for the cleanup commit.
   - a header-only card catalogue parse (as `scanFloppyDirectory` does);
   - a shared `NamedFileCatalog`-level helper for lists / classify /
     save-name validation, leaving the managers only Qt glue.
-- **GUI TRACE size check `stat()`s every frame.** `DebugPanel::
-  checkTraceSizeLimit()` calls `QFileInfo(path).size()` at 60 Hz and lags
-  by stdio's buffer. Have `PC1500TraceFile` count bytes written and read
-  that. Also, `DebugPanel::m_traceEnabled` shadows
-  `MachineController::traceActive()`, kept in step by the
-  `traceEndedByRebuild` signal/slot; reading `traceActive()` would drop
-  all three.
 - **Banked/unbanked split re-derived per access.**
   `r.banked ? r.banking.bankSize : r.capacity` and `? bankCount : 1`
   recur in `SoftwareDefinedCard.hpp` and `MemoryCardDefinition.hpp` (the

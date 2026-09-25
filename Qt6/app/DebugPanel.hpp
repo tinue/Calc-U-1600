@@ -80,14 +80,14 @@ private:
     // ── TRACE ─────────────────────────────────────────────────────────
     // The capture itself runs inside Core (MachineController::beginTrace());
     // this panel only starts/stops it and enforces the
-    // AppSettings::traceMaxFileSizeMB() cap by watching the file's size.
-    bool m_traceEnabled = false;
-    QString m_tracePath;
+    // AppSettings::traceMaxFileSizeMB() cap from Core's running byte count.
+    // Whether a capture runs is MachineController::traceActive();
+    // m_traceShownActive is only what the button currently shows, so the
+    // next frame notices a capture a machine rebuild ended.
+    bool m_traceShownActive = false;
     std::uint64_t m_traceMaxBytes = 0;
     void setTraceEnabled(bool enabled);
-    void onTraceEndedByRebuild();
     void updateTraceButtonAppearance();
-    void checkTraceSizeLimit();
 
     // ── LOG (cosmetic placeholder -- Core has no log statements yet) ─────
     enum class DebugLevel { Off, Info, Debug } m_debugLevel = DebugLevel::Off;

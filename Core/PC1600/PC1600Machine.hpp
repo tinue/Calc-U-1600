@@ -410,6 +410,9 @@ public:
     void endCpuTrace();
 
     bool cpuTraceActive() const { return m_traceFile != nullptr; }
+    /// Size of the active capture so far (0 when none); see
+    /// PC1500TraceFile::bytesWritten().
+    uint64_t cpuTraceBytes() const { return m_traceFile ? m_traceFile->bytesWritten() : 0; }
 
 private:
     mutable std::mutex m_mutex; // guards step()/reset()/pressKey/releaseKey/setOnKeyPressed/displaySnapshot

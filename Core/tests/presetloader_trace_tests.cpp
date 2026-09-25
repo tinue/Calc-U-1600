@@ -193,6 +193,7 @@ void test_z80_frame_shares_one_file_with_lh5801_frame() {
     if (dir.empty()) return;
     std::string path = dir + "/z80.bin";
 
+    uint64_t counted = 0;
     {
         std::FILE* fh = std::fopen(path.c_str(), "wb");
         CHECK(fh != nullptr);
@@ -207,11 +208,13 @@ void test_z80_frame_shares_one_file_with_lh5801_frame() {
         tf.writeFrame(z);
 
         tf.finish(); // writes SESSION_END, closes
+        counted = tf.bytesWritten();
     }
 
     std::ifstream in(path, std::ios::binary);
     std::vector<uint8_t> buf((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     CHECK(buf.size() >= 16);
+    CHECK(counted == buf.size()); // what the GUI's size cap reads instead of stat()
     CHECK(le32(buf.data()) == 0x50433135u);
     CHECK(le16(buf.data() + 4) == 2); // version
 

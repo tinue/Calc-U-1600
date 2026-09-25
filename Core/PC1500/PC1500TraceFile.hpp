@@ -60,11 +60,16 @@ public:
     /// and `fclose`s the handle. Idempotent -- a second call is a no-op.
     void finish();
 
+    /// Bytes handed to the file so far (header included) -- the file's
+    /// size once stdio flushes, without asking the filesystem.
+    uint64_t bytesWritten() const { return m_bytesWritten; }
+
     ~PC1500TraceFile();
 
 private:
     std::FILE* m_fh = nullptr;
     uint32_t m_eventCount = 0;
+    uint64_t m_bytesWritten = 0;
 
     void writeRecord(uint8_t type, const uint8_t* payload, uint16_t len);
 };

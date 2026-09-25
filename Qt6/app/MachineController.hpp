@@ -297,10 +297,11 @@ public:
     // into the file as it goes (PC1500Machine/PC1600Machine::
     // beginCpuTrace()), so nothing is lost between frame ticks. False if
     // the file can't be opened or a capture is already running. A machine
-    // rebuild (switchModel(), resetBareForPreset*()) ends the capture and
-    // emits traceEndedByRebuild().
+    // rebuild (switchModel(), resetBareForPreset*()) ends the capture.
     bool beginTrace(const QString& path);
     void endTrace();
+    // Bytes the active capture has written so far (0 when none).
+    std::uint64_t traceBytes() const;
     bool traceActive() const;
 
     // ---- Plotter support (PlotterController/PlotterPaperWidget only) ----
@@ -346,8 +347,6 @@ public:
 
 signals:
     void modelChanged(Model model);
-    // A machine rebuild ended the active TRACE capture (see beginTrace()).
-    void traceEndedByRebuild();
 
 private:
     Model m_model = Model::PC1500A;
@@ -359,11 +358,9 @@ private:
     KeyPasteFeeder m_paste;
     std::uint64_t m_pasteFrameCycles = 0; // cycles run since the paste feeder's last frame boundary
     void runActive(std::uint64_t cycles);
-    // Ends an active TRACE capture on the machine about to be replaced
-    // (its file closed with SESSION_END) and emits traceEndedByRebuild().
-    void endTraceBeforeRebuild();
-    // Drops the live machine before a rebuild: ends its trace, cancels a
-    // paste typing into it, destroys it.
+    // Drops the live machine before a rebuild: ends its TRACE capture (the
+    // file closed with SESSION_END), cancels a paste typing into it,
+    // destroys it.
     void discardMachine();
     void pasteOnFrame();
     MemoryModuleManager* m_moduleManager = nullptr; // not owned

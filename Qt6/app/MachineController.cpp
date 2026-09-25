@@ -516,22 +516,21 @@ void MachineController::endTrace() {
     withMachine([](auto& machine) { machine.endCpuTrace(); });
 }
 
+std::uint64_t MachineController::traceBytes() const {
+    return withMachine(std::uint64_t{0}, [](auto& machine) { return machine.cpuTraceBytes(); });
+}
+
 bool MachineController::traceActive() const {
     return withMachine(false, [](auto& machine) { return machine.cpuTraceActive(); });
 }
 
 void MachineController::discardMachine() {
-    endTraceBeforeRebuild();
+    endTrace();
     m_paste.cancel({}); // the machine it was typing into is going away
     m_pc1500.reset();
     m_pc1600.reset();
 }
 
-void MachineController::endTraceBeforeRebuild() {
-    if (!traceActive()) return;
-    endTrace();
-    emit traceEndedByRebuild();
-}
 
 // ---- Plotter support ----
 

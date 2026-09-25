@@ -295,6 +295,9 @@ public:
     void endCpuTrace();
 
     bool cpuTraceActive() const { return m_traceFile != nullptr; }
+    /// Size of the active capture so far (0 when none); see
+    /// PC1500TraceFile::bytesWritten().
+    uint64_t cpuTraceBytes() const { return m_traceFile ? m_traceFile->bytesWritten() : 0; }
     void addBreakpoint(uint16_t addr) { m_cpu.addBreakpoint(addr); }
     void removeBreakpoint(uint16_t addr) { m_cpu.removeBreakpoint(addr); }
     void clearBreakpoints() { m_cpu.clearBreakpoints(); }
