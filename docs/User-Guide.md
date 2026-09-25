@@ -12,9 +12,6 @@ into a full browsable site (the way the sibling Calc-U-59 project's docs
 site works); the section breakdown below is written to map cleanly onto
 that later.
 
-The screenshots are generated from scripted scenarios, so they follow the
-app. See [screenshots/README.md](screenshots/README.md).
-
 - [Getting started](#getting-started)
 - [The calculator & keyboard](#the-calculator--keyboard)
 - [Memory modules & plotter](#memory-modules--plotter)
@@ -32,18 +29,12 @@ Launch the app and it boots straight to BASIC on a PC-1500A (the default
 model) — no separate "power on" step. The control bar above the
 calculator's own faceplate has, left to right:
 
-![The main window: faceplate, control bar, Debug panel](images/main-window.png)
-
-
 - **Slot 1 / Slot 2** — the memory module pickers; see
   [Memory modules & plotter](#memory-modules--plotter) below. Slot 2 only
   appears for the PC-1600, which has two expansion slots.
 - **Model** — switch between PC-1500, PC-1500A, and PC-1600. Switching
   rebuilds the machine from scratch (a cold restart of the emulation, not
   a real device's model change).
-
-  ![The model picker opened](images/model-dropdown.png)
-
 - **ROM revision** — PC-1500 only (the PC-1500A always runs its one ROM,
   and the PC-1600 has no revision choice at all): A01, A03, or A04.
 - **Open Preset…** — load a `.pc1500`/`.pc1500a`/`.pc1600` scenario file;
@@ -58,11 +49,6 @@ the PC-1600's deeper ALL RESET level; on the PC-1500/1500A, which have no
 ALL RESET of their own, it clears all RAM to zero first, like taking the
 batteries out. Both run the boot at full
 speed until the prompt appears, then set the clock from the computer.
-
-The **Machine** menu also switches model and ROM, the same as the control
-bar's pickers:
-
-![The Machine ▸ Model menu on macOS](images/macos-machine-model-menu.png)
 
 ## The calculator & keyboard
 
@@ -110,13 +96,6 @@ layout (which differs between the PC-1500 and PC-1600) for reference —
 you don't need to click it, but it's there to look up a key's real
 position/label.
 
-![The PC-1600 faceplate](images/faceplate-pc1600.png)
-
-Clicking a key on the faceplate presses it for as long as the mouse button
-is down; the key lights up while pressed:
-
-![SHIFT held on the PC-1500A](images/faceplate-shift-held.png)
-
 ## Memory modules & plotter
 
 Each module slot has its own combo box in the control bar. Opening it
@@ -127,8 +106,6 @@ own in the save directory — see
 separator, if any exist) your own previously-saved battery-backed instances. Picking an
 entry attaches that module immediately (this rebuilds the machine, the
 same as a model switch).
-
-![The Slot 1 picker opened on a PC-1600](images/slot-dropdown.png)
 
 The PC-1600 has two independent slots; the PC-1500/1500A have one. A
 module that's battery-backed shows a small save-icon button next to its
@@ -142,11 +119,6 @@ so only one plotter is ever live at a time. Matching real hardware, where
 hot-plugging a peripheral needs a power cycle for the ROM to notice it,
 clicking one runs a synthesized OFF/ON power cycle rather than attaching
 instantly.
-
-While a plotter is attached, its paper appears next to the Debug panel;
-**Copy** puts the whole plot on the clipboard at its physical size:
-
-![A PC-1600 with the CE-1600P after plotting the Lissajous demo](images/plotter-window.png)
 
 ## Saving your work (battery-backed modules)
 
@@ -177,8 +149,6 @@ Opens from **Calc-U-1600 ▸ Settings…** (Cmd-,) on macOS, or
 **Edit ▸ Settings…** (Ctrl-,) on Windows/Linux. Every control here writes through
 immediately — there's no separate Save/Cancel, just **Close**.
 
-![The Settings dialog](images/settings-dialog.png)
-
 - **Startup device** — which model to boot into next time the app
   launches: Last used, PC-1500 (ROM A04), PC-1500A, or PC-1600.
 - **Battery-card save directory** — where "Name & Save" instances and
@@ -207,9 +177,6 @@ immediately — there's no separate Save/Cancel, just **Close**.
 
 A dockable panel under the control bar with a scrolling log and a row of
 buttons:
-
-![The Debug panel after Pointers](images/debug-panel.png)
-
 
 - **Pointers** — dumps the BASIC/system pointer table (program-end,
   RAM-end, and similar work-area pointers) for the current model.

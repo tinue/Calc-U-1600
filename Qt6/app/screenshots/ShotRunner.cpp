@@ -13,6 +13,9 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDir>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QLineEdit>
 #include <QGuiApplication>
 #include <QMenu>
 #include <QMenuBar>
@@ -21,6 +24,7 @@
 #include <QStyleHints>
 #include <QTimer>
 #include <cstdio>
+#include <cstring>
 
 namespace {
 
@@ -323,6 +327,42 @@ bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void(
         *delayMs = native ? std::max(settle, kNativeMenuCloseMs) : settle;
         return true;
     }
+    case K::ChooseFile: {
+        QFileDialog* dialog = nullptr;
+        for (QWidget* w : QApplication::topLevelWidgets()) {
+            if (auto* d = qobject_cast<QFileDialog*>(w); d && d->isVisible()) dialog = d;
+        }
+        if (!dialog) {
+            *error = QStringLiteral("no file dialog is open");
+            return false;
+        }
+        const QString path = step.text;
+        // Deferred: accepting returns from the dialog's exec(), and the
+        // code after it may open the next dialog or start a load.
+        *deferred = [dialog, path] {
+            dialog->setDirectory(QFileInfo(path).absolutePath());
+            dialog->selectFile(path);
+            // selectFile() lands asynchronously (the file model loads the
+            // folder in the background); the file-name field is what
+            // accept() reads, so fill it directly too.
+            if (auto* name = dialog->findChild<QLineEdit*>(QStringLiteral("fileNameEdit"))) name->setText(path);
+            static_cast<QDialog*>(dialog)->accept(); // QFileDialog::accept() is protected
+        };
+        *delayMs = settle;
+        return true;
+    }
+    case K::EnterText: {
+        QDialog* dialog = topmostDialog();
+        auto* edit = qobject_cast<QLineEdit*>(QApplication::focusWidget());
+        if (!edit && dialog) edit = dialog->findChild<QLineEdit*>();
+        if (!edit) {
+            *error = QStringLiteral("no text field to enter text into");
+            return false;
+        }
+        edit->setText(step.text);
+        *delayMs = settle;
+        return true;
+    }
     case K::Capture:
         return capture(step.capture, error);
     }
@@ -392,6 +432,13 @@ bool ShotRunner::openMenu(const QString& path, std::function<void()>* deferred, 
         QString target = QStringLiteral("menu bar item %1 of menu bar 1").arg(appleScriptString(parts[0]));
         QString script = QStringLiteral("tell application \"System Events\" to tell (first process whose unix id is %1)\n")
                              .arg(QCoreApplication::applicationPid());
+        // The menu bar belongs to the frontmost app, and macOS may refuse a
+        // terminal-launched app's own activation request -- bring it forward
+        // through System Events, then wait for its item (up to 5 s).
+        script += QStringLiteral("  set frontmost to true\n");
+        script += QStringLiteral("  repeat 20 times\n    if exists %1 then exit repeat\n    delay 0.25\n"
+                                 "  end repeat\n")
+                      .arg(target);
         script += QStringLiteral("  click %1\n").arg(target);
         for (int level = 1; level < parts.size(); ++level) {
             target = QStringLiteral("menu item %1 of menu 1 of %2").arg(appleScriptString(parts[level]), target);
@@ -491,6 +538,21 @@ bool ShotRunner::capture(const ShotCaptureSpec& spec, QString* error) {
             *error = QStringLiteral("no dialog is open");
             return false;
         }
+    } else if (spec.target == QLatin1String("lcd-image")) {
+        // What Edit > Copy Screen puts on the clipboard: the dot matrix at
+        // its physical size (see MainWindow::copyScreenToClipboard()).
+        const GrayImage screen = m_window->controller()->currentScreenImage();
+        QImage image;
+        if (screen.width > 0 && screen.height > 0) {
+            image = QImage(screen.width, screen.height, QImage::Format_Grayscale8);
+            for (int y = 0; y < screen.height; ++y)
+                std::memcpy(image.scanLine(y), screen.pixels.data() + static_cast<std::size_t>(y) * screen.width,
+                            static_cast<std::size_t>(screen.width));
+            const int dotsPerMeter = static_cast<int>(screen.pixelsPerMeter());
+            image.setDotsPerMeterX(dotsPerMeter);
+            image.setDotsPerMeterY(dotsPerMeter);
+        }
+        if (!ShotCapture::savePng(image, file, error)) return false;
     } else if (spec.target == QLatin1String("plot")) {
         if (!ShotCapture::savePng(m_window->plotterPaper()->renderPaperImage(), file, error)) {
             if (error->startsWith(QLatin1String("nothing"))) *error = QStringLiteral("the plotter paper is blank");
@@ -508,6 +570,7 @@ bool ShotRunner::capture(const ShotCaptureSpec& spec, QString* error) {
     if (target) {
         QList<QWidget*> extras = ShotCapture::visibleTransients(m_window);
         extras.removeAll(target);
+        extras.removeAll(target->window()); // a section of a dialog: not the whole dialog
         bool ok = false;
         if (spec.method == ShotCaptureSpec::Method::Qt) {
             ok = ShotCapture::savePng(ShotCapture::renderComposite(target, extras, spec.padding, spec.scale), file,
@@ -518,12 +581,16 @@ bool ShotRunner::capture(const ShotCaptureSpec& spec, QString* error) {
             QRect area;
 #ifdef Q_OS_MACOS
             if (spec.target == QLatin1String("screen-region")) {
-                // Every window we own, native menus included; with a
-                // menu-bar menu open, up to the top of the screen so its
-                // title in the menu bar is in the picture too.
-                area = macOwnWindowsBounds();
-                if (m_nativeMenuDepth > 0 && m_window->screen())
-                    area.setTop(m_window->screen()->geometry().top());
+                // With a menu-bar menu open: just the open menus, extended
+                // up to the top of the screen so their titles in the menu
+                // bar are in the picture too. Otherwise every window we own.
+                if (m_nativeMenuDepth > 0) {
+                    area = macOwnWindowsBounds(/*menusOnly=*/true);
+                    if (!area.isEmpty() && m_window->screen())
+                        area.setTop(m_window->screen()->geometry().top());
+                } else {
+                    area = macOwnWindowsBounds();
+                }
             }
 #endif
             if (area.isEmpty()) {

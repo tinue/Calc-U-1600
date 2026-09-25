@@ -1,0 +1,13 @@
+# User-guide screenshots: a PC-1600 with a CE-1600M in slot 1, saved once as
+# a named instance (so the slot picker lists a saved card), and the
+# CE-1600P + CE-1600F with the bundled "Formatted" disk.
+model: PC-1600
+plotter: ce1600p
+floppy: Formatted
+memory-expansion-1:
+  - modulespec: CE-1600M
+keys:
+  - key: mode
+  - type: NEW0
+  - key: mode
+  - saveas: s1:My programs

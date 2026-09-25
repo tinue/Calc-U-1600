@@ -36,8 +36,10 @@ struct SectionGrids {
     std::vector<QLabel*> labels;
 };
 
-QGridLayout* addSection(QVBoxLayout* layout, QWidget* parent, SectionGrids& sections, const QString& title) {
+QGridLayout* addSection(QVBoxLayout* layout, QWidget* parent, SectionGrids& sections, const QString& title,
+                        const QString& objectName) {
     auto* box = new QGroupBox(title, parent);
+    box->setObjectName(objectName); // screenshot scenarios crop one section by it
     auto* grid = new QGridLayout(box);
     grid->setColumnStretch(kValueColumn, 1);
     layout->addWidget(box);
@@ -190,7 +192,7 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     SectionGrids sections;
 
     // ── General ──────────────────────────────────────────────────────────
-    QGridLayout* general = addSection(layout, this, sections, tr("General"));
+    QGridLayout* general = addSection(layout, this, sections, tr("General"), QStringLiteral("dialog.settings.general"));
     addRowLabel(general, 0, this, sections, tr("Startup device:"));
     auto* startupModelCombo = new QComboBox(this);
     // Data strings match AppSettings::startupModelPreference()'s stored
@@ -219,13 +221,14 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     // Applied whenever that model gets selected (including at startup) --
     // see MainWindow::applyDefaultPreset().
     QGridLayout* presets =
-        addSection(layout, this, sections, tr("Default presets (loaded when the model is selected)"));
+        addSection(layout, this, sections, tr("Default presets (loaded when the model is selected)"),
+                   QStringLiteral("dialog.settings.presets"));
     addDefaultPresetRow(presets, 0, this, sections, tr("PC-1500:"), Model::PC1500);
     addDefaultPresetRow(presets, 1, this, sections, tr("PC-1500A:"), Model::PC1500A);
     addDefaultPresetRow(presets, 2, this, sections, tr("PC-1600:"), Model::PC1600);
 
     // ── Storage ──────────────────────────────────────────────────────────
-    QGridLayout* storage = addSection(layout, this, sections, tr("Storage"));
+    QGridLayout* storage = addSection(layout, this, sections, tr("Storage"), QStringLiteral("dialog.settings.storage"));
     {
         PathRowSpec spec = directorySpec(this, tr("Battery-card saves:"), tr("Choose Save Directory"),
                                          [] { return AppPaths::instanceDir(); });
@@ -236,7 +239,7 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     }
 
     // ── Tracing ──────────────────────────────────────────────────────────
-    QGridLayout* tracing = addSection(layout, this, sections, tr("Tracing"));
+    QGridLayout* tracing = addSection(layout, this, sections, tr("Tracing"), QStringLiteral("dialog.settings.tracing"));
     {
         PathRowSpec spec = directorySpec(this, tr("Trace directory:"), tr("Choose Trace Directory"),
                                          [] { return AppPaths::instanceDir(); });
@@ -263,7 +266,7 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     // disabled -- there is nothing for it to do there yet.
     // One folder for every emulated port: the PC-1600's own
     // (calcu1600.serial) and the CE-158's (calcu1600-ce158.serial).
-    QGridLayout* serial = addSection(layout, this, sections, tr("Serial ports"));
+    QGridLayout* serial = addSection(layout, this, sections, tr("Serial ports"), QStringLiteral("dialog.settings.serial"));
     auto* serialStatusLabel = new QLabel(this);
     serialStatusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     auto* ce158StatusLabel = new QLabel(this);

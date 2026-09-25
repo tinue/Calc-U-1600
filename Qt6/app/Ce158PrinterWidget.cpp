@@ -1,4 +1,5 @@
 #include "Ce158PrinterWidget.hpp"
+#include "AppPaths.hpp"
 #include "ChromeColors.hpp"
 #include "MachineController.hpp"
 #include "Connector/Ce158Card.hpp"
@@ -98,7 +99,7 @@ void Ce158PrinterWidget::onFrameTick() {
     if (path != m_serialPath || m_serialLabel->text().isEmpty()) {
         m_serialPath = path;
         m_serialLabel->setText(path.isEmpty() ? tr("RS-232C: no host port (the pseudo-terminal could not be opened)")
-                                              : tr("RS-232C: %1").arg(path));
+                                              : tr("RS-232C: %1").arg(AppPaths::forDisplay(path)));
     }
     m_saveButton->setEnabled(!m_printed.isEmpty());
     m_clearButton->setEnabled(!m_printed.isEmpty());

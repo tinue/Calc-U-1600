@@ -195,6 +195,17 @@ bool parseStep(const YamlNode& node, const QDir& baseDir, const ShotScenario& sc
     } else if (verb == QLatin1String("close")) {
         out->kind = K::Close;
         if (!noValue()) return false;
+    } else if (verb == QLatin1String("choose-file")) {
+        out->kind = K::ChooseFile;
+        if (!needText(&out->text)) return false;
+        out->text = QDir::cleanPath(baseDir.absoluteFilePath(out->text));
+        if (!QFileInfo::exists(out->text)) {
+            *error = lineError(node.line, QStringLiteral("file not found: %1").arg(out->text));
+            return false;
+        }
+    } else if (verb == QLatin1String("enter-text")) {
+        out->kind = K::EnterText;
+        if (!needText(&out->text)) return false;
     } else if (verb == QLatin1String("capture")) {
         out->kind = K::Capture;
         if (!hasValue) {

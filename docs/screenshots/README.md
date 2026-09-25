@@ -1,18 +1,19 @@
 # Scripted screenshots
 
-The pictures in [User-Guide.md](../User-Guide.md) (`docs/images/`) are
-generated, not hand-made. A **scenario** (`*.shots.yaml`) walks the real
+The pictures in [User-Guide.md](../User-Guide.md) (`docs/images/guide/`)
+are generated, not hand-made. There is one scenario per guide chapter, in
+[guide/](guide/). A **scenario** (`*.shots.yaml`) walks the real
 app through a list of shots: each starts from a **preset**, which sets up
 the emulator (model, cards, plotter, typed input). **Steps** then drive the
 Qt UI, for example opening a drop-down, triggering a menu item or holding a
 faceplate key, and a **capture** writes the PNG.
 
 ```sh
-tools/make_screenshots.sh                    # every scenario in this folder
-tools/make_screenshots.sh user-guide         # just one (name without .shots.yaml)
+tools/make_screenshots.sh                    # every scenario in guide/
+tools/make_screenshots.sh 05-modules         # just one (name without .shots.yaml)
 
 # or directly:
-Calc-U-1600.app/Contents/MacOS/Calc-U-1600 --shots docs/screenshots/user-guide.shots.yaml \
+Calc-U-1600.app/Contents/MacOS/Calc-U-1600 --shots docs/screenshots/guide/05-modules.shots.yaml \
     [--shots-out <dir>] [--shots-only name1,name2] [--shots-fail-fast]
 ```
 
@@ -56,7 +57,7 @@ settle: 150             # ms to let the UI settle after each UI step (default 15
 shots:
   - name: model-dropdown                       # unique; used by --shots-only
     window: 900x1000                           # optional: this shot's size (default: the scenario's)
-    preset: presets/pc1500a-hello.pc1500a      # optional: load it first
+    preset: ../presets/pc1500a-ready.pc1500a   # optional: load it first
     steps:                                     # optional
       - open: controlbar.model
     capture: { target: controlbar, file: model-dropdown.png, padding: 4 }
@@ -93,6 +94,8 @@ captures the whole window. More captures can go in `steps:` as
 | `action: Menu > … > Item` | Trigger a menu item. `&` mnemonics are ignored, and `...` matches `…`. |
 | `menu: Menu > Submenu` | Open a menu and leave it open. See the macOS note below. |
 | `close` | Close the topmost popup, dialog, or native menu. |
+| `choose-file: <path>` | Pick that file (relative to the scenario) in the open file dialog and accept it, e.g. after `action: File > Load Machine Code…`. |
+| `enter-text: <text>` | Type into the text field of the open dialog, e.g. a name in Name & Save. |
 | `capture: …` | Write an image; see below. |
 
 A dialog opened by `action:` or `click:` stays open and scriptable: the
@@ -109,6 +112,8 @@ open when a shot ends is closed automatically, and a held key is released.
   - `dialog`: the open dialog.
   - `plot`: the plotter's whole paper at physical size (up to 1200 DPI),
     as Copy puts it on the clipboard.
+  - `lcd-image`: the LCD dot matrix at physical size, as Edit ▸ Copy Screen
+    puts it on the clipboard. (`lcd` is the on-screen LCD widget.)
   - `screen-region`: `method: system` only; see below.
   - any **objectName** (listed below).
 - `method`:
@@ -120,8 +125,9 @@ open when a shot ends is closed automatically, and a held key is released.
     title bar and native menus included, at the screen's own resolution:
     - `target: window` or `dialog`: that window with its title bar, no
       shadow.
-    - `target: screen-region`: every window the app owns plus the menu bar
-      strip while a `menu:` is open.
+    - `target: screen-region`: while a `menu:` is open, the open menus plus
+      the menu-bar strip above them (so the menu title shows); otherwise
+      every window the app owns.
     - any other target: its on-screen rectangle.
 - `padding`: logical px of margin. It's transparent with `qt`.
 - `scale`: overrides the scenario's `scale` for this capture.
@@ -138,11 +144,16 @@ Privacy & Security**:
 - **Accessibility** and **Automation ▸ System Events**, to open the menu.
 
 A missing permission fails the shot with that message, never a silently
-wrong picture. The menu shots live in their own scenario,
-[macos-menus.shots.yaml](macos-menus.shots.yaml).
-[user-guide.shots.yaml](user-guide.shots.yaml) has a single `system` shot:
-the main window with its title bar. It needs only Screen Recording; its
-other shots are Qt-rendered and byte-identical per run.
+wrong picture. The guide uses `system` for only two shots: the title-bar
+window in `01-introduction` and the Machine menu in `02-getting-started`.
+Everything else is Qt-rendered and byte-identical from run to run.
+
+Two macOS details:
+- The app adds items of its own to any menu titled "Edit" (writing tools,
+  dictation and so on, in the system language), so the guide doesn't show
+  the Edit menu.
+- The menu script brings the app to the front itself, because the menu bar
+  belongs to the frontmost app.
 
 ### Widget names
 
@@ -158,6 +169,7 @@ other shots are Qt-rendered and byte-identical per run.
 | `paper`, `paper.copy`, `paper.cut` | plotter paper panel |
 | `ce158printer`, `ce158printer.save`, `ce158printer.clear` | CE-158 printer panel |
 | `dialog.settings`, `dialog.about`, `dialog.machinecode` | dialogs |
+| `dialog.settings.general`, `.presets`, `.storage`, `.tracing`, `.serial` | one section of Settings |
 
 ## Presets
 

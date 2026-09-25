@@ -1,0 +1,12 @@
+# User guide, 3 Plotter. Format: docs/screenshots/README.md.
+out: ../../images/guide
+window: 1430x1280
+
+shots:
+  - name: 03-plotter-attached
+    preset: ../presets/pc1600-lissajou.pc1600
+    steps:
+      - capture: { target: controlbar, file: 03-plotter-attached.png }
+      - capture: { target: paper, file: 03-paper-panel.png }
+      # What Copy on the paper panel puts on the clipboard.
+      - capture: { target: plot, file: 03-paper-copy.png }

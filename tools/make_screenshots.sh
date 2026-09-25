@@ -3,11 +3,11 @@
 # scenarios in docs/screenshots/ against the Qt app -- see
 # docs/screenshots/README.md. Builds the app first if needed.
 #
-#   tools/make_screenshots.sh              # every docs/screenshots/*.shots.yaml
-#   tools/make_screenshots.sh user-guide   # just these (names without .shots.yaml)
+#   tools/make_screenshots.sh                  # every docs/screenshots/guide/*.shots.yaml
+#   tools/make_screenshots.sh 05-modules       # just these (names without .shots.yaml)
 #
 # Extra --shots-* options can follow the names after `--`, e.g.
-#   tools/make_screenshots.sh user-guide -- --shots-only settings
+#   tools/make_screenshots.sh 09-appendix -- --shots-only 09-settings
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -33,9 +33,9 @@ done
 
 scenarios=()
 if [[ ${#names[@]} -eq 0 ]]; then
-  scenarios=("${ROOT}"/docs/screenshots/*.shots.yaml)
+  scenarios=("${ROOT}"/docs/screenshots/guide/*.shots.yaml)
 else
-  for n in "${names[@]}"; do scenarios+=("${ROOT}/docs/screenshots/${n}.shots.yaml"); done
+  for n in "${names[@]}"; do scenarios+=("${ROOT}/docs/screenshots/guide/${n}.shots.yaml"); done
 fi
 
 status=0

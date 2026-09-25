@@ -13,7 +13,7 @@ long macWindowNumber(const QWidget* widget) {
     return view.window ? static_cast<long>(view.window.windowNumber) : 0;
 }
 
-QRect macOwnWindowsBounds() {
+QRect macOwnWindowsBounds(bool menusOnly) {
     QRect bounds;
     CFArrayRef list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
                                                  kCGNullWindowID);
@@ -21,6 +21,7 @@ QRect macOwnWindowsBounds() {
     const pid_t self = getpid();
     for (NSDictionary* info in (__bridge NSArray*)list) {
         if ([info[(id)kCGWindowOwnerPID] intValue] != self) continue;
+        if (menusOnly && [info[(id)kCGWindowLayer] intValue] <= 0) continue;
         CGRect rect;
         if (!CGRectMakeWithDictionaryRepresentation((__bridge CFDictionaryRef)info[(id)kCGWindowBounds], &rect))
             continue;

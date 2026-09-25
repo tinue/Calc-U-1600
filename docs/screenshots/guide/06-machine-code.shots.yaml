@@ -1,0 +1,21 @@
+# User guide, 6 Machine-code programs. Format: docs/screenshots/README.md.
+out: ../../images/guide
+
+shots:
+  # A file without a header: the app asks where it goes.
+  - name: 06-start-address
+    window: 900x1000
+    preset: ../presets/pc1500a-ready.pc1500a
+    steps:
+      - action: File > Load Machine Code…
+      - choose-file: ../../../examples/memtest_1500a.bin
+    capture: { target: dialog, file: 06-start-address.png }
+
+  # A file with a PC-1600 header: loaded straight away, then the advice.
+  - name: 06-loaded
+    window: 1430x1000
+    preset: ../presets/pc1600-ready.pc1600
+    steps:
+      - action: File > Load Machine Code…
+      - choose-file: ../../../examples/assembly/CALCULAT.BIN
+    capture: { target: dialog, file: 06-loaded.png }

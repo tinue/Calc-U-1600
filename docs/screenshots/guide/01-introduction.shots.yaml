@@ -1,0 +1,9 @@
+# User guide, 1 Introduction. Format: docs/screenshots/README.md.
+out: ../../images/guide
+window: 1430x1280
+
+shots:
+  # The whole app at a glance, real window chrome (needs Screen Recording).
+  - name: 01-app-overview
+    preset: ../presets/pc1600-lissajou.pc1600
+    capture: { method: system, target: window, file: 01-app-overview.png }

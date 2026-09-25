@@ -1,0 +1,8 @@
+# User-guide screenshots: a PC-1600 ready for work -- NEW0 (PRO mode only),
+# back to RUN, a small calculation on the LCD.
+model: PC-1600
+keys:
+  - key: mode
+  - type: NEW0
+  - key: mode
+  - type: 2*PI

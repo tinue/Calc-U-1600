@@ -18,7 +18,7 @@
 struct ShotCaptureSpec {
     enum class Method { Qt, System };
     Method method = Method::Qt;
-    // window | faceplate | lcd | paper | dialog | screen-region | <objectName>
+    // window | dialog | plot | lcd-image | screen-region | <objectName>
     QString target = QStringLiteral("window");
     QString file;      // relative to the output directory
     int padding = 0;   // logical px of margin around the captured area
@@ -41,6 +41,8 @@ struct ShotStep {
         Menu,         // text = "Menu > Submenu": open, leave open
         Action,       // text = "Menu > ... > Item": trigger it
         Close,        // close the topmost popup/dialog
+        ChooseFile,   // text = absolute path: pick it in the open file dialog
+        EnterText,    // text: into the text field of the topmost dialog
         Capture,      // capture
     };
     Kind kind = Kind::Settle;

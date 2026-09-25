@@ -1,0 +1,19 @@
+# User-guide screenshots: a PC-1500A with the CE-158 that has printed two
+# lines on its parallel (printer) port.
+model: PC-1500A
+interface: ce158
+keys:
+  - key: cl
+  - type: NEW0
+program:
+  format: basic-text
+  text: |
+    10 OPN "LPRT"
+    20 LPRINT "HELLO FROM THE CE-158"
+    30 LPRINT "PRINTED ON THE PARALLEL PORT"
+    40 OPN
+    50 END
+keys:
+  - key: mode
+  - type: RUN
+  - wait:

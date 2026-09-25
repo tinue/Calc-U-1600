@@ -1,0 +1,41 @@
+# User guide, 2 Getting started. Format: docs/screenshots/README.md.
+out: ../../images/guide
+window: 900x1000
+
+shots:
+  - name: 02-model-picker
+    preset: ../presets/pc1500a-ready.pc1500a
+    steps:
+      - open: controlbar.model
+    capture: { target: controlbar, file: 02-model-picker.png, padding: 4 }
+
+  - name: 02-rom-picker-pc1500
+    preset: ../presets/pc1500-ready.pc1500
+    steps:
+      - open: controlbar.rom
+    capture: { target: controlbar, file: 02-rom-picker-pc1500.png, padding: 4 }
+
+  - name: 02-control-bar-pc1600
+    window: 1430x1000
+    preset: ../presets/pc1600-ready.pc1600
+    capture: { target: controlbar, file: 02-control-bar-pc1600.png }
+
+  # Native menu bar menus (Screen Recording + Accessibility + Automation).
+  - name: 02-machine-menu
+    window: 1430x1000
+    preset: ../presets/pc1600-ready.pc1600
+    steps:
+      - menu: Machine
+    capture: { method: system, target: screen-region, file: 02-machine-menu.png, padding: 8 }
+
+  - name: 02-faceplate-shift
+    preset: ../presets/pc1500a-ready.pc1500a
+    steps:
+      - hold-key: shift
+    capture: { target: faceplate, file: 02-faceplate-shift.png }
+
+  # What Edit > Copy Screen puts on the clipboard.
+  - name: 02-copy-screen
+    window: 1430x1000
+    preset: ../presets/pc1600-ready.pc1600
+    capture: { target: lcd-image, file: 02-copy-screen.png }
