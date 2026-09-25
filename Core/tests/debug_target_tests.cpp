@@ -17,6 +17,7 @@
 #include "../Debug/DebugExpression.hpp"
 #include "../Debug/MachineDebugTargets.hpp"
 #include "../PC1500/PC1500Machine.hpp"
+#include "DebugTargetTestSupport.hpp"
 #include "TestRoms.hpp"
 
 namespace {
@@ -221,13 +222,13 @@ void test_pc1500_target() {
 
     // A breakpoint on the boot's input-buffer clear loop (D0B0).
     target.setBreakpoints(1, {0xD0B0});
-    debug::Stop s = target.run(2000000);
+    debug::Stop s = debugtest::runFrom(target, 2000000);
     CHECK(s.kind == debug::Stop::Breakpoint && s.thread == 1);
     CHECK(target.pc(1) == 0xD0B0);
     CHECK(target.historySize(1) >= 20);
     CHECK(target.history(1, 0).len > 0);
     // Resuming leaves the breakpoint; it's a loop, so it comes back.
-    s = target.run(2000000);
+    s = debugtest::runFrom(target, 2000000);
     CHECK(s.kind == debug::Stop::Breakpoint && target.pc(1) == 0xD0B0);
     target.setBreakpoints(1, {});
     CHECK(!target.breakpointsActive());
@@ -235,7 +236,7 @@ void test_pc1500_target() {
 
     // Step one instruction.
     const uint32_t before = target.retired(1);
-    s = target.stepInstruction(1, 100);
+    s = debugtest::stepInstruction(target, 1, 100);
     CHECK(s.kind == debug::Stop::None && target.retired(1) == before + 1);
 
     // Registers and expressions.
@@ -257,7 +258,7 @@ void test_pc1500_target() {
     // A write watch on the RAM the ROM keeps updating while idle stops
     // right after the writing instruction.
     target.setWatches(1, {{0x7600, 0x7BFF, 0, false, true}});
-    s = target.run(20000000);
+    s = debugtest::runFrom(target, 20000000);
     CHECK(s.kind == debug::Stop::Watch && s.thread == 1 && s.hit.write);
     CHECK(s.hit.addr >= 0x7600 && s.hit.addr <= 0x7BFF);
     target.setWatches(1, {});
@@ -279,15 +280,15 @@ void test_pc1600_target() {
     // the next pass, and a resume comes back to it.
     const uint16_t pc = target.pc(1);
     target.setBreakpoints(1, {pc});
-    debug::Stop s = target.run(2000000);
+    debug::Stop s = debugtest::runFrom(target, 2000000);
     CHECK(s.kind == debug::Stop::Breakpoint && s.thread == 1 && target.pc(1) == pc);
-    s = target.run(2000000);
+    s = debugtest::runFrom(target, 2000000);
     CHECK(s.kind == debug::Stop::Breakpoint && target.pc(1) == pc);
     target.setBreakpoints(1, {});
     CHECK((machine.sc7852().traceFlags() & TRACE_BREAKPOINTS) == 0);
 
     const uint32_t before = target.retired(1);
-    s = target.stepInstruction(1, 100);
+    s = debugtest::stepInstruction(target, 1, 100);
     CHECK(s.kind == debug::Stop::None && target.retired(1) == before + 1);
 
     uint32_t v = 0;
@@ -321,30 +322,30 @@ void test_pc1600_lh5803_thread() {
 
     debug::PC1600DebugTarget target(m);
     target.setBreakpoints(debug::PC1600DebugTarget::kLh5803, {0xC003});
-    debug::Stop s = target.run(100000);
+    debug::Stop s = debugtest::runFrom(target, 100000);
     CHECK(s.kind == debug::Stop::Breakpoint && s.thread == debug::PC1600DebugTarget::kLh5803);
     CHECK(target.busOwner() == debug::PC1600DebugTarget::kLh5803 && target.pc(2) == 0xC003);
     CHECK(target.decode(2, 0xC000).text == "sta (0x1000)");
     // Resumes past it and comes round again.
-    s = target.run(100000);
+    s = debugtest::runFrom(target, 100000);
     CHECK(s.kind == debug::Stop::Breakpoint && target.pc(2) == 0xC003);
     target.setBreakpoints(debug::PC1600DebugTarget::kLh5803, {});
 
     // A write watch on the LH5803's 0x1000 fires; the same address on the
     // Z-80 side is a different place and doesn't.
     target.setWatches(debug::PC1600DebugTarget::kZ80, {{0x1000, 0x1000, 0, false, true}});
-    s = target.run(1000);
+    s = debugtest::runFrom(target, 1000);
     CHECK(s.kind == debug::Stop::None);
     target.setWatches(debug::PC1600DebugTarget::kZ80, {});
     target.setWatches(debug::PC1600DebugTarget::kLh5803, {{0x1000, 0x1000, 0, false, true}});
-    s = target.run(100000);
+    s = debugtest::runFrom(target, 100000);
     CHECK(s.kind == debug::Stop::Watch && s.thread == debug::PC1600DebugTarget::kLh5803 && s.hit.addr == 0x1000);
     CHECK(target.pc(2) == 0xC003); // stopped after the store
     // Stepping reports the watch too.
-    s = target.stepInstruction(2, 10); // nop
+    s = debugtest::stepInstruction(target, 2, 10); // nop
     CHECK(s.kind == debug::Stop::None);
-    s = target.stepInstruction(2, 10); // bch
-    s = target.stepInstruction(2, 10); // sta
+    s = debugtest::stepInstruction(target, 2, 10); // bch
+    s = debugtest::stepInstruction(target, 2, 10); // sta
     CHECK(s.kind == debug::Stop::Watch && s.thread == debug::PC1600DebugTarget::kLh5803);
 }
 

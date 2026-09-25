@@ -34,6 +34,8 @@ public:
     HistoryEntry history(int thread, uint32_t age) const override;
     uint32_t retired(int thread) const override;
     void reset(bool allReset) override;
+    Stop runMachine(uint64_t budget) override;
+    Stop stepMachine() override;
 
 protected:
     bool isHalted(int thread) const override;
@@ -41,8 +43,6 @@ protected:
     void enableBreakpointChecks(bool on) override;
     void resumePastBreakpoint(int thread) override;
     void attachWatches(int thread, WatchSet* watches) override;
-    Stop runMachine(uint64_t budget) override;
-    Stop stepMachine() override;
 
 private:
     Stop latchedStop();
@@ -74,6 +74,8 @@ public:
     HistoryEntry history(int thread, uint32_t age) const override;
     uint32_t retired(int thread) const override;
     void reset(bool allReset) override;
+    Stop runMachine(uint64_t budget) override;
+    Stop stepMachine() override;
 
 protected:
     bool isHalted(int thread) const override;
@@ -81,8 +83,6 @@ protected:
     void enableBreakpointChecks(bool on) override;
     void resumePastBreakpoint(int thread) override;
     void attachWatches(int thread, WatchSet* watches) override;
-    Stop runMachine(uint64_t budget) override;
-    Stop stepMachine() override;
 
 private:
     Stop latchedStop();

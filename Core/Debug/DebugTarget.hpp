@@ -141,24 +141,14 @@ public:
 
     // ── Execution ─────────────────────────────────────────────────────────
     /// Free run for up to `budget` machine cycles (the machine's own
-    /// runCycles() unit). Resumes past a breakpoint the CPUs sit on.
-    Stop run(uint64_t budget);
+    /// runCycles() unit); reports a breakpoint or watch the machine latched.
+    virtual Stop runMachine(uint64_t budget) = 0;
     /// One machine step: the bus owner executes one instruction (or idles
-    /// one halted tick). Resumes past a breakpoint the CPUs sit on.
-    Stop step();
-    /// Steps until `done` returns true after a step, a breakpoint or watch
-    /// stops it, or `maxSteps` machine steps have run (Stop::Budget).
-    Stop runUntil(uint64_t maxSteps, const std::function<bool()>& done);
-    /// Steps until `thread` has retired one instruction (the other CPU of
-    /// a PC-1600 runs meanwhile if it owns the bus).
-    Stop stepInstruction(int thread, uint64_t maxSteps);
-
-    /// The primitives under run()/step(), for a caller that manages resumes
-    /// itself (RunControl): runRaw()/stepRaw() stop again on a breakpoint a
-    /// CPU sits on unless resumeFromStop() let it go first.
+    /// one halted tick).
+    virtual Stop stepMachine() = 0;
+    /// Both stop again on a breakpoint a CPU sits on unless this let it go
+    /// first (the caller -- RunControl -- manages resumes).
     void resumeFromStop();
-    Stop runRaw(uint64_t budget) { return runMachine(budget); }
-    Stop stepRaw() { return stepMachine(); }
 
     /// Machine reset / all reset (RAM cleared first).
     virtual void reset(bool allReset) = 0;
@@ -170,9 +160,6 @@ protected:
     virtual void resumePastBreakpoint(int thread) = 0;
     /// Hands the thread's watch set to its CPU (nullptr: none).
     virtual void attachWatches(int thread, WatchSet* watches) = 0;
-    /// Runs the machine; reports a PC breakpoint the machine latched.
-    virtual Stop runMachine(uint64_t budget) = 0;
-    virtual Stop stepMachine() = 0;
     /// A Stop for a pending watch hit of `thread`'s CPU, or none.
     Stop watchStop(int thread);
     /// The first thread with a pending watch hit, or 0.

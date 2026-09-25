@@ -128,7 +128,7 @@ std::vector<DebugEvent> RunControl::slice(uint64_t budget, uint64_t maxSteps) {
     if (m_state == State::Running) {
         uint64_t remaining = budget;
         while (remaining > 0) {
-            const Stop s = m_target.runRaw(remaining);
+            const Stop s = m_target.runMachine(remaining);
             remaining -= std::min(s.cycles, remaining);
             if (s.kind == Stop::None) break;
             if (handleStop(s, &events)) return events;
@@ -148,7 +148,7 @@ std::vector<DebugEvent> RunControl::slice(uint64_t budget, uint64_t maxSteps) {
             m_callSp = m_target.sp(t);
         }
         const uint32_t before = m_target.retired(t);
-        const Stop s = m_target.stepRaw();
+        const Stop s = m_target.stepMachine();
         if (s.kind != Stop::None && handleStop(s, &events)) return events;
         if (m_target.retired(t) == before) continue;
         // Back at the caller's stack depth: the call returned (or, a

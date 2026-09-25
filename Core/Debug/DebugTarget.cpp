@@ -129,33 +129,6 @@ Stop DebugTarget::watchStop(int thread) {
     return s;
 }
 
-Stop DebugTarget::run(uint64_t budget) {
-    resumeFromStop();
-    return runMachine(budget);
-}
-
-Stop DebugTarget::step() {
-    resumeFromStop();
-    return stepMachine();
-}
-
-Stop DebugTarget::runUntil(uint64_t maxSteps, const std::function<bool()>& done) {
-    resumeFromStop();
-    for (uint64_t i = 0; i < maxSteps; i++) {
-        Stop s = stepMachine();
-        if (s.kind != Stop::None) return s;
-        if (done()) return {};
-    }
-    Stop s;
-    s.kind = Stop::Budget;
-    return s;
-}
-
-Stop DebugTarget::stepInstruction(int thread, uint64_t maxSteps) {
-    const uint32_t before = retired(thread);
-    return runUntil(maxSteps, [this, thread, before] { return retired(thread) != before; });
-}
-
 const std::vector<std::string>& flagNames(CpuKind kind) {
     static const std::vector<std::string> kLh = {"c", "ie", "z", "v", "h"};
     static const std::vector<std::string> kZ80 = {"c", "n", "pv", "", "h", "", "z", "s"};
