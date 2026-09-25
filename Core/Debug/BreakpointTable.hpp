@@ -49,6 +49,7 @@ struct DataBreakpointSpec : BreakpointSpec {
 /// Result of a raw hit: stop or not, which breakpoints, logpoint output.
 struct HitDecision {
     bool stop = false;
+    bool entry = false;            ///< the one-shot entry breakpoint (reason "entry")
     std::vector<int> ids;
     std::vector<std::string> log;  ///< expanded log messages, in order
 };
@@ -72,6 +73,10 @@ public:
                                                int thread);
     std::vector<BreakpointStatus> setData(const std::vector<DataBreakpointSpec>& requests);
     void clear();
+    /// A one-shot stop at `addr` (Build & Load's stopOnEntry): it stops
+    /// once, with reason "entry", then disappears.
+    void setEntry(int thread, uint16_t addr);
+    void clearEntry() { m_entryArmed = false; }
 
     /// Re-resolves source and function breakpoints after the source map
     /// changed (a new load, a stale listing). Returns the ones whose status
@@ -125,6 +130,9 @@ private:
     std::vector<Data> m_data;
     std::vector<BreakpointStatus> m_lastStatus; // source + function, for reresolve() diffs
     int m_nextId = 1;
+    bool m_entryArmed = false;
+    int m_entryThread = 1;
+    uint16_t m_entryAddr = 0;
 };
 
 /// Hit-condition check: `hits` is the count including this hit.

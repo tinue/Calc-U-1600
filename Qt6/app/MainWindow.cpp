@@ -256,6 +256,13 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         setWindowTitle(paused ? tr("Calc-U-1600 — Paused (debugger)") : tr("Calc-U-1600"));
     });
 
+    // A debugger's attach `preset:` loads the way File > Load Preset does.
+    m_controller->debugController()->setPresetLoader([this](const QString& path, QString* error) {
+        return runSynchronousLoad(
+            tr("Load Preset"), [this, path](QString* loadError) { return m_presetController->loadPreset(path, loadError); },
+            [this] { onPresetArmed(); }, error);
+    });
+
     m_audio = new AudioOutput(this);
     m_pacer = new EmulationPacer(m_controller.get(), m_audio, [this] { refreshViewsAfterAdvance(); }, this);
 
@@ -327,6 +334,7 @@ bool MainWindow::runSynchronousLoad(const QString& title, const std::function<bo
     // why: nothing else may drive the machine while a preset/BASIC-program
     // loader is mid-script.
     m_pacer->suspend();
+    m_controller->debugController()->setAppBusy(true); // a debugger's requests wait for the load
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
     setCursor(Qt::WaitCursor);
@@ -369,6 +377,7 @@ bool MainWindow::runSynchronousLoad(const QString& title, const std::function<bo
     // The load ran the machine flat out -- whatever it beeped is stale.
     m_controller->discardAudio();
     m_pacer->resume();
+    m_controller->debugController()->setAppBusy(false);
 
     if (!ok) {
         if (error) *error = loadError;

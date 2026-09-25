@@ -210,7 +210,14 @@ std::vector<BreakpointStatus> BreakpointTable::setData(const std::vector<DataBre
     return out;
 }
 
+void BreakpointTable::setEntry(int thread, uint16_t addr) {
+    m_entryArmed = true;
+    m_entryThread = thread;
+    m_entryAddr = addr;
+}
+
 void BreakpointTable::clear() {
+    m_entryArmed = false;
     m_sources.clear();
     m_sourceArmed.clear();
     m_instructionArmed.clear();
@@ -246,6 +253,7 @@ void BreakpointTable::apply(DebugTarget& target) const {
         for (const auto* list : {&m_sourceArmed, &m_instructionArmed, &m_functionArmed})
             for (const Armed& a : *list)
                 if (a.thread == t.id) addrs.push_back(a.addr);
+        if (m_entryArmed && m_entryThread == t.id) addrs.push_back(m_entryAddr);
         target.setBreakpoints(t.id, addrs);
         std::vector<WatchSet::Watch> watches;
         for (const Data& d : m_data) {
@@ -291,6 +299,12 @@ bool BreakpointTable::passes(BreakpointSpec& spec, int& hits, int thread, DebugT
 
 HitDecision BreakpointTable::onBreakpoint(int thread, uint16_t pc, DebugTarget& target, const SymbolLookup& symbols) {
     HitDecision d;
+    if (m_entryArmed && thread == m_entryThread && pc == m_entryAddr) {
+        m_entryArmed = false;
+        apply(target);
+        d.stop = true;
+        d.entry = true;
+    }
     for (auto* list : {&m_sourceArmed, &m_instructionArmed, &m_functionArmed})
         for (Armed& a : *list) {
             if (a.thread != thread || a.addr != pc) continue;

@@ -1,6 +1,8 @@
 #include "DapSession.hpp"
 
+#include <QCoreApplication>
 #include <QFileInfo>
+#include <QTimer>
 #include <QJsonDocument>
 
 #include <algorithm>
@@ -10,6 +12,7 @@
 #include "Debug/Disasm/LH5801Disassembler.hpp"
 #include "Debug/Disasm/Z80Disassembler.hpp"
 #include "Debug/Listing/Listing.hpp"
+#include "MachineCodeFile.hpp"
 
 namespace {
 
@@ -113,11 +116,21 @@ void DapSession::handle(const QJsonObject& request) {
     else if (command == QLatin1String("readMemory")) readMemory(args, &body, &error);
     else if (command == QLatin1String("writeMemory")) writeMemory(args, &body, &error);
     else if (command == QLatin1String("evaluate")) evaluate(args, &body, &error);
+    else if (command == QLatin1String("restart")) restart(args, &body, &error);
+    else if (command == QLatin1String("calcu1600/load")) customLoad(args, &body, &error);
+    else if (command == QLatin1String("calcu1600/reset")) customReset(args, &body, &error);
+    else if (command == QLatin1String("calcu1600/quit")) {}
     else error = QStringLiteral("Unsupported request '%1'").arg(command);
     respond(request, error.isEmpty(), body, error);
 
     if (command == QLatin1String("initialize") && error.isEmpty()) event(QStringLiteral("initialized"));
     if (command == QLatin1String("disconnect")) m_server->disconnectClient();
+    // Scripted runs (tools/dap_smoke.py) end the app this way: a normal quit,
+    // so macOS doesn't take it for a crash and offer to restore windows.
+    if (command == QLatin1String("calcu1600/quit")) {
+        m_controller->endSession();
+        QTimer::singleShot(0, qApp, &QCoreApplication::quit);
+    }
 }
 
 bool DapSession::ready(QString* error) const {
@@ -153,13 +166,118 @@ void DapSession::initialize(const QJsonObject&, QJsonObject* body, QString* erro
         {QStringLiteral("supportsSetVariable"), true},
         {QStringLiteral("supportsEvaluateForHovers"), true},
         {QStringLiteral("supportsValueFormattingOptions"), false},
+        {QStringLiteral("supportsRestartRequest"), true},
     };
 }
 
 void DapSession::attach(const QJsonObject& args, QJsonObject*, QString* error) {
     if (!ready(error)) return;
     m_attached = true;
+    m_attachConfig = args;
     m_stopOnEntry = args.value(QStringLiteral("stopOnEntry")).toBool(false);
+    prepare(args, error);
+}
+
+namespace {
+
+bool parseAddress(const QJsonValue& v, uint32_t* out) {
+    if (v.isDouble()) {
+        const double d = v.toDouble();
+        if (d < 0 || d > 0xFFFF) return false;
+        *out = uint32_t(d);
+        return true;
+    }
+    return machinecode::parseHexAddress(v.toString().toStdString(), out);
+}
+
+debug::BankKey bankKeyOf(const QJsonObject& o) {
+    debug::BankKey k;
+    k.bank = o.value(QStringLiteral("bank")).toInt(-1);
+    k.me = o.value(QStringLiteral("me")).toInt(-1);
+    k.pu = o.value(QStringLiteral("pu")).toInt(-1);
+    k.pv = o.value(QStringLiteral("pv")).toInt(-1);
+    return k;
+}
+
+} // namespace
+
+bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* error) {
+    debug::LoadRequest req;
+    req.bin = debug::absolutePath(d.value(QStringLiteral("bin")).toString().toStdString());
+    if (d.value(QStringLiteral("bin")).toString().isEmpty()) {
+        *error = QStringLiteral("\"bin\" is missing");
+        return false;
+    }
+    const QString listing = d.value(QStringLiteral("listing")).toString();
+    if (!listing.isEmpty()) req.listing = debug::absolutePath(listing.toStdString());
+    const QString source = d.value(QStringLiteral("source")).toString();
+    if (!source.isEmpty()) req.source = debug::absolutePath(source.toStdString());
+    for (const QJsonValue& s : d.value(QStringLiteral("symbols")).toArray())
+        req.symbols.push_back(debug::absolutePath(s.toString().toStdString()));
+    const QString cpu = d.value(QStringLiteral("cpu")).toString().toLower();
+    req.thread = cpu == QLatin1String("lh5803") ? 2 : 1;
+    req.key = bankKeyOf(d);
+    if (d.contains(QStringLiteral("address"))) {
+        req.hasAddress = parseAddress(d.value(QStringLiteral("address")), &req.address);
+        if (!req.hasAddress) {
+            *error = QStringLiteral("Bad \"address\"");
+            return false;
+        }
+    }
+    const QJsonValue slot = d.value(QStringLiteral("slot"));
+    if (slot.isString()) {
+        const QString s = slot.toString().toUpper();
+        req.slot = s == QLatin1String("S1") ? 1 : s == QLatin1String("S2") ? 2 : 0;
+    } else if (slot.isDouble()) {
+        req.slot = slot.toInt();
+    }
+    if (d.contains(QStringLiteral("entry"))) {
+        uint32_t e = 0;
+        req.hasEntry = parseAddress(d.value(QStringLiteral("entry")), &e);
+        req.entry = uint16_t(e);
+    }
+    const QString afterText = d.value(QStringLiteral("after")).toString(QStringLiteral("none"));
+    const DebugController::After after = afterText == QLatin1String("call")          ? DebugController::After::Call
+                                         : afterText == QLatin1String("stopOnEntry") ? DebugController::After::StopOnEntry
+                                                                                     : DebugController::After::None;
+    const debug::LoadResult r = m_controller->loadProgram(req, after);
+    if (!r.ok) {
+        *error = QStringLiteral("Load failed: %1").arg(QString::fromStdString(r.error));
+        return false;
+    }
+    for (const std::string& w : r.warnings) output(QString::fromStdString(w), QStringLiteral("important"));
+    const auto hex4 = [](uint16_t v) { return QStringLiteral("%1").arg(v, 4, 16, QLatin1Char('0')).toUpper(); };
+    QString message = QStringLiteral("Loaded %1 at %2-%3")
+                          .arg(QFileInfo(QString::fromStdString(req.bin)).fileName(), hex4(r.lo), hex4(r.hi));
+    if (!r.callCommand.empty()) message += QStringLiteral("; start with %1").arg(QString::fromStdString(r.callCommand));
+    output(message);
+    if (body) {
+        body->insert(QStringLiteral("start"), memoryReference(req.thread, r.lo));
+        body->insert(QStringLiteral("end"), memoryReference(req.thread, r.hi));
+        body->insert(QStringLiteral("entry"), memoryReference(req.thread, r.entry));
+        body->insert(QStringLiteral("call"), QString::fromStdString(r.callCommand));
+    }
+    sendBreakpointChanges(m_controller->rebindListings());
+    return true;
+}
+
+bool DapSession::prepare(const QJsonObject& args, QString* error) {
+    // 1. A preset rebuilds the machine.
+    const QString preset = args.value(QStringLiteral("preset")).toString();
+    if (!preset.isEmpty()) {
+        QString err;
+        if (!m_controller->loadPreset(preset, &err)) {
+            *error = QStringLiteral("Preset failed: %1").arg(err);
+            return false;
+        }
+    }
+    if (!ready(error)) return false;
+    // 2. Reset (without the boot run: ROM research starts at the vector).
+    const QString reset = args.value(QStringLiteral("reset")).toString(QStringLiteral("none"));
+    if (reset == QLatin1String("reset") || reset == QLatin1String("allReset")) {
+        if (!m_controller->resetMachine(reset == QLatin1String("allReset"), /*stop=*/true, error)) return false;
+    }
+    // 3. Static listings and symbols (ROM listings and the like).
     debug::SourceMap& map = m_controller->sourceMap();
     map.clear();
     const auto threadForCpu = [this](const QString& cpu) {
@@ -171,14 +289,6 @@ void DapSession::attach(const QJsonObject& args, QJsonObject*, QString* error) {
                 return t.id;
         return 1;
     };
-    const auto keyOf = [](const QJsonObject& o) {
-        debug::BankKey k;
-        k.bank = o.value(QStringLiteral("bank")).toInt(-1);
-        k.me = o.value(QStringLiteral("me")).toInt(-1);
-        k.pu = o.value(QStringLiteral("pu")).toInt(-1);
-        k.pv = o.value(QStringLiteral("pv")).toInt(-1);
-        return k;
-    };
     for (const QJsonValue& v : args.value(QStringLiteral("listings")).toArray()) {
         const QJsonObject o = v.isString() ? QJsonObject{{QStringLiteral("path"), v.toString()}} : v.toObject();
         debug::Listing listing;
@@ -189,7 +299,7 @@ void DapSession::attach(const QJsonObject& args, QJsonObject*, QString* error) {
             continue;
         }
         for (const std::string& w : listing.warnings) output(QString::fromStdString(path + ": " + w));
-        map.addStatic(threadForCpu(o.value(QStringLiteral("cpu")).toString()), std::move(listing), keyOf(o), path);
+        map.addStatic(threadForCpu(o.value(QStringLiteral("cpu")).toString()), std::move(listing), bankKeyOf(o), path);
     }
     for (const QJsonValue& v : args.value(QStringLiteral("symbols")).toArray()) {
         debug::Listing symbols;
@@ -209,6 +319,35 @@ void DapSession::attach(const QJsonObject& args, QJsonObject*, QString* error) {
                        .arg(b.mismatched)
                        .arg(b.checked),
                    QStringLiteral("important"));
+    // 4. The program, bound to its own listing.
+    const QJsonObject program = args.value(QStringLiteral("program")).toObject();
+    if (!program.isEmpty() && !loadProgram(program, nullptr, error)) return false;
+    return true;
+}
+
+void DapSession::restart(const QJsonObject& args, QJsonObject*, QString* error) {
+    if (!ready(error)) return;
+    // A restart carries the (possibly edited) attach configuration.
+    const QJsonObject config = args.value(QStringLiteral("arguments")).toObject();
+    if (!config.isEmpty()) m_attachConfig = config;
+    QJsonObject again = m_attachConfig;
+    if (again.value(QStringLiteral("reset")).toString(QStringLiteral("none")) == QLatin1String("none"))
+        again.insert(QStringLiteral("reset"), QStringLiteral("reset"));
+    m_stopOnEntry = again.value(QStringLiteral("stopOnEntry")).toBool(false);
+    if (!prepare(again, error)) return;
+    if (m_stopOnEntry) m_controller->runControl()->pause(debug::DebugEvent::Entry);
+    else m_controller->runControl()->resume();
+}
+
+void DapSession::customLoad(const QJsonObject& args, QJsonObject* body, QString* error) {
+    if (!ready(error)) return;
+    loadProgram(args, body, error);
+}
+
+void DapSession::customReset(const QJsonObject& args, QJsonObject*, QString* error) {
+    if (!ready(error)) return;
+    const bool all = args.value(QStringLiteral("kind")).toString() == QLatin1String("allReset");
+    m_controller->resetMachine(all, args.value(QStringLiteral("stop")).toBool(true), error);
 }
 
 void DapSession::configurationDone(const QJsonObject&, QJsonObject*, QString* error) {
@@ -328,7 +467,7 @@ void DapSession::stackTrace(const QJsonObject& args, QJsonObject* body, QString*
             pc = h.pc;
             QString text;
             if (h.interrupt) {
-                text = QStringLiteral("interrupt at %1").arg(pc, 4, 16, QLatin1Char('0')).toUpper();
+                text = QStringLiteral("interrupt at %1").arg(QStringLiteral("%1").arg(pc, 4, 16, QLatin1Char('0')).toUpper());
             } else {
                 const disasm::FetchFn fetch = [&h](uint16_t a) -> uint8_t {
                     const uint16_t k = uint16_t(a - h.pc);
@@ -338,7 +477,8 @@ void DapSession::stackTrace(const QJsonObject& args, QJsonObject* body, QString*
                 const disasm::SymbolFn symbols = [&map, thread](uint16_t a) { return map.symbolAt(thread, a); };
                 const disasm::Decoded d = t->kindOf(thread) == debug::CpuKind::Z80 ? disasm::decodeZ80(h.pc, fetch, symbols)
                                                                                  : disasm::decodeLH5801(h.pc, fetch, symbols);
-                text = QStringLiteral("after %1  %2").arg(pc, 4, 16, QLatin1Char('0')).toUpper().arg(QString::fromStdString(d.text));
+                text = QStringLiteral("after %1  %2")
+                           .arg(QStringLiteral("%1").arg(pc, 4, 16, QLatin1Char('0')).toUpper(), QString::fromStdString(d.text));
                 debug::SourceLocation loc;
                 if (m_controller->sourceMap().lookup(thread, pc, rc->bankMatch(), &loc)) {
                     f.insert(QStringLiteral("source"), sourceObject(QString::fromStdString(loc.file)));

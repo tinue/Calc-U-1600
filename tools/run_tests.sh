@@ -15,6 +15,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/Debug/SourceMap.cpp \
   Core/Debug/BreakpointTable.cpp \
   Core/Debug/RunControl.cpp \
+  Core/Debug/ProgramLoader.cpp \
   Core/Debug/Listing/Listing.cpp \
   Core/Debug/Listing/SdasListing.cpp \
   Core/Debug/Listing/ZasmListing.cpp \

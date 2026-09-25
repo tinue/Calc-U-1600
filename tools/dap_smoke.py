@@ -7,7 +7,8 @@ uses: threads, pause, stackTrace/scopes/variables, disassemble, readMemory,
 evaluate, instruction and data breakpoints, stepping, continue, disconnect.
 
 Stdlib only:  uv run tools/dap_smoke.py [--port 4711] [--app PATH]
-With --app the script starts the app itself (with --dap) and quits it.
+With --app the script starts the app itself (with --dap) and quits it
+through the calcu1600/quit request.
 """
 
 import argparse
@@ -67,6 +68,11 @@ class Dap:
         deadline = time.time() + timeout
         while True:
             for i, e in enumerate(self.events):
+                if e["event"] == "output":
+                    print("       |", e["body"]["output"].rstrip())
+                    self.events.pop(i)
+                    break
+            for i, e in enumerate(self.events):
                 if e["event"] == name and (match is None or match(e.get("body", {}))):
                     return self.events.pop(i).get("body", {})
             if time.time() > deadline:
@@ -87,6 +93,80 @@ def check(cond, what):
 check.failures = 0
 
 
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MEMTEST_ASM = os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest.asm")
+
+
+def top_frame(dap, tid):
+    return dap.request("stackTrace", threadId=tid, startFrame=0, levels=1)["stackFrames"][0]
+
+
+def program_run(port):
+    """Build & Load: a plain PC-1500 (preset), memtest with its listing, stop at its entry."""
+    print("program run:")
+    dap = Dap(port)
+    dap.request("initialize", adapterID="calcu1600")
+    dap.wait_event("initialized")
+    dap.request("attach", preset=os.path.join(REPO, "examples/startup/default-pc1500.pc1500"),
+                program={"bin": os.path.join(REPO, "examples/memtest_stock.bin"),
+                         "listing": os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest.rst"),
+                         "address": "0x40C5", "after": "stopOnEntry"})
+    bps = dap.request("setBreakpoints", source={"path": MEMTEST_ASM}, breakpoints=[{"line": 88}])["breakpoints"]
+    check(bps and bps[0]["verified"] and bps[0]["line"] == 89, f"source breakpoint 88 -> {bps and bps[0].get('line')}")
+    dap.request("configurationDone")
+    stop = dap.wait_event("stopped", timeout=30)
+    top = top_frame(dap, stop["threadId"])
+    check(stop.get("reason") == "entry" and top.get("line") == 74 and top.get("source", {}).get("path") == MEMTEST_ASM,
+          f"stopped at the entry: {stop.get('reason')} {top.get('source', {}).get('name')}:{top.get('line')}")
+    dap.request("continue", threadId=1)
+    stop = dap.wait_event("stopped", timeout=10)
+    check(stop.get("reason") == "breakpoint" and top_frame(dap, 1).get("line") == 89, "source breakpoint hit at line 89")
+    dap.request("next", threadId=1)
+    dap.wait_event("stopped")
+    check(top_frame(dap, 1).get("line") == 90, "next: line 90")
+    dap.request("stepIn", threadId=1)
+    dap.wait_event("stopped")
+    check(top_frame(dap, 1).get("line") == 94, "stepIn: line 94")
+    ev = dap.request("evaluate", expression="[ERR_FLAG]", frameId=1000, context="watch")
+    check(ev["result"].startswith("0x00"), f"evaluate [ERR_FLAG] = {ev['result']}")
+    dap.request("setBreakpoints", source={"path": MEMTEST_ASM}, breakpoints=[])
+    # Rebuild & reload: the listing is re-bound, the breakpoint re-resolved.
+    body = dap.request("calcu1600/load", bin=os.path.join(REPO, "examples/memtest_stock.bin"),
+                       listing=os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest.rst"),
+                       address="0x40C5")
+    check(body.get("start") == "1:40C5", f"calcu1600/load -> {body}")
+    dap.request("stepOut", threadId=1)
+    stop = dap.wait_event("stopped", timeout=10)
+    top = top_frame(dap, 1)
+    check(stop.get("reason") == "step" and "source" not in top, f"stepOut back into the ROM: {top['name']}")
+    dap.request("disconnect")
+    dap.sock.close()
+
+
+def rom_run(port):
+    """ROM research: reset and stop before the first instruction, then single-step."""
+    print("ROM run:")
+    dap = Dap(port)
+    dap.request("initialize", adapterID="calcu1600")
+    dap.wait_event("initialized")
+    dap.request("attach")
+    dap.request("configurationDone")
+    dap.request("calcu1600/reset", kind="reset", stop=True)
+    stop = dap.wait_event("stopped")
+    tid = stop["threadId"]
+    top = top_frame(dap, tid)
+    check(stop.get("reason") == "entry" and top["instructionPointerReference"] in ("1:E000", "1:0000"),
+          f"reset stops at the vector: {top['name']}")
+    for _ in range(5):
+        dap.request("stepIn", threadId=tid, granularity="instruction")
+        dap.wait_event("stopped")
+    frames = dap.request("stackTrace", threadId=tid, startFrame=0, levels=10)["stackFrames"]
+    check(len(frames) == 6, f"history after 5 steps: {len(frames) - 1} ({frames[-1]['name']} .. {frames[1]['name']})")
+    dap.request("continue", threadId=tid)
+    dap.request("disconnect")
+    dap.sock.close()
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=4711)
@@ -95,7 +175,9 @@ def main():
 
     proc = None
     if args.app:
-        proc = subprocess.Popen([args.app, "--dap", str(args.port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # -ApplePersistenceIgnoreState: no macOS window restoration for this run.
+        proc = subprocess.Popen([args.app, "--dap", str(args.port), "-ApplePersistenceIgnoreState", "YES"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(1.0)
     try:
         dap = Dap(args.port, timeout=20.0)
@@ -160,13 +242,19 @@ def main():
         check(stop.get("reason") == "pause", "continue + pause")
 
         dap.request("disconnect")
+        dap.sock.close()
+
+        program_run(args.port)
+        rom_run(args.port)
         print("done:", "all passed" if check.failures == 0 else f"{check.failures} failed")
     finally:
         if proc:
-            proc.terminate()
+            # Quit it the normal way (a kill makes macOS offer to restore
+            # its windows on the next launch); kill only as a last resort.
             try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
+                Dap(args.port, timeout=5).request("calcu1600/quit")
+                proc.wait(timeout=10)
+            except Exception:
                 proc.kill()
     return 1 if check.failures else 0
 

@@ -1,19 +1,46 @@
 #include "DebugController.hpp"
 
+#include <QTimer>
+
+#include <algorithm>
+
 #include "AppSettings.hpp"
 #include "DapServer.hpp"
 #include "DapSession.hpp"
 #include "Debug/MachineDebugTargets.hpp"
 #include "MachineController.hpp"
+#include "PC1500/PC1500Machine.hpp"
+#include "PC1600/PC1600Machine.hpp"
 
 DebugController::DebugController(MachineController* machines, QObject* parent)
     : QObject(parent), m_machines(machines) {
     m_server = new DapServer(this);
     connect(m_server, &DapServer::clientConnected, this, &DebugController::onClientConnected);
     connect(m_server, &DapServer::clientDisconnected, this, &DebugController::onClientDisconnected);
-    connect(m_server, &DapServer::messageReceived, this, [this](const QJsonObject& message) {
-        if (m_session) m_session->handle(message);
-    });
+    connect(m_server, &DapServer::messageReceived, this, &DebugController::dispatch);
+}
+
+void DebugController::dispatch(const QJsonObject& message) {
+    // A synchronous load pumps the event loop: messages arriving meanwhile
+    // (or while a request is being handled) wait, in order.
+    m_queued.push_back(message);
+    drainQueue();
+}
+
+void DebugController::drainQueue() {
+    if (m_busy || m_appBusy > 0) return;
+    m_busy = true;
+    while (!m_queued.empty() && m_appBusy == 0) {
+        const QJsonObject next = m_queued.front();
+        m_queued.erase(m_queued.begin());
+        if (m_session) m_session->handle(next);
+    }
+    m_busy = false;
+}
+
+void DebugController::setAppBusy(bool busy) {
+    m_appBusy = std::max(0, m_appBusy + (busy ? 1 : -1));
+    if (m_appBusy == 0 && !m_queued.empty()) QTimer::singleShot(0, this, &DebugController::drainQueue);
 }
 
 DebugController::~DebugController() {
@@ -109,6 +136,10 @@ void DebugController::runSlice(std::uint64_t cycles) {
         m_run->resume();
         if (m_session) m_session->onMachineReplaced();
     }
+    if (m_enterAfterPaste && !m_machines->pasteActive()) {
+        m_enterAfterPaste = false;
+        m_machines->enqueueKey("enter");
+    }
     // Breakpoints and watches act only while the debugger runs the machine;
     // a boot or load in between must not park on one.
     m_target->arm(true);
@@ -132,6 +163,55 @@ std::vector<debug::BreakpointStatus> DebugController::rebindListings() {
         m_target->arm(armed);
     }
     return changed;
+}
+
+bool DebugController::loadPreset(const QString& path, QString* error) {
+    if (!m_presetLoader) {
+        *error = tr("Presets can't be loaded from the debugger here");
+        return false;
+    }
+    const bool ok = m_presetLoader(path, error);
+    // The preset rebuilt the machine: bind to it right away (paused, as a
+    // fresh session is).
+    if (m_sessionActive && !m_target) createTarget();
+    return ok;
+}
+
+debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request, After after) {
+    debug::LoadResult r;
+    if (!m_target || !m_run) {
+        r.error = "no machine";
+        return r;
+    }
+    r = debug::loadProgram(m_machines->pc1500(), m_machines->pc1600(), request, m_map, *m_target);
+    if (!r.ok) return r;
+    if (after == After::None) return r;
+    if (r.callCommand.empty()) {
+        r.warnings.push_back("no BASIC CALL starts this CPU's code; load it, then call it from your own code");
+        return r;
+    }
+    if (after == After::StopOnEntry) m_breakpoints.setEntry(request.thread, r.entry);
+    m_breakpoints.apply(*m_target);
+    m_target->arm(false);
+    // The paste types the command but never presses ENTER; runSlice() does
+    // that once the typing is done.
+    m_machines->pasteText(r.callCommand);
+    m_enterAfterPaste = true;
+    m_run->resume();
+    return r;
+}
+
+bool DebugController::resetMachine(bool allReset, bool stop, QString* error) {
+    if (!m_target || !m_run) {
+        *error = tr("No machine is running");
+        return false;
+    }
+    m_machines->cancelPaste();
+    m_enterAfterPaste = false;
+    m_target->reset(allReset);
+    if (stop) m_run->pause(debug::DebugEvent::Entry);
+    else m_run->resume();
+    return true;
 }
 
 void DebugController::machineAboutToChange() {

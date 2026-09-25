@@ -81,8 +81,10 @@ bool RunControl::handleStop(const Stop& stop, std::vector<DebugEvent>* events) {
         events->push_back(out);
     }
     if (d.stop) {
-        stopWith(stop.kind == Stop::Breakpoint ? DebugEvent::Breakpoint : DebugEvent::DataBreakpoint, stop.thread,
-                 events, d.ids);
+        const DebugEvent::Reason reason = d.entry                        ? DebugEvent::Entry
+                                          : stop.kind == Stop::Breakpoint ? DebugEvent::Breakpoint
+                                                                          : DebugEvent::DataBreakpoint;
+        stopWith(reason, stop.thread, events, d.ids);
         return true;
     }
     // Not a stop after all (condition, hit count, logpoint, other bank):

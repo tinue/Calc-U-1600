@@ -59,6 +59,13 @@ private:
     void readMemory(const QJsonObject& args, QJsonObject* body, QString* error);
     void writeMemory(const QJsonObject& args, QJsonObject* body, QString* error);
     void evaluate(const QJsonObject& args, QJsonObject* body, QString* error);
+    void restart(const QJsonObject& args, QJsonObject* body, QString* error);
+    void customLoad(const QJsonObject& args, QJsonObject* body, QString* error);
+    void customReset(const QJsonObject& args, QJsonObject* body, QString* error);
+
+    /// preset, reset, program and listings of an attach configuration.
+    bool prepare(const QJsonObject& config, QString* error);
+    bool loadProgram(const QJsonObject& descriptor, QJsonObject* body, QString* error);
 
     // Helpers
     bool ready(QString* error) const;
@@ -81,4 +88,5 @@ private:
     bool m_attached = false;
     bool m_stopOnEntry = false;
     bool m_configured = false;
+    QJsonObject m_attachConfig; // for restart
 };

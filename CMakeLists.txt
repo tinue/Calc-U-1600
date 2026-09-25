@@ -58,6 +58,7 @@ set(CORE_COMMON_SOURCES
   ${CORE_ROOT}/Debug/SourceMap.cpp
   ${CORE_ROOT}/Debug/BreakpointTable.cpp
   ${CORE_ROOT}/Debug/RunControl.cpp
+  ${CORE_ROOT}/Debug/ProgramLoader.cpp
   ${CORE_ROOT}/Debug/Listing/Listing.cpp
   ${CORE_ROOT}/Debug/Listing/SdasListing.cpp
   ${CORE_ROOT}/Debug/Listing/ZasmListing.cpp
