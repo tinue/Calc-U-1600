@@ -138,9 +138,11 @@ Privacy & Security**:
 - **Accessibility** and **Automation ▸ System Events**, to open the menu.
 
 A missing permission fails the shot with that message, never a silently
-wrong picture. These shots live in their own scenario,
-[macos-menus.shots.yaml](macos-menus.shots.yaml), so the Qt-only
-[user-guide.shots.yaml](user-guide.shots.yaml) runs anywhere.
+wrong picture. The menu shots live in their own scenario,
+[macos-menus.shots.yaml](macos-menus.shots.yaml).
+[user-guide.shots.yaml](user-guide.shots.yaml) has a single `system` shot:
+the main window with its title bar. It needs only Screen Recording; its
+other shots are Qt-rendered and byte-identical per run.
 
 ### Widget names
 

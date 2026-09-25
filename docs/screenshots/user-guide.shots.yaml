@@ -1,14 +1,16 @@
 # Screenshots for docs/User-Guide.md -- regenerate with
 # tools/make_screenshots.sh. Format: docs/screenshots/README.md.
-# Qt-rendered only (no macOS permissions needed), byte-identical per run.
+# Qt-rendered (byte-identical per run), except the one `method: system`
+# shot below: that one needs the Screen Recording permission on macOS.
 out: ../images
 window: 900x1000
 
 shots:
-  # Getting started -- the whole window as it comes up.
+  # Getting started -- the whole window as it comes up, title bar included
+  # (macOS screencapture, so it shows the real window chrome).
   - name: main-window
     preset: presets/pc1500a-hello.pc1500a
-    capture: main-window.png
+    capture: { method: system, target: window, file: main-window.png }
 
   - name: model-dropdown
     preset: presets/pc1500a-hello.pc1500a
