@@ -60,6 +60,12 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
 - **Call Stack:** each CPU with its live frame and history. Click a frame to select it.
 - **Variables ▸ Registers:** the selected frame's registers, plus two expandable entries: *Flags* and, for the live frame, *Banks* (PC-1600 page banks, or PU/PV).
 - **Disassembly:** right-click a frame and choose **Open Disassembly View**. It opens by itself where there's no source.
+- **Memory:** VS Code has no memory panel. It opens memory in Microsoft's Hex Editor extension (`ms-vscode.hexeditor`), which it offers to install the first time.
+  - **Opening it:** while paused, hover over a 16-bit register under *Registers*, or a Watch entry, and click the binary-data icon (**View Binary Data**). A Watch entry can be any address or expression, e.g. `0x7600` or `x+0x10`.
+  - **Offsets are relative.** The offset column counts from the address you opened, which only the breadcrumb shows. The row labelled `00000000` is that address, and you can't scroll above it.
+  - **Real addresses:** open the view from a Watch entry `0`. Offsets then equal addresses, and **Cmd+G** (Go to offset) jumps anywhere.
+  - **Edits** in the hex editor are written to the machine.
+  - **Which CPU:** a Watch entry opens memory as the selected frame's CPU sees it. Select an LH5803 frame first to see the PC-1600's LH5803 side. ME1 can't be opened from a Watch entry.
 
 ## Using VS Code
 
