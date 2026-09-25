@@ -97,10 +97,14 @@ void ShotRunner::start() {
         return;
     }
 
+    // setColorScheme is Qt 6.8+; Linux CI builds against Ubuntu's Qt 6.4,
+    // where `appearance:` is ignored and shots follow the system scheme.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     if (m_scenario.appearance == QLatin1String("light"))
         QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Light);
     else if (m_scenario.appearance == QLatin1String("dark"))
         QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
+#endif
 
     m_window->setEmulationFrozen(true);
     // A fixed spot on the primary screen, so `method: system` regions and
