@@ -107,10 +107,12 @@ def program_run(port):
     dap = Dap(port)
     dap.request("initialize", adapterID="calcu1600")
     dap.wait_event("initialized")
-    dap.request("attach", preset=os.path.join(REPO, "examples/startup/default-pc1500.pc1500"),
-                program={"bin": os.path.join(REPO, "examples/memtest_stock.bin"),
-                         "listing": os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest.rst"),
-                         "address": "0x40C5", "after": "stopOnEntry"})
+    attach = {"type": "calcu1600", "request": "attach",
+              "preset": os.path.join(REPO, "examples/startup/default-pc1500.pc1500"),
+              "program": {"bin": os.path.join(REPO, "examples/memtest_stock.bin"),
+                          "listing": os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest.rst"),
+                          "address": "0x40C5", "after": "stopOnEntry"}}
+    dap.request("attach", **{k: v for k, v in attach.items() if k not in ("type", "request")})
     bps = dap.request("setBreakpoints", source={"path": MEMTEST_ASM}, breakpoints=[{"line": 88}])["breakpoints"]
     check(bps and bps[0]["verified"] and bps[0]["line"] == 89, f"source breakpoint 88 -> {bps and bps[0].get('line')}")
     dap.request("configurationDone")
@@ -138,6 +140,16 @@ def program_run(port):
     check(body.get("start") == "0x40C5", f"calcu1600/load -> {body}")
     stop = dap.wait_event("stopped", timeout=30)
     check(stop.get("reason") == "entry" and top_frame(dap, 1).get("line") == 74, "reloaded and stopped at the entry again")
+    # Restart (the toolbar's): the attach configuration again -- preset,
+    # load, entry stop -- and a breakpoint set before it still hits.
+    dap.request("setBreakpoints", source={"path": MEMTEST_ASM}, breakpoints=[{"line": 88}])
+    dap.request("restart", arguments=attach)
+    stop = dap.wait_event("stopped", timeout=30)
+    check(stop.get("reason") == "entry" and top_frame(dap, 1).get("line") == 74, "restart: stopped at the entry")
+    dap.request("continue", threadId=1)
+    stop = dap.wait_event("stopped", timeout=10)
+    check(stop.get("reason") == "breakpoint" and top_frame(dap, 1).get("line") == 89, "restart: breakpoint hit at line 89")
+    dap.request("setBreakpoints", source={"path": MEMTEST_ASM}, breakpoints=[])
     dap.request("stepOut", threadId=1)
     stop = dap.wait_event("stopped", timeout=10)
     top = top_frame(dap, 1)
@@ -196,6 +208,39 @@ def rom_run(port):
         dap.wait_event("stopped")
     frames = dap.request("stackTrace", threadId=tid, startFrame=0, levels=10)["stackFrames"]
     check(len(frames) == 6, f"history after 5 steps: {len(frames) - 1} ({frames[-1]['name']} .. {frames[1]['name']})")
+    dap.request("continue", threadId=tid)
+    dap.request("disconnect")
+    dap.sock.close()
+
+
+def reset_run(port):
+    """All Reset & Stop, then run on: the machine boots and breakpoints fire."""
+    print("All Reset run:")
+    dap = Dap(port)
+    dap.request("initialize", adapterID="calcu1600")
+    dap.wait_event("initialized")
+    dap.request("attach")
+    dap.request("configurationDone")
+    dap.request("calcu1600/reset", kind="allReset", stop=True)
+    stop = dap.wait_event("stopped", timeout=30)
+    check(stop.get("reason") == "entry", f"all reset stops at the vector: {top_frame(dap, stop['threadId'])['name']}")
+    tid = stop["threadId"]
+    dap.request("continue", threadId=tid)
+    time.sleep(1.5)
+    dap.request("pause", threadId=tid)
+    stop = dap.wait_event("stopped")
+    tid = stop["threadId"]
+    pc = top_frame(dap, tid)["instructionPointerReference"]
+    dap.request("setInstructionBreakpoints", breakpoints=[{"instructionReference": pc}])
+    dap.request("continue", threadId=tid)
+    try:
+        stop = dap.wait_event("stopped", timeout=10)
+        check(stop.get("reason") == "breakpoint", f"after the boot, a breakpoint at {pc} hits")
+    except TimeoutError:
+        check(False, f"breakpoint at {pc} hit within 10 s")
+        dap.request("pause", threadId=tid)
+        dap.wait_event("stopped")
+    dap.request("setInstructionBreakpoints", breakpoints=[])
     dap.request("continue", threadId=tid)
     dap.request("disconnect")
     dap.sock.close()
@@ -282,6 +327,7 @@ def main():
         program_run(args.port)
         pc1600_run(args.port)
         rom_run(args.port)
+        reset_run(args.port)
         print("done:", "all passed" if check.failures == 0 else f"{check.failures} failed")
     finally:
         if proc:

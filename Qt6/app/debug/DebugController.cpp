@@ -187,25 +187,42 @@ bool DebugController::loadPreset(const QString& path, QString* error) {
 }
 
 bool DebugController::cleanStart(const QString& preset, QString* how, QString* error) {
-    QString path = preset;
-    if (path.isEmpty()) path = AppSettings::defaultPresetPath(modelSettingsKey(m_machines->currentModel()));
-    if (!path.isEmpty()) {
-        *how = tr("preset %1").arg(path);
-        return loadPreset(path, error);
+    if (!m_sync) {
+        *error = tr("The machine can't be set up from the debugger here");
+        return false;
     }
-    // No preset: the machine as Reset All leaves it, booted to the prompt.
-    *how = tr("All Reset (no default preset for this model)");
-    m_machines->resetToPrompt(/*allReset=*/true);
-    return true;
+    bool ok = false;
+    if (!preset.isEmpty()) {
+        *how = tr("preset %1").arg(preset);
+        ok = m_sync->loadPreset(preset, error);
+    } else if (const QString path = AppSettings::defaultPresetPath(modelSettingsKey(m_machines->currentModel()));
+               !path.isEmpty()) {
+        // As the app applies it: refused if it's for another model.
+        *how = tr("default preset %1").arg(path);
+        ok = m_sync->loadDefaultPreset(path, m_machines->currentModel(), error);
+    } else {
+        // No preset: the machine as Reset All leaves it, booted to the prompt.
+        *how = tr("All Reset (no default preset for this model)");
+        ok = m_sync->resetToPrompt(/*allReset=*/true, error);
+    }
+    // A rebuilt machine stays paused, as a fresh session is -- the caller
+    // re-binds the listings.
+    m_replacedPending = false;
+    return ok;
 }
 
 debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request, After after) {
     debug::LoadResult r;
-    if (!m_target || !m_run) {
+    if (!m_target || !m_run || !m_sync) {
         r.error = "no machine";
         return r;
     }
-    r = debug::loadProgram(m_machines->pc1500(), m_machines->pc1600(), request, m_map, *m_target);
+    QString error;
+    m_sync->run(tr("Load Program"), [this, &r, &request](QString* e) {
+        r = debug::loadProgram(m_machines->pc1500(), m_machines->pc1600(), request, m_map, *m_target);
+        *e = QString::fromStdString(r.error);
+        return r.ok;
+    }, {}, &error);
     if (!r.ok) return r;
     if (after == After::None) return r;
     if (r.callCommand.empty()) {
@@ -220,12 +237,18 @@ debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request
 }
 
 bool DebugController::resetMachine(bool allReset, bool stop, QString* error) {
-    if (!m_target || !m_run) {
+    if (!m_target || !m_run || !m_sync) {
         *error = tr("No machine is running");
         return false;
     }
-    m_machines->cancelPaste();
-    m_target->reset(allReset);
+    // Without the boot run (ROM research starts at the vector), but like
+    // any reset: timer stopped meanwhile, clock re-seeded after.
+    if (!m_sync->run(allReset ? tr("Reset All") : tr("Reset"), [this, allReset](QString*) {
+            m_machines->cancelPaste();
+            m_target->reset(allReset);
+            return true;
+        }, {}, error))
+        return false;
     if (stop) m_run->pause(debug::DebugEvent::Entry);
     else m_run->resume();
     return true;

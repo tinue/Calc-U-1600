@@ -90,7 +90,7 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
    The build task assembles the file in focus, so keep `memtest.asm` in focus when pressing F5. The preset gives a stock PC-1500 with the program's bytes reserved (`NEW&417D`). A configuration with a memory module would put BASIC's free memory under &40C5, and memtest would overwrite itself. Build & Load types `CALL &40C5` without `,X`, so set **X** (the pass count) under *Registers* at the entry stop.
 4. **Start debugging** (F5). The session runs through these steps:
    1. The task builds the program.
-   2. **Clean start:** the preset sets the machine up. Without a `preset` in the configuration, the model's default preset from Settings is used; without that, All Reset and a boot to the prompt.
+   2. **Clean start:** the preset sets the machine up. Without a `preset` in the configuration, the model's default preset from Settings is used, and refused if it's for another model, as when the app applies it; without one, All Reset and a boot to the prompt. Like the menu's loads and resets, it runs with the frame timer stopped and sets the clock from the host afterwards.
    3. The program is loaded directly, without the Load Machine Code dialog or its advice popup.
    4. Its `CALL` is typed and entered through the app's inbound typing API. The GUI's Paste Text never presses ENTER; this API does.
    5. VS Code stops at the program's first line.
