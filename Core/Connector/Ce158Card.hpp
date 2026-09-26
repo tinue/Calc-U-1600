@@ -205,6 +205,13 @@ public:
         return true;
     }
 
+    /// The ME1 register blocks (a UART RX read clears status flags): a
+    /// debugger must not read them as memory.
+    bool readHasSideEffects(const PinState& pins) const override {
+        const uint16_t addr = pins.address;
+        return pins.me1 && ((addr >= kPioBase && addr <= kUartEnd) || (addr >= kIntIdBase && addr <= kIntIdEnd));
+    }
+
     WriteResult respondsToWrite(const PinState& pins, uint8_t value) override {
         if (!pins.me1) return WriteResult::ignored(); // ROM window is read-only
         const uint16_t addr = pins.address;

@@ -167,4 +167,10 @@ public:
     /// Whether this card claims this write, and whether it stored it
     /// (see WriteResult).
     virtual WriteResult respondsToWrite(const PinState& pins, uint8_t value) = 0;
+
+    /// Whether reading this access would change the card's state (a UART
+    /// data register, a status flag cleared on read), so a debugger view
+    /// must not read it. Lets a host's debug peek skip such addresses
+    /// without knowing which card sits where. Default: reads are harmless.
+    virtual bool readHasSideEffects(const PinState& /*pins*/) const { return false; }
 };

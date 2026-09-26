@@ -195,7 +195,7 @@ bool PC1600Machine::attachCE150(const uint8_t* rom, size_t romSize) {
     detachCE150Locked();
     detachCE1600PLocked(); // one plotter on the bus at a time
     card->reset();
-    m_lh5803Mem.attachCe150(card.get());
+    m_z80Mem.lh5803PeripheralBus().attach(card.get());
     m_ce150Card = std::move(card);
     return true;
 }
@@ -207,7 +207,7 @@ void PC1600Machine::detachCE150() {
 
 void PC1600Machine::detachCE150Locked() {
     if (!m_ce150Card) return;
-    m_lh5803Mem.detachCe150();
+    m_z80Mem.lh5803PeripheralBus().detach(m_ce150Card.get());
     m_ce150Card.reset();
 }
 
@@ -219,7 +219,7 @@ bool PC1600Machine::attachCE158(const uint8_t* rom, size_t romSize) {
     if (!card) return false;
     detachCE158Locked();
     detachCE1600PLocked(); // not usable together with the CE-1600P
-    m_lh5803Mem.attachCe158(card.get());
+    m_z80Mem.lh5803PeripheralBus().attach(card.get());
     m_ce158.install(std::move(card));
     return true;
 }
@@ -231,7 +231,7 @@ void PC1600Machine::detachCE158() {
 
 void PC1600Machine::detachCE158Locked() {
     if (!m_ce158.attached()) return;
-    m_lh5803Mem.detachCe158();
+    m_z80Mem.lh5803PeripheralBus().detach(m_ce158.card());
     m_ce158.remove();
 }
 

@@ -4,19 +4,6 @@
 #include <cstdio>
 #include <vector>
 
-namespace {
-// The CE-150's LH5810 register block lives in ME1 at 0xB008-0xB00F (see
-// Core/Connector/Ce150Card.hpp). On real hardware that range also aliases
-// the internal LH5811 -- isIoChipAddress() matches any ME1 address with
-// bits 12-13 set -- and the firmware only avoids the clash by always
-// addressing its own chip at 0xF00x. A 60-pin card that claims this window
-// decodes it itself, so readME1()/writeME1() give the SystemBus first
-// refusal here; with no card on the chain SystemBus::{read,write}ME1
-// returns false and the internal-chip path below runs unchanged.
-constexpr uint16_t kCe150IoBase = 0xB008;
-constexpr uint16_t kCe150IoEnd  = 0xB00F;
-} // namespace
-
 PC1500Memory::PC1500Memory(PC1500Variant variant)
     : m_variant(variant),
       m_userRamSize(variant == PC1500Variant::PC1500A ? kUserRamSizeA : kUserRamSizePlain),
@@ -166,10 +153,14 @@ bool PC1500Memory::poke(uint16_t addr, uint8_t value) {
 
 uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
     *readable = true;
-    if (addr >= kCe150IoBase && addr <= kCe150IoEnd) {
+    // Same order as readME1(); a card register a read would disturb stays
+    // unread (see ExpansionCard::readHasSideEffects).
+    uint8_t v;
+    if (m_systemBus.me1ReadHasSideEffects(addr, m_pu, m_pv)) {
         *readable = false;
         return 0xFF;
     }
+    if (m_systemBus.readME1(addr, m_pu, m_pv, v)) return v;
     if (isIoChipAddress(addr)) {
         switch (addr & 0xF) {
             case 0xC: return m_dda;
@@ -181,15 +172,19 @@ uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
             default: return m_ioScratchRegs[addr & 0xF];
         }
     }
-    uint8_t v;
-    if (m_systemBus.readME1(addr, m_pu, m_pv, v)) return v;
     return peek(addr);
 }
 
 uint8_t PC1500Memory::readME1(uint16_t addr) {
-    // A CE-150 (or any 60-pin card) claiming the LH5810 window shadows the
-    // internal I/O chip that also aliases it -- see kCe150IoBase's comment.
-    if (addr >= kCe150IoBase && addr <= kCe150IoEnd) {
+    // Only the 60-pin SystemBus carries ME1 (the 40-pin connector has no
+    // equivalent), and a card there gets first refusal on every ME1
+    // access. A card register inside the internal LH5811's broad decode
+    // (isIoChipAddress() matches any ME1 address with bits 12-13 set)
+    // shadows it: the CE-150's LH5810 at 0xB008-0xB00F is exactly such a
+    // clash, which the firmware avoids by addressing its own chip at
+    // 0xF00x. The host doesn't need to know which card sits where; with no
+    // card on the chain this falls straight through.
+    {
         uint8_t v;
         if (m_systemBus.readME1(addr, m_pu, m_pv, v)) return v;
     }
@@ -216,20 +211,12 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
             default: return m_ioScratchRegs[addr & 0xF]; // serial/etc: not modeled, but read back what was written
         }
     }
-    // Only the 60-pin SystemBus exposes DME1/ME1 (the 40-pin connector has
-    // no equivalent) -- give it first refusal before falling back to the
-    // ME0 mirror, resolving this file's earlier "flagged for revisit once
-    // Phase 4's ExpansionConnector work clarifies ME1's remaining role."
-    uint8_t v;
-    if (m_systemBus.readME1(addr, m_pu, m_pv, v)) return v;
     return readME0(addr); // no other documented ME1 wiring -- conservative mirror
 }
 
 void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
-    // See readME1(): a 60-pin card claiming the LH5810 window gets it first.
-    if (addr >= kCe150IoBase && addr <= kCe150IoEnd) {
-        if (m_systemBus.writeME1(addr, m_pu, m_pv, value)) return;
-    }
+    // See readME1(): a 60-pin card gets first refusal on every ME1 access.
+    if (m_systemBus.writeME1(addr, m_pu, m_pv, value)) return;
     if (isIoChipAddress(addr)) {
         switch (addr & 0xF) {
             case 0xC: m_dda = value; return;
@@ -252,7 +239,6 @@ void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
             default: m_ioScratchRegs[addr & 0xF] = value; return; // serial/etc: not modeled, but not discarded either
         }
     }
-    if (m_systemBus.writeME1(addr, m_pu, m_pv, value)) return;
     writeME0(addr, value);
 }
 

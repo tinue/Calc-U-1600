@@ -103,6 +103,12 @@ public:
         return WriteResult::ignored();                     // ROM window read-only
     }
 
+    /// The LH5810 registers: a debugger must not read them as memory.
+    bool readHasSideEffects(const PinState& pins) const override {
+        const Access a = decodeAccess(pins);
+        return a.me1 && a.addr >= kIoBase && a.addr <= kIoEnd;
+    }
+
 private:
     struct Access {
         uint16_t addr = 0;

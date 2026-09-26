@@ -81,6 +81,12 @@ public:
         return m_chain.write(decodeME1(addr, /*forWrite=*/true, pu, pv), value);
     }
 
+    /// Whether a card on the chain says reading this ME1 address would
+    /// disturb it -- PC1500Memory::debugPeekME1() only.
+    bool me1ReadHasSideEffects(uint16_t addr, bool pu, bool pv) const {
+        return !m_chain.empty() && m_chain.readHasSideEffects(decodeME1(addr, /*forWrite=*/false, pu, pv));
+    }
+
     // Queried on every host-ROM fetch; see InhibitSource.
     bool inhibitAsserted() const { return m_chain.inhibitAsserted(); }
 

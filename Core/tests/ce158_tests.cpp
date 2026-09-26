@@ -270,6 +270,44 @@ void test_machine_decode_alongside_internal_io() {
     CHECK(machine.memory().peek(0x8000) == 0xFF);
 }
 
+// The debugger's ME1 peeks ask the cards (readHasSideEffects) instead of
+// knowing their address ranges: a register a read would disturb stays
+// unread, only while that card is plugged in, on both hosts.
+void test_debug_peek_skips_card_registers() {
+    auto rom = fakeRom();
+    std::vector<uint8_t> ce150(Ce150Card::kRomSize, 0x5A);
+    bool readable = true;
+
+    PC1500Machine pc1500(PC1500Variant::PC1500A);
+    pc1500.memory().debugPeekME1(0xB008, &readable);
+    CHECK(readable);                                   // no CE-150: plain ME1 address
+    pc1500.memory().debugPeekME1(0xD200, &readable);
+    CHECK(readable);                                   // no CE-158 either
+    CHECK(pc1500.attachCE150(ce150.data(), ce150.size()));
+    CHECK(pc1500.attachCE158(rom.data(), rom.size()));
+    pc1500.memory().debugPeekME1(0xB008, &readable);
+    CHECK(!readable);                                  // the CE-150's LH5810
+    pc1500.memory().debugPeekME1(0xD200, &readable);
+    CHECK(!readable);                                  // the CE-158's UART
+    pc1500.memory().debugPeekME1(0xDE00, &readable);
+    CHECK(!readable);                                  // the CE-158's interrupt-ID register
+    pc1500.memory().debugPeekME1(0xF00C, &readable);
+    CHECK(readable);                                   // the internal LH5811 is still peekable
+
+    PC1600Machine pc1600;
+    auto& lh = pc1600.lh5803Memory();
+    lh.debugPeek(0xD200, /*me1=*/true, &readable);
+    CHECK(readable);                                   // no CE-158: LH5803 ROM alias
+    CHECK(pc1600.attachCE158(rom.data(), rom.size()));
+    lh.debugPeek(0xD200, /*me1=*/true, &readable);
+    CHECK(!readable);
+    lh.debugPeek(0xD400, /*me1=*/true, &readable);
+    CHECK(readable);                                   // just past the CE-158's blocks
+    pc1600.detachCE158();
+    lh.debugPeek(0xD200, /*me1=*/true, &readable);
+    CHECK(readable);
+}
+
 const char* kSysRom = "roms/PC-1500_A04.ROM";
 const char* kCe150Rom = "roms/CE-150.ROM";
 const char* kCe158Rom = "roms/CE-158.ROM";
@@ -488,6 +526,7 @@ int run_ce158_tests() {
     test_uart_transmit_paced_by_baud();
     test_uart_receive_never_overruns();
     test_machine_decode_alongside_internal_io();
+    test_debug_peek_skips_card_registers();
     test_preset_parse_interface_key();
     test_rom_lprint_centronics_with_ce150_chained();
     test_rom_serial_lprint_and_input();

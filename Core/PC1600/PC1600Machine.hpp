@@ -11,6 +11,7 @@
 
 #include "../Connector/CE1600FCard.hpp"
 #include "../Connector/CE1600PCard.hpp"
+#include "../Connector/Ce150Card.hpp"
 #include "../Connector/Ce158Port.hpp"
 #include "../Connector/ExpansionCard.hpp"
 #include "../CPU/LH5803/LH5803.hpp"

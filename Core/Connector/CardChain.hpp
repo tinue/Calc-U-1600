@@ -66,6 +66,14 @@ public:
         return WriteReturn{};
     }
 
+    /// True when any card says reading this access would disturb it (see
+    /// ExpansionCard::readHasSideEffects) -- for debugger peeks only.
+    bool readHasSideEffects(const Pins& pins) const {
+        for (const Card* card : m_cards)
+            if (card->readHasSideEffects(pins)) return true;
+        return false;
+    }
+
     // Queried on every host-ROM fetch; see InhibitSource. Only the cards
     // that declared the capability are asked.
     bool inhibitAsserted() const {
