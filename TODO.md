@@ -91,6 +91,65 @@ obligations.
   `OUTSTAT 0-3` and buffer-full RTS become effective end-to-end, for
   serial-only tooling to bridge via `socat`.
 
+## PC-1600 program loading and pointer bookkeeping
+
+The fast loader pokes BASPRG_END and the PRGADR end triple (`$FE3F`,
+7b327cd) by hand, handles S0 only, and repeats the LH5803↔Z80 `+0x8000`
+mapping in `PC1600BasicLoader`, `PC1600BasicTyper` (`toZ80`) and
+`PC1600ProgramPlacement`. PRGADR was found missing late, so the real risk
+is other work-area bookkeeping the loader skips. **Trace the scenarios
+below on the ROM before deciding anything** (a pointer helper, or
+mirroring the ROM's own sequence).
+
+### Scenarios to trace
+- **A memory module split into program area and base memory**
+  (`INIT"Sx:","P",n`). What goes into ADTBL, SxMTb/SxMBb, the S1/S2
+  descriptors (F019–F01E / F023–F028) and the module header, and how S0's
+  bank list changes.
+- **Loading a BASIC program into a program area** (TITLE = S1/S2). Not
+  supported by the fast loader today. The ROM's `LOAD` finish takes a
+  separate S1/S2 path (see below).
+- **Loading a program saved on a PC-1500**, both machine code and BASIC.
+  The PC-1600 accepts both. Machine code lands in LH5803-visible memory.
+  Where BASIC goes, and whether it's converted or retokenised, is unknown.
+- **Loading while the calculator is in MODE 1** (LH5803 owns the bus).
+- For each scenario: diff the whole work area (F000–FFFF) typed vs
+  loaded vs fast-loaded (same preset, `pc1600_cli`). Include a program
+  that crosses a bank boundary, to settle the F02C question below.
+
+### Found in the ROM so far (2026-09-26)
+- **PRGADR** (jump table 02F4H = `RST 18H` → romI-0 188BH) only derives
+  FE3C–FE41 and writes nothing else. With TITLE (F1D5) = 0 (S0):
+  FE3C/FE3D = F865 (BE → LE, bit 15 set), FE3E = F02B (start bank),
+  FE3F/FE40 = F867 (same conversion), FE41 = F02C (end bank). For S1/S2 it
+  copies the 6-byte descriptor F019–F01E / F023–F028 to FE3C. If that
+  slot's SxMTb (F016/F020) is ≥ FEh (not a program module), it resets
+  TITLE to 0 and takes the S0 path.
+- **romI-0 1874H** ("program empty?") compares FE3E with FE41, then
+  FE3C with FE3F, so the start and end banks can differ.
+- **`LOAD` finish, rom3b 70E1H**: the ROM's own "program placed in
+  memory" sequence, with the end in FA00/FA01 and the end bank in FA02:
+  1. writes the `FF` terminator at the end;
+  2. S0: F867 = end (BE), **F02C = end bank**;
+  3. S0: if the variable pointer F899 ≤ the new end (LOGEND, 02DAH),
+     sets F899 = (F864):00;
+  4. S1/S2 instead: end triple → F01C / F026, patches the module header
+     (+5/+6, clears b7 of +7 when F3DB b1 is set);
+  5. calls PRGADR;
+  6. F89E (CURRENT TOP) = start, F1C1 (CURRENT bank) = FE3E;
+  7. FA02 = FFh.
+- **`LOAD` start, rom3b 71B3H**, fills FA00–FA05 from F865/F02B/F867/F02C
+  (S0) or copies the S1/S2 descriptor.
+- **Writers of F02C**: rom3b 44BCH/44CBH, 65E4H (`NEW`: F02B = F02C =
+  F02AH), 70F8H (`LOAD` finish), and romce1600-2 34E3H (not looked at yet).
+- **Gaps in the fast loader** compared with 70E1H: it never writes F02C,
+  and it copies FE41 from FE3E instead of taking the end bank. That is
+  correct only while the end stays in the start bank. The loader comment
+  says that held on a measured program spilling into internal RAM, but the
+  ROM treats the two banks as independent. A MODE switch re-runs PRGADR
+  and propagates a stale F02C. It also skips F899, F89E and F1C1, which is
+  probably harmless after NEW0 but unconfirmed.
+
 ## Feature ideas
 
 - **Real-time-clock timers in the sub-CPU: wake-up (`WAKE$`), `ALARM$`,
@@ -194,18 +253,6 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   - a shared `NamedFileCatalog`-level helper for lists / classify /
     save-name validation, leaving the managers only Qt glue;
   - one directory scan per refresh.
-- **PC-1600 program pointers are written cell by cell.** The fast loader
-  pokes BASPRG_END and each PRGADR copy (`$FE3F`, 7b327cd) by hand, and
-  the LH5803↔Z80 `+0x8000` mapping is repeated in `PC1600BasicLoader`,
-  `PC1600BasicTyper` (`toZ80`) and `PC1600ProgramPlacement`.
-
-  **Before fixing (ROM check):** PRGADR was found missing late, so the
-  real risk is other work-area bookkeeping the loader skips. Diff the whole
-  work area (F000-FFFF) after a typed program and after a fast-loaded one
-  (same preset, `pc1600_cli`), and list every cell that differs. Then
-  decide: a `PC1600ProgramPointers` read/write helper that covers all of
-  them, or running the ROM's own PRGADR routine (jump table 02F4H) after
-  poking.
 - **TC8576F interrupt plumbing.** Four `read/write/tick/reset` →
   `…Impl()` wrappers exist only to call `refreshInterruptOutput()`; the
   `std::function<void(bool)>` hook's one subscriber ignores the bool.

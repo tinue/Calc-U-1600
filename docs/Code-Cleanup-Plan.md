@@ -27,12 +27,9 @@ analysis, then states the target fix. The cost description stays.
     path.
   - Target: nothing pushes updates. Moving the four refresh wrappers into
     `PC1600Memory` would only move them.
-- **PC-1600 program pointers.**
-  - Before fixing, a ROM check: diff the whole work area (F000-FFFF) after a
-    typed program and after a fast-loaded one (`pc1600_cli`, preset runs), to
-    find any other cells the loader skips besides PRGADR.
-  - Then decide: a pointer helper, or calling the ROM's PRGADR routine
-    (02F4H).
+- **PC-1600 program pointers.** Moved to its own TODO chapter ("PC-1600
+  program loading and pointer bookkeeping"): several load scenarios have to
+  be traced on the ROM before deciding.
 - **Card/floppy template-vs-instance rules.**
   - Before fixing: analyse `MemoryCardDefinition`. Cutting the text at a key
     depends on key order, which hand-written `.card.yaml` files don't
