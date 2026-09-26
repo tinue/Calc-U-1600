@@ -83,20 +83,7 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
    - stops on its first instruction, or on `ENTRY` if the source defines that label (or equate) inside the program.
 
    The configurations set no `address`. A headerless `.bin` without an `address` loads at the lowest address in its listing, which is the source's `.org`. Neither preset reserves memory for the program, so pick an `.org` that BASIC won't overwrite while you debug (the PC-1500A's &7C01 area, or above a `NEW` of your own). Build & Load assembles the file in focus but reloads the one the session started with, so keep that file in focus.
-4. **Add a launch configuration for your own program** (*Add Configuration… ▸ Calc-U-1600: …*) when it needs its own machine set-up. For example, memtest on a stock PC-1500:
-   ```jsonc
-   {
-     "type": "calcu1600", "request": "attach", "name": "PC-1500: memtest (stock)", "port": 4711,
-     "preLaunchTask": "sdas: build current file", "buildTask": "sdas: build current file",
-     "preset": "${workspaceFolder}/examples/memtest_stock_debug.pc1500",
-     "program": {
-       "bin": "${workspaceFolder}/examples/memtest.bin",
-       "listing": "${workspaceFolder}/examples/memtest.rst",
-       "address": "0x40C5", "after": "stopOnEntry"
-     }
-   }
-   ```
-   The build task assembles the file in focus, so keep `memtest.asm` in focus when pressing F5. The preset gives a stock PC-1500 with the program's bytes reserved (`NEW&417D`). A configuration with a memory module would put BASIC's free memory under &40C5, and memtest would overwrite itself. Build & Load types `CALL &40C5` without `,X`, so set **X** (the pass count) under *Registers* at the entry stop.
+4. **Add a launch configuration for your own program** (*Add Configuration… ▸ Calc-U-1600: …*) when it needs its own machine set-up: copy a *Debug on …* configuration and point its `preset` at a preset of your own, e.g. one that reserves the program's bytes with `NEW`.
 5. **Start debugging** (F5). The session runs through these steps:
    1. The task builds the program.
    2. **Clean start:** the preset sets the machine up. Without a `preset` in the configuration, the model's default preset from Settings is used, and refused if it's for another model, as when the app applies it; without one, All Reset and a boot to the prompt. Like the menu's loads and resets, it runs with the frame timer stopped and sets the clock from the host afterwards.

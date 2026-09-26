@@ -66,25 +66,26 @@ The zasm problem matcher reads the `in file x.asm:` header that zasm prints befo
 - a PC-1600 program built with zasm
 - ROM research: reset and stop
 
-A typical program configuration:
+A typical program configuration (the workspace's *Debug on PC-1500A*):
 
 ```jsonc
 {
   "type": "calcu1600",
   "request": "attach",
-  "name": "PC-1500: memtest (stock)",
+  "name": "Debug on PC-1500A",
   "port": 4711,
   "preLaunchTask": "sdas: build current file",
   "buildTask": "sdas: build current file",
-  "preset": "${workspaceFolder}/examples/memtest_stock_debug.pc1500",
+  "preset": "${workspaceFolder}/examples/debug/debug-pc1500a.pc1500a",
   "program": {
     "bin": "${fileDirname}/${fileBasenameNoExtension}.bin",
     "listing": "${fileDirname}/${fileBasenameNoExtension}.rst",
-    "address": "0x40C5",
     "after": "stopOnEntry"
   }
 }
 ```
+
+Without `address`, a headerless `.bin` loads at its listing's lowest address (the `.org`). Without `entry`, it starts at the listing's `ENTRY` if that lies in the program, else at the load address.
 
 What the `program` fields do:
 - **`after`:**
