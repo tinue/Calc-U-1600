@@ -150,6 +150,92 @@ mirroring the ROM's own sequence).
   and propagates a stale F02C. It also skips F899, F89E and F1C1, which is
   probably harmless after NEW0 but unconfirmed.
 
+## Expansion connectors: one model on both machines
+
+**Goal:** the connectors are fundamentally the same on the PC-1500 and the
+PC-1600, so software models them the same way. Each physical connector is
+one connector object. The host drives the signals, and a card sees only
+those signals, never the host (docs/Decisions.md, "Cards know only the
+bus"). The 60-pin connector extends the 40-pin one. They stay two plugs,
+but share one signal vocabulary and one connector/chain shell.
+
+**Hardware facts** (Expansion-Connectors.md §2, §4):
+- Both connectors carry the address bus, data bus, PU/PV, INHIBIT, DME0,
+  R/W and OD.
+- The 60-pin one adds ME1/DME1, INT, WAIT (WEX/W1), CMTIN/CMTOUT, VBAT, BFO
+  and φOS.
+- The PC-1500's 40-pin connector also carries decoded chip selects
+  (Y0, Y2, S1–S4) that aren't on the 60-pin one, so neither signal set
+  strictly contains the other. The PC-1600's 40-pin slots carry
+  RAM1/RAM2, PVOUT, PT, K0–K2/S1–S3 and MREQ instead.
+- The PC-1600's 60-pin connector matches the PC-1500's on every common
+  signal and pin. The CPU-specific pins differ: PT/PU/PVOUT, RD/WR, IORQ,
+  MREQ, M1, ELH, IOE. That's what the host drives, not what the card
+  sees.
+
+**Today there are five paths, not two:**
+
+| Connector | Code | Card interface |
+|---|---|---|
+| PC-1500 40-pin | `ExpansionConnector` | `ExpansionCard` / `PinState` |
+| PC-1600 40-pin slots | `MemorySlotConnector` | `ExpansionCard` / `PinState` ✓ |
+| PC-1500 60-pin | `SystemBus` | `ExpansionCard` / `PinState` |
+| PC-1600 60-pin, LH5803 side (CE-150, CE-158) | `LH5803SharedMemory::peripheralPins` / `cardRead` | `PinState` built by hand |
+| PC-1600 60-pin, SC7852 side (CE-1600P, CE-1600F) | `PC1600SystemBus` | its own `PC1600ExpansionCard` / `PC1600BusPins` |
+
+What's wrong with that:
+- **`PinState` numbers signals by 40-pin contact.** `SystemBus` reuses
+  it for the 60-pin connector and sets Y0/Y2 and S-block pins (via
+  `PC1500SignalDecode::basePinState` and `sBlockPin`) that the 60-pin
+  connector doesn't carry. On the 60-pin connector, contacts 16–18 are
+  PU/D7/D6. It's harmless today because the CE-150 and CE-158 read only
+  address, ME1 and PV/PU, but the model is wrong.
+- **The PC-1600 has no 60-pin connector object on the LH5803 side.**
+  `LH5803SharedMemory` holds typed `Ce150Card*`/`Ce158Card*` pointers
+  with a fixed order and knows the CE-158's address ranges (`isCe158Io`).
+  So the host knows the card.
+- **`PC1600BusPins` isn't a pin model.** It's a ROM offset plus a
+  `bank5` flag. On real hardware, bank 4/5 at 4000–7FFF reaches the
+  CE-1600P via the Port 31H page-B field on the PT/PU/PVOUT pins.
+- Because of this split, the same physical 60-pin connector exists twice
+  on the PC-1600. That's why the CE-158 and the CE-1600P can't be
+  attached together (see Feature ideas).
+- `MemorySlotConnector` and `ExpansionConnector` share ~25 lines of
+  copy-pasted dispatch. `PC1500Memory` gets its `ExpansionConnector` and
+  `SystemBus` by raw pointer from `PC1500Machine`, while `PC1600Memory`
+  owns its connectors by value.
+
+**Direction** (to confirm in the analysis below):
+- Keep the physical-contact principle (docs/Memory-Card-Definition-Spec.md:
+  "the loader operates on physical pin numbers, full stop"), but number
+  each plug by its own real contacts. A 40-pin card sees 40-pin contacts.
+  A 60-pin card sees 60-pin contacts (e.g. PV 15, PU 16, ME1 59) instead
+  of today's 40-pin numbers plus a `me1` flag. Each connector class maps
+  host state onto the contacts it physically has, and the signals both
+  plugs share get one piece of mapping code.
+- One connector/chain shell (attach/detach, INHIBIT, read/write) for both
+  plug types. A 40-pin slot is a chain of one.
+- One 60-pin connector object per machine. On the PC-1600, both CPUs drive
+  it: the LH5803 side when it owns the bus (ELH), and the SC7852 side. The
+  CE-150, CE-158, CE-1600P and CE-1600F all become `ExpansionCard`s on it.
+
+**Before fixing:**
+- Research the PC-1600 60-pin connector signals that the cards need:
+  - What the CE-150/CE-158 see there. Does LH5803 ME1 map to IOE (pin
+    59)? Is ELH the ownership signal? Which PC-1600 signal reaches the
+    CE-150's PV gate (see the CE-158 PARBAN@E224 PV fix)?
+  - Which pins tell bank 4 from bank 5 for the CE-1600P ROM, and how its
+    I/O ports (IORQ + address) show up.
+- Find out why `PC1500Memory` gets its `ExpansionConnector` *and* its
+  `SystemBus` by raw pointer (tests that build a bare `PC1500Memory`?
+  construction order in `PC1500Machine`?). Converge the connectors and
+  the bus ownership in one pass. Moving only the connector would leave the
+  same inconsistency on the bus.
+- `.card.yaml` files and `SoftwareDefinedCard` use 40-pin contact numbers,
+  and that stays. Check that nothing in the 40-pin path changes when the
+  60-pin side moves to its own contact numbering (the memory-card tests
+  should pass unchanged).
+
 ## Feature ideas
 
 - **Real-time-clock timers in the sub-CPU: wake-up (`WAKE$`), `ALARM$`,
@@ -175,7 +261,8 @@ mirroring the ROM's own sequence).
 - CE-158 together with the CE-1600P. The real CE-1600P has its own
   connector at the back (like the CE-150), so both can be attached at
   once; today `PC1600Machine::attachCE1600P`/`attachCE158` detach each
-  other and the preset parser rejects the pair (User Guide says "not yet
+  other and the preset parser rejects the pair (blocked on "Expansion
+  connectors: one model on both machines"; User Guide says "not yet
   supported").
 - Allow saving a diskette or memory module into a preset after it has been
   set up (e.g. formatted / populated in a session), so the preset carries
@@ -221,16 +308,6 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   *one* guard inside the shared picker (call onPick only when the value
   changes). Replacing them with `toggled(true)` plus `QSignalBlocker`s in
   every sync setter only moves them.
-- **Connectors.** `MemorySlotConnector` and `ExpansionConnector` share ~25
-  lines of copy-pasted dispatch shell (a small base class would hold it),
-  and `PC1500Memory` holds its connector by raw pointer injected by
-  `PC1500Machine` where `PC1600Memory` owns its connectors by value.
-
-  **Before fixing:** find out why `PC1500Memory` gets both its
-  `ExpansionConnector` *and* its `SystemBus` injected by raw pointer (tests
-  that build a bare `PC1500Memory`? construction order in `PC1500Machine`?).
-  Converge the connectors and the bus ownership in one pass. Moving only
-  the connector would leave the same inconsistency on the bus.
 - **Card/floppy template-vs-instance rules are written twice and re-parse
   files.** `MemoryModuleManager` (`moduleLists`, `classifySlot`,
   `templateNames`, `saveSlotAs`) and `FloppyDiskManager` (`diskLists`,

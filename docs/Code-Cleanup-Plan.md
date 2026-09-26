@@ -43,12 +43,9 @@ analysis, then states the target fix. The cost description stays.
     replace them with `toggled(true)` plus `QSignalBlocker`s, which only moves
     them.
   - Enum, warning and status-helper parts as before.
-- **Connectors.**
-  - Before fixing: find out why `PC1500Memory` gets its `SystemBus` (and
-    `ExpansionConnector`) injected by raw pointer, for example tests that
-    build a `PC1500Memory` without a bus.
-  - Converge both connectors *and* the bus ownership in one pass, so no
-    inconsistency is left behind.
+- **Connectors.** Moved to its own TODO chapter ("Expansion connectors: one
+  model on both machines"): five connector paths, not two; research the
+  PC-1600 60-pin signals first.
 
 ## Phase 1: leftovers (TODO: "Leftovers, one quick pass")
 - Delete `PC1600LhsWindow`, `pc1600LhsWindow()` and `PC1600Bank::lhsRemapRow()`
