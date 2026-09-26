@@ -286,7 +286,8 @@ emulator does and need a deliberate check. Entries with a **Before
 fixing** step need that analysis first. A fix that only moves the cost
 somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
 
-- **Picker and peripheral-button plumbing is written twice.**
+- **Picker and serial-status plumbing is written twice.** Independent of
+  the connector model; can be done any time.
   - `CE1600PRomVersion` clones `PC1600RomVersion`, and
     `BundledRoms::isCE1600PRomVersion` == `isPC1600RomVersion`.
   - The enum↔string mapping is inlined in `MachineController.cpp`
@@ -295,19 +296,33 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   - MainWindow's ROM menu builder/sync and ControlBar's combo are
     copy-pasted, and the four `apply*Selection` handlers each carry an
     "already checked" guard (dff5d13).
-  - `ControlBar::setCe150State`/`setCe158State`, and
-    `MachineController::serialLinkStatus`/`ce158SerialLinkStatus`, are
-    pairs.
+  - `MachineController::serialLinkStatus`/`ce158SerialLinkStatus` are a
+    pair.
 
   Fix: one `NewOldRom` enum with to/from-string, one
   `warnOldRomFallback()`, one menu/combo builder parameterised by label and
-  slot, one peripheral-button setter, and one static status helper over a
-  `PtySerialLink*`.
+  slot, and one static status helper over a `PtySerialLink*`.
 
   **Design constraint:** the four "already checked" guards must end up as
   *one* guard inside the shared picker (call onPick only when the value
   changes). Replacing them with `toggled(true)` plus `QSignalBlocker`s in
   every sync setter only moves them.
+- **Peripheral buttons are one setter per peripheral.**
+  `ControlBar::setCe150State`/`setCe158State`/`setCe1600pState`,
+  `PlotterController`'s per-peripheral toggles and
+  `MachineController::attachCE150/158/1600P` + `detach*` repeat the same
+  shape, and `MainWindow::syncPeripherals()` hard-codes the exclusion rules
+  ("CE-1600P excludes CE-150 and CE-158").
+
+  **Order: do this after "Expansion connectors: one model on both
+  machines".** The exclusions come from today's split 60-pin model (the
+  same plug exists twice on the PC-1600), and the connector work changes
+  both the rules (CE-158 + CE-1600P become possible) and the attach API
+  (cards on one 60-pin chain). Unifying the buttons first would bake the
+  current pairwise rules into the shared setter. Target afterwards: one
+  button setter and one attach/detach path per peripheral kind, with
+  "enabled" derived from what the connector chain can take instead of
+  hard-coded pairs.
 - **Card/floppy template-vs-instance rules are written twice and re-parse
   files.** `MemoryModuleManager` (`moduleLists`, `classifySlot`,
   `templateNames`, `saveSlotAs`) and `FloppyDiskManager` (`diskLists`,

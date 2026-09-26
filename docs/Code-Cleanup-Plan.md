@@ -37,12 +37,14 @@ analysis, then states the target fix. The cost description stays.
   - Likely target: a parse mode that skips decoding `initial-content` hex.
   - The `ResolvedSource {path, isTemplate, battery}` and the shared catalogue
     helper follow from that.
-- **Picker and peripheral-button plumbing.**
+- **Picker and serial-status plumbing.**
   - Design constraint: the "already checked" guards must end up as one guard
     inside the shared picker (call onPick only when the value changes). Don't
     replace them with `toggled(true)` plus `QSignalBlocker`s, which only moves
     them.
   - Enum, warning and status-helper parts as before.
+  - The peripheral-button part is split off in TODO.md and waits for the
+    connector chapter.
 - **Connectors.** Moved to its own TODO chapter ("Expansion connectors: one
   model on both machines"): five connector paths, not two; research the
   PC-1600 60-pin signals first.
