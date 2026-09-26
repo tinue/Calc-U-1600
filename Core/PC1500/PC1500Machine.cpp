@@ -1,10 +1,7 @@
 #include "PC1500Machine.hpp"
 
 PC1500Machine::PC1500Machine(PC1500Variant variant)
-    : m_memory(variant), m_cpu(m_memory), m_expansionConnector(variant), m_systemBus(variant) {
-    m_memory.setExpansionConnector(&m_expansionConnector);
-    m_memory.setSystemBus(&m_systemBus);
-}
+    : m_memory(variant), m_cpu(m_memory) {}
 
 bool PC1500Machine::loadROM(const uint8_t* data, std::size_t size) {
     return m_memory.loadROM(data, size);
@@ -49,7 +46,7 @@ bool PC1500Machine::attachCE150(const uint8_t* rom, size_t romSize) {
     std::lock_guard<std::mutex> lock(m_mutex);
     detachCE150Locked();
     card->reset();
-    m_systemBus.attach(card.get());
+    m_memory.systemBus().attach(card.get());
     m_ce150Card = std::move(card);
     return true;
 }
@@ -61,7 +58,7 @@ void PC1500Machine::detachCE150() {
 
 void PC1500Machine::detachCE150Locked() {
     if (!m_ce150Card) return;
-    m_systemBus.detach(m_ce150Card.get());
+    m_memory.systemBus().detach(m_ce150Card.get());
     m_ce150Card.reset();
 }
 
@@ -70,7 +67,7 @@ bool PC1500Machine::attachCE158(const uint8_t* rom, size_t romSize) {
     auto card = m_ce158.build(rom, romSize, Ce158Card::kCpuHz);
     if (!card) return false;
     detachCE158Locked();
-    m_systemBus.attach(card.get());
+    m_memory.systemBus().attach(card.get());
     m_ce158.install(std::move(card));
     return true;
 }
@@ -82,7 +79,7 @@ void PC1500Machine::detachCE158() {
 
 void PC1500Machine::detachCE158Locked() {
     if (!m_ce158.attached()) return;
-    m_systemBus.detach(m_ce158.card());
+    m_memory.systemBus().detach(m_ce158.card());
     m_ce158.remove();
 }
 

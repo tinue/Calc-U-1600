@@ -207,11 +207,11 @@ public:
     PC1500Memory&       memory() { return m_memory; }
     const PC1500Memory& memory() const { return m_memory; }
 
-    // The 40-pin (single-slot) and 60-pin (daisy-chain) connectors, wired
-    // into m_memory by the constructor. No card is attached by default --
-    // tests and the app layer attach directly via these accessors.
-    ExpansionConnector& expansionConnector() { return m_expansionConnector; }
-    SystemBus&          systemBus() { return m_systemBus; }
+    // The 40-pin (single-slot) and 60-pin (daisy-chain) connectors, owned
+    // by m_memory. No card is attached by default -- tests and the app
+    // layer attach directly via these accessors.
+    ExpansionConnector& expansionConnector() { return m_memory.expansionConnector(); }
+    SystemBus&          systemBus() { return m_memory.systemBus(); }
 
     /// Takes ownership of `card` and attaches it to the 40-pin
     /// ExpansionConnector -- for callers (the preset loader, the CLI) with
@@ -221,7 +221,7 @@ public:
     /// m_mutex: the emulation thread dispatches bus accesses to the card.
     void attachExpansionCard(std::unique_ptr<ExpansionCard> card) {
         std::lock_guard<std::mutex> lock(m_mutex);
-        m_expansionConnector.attach(card.get());
+        m_memory.expansionConnector().attach(card.get());
         m_attachedExpansionCard = std::move(card); // old card freed only after it's unplugged
     }
 
@@ -231,7 +231,7 @@ public:
     // window (guest 0xA000-0xBFFF, ME0) and its LH5810 register block
     // (guest 0xB008-0xB00F, ME1) are both served by the card off that bus.
     // `attachCE150` builds a card, loads its 8 KB ROM, resets it, and
-    // attaches it to `m_systemBus`. A chip/machine reset does not clear the
+    // attaches it to the memory's `systemBus()`. A chip/machine reset does not clear the
     // attachment (it does re-anchor the card -- see reset()).
     bool attachCE150(const uint8_t* rom, size_t romSize);
     void detachCE150();
@@ -318,8 +318,6 @@ private:
     LH5801       m_cpu;
     WatchSet*    m_watches{nullptr};
     DebugStopLatch m_debugStop;
-    ExpansionConnector m_expansionConnector;
-    SystemBus          m_systemBus;
     std::unique_ptr<ExpansionCard> m_attachedExpansionCard; // see attachExpansionCard()
     std::unique_ptr<Ce150Card> m_ce150Card;                 // see attachCE150()
     Ce158Port m_ce158;                                      // see attachCE158()

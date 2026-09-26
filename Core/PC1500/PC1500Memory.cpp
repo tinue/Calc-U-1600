@@ -4,9 +4,6 @@
 #include <cstdio>
 #include <vector>
 
-#include "../Connector/ExpansionConnector.hpp"
-#include "../Connector/SystemBus.hpp"
-
 namespace {
 // The CE-150's LH5810 register block lives in ME1 at 0xB008-0xB00F (see
 // Core/Connector/Ce150Card.hpp). On real hardware that range also aliases
@@ -23,7 +20,9 @@ constexpr uint16_t kCe150IoEnd  = 0xB00F;
 PC1500Memory::PC1500Memory(PC1500Variant variant)
     : m_variant(variant),
       m_userRamSize(variant == PC1500Variant::PC1500A ? kUserRamSizeA : kUserRamSizePlain),
-      m_systemRamAddrMask(variant == PC1500Variant::PC1500A ? 0x7FF : 0x3FF) {
+      m_systemRamAddrMask(variant == PC1500Variant::PC1500A ? 0x7FF : 0x3FF),
+      m_expansionConnector(variant),
+      m_systemBus(variant) {
     m_rom.fill(0xFF);  // open until a ROM is loaded
     // Power-up: user CMOS RAM that has lost its supply comes back (mostly)
     // zero on real hardware, not 0xFF -- modelled as all 0x00. The 1.5K at
@@ -74,8 +73,7 @@ void PC1500Memory::reset() {
 }
 
 bool PC1500Memory::inhibitAsserted() const {
-    return (m_expansionConnector && m_expansionConnector->inhibitAsserted()) ||
-           (m_systemBus && m_systemBus->inhibitAsserted());
+    return m_expansionConnector.inhibitAsserted() || m_systemBus.inhibitAsserted();
 }
 
 const uint8_t* PC1500Memory::resolve(uint16_t addr, bool forWrite) const {
@@ -123,8 +121,8 @@ uint8_t PC1500Memory::readOpenBus(uint16_t addr) const {
     // 0xFF. Consulted on every access in these ranges, not a memory-map
     // shortcut.
     uint8_t v;
-    if (m_expansionConnector && m_expansionConnector->read(addr, m_pu, m_pv, v)) return v;
-    if (m_systemBus && m_systemBus->read(addr, m_pu, m_pv, v)) return v;
+    if (m_expansionConnector.read(addr, m_pu, m_pv, v)) return v;
+    if (m_systemBus.read(addr, m_pu, m_pv, v)) return v;
     return 0xFF;
 }
 
@@ -135,8 +133,8 @@ uint8_t PC1500Memory::readME0(uint16_t addr) {
 
 void PC1500Memory::writeME0(uint16_t addr, uint8_t value) {
     if (uint8_t* p = resolve(addr, /*forWrite=*/true)) { *p = value; return; }
-    if (m_expansionConnector && m_expansionConnector->write(addr, m_pu, m_pv, value)) return;
-    if (m_systemBus && m_systemBus->write(addr, m_pu, m_pv, value)) return;
+    if (m_expansionConnector.write(addr, m_pu, m_pv, value)) return;
+    if (m_systemBus.write(addr, m_pu, m_pv, value)) return;
 }
 
 uint8_t PC1500Memory::peek(uint16_t addr) const {
@@ -146,7 +144,7 @@ uint8_t PC1500Memory::peek(uint16_t addr) const {
 
 bool PC1500Memory::debugSlotResponds(uint16_t addr) const {
     uint8_t v;
-    return m_expansionConnector && m_expansionConnector->read(addr, m_pu, m_pv, v);
+    return m_expansionConnector.read(addr, m_pu, m_pv, v);
 }
 
 bool PC1500Memory::poke(uint16_t addr, uint8_t value) {
@@ -158,19 +156,17 @@ bool PC1500Memory::poke(uint16_t addr, uint8_t value) {
     // -- it just pokes the currently-selected bank -- which is exactly the
     // semantics a debug poke wants too.
     if (uint8_t* p = resolve(addr, /*forWrite=*/true)) { *p = value; return true; }
-    if (m_expansionConnector) {
-        if (const WriteResult r = m_expansionConnector->write(addr, m_pu, m_pv, value, /*direct=*/true))
-            return r.stored;
-    }
+    if (const WriteResult r = m_expansionConnector.write(addr, m_pu, m_pv, value, /*direct=*/true))
+        return r.stored;
     // SystemBus (60-pin) carries no lock-gating card today, so a plain
     // write is enough -- PinState::direct defaults false, matching the
     // pre-`direct` behavior.
-    return m_systemBus && m_systemBus->write(addr, m_pu, m_pv, value).stored;
+    return m_systemBus.write(addr, m_pu, m_pv, value).stored;
 }
 
 uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
     *readable = true;
-    if (m_systemBus && addr >= kCe150IoBase && addr <= kCe150IoEnd) {
+    if (addr >= kCe150IoBase && addr <= kCe150IoEnd) {
         *readable = false;
         return 0xFF;
     }
@@ -185,19 +181,17 @@ uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
             default: return m_ioScratchRegs[addr & 0xF];
         }
     }
-    if (m_systemBus) {
-        uint8_t v;
-        if (m_systemBus->readME1(addr, m_pu, m_pv, v)) return v;
-    }
+    uint8_t v;
+    if (m_systemBus.readME1(addr, m_pu, m_pv, v)) return v;
     return peek(addr);
 }
 
 uint8_t PC1500Memory::readME1(uint16_t addr) {
     // A CE-150 (or any 60-pin card) claiming the LH5810 window shadows the
     // internal I/O chip that also aliases it -- see kCe150IoBase's comment.
-    if (m_systemBus && addr >= kCe150IoBase && addr <= kCe150IoEnd) {
+    if (addr >= kCe150IoBase && addr <= kCe150IoEnd) {
         uint8_t v;
-        if (m_systemBus->readME1(addr, m_pu, m_pv, v)) return v;
+        if (m_systemBus.readME1(addr, m_pu, m_pv, v)) return v;
     }
     if (isIoChipAddress(addr)) {
         switch (addr & 0xF) { // RS0-3 = AD0-3
@@ -226,17 +220,15 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
     // no equivalent) -- give it first refusal before falling back to the
     // ME0 mirror, resolving this file's earlier "flagged for revisit once
     // Phase 4's ExpansionConnector work clarifies ME1's remaining role."
-    if (m_systemBus) {
-        uint8_t v;
-        if (m_systemBus->readME1(addr, m_pu, m_pv, v)) return v;
-    }
+    uint8_t v;
+    if (m_systemBus.readME1(addr, m_pu, m_pv, v)) return v;
     return readME0(addr); // no other documented ME1 wiring -- conservative mirror
 }
 
 void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
     // See readME1(): a 60-pin card claiming the LH5810 window gets it first.
-    if (m_systemBus && addr >= kCe150IoBase && addr <= kCe150IoEnd) {
-        if (m_systemBus->writeME1(addr, m_pu, m_pv, value)) return;
+    if (addr >= kCe150IoBase && addr <= kCe150IoEnd) {
+        if (m_systemBus.writeME1(addr, m_pu, m_pv, value)) return;
     }
     if (isIoChipAddress(addr)) {
         switch (addr & 0xF) {
@@ -260,7 +252,7 @@ void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
             default: m_ioScratchRegs[addr & 0xF] = value; return; // serial/etc: not modeled, but not discarded either
         }
     }
-    if (m_systemBus && m_systemBus->writeME1(addr, m_pu, m_pv, value)) return;
+    if (m_systemBus.writeME1(addr, m_pu, m_pv, value)) return;
     writeME0(addr, value);
 }
 

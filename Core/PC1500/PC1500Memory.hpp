@@ -5,12 +5,11 @@
 
 #include "../Audio/PiezoSampler.hpp"
 #include "../CPU/LH5801/LH5801.hpp"
+#include "../Connector/ExpansionConnector.hpp"
+#include "../Connector/SystemBus.hpp"
 #include "PC1500Keyboard.hpp"
 #include "PC1500Variant.hpp"
 #include "Upd1990ac.hpp"
-
-class ExpansionConnector;
-class SystemBus;
 
 // ── PC-1500 / PC-1500A physical memory map ───────────────────────────────
 //
@@ -169,13 +168,12 @@ public:
 
     // ── Expansion connectors ──────────────────────────────────────────────
     //
-    // Wired by PC1500Machine (the only place that owns both this class and
-    // the connector objects), defaulting to nullptr -- pure open-bus
-    // behavior when unset (no card attached). See
-    // Core/Connector/ExpansionConnector.hpp and SystemBus.hpp for what
-    // these actually model.
-    void setExpansionConnector(ExpansionConnector* connector) { m_expansionConnector = connector; }
-    void setSystemBus(SystemBus* bus) { m_systemBus = bus; }
+    // The 40-pin (single-slot) and 60-pin (daisy-chain) connectors, built
+    // for this memory's own variant. With no card attached they are pure
+    // open bus. See Core/Connector/ExpansionConnector.hpp and SystemBus.hpp
+    // for what these model; PC1500Machine forwards its accessors here.
+    ExpansionConnector& expansionConnector() { return m_expansionConnector; }
+    SystemBus&          systemBus() { return m_systemBus; }
 
     /// Live LH5801 PU/PV flip-flop state, pushed once per instruction by
     /// PC1500Machine::step()/runCycles() -- PC1500Memory has no CPU
@@ -260,9 +258,9 @@ private:
     // entirely.
     std::array<uint8_t, 16> m_ioScratchRegs{};
 
-    // Expansion connectors -- see the public setters above.
-    ExpansionConnector* m_expansionConnector{nullptr};
-    SystemBus*          m_systemBus{nullptr};
+    // Expansion connectors -- see expansionConnector()/systemBus() above.
+    ExpansionConnector m_expansionConnector;
+    SystemBus          m_systemBus;
     bool m_pu{false};
     bool m_pv{false};
 
