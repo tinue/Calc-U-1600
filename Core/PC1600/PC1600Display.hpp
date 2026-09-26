@@ -22,7 +22,8 @@
 // 58H-5BH = IC2 only" split. **Command/data/status/read decode within
 // each 4-port block** (see writeIO's own comment for the full story):
 // offset 0 = command write, offset 2 = data write, offset 1 = status
-// read, offset 3 = data read.
+// read, offset 3 = data read (all four seen in ROM code: writes and the
+// busy-wait in the boot trace, data reads at bank 6 81E8H/8AA2H).
 //
 // **The 64+64+28-dot three-block column split** comes from the TRM's own
 // LCD block diagram (Systemhandbuch): the right 28-dot block reads the
@@ -53,24 +54,31 @@ public:
 
     /// `port` is the low 8 bits of the I/O address (50H-5BH is the only
     /// range this class claims -- callers should only forward addresses in
-    /// that range). Status reads (port's bit0 clear) return the busy flag
-    /// (bit7) for kBusyClocks LCD-clock edges after each write; the boot
-    /// ROM and user code busy-wait on it, see the .cpp's own comment. Data
-    /// reads (bit0 set)
-    /// return the byte at the controller's current (column, page) address,
-    /// auto-incrementing the column the same way a data write does.
+    /// that range). Status reads (offset 1) return the busy flag (bit7) for
+    /// kBusyClocks LCD-clock edges after each write, and bit5 while the
+    /// display is off; the boot ROM and user code busy-wait on bit 7, see
+    /// the .cpp's own comment. Data reads (offset 3) return the output
+    /// register, which each read reloads from the current (column, page)
+    /// address before incrementing the column -- one read behind, as on
+    /// the HD61102.
     uint8_t readIO(uint8_t port);
     void    writeIO(uint8_t port, uint8_t value);
 
     /// How long a controller reports busy (status bit 7) after a command or
-    /// data write: until the kBusyClocks-th edge of its own LCD clock
+    /// data write: until the kBusyClocks-th edge of CK0, the LCD base clock
     /// (phi-OS 1.3 MHz / 6 = 216.7 kHz, ~16.5 SC-7852 T-states per edge),
-    /// which free-runs asynchronously to the CPU. See the .cpp's readIO().
+    /// which free-runs asynchronously to the CPU. CK0 feeds the HD61203's
+    /// oscillator, which halves it into the HD61102s' phi1/phi2, so 4 edges
+    /// are about 2 phi cycles -- a fit inside the datasheet's 1-3 phi
+    /// cycles. See the .cpp's readIO().
     static constexpr int kBusyClocks = 4;
     /// Credits elapsed SC-7852 T-states to the LCD clock. Only a running
     /// total: edges are derived on demand (lcdEdges()), since they matter
-    /// only on an LCD port access.
-    void tick(int tstates) { m_tstates += static_cast<uint64_t>(tstates); }
+    /// only on an LCD port access. Nothing is credited while CK0 is off:
+    /// the controllers then get no phi clock, so busy cannot clear.
+    void tick(int tstates) {
+        if (m_clockEnabled) m_tstates += static_cast<uint64_t>(tstates);
+    }
 
     /// True while CK0 (LCD base clock) is enabled -- Z-80 I/O port 37H bit
     /// 4, see PC1600Memory's I/O decode. The display renders as blank
@@ -122,6 +130,7 @@ private:
         uint8_t addressCol{0};       // current column address (0-63), auto-increments on data write
         uint8_t addressPage{0};      // current page (0-7) -- direct register access, NOT windowed by addressStartLine (see readIO's own dataByte)
         uint8_t addressStartLine{0}; // display start line (0-63), command 0xC0-0xFF
+        uint8_t outputReg{0};        // data-read output register, loaded by the previous read (see readIO)
         bool displayOn{false};
         uint64_t busyUntilEdge{0};   // status bit 7 stays set until lcdEdges() reaches this (see kBusyClocks)
     };

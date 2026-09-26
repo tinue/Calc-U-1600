@@ -122,6 +122,18 @@ The RTC accumulator advances in both CPU branches of `PC1600Machine::step()`.
 The real RTC sits on the always-powered rail, so TIME keeps running while the
 machine is OFF or in auto power-off.
 
+### PC-1600 LCD: stale first data read, fitted busy time
+`PC1600Display` follows the HD61102 datasheet. A data read returns the output
+register that the *previous* read loaded, so the first read after setting an
+address is stale. The ROM discards that dummy read (bank 6 `81E8H`). The
+status byte reports display-off in bit 5, and busy doesn't clear while CK0
+(port 37H bit 4) is off.
+- `kBusyClocks = 4` is a fit to real-unit benchmarks, not a datasheet
+  figure. It is inside the datasheet's 1–3 φ cycles (φ = CK0 / 2), so don't
+  "correct" it to the datasheet min or max. The re-fit plan is in TODO.md.
+- The controllers aren't reset on power-on or reset: VGG keeps their RAM and
+  registers. Only CK0 stops.
+
 ## Authentic ROM behaviour: not bugs
 
 - **CE-1600P Y clip at about 1000 units.** This is the `PAPER` default (999

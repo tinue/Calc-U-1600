@@ -103,6 +103,9 @@ void test_display_ic2_command_and_data() {
 // written controller goes busy; 50H-53H writes hit both.
 void test_display_busy_after_write() {
     PC1600Display d;
+    d.setClockEnabled(true);
+    d.writeIO(0x50, 0x3F);               // both on, so the status byte is only busy
+    d.tick(70);
     CHECK(d.readIO(0x59) == 0x00);
     CHECK(d.readIO(0x55) == 0x00);
     d.writeIO(0x5A, 0x81);               // IC2 data write
@@ -120,6 +123,36 @@ void test_display_busy_after_write() {
     CHECK(d.readIO(0x55) == 0x00);
 }
 
+// Without CK0 (port 37H bit 4) the HD61102s get no phi clock, so busy
+// cannot clear; it clears 4 edges after the clock comes back.
+void test_display_busy_holds_while_clock_off() {
+    PC1600Display d;
+    d.writeIO(0x5A, 0x81);
+    d.tick(10'000);
+    CHECK((d.readIO(0x59) & 0x80) != 0);
+    d.setClockEnabled(true);
+    d.tick(49);
+    CHECK((d.readIO(0x59) & 0x80) != 0);
+    d.tick(18);
+    CHECK((d.readIO(0x59) & 0x80) == 0);
+}
+
+// Status DB5 = ON/OFF, 1 = display off (the reverse of the instruction's
+// D bit); DB4 (RESET) stays clear.
+void test_display_status_reports_on_off() {
+    PC1600Display d;
+    d.setClockEnabled(true);
+    CHECK(d.readIO(0x59) == 0x20);      // off after power-on
+    CHECK(d.readIO(0x55) == 0x20);
+    d.writeIO(0x58, 0x3F);              // IC2 on
+    d.tick(70);
+    CHECK(d.readIO(0x59) == 0x00);
+    CHECK(d.readIO(0x55) == 0x20);      // IC3 still off
+    d.writeIO(0x58, 0x3E);
+    d.tick(70);
+    CHECK(d.readIO(0x59) == 0x20);
+}
+
 void test_display_ic3_column_offset() {
     PC1600Display d;
     // Port block 0x54-0x57 = IC3-only, columns 64-127 of the panel.
@@ -131,12 +164,11 @@ void test_display_ic3_column_offset() {
     CHECK(!d.pixel(0, 0)); // IC2 untouched
 }
 
-void test_display_read_lags_one_column() {
-    // See PC1600Display.cpp's dataByte() comment: a read returns the byte
-    // at addressCol-1, not addressCol, matching the HD61102's own dummy-read
-    // behavior. Without this lag, the ROM's cursor-blink read-modify-write
-    // would read the wrong column, corrupting the cell a little more on
-    // every blink.
+void test_display_read_returns_output_register() {
+    // See PC1600Display.cpp's dataByte() comment: a read returns the
+    // output register, which the previous read loaded, then reloads it
+    // from the current address. The first read after setting an address
+    // is the dummy read the ROM discards (bank 6 81E8H).
     PC1600Display d;
     d.writeIO(0x58, 0x3F);       // display on
     d.writeIO(0x58, 0xB8);       // page 0
@@ -144,11 +176,23 @@ void test_display_read_lags_one_column() {
     d.writeIO(0x5A, 0x11);       // write column 0 = 0x11, pointer -> column 1
     d.writeIO(0x5A, 0x22);       // write column 1 = 0x22, pointer -> column 2
     d.writeIO(0x58, 0x40);       // re-home: set column 0
-    // First read after a column-address-set is stale (lags by one) --
-    // real hardware's dummy-read behavior.
-    CHECK(d.readIO(0x5B) == 0x00); // pointer was 0 -> lagged col = 63 (untouched, still 0)
-    CHECK(d.readIO(0x5B) == 0x11); // pointer now 1 -> lagged col = 0
-    CHECK(d.readIO(0x5B) == 0x22); // pointer now 2 -> lagged col = 1
+    CHECK(d.readIO(0x5B) == 0x00); // dummy: output register still empty
+    CHECK(d.readIO(0x5B) == 0x11); // column 0
+    CHECK(d.readIO(0x5B) == 0x22); // column 1
+
+    // A write between reads does not touch the output register: the next
+    // read still returns what the previous read latched (column 2 = 0).
+    d.writeIO(0x58, 0x42);       // column 2
+    (void)d.readIO(0x5B);        // dummy, latches column 2 (0x00)
+    d.writeIO(0x58, 0x42);
+    d.writeIO(0x5A, 0x33);       // column 2 = 0x33
+    CHECK(d.readIO(0x5B) == 0x00); // stale latch, not 0x33
+
+    // A page change is the same: the latch keeps the old page's byte.
+    d.writeIO(0x58, 0x40);
+    (void)d.readIO(0x5B);        // latches page 0 column 0 (0x11)
+    d.writeIO(0x58, 0xB9);       // page 1
+    CHECK(d.readIO(0x5B) == 0x11);
 }
 
 /// A round-trip read-modify-write, exactly the shape of the ROM's own
@@ -818,6 +862,14 @@ void test_memory_clock_enable_via_port37_write() {
     CHECK(!mem.display().clockEnabled());
     static_cast<SC7852Bus&>(mem).writeIO(0x37, 0x10); // bit4 set
     CHECK(mem.display().clockEnabled());
+    // Reset clears port 37H, so CK0 stops; the LCD RAM stays (VGG).
+    static_cast<SC7852Bus&>(mem).writeIO(0x58, 0x3F);
+    static_cast<SC7852Bus&>(mem).writeIO(0x58, 0xB8);
+    static_cast<SC7852Bus&>(mem).writeIO(0x58, 0x40);
+    static_cast<SC7852Bus&>(mem).writeIO(0x5A, 0x01);
+    mem.reset();
+    CHECK(!mem.display().clockEnabled());
+    CHECK(mem.display().pixel(0, 0));
 }
 
 } // namespace
@@ -861,7 +913,7 @@ int run_pc1600_keyboard_display_tests() {
     test_keyboard_rsv_matrix_position();
     test_keyboard_no_keys_pressed_is_all_ones();
     test_display_ic2_command_and_data();
-    test_display_read_lags_one_column();
+    test_display_read_returns_output_register();
     test_display_cursor_style_read_modify_write_roundtrip();
     test_display_ic3_column_offset();
     test_display_off_reads_as_blank();
@@ -871,6 +923,8 @@ int run_pc1600_keyboard_display_tests() {
     test_display_status_symbols_blank_when_ic3_display_off();
     test_display_clock_enable_flag();
     test_display_busy_after_write();
+    test_display_busy_holds_while_clock_off();
+    test_display_status_reports_on_off();
     test_statusline_defaults_all_off();
     test_statusline_set_and_read();
     test_statusline_reset_clears_all();

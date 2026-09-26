@@ -54,6 +54,10 @@ void PC1600Memory::reset() {
     m_intMask = 0;
     updateIntLine();
     m_uart.reset();
+    // Port 37H bit 4 (CK0, the LCD base clock) is 0 after reset until the
+    // boot ROM enables it. The LCD controllers themselves are not reset:
+    // VGG keeps their RAM and registers.
+    m_display.setClockEnabled(false);
     // Port-block reset: modulation off, SDO back to its idle level.
     m_fReg = 0;
     m_sdo = true;

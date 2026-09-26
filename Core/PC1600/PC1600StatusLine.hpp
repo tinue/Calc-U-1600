@@ -60,9 +60,11 @@
 // **Wiring**: these three 8-bit sets are read from the *centre* HD61102
 // controller's own column 63, pages 4/6/7 respectively, rotated by the
 // same `addressStartLine` the display-scroll logic uses --
-// page4=B=02H, page6=B=01H, page7=B=00H. A headless trace independently
-// found non-zero data at exactly IC3 (the centre chip)'s column 63,
-// pages 6/7 during boot, consistent with this being the real mechanism.
+// page4=B=02H, page6=B=01H, page7=B=00H. The ROM's symbol writer confirms
+// the storage (PC1600-P2-B6-new.bin 8220H, called with the page in A): it
+// sets page (A + DSPLPTR F05CH) & 7 and column 3FH on IC3 (C = 54H, via
+// 81F0H/81FCH), then writes the byte with OUT (56H). Its RAM shadows
+// (read by 8208H) are F64EH/F64FH/F3C6H for pages 7/6/4; page 5 is unused.
 // See `PC1600Display::refreshStatusSymbols()`.
 class PC1600StatusLine {
 public:

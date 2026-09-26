@@ -396,15 +396,23 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   Data Book* U74, 1989, printed pp. 261–290; local copy
   `PC-1600/Hitachi_HD61102_1989.pdf`, HD61203 alongside) bounds the busy
   time at **1/fCLK ≤ T_BUSY ≤ 3/fCLK**, where fCLK is the φ1/φ2
-  frequency. The model keeps busy until the 4th "LCD-clock edge" of
-  φOS/6 = 216.7 kHz, i.e. 3–4 of those periods. Settle what an edge is
-  relative to fCLK before re-fitting. The HD61203 datasheet says that in
-  master mode fOSC = 2 × fφ, so if the 216.7 kHz signal is the HD61203's
-  oscillator input, fCLK is 108 kHz. Then 4 edges are ~2 fCLK cycles,
-  inside the bound. If 216.7 kHz is fCLK itself, the fit exceeds the
-  datasheet maximum and likely compensates for the residual. Check how
-  CK0 (port 37H b4) reaches the HD61203 (master/slave mode, FS pin) in the
-  Service Manual schematic.
+  frequency. Settled (reference §9.7): CK0 = 216.7 kHz is the HD61203's
+  external oscillator (the 215 kHz / FS = GND case), which halves it into
+  φ, so fCLK = 108.3 kHz and the bound is 9.2–27.7 µs. The fit (busy until
+  the 4th CK0 edge = 3–4 CK0 periods = 13.8–18.5 µs, ~2 φ cycles) is
+  inside it, so the LCD fit is not over the datasheet maximum.
+
+  Datasheet behaviour left out because it moves the fit. The scroll/copy
+  routine (bank 6 `8A2C`/`8A66`) reads 4 bytes and writes 4 per column, so
+  apply these only together with the re-fit, against the scrolling-PRINT
+  benchmark:
+  - Busy after data *reads* as well. The ROM busy-waits before every read
+    (`8AA2`), which is consistent with this.
+  - Busy phase-locked to φ: end on the 2nd φ edge (2–4 CK0 periods)
+    instead of the 4th CK0 edge.
+  - Instructions and data writes ignored while busy (only Status Read is
+    accepted). The ROM always polls, so only user ML that doesn't would
+    notice.
 
   **Sub-CPU half.** The 1.66 ms figure comes from the 0.5 s ISR's commands
   but is applied to every sub-CPU command (clock, IOCS, the power-off
