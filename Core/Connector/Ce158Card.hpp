@@ -196,6 +196,8 @@ public:
             }
             return false;
         }
+        // PV/PU read from their 40-pin contacts 2/3 -- a shortcut until the
+        // 60-pin connector is modelled (TODO.md, "Expansion connectors").
         if (pins.forWrite || !pins.pin[2] /*PV*/) return false;
         if (addr < kRomBase || addr > kRomEnd || !m_romLoaded) return false;
         const size_t bank = pins.pin[3] /*PU*/ ? kBankSize : 0;

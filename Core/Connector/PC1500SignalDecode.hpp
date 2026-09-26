@@ -33,6 +33,9 @@ inline int sBlockIndex(uint16_t addr) {
 // the sBlockIndex()-derived S-block strobe is deliberately left to the
 // caller, since S-block-to-pin routing is the one thing that actually
 // differs between ExpansionConnector and SystemBus (see their decode()).
+// Shortcut: SystemBus reuses this, so on the 60-pin connector PU/PV sit on
+// their 40-pin contacts 3/2, not on 60-pin 15/16 (whose PU/PV order the
+// PC-1500 and PC-1600 manuals dispute). TODO.md, "Expansion connectors".
 inline PinState basePinState(uint16_t addr, bool forWrite, bool pu, bool pv) {
     PinState pins;
     pins.address = addr;

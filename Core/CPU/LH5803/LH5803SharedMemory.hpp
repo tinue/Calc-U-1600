@@ -141,6 +141,10 @@ private:
     /// forWrite, me1, PV, PU) -- no S-block/Y strobe, so no
     /// PC1500SignalDecode dependency here. See Ce150Card.hpp's "Bus
     /// dependency" note.
+    /// Shortcut: hands the LH5803's own PU/PV to the cards on their 40-pin
+    /// contacts. Real hardware routes PV out as SC7852 PVOUT, and the
+    /// LH5803's PU has no documented path to the connector (TODO.md,
+    /// "Expansion connectors").
     PinState peripheralPins(uint16_t addr, bool forWrite, bool me1) const {
         PinState p;
         p.address = addr;

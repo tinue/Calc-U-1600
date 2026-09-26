@@ -29,6 +29,8 @@ struct PinState {
     // Pin roles per host (a card must not care which):
     //   pin[2]  PC-1500 PV        / PC-1600 PVIN
     //   pin[3]  PC-1500 PU        / PC-1600 PU
+    //   (The 60-pin cards CE-150/CE-158 also read PV/PU here, a shortcut:
+    //   on the 60-pin plug they are contacts 15/16. TODO.md.)
     //   pin[4]  PC-1500 Y0 (CS &0000-&3FFF) / PC-1600 RAM2 (Slot 1) or RAM1 (Slot 2) CS
     //   pin[5]  PC-1500 S4        / PC-1600 PVOUT
     //   pin[6]  PC-1500 DME0      / PC-1600 MREQ
