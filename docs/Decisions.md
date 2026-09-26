@@ -129,9 +129,10 @@ address is stale. The ROM discards that dummy read (bank 6 `81E8H`). The
 status byte reports display-off in bit 5, and busy doesn't clear while CK0
 (port 37H bit 4) is off.
 - `kBusyClocks = 4` is a fit to real-unit benchmarks, not a datasheet
-  figure. If φ = CK0 / 2 (inferred, not yet schematic-confirmed), it is
-  inside the datasheet's 1–3 φ cycles. Don't "correct" it to the datasheet
-  min or max. The re-fit plan is in TODO.md.
+  figure. It is inside the datasheet's 1–3 φ cycles: CK0 drives the
+  HD61203's CR pin (Service Manual key circuit diagram, printed p. 43),
+  which halves it into φ. Don't "correct" it to the datasheet min or max.
+  The re-fit plan is in TODO.md.
 - The controllers aren't reset on power-on or reset: VGG keeps their RAM and
   registers. Only CK0 stops.
 
