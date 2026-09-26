@@ -107,6 +107,13 @@ FAULT isn't inverted by the CPC but /SLCT and /PE are, so CS reads 0 when on
 while CD and DR read 1. The ROM flips only bit 0 (P2-B6 A526H `XOR 01H`).
 It looks inconsistent, but it is the hardware.
 
+### TC8576F transmits whatever the peer's CS says
+The chip's /CTS pin is tied to GND and its /DSR pin to RXD (Service Manual
+§9-5, printed p. 33), so CS never holds the transmitter, TxRDY or the Tx
+interrupt, and SSR bit 7 isn't the peer's DSR. The peer's CS and DR reach
+only the ROM, through PSR FAULT and PE. The ROM does the flow control itself
+(`SNDSTAT`, P2-B6 A524H). Don't gate `tick()`'s transmit on `m_cts`.
+
 ### PC-1600 INT is a level
 The level is `(intCause() & port 35H) != 0`, driven by `updateIntLine()`. It
 isn't an edge or a queued event. The ROM dispatcher reads the causes whatever

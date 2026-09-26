@@ -99,9 +99,9 @@ The register model follows Toshiba's TC8576AF data sheet (SharpPC1500Reference
   Parity/framing errors and break (RBRK, SBRK) never occur.
 - **Transmit queue deeper than the chip's double buffer** — 512 bytes, so a
   host bridge doesn't stall the ROM; TxRDY drops only when it is full.
-- **/CTS (pin 35) and /DSR (pin 34) wiring unknown** — the transmitter
-  follows the peer's CS; SSR bit 7 follows the peer's DSR (the ROM never
-  reads it).
+- **SSR bit 7 (DSR) always reads 0** — the chip's /DSR is wired to RXD
+  (Service Manual §9-5), and with no bit-level line model RXD idles at
+  mark. The ROM never reads it.
 - **Parallel status-line interrupts (factor 2) not modelled** — the
   PC-1600 keeps IM2 set, so the ROM never sees them.
 - **No `SerialLink` attached** → nothing connected: modem inputs read off,

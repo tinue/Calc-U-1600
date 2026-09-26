@@ -37,8 +37,9 @@ CD and DR read 1 (the chip inverts two of the three inputs). The peer's RI
 goes to the sub-CPU, which reports it as CI (`ON PHONE`, `WAKE$(1)`). A raw
 PTY carries no modem lines, so `PtySerialLink::getStatus()` reports CTS and
 DSR permanently asserted (DCD approximates "a peer holds the slave open").
-The transmitter is gated on CTS but CTS defaults asserted, so a line-less
-PTY never stalls `SAVE"COM1:"`. The receiver only takes bytes while the
+The chip's own /CTS is tied to GND (Service Manual §9-5), so the peer's CS
+never holds the transmitter; it only reaches the ROM, which gates in
+software when a `SNDSTAT` value asks it to. The receiver only takes bytes while the
 ROM has it enabled (RxEN), which it does when a channel is opened; until
 then incoming bytes wait in the PTY.
 
@@ -104,4 +105,4 @@ and the stable symlink path.
 See `TODO.md` for the still-open items (the exact on-wire `SAVE"COM1:"`
 framing and a socket-transport follow-on) and
 `docs/PC1600-Core-Limitations.md` for what isn't modelled (the RS-232C/SIO
-connector mux, bit-level line timing, the /CTS and /DSR wiring).
+connector mux, bit-level line timing).

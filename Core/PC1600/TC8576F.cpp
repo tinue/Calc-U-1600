@@ -12,7 +12,6 @@ constexpr uint8_t kSsrPE    = 0x08;
 constexpr uint8_t kSsrOE    = 0x10;
 constexpr uint8_t kSsrFE    = 0x20;
 constexpr uint8_t kSsrRBRK  = 0x40;
-constexpr uint8_t kSsrDSR   = 0x80;
 
 constexpr uint8_t kPsrFAULT = 0x01;
 constexpr uint8_t kPsrSLCT  = 0x02;
@@ -88,9 +87,9 @@ int TC8576F::dstbDelayTStates() const {
 uint8_t TC8576F::ssr() const {
     uint8_t v = 0;
     // TxRDY: with TxINTM = 1 (what the ROM programs) plain "buffer empty";
-    // with TxINTM = 0 also needs CTS and TxEN, the transmit-interrupt
-    // condition (CPC §6.3).
-    const bool txRdy = m_txIntMask ? m_txReady : (m_txReady && m_cts && m_txEnable);
+    // with TxINTM = 0 also needs /CTS = 0 and TxEN, the transmit-interrupt
+    // condition (CPC §6.3). /CTS is tied to GND, see tick().
+    const bool txRdy = m_txIntMask ? m_txReady : (m_txReady && m_txEnable);
     if (txRdy)          v |= kSsrTxRDY;
     if (m_rxReady)      v |= kSsrRxRDY;
     if (m_txEmpty)      v |= kSsrTxEMP;
@@ -98,7 +97,10 @@ uint8_t TC8576F::ssr() const {
     if (m_overrunError) v |= kSsrOE;
     if (m_framingError) v |= kSsrFE;
     if (m_rxBreak)      v |= kSsrRBRK;
-    if (m_dsr)          v |= kSsrDSR; // the ROM never reads it (CPC §9.5)
+    // DSR (b7) is the inverted /DSR pin, which the PC-1600 wires to RXD
+    // (Service Manual §9-5, printed p. 33). RXD idles at mark between
+    // characters and this model has no bit-level line, so it reads 0. The
+    // ROM never reads it (CPC §9.5); the peer's DSR goes to PSR PE instead.
     return v;
 }
 
@@ -323,11 +325,12 @@ void TC8576F::tickImpl(int tstates) {
             }
         }
 
-        // TX: shift one queued byte out while the transmitter is enabled
-        // and the peer is clear-to-send. The chip's own /CTS input gates
-        // the transmitter (CPC §6.4); how it is wired in the PC-1600 isn't
-        // known, so it follows the peer's CS here.
-        if (!m_txFifo.empty() && m_txEnable && m_cts) {
+        // TX: shift one queued byte out while the transmitter is enabled.
+        // The chip's /CTS input would gate it (CPC §6.4), but the PC-1600
+        // ties /CTS to GND (Service Manual §9-5, printed p. 33), so it is
+        // always clear to send. The peer's CS reaches only the ROM, via PSR
+        // FAULT, and the ROM does its own gating (SNDSTAT, P2-B6 A524H).
+        if (!m_txFifo.empty() && m_txEnable) {
             m_link->send(m_txFifo.front());
             m_txFifo.pop_front();
             if (m_txFifo.empty()) {
@@ -364,7 +367,7 @@ void TC8576F::reset() {
 
 void TC8576F::refreshInterruptOutput() {
     // DS §5.9 (CPC §6.5).
-    const bool txInt = m_txEnable && m_cts && m_txReady && !m_txIntMask;
+    const bool txInt = m_txEnable && m_txReady && !m_txIntMask; // /CTS = 0, see tick()
     const bool rxInt = m_rxEnable &&
         ((!m_rxIntMask && (m_rxReady || m_rxBreak)) ||
          (!m_errIntMask && (m_framingError || m_overrunError || m_parityError)));

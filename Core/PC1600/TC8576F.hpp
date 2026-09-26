@@ -184,8 +184,8 @@ private:
     int  m_charLength{5};
 
     // ── Serial status (22H read, CPC §6.3) ─────────────────────────────
-    // b7 DSR, b6 RBRK, b5 FE, b4 OE, b3 PE, b2 TxEMP, b1 RxRDY, b0 TxRDY.
-    bool m_dsr{false};
+    // b7 DSR (reads 0, see ssr()), b6 RBRK, b5 FE, b4 OE, b3 PE, b2 TxEMP,
+    // b1 RxRDY, b0 TxRDY.
     bool m_rxBreak{false};
     bool m_framingError{false};
     bool m_overrunError{false};
@@ -202,7 +202,8 @@ private:
     // ── RS-232C input lines, cached from SerialLink::getStatus() each
     // tick() while a peer is attached. Off with no peer, as with nothing
     // plugged into a real unit.
-    bool m_cts{false};      // CS: peer RTS
+    bool m_cts{false};      // CS: peer RTS, seen by the ROM only through PSR FAULT
     bool m_dcd{false};      // CD
+    bool m_dsr{false};      // DR, seen by the ROM through PSR PE (not SSR b7)
     bool m_ci{false};       // CI (ring), forwarded to the sub-CPU's Q1
 };

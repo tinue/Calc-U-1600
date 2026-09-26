@@ -208,13 +208,14 @@ void test_parallel_command_drives_prime_and_clears_xbusy() {
     CHECK((uart.psr() & kPsrXBUSY) == 0);
 }
 
-// CPC §6.5: the transmit interrupt needs TxEN, CTS, an empty buffer and
-// TxINTM clear -- a freshly reset chip does not interrupt.
+// CPC §6.5: the transmit interrupt needs TxEN, /CTS = 0 (tied to GND on
+// the PC-1600), an empty buffer and TxINTM clear -- a freshly reset chip
+// does not interrupt.
 void test_interrupt_output_follows_tx_equation() {
     PC1600SubCpu sub;
     TC8576F uart(sub);
     uart.reset();
-    FakeLink link;                        // CTS asserted by default
+    FakeLink link;
     uart.setSerialLink(&link);
     std::vector<bool> edges;
     uart.setInterruptHook([&edges](bool level) { edges.push_back(level); });
@@ -412,21 +413,30 @@ void test_serial_command_register_forwards_rts_dtr() {
     CHECK(!link.lastRts);
 }
 
-void test_serial_cts_low_holds_the_transmitter() {
+// The PC-1600 ties the chip's /CTS to GND (Service Manual §9-5), so the
+// peer's CS never holds the transmitter, TxRDY or the Tx interrupt; only
+// the ROM sees it, through PSR FAULT. SSR DSR is the RXD pin, not the
+// peer's DSR.
+void test_serial_peer_cs_does_not_gate_the_chip() {
     PC1600SubCpu sub;
     TC8576F uart(sub);
     bootInit(uart);
     FakeLink link;
     link.lines.cts = false;
+    link.lines.dsr = true;
     uart.setSerialLink(&link);
     uart.writeRegister(3, 0x05);          // TxEN | RxEN
     uart.writeRegister(0, 'Z');
 
-    uart.tick(kDefaultCharTStates * 3);
-    CHECK(link.tx.empty());               // CTS low -> nothing shifts out
-    link.lines.cts = true;
     uart.tick(kDefaultCharTStates);
-    CHECK(link.tx.size() == 1);
+    CHECK(link.tx.size() == 1);           // CS off, the byte still goes out
+    CHECK((uart.psr() & kPsrFAULT) != 0); // ...and the ROM can see CS off
+    CHECK((uart.ssr() & 0x80) == 0);      // SSR DSR: RXD idles at mark
+
+    uart.writeRegister(3, 0xC5);
+    uart.writeRegister(2, 0x00);          // TxINTM clear: TxRDY = Tx int condition
+    CHECK((uart.ssr() & kSsrTxRDY) != 0);
+    CHECK(uart.interruptOutput());
 }
 
 void test_no_link_preserves_standalone_behaviour() {
@@ -466,13 +476,13 @@ void test_detach_with_queued_bytes_restores_ready() {
     uart.setSerialLink(&link);
     uart.writeRegister(3, 0x05);          // TxEN | RxEN
     uart.tick(kDefaultCharTStates);       // pick up DSR from the peer
-    CHECK((uart.ssr() & 0x80) != 0);
+    CHECK((uart.psr() & kPsrPE) != 0);
     for (int i = 0; i < 600; i++) uart.writeRegister(0, 0x41); // fill the FIFO
     CHECK((uart.ssr() & kSsrTxRDY) == 0);
     uart.setSerialLink(nullptr);
     CHECK((uart.ssr() & kSsrTxRDY) != 0);
     CHECK((uart.ssr() & kSsrTxE) != 0);
-    CHECK((uart.ssr() & 0x80) == 0);      // DSR back to the no-peer level
+    CHECK((uart.psr() & kPsrPE) == 0);    // DSR back to the no-peer level
     uart.setSerialLink(&link);
     uart.tick(kDefaultCharTStates);
     CHECK(link.tx.size() <= 1);           // nothing stale left to send
@@ -498,7 +508,7 @@ int run_tc8576f_tests() {
     test_serial_psr_carries_peer_modem_lines();
     test_serial_ci_reaches_the_subcpu();
     test_serial_command_register_forwards_rts_dtr();
-    test_serial_cts_low_holds_the_transmitter();
+    test_serial_peer_cs_does_not_gate_the_chip();
     test_no_link_preserves_standalone_behaviour();
     test_chip_reset_keeps_peer_attached();
     test_detach_with_queued_bytes_restores_ready();

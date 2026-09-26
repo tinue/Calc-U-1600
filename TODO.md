@@ -87,17 +87,6 @@ obligations.
 
 ## PC-1600 serial port
 
-- **The model gates the TC8576F transmitter on the peer's CS; the real
-  chip's /CTS is tied to GND.** Settled 2026-09-26 from the Service Manual
-  §9-5 pin table (printed p. 33): pin 35 /CTS "Connected to GND", pin 34
-  /DSR "connected with the RXD line". The data sheet defines CTS on as
-  /CTS = 0, so the chip's transmitter, TxRDY and Tx interrupt are never
-  held off in hardware. The peer's CS reaches only the ROM, through
-  FAULT (`PC-1600-CPC-TC8576.md` §9.5). Fix: drop `m_cts` from the
-  transmit start, `ssr()` TxRDY and `refreshInterruptOutput()`, and keep it
-  on PSR FAULT. SSR bit 7 is the inverted RXD line, not the peer's DSR
-  (the ROM never reads it). Also close the open item in the corpus
-  (`PC-1600-CPC-TC8576.md` §12).
 - **RS-232C / SIO connector mux.** PRIME (the PRIM select) is tracked in
   `TC8576F::rs232Selected()`; both connectors still share the one
   `SerialLink`.
