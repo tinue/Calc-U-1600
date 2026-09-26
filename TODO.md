@@ -5,32 +5,6 @@ obligations.
 
 ## Known issues
 
-- **Minor display timing difference**: real LCD hardware is slower than
-  the emulation, so a spurious character can briefly appear while
-  scrolling. Controller busy time is now modelled (2026-09-23: busy until
-  the 4th 216.7 kHz LCD-clock edge after each write, fitted to a
-  real-unit scrolling-PRINT benchmark). Recheck whether the spurious
-  character still shows.
-- **CE-1600P / CE-150 plotter: pen colour can drift out of sync after
-  OFF/ON.** Deliberately left as a known limitation. Set a colour
-  (`COLOR 2`), power off/on, print again — the plotter draws in the
-  wrong colour (typically off by a fixed amount from then on). A plain
-  calculator *reset* is fine; only OFF/ON drifts it.
-
-  Root cause: pen colour is firmware-RAM state, not a hardware register,
-  and there's no colour-home signal the CPU can read — the real "colour 0
-  magnet" is a purely mechanical home detent reached by a blind fixed-
-  count turret spin during the firmware's OFF→ON re-init. This emulator's
-  `AlpsPlotterMechanism` just increments on every turret click with
-  nothing forcing it back to 0, so the init spin doesn't reliably land on
-  the firmware's assumed colour 0.
-
-  Fix has to detect the firmware's power-on/init turret spin specifically
-  (it does carriage homing *and* turret rotation together, which no
-  ordinary `COLOR n`/`LPRINT` does) and force the mechanism to colour 0 at
-  its end. Do **not** reintroduce a bare "N turret clicks with pen up ⇒
-  home spin" heuristic — it fires mid-`COLOR` command and breaks ordinary
-  colour changes (tried and reverted once already).
 - **PC-1600 BASIC runs ~0.65% fast vs a real unit (MODE 0); cause open.**
   Measured 2026-09-23 from audio recordings (BEEP markers, ms precision;
   the recorder reads 0.22% slow, calibrated from the F-register whistle).
@@ -92,14 +66,6 @@ obligations.
 
   MODE 1 (LH-5803) hasn't been re-measured since the host-pacing fix; the
   old "~7% fast" figure predates it.
-- **`TIME`/the RTC advances at emulated-CPU rate, not wall-clock** — it
-  races ahead when the emulator runs faster than real-time, since the
-  clock is seeded once from the host and thereafter advanced only by
-  emulated CPU cost, never re-synced. Expected behavior once you think it
-  through, but worth knowing when authoring presets: a `T1=TIME…T2=TIME`
-  bracket measures emulated CPU work (reproducible at any speed), while a
-  preset relying on wall-clock-accurate `TIME$=`/`DATE$=` must run at
-  authentic speed for the span that matters.
 - **Parameterless `- wait:` in a preset can inflate a program's own
   `TIME` measurement** (~2.3x observed) in the GUI, while `- wait: <n>`
   and no wait agree with each other and with headless runs. Working
@@ -108,9 +74,8 @@ obligations.
   `FOR/NEXT` sees no timer-ISR overhead; the GUI's parameterless-`wait:`
   handback path appears to let the SC7852 step during the loop, so the
   timer ISR runs every iteration and `TIME` reports the (arguably more
-  realistic) larger cost. If so, this is the same "timers freeze under
-  LH5803 ownership" class of gap as the item above, not a `wait:`-specific
-  bug.
+  realistic) larger cost. If so, this is a "timers freeze under LH5803
+  ownership" gap, not a `wait:`-specific bug.
 
 ## PC-1600 serial port
 
@@ -159,13 +124,9 @@ obligations.
 - Allow viewing a memory module's or diskette's binary file contents in the
   debug area, without having to save them out first. For memory modules
   this means the disk part (the RAM-disk filesystem), not the RAM-extension
-  part. For a floppy side, SharpDataExchange 0.2.3's `sde_disk_list` /
-  `sde_disk_get` already decode the directory and files (BASIC as a
-  listing) from the in-memory image.
-- Use SharpDataExchange's disk API once the vendored libsharpdx is
-  refreshed to 0.2.3 (`tools/refresh_sharpdx.sh` / `fetch_sharpdx.sh`):
-  e.g. a preset step that puts a `.bas` / text file straight onto the
-  floppy (`sde_disk_put`), without typing `SAVE` in the emulator.
+  part. For a floppy side, the vendored libsharpdx (0.3.0) already has
+  `sde_disk_list` / `sde_disk_get`, which decode the directory and files
+  (BASIC as a listing) from the in-memory image; nothing calls them yet.
 - Watch an inserted floppy's `.floppy.yaml` for outside changes (e.g.
   `sde put` while the disk is in the drive) and reload or warn, instead
   of overwriting them at the next autosave. Until then the rule is

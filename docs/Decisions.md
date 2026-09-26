@@ -103,6 +103,33 @@ machine is OFF or in auto power-off.
 - **F89B = 160 right after boot** is left over from the boot drive scan. It
   doesn't signal a failed command.
 
+## Accepted limitations: won't fix
+
+### Plotter pen colour can drift after OFF/ON
+Symptom: set `COLOR 2`, switch off and on, print again, and the CE-1600P or
+CE-150 draws in the wrong colour. It is typically off by a fixed amount from
+then on. A plain reset is fine; only OFF/ON causes the drift.
+
+Why it happens: the pen colour is state in firmware RAM, and the CPU has no
+colour-home signal to read. On the real plotter, colour 0 is a mechanical
+detent that a blind fixed-count turret spin reaches during the OFF→ON
+re-init. `AlpsPlotterMechanism` just counts turret clicks, so that spin
+doesn't reliably land on colour 0.
+
+A real fix would have to detect exactly that init spin (carriage homing and
+turret rotation together, which no ordinary `COLOR n` or `LPRINT` does) and
+force colour 0 at its end. Do **not** reintroduce a bare "N turret clicks with
+pen up ⇒ home spin" heuristic. It fires in the middle of `COLOR` commands and
+breaks ordinary colour changes (tried once and reverted).
+
+### TIME advances at emulated-CPU rate, not wall-clock
+The RTC is seeded once from the host clock. After that, only emulated CPU
+cost advances it; it is never re-synced, so it runs ahead whenever the
+emulator runs faster than real time. This is intended: a `T1=TIME … T2=TIME`
+bracket measures emulated work and gives the same result at any speed. A
+preset that needs wall-clock-accurate `TIME$=` / `DATE$=` must run at
+authentic speed for the span that matters.
+
 ## Design choices
 
 ### Preset loading
