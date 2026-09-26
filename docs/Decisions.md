@@ -154,7 +154,9 @@ authentic speed for the span that matters.
   ME0/ME1, R/W, PU, PV and chip selects. It never knows which calculator it
   is attached to. Host differences belong in the host's bus model, which
   decides what reaches each pin. Don't give a card host-specific hooks or
-  shortcuts.
+  shortcuts. `makeSoftwareDefinedCard(path, host)` doesn't break this: the
+  host only checks the file's `compatible-hosts` at load time, like the
+  label on the box, and the built card keeps no host.
 - **Peripheral-ROM fetches take the generic open-bus path. This is fine as
   is.** Every fetch from a card ROM (CE-150 at 0xA000-0xBFFF, CE-158 at
   0x8000-0x9FFF) on the PC-1500 goes through `resolve()` → `readOpenBus()`

@@ -358,7 +358,21 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   parsed: `classifySlot` fully parses the `.card.yaml` again (MB of
   `initial-content` hex for superRAM 512K) on every rebuild and twice per
   preset load; `saveSlotAs` parses the instance dir 3x; and
-  `refreshModuleCombos` scans + parses both dirs once per slot.
+  `refreshModuleCombos` scans + parses both dirs once per slot. The name
+  lookup itself is the biggest cost: `resolveModuleSpecByName` scans and
+  *fully* parses every `.card.yaml` in both dirs to find one name. So
+  attaching one module parses every card file, then the chosen one twice
+  more (`makeSoftwareDefinedCard`, `classifySlot` via
+  `readMemoryCardCatalogEntry`, which is a full parse too).
+
+  **Dependencies (checked 2026-09-26):** none on the expansion-connector
+  chapter. This is file-catalogue logic, `.card.yaml` keeps 40-pin contact
+  numbers, and `compatible-hosts` is only a load-time gate (the built card
+  keeps no host). The planned `{path, isTemplate, battery}` result matches
+  the reserved `batteryBacked` flag (docs/Decisions.md). **Do this before**
+  the feature ideas that build on this layer: saving a diskette/module
+  into a preset, viewing their contents, and watching `.floppy.yaml` for
+  outside changes.
 
   **Before fixing:** analyse `MemoryCardDefinition`'s parser.
   `scanFloppyDirectory`'s trick (cut the text at `\nsides:`) relies on key
