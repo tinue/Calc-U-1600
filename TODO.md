@@ -392,3 +392,18 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   but is applied to every sub-CPU command (key scan, clock, IOCS). Chase
   the residual first, then re-fit once; consider a per-command response
   time. Verify with the scrolling-PRINT benchmark.
+
+  **Order for the sub-CPU half:**
+  1. The TC8576F datasheet check ("PC-1600 serial port"). `TC8576F::psr()`
+     raises PSR b5 (BUSY) and b6 (XBUSY) together for the whole window. The
+     datasheet separates them (b6 = XBUSY/BUFFUL, the output buffer still
+     full; b5 = the external device's BUSY). It also makes the UART's own
+     handshake time programmable: DSTB delay pr[2] and DSTB width pr[3], on
+     the pr[7]-prescaled clock. Part of the fitted 1.66 ms may be UART
+     strobe timing that the ROM programs, not LU-57813P response time.
+  2. The sub-CPU protocol spec (Feature ideas). A per-command response
+     time needs the command table, including which commands the 0.5 s ISR
+     sends, since that's what the fit came from.
+  3. The residual itself, which may need the RTC timers feature
+     (`ON TIME$`, see the known issue).
+  4. Then re-fit once.
