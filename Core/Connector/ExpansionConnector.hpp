@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 
+#include "CardChain.hpp"
 #include "ExpansionCard.hpp"
 #include "PC1500SignalDecode.hpp"
 #include "../PC1500/PC1500Variant.hpp"
@@ -21,22 +22,16 @@ class ExpansionConnector {
 public:
     explicit ExpansionConnector(PC1500Variant variant) : m_variant(variant) {}
 
-    void attach(ExpansionCard* card) {
-        m_card = card;
-        m_inhibitCard = dynamic_cast<const InhibitSource*>(card);
-    }
-    void detach() {
-        m_card = nullptr;
-        m_inhibitCard = nullptr;
-    }
-    ExpansionCard* attachedCard() const { return m_card; }
+    void attach(ExpansionCard* card) { m_card.replace(card); }
+    void detach() { m_card.clear(); }
+    ExpansionCard* attachedCard() const { return m_card.front(); }
 
     /// Consulted by PC1500Memory only for ME0 addresses whose own decode
     /// (resolve()) already determined are open bus (Y0, the variant's open
     /// S-range, Y2) or ROM-with-INHIBIT-asserted.
     bool read(uint16_t addr, bool pu, bool pv, uint8_t& outValue) const {
-        if (!m_card) return false;
-        return m_card->respondsToRead(decode(addr, /*forWrite=*/false, pu, pv), outValue);
+        if (m_card.empty()) return false;
+        return m_card.read(decode(addr, /*forWrite=*/false, pu, pv), outValue);
     }
 
     /// `direct` = true when the write comes from PC1500Memory::poke() (the
@@ -44,19 +39,18 @@ public:
     /// PinState::direct so a lock-gating card (CE-163F flash) can let it
     /// bypass its runtime write protocol.
     WriteResult write(uint16_t addr, bool pu, bool pv, uint8_t value, bool direct = false) {
-        if (!m_card) return WriteResult::ignored();
+        if (m_card.empty()) return WriteResult::ignored();
         PinState pins = decode(addr, /*forWrite=*/true, pu, pv);
         pins.direct = direct;
-        return m_card->respondsToWrite(pins, value);
+        return m_card.write(pins, value);
     }
 
     // Queried on every host-ROM fetch; see InhibitSource.
-    bool inhibitAsserted() const { return m_inhibitCard && m_inhibitCard->assertsInhibit(); }
+    bool inhibitAsserted() const { return m_card.inhibitAsserted(); }
 
 private:
     PC1500Variant m_variant;
-    ExpansionCard* m_card = nullptr;
-    const InhibitSource* m_inhibitCard = nullptr; // m_card if it can assert INHIBIT, else null
+    CardChain<ExpansionCard, PinState> m_card; // a chain of one: the 40-pin plug takes one module
 
     // Per-variant S-block -> physical-pin routing (Expansion-Connectors.md
     // §3.1). PC-1500: pins 16/17/18/5 carry S1/S2/S3/S4. PC-1500A: the same

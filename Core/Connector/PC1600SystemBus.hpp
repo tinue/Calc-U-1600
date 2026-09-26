@@ -1,7 +1,8 @@
 #pragma once
-#include <algorithm>
 #include <cstdint>
 #include <vector>
+
+#include "CardChain.hpp"
 
 // ── PC-1600 60-pin system bus (CE-1600P and future peripherals) ──────────
 //
@@ -45,14 +46,9 @@ public:
 
 class PC1600SystemBus {
 public:
-    void attach(PC1600ExpansionCard* card) {
-        if (card && std::find(m_chain.begin(), m_chain.end(), card) == m_chain.end())
-            m_chain.push_back(card);
-    }
-    void detach(PC1600ExpansionCard* card) {
-        m_chain.erase(std::remove(m_chain.begin(), m_chain.end(), card), m_chain.end());
-    }
-    const std::vector<PC1600ExpansionCard*>& chain() const { return m_chain; }
+    void attach(PC1600ExpansionCard* card) { m_chain.attach(card); }
+    void detach(PC1600ExpansionCard* card) { m_chain.detach(card); }
+    const std::vector<PC1600ExpansionCard*>& chain() const { return m_chain.cards(); }
 
     /// Page B banks 4/5 ROM window (Z-80 4000-7FFF); `offset` is address
     /// minus 0x4000. Consulted by PC1600Memory only when the page-B bank
@@ -64,9 +60,7 @@ public:
         PC1600BusPins pins;
         pins.address = offset;
         pins.bank5 = bank5;
-        for (PC1600ExpansionCard* card : m_chain)
-            if (card->respondsToRead(pins, outValue)) return true;
-        return false;
+        return m_chain.read(pins, outValue);
     }
 
     bool readIO(uint8_t port, uint8_t& outValue) const {
@@ -74,9 +68,7 @@ public:
         PC1600BusPins pins;
         pins.address = port;
         pins.io = true;
-        for (PC1600ExpansionCard* card : m_chain)
-            if (card->respondsToRead(pins, outValue)) return true;
-        return false;
+        return m_chain.read(pins, outValue);
     }
 
     bool writeIO(uint8_t port, uint8_t value) {
@@ -85,11 +77,9 @@ public:
         pins.address = port;
         pins.io = true;
         pins.forWrite = true;
-        for (PC1600ExpansionCard* card : m_chain)
-            if (card->respondsToWrite(pins, value)) return true;
-        return false;
+        return m_chain.write(pins, value);
     }
 
 private:
-    std::vector<PC1600ExpansionCard*> m_chain;
+    CardChain<PC1600ExpansionCard, PC1600BusPins> m_chain;
 };

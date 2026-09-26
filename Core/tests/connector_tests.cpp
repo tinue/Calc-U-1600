@@ -13,6 +13,7 @@
 #include <functional>
 #include <vector>
 
+#include "../Connector/CardChain.hpp"
 #include "../Connector/ExpansionCard.hpp"
 #include "../PC1500/PC1500Machine.hpp"
 
@@ -212,6 +213,38 @@ void test_two_independent_ports() {
     CHECK(machine.memory().readME0(0x8000) == 0x60); // 60-pin card claims Y2 (40-pin connector has no card there)
 }
 
+void test_card_chain_shell() {
+    // The shell every connector dispatches through (CardChain.hpp), on its own.
+    CardChain<ExpansionCard, PinState> chain;
+    PinState pins;
+    uint8_t v = 0;
+    CHECK(chain.empty() && chain.front() == nullptr);
+    CHECK(!chain.read(pins, v));
+    CHECK(!chain.write(pins, 0x12).claimed); // nobody claims -> ignored
+
+    StubCard first = makeReadStub(0x11, [](const PinState&) { return true; });
+    StubCard second = makeReadStub(0x22, [](const PinState&) { return true; }, /*inhibit=*/true);
+    chain.attach(&first);
+    chain.attach(&first); // no duplicate
+    chain.attach(&second);
+    CHECK(chain.cards().size() == 2);
+    CHECK(chain.read(pins, v) && v == 0x11); // first responder wins
+    CHECK(chain.inhibitAsserted());          // only `second` declared InhibitSource
+
+    chain.detach(&second);
+    CHECK(!chain.inhibitAsserted());         // its inhibit entry went with it
+
+    StubCard writer(nullptr, [](const PinState&, uint8_t) { return true; });
+    chain.attach(&writer);
+    CHECK(chain.write(pins, 0x34).stored);   // `first` ignores writes, `writer` takes it
+
+    // Chain-of-one form: replace() leaves exactly the new card, inhibit included.
+    chain.replace(&second);
+    CHECK(chain.cards().size() == 1 && chain.front() == &second && chain.inhibitAsserted());
+    chain.replace(nullptr);
+    CHECK(chain.empty() && !chain.inhibitAsserted());
+}
+
 } // namespace
 
 // Returns the number of failed checks (0 = all passed), so the shared
@@ -227,6 +260,7 @@ int run_connector_tests() {
     test_systembus_daisy_chain();
     test_expansion_connector_single_slot_replaces_not_chains();
     test_two_independent_ports();
+    test_card_chain_shell();
 
     std::printf("connector_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

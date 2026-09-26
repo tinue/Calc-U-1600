@@ -1,8 +1,8 @@
 #pragma once
-#include <algorithm>
 #include <cstdint>
 #include <vector>
 
+#include "CardChain.hpp"
 #include "ExpansionCard.hpp"
 #include "PC1500SignalDecode.hpp"
 #include "../PC1500/PC1500Variant.hpp"
@@ -48,38 +48,20 @@ public:
     /// decode actually matches" should always coincide; two cards
     /// responding to the same access is a real hardware bus conflict, not
     /// something this phase resolves.
-    void attach(ExpansionCard* card) {
-        if (card && std::find(m_chain.begin(), m_chain.end(), card) == m_chain.end()) {
-            m_chain.push_back(card);
-            if (auto* source = dynamic_cast<const InhibitSource*>(card)) m_inhibitChain.push_back(source);
-        }
-    }
-    void detach(ExpansionCard* card) {
-        m_chain.erase(std::remove(m_chain.begin(), m_chain.end(), card), m_chain.end());
-        if (auto* source = dynamic_cast<const InhibitSource*>(card))
-            m_inhibitChain.erase(std::remove(m_inhibitChain.begin(), m_inhibitChain.end(), source),
-                                 m_inhibitChain.end());
-    }
-    const std::vector<ExpansionCard*>& chain() const { return m_chain; }
+    void attach(ExpansionCard* card) { m_chain.attach(card); }
+    void detach(ExpansionCard* card) { m_chain.detach(card); }
+    const std::vector<ExpansionCard*>& chain() const { return m_chain.cards(); }
 
     /// Consulted by PC1500Memory only for ME0 addresses whose own decode
     /// already determined are open bus, or ROM-with-INHIBIT-asserted.
     bool read(uint16_t addr, bool pu, bool pv, uint8_t& outValue) const {
         if (m_chain.empty()) return false; // common case: no card on this bus
-        PinState pins = decode(addr, /*forWrite=*/false, pu, pv);
-        for (ExpansionCard* card : m_chain) {
-            if (card->respondsToRead(pins, outValue)) return true;
-        }
-        return false;
+        return m_chain.read(decode(addr, /*forWrite=*/false, pu, pv), outValue);
     }
 
     WriteResult write(uint16_t addr, bool pu, bool pv, uint8_t value) {
         if (m_chain.empty()) return WriteResult::ignored();
-        PinState pins = decode(addr, /*forWrite=*/true, pu, pv);
-        for (ExpansionCard* card : m_chain) {
-            if (const WriteResult r = card->respondsToWrite(pins, value)) return r;
-        }
-        return WriteResult::ignored();
+        return m_chain.write(decode(addr, /*forWrite=*/true, pu, pv), value);
     }
 
     /// ME1-space access -- only the 60-pin connector exposes DME1/ME1, so
@@ -92,31 +74,19 @@ public:
     /// `me1 && address` directly (see PinState::me1's doc comment).
     bool readME1(uint16_t addr, bool pu, bool pv, uint8_t& outValue) const {
         if (m_chain.empty()) return false;
-        PinState pins = decodeME1(addr, /*forWrite=*/false, pu, pv);
-        for (ExpansionCard* card : m_chain) {
-            if (card->respondsToRead(pins, outValue)) return true;
-        }
-        return false;
+        return m_chain.read(decodeME1(addr, /*forWrite=*/false, pu, pv), outValue);
     }
     bool writeME1(uint16_t addr, bool pu, bool pv, uint8_t value) {
         if (m_chain.empty()) return false;
-        PinState pins = decodeME1(addr, /*forWrite=*/true, pu, pv);
-        for (ExpansionCard* card : m_chain) {
-            if (card->respondsToWrite(pins, value)) return true;
-        }
-        return false;
+        return m_chain.write(decodeME1(addr, /*forWrite=*/true, pu, pv), value);
     }
 
     // Queried on every host-ROM fetch; see InhibitSource.
-    bool inhibitAsserted() const {
-        for (const InhibitSource* source : m_inhibitChain) if (source->assertsInhibit()) return true;
-        return false;
-    }
+    bool inhibitAsserted() const { return m_chain.inhibitAsserted(); }
 
 private:
     PC1500Variant m_variant;
-    std::vector<ExpansionCard*> m_chain;
-    std::vector<const InhibitSource*> m_inhibitChain; // the cards in m_chain that can assert INHIBIT
+    CardChain<ExpansionCard, PinState> m_chain;
 
     // S-block -> physical-pin routing. The 60-pin connector's own S-pin
     // positions aren't transcribed in the research corpus, so this assumes

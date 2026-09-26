@@ -96,17 +96,12 @@ public:
     virtual bool assertsInhibit() const = 0;
 };
 
-class ExpansionCard {
+// What every card has regardless of which plug it fits: debug views of
+// its storage and its name. The bus-facing half (which pins it decodes)
+// lives in the per-plug interface derived from this.
+class CardBase {
 public:
-    virtual ~ExpansionCard() = default;
-
-    /// Return true and set outValue if this card responds to this access.
-    /// Returning false leaves the bus open (0xFF).
-    virtual bool respondsToRead(const PinState& pins, uint8_t& outValue) const = 0;
-
-    /// Whether this card claims this write, and whether it stored it
-    /// (see WriteResult).
-    virtual WriteResult respondsToWrite(const PinState& pins, uint8_t value) = 0;
+    virtual ~CardBase() = default;
 
     /// The bank index this card currently exposes through its main banked
     /// window, for the GUI debug "Dump Mem" panel's per-column labels.
@@ -160,4 +155,16 @@ public:
     /// so the GUI can read what sits in a slot from the slot itself.
     /// Empty for a card without one (test stubs).
     virtual std::string moduleName() const { return {}; }
+};
+
+// A card on a connector numbered with PinState's 40-pin contacts.
+class ExpansionCard : public CardBase {
+public:
+    /// Return true and set outValue if this card responds to this access.
+    /// Returning false leaves the bus open (0xFF).
+    virtual bool respondsToRead(const PinState& pins, uint8_t& outValue) const = 0;
+
+    /// Whether this card claims this write, and whether it stored it
+    /// (see WriteResult).
+    virtual WriteResult respondsToWrite(const PinState& pins, uint8_t value) = 0;
 };
