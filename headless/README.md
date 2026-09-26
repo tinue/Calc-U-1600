@@ -9,7 +9,8 @@ CLI/preset run produce — ROM/RAM image dumps, format-utility test images,
 
 Everything in here except this file is gitignored: it's all regenerable
 (rebuild the tool) or disposable (rerun the probe). Nothing durable should
-live here — a reusable example preset belongs in `examples/`, a written-up
+live here — a reusable example preset belongs in `examples/` (user-facing)
+or `dev/` (debug/regression presets, hardware checks), a written-up
 investigation belongs in `docs/`, and a permanent finding belongs in this
 project's memory.
 

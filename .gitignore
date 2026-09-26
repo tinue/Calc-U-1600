@@ -74,4 +74,11 @@ roms/*.bin
 /examples/**/*.rel
 /examples/**/*.rst
 /examples/**/*.sym
+/dev/**/*.ihx
+/dev/**/*.lnk
+/dev/**/*.lst
+/dev/**/*.map
+/dev/**/*.rel
+/dev/**/*.rst
+/dev/**/*.sym
 /examples/memtest.bin

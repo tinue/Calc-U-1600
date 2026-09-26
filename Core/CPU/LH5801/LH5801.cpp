@@ -749,7 +749,7 @@ int LH5801::executeFD(uint8_t op) {
         // ── ADR (16-bit: Rreg = Rreg + A) ───────────────────────────────────
         //
         // ADR leaves C/V/H/Z *unchanged* on real silicon -- confirmed on a
-        // real PC-1500A (via examples/debug/adrtest_1500a.asm): carry
+        // real PC-1500A (via dev/hardware-checks/adrtest_1500a.asm): carry
         // survives an ADR intact. This is despite the PC-1500 Technical
         // Reference Manual's §2-4 prose ("C, H, Z, and V may change") and
         // worked example, which describe the low-byte addition's flags as

@@ -77,8 +77,8 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
 3. **Debug the `.asm` in focus:** *Debug on PC-1600* and *Debug on PC-1500A* work for any program. With the `.asm` in focus, press F5. The session then:
    - assembles it with the machine's assembler (zasm for the PC-1600, sdaslh5801 for the PC-1500A);
    - does a clean start:
-     - *Debug on PC-1600:* a plain PC-1600, without the CE-1600P and without memory modules (`examples/debug/debug-pc1600.pc1600`);
-     - *Debug on PC-1500A:* a PC-1500A with a CE-163F (`examples/debug/debug-pc1500a.pc1500a`);
+     - *Debug on PC-1600:* a plain PC-1600, without the CE-1600P and without memory modules (`vscode/presets/debug-pc1600.pc1600`);
+     - *Debug on PC-1500A:* a PC-1500A with a CE-163F (`vscode/presets/debug-pc1500a.pc1500a`);
    - loads the program at its `.org`;
    - stops on its first instruction, or on `ENTRY` if the source defines that label (or equate) inside the program.
 

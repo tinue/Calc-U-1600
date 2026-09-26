@@ -4,7 +4,7 @@
 # configured trace directory (the CLI's cwd; the app's
 # AppSettings.traceDirectory()).
 #
-#   tools/build_cli.sh && ./pc1500_cli --preset examples/debug/trace_demo.pc1500a
+#   tools/build_cli.sh && ./pc1500_cli --preset dev/presets/trace_demo.pc1500a
 #   python3 tools/read_trace.py trace_demo.bin
 #
 # Starting a new `- trace:` closes any open one; a trace still running when

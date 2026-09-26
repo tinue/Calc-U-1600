@@ -169,7 +169,7 @@ void test_adr_preserves_flags() {
     // This behavior contradicts the PC-1500 TRM's own text (which says ADR
     // does change C/H/Z/V, and backs it with a worked example), but is
     // confirmed on real hardware (PC-1500A) via
-    // examples/debug/adrtest_1500a.asm.
+    // dev/hardware-checks/adrtest_1500a.asm.
 
     // sec ; ldi a,0x00 ; ldi yh,0x7B ; ldi yl,0xB2 ; adr y
     // Adding 0 produces no carry out, so a flag-clobbering ADR would clear

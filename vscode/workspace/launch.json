@@ -13,7 +13,7 @@
             "port": 4711,
             "preLaunchTask": "zasm: build current file",
             "buildTask": "zasm: build current file",
-            "preset": "${workspaceFolder}/examples/debug/debug-pc1600.pc1600",
+            "preset": "${workspaceFolder}/vscode/presets/debug-pc1600.pc1600",
             "program": {
                 "bin": "${fileDirname}/${fileBasenameNoExtension}.bin",
                 "listing": "${fileDirname}/${fileBasenameNoExtension}.lst",
@@ -30,7 +30,7 @@
             "port": 4711,
             "preLaunchTask": "sdas: build current file",
             "buildTask": "sdas: build current file",
-            "preset": "${workspaceFolder}/examples/debug/debug-pc1500a.pc1500a",
+            "preset": "${workspaceFolder}/vscode/presets/debug-pc1500a.pc1500a",
             "program": {
                 "bin": "${fileDirname}/${fileBasenameNoExtension}.bin",
                 "listing": "${fileDirname}/${fileBasenameNoExtension}.rst",

@@ -76,7 +76,7 @@ A typical program configuration (the workspace's *Debug on PC-1500A*):
   "port": 4711,
   "preLaunchTask": "sdas: build current file",
   "buildTask": "sdas: build current file",
-  "preset": "${workspaceFolder}/examples/debug/debug-pc1500a.pc1500a",
+  "preset": "${workspaceFolder}/vscode/presets/debug-pc1500a.pc1500a",
   "program": {
     "bin": "${fileDirname}/${fileBasenameNoExtension}.bin",
     "listing": "${fileDirname}/${fileBasenameNoExtension}.rst",
