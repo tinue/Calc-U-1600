@@ -227,12 +227,3 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   but is applied to every sub-CPU command (key scan, clock, IOCS). Chase
   the residual first, then re-fit once; consider a per-command response
   time. Verify with the scrolling-PRINT benchmark.
-- **CE-158 ROM reads on the PC-1500 go through the generic open-bus
-  path** *(timing-sensitive)*. Every fetch at 0x8000–0x9FFF runs resolve →
-  readOpenBus → SystemBus decode → per-card `respondsToRead`. Option: a
-  direct per-PU/PV ROM pointer from the card.
-
-  **Before fixing:** profile a CE-158-attached PC-1500 running BASIC
-  from the CE-158 ROM, and measure this path's share of host time. If the
-  gain is negligible, move this to docs/Decisions.md ("fine as is")
-  instead of adding a cache.

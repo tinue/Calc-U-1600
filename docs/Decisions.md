@@ -148,6 +148,24 @@ authentic speed for the span that matters.
 - **`kMaxBasicLineLength` (79)** is a guessed limit on the raw typed line.
   It stays until the real limit is measured.
 
+### Expansion bus
+- **Cards know only the bus.** A peripheral card (CE-150, CE-158, memory
+  modules, ...) reacts to the connector signals in its `PinState`: address,
+  ME0/ME1, R/W, PU, PV and chip selects. It never knows which calculator it
+  is attached to. Host differences belong in the host's bus model, which
+  decides what reaches each pin. Don't give a card host-specific hooks or
+  shortcuts.
+- **Peripheral-ROM fetches take the generic open-bus path. This is fine as
+  is.** Every fetch from a card ROM (CE-150 at 0xA000-0xBFFF, CE-158 at
+  0x8000-0x9FFF) on the PC-1500 goes through `resolve()` → `readOpenBus()`
+  → `SystemBus` decode → each card's `respondsToRead`. It costs a few calls
+  and compares of host time per fetch. It costs no emulated time: LH5801
+  cycles come from the opcode tables, and the memory path adds none. The
+  ~1.3 MHz guest leaves plenty of host headroom. Don't add a per-card ROM
+  pointer or cache. It would break the rule above and gain nothing
+  measurable. If profiling ever shows a real cost, the fix belongs at bus
+  level and must work the same way for every card.
+
 ### Typing into the machine
 - **The GUI Paste Text never presses ENTER.** This is deliberate: a careless
   paste must not run anything. Tool paths (debugger auto-start, future inbound

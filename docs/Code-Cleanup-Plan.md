@@ -52,11 +52,6 @@ analysis, then states the target fix. The cost description stays.
     build a `PC1500Memory` without a bus.
   - Converge both connectors *and* the bus ownership in one pass, so no
     inconsistency is left behind.
-- **CE-158 ROM reads on the PC-1500.**
-  - Before fixing: profile a CE-158-attached PC-1500 run to measure the share
-    of the open-bus path.
-  - If the gain is negligible, move this to `docs/Decisions.md` ("fine as
-    is") instead of adding a cache.
 
 ## Phase 1: leftovers (TODO: "Leftovers, one quick pass")
 - Delete `PC1600LhsWindow`, `pc1600LhsWindow()` and `PC1600Bank::lhsRemapRow()`
