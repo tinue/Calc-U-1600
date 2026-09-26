@@ -159,8 +159,8 @@ bool readBytes(const char* path, std::vector<uint8_t>* out) {
 void test_real_sample_files() {
     struct Case { const char* path; basic::TransferModel model; };
     const Case cases[] = {
-        {"examples/lissajou-1500_tokenized.bas", basic::TransferModel::PC1500},
-        {"examples/lissajou-1600_tokenized.bas", basic::TransferModel::PC1600},
+        {"Core/tests/fixtures/basic/lissajou-1500_tokenized.bas", basic::TransferModel::PC1500},
+        {"Core/tests/fixtures/basic/lissajou-1600_tokenized.bas", basic::TransferModel::PC1600},
     };
     for (const auto& c : cases) {
         std::vector<uint8_t> bytes;

@@ -109,7 +109,7 @@ def program_run(port):
     dap.wait_event("initialized")
     attach = {"type": "calcu1600", "request": "attach",
               "preset": os.path.join(REPO, "examples/startup/default-pc1500.pc1500"),
-              "program": {"bin": os.path.join(REPO, "examples/memtest_stock.bin"),
+              "program": {"bin": os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest_stock.bin"),
                           "listing": os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest.rst"),
                           "address": "0x40C5", "after": "stopOnEntry"}}
     dap.request("attach", **{k: v for k, v in attach.items() if k not in ("type", "request")})
@@ -134,7 +134,7 @@ def program_run(port):
     dap.request("setBreakpoints", source={"path": MEMTEST_ASM}, breakpoints=[])
     # Build & Load again (what the extension sends): clean start, load,
     # auto-start, stop at the entry.
-    body = dap.request("calcu1600/load", bin=os.path.join(REPO, "examples/memtest_stock.bin"),
+    body = dap.request("calcu1600/load", bin=os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest_stock.bin"),
                        listing=os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest.rst"),
                        address="0x40C5", after="stopOnEntry")
     check(body.get("start") == "0x40C5", f"calcu1600/load -> {body}")
@@ -142,9 +142,9 @@ def program_run(port):
     check(stop.get("reason") == "entry" and top_frame(dap, 1).get("line") == 74, "reloaded and stopped at the entry again")
     # Entry from the listing: its ENTRY by default, or a named symbol.
     rst = os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest.rst")
-    body = dap.request("calcu1600/load", bin=os.path.join(REPO, "examples/memtest_stock.bin"), listing=rst, after="none")
+    body = dap.request("calcu1600/load", bin=os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest_stock.bin"), listing=rst, after="none")
     check(body.get("start") == "0x40C5" and body.get("entry") == "0x40C5", f"load without address/entry -> {body}")
-    body = dap.request("calcu1600/load", bin=os.path.join(REPO, "examples/memtest_stock.bin"), listing=rst,
+    body = dap.request("calcu1600/load", bin=os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest_stock.bin"), listing=rst,
                        entry="MEMTEST", after="none")
     check(body.get("entry") == "0x40CC" and body.get("call") == "CALL &40CC", f"entry MEMTEST -> {body}")
     # Restart (the toolbar's): the attach configuration again -- preset,

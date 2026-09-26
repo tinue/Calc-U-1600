@@ -1,6 +1,6 @@
 // Headless tests for the debugger's run control (Core/Debug/RunControl) and
 // breakpoint table (Core/Debug/BreakpointTable), driven with the real
-// memtest program (examples/memtest_stock.bin, ENTRY 0x40C5) and its sdas
+// memtest program (fixtures/listings/sdas-lh5801/memtest_stock.bin, ENTRY 0x40C5) and its sdas
 // listing fixture on a PC-1500A with no ROM. A small harness calls it:
 //
 //   4600  sjp 0x40C5      ; BE 40 C5
@@ -48,7 +48,7 @@ struct Rig {
     bool ok = false;
 
     Rig() {
-        std::ifstream bin("examples/memtest_stock.bin", std::ios::binary);
+        std::ifstream bin("Core/tests/fixtures/listings/sdas-lh5801/memtest_stock.bin", std::ios::binary);
         std::vector<uint8_t> image((std::istreambuf_iterator<char>(bin)), std::istreambuf_iterator<char>());
         debug::Listing listing;
         std::string error;

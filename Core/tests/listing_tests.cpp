@@ -4,7 +4,8 @@
 // real assembler output:
 //
 //   sdas-lh5801/memtest.*       examples/memtest.asm (ENTRY 0x40C5) through
-//                               sdaslh5801 -plosgff + sdld (the .rst)
+//                               sdaslh5801 -plosgff + sdld (the .rst), plus
+//                               its linked image memtest_stock.bin
 //   sdas-lh5801/include_main.*  an .include, and a .db that wraps
 //   sdas-z80/blink.*            sdasz80 -plosgff + sdldz80 -b CODE=0xC0C5:
 //                               the .lst holds area offsets, the .rst the
@@ -76,7 +77,7 @@ void test_sdas_lh5801_memtest() {
     CHECK(l.symbols.count("BOTTOM_H") && l.symbols.at("BOTTOM_H") == 0x7867);
 
     // Every byte agrees with the shipped binary built from the same source.
-    std::ifstream bin("examples/memtest_stock.bin", std::ios::binary);
+    std::ifstream bin("Core/tests/fixtures/listings/sdas-lh5801/memtest_stock.bin", std::ios::binary);
     std::vector<uint8_t> image((std::istreambuf_iterator<char>(bin)), std::istreambuf_iterator<char>());
     CHECK(totalBytes(l) == image.size());
     bool same = !image.empty();
@@ -206,7 +207,7 @@ void test_source_map() {
     std::string error;
     CHECK(debug::loadListing(kDir + "sdas-lh5801/memtest.rst", &memtest, &error));
     const std::string asmFile = memtest.files[0];
-    std::ifstream bin("examples/memtest_stock.bin", std::ios::binary);
+    std::ifstream bin("Core/tests/fixtures/listings/sdas-lh5801/memtest_stock.bin", std::ios::binary);
     std::vector<uint8_t> mem(65536, 0);
     std::vector<uint8_t> image((std::istreambuf_iterator<char>(bin)), std::istreambuf_iterator<char>());
     for (size_t i = 0; i < image.size(); i++) mem[0x40C5 + i] = image[i];
