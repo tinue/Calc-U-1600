@@ -482,8 +482,10 @@ bool DebugPanel::batteryCardImage(int slot, int* bankCount, std::vector<std::uin
         *bankCount = m_controller->debugSlotCardBankCount();
         *image = m_controller->debugSlotCardImage();
     }
-    if (*bankCount <= 0 || image->empty() || image->size() % *bankCount != 0) return false;
-    return true;
+    // bankCount <= 0 is an unbanked card (e.g. CE-1600M): one implicit bank,
+    // which formatBatteryCardInitialContentBlock() writes without a `bank:` key.
+    if (image->empty()) return false;
+    return *bankCount <= 0 || image->size() % *bankCount == 0;
 }
 
 void DebugPanel::debugDumpModuleCardAsYaml() {
@@ -495,16 +497,18 @@ void DebugPanel::debugDumpModuleCardAsYaml() {
         std::vector<std::uint8_t> image;
         if (!batteryCardImage(slot, &bankCount, &image)) continue;
         const auto lines = formatBatteryCardInitialContentBlock(bankCount, image);
-        const std::size_t bankSize = image.size() / bankCount;
         const std::string name = m_moduleManager ? m_moduleManager->selectedModuleName(slot).toStdString() : std::string();
         const std::string label = name.empty() ? "attached module" : name;
         const std::string slotLabel = isPC1600 ? fmt(" (Slot %d)", slot) : "";
-        chunks.push_back(fmt("\xE2\x94\x80\xE2\x94\x80 Module card dump: %s%s, %d bank(s) x %s -- paste under the region's initial-content: \xE2\x94\x80\xE2\x94\x80",
-                              label.c_str(), slotLabel.c_str(), bankCount, debugSizeLabel(static_cast<int>(bankSize)).c_str()));
+        const std::string layout = bankCount > 0
+            ? fmt("%d bank(s) x %s", bankCount, debugSizeLabel(static_cast<int>(image.size() / bankCount)).c_str())
+            : fmt("unbanked, %s", debugSizeLabel(static_cast<int>(image.size())).c_str());
+        chunks.push_back(fmt("\xE2\x94\x80\xE2\x94\x80 Module card dump: %s%s, %s -- paste under the region's initial-content: \xE2\x94\x80\xE2\x94\x80",
+                              label.c_str(), slotLabel.c_str(), layout.c_str()));
         chunks.push_back(joinLines(lines));
     }
     if (chunks.empty()) {
-        ringWriteAll({"\xE2\x94\x80\xE2\x94\x80 Module card dump: no card attached, or it has no bank concept \xE2\x94\x80\xE2\x94\x80"});
+        ringWriteAll({"\xE2\x94\x80\xE2\x94\x80 Module card dump: no card attached, or it has no dumpable RAM \xE2\x94\x80\xE2\x94\x80"});
         return;
     }
     ringWriteAll(chunks);
