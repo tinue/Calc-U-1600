@@ -194,11 +194,6 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   - a shared `NamedFileCatalog`-level helper for lists / classify /
     save-name validation, leaving the managers only Qt glue;
   - one directory scan per refresh.
-- **Banked/unbanked split re-derived per access.**
-  `r.banked ? r.banking.bankSize : r.capacity` and `? bankCount : 1`
-  recur in `SoftwareDefinedCard.hpp` and `MemoryCardDefinition.hpp` (the
-  flash-on-unbanked bug was this omission). Normalise at parse time: an
-  unbanked region is one bank of `capacity` bytes.
 - **PC-1600 program pointers are written cell by cell.** The fast loader
   pokes BASPRG_END and each PRGADR copy (`$FE3F`, 7b327cd) by hand, and
   the LH5803↔Z80 `+0x8000` mapping is repeated in `PC1600BasicLoader`,

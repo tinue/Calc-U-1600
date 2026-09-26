@@ -382,9 +382,8 @@ void test_splice_roundtrip_through_real_bundled_file_if_present() {
     CHECK(parseMemoryCardDefinition(sourceText, &orig, &err));
     if (orig.regions.empty()) return;
 
-    const int bankCount = orig.regions[0].banked ? static_cast<int>(orig.regions[0].banking.bankCount) : 1;
-    const size_t bankSize =
-        orig.regions[0].banked ? orig.regions[0].banking.bankSize : orig.regions[0].capacity;
+    const int bankCount = static_cast<int>(orig.regions[0].banking.bankCount);
+    const size_t bankSize = orig.regions[0].banking.bankSize;
     std::vector<uint8_t> image(bankSize * static_cast<size_t>(bankCount), 0);
     if (!image.empty()) image[0] = 0x7E;  // ensure at least one non-uniform bank
 

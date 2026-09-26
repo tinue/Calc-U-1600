@@ -28,25 +28,16 @@ public:
         for (const Region& r : m_def.regions) {
             RegionState st;
             st.def = &r;
-            if (r.banked) {
-                st.backing.resize(size_t(r.banking.bankCount) * r.banking.bankSize);
-                for (uint32_t b = 0; b < r.banking.bankCount; b++) {
-                    auto it = r.initialContentByBank.find(b);
-                    if (it != r.initialContentByBank.end()) {
-                        std::copy(it->second.begin(), it->second.end(),
-                                  st.backing.begin() + size_t(b) * r.banking.bankSize);
-                    } else {
-                        uint8_t fill = r.contentForBank(b).powerUpFill;
-                        std::fill_n(st.backing.begin() + size_t(b) * r.banking.bankSize,
-                                   r.banking.bankSize, fill);
-                    }
-                }
-            } else {
-                auto it = r.initialContentByBank.find(0);
+            st.backing.resize(r.capacity);
+            for (uint32_t b = 0; b < r.banking.bankCount; b++) {
+                auto it = r.initialContentByBank.find(b);
                 if (it != r.initialContentByBank.end()) {
-                    st.backing = it->second;
+                    std::copy(it->second.begin(), it->second.end(),
+                              st.backing.begin() + size_t(b) * r.banking.bankSize);
                 } else {
-                    st.backing.assign(r.capacity, r.content.powerUpFill);
+                    uint8_t fill = r.contentForBank(b).powerUpFill;
+                    std::fill_n(st.backing.begin() + size_t(b) * r.banking.bankSize,
+                               r.banking.bankSize, fill);
                 }
             }
             m_regions.push_back(std::move(st));
@@ -88,7 +79,7 @@ public:
             uint32_t off;
             if (!locate(st, pins, &off)) continue;
             const Region& r = *st.def;
-            const RegionContent& c = r.contentForBank(r.banked ? uint32_t(st.bank) : 0);
+            const RegionContent& c = r.contentForBank(uint32_t(st.bank));
             // A mask ROM takes no write from anyone -- not even a host poke.
             // Claimed, so the bus doesn't fall through to open bus.
             if (c.kind == ContentKind::Rom) return WriteResult::refused();
@@ -99,7 +90,7 @@ public:
                 }
                 // off = bank*bankSize + windowOffset (see locate()) -- the flash command
                 // decoder only ever sees the window-relative address.
-                uint32_t bankBase = r.banked ? uint32_t(st.bank) * r.banking.bankSize : 0;
+                uint32_t bankBase = uint32_t(st.bank) * r.banking.bankSize;
                 flashWrite(st, r, c.flash, off - bankBase, value);
                 return WriteResult::taken();  // the chip took the command, even one that leaves the array untouched
             }
@@ -200,7 +191,7 @@ private:
             const size_t regEnd = base + st.backing.size();
             const size_t lo = std::max(off, base), hi = std::min(off + n, regEnd);
             if (lo < hi) {
-                const size_t bankSize = r.banked ? r.banking.bankSize : st.backing.size();
+                const size_t bankSize = r.banking.bankSize;
                 for (size_t b = (lo - base) / bankSize; b <= (hi - 1 - base) / bankSize; ++b)
                     if (r.contentForBank(static_cast<uint32_t>(b)).kind == ContentKind::Rom) return true;
             }
@@ -336,9 +327,9 @@ private:
         }
 
         using S = FlashDecoderState;
-        // An unbanked region is one "bank" of `capacity` bytes.
-        const uint32_t bankSize = r.banked ? r.banking.bankSize : r.capacity;
-        const uint32_t bankCount = r.banked ? r.banking.bankCount : 1;
+        // An unbanked region is one "bank" of `capacity` bytes (normalised at parse time).
+        const uint32_t bankSize = r.banking.bankSize;
+        const uint32_t bankCount = r.banking.bankCount;
         uint32_t bankBase = uint32_t(st.bank) * bankSize;
         switch (st.flash) {
             case S::Idle:
