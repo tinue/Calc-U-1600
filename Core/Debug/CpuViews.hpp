@@ -43,6 +43,7 @@ public:
     virtual void setBreakpoints(const std::vector<uint16_t>& addrs) = 0;
     virtual void enableBreakpoints(bool on) = 0;
     virtual void resumePastBreakpoint() = 0;
+    virtual void clearBreakpointSkip() = 0;
 };
 
 namespace detail {
@@ -88,6 +89,7 @@ public:
     void setBreakpoints(const std::vector<uint16_t>& addrs) override { detail::loadBreakpoints(m_cpu, addrs); }
     void enableBreakpoints(bool on) override { m_cpu.setBreakpointsEnabled(on); }
     void resumePastBreakpoint() override { m_cpu.resumePastBreakpoint(); }
+    void clearBreakpointSkip() override { m_cpu.clearBreakpointSkip(); }
 
 private:
     LH5801& m_cpu;
@@ -117,6 +119,7 @@ public:
     void setBreakpoints(const std::vector<uint16_t>& addrs) override { detail::loadBreakpoints(m_cpu, addrs); }
     void enableBreakpoints(bool on) override { m_cpu.setBreakpointsEnabled(on); }
     void resumePastBreakpoint() override { m_cpu.resumePastBreakpoint(); }
+    void clearBreakpointSkip() override { m_cpu.clearBreakpointSkip(); }
 
 private:
     SC7852& m_cpu;

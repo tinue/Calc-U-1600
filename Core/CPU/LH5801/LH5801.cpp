@@ -73,7 +73,7 @@ void LH5801::reset() {
     m_irqPending = false;
     m_history.clear();
     m_breakpoints.clearHit();
-    m_skipBreakpointOnce = false;
+    m_skipBreakpointAt = -1;
     // 16-bit big-endian reset vector at ME0 0xFFFE/0xFFFF (confirmed against
     // PC-1500_A04.ROM: bytes E0,00 -> 0xE000, which decodes as RIE; LDI A,0;
     // AM0; RDP; ... — a plausible reset-init sequence).
@@ -300,7 +300,7 @@ int LH5801::step() {
     }
 
     if (m_breakpointsEnabled) {
-        if (m_skipBreakpointOnce) m_skipBreakpointOnce = false;
+        if (m_skipBreakpointAt == P) m_skipBreakpointAt = -1;
         else if (m_breakpoints.check(P)) return 0;
     }
 

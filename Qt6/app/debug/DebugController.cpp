@@ -30,6 +30,7 @@ void DebugController::dispatch(const QJsonObject& message) {
 
 void DebugController::drainQueue() {
     if (m_busy || m_appBusy > 0) return;
+    finishTeardown(); // a client that left meanwhile, before its successor's messages
     m_busy = true;
     while (!m_queued.empty() && m_appBusy == 0) {
         const QJsonObject next = m_queued.front();
@@ -37,11 +38,13 @@ void DebugController::drainQueue() {
         if (m_session) m_session->handle(next);
     }
     m_busy = false;
+    finishTeardown();
 }
 
 void DebugController::setAppBusy(bool busy) {
     m_appBusy = std::max(0, m_appBusy + (busy ? 1 : -1));
-    if (m_appBusy == 0 && !m_queued.empty()) QTimer::singleShot(0, this, &DebugController::drainQueue);
+    if (m_appBusy == 0 && (!m_queued.empty() || m_teardownPending))
+        QTimer::singleShot(0, this, &DebugController::drainQueue);
 }
 
 DebugController::~DebugController() {
@@ -95,9 +98,23 @@ void DebugController::onClientConnected() {
 }
 
 void DebugController::onClientDisconnected() {
-    endSession();
-    m_session.reset();
+    // The socket may close while a request is being handled -- a Build &
+    // Load pumps the event loop for seconds. That request's DapSession,
+    // target and run control are still on the stack, so they go only once
+    // it has returned (finishTeardown()); until then the session is just
+    // detached from the controller.
+    m_queued.clear(); // the old client's; a new one's must not see them
+    if (m_session) m_retiredSessions.push_back(std::move(m_session));
+    m_teardownPending = true;
+    finishTeardown();
     emit serverStatusChanged();
+}
+
+void DebugController::finishTeardown() {
+    if (!m_teardownPending || m_busy || m_appBusy > 0) return;
+    m_teardownPending = false;
+    endSession();
+    m_retiredSessions.clear();
 }
 
 // ── Session ───────────────────────────────────────────────────────────────

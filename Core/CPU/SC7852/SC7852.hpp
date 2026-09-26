@@ -186,9 +186,12 @@ public:
     void clearBreakpoints() { m_breakpoints.clear(); }
     /// Returns true once per hit; call after a step() that returned 0.
     bool consumeBreakpointHit() { return m_breakpoints.consumeHit(); }
-    /// Continue from a breakpoint: the next instruction executes even if
-    /// its address is a breakpoint (once).
-    void resumePastBreakpoint() { m_skipBreakpointOnce = true; }
+    /// Continue from a breakpoint: the instruction at the current PC
+    /// executes once even though it is a breakpoint. The skip is tied to
+    /// that address, so an interrupt taken first can't spend it on its
+    /// handler; it lasts until that instruction runs or the next call.
+    void resumePastBreakpoint() { m_skipBreakpointAt = PC; }
+    void clearBreakpointSkip() { m_skipBreakpointAt = -1; }
     /// Data breakpoints; see LH5801::setWatches(). Not owned.
     void setWatches(WatchSet* watches) { m_watches = watches; }
 
@@ -304,7 +307,7 @@ private:
     BreakpointSet m_breakpoints;
     WatchSet* m_watches{nullptr};
     bool m_breakpointsEnabled{false};
-    bool m_skipBreakpointOnce{false};
+    int32_t m_skipBreakpointAt{-1}; // resumePastBreakpoint(); -1 = none
     Z80HistoryFrame* m_historyFrame{&m_history.next()}; // the frame the current step() fills
     uint8_t m_fetchLen{0}; // bytes fetched by the current step(), mirrored into *m_historyFrame
     void recordHistory(uint16_t pcAtStart, bool interrupt);

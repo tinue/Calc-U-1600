@@ -33,7 +33,7 @@ void SC7852::reset() {
     m_pendingPrefix = 0;
     m_history.clear();
     m_breakpoints.clearHit();
-    m_skipBreakpointOnce = false;
+    m_skipBreakpointAt = -1;
     m_historyFrame = &m_history.next();
     // A/F and the general-purpose registers are left as their construction-
     // time values on a real Z-80 reset (undefined/whatever they were) —
@@ -470,8 +470,13 @@ int SC7852::step() {
 
     uint32_t tf = traceFlags();
     if (m_breakpointsEnabled && !m_pendingPrefix) {
-        if (m_skipBreakpointOnce) m_skipBreakpointOnce = false;
-        else if (m_breakpoints.check(PC)) return 0;
+        if (m_skipBreakpointAt == PC) m_skipBreakpointAt = -1;
+        else if (m_breakpoints.check(PC)) {
+            // Parked, nothing executed: an EI just before still shields
+            // this instruction from a pending INT when it does run.
+            m_eiShadow = eiShadow;
+            return 0;
+        }
     }
 
     uint16_t pcAtStart = m_pendingPrefix ? uint16_t(PC - 1) : PC; // a carried prefix starts the instruction

@@ -142,6 +142,52 @@ void test_z80_breakpoint_not_between_prefix_and_opcode() {
     CHECK(cpu.iy() == 0x0000 && cpu.pc() == 0x0005);
 }
 
+void test_z80_skip_is_tied_to_its_address() {
+    // Parked on 0001 with an interrupt pending: the continue takes the
+    // interrupt first. The handler's breakpoint still stops, and the skip
+    // is still there for 0001 when the handler returns.
+    ZBus bus;
+    bus.mem[0x0000] = 0x00; bus.mem[0x0001] = 0x00; bus.mem[0x0002] = 0x00; // nop; nop; nop
+    bus.mem[0x0038] = 0xC9;                                                  // ret
+    SC7852 cpu(bus);
+    cpu.reset();                 // IM 0, run as IM 1 (RST 38H)
+    cpu.setBreakpointsEnabled(true);
+    cpu.addBreakpoint(0x0001);
+    cpu.addBreakpoint(0x0038);
+    cpu.step();
+    CHECK(cpu.step() == 0 && cpu.consumeBreakpointHit() && cpu.pc() == 0x0001);
+    cpu.setIFF1(true);
+    cpu.setIntLine(true);
+    cpu.resumePastBreakpoint();
+    CHECK(cpu.step() > 0 && cpu.pc() == 0x0038); // interrupt entry
+    cpu.setIntLine(false);
+    CHECK(cpu.step() == 0 && cpu.consumeBreakpointHit()); // not eaten by the skip
+    cpu.removeBreakpoint(0x0038);
+    CHECK(cpu.step() > 0 && cpu.pc() == 0x0001); // ret
+    CHECK(cpu.step() > 0 && cpu.pc() == 0x0002); // the skip, spent where it was meant
+
+    cpu.clearBreakpointSkip();   // and a cleared one is gone
+    cpu.addBreakpoint(0x0002);
+    CHECK(cpu.step() == 0 && cpu.consumeBreakpointHit());
+}
+
+void test_z80_breakpoint_keeps_ei_shadow() {
+    // ei; nop (breakpoint) with INT pending: parking on the nop must not
+    // drop the EI delay, so the nop still runs before the interrupt.
+    ZBus bus;
+    bus.mem[0x0000] = 0xFB; bus.mem[0x0001] = 0x00; bus.mem[0x0002] = 0x00; // ei; nop; nop
+    SC7852 cpu(bus);
+    cpu.reset();
+    cpu.setIntLine(true);
+    cpu.setBreakpointsEnabled(true);
+    cpu.addBreakpoint(0x0001);
+    CHECK(cpu.step() > 0 && cpu.iff1());          // ei
+    CHECK(cpu.step() == 0 && cpu.consumeBreakpointHit() && cpu.pc() == 0x0001);
+    cpu.resumePastBreakpoint();
+    CHECK(cpu.step() > 0 && cpu.pc() == 0x0002);  // the nop, not the interrupt
+    CHECK(cpu.step() > 0 && cpu.pc() == 0x0038);  // now the interrupt
+}
+
 void test_lh5801_skip_once() {
     LhBus bus;
     bus.mem[0xFFFE] = 0x40; bus.mem[0xFFFF] = 0x00;
@@ -411,6 +457,30 @@ void test_pc1600_lh5803_thread() {
     s = debugtest::stepInstruction(target, 2, 10); // bch
     s = debugtest::stepInstruction(target, 2, 10); // sta
     CHECK(s.kind == debug::Stop::Watch && s.thread == debug::PC1600DebugTarget::kLh5803);
+}
+
+void test_pc1600_skip_only_for_the_running_cpu() {
+    // Same machine as test_pc1600_lh5803_thread(). The LH5803 sits at its
+    // reset address C000 off the bus while the Z-80 runs; a continue must
+    // not hand it the skip, so it stops at C000 when it gets the bus.
+    PC1600Machine m;
+    std::vector<uint8_t> lower(PC1600Memory::kBankSize, 0x00), upper(PC1600Memory::kBankSize, 0x00);
+    lower[0] = 0xD3; lower[1] = 0x38; lower[2] = 0x76;
+    CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
+    std::vector<uint8_t> rom(16384, 0x00);
+    const uint8_t code[] = {0xAE, 0x10, 0x00, 0x38, 0x9E, 0x06};
+    for (size_t i = 0; i < sizeof code; i++) rom[i] = code[i];
+    rom[16384 - 2] = 0xC0; rom[16384 - 1] = 0x00;
+    CHECK(m.loadLH5803Rom(rom.data(), rom.size()));
+    m.reset();
+
+    debug::PC1600DebugTarget target(m);
+    CHECK(target.busOwner() == debug::PC1600DebugTarget::kZ80 && target.pc(2) == 0xC000);
+    target.setBreakpoints(debug::PC1600DebugTarget::kLh5803, {0xC000});
+    const uint32_t before = target.retired(2);
+    debug::Stop s = debugtest::runFrom(target, 100000);
+    CHECK(s.kind == debug::Stop::Breakpoint && s.thread == debug::PC1600DebugTarget::kLh5803);
+    CHECK(target.pc(2) == 0xC000 && target.retired(2) == before); // its first instruction, not a later pass
 }
 
 void test_machine_step_latches_stops() {
@@ -692,6 +762,8 @@ int run_debug_target_tests() {
     test_expressions();
     test_z80_breakpoint_and_skip_once();
     test_z80_breakpoint_not_between_prefix_and_opcode();
+    test_z80_skip_is_tied_to_its_address();
+    test_z80_breakpoint_keeps_ei_shadow();
     test_lh5801_skip_once();
     test_breakpoint_set();
     test_trace_flags_leave_breakpoints_alone();
@@ -701,6 +773,7 @@ int run_debug_target_tests() {
     test_pc1500_target();
     test_pc1600_target();
     test_pc1600_lh5803_thread();
+    test_pc1600_skip_only_for_the_running_cpu();
     test_machine_step_latches_stops();
     test_cpu_views();
     test_register_reads();

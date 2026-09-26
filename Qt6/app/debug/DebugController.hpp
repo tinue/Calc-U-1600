@@ -101,6 +101,9 @@ private:
     void createTarget();
     void onClientConnected();
     void onClientDisconnected();
+    /// Ends the session of a client that disconnected, once no request or
+    /// synchronous operation is running (see onClientDisconnected()).
+    void finishTeardown();
 
     MachineController* m_machines; // not owned
     DapServer* m_server = nullptr;
@@ -119,5 +122,7 @@ private:
     bool m_busy = false;     // handling a message (which may itself load)
     int m_appBusy = 0;       // synchronous loads in progress
     std::vector<QJsonObject> m_queued;
+    bool m_teardownPending = false; // client gone, session not yet ended
+    std::vector<std::unique_ptr<DapSession>> m_retiredSessions; // detached, maybe still on the stack
     SyncOperations* m_sync = nullptr; // not owned
 };

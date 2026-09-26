@@ -183,9 +183,12 @@ public:
     /// checked against `watches` while it is non-null. Not owned.
     void setWatches(WatchSet* watches) { m_watches = watches; }
 
-    /// Continue from a breakpoint: the next instruction executes even if
-    /// its address is a breakpoint (once).
-    void resumePastBreakpoint() { m_skipBreakpointOnce = true; }
+    /// Continue from a breakpoint: the instruction at the current PC
+    /// executes once even though it is a breakpoint. The skip is tied to
+    /// that address, so an interrupt taken first can't spend it on its
+    /// handler; it lasts until that instruction runs or the next call.
+    void resumePastBreakpoint() { m_skipBreakpointAt = P; }
+    void clearBreakpointSkip() { m_skipBreakpointAt = -1; }
 
     /// PC breakpoints, checked at the start of each instruction while
     /// enabled. A hit makes step() return 0 without executing anything.
@@ -292,7 +295,7 @@ private:
     History m_history;
     WatchSet* m_watches{nullptr};
     bool m_breakpointsEnabled{false};
-    bool m_skipBreakpointOnce{false};
+    int32_t m_skipBreakpointAt{-1}; // resumePastBreakpoint(); -1 = none
     uint8_t m_fetchLen{0}; // bytes fetched by the current step(), mirrored into m_history.next()
 
     bool     m_illegalOpcodeHit{false};

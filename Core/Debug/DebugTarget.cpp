@@ -154,12 +154,17 @@ void DebugTarget::setWatches(int thread, const std::vector<WatchSet::Watch>& wat
 }
 
 void DebugTarget::resumeFromStop() {
-    // A CPU parked on one of its breakpoints executes that instruction on
-    // resume instead of stopping again. Only CPUs actually sitting on one
-    // get the skip, so a parked second CPU can't lose a later stop.
+    // The CPU about to execute -- the bus owner, not halted -- runs the
+    // breakpoint instruction it sits on instead of stopping again. Every
+    // other CPU drops any skip: a PC-1600 CPU parked off the bus, or a
+    // halted one, stops on that breakpoint when it does get there.
+    const int owner = busOwner();
     for (const Thread& t : threads()) {
         const auto& list = breakpoints(t.id);
-        if (std::binary_search(list.begin(), list.end(), pc(t.id))) view(t.id).resumePastBreakpoint();
+        if (t.id == owner && !halted(t.id) && std::binary_search(list.begin(), list.end(), pc(t.id)))
+            view(t.id).resumePastBreakpoint();
+        else
+            view(t.id).clearBreakpointSkip();
     }
     for (auto& entry : m_watches)
         if (entry.second.hitPending()) entry.second.consumeHit();
