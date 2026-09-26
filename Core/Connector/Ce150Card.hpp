@@ -30,8 +30,8 @@
 // Bus dependency -- deliberately narrow: `respondsToRead/Write` read only
 // `pins.address`, `pins.forWrite`, `pins.me1` and `pins.pin[2]` (PV) via
 // `decodeAccess()`. Nothing else. The PC-1500 `SystemBus` fills those four
-// (`decode`/`decodeME1`); a PC-1600 `LH5803SharedMemory` (Phase 2) can
-// hand-build the same four with no S-block/Y-strobe decode to reproduce.
+// (`decode`/`decodeME1`); on the PC-1600, `LH5803SharedMemory::
+// peripheralPins()` builds the same four with no S-block/Y-strobe decode.
 //
 // Cassette (CSAVE/CLOAD/CHAIN/PRINT#) is out of scope, same as the
 // CE-1600P: the RMT bits on OPA are latched and ignored, the ROM's tape

@@ -1,5 +1,7 @@
 # Expansion connectors: mechanical groundwork (no signal-model changes)
 
+**Status:** implemented 2026-09-26 (a9e56f9, db7af2f, ac4dc0a). The signal work stays open in TODO.md.
+
 ## Context
 
 TODO.md § "Expansion connectors: one model on both machines" (as updated in 2c1723b). The end goal is

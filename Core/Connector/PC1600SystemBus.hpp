@@ -21,11 +21,14 @@
 // (ExpansionCard.hpp) -- it is just this bus's own pin vocabulary, not a
 // physical edge-connector contact list.
 //
-// Chain-capable from the start (attach/detach/chain(), mirroring
-// SystemBus.hpp's shape) even though only CE1600PCard exists today, so a
-// later peripheral (e.g. the CE-1600F floppy add-on that docks onto a
-// CE-1600P's own 50-pin sub-connector, or a from-scratch 60-pin device)
-// does not require a bus rewrite.
+// A chain (CardChain.hpp, the same shell as every other connector): the
+// CE-1600P and the CE-1600F both sit on it.
+//
+// This is only the SC7852 half of the PC-1600's one 60-pin plug; the
+// LH5803 half (CE-150, CE-158) is PC1600Memory::lh5803PeripheralBus(),
+// next to this bus in PC1600Memory. Merging the two into one connector
+// object with real 60-pin contacts waits on the open signal questions in
+// TODO.md ("Expansion connectors: one model on both machines").
 struct PC1600BusPins {
     uint16_t address = 0; // ROM offset (romRead) or I/O port number (io)
     bool forWrite = false;

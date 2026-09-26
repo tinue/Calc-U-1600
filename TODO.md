@@ -187,9 +187,9 @@ It is not a copy of the PC-1500's signals.
   hardware PV goes out through the SC7852 as PVOUT. The LH5803's PU has
   no documented path to the connector, because the SC7852's PU output is
   a Port 31H bit.
-- The rest of the list follows below: typed `Ce150Card*`/`Ce158Card*` in
-  `LH5803SharedMemory`, `isCe158Io`, `PC1600BusPins`, and two separate
-  60-pin paths on the PC-1600.
+- The rest of the list follows below: `PC1600BusPins` and two separate
+  60-pin paths on the PC-1600. (Typed `Ce150Card*`/`Ce158Card*`,
+  `isCe158Io` and the PC-1500's `kCe150IoBase` are gone, see below.)
 
 **Hardware facts** (Expansion-Connectors.md §2, §4):
 - Both connectors carry the address bus, data bus, PU/PV, INHIBIT, DME0,
@@ -205,7 +205,25 @@ It is not a copy of the PC-1500's signals.
   MREQ, M1, ELH, IOE. That's what the host drives, not what the card
   sees.
 
-**Today there are five paths, not two:**
+**Done 2026-09-26 (mechanical groundwork, docs/Expansion-Connectors-Plan.md;
+the pins reaching the cards are unchanged):**
+- One card-chain shell, `CardChain` (attach/detach, InhibitSource cache,
+  first-responder read/write), behind all four connector classes. The
+  40-pin plugs are chains of one. The debug/name virtuals moved to
+  `CardBase` so a later 60-pin card interface can share them.
+- `PC1500Memory` owns its `ExpansionConnector` and `SystemBus` by value;
+  the raw-pointer setters are gone.
+- The hosts no longer know which card sits where. `LH5803SharedMemory`
+  offers its peripheral accesses to one chain,
+  `PC1600Memory::lh5803PeripheralBus()`, instead of typed pointers and
+  `isCe158Io`. `PC1500Memory` gives the 60-pin bus first refusal on every
+  ME1 access instead of hard-coding the CE-150's LH5810 window. Debug
+  peeks ask `ExpansionCard::readHasSideEffects()`.
+- The PC-1600's two 60-pin halves (`lh5803PeripheralBus()` and
+  `ce1600pBus()`) now sit side by side in `PC1600Memory`, ready to become
+  one object once the signals are settled.
+
+**Paths before the groundwork above (five, not two):**
 
 | Connector | Code | Card interface |
 |---|---|---|
@@ -222,20 +240,21 @@ What's wrong with that:
   connector doesn't carry. On the 60-pin connector, contacts 16–18 are
   PU/D7/D6. It's harmless today because the CE-150 and CE-158 read only
   address, ME1 and PV/PU, but the model is wrong.
-- **The PC-1600 has no 60-pin connector object on the LH5803 side.**
+- ~~**The PC-1600 has no 60-pin connector object on the LH5803 side.**
   `LH5803SharedMemory` holds typed `Ce150Card*`/`Ce158Card*` pointers
   with a fixed order and knows the CE-158's address ranges (`isCe158Io`).
-  So the host knows the card.
+  So the host knows the card.~~ Done: a card chain, but still separate
+  from the SC7852 side and still fed hand-built `PinState`s.
 - **`PC1600BusPins` isn't a pin model.** It's a ROM offset plus a
   `bank5` flag. On real hardware, bank 4/5 at 4000–7FFF reaches the
   CE-1600P via the Port 31H page-B field on the PT/PU/PVOUT pins.
 - Because of this split, the same physical 60-pin connector exists twice
   on the PC-1600. That's why the CE-158 and the CE-1600P can't be
   attached together (see Feature ideas).
-- `MemorySlotConnector` and `ExpansionConnector` share ~25 lines of
+- ~~`MemorySlotConnector` and `ExpansionConnector` share ~25 lines of
   copy-pasted dispatch. `PC1500Memory` gets its `ExpansionConnector` and
   `SystemBus` by raw pointer from `PC1500Machine`, while `PC1600Memory`
-  owns its connectors by value.
+  owns its connectors by value.~~ Done.
 
 **Direction** (to confirm in the analysis below):
 - Keep the physical-contact principle (docs/Memory-Card-Definition-Spec.md:
@@ -303,8 +322,10 @@ What's wrong with that:
   / `SystemBus(variant)` built from the memory's own variant), with the
   machine's `expansionConnector()`/`systemBus()` forwarding. On the
   PC-1600, the single 60-pin connector has to be reachable from both
-  `PC1600Memory` and `LH5803SharedMemory`, so it probably belongs to
-  `PC1600Machine`, passed to both memories by reference.
+  `PC1600Memory` and `LH5803SharedMemory`. Done for the PC-1500. On the
+  PC-1600 both halves now live in `PC1600Memory`, which
+  `LH5803SharedMemory` already reaches (as it does for `uart()`), so the
+  merged object can stay there with no machine-level wiring.
 - `.card.yaml` files and `SoftwareDefinedCard` use 40-pin contact numbers,
   and that stays. Check that nothing in the 40-pin path changes when the
   60-pin side moves to its own contact numbering (the memory-card tests

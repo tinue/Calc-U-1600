@@ -215,7 +215,8 @@ public:
     // The PC-1500's CE-150 attached to the PC-1600's LH5803 compatibility
     // CPU: its ROM window (LH5803 0xA000-0xBFFF, PV=0) and LH5810 block
     // (LH5803 ME1 0xB008-0xB00F) are served by the same Ce150Card the
-    // PC-1500 uses, wired through LH5803SharedMemory. Mutually exclusive
+    // PC-1500 uses, plugged into PC1600Memory::lh5803PeripheralBus() (the
+    // LH5803 side of the 60-pin connector). Mutually exclusive
     // with the CE-1600P on the shared 60-pin bus concept -- attaching one
     // detaches the other. A chip/machine reset re-anchors the card but
     // leaves it attached (like the CE-1600P).
