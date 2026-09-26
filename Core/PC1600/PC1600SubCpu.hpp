@@ -183,12 +183,48 @@ public:
     /// Called whenever interruptRequest() changes.
     void setInterruptHook(std::function<void()> hook) { m_intHook = std::move(hook); }
 
+    // ── System power (SubCpu §4) ────────────────────────────────────────
+    //
+    // The sub-CPU alone decides whether the system has power. EAH (IOCS
+    // 20H, sent by the LH-5803's OFF routine) asks for system off; the
+    // sub-CPU cuts VCC once PCTRL -> Q0 confirms, which PC1600Machine
+    // models as "the bus-owning CPU has halted". While off, the ON key
+    // (KH), the wake-up timer with SWPON bit 1 and RS-232C CI with SWPON
+    // bit 0 turn it back on. Every power-on is a Z-80 reset, and the cause
+    // goes to the boot ROM through A5H (SubCpu §4.1).
+
+    bool systemOn() const { return m_systemOn; }
+    /// EAH has been received and the system is still on.
+    bool powerOffCommanded() const { return m_systemOn && m_powerOffCommanded; }
+    /// PCTRL -> Q0: VCC goes.
+    void switchSystemOff() { m_systemOn = false; m_powerOffCommanded = false; m_powerOnCause = 0; }
+    /// A reset that happens with power present (RESET, ALL RESET): the
+    /// system is on, and nothing is waiting to switch it off.
+    void markSystemOn() { m_systemOn = true; m_powerOffCommanded = false; m_powerOnCause = 0; }
+    /// The ON key's rising edge (KH). Ignored while the system is on --
+    /// then it is the BREAK key, polled by the ROM.
+    void onKeyPressed() { if (!m_systemOn) m_powerOnCause |= kCauseOnKey; }
+    /// While off: a pending power-on source switches the system on and
+    /// returns its cause (0 = stay off). The cause is then what A5H
+    /// reports to the boot ROM.
+    uint8_t takePowerOnCause();
+
+    // A5H answer bits (SubCpu §4.1).
+    static constexpr uint8_t kCauseOnKey  = 0x08;
+    static constexpr uint8_t kCauseWakeUp = 0x02;
+    static constexpr uint8_t kCauseCi     = 0x01;
+
     /// The analog-input jack's A/D value, answered to SRA1 (A9H).
     void setAnalogInput(uint8_t v) { m_analog = v; }
 
     /// The RS-232C CI (ring) line, sampled on Q1 (Service Manual §9-3).
     /// SRINP (A3H) reports it in bit 5, inverted.
-    void setCiLine(bool asserted) { m_ci = asserted; }
+    void setCiLine(bool asserted) {
+        // CI switches the system on when SWPON bit 0 allows it (the ROM's
+        // WAKE$(1)). The chip samples Q1 every 0.5 s; here it acts at once.
+        if (asserted && !m_ci && !m_systemOn && (m_powerOnMask & 0x01)) m_powerOnCause |= kCauseCi;
+        m_ci = asserted;
+    }
 
     uint8_t interruptMask() const { return m_irqMask; }
     bool passwordSet() const { return m_password[0] != 0; }
@@ -246,6 +282,9 @@ private:
     uint8_t  m_alarmSignal{0};            // SWAB nibble (6AH), stored only
     uint8_t  m_powerOnMask{0};            // SWPON nibble (A4H), SubCpu §7.2
     bool     m_ci{false};
+    bool     m_systemOn{true};
+    bool     m_powerOffCommanded{false};
+    uint8_t  m_powerOnCause{0};
     // 1 Jan, 00:00:00 -- an arbitrary but valid default, so a ROM that
     // reads the clock before anything sets it gets a well-formed answer
     // rather than an all-zero (month 0) one it would reject.

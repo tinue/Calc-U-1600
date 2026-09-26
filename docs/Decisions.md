@@ -72,6 +72,41 @@ The HLE sub-CPU answers the IOCS 25H probe (4FH/4EH → AAH/55H) and responds
 in 1.66 ms. Without the answer, every OUT (21H) waits for a PB5 edge and the
 0.5 s interrupt handler becomes 8-16 ms long.
 
+### PC-1600 power-off is a real power cut; power-on is a reset
+Once the sub-CPU has the system-off command (operand EAH, sent raw as 15H by
+the LH-5803's OFF routine) and the bus owner halts, `PC1600Machine` stops
+stepping the CPUs and only advances the always-on clocks (`m_poweredOff`).
+The ON key, the wake-up timer (SWPON bit 1) and CI (SWPON bit 0) switch it
+back on through an ordinary reset that reports the cause via A5H. The boot ROM
+then resumes through the FA08H signature, or runs the WAKE$ command string.
+- Don't bring back "ON resumes the halted CPU". WAKE$(0)/(1) and the ROM's
+  own resume logic only work through the reset.
+- `m_rtcAccum` isn't touched by any reset or power cycle: it's the
+  sub-CPU's divider.
+Source: SharpPC1500Reference PC-1600-SubCpu-LU57813P.md §4.1.
+
+### Sub-CPU SRIRQ clears on read; INT6 is a level
+`PC1600SubCpu` keeps events as pending bits. SRIRQ (A2H) returns and clears
+all of them, and port 32H bit 6 is `(pending & SWMSK) != 0`, live. The ROM's
+INT6 handler keeps the masked-off bits in F07EH itself, which only makes
+sense if the read clears them (P1-B3 419FH). The RAM disk was checked with
+this model (CE-1601M SAVE/NEW/LOAD).
+
+### Sub-CPU commands without an answer ACK on receipt
+Z9 pulses at the end of the window for commands with an answer and on
+receipt otherwise, while Z10 stays busy for the whole window (Service Manual
+§4-3, type (i)/(ii)). Both CPC flags (PSR b5 BUSY, b6 XBUSY) follow from it.
+
+### TC8576F receiver ignores the line while RxEN is off
+With RxEN = 0 the link isn't polled, so bytes wait in the host PTY instead of
+latching into RxD (data sheet: the receiver is disabled). Nothing is lost that
+the ROM would have read: it enables the receiver when it opens a channel.
+
+### TC8576F PSR bit 0 reads 0 when CS is on
+FAULT isn't inverted by the CPC but /SLCT and /PE are, so CS reads 0 when on
+while CD and DR read 1. The ROM flips only bit 0 (P2-B6 A526H `XOR 01H`).
+It looks inconsistent, but it is the hardware.
+
 ### PC-1600 INT is a level
 The level is `(intCause() & port 35H) != 0`, driven by `updateIntLine()`. It
 isn't an edge or a queued event. The ROM dispatcher reads the causes whatever

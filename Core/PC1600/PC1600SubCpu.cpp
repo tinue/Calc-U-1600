@@ -61,7 +61,19 @@ void PC1600SubCpu::compareTimers() {
         if (!fieldMatches(a.day, m_clock.day) || !fieldMatches(a.hour, m_clock.hour) ||
             !fieldMatches(a.minute, m_clock.minute)) continue;
         raise(kBit[i]);
+        // The wake-up timer also switches the system on, if SWPON bit 1
+        // allows it (WAKE$(0), romIII-3 6E68H sets bits 1 and 2).
+        if (i == WakeUp && !m_systemOn && (m_powerOnMask & 0x02)) m_powerOnCause |= kCauseWakeUp;
     }
+}
+
+uint8_t PC1600SubCpu::takePowerOnCause() {
+    if (m_systemOn || m_powerOnCause == 0) return 0;
+    const uint8_t cause = m_powerOnCause;
+    m_powerOnCause = 0;
+    m_systemOn = true;
+    m_resetCause = cause;
+    return cause;
 }
 
 void PC1600SubCpu::refreshInterrupt() {
@@ -301,9 +313,14 @@ bool PC1600SubCpu::execute(uint8_t op) {
             m_answerPending = true;
             return true;
 
+        // System off (IOCS 20H). The LH-5803's OFF routine sends it raw as
+        // 15H (rom1500 E540H) and then halts; see switchSystemOff().
+        case 0xEA:
+            m_powerOffCommanded = true;
+            return false;
+
         // Everything else: 53H (after IOCS 1EH), 9CH-9FH (IOCS 0CH-0FH), E5H
-        // (IOCS 26H), EAH (system off, IOCS 20H), the LH-5803's DCH. Accepted,
-        // no effect (SubCpu §8).
+        // (IOCS 26H), the LH-5803's DCH. Accepted, no effect (SubCpu §8).
         default: return false;
     }
 }

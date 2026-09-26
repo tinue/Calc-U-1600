@@ -284,7 +284,16 @@ public:
     /// releaseKey convention.
     void pressKey(const std::string& name);
     void releaseKey(const std::string& name);
+    /// The ON/BREAK key. While the machine runs it is BREAK (the ROM polls
+    /// its latch); while the system is off its rising edge powers it on.
     void setOnKeyPressed(bool pressed);
+    /// True while the sub-CPU has the system switched off (after the ROM's
+    /// OFF / auto power-off sequence). Only the always-on parts advance:
+    /// the sub-CPU's clock and timers, the LCD and RAM contents stay.
+    bool isPoweredOff() const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_poweredOff;
+    }
     /// A point-in-time copy of the display's pixel state -- safe to read on
     /// a different thread while the emulation loop is mid-step() (see
     /// PC1600DisplaySnapshot's own doc comment).
@@ -515,7 +524,12 @@ private:
     static_assert(kTStateHz * kTimer64AccumScale % 128 == 0, "64 Hz half period must be exact");
     int m_timer64Accum{0};
     bool m_timer64State{false};
-    bool m_onWakePending{false}; // ON pressed, not yet delivered -- see setOnKeyPressed()
+    // System power (SubCpu doc §4): the sub-CPU switched VCC off. step()
+    // then advances only the always-on clocks, kOffSliceTStates at a time,
+    // until a power-on source fires; power-on is a reset with a cause.
+    bool m_poweredOff{false};
+    static constexpr int kOffSliceTStates = 256;
+    void powerOnLocked();
 
     // The sub-CPU's 0.5 s tick. Its interrupt line (Z7 -> INT6, port 32H
     // bit 6) and the other events that drive it -- the 1 s tick and the

@@ -349,9 +349,9 @@ public:
     std::uint64_t ce1600pPlotRevision() const;
     void clearCE1600PPaper();
 
-    // True while the active machine is powered on -- PC1600: sc7852Owns()
-    // (false once the OFF-key/auto-power-off handoff parks it on the
-    // LH5803 side); PC1500(A): !cpu().poweredOff(). PlotterController polls
+    // True while the active machine is powered on -- PC1600: the sub-CPU
+    // has not switched the system off (isPoweredOff()); PC1500(A):
+    // !cpu().poweredOff(). PlotterController polls
     // this while waiting for a synthetic OFF keypress to actually land.
     bool isMachinePoweredOn() const;
 

@@ -656,7 +656,7 @@ void MachineController::clearCE1600PPaper() {
 }
 
 bool MachineController::isMachinePoweredOn() const {
-    if (m_pc1600) return m_pc1600->sc7852Owns();
+    if (m_pc1600) return !m_pc1600->isPoweredOff();
     if (m_pc1500) return !m_pc1500->cpu().poweredOff();
     return false;
 }

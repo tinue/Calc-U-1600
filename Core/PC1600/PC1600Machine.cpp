@@ -16,19 +16,31 @@ void PC1600Machine::resetLocked() {
     m_z80Mem.reset();
     m_z80Mem.keyboard().releaseAll();
     m_sc7852.reset();
-    m_onWakePending = false;
     m_lh5803.reset();
     m_arbiter.reset();
     m_debugStop.clear();
     m_timer64Accum = 0;
     m_timer64State = false;
     m_timer64EdgeCount = 0;
-    m_rtcAccum = 0; // the clock value itself survives reset (see seedClock())
+    // m_rtcAccum is the sub-CPU's divider, which runs on the always-on rail:
+    // no reset or power cycle touches it (seedClock() sets its phase).
     m_z80Mem.setTimer64Bit(false);
     m_lh5803Mem.reset();                  // clear the internal-PIO register file (0xF00x)
     m_lh5803Mem.updatePUPV(false, false); // match the just-reset LH5803 CPU
     if (m_ce150Card) m_ce150Card->reset(); // re-anchor, keep it attached (like the CE-1600P)
     m_ce158.reset();
+    // Any reset happens with power present.
+    m_poweredOff = false;
+    m_z80Mem.subCpu().markSystemOn();
+}
+
+void PC1600Machine::powerOnLocked() {
+    // The sub-CPU switches VCC on and holds the SC-7852 in reset for 30 ms
+    // (Service Manual §6-3). RAM and the LCD's RAM kept their contents on
+    // VGG; the boot ROM finds its FA08H signature and resumes, or runs the
+    // WAKE$ command string, depending on the cause the sub-CPU reports
+    // (takePowerOnCause() has set it).
+    resetLocked();
 }
 
 void PC1600Machine::reset() {
@@ -258,17 +270,23 @@ void PC1600Machine::clearCE150Paper() {
 
 int PC1600Machine::step() {
     std::lock_guard<std::mutex> lock(m_mutex);
-    // An ON press resumes whichever CPU owns the bus from its next HALT
-    // (see setOnKeyPressed()). Held until then, so a press landing between
-    // the SC7852's OUT (38H) and its HALT still wakes the LH5803 it hands to.
-    if (m_onWakePending) {
-        if (m_arbiter.sc7852Owns() && m_sc7852.halted()) {
-            m_sc7852.resumeFromHalt();
-            m_onWakePending = false;
-        } else if (!m_arbiter.sc7852Owns() && m_lh5803.halted()) {
-            m_lh5803.wakeFromHalt();
-            m_onWakePending = false;
-        }
+    if (m_poweredOff) {
+        // No CPU has power. The sub-CPU's clock, timers and the peripherals
+        // with their own supply keep going; a power-on source ends it.
+        advanceSharedClocks(kOffSliceTStates);
+        if (m_z80Mem.subCpu().takePowerOnCause()) powerOnLocked();
+        return kOffSliceTStates;
+    }
+    // The sub-CPU cuts power once it has the OFF command (EAH) and PCTRL ->
+    // Q0 confirms. The CPU side of that is not documented; the ROM's OFF
+    // routine halts the LH-5803 right after sending EAH (rom1500 E553H),
+    // so a halted bus owner stands for it.
+    if (m_z80Mem.subCpu().powerOffCommanded() &&
+        (m_arbiter.sc7852Owns() ? m_sc7852.halted() : m_lh5803.halted())) {
+        m_z80Mem.subCpu().switchSystemOff();
+        m_poweredOff = true;
+        advanceSharedClocks(kOffSliceTStates);
+        return kOffSliceTStates;
     }
     if (m_arbiter.sc7852Owns()) {
         int c = m_sc7852.step();
@@ -385,6 +403,7 @@ uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {
         // hand the bus to the other CPU: the cost step() returns belongs to
         // whichever CPU actually executed, i.e. the owner on entry.
         const bool z80Owns = sc7852Owns();
+        const bool wasOff = isPoweredOff();
         const int c = step(); // takes m_mutex per step, as PC1500Machine does
         if (m_debugStop.pending() == DebugStop::Breakpoint) break; // parked on a breakpoint: no time passed
         // The halted-step fallback must match whichever CPU actually owned
@@ -400,7 +419,10 @@ uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {
         // window m_rtcAccum's LH5803 branch (see step()) exists to cover.
         const uint64_t cycles = static_cast<uint64_t>(
             c > 0 ? c : (z80Owns ? SC7852::kHaltTickCycles : LH5801::kHaltTickCycles));
-        const uint64_t tstates = toTStates(cycles, z80Owns);
+        // A powered-off step (or the step that switches off) reports its
+        // slice in T-states already.
+        const bool offStep = wasOff || isPoweredOff();
+        const uint64_t tstates = offStep ? static_cast<uint64_t>(c) : toTStates(cycles, z80Owns);
         consumed += tstates;
         if (m_debugStop.pending() == DebugStop::Watch) break; // the watched access's instruction has completed
         // See setYieldHook(). step() takes m_mutex per call, so it isn't
@@ -438,34 +460,12 @@ void PC1600Machine::releaseKey(const std::string& name) {
 }
 void PC1600Machine::setOnKeyPressed(bool pressed) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    bool risingEdge = m_z80Mem.setOnKeyPressed(pressed);
-    // The ROM's auto-power-off / OFF-key power-down parks the SC7852 in a
-    // HALT with IFF1=1 but every *periodic* interrupt cause masked at port
-    // 35H (confirmed by a GUI freeze trace, 2026-09: last frame is
-    // `PC=5C22 OP=76` HALT, IFF1=1, reached right after an EI/RETI, and the
-    // 64 Hz key-scan and 0.5 s sub-CPU ticks this class would otherwise
-    // raise never fire again). Only the ON/BREAK line can wake it from
-    // there. `m_z80Mem.setOnKeyPressed()` just latches the pollable IF-b1
-    // bit (port 1BH) -- a HALTed CPU never polls it. ON has no port-32H
-    // cause bit, so it is not an SC7852 INT: a press sets m_onWakePending,
-    // and step() resumes whichever CPU owns the bus from its next HALT (it
-    // then polls the latch); the parked one is left for the arbiter. This
-    // is a stand-in -- the documented sources do not say how the real ON
-    // line ends a HALT (sub-CPU INT6, NMI and clock gating are all
-    // candidates), so resuming directly skips any ISR a real wake might
-    // run. Rising edge only, matching the latch and a real PB7 edge.
-    // After power-down settles the bus usually belongs to the LH5803, halted
-    // at 0xE555 (the SC7852 handed off at 5C1F before its own HALT); the
-    // LH5803's requestMaskableInterrupt() is IE-gated and IE is clear
-    // there, so its wake is wakeFromHalt(), the unconditional counterpart.
-    //
-    // Only a press that finds the bus owner halted, or the SC7852 between
-    // its OUT (38H) and HALT, is a wake. A press while the owner runs is a
-    // BREAK the ROM reads from the latch; kept pending, it would wake the
-    // machine from its next power-down park.
-    if (!risingEdge) return;
-    const bool ownerHalted = m_arbiter.sc7852Owns() ? m_sc7852.halted() : m_lh5803.halted();
-    if (ownerHalted || m_arbiter.switchRequestedBySC7852()) m_onWakePending = true;
+    // The ON/BREAK line: the SC-7852 sees its debounced level on PB7 and
+    // the latch at 1BH (BREAK), and the sub-CPU sees it on KH, where a
+    // rising edge powers a switched-off system on (Service Manual §9-3).
+    // step() does the power-on at its next call.
+    const bool risingEdge = m_z80Mem.setOnKeyPressed(pressed);
+    if (risingEdge && m_poweredOff) m_z80Mem.subCpu().onKeyPressed();
 }
 
 bool PC1600Machine::pokeMemory(uint16_t address, const uint8_t* data, size_t size) {
