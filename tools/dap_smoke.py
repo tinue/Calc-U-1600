@@ -165,9 +165,10 @@ def pc1600_run(port):
     dap = Dap(port)
     dap.request("initialize", adapterID="calcu1600")
     dap.wait_event("initialized")
-    dap.request("attach", preset=os.path.join(REPO, "examples/startup/default-pc1600.pc1600"),
-                program={"bin": dumper + ".bin", "listing": dumper + ".lst", "address": "0xC0C5",
-                         "after": "stopOnEntry"})
+    # No "address": the headerless .bin loads at the listing's lowest
+    # address (C0C5), as "Debug on PC-1600" relies on.
+    dap.request("attach", preset=os.path.join(REPO, "examples/debug/debug-pc1600.pc1600"),
+                program={"bin": dumper + ".bin", "listing": dumper + ".lst", "after": "stopOnEntry"})
     dap.request("configurationDone")
     stop = dap.wait_event("stopped", timeout=60)
     top = top_frame(dap, stop["threadId"])

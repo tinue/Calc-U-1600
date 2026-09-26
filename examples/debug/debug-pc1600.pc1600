@@ -1,0 +1,10 @@
+# Clean start for "Debug on PC-1600" in VS Code: a plain PC-1600 -- no
+# CE-1600P, no memory modules -- NEW'd, in RUN mode. The debugger then
+# loads the assembled program at its listing's address and types its CALL.
+
+model: PC-1600
+
+keys:
+  - key: mode
+  - type: NEW0
+  - key: mode

@@ -1,5 +1,6 @@
 #include "ProgramLoader.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <iterator>
 
@@ -23,6 +24,20 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
     const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     const machinecode::File file = machinecode::readFile(bytes);
 
+    // The listing first: a headerless file without an "address" loads at the
+    // listing's lowest address (the source's .org), so one launch
+    // configuration serves any program.
+    Listing listing;
+    const bool haveListing = (!req.listing.empty() || !req.symbols.empty()) &&
+                             loadListingWithSymbols(req.listing, req.source, req.symbols, &listing, &r.warnings);
+    bool hasAddress = req.hasAddress;
+    uint32_t address = req.address;
+    if (!hasAddress && file.header == machinecode::File::Header::None && haveListing && !listing.lines.empty()) {
+        address = listing.lines.front().addr;
+        for (const ListingLine& l : listing.lines) address = std::min<uint32_t>(address, l.addr);
+        hasAddress = true;
+    }
+
     // Build & Load's rules: a header length mismatch still loads, the
     // request's address and slot override, LH5803 code goes to the Z-80's
     // 8000-FFFF, and a PC-1600 slot is otherwise the BASIC area's (internal
@@ -30,8 +45,8 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
     machinecode::LoadOptions options;
     options.target = pc1600 ? machinecode::Target::PC1600 : machinecode::Target::PC1500;
     options.acceptLengthMismatch = true;
-    options.hasAddress = req.hasAddress;
-    options.address = req.address;
+    options.hasAddress = hasAddress;
+    options.address = address;
     options.lh5803 = pc1600 && req.thread == 2;
     if (req.slot >= 0) options.slot = machinecode::Slot(req.slot);
     else options.slotPolicy = machinecode::SlotPolicy::DeriveOrInternal;
@@ -40,7 +55,7 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
     switch (plan.error) {
         case machinecode::LoadError::None: break;
         case machinecode::LoadError::Empty: r.error = req.bin + " is empty"; return r;
-        case machinecode::LoadError::NeedsAddress: r.error = "a headerless program needs an \"address\""; return r;
+        case machinecode::LoadError::NeedsAddress: r.error = "a headerless program needs an \"address\" or a listing"; return r;
         case machinecode::LoadError::OutsideBank0:
         case machinecode::LoadError::PastEnd: r.error = "the program doesn't fit below 0x10000"; return r;
         case machinecode::LoadError::LhRange: r.error = "LH5803 code must sit in 0000-7FFF (the Z-80's 8000-FFFF)"; return r;
@@ -71,9 +86,7 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
     }
 
     // The listing and symbols bind to the loaded range; symbols alone too.
-    Listing listing;
-    if ((!req.listing.empty() || !req.symbols.empty()) &&
-        loadListingWithSymbols(req.listing, req.source, req.symbols, &listing, &r.warnings)) {
+    if (haveListing) {
         const std::string& name = req.listing.empty() ? req.symbols.front() : req.listing;
         r.binding = map.addLoaded(req.thread, std::move(listing), req.key, r.lo, r.hi, name);
         const int bad = map.verify(

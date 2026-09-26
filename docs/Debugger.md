@@ -73,8 +73,17 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
 1. **Install the extension:** run `tools/install_vscode_extension.sh`, then reload the VS Code window. The script packages a `.vsix` and installs it; a symlink into `~/.vscode/extensions` doesn't work with current VS Code.
 2. **Copy the workspace configuration:** `vscode/workspace/tasks.json` and `launch.json` go into the repository's `.vscode/`, which git ignores. If you already have your own files there, merge them in.
    - **tasks.json** has the build tasks. `sdas: build current file` runs sdaslh5801 → sdld → makebin; `zasm: build current file` runs zasm. Their problem matchers put assembler errors in the Problems view. Set `CALCU_SDCC_BIN` / `CALCU_ZASM` if the assemblers aren't in the default checkouts.
-   - **launch.json** has three configurations: *PC-1500: memtest (stock)*, *ROM: reset and stop* and *Calc-U-1600: attach*.
-3. **Add a launch configuration for your own program** (*Add Configuration… ▸ Calc-U-1600: …*). The memtest one:
+   - **launch.json** has five configurations: *Debug on PC-1600*, *Debug on PC-1500A*, *PC-1500: memtest (stock)*, *ROM: reset and stop* and *Calc-U-1600: attach*.
+3. **Debug the `.asm` in focus:** *Debug on PC-1600* and *Debug on PC-1500A* work for any program. With the `.asm` in focus, press F5. The session then:
+   - assembles it with the machine's assembler (zasm for the PC-1600, sdaslh5801 for the PC-1500A);
+   - does a clean start:
+     - *Debug on PC-1600:* a plain PC-1600, without the CE-1600P and without memory modules (`examples/debug/debug-pc1600.pc1600`);
+     - *Debug on PC-1500A:* a PC-1500A with a CE-163F (`examples/debug/debug-pc1500a.pc1500a`);
+   - loads the program at its `.org`;
+   - stops on its first instruction.
+
+   The configurations set no `address`. A headerless `.bin` without an `address` loads at the lowest address in its listing, which is the source's `.org`. Neither preset reserves memory for the program, so pick an `.org` that BASIC won't overwrite while you debug (the PC-1500A's &7C01 area, or above a `NEW` of your own). Build & Load assembles the file in focus but reloads the one the session started with, so keep that file in focus.
+4. **Add a launch configuration for your own program** (*Add Configuration… ▸ Calc-U-1600: …*). The memtest one:
    ```jsonc
    {
      "type": "calcu1600", "request": "attach", "name": "PC-1500: memtest (stock)", "port": 4711,
@@ -88,13 +97,13 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
    }
    ```
    The build task assembles the file in focus, so keep `memtest.asm` in focus when pressing F5. The preset gives a stock PC-1500 with the program's bytes reserved (`NEW&417D`). A configuration with a memory module would put BASIC's free memory under &40C5, and memtest would overwrite itself. Build & Load types `CALL &40C5` without `,X`, so set **X** (the pass count) under *Registers* at the entry stop.
-4. **Start debugging** (F5). The session runs through these steps:
+5. **Start debugging** (F5). The session runs through these steps:
    1. The task builds the program.
    2. **Clean start:** the preset sets the machine up. Without a `preset` in the configuration, the model's default preset from Settings is used, and refused if it's for another model, as when the app applies it; without one, All Reset and a boot to the prompt. Like the menu's loads and resets, it runs with the frame timer stopped and sets the clock from the host afterwards.
    3. The program is loaded directly, without the Load Machine Code dialog or its advice popup.
    4. Its `CALL` is typed and entered through the app's inbound typing API. The GUI's Paste Text never presses ENTER; this API does.
    5. VS Code stops at the program's first line.
-5. **After an edit, press Build & Load** (`⌘⌥L` / `Ctrl+Alt+L`). It rebuilds, does the same clean start, then loads the new binary and listing and starts it, without detaching. Breakpoints move with the code. Set `"cleanStart": false` in `program` to reload in place instead.
+6. **After an edit, press Build & Load** (`⌘⌥L` / `Ctrl+Alt+L`). It rebuilds, does the same clean start, then loads the new binary and listing and starts it, without detaching. Breakpoints move with the code. Set `"cleanStart": false` in `program` to reload in place instead.
 
 The attach settings:
 
@@ -104,7 +113,7 @@ The attach settings:
 | `preset` | a preset applied first; it rebuilds the machine |
 | `reset` | `none`, `reset` or `allReset`: reset without the boot run |
 | `stopOnEntry` | stop right after attaching; after a reset, that is before the first instruction |
-| `program` | Build & Load: `bin`, `listing`, `source`, `symbols`, `cpu` (`lh5801` / `z80` / `lh5803`), `address`, `slot` (`S0`–`S2`), `entry`, `after` (`none` / `call` / `stopOnEntry`), `cleanStart` (default `true`), and the bank qualifiers below |
+| `program` | Build & Load: `bin`, `listing`, `source`, `symbols`, `cpu` (`lh5801` / `z80` / `lh5803`), `address` (for a headerless file; default: the listing's lowest address), `slot` (`S0`–`S2`), `entry`, `after` (`none` / `call` / `stopOnEntry`), `cleanStart` (default `true`), and the bank qualifiers below |
 | `listings` | static listings, e.g. of ROM code: `{path, source, cpu, bank, me, pu, pv}` |
 | `symbols` | `.SYMBOLS:` tables: a path (main CPU), or `{path, cpu, bank, me, pu, pv}` like `listings` |
 | `buildTask` | the task Build & Load runs |

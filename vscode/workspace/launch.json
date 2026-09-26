@@ -4,6 +4,39 @@
     "version": "0.2.0",
     "configurations": [
         {
+            // Assembles the .asm in focus with zasm and loads it into a plain
+            // PC-1600 (no CE-1600P, no modules) at its .org; stops on the
+            // first instruction.
+            "type": "calcu1600",
+            "request": "attach",
+            "name": "Debug on PC-1600",
+            "port": 4711,
+            "preLaunchTask": "zasm: build current file",
+            "buildTask": "zasm: build current file",
+            "preset": "${workspaceFolder}/examples/debug/debug-pc1600.pc1600",
+            "program": {
+                "bin": "${fileDirname}/${fileBasenameNoExtension}.bin",
+                "listing": "${fileDirname}/${fileBasenameNoExtension}.lst",
+                "after": "stopOnEntry"
+            }
+        },
+        {
+            // Assembles the .asm in focus with sdaslh5801 and loads it into a
+            // PC-1500A + CE-163F at its .org; stops on the first instruction.
+            "type": "calcu1600",
+            "request": "attach",
+            "name": "Debug on PC-1500A",
+            "port": 4711,
+            "preLaunchTask": "sdas: build current file",
+            "buildTask": "sdas: build current file",
+            "preset": "${workspaceFolder}/examples/debug/debug-pc1500a.pc1500a",
+            "program": {
+                "bin": "${fileDirname}/${fileBasenameNoExtension}.bin",
+                "listing": "${fileDirname}/${fileBasenameNoExtension}.rst",
+                "after": "stopOnEntry"
+            }
+        },
+        {
             // examples/memtest.asm, stock build (ENTRY = &40C5). Focus
             // memtest.asm before pressing F5: the build task assembles the
             // current file. Set X (the pass count) at the entry stop.

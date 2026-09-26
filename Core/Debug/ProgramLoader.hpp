@@ -28,7 +28,7 @@ struct LoadRequest {
     std::vector<std::string> symbols; ///< extra .SYMBOLS: files
     int thread = 1;                   ///< the CPU it's for (PC-1600: 1 = Z-80, 2 = LH5803)
     BankKey key;
-    bool hasAddress = false;          ///< else the header's (required for a headerless file)
+    bool hasAddress = false;          ///< else the header's, else (headerless) the listing's lowest address
     uint32_t address = 0;             ///< in `thread`'s address space
     int slot = -1;                    ///< PC-1600 Z-80: 0 = S0, 1 / 2; -1 = from the address
     bool hasEntry = false;            ///< else the header's autorun address, else the load address

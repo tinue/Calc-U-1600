@@ -1,0 +1,14 @@
+# Clean start for "Debug on PC-1500A" in VS Code: a PC-1500A with a
+# CE-163F (16K) in the expansion slot, NEW'd, in RUN mode. The debugger
+# then loads the assembled program at its listing's address and types its
+# CALL.
+
+model: PC-1500A:A04
+
+memory-expansion:
+  - modulespec: CE-163F
+
+keys:
+  - key: cl
+  - type: NEW0
+  - key: mode

@@ -71,7 +71,7 @@
                   "source": { "type": "string", "description": "The listing's main source if it isn't <listing>.asm" },
                   "symbols": { "type": "array", "items": { "type": "string" } },
                   "cpu": { "enum": ["lh5801", "z80", "lh5803"] },
-                  "address": { "type": ["string", "number"], "description": "Load address (headerless files), e.g. \"0x40C5\"" },
+                  "address": { "type": ["string", "number"], "description": "Load address (headerless files), e.g. \"0x40C5\"; default: the listing's lowest address" },
                   "slot": { "enum": ["S0", "S1", "S2"] },
                   "entry": { "type": ["string", "number"] },
                   "after": { "enum": ["none", "call", "stopOnEntry"], "default": "stopOnEntry" },
