@@ -224,10 +224,19 @@ bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* e
     } else if (slot.isDouble()) {
         req.slot = slot.toInt();
     }
-    if (d.contains(QStringLiteral("entry"))) {
+    // A number is the entry; text is a symbol of the listing or an address,
+    // which the loader resolves once the listing is read.
+    const QJsonValue entry = d.value(QStringLiteral("entry"));
+    if (entry.isDouble()) {
         uint32_t e = 0;
-        req.hasEntry = parseAddress(d.value(QStringLiteral("entry")), &e);
+        req.hasEntry = parseAddress(entry, &e);
+        if (!req.hasEntry) {
+            *error = QStringLiteral("Bad \"entry\"");
+            return false;
+        }
         req.entry = uint16_t(e);
+    } else if (entry.isString()) {
+        req.entrySymbol = entry.toString().trimmed().toStdString();
     }
     const QString afterText = d.value(QStringLiteral("after")).toString(QStringLiteral("none"));
     const DebugController::After after = afterText == QLatin1String("call")          ? DebugController::After::Call

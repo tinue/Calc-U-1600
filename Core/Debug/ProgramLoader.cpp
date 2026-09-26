@@ -72,7 +72,36 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
     const uint32_t addr = plan.addr;
     r.lo = uint16_t(addr);
     r.hi = uint16_t(addr + plan.len - 1);
-    r.entry = req.hasEntry ? req.entry : uint16_t(file.autorunAddr ? file.autorunAddr : addr);
+    // The entry: the request's (an address, or a symbol of the listing --
+    // a name the listing defines wins over reading it as hex), else the
+    // header's auto-run address, else the listing's ENTRY if it lies in the
+    // loaded range, else the load address.
+    const auto symbol = [&](const std::string& name, uint16_t* v) {
+        const auto it = haveListing ? listing.symbols.find(name) : listing.symbols.end();
+        if (it == listing.symbols.end()) return false;
+        *v = it->second;
+        return true;
+    };
+    uint16_t entry = 0;
+    uint32_t parsed = 0;
+    if (req.hasEntry) {
+        r.entry = req.entry;
+    } else if (!req.entrySymbol.empty()) {
+        if (symbol(req.entrySymbol, &entry)) r.entry = entry;
+        else if (machinecode::parseHexAddress(req.entrySymbol, &parsed)) r.entry = uint16_t(parsed);
+        else {
+            r.error = "\"entry\": " + req.entrySymbol + " is neither a symbol of the listing nor an address";
+            return r;
+        }
+    } else if (file.autorunAddr) {
+        r.entry = uint16_t(file.autorunAddr);
+    } else if (symbol("ENTRY", &entry) && entry >= r.lo && entry <= r.hi) {
+        r.entry = entry;
+    } else {
+        if (symbol("ENTRY", &entry))
+            r.warnings.push_back("ENTRY is outside the loaded range, so the program starts at its load address");
+        r.entry = r.lo;
+    }
 
     // How BASIC starts it.
     uint32_t ramStart = 0, ramEnd = 0;

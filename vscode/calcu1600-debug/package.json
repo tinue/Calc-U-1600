@@ -73,7 +73,7 @@
                   "cpu": { "enum": ["lh5801", "z80", "lh5803"] },
                   "address": { "type": ["string", "number"], "description": "Load address (headerless files), e.g. \"0x40C5\"; default: the listing's lowest address" },
                   "slot": { "enum": ["S0", "S1", "S2"] },
-                  "entry": { "type": ["string", "number"] },
+                  "entry": { "type": ["string", "number"], "description": "Where it starts: an address, or a symbol of the listing. Default: the header's auto-run address, else the listing's ENTRY (if in the program), else the load address" },
                   "after": { "enum": ["none", "call", "stopOnEntry"], "default": "stopOnEntry" },
                   "cleanStart": { "type": "boolean", "default": true, "description": "Before each load: apply 'preset' (else the model's default preset, else All Reset)." },
                   "bank": { "type": "number", "description": "PC-1600 Z80 page bank 0-7" },

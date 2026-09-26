@@ -31,8 +31,9 @@ struct LoadRequest {
     bool hasAddress = false;          ///< else the header's, else (headerless) the listing's lowest address
     uint32_t address = 0;             ///< in `thread`'s address space
     int slot = -1;                    ///< PC-1600 Z-80: 0 = S0, 1 / 2; -1 = from the address
-    bool hasEntry = false;            ///< else the header's autorun address, else the load address
-    uint16_t entry = 0;
+    bool hasEntry = false;            ///< else entrySymbol, else the header's autorun address, else the
+    uint16_t entry = 0;               ///< listing's ENTRY (if in the loaded range), else the load address
+    std::string entrySymbol;          ///< a symbol of the listing, or an address as text
 };
 
 struct LoadResult {

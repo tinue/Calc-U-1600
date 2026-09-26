@@ -140,6 +140,13 @@ def program_run(port):
     check(body.get("start") == "0x40C5", f"calcu1600/load -> {body}")
     stop = dap.wait_event("stopped", timeout=30)
     check(stop.get("reason") == "entry" and top_frame(dap, 1).get("line") == 74, "reloaded and stopped at the entry again")
+    # Entry from the listing: its ENTRY by default, or a named symbol.
+    rst = os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest.rst")
+    body = dap.request("calcu1600/load", bin=os.path.join(REPO, "examples/memtest_stock.bin"), listing=rst, after="none")
+    check(body.get("start") == "0x40C5" and body.get("entry") == "0x40C5", f"load without address/entry -> {body}")
+    body = dap.request("calcu1600/load", bin=os.path.join(REPO, "examples/memtest_stock.bin"), listing=rst,
+                       entry="MEMTEST", after="none")
+    check(body.get("entry") == "0x40CC" and body.get("call") == "CALL &40CC", f"entry MEMTEST -> {body}")
     # Restart (the toolbar's): the attach configuration again -- preset,
     # load, entry stop -- and a breakpoint set before it still hits.
     dap.request("setBreakpoints", source={"path": MEMTEST_ASM}, breakpoints=[{"line": 88}])

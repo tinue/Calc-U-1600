@@ -80,7 +80,7 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
      - *Debug on PC-1600:* a plain PC-1600, without the CE-1600P and without memory modules (`examples/debug/debug-pc1600.pc1600`);
      - *Debug on PC-1500A:* a PC-1500A with a CE-163F (`examples/debug/debug-pc1500a.pc1500a`);
    - loads the program at its `.org`;
-   - stops on its first instruction.
+   - stops on its first instruction, or on `ENTRY` if the source defines that label (or equate) inside the program.
 
    The configurations set no `address`. A headerless `.bin` without an `address` loads at the lowest address in its listing, which is the source's `.org`. Neither preset reserves memory for the program, so pick an `.org` that BASIC won't overwrite while you debug (the PC-1500A's &7C01 area, or above a `NEW` of your own). Build & Load assembles the file in focus but reloads the one the session started with, so keep that file in focus.
 4. **Add a launch configuration for your own program** (*Add Configuration… ▸ Calc-U-1600: …*). The memtest one:
@@ -113,7 +113,7 @@ The attach settings:
 | `preset` | a preset applied first; it rebuilds the machine |
 | `reset` | `none`, `reset` or `allReset`: reset without the boot run |
 | `stopOnEntry` | stop right after attaching; after a reset, that is before the first instruction |
-| `program` | Build & Load: `bin`, `listing`, `source`, `symbols`, `cpu` (`lh5801` / `z80` / `lh5803`), `address` (for a headerless file; default: the listing's lowest address), `slot` (`S0`–`S2`), `entry`, `after` (`none` / `call` / `stopOnEntry`), `cleanStart` (default `true`), and the bank qualifiers below |
+| `program` | Build & Load: `bin`, `listing`, `source`, `symbols`, `cpu` (`lh5801` / `z80` / `lh5803`), `address` (for a headerless file; default: the listing's lowest address), `slot` (`S0`–`S2`), `entry` (an address or a symbol of the listing; default: the header's auto-run address, else the listing's `ENTRY` if it lies in the program, else the load address), `after` (`none` / `call` / `stopOnEntry`), `cleanStart` (default `true`), and the bank qualifiers below |
 | `listings` | static listings, e.g. of ROM code: `{path, source, cpu, bank, me, pu, pv}` |
 | `symbols` | `.SYMBOLS:` tables: a path (main CPU), or `{path, cpu, bank, me, pu, pv}` like `listings` |
 | `buildTask` | the task Build & Load runs |
