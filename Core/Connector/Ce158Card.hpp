@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "ExpansionCard.hpp"
+#include "../PC1500/PC1500Clocks.hpp"
 #include "../Serial/SerialLink.hpp"
 
 // ── CE-158 RS-232C / Centronics interface (60-pin bus) ──────────────────
@@ -89,9 +90,9 @@ public:
     static constexpr uint8_t kStatusTHRE = 0x80; // transmitter holding register empty
 
     /// The default unit tick() counts in: PC1500Machine ticks the card
-    /// with LH5801 cycles (same value as Upd1990ac::kCpuHz). The PC-1600
-    /// ticks it with SC7852 T-states and sets its own rate (setClockHz).
-    static constexpr double kCpuHz = 1300000.0;
+    /// with LH5801 cycles. The PC-1600 ticks it with SC7852 T-states and
+    /// sets its own rate (setClockHz).
+    static constexpr double kCpuHz = kPC1500CpuHz;
 
     /// Rate of the units tick() is given in. Recomputes the character time.
     void setClockHz(double hz) {

@@ -17,7 +17,11 @@
 //     b3:b2:b1  (3-bit)  bank select 0-7,   page B only (4000-7FFF)
 //     b6:b5:b4  (3-bit)  bank select 0-7,   page C only (8000-BFFF)
 //                        — b6 is ALSO, independently, the LHS1/LHS2/LHS3
-//                          remap-table selector (see lhsRemapRow()).
+//                          remap-table selector (Bank 0 windows, from
+//                          PC-1600-Memory-Bank-Switching.md Part 4; not
+//                          modelled, nothing in the ROM paths we run needs it):
+//                            b6=0: LHS1 A800, LHS2 B000, LHS3 B800
+//                            b6=1: LHS1 B000, LHS2 A800, LHS3 A000
 //     b7        1-bit    bank select, page D only (C000-FFFF)
 //
 //   Port 28H (write-only) — Slot 2 "vertical bank" select, 0-7 (superRAM
@@ -79,9 +83,6 @@ public:
     uint8_t pageCBank() const { return (m_port31 >> 4) & 0x07; }
     /// Page D (C000-FFFF) bank select: 0 or 1 (Port 31H bit 7).
     uint8_t pageDBank() const { return (m_port31 >> 7) & 0x01; }
-    /// LHS1/LHS2/LHS3 remap-table row (Port 31H bit 6 — same physical bit
-    /// as pageCBank()'s top bit, read independently for this purpose).
-    uint8_t lhsRemapRow() const { return (m_port31 >> 6) & 0x01; }
 
     // ── Port 28H ──────────────────────────────────────────────────────
     void    writePort28(uint8_t value) { m_port28 = value; }
@@ -172,18 +173,3 @@ private:
     uint32_t m_slot1MapChangeSeq{0};
     uint32_t m_slot2MapChangeSeq{0};
 };
-
-// LHS1/LHS2/LHS3 remap windows (Bank 0), selected by PC1600Bank::lhsRemapRow().
-// Both rows from PC-1600-Memory-Bank-Switching.md Part 4.
-struct PC1600LhsWindow {
-    uint16_t lhs1Base;
-    uint16_t lhs2Base;
-    uint16_t lhs3Base;
-};
-
-inline PC1600LhsWindow pc1600LhsWindow(uint8_t remapRow) {
-    if (remapRow == 0) {
-        return { 0xA800, 0xB000, 0xB800 };
-    }
-    return { 0xB000, 0xA800, 0xA000 };
-}

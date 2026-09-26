@@ -85,25 +85,6 @@ void test_port31_fields_are_fully_independent() {
     CHECK(bank.readPort31() == 0xBB);
 }
 
-// ── LHS1/LHS2/LHS3 remap table (Port 31H bit 6) ──────────────────────────
-
-void test_lhs_remap_table_both_rows() {
-    PC1600Bank bank;
-    bank.writePort31(0x00); // b6=0
-    CHECK(bank.lhsRemapRow() == 0);
-    PC1600LhsWindow row0 = pc1600LhsWindow(bank.lhsRemapRow());
-    CHECK(row0.lhs1Base == 0xA800);
-    CHECK(row0.lhs2Base == 0xB000);
-    CHECK(row0.lhs3Base == 0xB800);
-
-    bank.writePort31(0x40); // b6=1
-    CHECK(bank.lhsRemapRow() == 1);
-    PC1600LhsWindow row1 = pc1600LhsWindow(bank.lhsRemapRow());
-    CHECK(row1.lhs1Base == 0xB000);
-    CHECK(row1.lhs2Base == 0xA800);
-    CHECK(row1.lhs3Base == 0xA000);
-}
-
 // ── Port 28H: Slot 2 vertical bank ────────────────────────────────────────
 
 void test_port28_write_readback_round_trip() {
@@ -350,7 +331,6 @@ int run_pc1600_bank_tests() {
     test_port31_page_c_bank_is_bits_4_to_6();
     test_port31_page_d_bank_is_bit7_only();
     test_port31_fields_are_fully_independent();
-    test_lhs_remap_table_both_rows();
     test_port28_write_readback_round_trip();
     test_port3c_slot2map_mode_decode();
     test_port3c_slot1map_active();

@@ -230,12 +230,6 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   configure-and-build block. Fix: `tools/CliCommon.hpp` with
   `readFile`/`writeFile`/`printCe150Report`, and a shared build step
   (`--build-only` or a sourced `tools/build_app.sh`).
-- **Leftovers, one quick pass.**
-  - `PC1600LhsWindow`/`pc1600LhsWindow()`/`PC1600Bank::lhsRemapRow()` have
-    no callers outside their own test: delete all three plus the test, or
-    demote the remap table to a documentation comment.
-  - `Ce158Card.hpp` defaults its clock to the literal `1300000.0`; take
-    `kPC1500CpuHz` once Connector may include PC1500Clocks.hpp.
 - **PC-1600 LCD / sub-CPU timing model** *(behaviour/timing)*.
   `PC1600Display::kBusyClocks = 4` and `PC1600SubCpu::kResponseMicros =
   1660` were both fitted to real-unit benchmarks on 2026-09-23 while the
