@@ -386,9 +386,23 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   `PC1600Display::kBusyClocks = 4` and `PC1600SubCpu::kResponseMicros =
   1660` were both fitted to real-unit benchmarks on 2026-09-23 while the
   ~0.65 % BASIC-speed residual is still open (see the "PC-1600 BASIC runs
-  ~0.65% fast" known issue), so each may partly compensate for it. The
-  HD61102 datasheet bound on busy time should be checked against the
-  fitted 4 clocks; the 1.66 ms figure comes from the 0.5 s ISR's commands
+  ~0.65% fast" known issue), so each may partly compensate for it.
+
+  **LCD half.** The HD61102 datasheet (Hitachi *LCD Controller/Driver LSI
+  Data Book* U74, 1989, printed pp. 261–290; local copy
+  `PC-1600/Hitachi_HD61102_1989.pdf`, HD61203 alongside) bounds the busy
+  time at **1/fCLK ≤ T_BUSY ≤ 3/fCLK**, where fCLK is the φ1/φ2
+  frequency. The model keeps busy until the 4th "LCD-clock edge" of
+  φOS/6 = 216.7 kHz, i.e. 3–4 of those periods. Settle what an edge is
+  relative to fCLK before re-fitting. The HD61203 datasheet says that in
+  master mode fOSC = 2 × fφ, so if the 216.7 kHz signal is the HD61203's
+  oscillator input, fCLK is 108 kHz. Then 4 edges are ~2 fCLK cycles,
+  inside the bound. If 216.7 kHz is fCLK itself, the fit exceeds the
+  datasheet maximum and likely compensates for the residual. Check how
+  CK0 (port 37H b4) reaches the HD61203 (master/slave mode, FS pin) in the
+  Service Manual schematic.
+
+  **Sub-CPU half.** The 1.66 ms figure comes from the 0.5 s ISR's commands
   but is applied to every sub-CPU command (key scan, clock, IOCS). Chase
   the residual first, then re-fit once; consider a per-command response
   time. Verify with the scrolling-PRINT benchmark.
