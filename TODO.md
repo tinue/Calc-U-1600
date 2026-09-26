@@ -87,11 +87,17 @@ obligations.
 
 ## PC-1600 serial port
 
-- **/CTS and /DSR wiring (TC8576F pins 35/34) unknown.** The ROM reads
-  CS/CD/DR through the parallel status inputs (settled from the data
-  sheet and ROM, `PC-1600-CPC-TC8576.md` §9.5), but the chip's own /CTS
-  still gates its transmitter in hardware. The model lets the peer's CS
-  gate it. Needs the main-board schematic or a measurement.
+- **The model gates the TC8576F transmitter on the peer's CS; the real
+  chip's /CTS is tied to GND.** Settled 2026-09-26 from the Service Manual
+  §9-5 pin table (printed p. 33): pin 35 /CTS "Connected to GND", pin 34
+  /DSR "connected with the RXD line". The data sheet defines CTS on as
+  /CTS = 0, so the chip's transmitter, TxRDY and Tx interrupt are never
+  held off in hardware. The peer's CS reaches only the ROM, through
+  FAULT (`PC-1600-CPC-TC8576.md` §9.5). Fix: drop `m_cts` from the
+  transmit start, `ssr()` TxRDY and `refreshInterruptOutput()`, and keep it
+  on PSR FAULT. SSR bit 7 is the inverted RXD line, not the peer's DSR
+  (the ROM never reads it). Also close the open item in the corpus
+  (`PC-1600-CPC-TC8576.md` §12).
 - **RS-232C / SIO connector mux.** PRIME (the PRIM select) is tracked in
   `TC8576F::rs232Selected()`; both connectors still share the one
   `SerialLink`.
@@ -231,17 +237,42 @@ What's wrong with that:
   CE-150, CE-158, CE-1600P and CE-1600F all become `ExpansionCard`s on it.
 
 **Before fixing:**
-- Research the PC-1600 60-pin connector signals that the cards need:
-  - What the CE-150/CE-158 see there. Does LH5803 ME1 map to IOE (pin
-    59)? Is ELH the ownership signal? Which PC-1600 signal reaches the
-    CE-150's PV gate (see the CE-158 PARBAN@E224 PV fix)?
-  - Which pins tell bank 4 from bank 5 for the CE-1600P ROM, and how its
-    I/O ports (IORQ + address) show up.
-- Find out why `PC1500Memory` gets its `ExpansionConnector` *and* its
-  `SystemBus` by raw pointer (tests that build a bare `PC1500Memory`?
-  construction order in `PC1500Machine`?). Converge the connectors and
-  the bus ownership in one pass. Moving only the connector would leave the
-  same inconsistency on the bus.
+- Research the PC-1600 60-pin connector signals that the cards need.
+  **Mostly settled 2026-09-26** from the Service Manual's SC7852 pin table
+  (printed pp. 20–21) and memory map (§5-3):
+  - When the LH5803 owns the bus, the SC7852 pins turn into inputs that
+    carry the LH5803's signals: IORQ = ME1, MREQ = ME0, RD = OD,
+    WR = R/W, M1/RFSH made from OPF. So on the connector, IORQ (26) *is*
+    LH5803 ME1 while ELH (58) is low.
+  - IOE (59) is not raw ME1. It is a decoded strobe the SC7852 raises
+    only for LH5803 ME1 accesses to `xx00–xx0F` and `8000–FFFF`, with
+    one wait (LHWAIT), half a clock after ME1. It never fires for the
+    Z-80.
+  - ELH (58) low = LH5803 running: the ownership signal.
+  - PV: "the PV signal of the LH-5803 is directly sent by PVOUT"; ME1
+    `8000–BFFF` is the CE-150 at PVOUT = 0, the CE-158 at PVOUT = 1.
+  - **Still open:** the PC-1500 TRM gives 60-pin contact 15 = PV,
+    16 = PU; the PC-1600 TRM *and* Service Manual give 15 = PU,
+    16 = PVOUT. Taken literally, a CE-150 would see PU on its PV contact,
+    which contradicts the SM's PVOUT split above. Needs the CE-150's own
+    connector wiring (its Service Manual schematic) or a continuity check.
+    Not blocking: the model can route PVOUT to the cards' PV input on the
+    SM's word.
+  - Not yet looked at: which pins tell bank 4 from bank 5 for the
+    CE-1600P ROM, and how its I/O ports show up (the CE-1600P PDF).
+- ~~Why `PC1500Memory` gets its `ExpansionConnector` and `SystemBus` by
+  raw pointer.~~ Settled 2026-09-26: no reason survives. The setters date
+  from the squashed v0.1.0 import. `PC1500Machine` wires them right after
+  constructing `m_memory` (declared before the connectors, which is why
+  they can't be constructor arguments today). The bare `PC1500Memory`
+  instances in `lh5801_tests.cpp` never attach a card, so empty owned
+  connectors behave the same as the null pointers. Converge on
+  `PC1600Memory`'s pattern (owned by value, `ExpansionConnector(variant)`
+  / `SystemBus(variant)` built from the memory's own variant), with the
+  machine's `expansionConnector()`/`systemBus()` forwarding. On the
+  PC-1600, the single 60-pin connector has to be reachable from both
+  `PC1600Memory` and `LH5803SharedMemory`, so it probably belongs to
+  `PC1600Machine`, passed to both memories by reference.
 - `.card.yaml` files and `SoftwareDefinedCard` use 40-pin contact numbers,
   and that stays. Check that nothing in the 40-pin path changes when the
   60-pin side moves to its own contact numbering (the memory-card tests
@@ -362,12 +393,19 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   into a preset, viewing their contents, and watching `.floppy.yaml` for
   outside changes.
 
-  **Before fixing:** analyse `MemoryCardDefinition`'s parser.
-  `scanFloppyDirectory`'s trick (cut the text at `\nsides:`) relies on key
-  order, which hand-written `.card.yaml` files don't guarantee, and
-  `isRom()` may need the regions. The cost is decoding the
-  `initial-content` hex, so the likely target is a parse mode that skips
-  that decode. The rest follows from it:
+  **Parser analysis (done 2026-09-26).** `isRom()` needs only each
+  region's content kind, `by-bank` ranges and bank count, which
+  `parseRegion()` has before it reaches `initial-content`. Measured on a
+  synthetic superRAM 512K instance (`headless/cardparse/`): 2.2 MB of
+  random content costs 24 ms to parse fully, of which `parseYaml` is 8 ms
+  and the hex decode 16 ms. A sparse one (0.5 MB) costs 8 ms (4 + 4). The
+  YAML before `initial-content` takes 0.03 ms. Every card file today is
+  single-region with `initial-content` last, but the format doesn't
+  require that, so a text cut like the floppy's `\nsides:` isn't safe for
+  cards. Target: a catalogue parse mode that skips `parseInitialContent()`
+  and the ROM coverage check (≈3x cheaper). Only if that isn't enough,
+  let the YAML reader skip block-scalar bodies too. The rest follows from
+  it:
   - `PresetLoadResult` / the attach path return `{path, isTemplate,
     battery}`, not a bare path;
   - a shared `NamedFileCatalog`-level helper for lists / classify /
@@ -379,13 +417,22 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   `PC1600SubCpu` has the same kind of hook now (Z7 -> INT6), so the fix
   covers both.
 
-  **Before fixing:** check how the SC7852 samples INT (today
-  `PC1600Memory::updateIntLine()` pushes it via `setIntLine()`), and what
-  it would cost to read the level (`intCause() & 35H`, the UART's
-  `interruptOutput()` as a const expression) when the CPU checks for
-  interrupts. Target: nothing pushes updates. Moving the four wrappers
-  into `PC1600Memory` (UART access / tick / relink / reset each calling
-  `updateIntLine()`) only moves them.
+  **Sampling checked 2026-09-26.** The SC7852 reads `m_intLine` in one
+  place, the top of `step()` (and `serviceInterrupt()` from there), once
+  per instruction. Nothing else reads it except tests via `intLine()`.
+  All three inputs are already state: `m_intCause`, the UART's condition
+  (TxEN/CTS/TxRDY/masks/Rx flags plus `psr() & IntF`, the last of which
+  calls `m_sub.busy()`) and `PC1600SubCpu::interruptRequest()`
+  (`m_pending & m_irqMask`). So the SC7852 can ask a level source at the
+  top of `step()`. That's a few loads plus one indirect call per
+  instruction, and no change in timing because the push is synchronous
+  today. Target: the SC7852 holds an interrupt-level source
+  (`setIntLine()` stays as a test-only fixed source); `TC8576F::
+  interruptOutput()` becomes the const expression now inside
+  `refreshInterruptOutput()`; both hooks, `m_intOut` and the four
+  `…Impl()` wrappers go. Moving the four wrappers into `PC1600Memory`
+  (UART access / tick / relink / reset each calling `updateIntLine()`)
+  only moves them.
 - **PC-1600 LCD / sub-CPU timing model** *(behaviour/timing)*.
   `PC1600Display::kBusyClocks = 4` and `PC1600SubCpu::kResponseMicros =
   1660` were both fitted to real-unit benchmarks on 2026-09-23 while the
