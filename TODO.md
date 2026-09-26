@@ -136,7 +136,9 @@ obligations.
 
 Refactors and internal costs, not user-facing bugs. Take them when the
 area is next touched; entries marked *(behaviour/timing)* change what the
-emulator does and need a deliberate check.
+emulator does and need a deliberate check. Entries with a **Before
+fixing** step need that analysis first. A fix that only moves the cost
+somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
 
 - **Picker and peripheral-button plumbing is written twice.**
   - `CE1600PRomVersion` clones `PC1600RomVersion`, and
@@ -153,14 +155,23 @@ emulator does and need a deliberate check.
 
   Fix: one `NewOldRom` enum with to/from-string, one
   `warnOldRomFallback()`, one menu/combo builder parameterised by label and
-  slot whose exclusive-group actions connect to `toggled(true)` (which
-  drops the guards), one peripheral-button setter, and one static status
-  helper over a `PtySerialLink*`.
+  slot, one peripheral-button setter, and one static status helper over a
+  `PtySerialLink*`.
+
+  **Design constraint:** the four "already checked" guards must end up as
+  *one* guard inside the shared picker (call onPick only when the value
+  changes). Replacing them with `toggled(true)` plus `QSignalBlocker`s in
+  every sync setter only moves them.
 - **Connectors.** `MemorySlotConnector` and `ExpansionConnector` share ~25
   lines of copy-pasted dispatch shell (a small base class would hold it),
   and `PC1500Memory` holds its connector by raw pointer injected by
   `PC1500Machine` where `PC1600Memory` owns its connectors by value.
-  Converge both while in there.
+
+  **Before fixing:** find out why `PC1500Memory` gets both its
+  `ExpansionConnector` *and* its `SystemBus` injected by raw pointer (tests
+  that build a bare `PC1500Memory`? construction order in `PC1500Machine`?).
+  Converge the connectors and the bus ownership in one pass. Moving only
+  the connector would leave the same inconsistency on the bus.
 - **Card/floppy template-vs-instance rules are written twice and re-parse
   files.** `MemoryModuleManager` (`moduleLists`, `classifySlot`,
   `templateNames`, `saveSlotAs`) and `FloppyDiskManager` (`diskLists`,
@@ -170,12 +181,19 @@ emulator does and need a deliberate check.
   parsed: `classifySlot` fully parses the `.card.yaml` again (MB of
   `initial-content` hex for superRAM 512K) on every rebuild and twice per
   preset load; `saveSlotAs` parses the instance dir 3x; and
-  `refreshModuleCombos` scans + parses both dirs once per slot. Fix:
+  `refreshModuleCombos` scans + parses both dirs once per slot.
+
+  **Before fixing:** analyse `MemoryCardDefinition`'s parser.
+  `scanFloppyDirectory`'s trick (cut the text at `\nsides:`) relies on key
+  order, which hand-written `.card.yaml` files don't guarantee, and
+  `isRom()` may need the regions. The cost is decoding the
+  `initial-content` hex, so the likely target is a parse mode that skips
+  that decode. The rest follows from it:
   - `PresetLoadResult` / the attach path return `{path, isTemplate,
     battery}`, not a bare path;
-  - a header-only card catalogue parse (as `scanFloppyDirectory` does);
   - a shared `NamedFileCatalog`-level helper for lists / classify /
-    save-name validation, leaving the managers only Qt glue.
+    save-name validation, leaving the managers only Qt glue;
+  - one directory scan per refresh.
 - **Banked/unbanked split re-derived per access.**
   `r.banked ? r.banking.bankSize : r.capacity` and `? bankCount : 1`
   recur in `SoftwareDefinedCard.hpp` and `MemoryCardDefinition.hpp` (the
@@ -184,14 +202,26 @@ emulator does and need a deliberate check.
 - **PC-1600 program pointers are written cell by cell.** The fast loader
   pokes BASPRG_END and each PRGADR copy (`$FE3F`, 7b327cd) by hand, and
   the LH5803↔Z80 `+0x8000` mapping is repeated in `PC1600BasicLoader`,
-  `PC1600BasicTyper` (`toZ80`) and `PC1600ProgramPlacement`. One
-  `PC1600ProgramPointers` read/write helper. Better: run the ROM's own
-  PRGADR routine (jump table 02F4H) after poking.
+  `PC1600BasicTyper` (`toZ80`) and `PC1600ProgramPlacement`.
+
+  **Before fixing (ROM check):** PRGADR was found missing late, so the
+  real risk is other work-area bookkeeping the loader skips. Diff the whole
+  work area (F000-FFFF) after a typed program and after a fast-loaded one
+  (same preset, `pc1600_cli`), and list every cell that differs. Then
+  decide: a `PC1600ProgramPointers` read/write helper that covers all of
+  them, or running the ROM's own PRGADR routine (jump table 02F4H) after
+  poking.
 - **TC8576F interrupt plumbing.** Four `read/write/tick/reset` →
   `…Impl()` wrappers exist only to call `refreshInterruptOutput()`; the
   `std::function<void(bool)>` hook's one subscriber ignores the bool.
-  Make `interruptOutput()` a const expression and have `PC1600Memory`
-  call `updateIntLine()` after UART access / tick / relink / reset.
+
+  **Before fixing:** check how the SC7852 samples INT (today
+  `PC1600Memory::updateIntLine()` pushes it via `setIntLine()`), and what
+  it would cost to read the level (`intCause() & 35H`, the UART's
+  `interruptOutput()` as a const expression) when the CPU checks for
+  interrupts. Target: nothing pushes updates. Moving the four wrappers
+  into `PC1600Memory` (UART access / tick / relink / reset each calling
+  `updateIntLine()`) only moves them.
 - **Tool scripts and CLIs duplicate helpers.** `tools/pc1600_cli.cpp`
   hand-rolls fopen/fwrite for `--save-dir` and copies the CE-150 summary
   printf from `pc1500_cli.cpp`; `Ce158CliPeer.hpp` reads `--ce158-rx`
@@ -225,3 +255,8 @@ emulator does and need a deliberate check.
   path** *(timing-sensitive)*. Every fetch at 0x8000–0x9FFF runs resolve →
   readOpenBus → SystemBus decode → per-card `respondsToRead`. Option: a
   direct per-PU/PV ROM pointer from the card.
+
+  **Before fixing:** profile a CE-158-attached PC-1500 running BASIC
+  from the CE-158 ROM, and measure this path's share of host time. If the
+  gain is negligible, move this to docs/Decisions.md ("fine as is")
+  instead of adding a cache.
