@@ -480,30 +480,32 @@ void test_memory_pb5_survives_opb_read_modify_write() {
 
 // ── PC1600SubCpu (LU-57813P) ──────────────────────────────────────────
 
+// The values below are what the Z-80 writes to port 21H: the complement of
+// the sub-CPU operand (PC1600SubCpu's class comment). Operands in brackets.
 void test_subcpu_requests_answer_on_port33() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
     auto& bus = static_cast<SC7852Bus&>(mem);
 
-    // 5AH: the first request the main CPU issues -> A0H.
+    // 5AH [A5H, IOCS 15H]: the reset cause, the first request -> A0H.
     bus.writeIO(0x21, 0x5A);
     CHECK(mem.subCpu().answerPending());
     CHECK(bus.readIO(0x33) == 0xA0);
     CHECK(!mem.subCpu().answerPending());
 
-    // 57H (main supply) / 55H (CE-1600P pack): both must clear the ROM's
+    // 57H [A8H SRA0, main supply] / 55H [AAH SRA2, CE-1600P pack]: both must clear the ROM's
     // low-battery thresholds (AFH and A8H respectively).
     bus.writeIO(0x21, 0x57);
     CHECK(bus.readIO(0x33) == 0xC0);
     bus.writeIO(0x21, 0x55);
     CHECK(bus.readIO(0x33) == 0xC0);
 
-    // 56H answers the injected analog reading.
+    // 56H [A9H SRA1] answers the injected analog reading.
     mem.subCpu().setAnalogInput(0x7B);
     bus.writeIO(0x21, 0x56);
     CHECK(bus.readIO(0x33) == 0x7B);
 
-    // 5CH: bit5 = CI low (no serial peripheral), bit2 = password stored.
+    // 5CH [A3H SRINP]: bit5 = CI not asserted, bit2 = password stored.
     bus.writeIO(0x21, 0x5C);
     CHECK(bus.readIO(0x33) == 0x20);
 
@@ -520,8 +522,8 @@ void test_subcpu_nibble_stack_clock_roundtrip() {
     auto& bus = static_cast<SC7852Bus&>(mem);
 
     // Set the clock to 09-25 14:37:52 by pushing nine nibbles (each sent
-    // one's-complemented in its low nibble: 0x cmd resets the stack and
-    // pushes, 7x pushes) and committing with action 6DH.
+    // as its complement: 0x = F0H+n starts the block, 7x = 80H+n appends)
+    // and committing with 6DH [92H SWRT].
     const uint8_t nib[9] = {0x09, 0x2, 0x5, 0x1, 0x4, 0x3, 0x7, 0x5, 0x2};
     bus.writeIO(0x21, static_cast<uint8_t>(0x00 | (0x0F - nib[0])));
     for (int i = 1; i < 9; i++) {
@@ -548,8 +550,8 @@ void test_subcpu_nibble_stack_clock_roundtrip() {
     CHECK(dt.hour == 0x14);    // untouched
     CHECK(dt.second == 0x01);  // rewritten
 
-    // Read the clock back the way BASIC's `TIME` does: action 6CH publishes
-    // the nine nibbles, then one 6FH ("pop") per nibble moves each into the
+    // Read the clock back the way BASIC's `TIME` does: 6CH [93H SRRT] publishes
+    // the nine nibbles, then one 6FH [90H fetch] per nibble moves each into the
     // answer register for the following IN A,(33H). Expected clock now:
     // month 09, day 25, 14:37:01.
     const uint8_t want[9] = {0x09, 0x2, 0x5, 0x1, 0x4, 0x3, 0x7, 0x0, 0x1};
@@ -642,7 +644,7 @@ void test_subcpu_interrupt_mask_and_password() {
     PC1600Memory mem(bank);
     auto& bus = static_cast<SC7852Bus&>(mem);
 
-    // 5FH builds the SC-7852 interrupt mask from the first two nibbles.
+    // 5FH [A0H SWMSK] builds the interrupt mask from the first two nibbles.
     bus.writeIO(0x21, static_cast<uint8_t>(0x00 | (0x0F - 0x0A)));
     bus.writeIO(0x21, static_cast<uint8_t>(0x70 | (0x0F - 0x05)));
     bus.writeIO(0x21, 0x5F);
@@ -650,7 +652,7 @@ void test_subcpu_interrupt_mask_and_password() {
     bus.writeIO(0x21, 0x5E);            // read it back
     CHECK(bus.readIO(0x33) == 0xA5);
 
-    // 65H stores a password; 5CH then reports bit2 set alongside bit5.
+    // 65H [9AH, IOCS 0AH] stores a password; 5CH then reports bit2 set alongside bit5.
     CHECK(!mem.subCpu().passwordSet());
     bus.writeIO(0x21, static_cast<uint8_t>(0x00 | (0x0F - 0x07)));
     bus.writeIO(0x21, 0x65);

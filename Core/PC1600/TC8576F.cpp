@@ -93,7 +93,7 @@ uint8_t TC8576F::psr() const {
     // Bit 6: the sub-CPU is still processing the last command byte. The ROM
     // waits for it to clear before reading the answer (P2-B6 A98C). It is the
     // only reader of this bit; see PC1600SubCpu::kResponseMicros.
-    if (m_sub.busy()) v |= kPsrBUSY | kPsrXBUSY;
+    if (m_sub.busy() || !m_sub.acked()) v |= kPsrBUSY | kPsrXBUSY;
     // FAULT/SLCT/PE/P5V/PRIME/XBUSY/IntF: parallel-printer status, no
     // Centronics device modelled -- all clear.
     //
@@ -148,7 +148,8 @@ void TC8576F::writeRegisterImpl(uint8_t reg, uint8_t value) {
             return;
         case 0x01: // 21H -- parallel data out (PVOUT) == sub-CPU command byte
             m_parallelOut = value;
-            m_sub.command(value);
+            // /DATA1-8 are inverted: the sub-CPU sees the complement.
+            m_sub.strobe(static_cast<uint8_t>(~value));
             return;
         case 0x02: // 22H -- parameter register (byte -> pr[m_par])
             writeParameter(value);

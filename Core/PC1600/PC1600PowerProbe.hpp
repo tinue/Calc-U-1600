@@ -83,7 +83,7 @@ inline void onSubCpuCommand(uint8_t cmd) {
     if (!g_active) return;
     g_subCmdCount[cmd]++;
     if (g_verbose)
-        std::fprintf(stderr, "  [%s @%04X]  sub-CPU cmd %02X\n",
+        std::fprintf(stderr, "  [%s @%04X]  sub-CPU operand %02X\n",
                      g_ownsSc7852 ? "Z80 " : "5803", g_pc, cmd);
 }
 

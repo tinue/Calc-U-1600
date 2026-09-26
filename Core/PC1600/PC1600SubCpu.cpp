@@ -9,10 +9,10 @@
 #endif
 
 namespace {
-// The clock's wire layout, described once for both directions: a single
-// month nibble, then these four fields as BCD pairs (high nibble first).
-// Actions 6CH (publish) and 6DH (set) both walk this, so the field order
-// and the stack indices can't drift apart between them.
+// The clock's wire layout (SubCpu §7.3), described once for both
+// directions: a single month nibble, then these four fields as BCD pairs
+// (high nibble first). SWRT (92H) and SRRT (93H) both walk this, so the
+// field order can't drift apart between them.
 constexpr uint8_t PC1600SubCpu::DateTime::* kClockPairFields[] = {
     &PC1600SubCpu::DateTime::day,
     &PC1600SubCpu::DateTime::hour,
@@ -36,160 +36,61 @@ void PC1600SubCpu::tickOneSecond() {
     m_year++;
 }
 
-void PC1600SubCpu::push(uint8_t nibble) {
-    if (m_sp >= kStackSize) return; // bounded; see kStackSize's own comment
-    m_stack[m_sp++] = static_cast<uint8_t>(nibble & 0x0F);
+void PC1600SubCpu::appendParam(uint8_t nibble) {
+    if (m_paramLen >= kParamMax) return; // no ROM block is longer
+    m_param[m_paramLen++] = static_cast<uint8_t>(nibble & 0x0F);
 }
 
-void PC1600SubCpu::command(uint8_t cmd) {
+void PC1600SubCpu::strobe(uint8_t operand, int kiDelayTStates) {
 #ifdef PC1600_POWER_PROBE
-    pc1600probe::onSubCpuCommand(cmd);
+    pc1600probe::onSubCpuCommand(operand);
 #endif
-    // Every command byte crosses the parallel port and starts the BUSY
-    // window firmware paces the handshake against (see busy()).
-    m_busyTStatesLeft = kBusyTStates;
-
-    const uint8_t oper  = static_cast<uint8_t>(cmd >> 4);
-    const uint8_t value = static_cast<uint8_t>(cmd & 0x0F);
-
-    switch (oper) {
-        // The nibble arrives one's-complemented within its nibble (0x0F -
-        // value). 0x is exactly 7x preceded by a stack reset.
-        case 0x0: m_sp = 0; [[fallthrough]];
-        case 0x7: push(static_cast<uint8_t>(0x0F - value)); return;
-
-        // 4FH / 4EH: the boot ROM's sub-CPU capability probe, timer IOCS
-        // 25H (romVI-6 A951). It sends B0H then B1H (complemented on the
-        // wire) and expects AAH then 55H. A sub-CPU that answers both gets
-        // F0B8H bit 0 set, and from then on command bytes go straight out.
-        // Otherwise the ROM (A9FB) holds every byte until the next 64 Hz
-        // PB5 transition. That costs up to 7.8 ms per byte, and inside the
-        // 0.5 s ISR (two bytes, ~16 ms) it swallows the PB5 edges the BEEP
-        // repeat loop counts. A real unit's BEEP repeats never slip a tick,
-        // so it takes the fast path.
-        case 0x4:
-            if (value == 0x0F) { m_answer = 0xAA; m_answerPending = true; }
-            else if (value == 0x0E) { m_answer = 0x55; m_answerPending = true; }
-            return;
-        case 0x5: request(value); return;
-        case 0x6: action(value);  return;
-
-        // 9x begins an ALARM$/WAKE$ definition and Ax ends an "ON ADIN"
-        // sequence. Both are accepted and dropped -- the state they would
-        // set up is not modelled (see the class comment's scope note).
-        case 0x9: case 0xA: return;
-
-        // Cx/3 parks the nibble stack on the analog-input area.
-        case 0xC: if (value == 0x03) m_sp = kAnalogStackBase; return;
-
-        default: return; // unknown operation: ignored, like the real part
-    }
+    const bool answers = execute(operand);
+    // KI arrives kiDelayTStates after the Z-80's write. The sub-CPU is busy
+    // from then for its response time; Z9 pulses at the end for a command
+    // with an answer, on receipt otherwise (see busy()/acked()).
+    m_elapsed   = 0;
+    m_busyFrom  = kiDelayTStates;
+    m_busyUntil = kiDelayTStates + kBusyTStates;
+    m_ackAt     = answers ? m_busyUntil : kiDelayTStates;
 }
 
-void PC1600SubCpu::request(uint8_t which) {
-    switch (which) {
-        // 51H/53H: issued during initialisation, each followed immediately
-        // by a read. The ROM only checks that *an* answer comes back; the
-        // meaning of the value is not known from any source available here.
-        case 0x01: case 0x03: m_answer = 0x00; break;
-
-        // 55H: CE-1600P Ni-Cd battery voltage. The ROM judges "low battery"
-        // below A8H, so C0H reads as a healthy pack.
-        case 0x05: m_answer = 0xC0; break;
-
-        // 56H: raw analog input port.
-        case 0x06: m_answer = m_analog; break;
-
-        // 57H: PC-1600 main-unit supply voltage. Low battery below AFH,
-        // released again above BEH -- C0H is clear of both thresholds.
-        case 0x07: m_answer = 0xC0; break;
-
-        // 5AH: the first request the boot ROM ever issues -- the reset
-        // cause. Bit 5 tells the ROM whether to run a full ALL RESET
-        // (wipe clock + RAM + settings) or preserve everything. See
-        // setResetCauseAllReset()/setResetCauseSimple().
-        case 0x0A: m_answer = m_resetCause; break;
-
-        // 5CH: signal states, both reported inverted -- bit5 = 0 when the
-        // CI (serial carrier-in) line is high, bit2 = 0 when the PASSWORD
-        // line is high. No serial peripheral is modelled, so CI reads low
-        // (bit5 = 1); bit2 tracks whether a password has been stored.
-        case 0x0C:
-            m_answer = static_cast<uint8_t>(0x20 | (passwordSet() ? 0x04 : 0x00));
-            break;
-
-        // 5DH: the sub-CPU's interrupt-cause byte (SRIRQ). The RAM-disk /
-        // file IOCS readiness handshake (romIV-6 A8F0-region) polls this
-        // and gates on bit 1 = the 0.5 s timer signal, which the real
-        // sub-CPU runs as a free square wave off its own crystal -- the
-        // firmware waits to see it toggle (retries ~24x, then times out to
-        // BASIC ERROR 163). Driven here by PC1600Machine's 0.5 s
-        // accumulator via setHalfSecondSignal(); the other cause bits stay
-        // 0 until something raises them.
-        case 0x0D: m_answer = m_halfSecondSignal ? 0x02 : 0x00; break;
-        // 5EH: read back the SC-7852 interrupt mask set via 5FH.
-        case 0x0E: m_answer = m_irqMask;  break;
-
-        // 5FH: set the SC-7852 interrupt mask from the first two stacked
-        // nibbles (high nibble first).
-        case 0x0F:
-            m_irqMask = static_cast<uint8_t>((m_stack[0] << 4) | (m_stack[1] & 0x0F));
-            break;
-
-        // Unknown request: leave the previous answer standing rather than
-        // inventing one, matching how the real part keeps driving its last
-        // value (see readAnswer()'s comment).
+bool PC1600SubCpu::execute(uint8_t op) {
+    // Parameter nibbles, SubCpu §7.1.
+    switch (op & 0xF0) {
+        case 0xF0: // first nibble of a block
+            m_paramLen = 0;
+            m_prefix = 0;
+            appendParam(op);
+            return false;
+        case 0x80: // next nibble
+            appendParam(op);
+            // SWAB (6AH) takes its value as one trailing nibble; SWA1A (3CH)
+            // takes its two threshold bytes as four (P2-B6 A8B4H, A944H).
+            if (m_prefix == 0x6A) m_alarmSignal = static_cast<uint8_t>(op & 0x0F);
+            if (m_prefix == 0x3C && m_paramLen == 4) {
+                m_adinLow  = static_cast<uint8_t>((param(0) << 4) | param(1));
+                m_adinHigh = static_cast<uint8_t>((param(2) << 4) | param(3));
+            }
+            return false;
         default: break;
     }
-    m_answerPending = true;
-}
 
-void PC1600SubCpu::action(uint8_t which) {
-    switch (which) {
-        // 64H: clear the password -- but only if the nibbles just pushed
-        // match the stored one, i.e. the caller proved it knew the password.
-        case 0x04:
-            if (std::memcmp(m_password.data(), m_stack.data(), kPasswordLen) == 0) {
-                m_password[0] = 0;
-            }
-            return;
+    switch (op) {
+        // Fetch the next result nibble (A9B6H). The ROM writes the raw 6FH
+        // without its usual complement, so this is operand 90H.
+        case 0x90:
+            setAnswer(m_resultPos < m_resultLen ? m_result[m_resultPos++] : 0x00);
+            return true;
 
-        // 65H: store a new password from the stack.
-        case 0x05:
-            std::memcpy(m_password.data(), m_stack.data(), kPasswordLen);
-            return;
+        // SBEEP (IOCS 01H): key click on the F pin. The tone is unmeasured,
+        // so it isn't generated (TODO.md, F-pin tones).
+        case 0x91: return false;
 
-        // 67H/69H/6BH: commit ALARM$ / TIME_CHECK$ / WAKE$(0) from the
-        // stack. Accepted and dropped -- not modelled (class comment).
-        case 0x07: case 0x09: case 0x0B: return;
-
-        // 6CH: "ask for time" -- publish the clock into the stack as nine
-        // nibbles, then rewind so the Z-80 can read them back out.
-        case 0x0C:
-            m_sp = 0;
-            push(m_clock.month);
-            for (auto field : kClockPairFields) {
-                const uint8_t v = m_clock.*field;
-                push(static_cast<uint8_t>(v >> 4));
-                push(static_cast<uint8_t>(v & 0x0F));
-            }
-            m_sp = 0;
-            return;
-
-        // 6FH: "pop" -- move the next stacked nibble into the answer
-        // register so the following IN A,(33H) reads it. This is the read
-        // side of 6CH: the ROM sends one 6FH per nibble to walk the nine
-        // clock nibbles back out. Without it, TIME$ always reads as zeros.
-        case 0x0F:
-            m_answer = (m_sp < kStackSize) ? m_stack[m_sp] : 0x00;
-            if (m_sp < kStackSize) m_sp++;
-            m_answerPending = true;
-            return;
-
-        // 6DH: set the clock from the stack. A field whose nibbles are all
-        // 1s (0FH) means "leave this one alone" -- that is how the ROM
-        // implements a partial TIME$ assignment.
-        case 0x0D: {
+        // SWRT (IOCS 02H): set the clock from the 9-nibble block. A field
+        // whose nibbles are all F means "leave this one alone" -- that is how
+        // the ROM implements a partial TIME$ / DATE$ assignment.
+        case 0x92: {
             // The boot ROM unconditionally re-inits the calendar to
             // 1 Jan 00:00:00 on cold start -- our reset() wipes internal
             // RAM, so it always reads as a dead-battery cold boot. When
@@ -197,36 +98,142 @@ void PC1600SubCpu::action(uint8_t which) {
             // let exactly that one default write pass through without
             // touching the clock: on hardware the RTC keeps running on
             // standby power and this cold-init only fires with a truly
-            // dead clock. Any other 6DH -- a real TIME$= -- disarms the
+            // dead clock. Any other SWRT -- a real TIME$= -- disarms the
             // guard and is applied normally.
             if (m_hostSeedGuard) {
                 m_hostSeedGuard = false;
-                const bool coldDefault =
-                    m_stack[0] == 0x01 && m_stack[1] == 0x00 && m_stack[2] == 0x01 &&
-                    m_stack[3] == 0x00 && m_stack[4] == 0x00 && m_stack[5] == 0x00 &&
-                    m_stack[6] == 0x00 && m_stack[7] == 0x00 && m_stack[8] == 0x00;
-                if (coldDefault) return;
+                static constexpr uint8_t kColdDefault[9] = {1, 0, 1, 0, 0, 0, 0, 0, 0};
+                bool coldDefault = m_paramLen == 9;
+                for (size_t i = 0; i < 9 && coldDefault; i++) coldDefault = param(i) == kColdDefault[i];
+                if (coldDefault) return false;
             }
-            if (m_stack[0] != 0x0F) m_clock.month = m_stack[0];
+            if (param(0) != 0x0F) m_clock.month = param(0);
             for (size_t i = 0; i < kClockPairCount; i++) {
                 const size_t hi = 1 + 2 * i; // month occupies index 0
-                if (m_stack[hi] == 0x0F || m_stack[hi + 1] == 0x0F) continue;
+                if (param(hi) == 0x0F || param(hi + 1) == 0x0F) continue;
                 m_clock.*kClockPairFields[i] =
-                    static_cast<uint8_t>(((m_stack[hi] & 0x0F) << 4) |
-                                          (m_stack[hi + 1] & 0x0F));
+                    static_cast<uint8_t>((param(hi) << 4) | param(hi + 1));
             }
-            return;
+            return false;
         }
 
-        default: return;
+        // SRRT (IOCS 03H): publish the clock as nine nibbles for 90H to fetch.
+        case 0x93:
+            m_resultLen = 0;
+            m_result[m_resultLen++] = m_clock.month;
+            for (auto field : kClockPairFields) {
+                const uint8_t v = m_clock.*field;
+                m_result[m_resultLen++] = static_cast<uint8_t>(v >> 4);
+                m_result[m_resultLen++] = static_cast<uint8_t>(v & 0x0F);
+            }
+            m_resultPos = 0;
+            return false;
+
+        // SWWT / SWA1T / SWA2T (IOCS 04H/06H/08H, WAKE$(0) / ON TIME$ /
+        // ALARM$) and their reads: accepted and dropped for now.
+        case 0x94: case 0x95: case 0x96: case 0x97: case 0x98: case 0x99:
+            return false;
+
+        // IOCS 0AH: store the PASS password (8 bytes = 16 nibbles).
+        case 0x9A:
+            for (size_t i = 0; i < kPasswordLen; i++) m_password[i] = param(i);
+            return false;
+        // IOCS 0BH: clear it -- but only if the nibbles just sent match the
+        // stored ones, i.e. the caller proved it knew the password. The ROM
+        // then checks SRINP bit 2 (A905H).
+        case 0x9B: {
+            bool match = true;
+            for (size_t i = 0; i < kPasswordLen && match; i++) match = m_password[i] == param(i);
+            if (match) m_password[0] = 0;
+            return false;
+        }
+
+        // SWMSK (IOCS 10H): the interrupt mask, high nibble first.
+        case 0xA0:
+            m_irqMask = static_cast<uint8_t>((param(0) << 4) | param(1));
+            return false;
+        // SRMSK (IOCS 11H).
+        case 0xA1: setAnswer(m_irqMask); return true;
+        // SRIRQ (IOCS 12H): bit 1 = the 0.5 s signal. See
+        // toggleHalfSecondSignal().
+        case 0xA2: setAnswer(m_halfSecondSignal ? 0x02 : 0x00); return true;
+        // SRINP (IOCS 13H): bit 5 = 0 while CI is asserted (P2-B6 A396H
+        // inverts it into INSTAT), bit 2 = a password is set (A905H).
+        case 0xA3:
+            setAnswer(static_cast<uint8_t>((m_ci ? 0x00 : 0x20) | (passwordSet() ? 0x04 : 0x00)));
+            return true;
+        // SWPON (IOCS 14H): the power-on condition nibble (SubCpu §7.2).
+        case 0xA4: m_powerOnMask = param(0); return false;
+        // IOCS 15H: the reset / power-on cause, SubCpu §4.1.
+        case 0xA5: setAnswer(m_resetCause); return true;
+
+        // SRA0 (IOCS 18H): PC-1600 main supply. The 0.5 s ISR (P1-B3 41DAH)
+        // sets low battery below AFH and clears it at BEH and above; C0H is
+        // clear of both.
+        case 0xA8: setAnswer(0xC0); return true;
+        // SRA1 (IOCS 19H): the analog-input jack.
+        case 0xA9: setAnswer(m_analog); return true;
+        // SRA2 (IOCS 1AH): the second supply input, KC2 = the CE-1600P pack
+        // (Service Manual §9-3). The ROM judges it low below A8H.
+        case 0xAA: setAnswer(0xC0); return true;
+        // IOCS 1CH, read once at init; the ROM only needs an answer back.
+        case 0xAC: setAnswer(0x00); return true;
+        // IOCS 1EH's execute byte: analog-input interrupt mode, stored nowhere.
+        case 0xAE: setAnswer(0x00); return false;
+
+        // IOCS 25H: the boot ROM's capability probe (P2-B6 A951H). It sends
+        // B0H then B1H and expects AAH then 55H. A sub-CPU that answers both
+        // gets F0B8H bit 0 set, and from then on command bytes go straight
+        // out. Otherwise the ROM (A9FBH) holds every byte until the next
+        // 64 Hz PB5 transition. That costs up to 7.8 ms per byte, and inside
+        // the 0.5 s ISR (two bytes, ~16 ms) it swallows the PB5 edges the
+        // BEEP repeat loop counts. A real unit's BEEP repeats never slip a
+        // tick, so it takes the fast path (docs/Decisions.md).
+        case 0xB0: setAnswer(0xAA); return true;
+        case 0xB1: setAnswer(0x55); return true;
+
+        // SRPON (IOCS 21H): the SWPON nibble, fetched with one 90H.
+        case 0x69:
+            m_result[0] = m_powerOnMask;
+            m_resultLen = 1;
+            m_resultPos = 0;
+            return false;
+        // SWAB / SRAB (IOCS 22H/23H): followed by 80H+n to write the
+        // alarm-signal nibble, or by a 90H fetch to read it.
+        case 0x6A:
+            m_prefix = 0x6A;
+            m_result[0] = m_alarmSignal;
+            m_resultLen = 1;
+            m_resultPos = 0;
+            return false;
+        // SWA1A (IOCS 24H): the analog-input thresholds follow as four
+        // 80H+n nibbles.
+        case 0x3C:
+            m_prefix = 0x3C;
+            m_paramLen = 0;
+            return false;
+
+        // Reads whose meaning no source gives (IOCS 16H/17H/1BH/1DH/1FH,
+        // SubCpu §8): the ROM reads 33H after them, which finds the previous
+        // answer still standing.
+        case 0xA6: case 0xA7: case 0xAB: case 0xAD: case 0xAF:
+            m_answerPending = true;
+            return true;
+
+        // Everything else: 53H (after IOCS 1EH), 9CH-9FH (IOCS 0CH-0FH), E5H
+        // (IOCS 26H), EAH (system off, IOCS 20H), the LH-5803's DCH. Accepted,
+        // no effect (SubCpu §8).
+        default: return false;
     }
 }
 
 uint8_t PC1600SubCpu::readAnswer() {
     // Reading the answer register ends the parallel transaction -- close
-    // the BUSY window even if step()'s T-state pump hasn't run (standalone
-    // SC7852 + PC1600Memory use, e.g. sc7852_tests' boot smoke).
-    m_busyTStatesLeft = 0;
+    // the handshake window even if step()'s T-state pump hasn't run
+    // (standalone SC7852 + PC1600Memory use, e.g. sc7852_tests' boot
+    // smoke). The ROM only reads 33H once Z9 has pulsed, so on a timed
+    // machine this changes nothing.
+    m_elapsed = m_busyUntil;
     m_answerPending = false;
     return m_answer;
 }

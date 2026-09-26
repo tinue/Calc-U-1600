@@ -304,9 +304,9 @@ int PC1600Machine::step() {
             // same 64 Hz signal, see kTimer64EdgesPerHalfSecond.
             if (++m_timer64EdgeCount == kTimer64EdgesPerHalfSecond) {
                 m_timer64EdgeCount = 0;
-                // The sub-CPU's 0.5 s signal, visible in bit 1 of request
-                // 5DH, is a free-running level -- toggle it every period.
-                // The file/RAM-disk IOCS readiness handshake polls 5DH and
+                // The sub-CPU's 0.5 s signal, visible in bit 1 of
+                // SRIRQ (A2H), is a free-running level -- toggle it every period.
+                // The file/RAM-disk IOCS readiness handshake polls SRIRQ and
                 // waits for this to change.
                 m_z80Mem.subCpu().toggleHalfSecondSignal();
                 m_z80Mem.latchSubCpuInterruptCause();

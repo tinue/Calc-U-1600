@@ -185,7 +185,7 @@ void test_yield_hook_fires_per_interval_across_runcycles_calls() {
 }
 
 void test_half_second_signal_toggles_off_the_05s_accumulator() {
-    // The sub-CPU's 0.5 s signal (bit 1 of request 5DH) must actually
+    // The sub-CPU's 0.5 s signal (bit 1 of SRIRQ, A2H) must actually
     // toggle for the file/RAM-disk IOCS readiness handshake to progress --
     // step()'s 0.5 s accumulator drives it.
     PC1600Machine m;
