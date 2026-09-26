@@ -152,6 +152,9 @@ public:
         // the chip (e.g. reads RxD). Port 35H bit 0 gates it in
         // updateIntLine().
         m_uart.setInterruptHook([this](bool) { updateIntLine(); });
+        // The sub-CPU's Z7 reaches INT6 = cause bit 6, also a level: it
+        // drops when the handler reads SRIRQ (PC1600SubCpu).
+        m_subCpu.setInterruptHook([this] { updateIntLine(); });
         updateIntLine();
     }
 
@@ -254,11 +257,6 @@ public:
     void latchTimer64InterruptCause() { m_intCause |= 0x10; updateIntLine(); }
 
 
-    /// Latches interrupt-cause register (port 32H) bit 6, the sub-CPU's
-    /// aggregated interrupt line. Same falling-edge-only, read-clears
-    /// convention as latchTimer64InterruptCause() above.
-    void latchSubCpuInterruptCause() { m_intCause |= 0x40; updateIntLine(); }
-
     /// Latches cause bit 3, "interrupt from the LH-5801/5803 side": the
     /// LH5803's STA #(0A038H) handback. The ROM's only handoff (P1-B3
     /// 5C0E-5C22) unmasks just this cause (35H = 08H) before EI;HALT, and
@@ -266,10 +264,12 @@ public:
     /// INT is what ends the parked SC7852's HALT.
     void latchLh5803InterruptCause() { m_intCause |= 0x08; updateIntLine(); }
 
-    /// Port 32H as read: the latched causes plus bit 0, the TC8576F's live
-    /// INT output (TC8576F -> INT0, pin 81).
+    /// Port 32H as read: the latched causes plus two live levels, bit 0
+    /// the TC8576F's INT output (INT0, pin 81) and bit 6 the sub-CPU's Z7
+    /// (INT6, pin 84).
     uint8_t intCause() const {
-        return static_cast<uint8_t>(m_intCause | (m_uart.interruptOutput() ? 0x01 : 0x00));
+        return static_cast<uint8_t>(m_intCause | (m_uart.interruptOutput() ? 0x01 : 0x00) |
+                                    (m_subCpu.interruptRequest() ? 0x40 : 0x00));
     }
 
     /// The SC-7852's INT line is the OR of the latched causes (port 32H)
@@ -455,9 +455,9 @@ private:
     PC1600BusArbiter* m_arbiter{nullptr};
     SC7852* m_cpu{nullptr};
     uint8_t m_intCause{0};      // Port 32H latched causes, whatever the mask -- bit 3 LH5803
-                                // handback, bit 4 1/64 s timer, bit 6 sub-CPU; the rest have no
+                                // handback, bit 4 1/64 s timer; the rest have no
                                 // source yet. Read-clears.
-                                // Bit 0 (comm) is the UART's live level, see intCause().
+                                // Bits 0 (comm) and 6 (sub-CPU) are live levels, see intCause().
                                 // INT = intCause() & mask (updateIntLine())
     uint8_t m_intMask{0};       // Port 35H
     uint8_t m_im2VectorLow{0xFF}; // Port 39H

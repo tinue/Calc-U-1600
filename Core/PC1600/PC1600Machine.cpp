@@ -47,6 +47,7 @@ void PC1600Machine::allReset() {
     // zeroed, settings to default.
     m_z80Mem.clearInternalRam();
     resetLocked();
+    m_z80Mem.subCpu().aclReset(); // ALL RESET is the sub-CPU's ACL pin too
     m_z80Mem.subCpu().setResetCauseAllReset();
 }
 
@@ -299,17 +300,12 @@ int PC1600Machine::step() {
             // P1-B3 4102H/4112H); the mask only gates the INT level -- see
             // PC1600Memory::updateIntLine().
             if (!m_timer64State) m_z80Mem.latchTimer64InterruptCause();
-            // The sub-CPU's own aggregated interrupt line (INT6, cause bit
-            // 6), driven here by its 0.5s timer -- divided down from this
-            // same 64 Hz signal, see kTimer64EdgesPerHalfSecond.
+            // The sub-CPU's 0.5 s tick comes from the same divider as this
+            // 64 Hz signal, see kTimer64EdgesPerHalfSecond. It raises SRIRQ
+            // bit 1, and INT6 when the mask enables it.
             if (++m_timer64EdgeCount == kTimer64EdgesPerHalfSecond) {
                 m_timer64EdgeCount = 0;
-                // The sub-CPU's 0.5 s signal, visible in bit 1 of
-                // SRIRQ (A2H), is a free-running level -- toggle it every period.
-                // The file/RAM-disk IOCS readiness handshake polls SRIRQ and
-                // waits for this to change.
-                m_z80Mem.subCpu().toggleHalfSecondSignal();
-                m_z80Mem.latchSubCpuInterruptCause();
+                m_z80Mem.subCpu().halfSecondTick();
             }
         }
         advanceSharedClocks(cost);

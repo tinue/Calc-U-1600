@@ -517,16 +517,10 @@ private:
     bool m_timer64State{false};
     bool m_onWakePending{false}; // ON pressed, not yet delivered -- see setOnKeyPressed()
 
-    // Sub-CPU interrupt (port 32H bit 6, INT6 pin 84). Per
-    // PC-1600-CPU-SC7852-Z80.md §5.2 this one line aggregates everything
-    // the LU-57813P raises: the 0.5s timer, low-battery/analog-in/CI
-    // checks, auto-power-off, the RS-232C timeout, and the wakeup/alarm1/
-    // alarm2 timers. Only the 0.5s timer is modeled here -- it is the one
-    // that free-runs with no external stimulus, and §5.2's own firmware
-    // list (TRM §3.4.1(2)(e)) makes it the carrier for the periodic
-    // housekeeping tasks. The event-driven members of that list stay
-    // unraised until there is something to raise them: no battery or
-    // analog model, no CI line, and no serial peripheral to time out.
+    // The sub-CPU's 0.5 s tick. Its interrupt line (Z7 -> INT6, port 32H
+    // bit 6) and the other events that drive it -- the 1 s tick and the
+    // wake-up / alarm timers, compared at each minute carry -- live in
+    // PC1600SubCpu (SharpPC1500Reference PC-1600-SubCpu-LU57813P.md §5).
     //
     // Both signals come out of the sub-CPU's one divider chain, so 0.5 s is
     // exactly 64 edges (32 periods) of the 64 Hz signal, at a fixed phase

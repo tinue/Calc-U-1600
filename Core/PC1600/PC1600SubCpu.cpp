@@ -24,8 +24,15 @@ constexpr size_t kClockPairCount = 4;
 } // namespace
 
 void PC1600SubCpu::tickOneSecond() {
+    raise(kIrqOneSecond);
     if (!bcdBumpField(m_clock.second, 59, 0)) return;
-    if (!bcdBumpField(m_clock.minute, 59, 0)) return;
+    if (bcdBumpField(m_clock.minute, 59, 0)) carryIntoHour();
+    // "At each minute carry it compares the time against the wake-up and
+    // alarm settings" (Service Manual §7-1).
+    compareTimers();
+}
+
+void PC1600SubCpu::carryIntoHour() {
     if (!bcdBumpField(m_clock.hour, 23, 0)) return;
     if (!bcdBumpField(m_clock.day, bcdDaysInMonth(m_clock.month, m_year), 1)) return;
     if (m_clock.month < 12) {
@@ -34,6 +41,70 @@ void PC1600SubCpu::tickOneSecond() {
     }
     m_clock.month = 1;
     m_year++;
+}
+
+namespace {
+// A stored field matches when it equals the clock's, or when it is a
+// wildcard: BASIC sends a '?' digit as nibble F (SubCpu §7.3). BCD digits
+// are never F, so any F nibble marks the field.
+bool fieldMatches(uint8_t stored, uint8_t now) {
+    return (stored & 0x0F) == 0x0F || (stored >> 4) == 0x0F || stored == now;
+}
+} // namespace
+
+void PC1600SubCpu::compareTimers() {
+    static constexpr uint8_t kBit[3] = {kIrqWakeUp, kIrqAlarm1, kIrqAlarm2};
+    for (int i = 0; i < 3; i++) {
+        const Alarm& a = m_timers[i];
+        if (a.month == 0) continue; // cleared (SINIT's default)
+        if (a.month != 0x0F && a.month != m_clock.month) continue;
+        if (!fieldMatches(a.day, m_clock.day) || !fieldMatches(a.hour, m_clock.hour) ||
+            !fieldMatches(a.minute, m_clock.minute)) continue;
+        raise(kBit[i]);
+    }
+}
+
+void PC1600SubCpu::refreshInterrupt() {
+    const bool out = interruptRequest();
+    if (out == m_irqOut) return;
+    m_irqOut = out;
+    if (m_intHook) m_intHook();
+}
+
+void PC1600SubCpu::aclReset() {
+    m_timers = {};
+    m_irqMask = 0;
+    m_pending = 0;
+    m_password = {};
+    m_powerOnMask = 0;
+    m_alarmSignal = 0;
+    m_adinLow = m_adinHigh = 0;
+    m_paramLen = m_resultLen = m_resultPos = 0;
+    m_prefix = 0;
+    refreshInterrupt();
+}
+
+void PC1600SubCpu::storeTimer(Timer t) {
+    // Same 9-nibble block as the clock; a timer has no seconds.
+    Alarm& a = m_timers[t];
+    a.month  = param(0);
+    a.day    = static_cast<uint8_t>((param(1) << 4) | param(2));
+    a.hour   = static_cast<uint8_t>((param(3) << 4) | param(4));
+    a.minute = static_cast<uint8_t>((param(5) << 4) | param(6));
+}
+
+void PC1600SubCpu::publishTimer(Timer t) {
+    // Read back as 7 nibbles: month, then day/hour/minute pairs (P2-B6
+    // A881H fetches 1 + 3 x 2).
+    const Alarm& a = m_timers[t];
+    const uint8_t fields[3] = {a.day, a.hour, a.minute};
+    m_resultLen = 0;
+    m_result[m_resultLen++] = a.month;
+    for (uint8_t v : fields) {
+        m_result[m_resultLen++] = static_cast<uint8_t>(v >> 4);
+        m_result[m_resultLen++] = static_cast<uint8_t>(v & 0x0F);
+    }
+    m_resultPos = 0;
 }
 
 void PC1600SubCpu::appendParam(uint8_t nibble) {
@@ -129,10 +200,14 @@ bool PC1600SubCpu::execute(uint8_t op) {
             m_resultPos = 0;
             return false;
 
-        // SWWT / SWA1T / SWA2T (IOCS 04H/06H/08H, WAKE$(0) / ON TIME$ /
-        // ALARM$) and their reads: accepted and dropped for now.
-        case 0x94: case 0x95: case 0x96: case 0x97: case 0x98: case 0x99:
-            return false;
+        // SWWT / SWA1T / SWA2T (IOCS 04H/06H/08H: WAKE$(0), ON TIME$,
+        // ALARM$) and the matching reads SRWT / SRA1T / SRA2T.
+        case 0x94: storeTimer(WakeUp); return false;
+        case 0x95: publishTimer(WakeUp); return false;
+        case 0x96: storeTimer(Alarm1); return false;
+        case 0x97: publishTimer(Alarm1); return false;
+        case 0x98: storeTimer(Alarm2); return false;
+        case 0x99: publishTimer(Alarm2); return false;
 
         // IOCS 0AH: store the PASS password (8 bytes = 16 nibbles).
         case 0x9A:
@@ -151,12 +226,18 @@ bool PC1600SubCpu::execute(uint8_t op) {
         // SWMSK (IOCS 10H): the interrupt mask, high nibble first.
         case 0xA0:
             m_irqMask = static_cast<uint8_t>((param(0) << 4) | param(1));
+            refreshInterrupt();
             return false;
         // SRMSK (IOCS 11H).
         case 0xA1: setAnswer(m_irqMask); return true;
-        // SRIRQ (IOCS 12H): bit 1 = the 0.5 s signal. See
-        // toggleHalfSecondSignal().
-        case 0xA2: setAnswer(m_halfSecondSignal ? 0x02 : 0x00); return true;
+        // SRIRQ (IOCS 12H): the pending events, cleared by the read, which
+        // drops Z7 (Service Manual §4-3). The ROM's INT6 handler keeps the
+        // masked-off bits in F07EH itself (P1-B3 41A4H), SubCpu §5.
+        case 0xA2:
+            setAnswer(m_pending);
+            m_pending = 0;
+            refreshInterrupt();
+            return true;
         // SRINP (IOCS 13H): bit 5 = 0 while CI is asserted (P2-B6 A396H
         // inverts it into INSTAT), bit 2 = a password is set (A905H).
         case 0xA3:

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
+#include <initializer_list>
 #include <iterator>
 #include <string>
 #include <vector>
@@ -704,20 +705,74 @@ void test_subcpu_interrupt_cause_bit6() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
     auto& bus = static_cast<SC7852Bus&>(mem);
-    // Bit 0 is the TC8576F's live INT output, not
-    // part of the latch under test here.
-    auto latched = [&] { return static_cast<uint8_t>(bus.readIO(0x32) & 0xFE); };
+    auto& sub = mem.subCpu();
+    auto cause6 = [&] { return static_cast<uint8_t>(bus.readIO(0x32) & 0x40); };
 
-    // Masked off (35H bit6 = 0): the cause still latches; only INT is gated.
-    bus.writeIO(0x35, 0x10);        // only the 1/64s timer unmasked
-    mem.latchSubCpuInterruptCause();
-    CHECK(latched() == 0x40);
-    CHECK(latched() == 0x00); // read-clears, same as bit4's convention
+    // Bit 6 is the sub-CPU's Z7: pending events its own mask enables.
+    // Without SWMSK the 0.5 s tick stays pending but raises nothing.
+    sub.halfSecondTick();
+    CHECK(cause6() == 0x00);
+    // SWMSK 02H (5FH [A0H] after the nibbles 0, 2, sent complemented).
+    bus.writeIO(0x21, 0x0F);
+    bus.writeIO(0x21, 0x7D);
+    bus.writeIO(0x21, 0x5F);
+    CHECK(cause6() == 0x40);
+    CHECK(cause6() == 0x40);              // a level: a 32H read doesn't clear it
 
-    // Both causes can be pending at once without disturbing each other.
-    mem.latchTimer64InterruptCause();
-    mem.latchSubCpuInterruptCause();
-    CHECK(latched() == 0x50);
+    // SRIRQ (5DH [A2H]) returns the pending bits and clears them, which
+    // drops the line (Service Manual §4-3).
+    bus.writeIO(0x21, 0x5D);
+    CHECK(bus.readIO(0x33) == 0x02);
+    CHECK(cause6() == 0x00);
+    bus.writeIO(0x21, 0x5D);
+    CHECK(bus.readIO(0x33) == 0x00);
+
+    // A masked-off event is reported by SRIRQ too, and cleared with it.
+    sub.tickOneSecond();                  // 1 s bit, not in the mask
+    CHECK(cause6() == 0x00);
+    bus.writeIO(0x21, 0x5D);
+    CHECK(bus.readIO(0x33) == 0x04);
+}
+
+// SWA1T / SRA1T (96H / 97H) store and read back a timer; at the minute
+// carry that matches it, the sub-CPU raises its SRIRQ bit. '?' fields are
+// sent as F nibbles and match anything (SubCpu §7.3).
+void test_subcpu_timer_store_readback_and_match() {
+    PC1600Bank bank;
+    PC1600Memory mem(bank);
+    auto& sub = mem.subCpu();
+    auto send = [&](std::initializer_list<uint8_t> nibbles, uint8_t exec) {
+        bool first = true;
+        for (uint8_t n : nibbles) {
+            sub.strobe(static_cast<uint8_t>((first ? 0xF0 : 0x80) | n));
+            first = false;
+        }
+        sub.strobe(exec);
+    };
+    sub.setDateTime({0x09, 0x26, 0x13, 0x29, 0x58});
+    // ON TIME$ = "??/??/13/30" (month F, day FF, 13:30, seconds sent too).
+    send({0xF, 0xF, 0xF, 0x1, 0x3, 0x3, 0x0, 0x0, 0x0}, 0x96);
+    sub.strobe(0x97);
+    const uint8_t want[7] = {0xF, 0xF, 0xF, 0x1, 0x3, 0x3, 0x0};
+    for (uint8_t w : want) { sub.strobe(0x90); CHECK(sub.readAnswer() == w); }
+
+    sub.strobe(0xA2); (void)sub.readAnswer();
+    sub.tickOneSecond();                  // 13:29:59
+    CHECK((sub.pendingInterrupts() & PC1600SubCpu::kIrqAlarm1) == 0);
+    sub.tickOneSecond();                  // 13:30:00 -- match
+    CHECK((sub.pendingInterrupts() & PC1600SubCpu::kIrqAlarm1) != 0);
+
+    // A cleared timer (month 0, SINIT's default) never fires.
+    send({0x0, 0, 0, 0, 0, 0, 0, 0, 0}, 0x98);
+    sub.strobe(0xA2); (void)sub.readAnswer();
+    for (int i = 0; i < 120; i++) sub.tickOneSecond();
+    CHECK((sub.pendingInterrupts() & PC1600SubCpu::kIrqAlarm2) == 0);
+
+    // WAKE$(0) at an exact date and time.
+    sub.setDateTime({12, 0x25, 0x07, 0x29, 0x59}); // month is plain binary
+    send({0xC, 0x2, 0x5, 0x0, 0x7, 0x3, 0x0, 0x0, 0x0}, 0x94);
+    sub.tickOneSecond();
+    CHECK((sub.pendingInterrupts() & PC1600SubCpu::kIrqWakeUp) != 0);
 }
 
 void test_pb3_reads_high_for_the_alternate_charset_gate() {
@@ -831,6 +886,7 @@ int run_pc1600_keyboard_display_tests() {
     test_memory_intmask_reads_back_via_port35();
     test_kbii_segment_is_panel_driven_not_mode_driven();
     test_subcpu_interrupt_cause_bit6();
+    test_subcpu_timer_store_readback_and_match();
     test_pb3_reads_high_for_the_alternate_charset_gate();
     test_memory_display_wiring_via_io();
     test_memory_clock_enable_via_port37_write();

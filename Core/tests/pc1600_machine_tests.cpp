@@ -7,6 +7,8 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <initializer_list>
+#include <string>
 #include <vector>
 
 #include "../PC1600/PC1600Machine.hpp"
@@ -184,10 +186,9 @@ void test_yield_hook_fires_per_interval_across_runcycles_calls() {
     CHECK(calls == 5);
 }
 
-void test_half_second_signal_toggles_off_the_05s_accumulator() {
-    // The sub-CPU's 0.5 s signal (bit 1 of SRIRQ, A2H) must actually
-    // toggle for the file/RAM-disk IOCS readiness handshake to progress --
-    // step()'s 0.5 s accumulator drives it.
+void test_half_second_tick_raises_srirq_bit1() {
+    // The sub-CPU's 0.5 s tick raises SRIRQ (A2H) bit 1; step()'s 0.5 s
+    // accumulator drives it, and the SRIRQ read clears it.
     PC1600Machine m;
     std::vector<uint8_t> lower = makeBank(0x00);
     std::vector<uint8_t> upper = makeBank(0x00);
@@ -195,13 +196,15 @@ void test_half_second_signal_toggles_off_the_05s_accumulator() {
     CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
     m.reset();
 
-    const bool start = m.memory().subCpu().halfSecondSignal();
+    auto& sub = m.memory().subCpu();
+    sub.strobe(0xA2); (void)sub.readAnswer(); // start from nothing pending
+    CHECK((sub.pendingInterrupts() & PC1600SubCpu::kIrqHalfSecond) == 0);
     // Just over one 0.5 s period of emulated time.
     m.runCycles(PC1600Machine::kTStateHz / 2 + PC1600Machine::kTStateHz / 20);
-    CHECK(m.memory().subCpu().halfSecondSignal() != start);
-    // A second period brings it back.
-    m.runCycles(PC1600Machine::kTStateHz / 2 + PC1600Machine::kTStateHz / 20);
-    CHECK(m.memory().subCpu().halfSecondSignal() == start);
+    CHECK((sub.pendingInterrupts() & PC1600SubCpu::kIrqHalfSecond) != 0);
+    sub.strobe(0xA2);
+    CHECK((sub.readAnswer() & PC1600SubCpu::kIrqHalfSecond) != 0);
+    CHECK(sub.pendingInterrupts() == 0);
 }
 
 void test_runcycles_budget_is_tstates_in_either_bus_mode() {
@@ -652,12 +655,16 @@ void test_int_line_follows_cause_and_mask() {
     CHECK(mem.readIO(0x32) == 0x10);
     CHECK(!m.sc7852().intLine()); // read-clear drops it
 
-    // A cause arriving while masked is still latched; unmasking raises INT.
+    // A cause arriving while masked at 35H is still there; unmasking raises
+    // INT. Bit 6 is the sub-CPU's Z7, a level its own mask (SWMSK) gates.
     mem.writeIO(0x35, 0x00);
-    mem.latchSubCpuInterruptCause();
+    mem.subCpu().strobe(0xF0); mem.subCpu().strobe(0x82); mem.subCpu().strobe(0xA0); // SWMSK 02H
+    mem.subCpu().halfSecondTick();
     CHECK(!m.sc7852().intLine());
     mem.writeIO(0x35, 0x40);
     CHECK(m.sc7852().intLine());
+    mem.subCpu().strobe(0xA2);                  // SRIRQ read drops Z7
+    CHECK(!m.sc7852().intLine());
 
     // Bit 0 is the TC8576F's live INT output, not a latch: a 32H read
     // leaves it (and INT) up until the chip itself is serviced.
@@ -727,7 +734,48 @@ void test_real_rom_off_stays_off_and_on_restarts() {
     }
 }
 
+// Real ROM: ON TIME$ GOSUB fires. BASIC stores the time with SWA1T (96H);
+// at the matching minute carry the sub-CPU raises SRIRQ bit 6, the INT6
+// handler sets F127H bit 6, and the interpreter branches (SubCpu §5).
+void typeProgram(PC1600Machine& m, std::initializer_list<const char*> lines) {
+    std::string err;
+    for (const char* l : lines) CHECK(typeLine(m, l, /*pressEnter=*/true, &err));
+}
+
+void test_rom_on_time_gosub_fires() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_rom_on_time_gosub_fires: PC-1600 ROM images not found\n");
+        return;
+    }
+    tapKey(m, "mode"); // RUN -> PRO
+    waitIdle(m, PC1600Machine::kTStateHz);
+    typeProgram(m, {
+        "10 POKE &FF80,0",
+        "20 DATE$=\"09/26\":TIME$=\"13:29:57\"",
+        "30 ON TIME$=\"09/26/13/30\" GOSUB 100",
+        "40 TIME$ ON",
+        "50 GOTO 50",
+        "100 POKE &FF80,123",
+        "110 END",
+    });
+    tapKey(m, "mode"); // PRO -> RUN
+    waitIdle(m, PC1600Machine::kTStateHz);
+    std::string err;
+    typeLine(m, "RUN", /*pressEnter=*/true, &err);
+    // Step in 50 ms slices until the handler has run; it must be at the
+    // 13:30:00 minute carry, not before.
+    PC1600SubCpu::DateTime at{};
+    for (int i = 0; i < 200 && m.memory().read(0xFF80) != 123; i++) {
+        at = m.memory().subCpu().dateTime();
+        m.runCycles(PC1600Machine::kTStateHz / 20);
+    }
+    CHECK(m.memory().read(0xFF80) == 123);
+    CHECK(at.hour == 0x13 && at.minute == 0x30 && at.second == 0x00);
+}
+
 int run_pc1600_machine_tests() {
+    test_rom_on_time_gosub_fires();
     test_simple_reset_keeps_internal_ram_all_reset_wipes_it();
     test_reset_releases_held_keys();
     test_reset_level_reported_to_boot_rom_via_request_5A();
@@ -743,7 +791,7 @@ int run_pc1600_machine_tests() {
     test_trace_rings_are_independent_and_cpu_id_tagged();
     test_runcycles_charges_halted_steps_at_the_halt_tick_rate();
     test_yield_hook_fires_per_interval_across_runcycles_calls();
-    test_half_second_signal_toggles_off_the_05s_accumulator();
+    test_half_second_tick_raises_srirq_bit1();
     test_runcycles_budget_is_tstates_in_either_bus_mode();
     test_on_key_wakes_a_halted_sc7852();
     test_int_line_follows_cause_and_mask();

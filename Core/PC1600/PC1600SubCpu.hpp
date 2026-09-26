@@ -2,6 +2,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 
 #include "../BcdCalendar.hpp"
 #include "PC1600Clocks.hpp"
@@ -142,8 +143,45 @@ public:
     /// (a nibble pair per field, as the protocol ships them), so the carry
     /// is BCD arithmetic; month is plain 1-12. Driven by PC1600Machine's
     /// 1 Hz accumulator -- i.e. off emulated cycles, exactly as the real
-    /// chip runs off its own crystal.
+    /// chip runs off its own crystal. Raises the 1 s interrupt bit, and at
+    /// each minute carry compares the clock with the three timers
+    /// (Service Manual §7-1).
     void tickOneSecond();
+
+    /// The 0.5 s tick of the sub-CPU's divider: raises SRIRQ bit 1.
+    /// PC1600Machine derives it from the same divider as the 64 Hz Z6
+    /// output (kTimer64EdgesPerHalfSecond).
+    void halfSecondTick() { raise(kIrqHalfSecond); }
+
+    /// The ALL RESET switch (ACL): the sub-CPU restarts and loses its
+    /// timers, masks, password and pending interrupts. The clock value is
+    /// kept here -- the ROM rewrites it on ALL RESET anyway, and a
+    /// host-seeded time must survive that (armHostSeedGuard()).
+    void aclReset();
+
+    // ── Timers and the interrupt line (SubCpu §5, §7.3) ─────────────────
+
+    /// A wake-up / alarm setting as stored: month nibble (0FH = any), then
+    /// BCD pairs whose all-F value means "any". Month 0 never matches, which
+    /// is what SINIT writes on ALL RESET (P2-B6 A846H).
+    struct Alarm { uint8_t month{0}, day{0}, hour{0}, minute{0}; };
+    enum Timer { WakeUp = 0, Alarm1 = 1, Alarm2 = 2 };
+    Alarm timer(Timer t) const { return m_timers[t]; }
+
+    // SRIRQ / SWMSK bits (PC-1600-IO-Ports.md §7.1).
+    static constexpr uint8_t kIrqWakeUp     = 0x80;
+    static constexpr uint8_t kIrqAlarm1     = 0x40; // ON TIME$
+    static constexpr uint8_t kIrqAlarm2     = 0x20; // ALARM$
+    static constexpr uint8_t kIrqOneSecond  = 0x04;
+    static constexpr uint8_t kIrqHalfSecond = 0x02;
+
+    /// Events raised and not yet read by SRIRQ, whatever the mask.
+    uint8_t pendingInterrupts() const { return m_pending; }
+    /// Z7 -> INT6 (port 32H bit 6): a pending event the mask enables. The
+    /// SRIRQ read (A2H) clears every pending bit and so drops the line.
+    bool interruptRequest() const { return (m_pending & m_irqMask) != 0; }
+    /// Called whenever interruptRequest() changes.
+    void setInterruptHook(std::function<void()> hook) { m_intHook = std::move(hook); }
 
     /// The analog-input jack's A/D value, answered to SRA1 (A9H).
     void setAnalogInput(uint8_t v) { m_analog = v; }
@@ -155,15 +193,14 @@ public:
     uint8_t interruptMask() const { return m_irqMask; }
     bool passwordSet() const { return m_password[0] != 0; }
 
-    /// The sub-CPU's 0.5 s timer signal, as seen in bit 1 of SRIRQ (A2H).
-    /// On hardware it free-runs off the sub-CPU crystal; here
-    /// PC1600Machine's 0.5 s accumulator toggles it. The file/RAM-disk
-    /// IOCS readiness handshake polls SRIRQ and waits for this to change
-    /// state, so it must actually toggle, not sit at a constant.
-    void toggleHalfSecondSignal() { m_halfSecondSignal = !m_halfSecondSignal; }
-    bool halfSecondSignal() const { return m_halfSecondSignal; }
-
 private:
+    void raise(uint8_t bits) { m_pending |= bits; refreshInterrupt(); }
+    void refreshInterrupt();
+    void storeTimer(Timer t);
+    void publishTimer(Timer t);
+    void compareTimers();
+    void carryIntoHour();
+
     /// Executes `operand` (SubCpu §7.2). Returns true if the command
     /// answers on R33-R20 (type (i)), which decides when Z9 pulses.
     bool execute(uint8_t operand);
@@ -199,8 +236,11 @@ private:
     int      m_busyFrom{0};
     int      m_busyUntil{0};
     int      m_ackAt{0};
-    bool     m_halfSecondSignal{false}; // SRIRQ bit 1; see toggleHalfSecondSignal()
     uint8_t  m_irqMask{0};
+    uint8_t  m_pending{0};
+    bool     m_irqOut{false};
+    std::function<void()> m_intHook;
+    std::array<Alarm, 3> m_timers{};
     uint8_t  m_analog{0};
     uint8_t  m_adinLow{0}, m_adinHigh{0}; // SWA1A thresholds (3CH), stored only
     uint8_t  m_alarmSignal{0};            // SWAB nibble (6AH), stored only
