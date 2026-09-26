@@ -121,3 +121,14 @@ analysis, then states the target fix. The cost description stays.
 - At the end, TODO.md's cleanup section holds:
   - the six rewritten "Before fixing:" entries;
   - the LCD/sub-CPU re-fit remainder.
+
+## Outcome (2026-09-26)
+
+All four low-risk phases landed as planned, with two small deviations:
+- Phase 3 computes `lcdEdges()` as quotient plus remainder instead of an
+  `unsigned __int128` product. It's exact, can't overflow, and builds with
+  MSVC too. The scrolling-PRINT benchmark's BEEP audio stayed bit-identical.
+- Phase 4: `pc1600_cli` now prints the CE-150 event list like `pc1500_cli`
+  (one shared `cli::printCe150Report`). All other CLI output is unchanged.
+
+The six "Before fixing" items remain in TODO.md.

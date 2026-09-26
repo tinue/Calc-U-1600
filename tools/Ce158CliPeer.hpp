@@ -12,6 +12,7 @@
 
 #include "../Core/Connector/Ce158Card.hpp"
 #include "../Core/Serial/PtySerialLink.hpp"
+#include "CliCommon.hpp"
 
 // --ce158-rx / --ce158-tx: a file-backed serial peer for repeatable runs.
 class FileSerialLink final : public SerialLink {
@@ -61,11 +62,10 @@ public:
             machine.setCE158SerialLink(m_ptyLink.get());
         } else if (!m_rxPath.empty() || !m_txPath.empty()) {
             if (!m_rxPath.empty()) {
-                std::FILE* f = std::fopen(m_rxPath.c_str(), "rb");
-                if (!f) { std::fprintf(stderr, "cannot read %s\n", m_rxPath.c_str()); return false; }
-                int ch;
-                while ((ch = std::fgetc(f)) != EOF) m_file.rx.push_back(static_cast<uint8_t>(ch));
-                std::fclose(f);
+                if (!cli::readFile(m_rxPath, &m_file.rx)) {
+                    std::fprintf(stderr, "cannot read %s\n", m_rxPath.c_str());
+                    return false;
+                }
             }
             m_file.holdPolls = m_hold;
             machine.setCE158SerialLink(&m_file);

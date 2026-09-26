@@ -51,6 +51,7 @@
 #include "../Core/Preset/PresetFile.hpp"
 #include "../Core/PC1500/PC1500PresetLoader.hpp"
 #include "Ce158CliPeer.hpp"
+#include "CliCommon.hpp"
 
 int main(int argc, char** argv) {
     // Pull an optional `--modules-dir <dir>` out of argv up front so the
@@ -298,15 +299,7 @@ int main(int argc, char** argv) {
 
     if (!ce158Peer.report(machine)) return 1;
 
-    if (machine.ce150Attached()) {
-        auto pts = machine.ce150PlotPoints();
-        std::printf("CE-150: attached, plot points=%zu revision=%llu\n",
-                    pts.size(), static_cast<unsigned long long>(machine.ce150PlotRevision()));
-        auto events = machine.drainCE150Events();
-        std::printf("CE-150 events (%zu):\n", events.size());
-        for (size_t i = 0; i < events.size() && i < 60; ++i)
-            std::printf("  %s\n", events[i].c_str());
-    }
+    cli::printCe150Report(machine);
 
     return 0;
 }

@@ -13,10 +13,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${ROOT}/Qt6/build"
 
-if [[ ! -f "${BUILD_DIR}/build.ninja" ]]; then
-  cmake -S "${ROOT}/Qt6" -B "${BUILD_DIR}" -G Ninja -DCMAKE_BUILD_TYPE=Release
-fi
-cmake --build "${BUILD_DIR}"
+"${ROOT}/tools/build_app.sh"
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   APP="${BUILD_DIR}/Calc-U-1600.app/Contents/MacOS/Calc-U-1600"

@@ -52,17 +52,9 @@
 #include "../Core/Preset/PresetFile.hpp"
 #include "../Core/Resources/BundledRomCatalog.hpp"
 #include "Ce158CliPeer.hpp"
+#include "CliCommon.hpp"
 
 namespace {
-bool readFile(const std::string& path, std::vector<uint8_t>* out) {
-    FILE* f = std::fopen(path.c_str(), "rb");
-    if (!f) return false;
-    out->resize(16384);
-    size_t n = std::fread(out->data(), 1, 16384, f);
-    std::fclose(f);
-    return n == 16384;
-}
-
 int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
               const std::string& moduleDir, const std::vector<std::string>& extraModuleDirs,
               const std::string& wavPath, const std::string& romOverride,
@@ -114,14 +106,11 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
                 return false;
             }
             const std::string path = saveDir + "/" + name + kFloppyFileSuffix;
-            FILE* f = std::fopen(path.c_str(), "wb");
-            if (!f) {
+            if (!cli::writeFile(path, formatFloppyFile(name, machine.ce1600fDiskImage()))) {
                 *err = "cannot write " + path;
                 return false;
             }
-            const std::string text = formatFloppyFile(name, machine.ce1600fDiskImage());
-            const bool ok = std::fwrite(text.data(), 1, text.size(), f) == text.size();
-            return std::fclose(f) == 0 && ok;
+            return true;
         };
     }
     PresetLoadResult loaded = applyPC1600Preset(
@@ -155,10 +144,7 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
     }
     std::printf("Preset '%s' applied successfully.\n", presetPath.c_str());
     if (runAfter) machine.runCycles(runAfter);
-    if (machine.ce150Attached()) {
-        std::printf("CE-150: attached, plot points=%zu revision=%llu\n", machine.ce150PlotPoints().size(),
-                    static_cast<unsigned long long>(machine.ce150PlotRevision()));
-    }
+    cli::printCe150Report(machine);
     if (!ce158Peer.report(machine)) return 1;
 
     if (!wavPath.empty()) {
@@ -253,11 +239,11 @@ int main(int argc, char** argv) {
     if (argc >= 4) maxCycles = std::strtoull(argv[3], nullptr, 10);
 
     std::vector<uint8_t> lower, upper;
-    if (!readFile(argv[1], &lower)) {
+    if (!cli::readFileExact(argv[1], 16384, &lower)) {
         std::fprintf(stderr, "failed to read '%s' (expected exactly 16384 bytes)\n", argv[1]);
         return 1;
     }
-    if (!readFile(argv[2], &upper)) {
+    if (!cli::readFileExact(argv[2], 16384, &upper)) {
         std::fprintf(stderr, "failed to read '%s' (expected exactly 16384 bytes)\n", argv[2]);
         return 1;
     }

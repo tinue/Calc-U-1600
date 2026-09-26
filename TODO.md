@@ -217,14 +217,6 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   interrupts. Target: nothing pushes updates. Moving the four wrappers
   into `PC1600Memory` (UART access / tick / relink / reset each calling
   `updateIntLine()`) only moves them.
-- **Tool scripts and CLIs duplicate helpers.** `tools/pc1600_cli.cpp`
-  hand-rolls fopen/fwrite for `--save-dir` and copies the CE-150 summary
-  printf from `pc1500_cli.cpp`; `Ce158CliPeer.hpp` reads `--ce158-rx`
-  with an fgetc loop though `readFile`/`BundledRoms::detail::readWholeFile`
-  exist; `tools/make_screenshots.sh` copies `build_and_run.sh`'s
-  configure-and-build block. Fix: `tools/CliCommon.hpp` with
-  `readFile`/`writeFile`/`printCe150Report`, and a shared build step
-  (`--build-only` or a sourced `tools/build_app.sh`).
 - **PC-1600 LCD / sub-CPU timing model** *(behaviour/timing)*.
   `PC1600Display::kBusyClocks = 4` and `PC1600SubCpu::kResponseMicros =
   1660` were both fitted to real-unit benchmarks on 2026-09-23 while the

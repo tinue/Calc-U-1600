@@ -7,11 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/Qt6/build"
 
-if [[ ! -f "${BUILD_DIR}/build.ninja" ]]; then
-  cmake -S "${SCRIPT_DIR}/Qt6" -B "${BUILD_DIR}" -G Ninja -DCMAKE_BUILD_TYPE=Release
-fi
-
-cmake --build "${BUILD_DIR}"
+"${SCRIPT_DIR}/tools/build_app.sh"
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   open "${BUILD_DIR}/Calc-U-1600.app"
