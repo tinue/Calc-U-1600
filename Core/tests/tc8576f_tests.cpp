@@ -217,8 +217,6 @@ void test_interrupt_output_follows_tx_equation() {
     uart.reset();
     FakeLink link;
     uart.setSerialLink(&link);
-    std::vector<bool> edges;
-    uart.setInterruptHook([&edges](bool level) { edges.push_back(level); });
     uart.tick(1);
     CHECK(!uart.interruptOutput());       // TxEN clear after reset
     uart.writeRegister(3, 0x01);          // TxEN
@@ -226,7 +224,6 @@ void test_interrupt_output_follows_tx_equation() {
     uart.writeRegister(3, 0xC5);
     uart.writeRegister(2, 0x02);          // TxINTM
     CHECK(!uart.interruptOutput());
-    CHECK(edges.size() == 2 && edges[0] && !edges[1]);
 }
 
 // ── A serial peer attached via setSerialLink() ──────────────────────────
@@ -285,9 +282,7 @@ void test_serial_receiver_needs_rxenable() {
     bootInit(uart);
     FakeLink link;
     link.rx = {0x55};
-    std::vector<bool> edges;
     uart.setSerialLink(&link);
-    uart.setInterruptHook([&edges](bool level) { edges.push_back(level); });
 
     uart.writeRegister(3, 0x00);          // RxEN clear
     uart.tick(kDefaultCharTStates * 3);
@@ -300,7 +295,6 @@ void test_serial_receiver_needs_rxenable() {
     CHECK(uart.interruptOutput());        // held while the byte waits
     CHECK((uart.readRegister(0) & 0xFF) == 0x55);
     CHECK(!uart.interruptOutput());       // reading RxD drops it
-    CHECK(edges.size() == 2 && edges[0] && !edges[1]);
 }
 
 // A receive error interrupts too when ERINTM is clear (CPC §6.5).

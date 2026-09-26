@@ -36,6 +36,8 @@ public:
     void    writeMem(uint16_t addr, uint8_t v) override { mem[addr] = v; }
     uint8_t readIO(uint8_t port) override { return io[port]; }
     void    writeIO(uint8_t port, uint8_t v) override { io[port] = v; }
+    bool intLine = false; // the INT level a device would drive
+    bool interruptLevel() const override { return intLine; }
 };
 
 // Loads `code` at 0x0000 (SC7852's reset PC), returns a ready-to-step CPU.
@@ -386,7 +388,7 @@ void test_prefix_run_is_bounded_and_blocks_int() {
     code[0] = 0xFB; // EI, then a run of DD prefixes
     Rig r(code);
     r.cpu.step();
-    r.cpu.setIntLine(true);
+    r.bus.intLine = true;
     for (int i = 0; i < 8; i++) {
         CHECK(r.cpu.step() == 4 + SC7852::kM1WaitStates); // one prefix per step, no INT taken
     }
@@ -443,7 +445,7 @@ void test_di_ei_and_im() {
 void test_interrupt_im1_pushes_pc_and_vectors_to_0038() {
     Rig r({0xFB, 0x00, 0x00}); // EI ; NOP ; NOP
     r.cpu.step(); // EI
-    r.cpu.setIntLine(true);
+    r.bus.intLine = true;
     r.cpu.step(); // NOP: runs in the EI shadow
     r.cpu.step(); // services the pending IRQ (IM defaults 0 -> treated as IM1 path)
     CHECK(r.cpu.pc() == 0x0038);
@@ -456,7 +458,7 @@ void test_halt_wakes_on_interrupt() {
     CHECK(r.cpu.halted());
     int cyclesWhileHalted = r.cpu.step();
     CHECK(cyclesWhileHalted == 0);
-    r.cpu.setIntLine(true);
+    r.bus.intLine = true;
     r.cpu.step();
     CHECK(!r.cpu.halted());
     CHECK(r.cpu.pc() == 0x0038);
@@ -466,7 +468,7 @@ void test_halt_wakes_on_interrupt() {
 void test_masked_int_keeps_halt() {
     Rig r({0x76, 0x00}); // HALT (IFF1 clear: never EI'd)
     r.cpu.step();
-    r.cpu.setIntLine(true);
+    r.bus.intLine = true;
     CHECK(r.cpu.step() == 0);
     CHECK(r.cpu.halted()); // a masked INT does not end HALT
     r.cpu.resumeFromHalt();
@@ -481,8 +483,8 @@ void test_masked_int_keeps_halt() {
 
 void test_int_line_dropped_before_ei_is_not_taken() {
     Rig r({0xFB, 0x00, 0x00, 0x00}); // EI ; NOP ; NOP ; NOP
-    r.cpu.setIntLine(true);
-    r.cpu.setIntLine(false); // the device withdrew it (cause masked/cleared)
+    r.bus.intLine = true;
+    r.bus.intLine = false; // the device withdrew it (cause masked/cleared)
     r.cpu.step(); r.cpu.step(); r.cpu.step();
     CHECK(r.cpu.pc() == 0x0003);
     CHECK(r.cpu.iff1());
@@ -490,7 +492,7 @@ void test_int_line_dropped_before_ei_is_not_taken() {
 
 void test_ei_defers_pending_irq_by_one_instruction() {
     Rig r({0xFB, 0x76, 0x00}); // EI ; HALT ; NOP
-    r.cpu.setIntLine(true); // already pending when EI runs
+    r.bus.intLine = true; // already pending when EI runs
     r.cpu.step(); // EI
     r.cpu.step(); // HALT still executes before the IRQ is accepted
     CHECK(r.cpu.halted());

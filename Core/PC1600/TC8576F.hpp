@@ -1,7 +1,6 @@
 #pragma once
 #include <cstdint>
 #include <deque>
-#include <functional>
 
 #include "PC1600SubCpu.hpp"
 #include "../Serial/SerialLink.hpp"
@@ -54,14 +53,13 @@
 // ROM's transmit loop; TxRDY drops only when the queue is full.
 class TC8576F {
 public:
-    explicit TC8576F(PC1600SubCpu& sub) : m_sub(sub) { updateCharTStates(); refreshInterruptOutput(); }
+    explicit TC8576F(PC1600SubCpu& sub) : m_sub(sub) { updateCharTStates(); }
 
-    /// Wire the chip's INT output (SC-7852 INT0, cause bit 0). It is a
-    /// level, DS §5.9 (CPC §6.5): the unmasked transmit, receive and error
-    /// conditions, OR the parallel side's IntF. The hook is called with
-    /// the new level whenever it changes. Left unset for standalone tests.
-    void setInterruptHook(std::function<void(bool)> hook) { m_intHook = std::move(hook); }
-    bool interruptOutput() const { return m_intOut; }
+    /// The chip's INT output (SC-7852 INT0, cause bit 0). It is a level,
+    /// DS §5.9 (CPC §6.5): the unmasked transmit, receive and error
+    /// conditions, OR the parallel side's IntF. Computed from the current
+    /// state; PC1600Memory::interruptLevel() asks for it.
+    bool interruptOutput() const;
 
     /// Attach / detach the RS-232C peer. Non-owning -- the host owns the
     /// object and must outlive the chip (or detach first). `nullptr`
@@ -97,10 +95,10 @@ public:
     int dstbDelayTStates() const;
 
 private:
-    uint8_t readRegisterImpl(uint8_t reg);
-    void    writeRegisterImpl(uint8_t reg, uint8_t value);
-    void    tickImpl(int tstates);
-    void    resetImpl();
+    /// The chip-level reset shared by reset() (the RESET pin) and the 23H
+    /// D5 command, which also holds the chip in reset (m_resetHeld).
+    void    resetChip();
+    bool    intF() const; // PSR b7, the parallel side's interrupt flag
     // No-peer serial defaults: empty transmitter, modem lines off.
     void    resetSerialState();
     void writeControlRegister(uint8_t value); // 23H write
@@ -134,11 +132,6 @@ private:
     void updateCharTStates() { updateCharTStates(wordFormat()); }
 
     PC1600SubCpu& m_sub;
-    std::function<void(bool)> m_intHook;
-    bool m_intOut{false};
-    /// Recomputes the interrupt output and reports a change to m_intHook.
-    /// Called after every register access, tick() and reset().
-    void refreshInterruptOutput();
 
     // ── Serial peer ─────────────────────────────────────────────────
     SerialLink* m_link{nullptr};          // non-owning; nullptr => no peer

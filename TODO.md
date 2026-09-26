@@ -400,28 +400,6 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   - a shared `NamedFileCatalog`-level helper for lists / classify /
     save-name validation, leaving the managers only Qt glue;
   - one directory scan per refresh.
-- **TC8576F interrupt plumbing.** Four `read/write/tick/reset` →
-  `…Impl()` wrappers exist only to call `refreshInterruptOutput()`; the
-  `std::function<void(bool)>` hook's one subscriber ignores the bool.
-  `PC1600SubCpu` has the same kind of hook now (Z7 -> INT6), so the fix
-  covers both.
-
-  **Sampling checked 2026-09-26.** The SC7852 reads `m_intLine` in one
-  place, the top of `step()` (and `serviceInterrupt()` from there), once
-  per instruction. Nothing else reads it except tests via `intLine()`.
-  All three inputs are already state: `m_intCause`, the UART's condition
-  (TxEN/CTS/TxRDY/masks/Rx flags plus `psr() & IntF`, the last of which
-  calls `m_sub.busy()`) and `PC1600SubCpu::interruptRequest()`
-  (`m_pending & m_irqMask`). So the SC7852 can ask a level source at the
-  top of `step()`. That's a few loads plus one indirect call per
-  instruction, and no change in timing because the push is synchronous
-  today. Target: the SC7852 holds an interrupt-level source
-  (`setIntLine()` stays as a test-only fixed source); `TC8576F::
-  interruptOutput()` becomes the const expression now inside
-  `refreshInterruptOutput()`; both hooks, `m_intOut` and the four
-  `…Impl()` wrappers go. Moving the four wrappers into `PC1600Memory`
-  (UART access / tick / relink / reset each calling `updateIntLine()`)
-  only moves them.
 - **PC-1600 LCD / sub-CPU timing model** *(behaviour/timing)*.
   `PC1600Display::kBusyClocks = 4` and `PC1600SubCpu::kResponseMicros =
   1660` were both fitted to real-unit benchmarks on 2026-09-23 while the

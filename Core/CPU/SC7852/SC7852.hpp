@@ -32,6 +32,15 @@ public:
     /// forwarded since nothing in this project's scope needs them yet.
     virtual uint8_t readIO(uint8_t port) { (void)port; return 0xFF; }
     virtual void    writeIO(uint8_t port, uint8_t value) { (void)port; (void)value; }
+
+    /// The maskable INT pin, a level like the real one. step() reads it at
+    /// the start of every call: while it is asserted, an interrupt is
+    /// accepted if IFF1 is set and the previous instruction was not EI;
+    /// otherwise nothing happens (a HALTed CPU stays HALTed). Accepting it
+    /// does not drop the level -- the device does, once the handler clears
+    /// its cause. The board computes it from its own state when asked, so
+    /// nothing has to push updates.
+    virtual bool interruptLevel() const { return false; }
 };
 
 // ── SC7852 CPU core ──────────────────────────────────────────────────────
@@ -107,7 +116,7 @@ public:
     bool     iff2() const { return IFF2; }
     uint8_t  im() const { return IM; }
     bool     halted() const { return m_halted; }
-    bool     intLine() const { return m_intLine; }
+    bool     intLine() const { return bus.interruptLevel(); }
     /// Clears HALT without going through the interrupt path -- used by
     /// PC1600BusArbiter/PC1600Machine to resume the SC7852 when bus
     /// ownership switches back to it after parking on
@@ -148,15 +157,10 @@ public:
     bool flagN()  const { return (F & 0x02) != 0; }
     bool flagC()  const { return (F & 0x01) != 0; }
 
-    /// Drives the maskable INT line (a level, like the real pin). While it
-    /// is asserted, an interrupt is accepted at the start of a step() call
-    /// if IFF1 is set and the previous instruction was not EI; otherwise
-    /// nothing happens (a HALTed CPU stays HALTed). Accepting it does not
-    /// drop the line -- the device does, once the handler clears its cause.
     /// PC-1600's IM2 vector byte (Port 39H, low byte of the vector address;
     /// I register supplies the high byte) is the caller's responsibility to
-    /// have wired up via setIM2VectorByte() before requesting.
-    void setIntLine(bool asserted) { m_intLine = asserted; }
+    /// have wired up via setIM2VectorByte() before INT is asserted (see
+    /// SC7852Bus::interruptLevel()).
     void setIM2VectorByte(uint8_t low) { m_im2VectorLow = low; }
 
     /// Non-maskable interrupt (NMI): always serviced, clears IFF1 (saving
@@ -212,7 +216,6 @@ private:
     bool IFF1{false}, IFF2{false};
     uint8_t IM{0};
     bool m_halted{false};
-    bool m_intLine{false};    // an input driven by the board (setIntLine()); reset() leaves it
     bool m_nmiPending{false};
     uint8_t m_pendingPrefix{0}; // a DD/FD fetched but not yet executed (see step())
     bool m_eiShadow{false};   // set by EI: blocks INT acceptance for one instruction
@@ -279,13 +282,13 @@ private:
 
     /// Returns the cycle cost if an interrupt was actually serviced (PC
     /// redirected to a handler) this call, or -1 if nothing happened (no
-    /// interrupt pending, or only a maskable one that IFF1 or
-    /// `maskableBlocked` -- the EI shadow -- holds off). step() uses -1 to mean "go ahead
+    /// NMI pending and `takeInt` false). `takeInt` is step()'s verdict on the
+    /// maskable INT: level asserted, IFF1 set, no EI shadow. step() uses -1 to mean "go ahead
     /// and fetch/execute a normal opcode this call" -- servicing an
     /// interrupt and executing the next opcode never happen in the same
     /// step() call, matching real hardware (the interrupt ack cycle IS
     /// the whole "instruction" for that cycle).
-    int serviceInterrupt(bool maskableBlocked);
+    int serviceInterrupt(bool takeInt);
 
     // ── Trace state ──
     std::atomic<uint32_t> m_traceFlags{TRACE_NONE};

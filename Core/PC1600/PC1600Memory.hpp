@@ -144,19 +144,7 @@ public:
     /// dispatch used its unrelated, never-written default, so any genuine
     /// interrupt would have vectored through garbage. Defaults to nullptr,
     /// same no-op-when-unset convention as setBusArbiter().
-    void setCPU(SC7852* cpu) {
-        m_cpu = cpu;
-        // The TC8576F's INT output (a level, masked per source by its own
-        // pr[5]) reaches the SC-7852 on INT0 = interrupt-cause bit 0. It is
-        // not latched: bit 0 follows the chip until the handler services
-        // the chip (e.g. reads RxD). Port 35H bit 0 gates it in
-        // updateIntLine().
-        m_uart.setInterruptHook([this](bool) { updateIntLine(); });
-        // The sub-CPU's Z7 reaches INT6 = cause bit 6, also a level: it
-        // drops when the handler reads SRIRQ (PC1600SubCpu).
-        m_subCpu.setInterruptHook([this] { updateIntLine(); });
-        updateIntLine();
-    }
+    void setCPU(SC7852* cpu) { m_cpu = cpu; }
 
     /// Raw port 35H value -- debug/test access, same convention as
     /// PC1500Machine's own cpu()/memory() unlocked accessors.
@@ -254,7 +242,7 @@ public:
     /// this project's own trace evidence can distinguish from "write
     /// clears" or "cleared some other way," and is the simplest
     /// convention consistent with it.
-    void latchTimer64InterruptCause() { m_intCause |= 0x10; updateIntLine(); }
+    void latchTimer64InterruptCause() { m_intCause |= 0x10; }
 
 
     /// Latches cause bit 3, "interrupt from the LH-5801/5803 side": the
@@ -262,20 +250,28 @@ public:
     /// 5C0E-5C22) unmasks just this cause (35H = 08H) before EI;HALT, and
     /// the dispatcher's bit-3 branch (4154H) acknowledges it -- so this
     /// INT is what ends the parked SC7852's HALT.
-    void latchLh5803InterruptCause() { m_intCause |= 0x08; updateIntLine(); }
+    void latchLh5803InterruptCause() { m_intCause |= 0x08; }
 
     /// Port 32H as read: the latched causes plus two live levels, bit 0
     /// the TC8576F's INT output (INT0, pin 81) and bit 6 the sub-CPU's Z7
-    /// (INT6, pin 84).
+    /// (INT6, pin 84). Neither is latched: bit 0 follows the chip until the
+    /// handler services it (e.g. reads RxD), bit 6 drops when the handler
+    /// reads SRIRQ (PC1600SubCpu).
     uint8_t intCause() const {
         return static_cast<uint8_t>(m_intCause | (m_uart.interruptOutput() ? 0x01 : 0x00) |
                                     (m_subCpu.interruptRequest() ? 0x40 : 0x00));
     }
 
-    /// The SC-7852's INT line is the OR of the latched causes (port 32H)
-    /// that are enabled at port 35H -- a level, so masking a cause or the
-    /// 32H read that clears it withdraws a request not yet taken.
-    void updateIntLine() { if (m_cpu) m_cpu->setIntLine((intCause() & m_intMask) != 0); }
+    /// The SC-7852's INT line is the OR of the causes (port 32H) that are
+    /// enabled at port 35H -- a level, so masking a cause or the 32H read
+    /// that clears it withdraws a request not yet taken. The CPU asks for
+    /// it at the start of each step(); a masked live source isn't even
+    /// evaluated.
+    bool interruptLevel() const override {
+        return (m_intCause & m_intMask) != 0 ||
+               ((m_intMask & 0x01) && m_uart.interruptOutput()) ||
+               ((m_intMask & 0x40) && m_subCpu.interruptRequest());
+    }
 
     /// Loads the always-resident system ROM: `lower` backs page A
     /// (0000-3FFF, PC1600-P0-B0-new.bin) and `upper` backs page B bank 0
@@ -458,7 +454,7 @@ private:
                                 // handback, bit 4 1/64 s timer; the rest have no
                                 // source yet. Read-clears.
                                 // Bits 0 (comm) and 6 (sub-CPU) are live levels, see intCause().
-                                // INT = intCause() & mask (updateIntLine())
+                                // INT = intCause() & mask (interruptLevel())
     uint8_t m_intMask{0};       // Port 35H
     uint8_t m_im2VectorLow{0xFF}; // Port 39H
 

@@ -115,9 +115,11 @@ only the ROM, through PSR FAULT and PE. The ROM does the flow control itself
 (`SNDSTAT`, P2-B6 A524H). Don't gate `tick()`'s transmit on `m_cts`.
 
 ### PC-1600 INT is a level
-The level is `(intCause() & port 35H) != 0`, driven by `updateIntLine()`. It
-isn't an edge or a queued event. The ROM dispatcher reads the causes whatever
-the mask is, and the mask only gates INT.
+The level is `(intCause() & port 35H) != 0`, computed by
+`PC1600Memory::interruptLevel()` when the SC7852 asks for it at the start of
+each `step()`. It isn't an edge or a queued event, and no device pushes
+updates. The ROM dispatcher reads the causes whatever the mask is, and the
+mask only gates INT.
 
 ### Absolute-deadline emulation pacing
 `Qt6/app/EmulationPacer.cpp` schedules each batch against

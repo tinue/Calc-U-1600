@@ -59,6 +59,8 @@ public:
     uint8_t mem[65536]{};
     uint8_t readMem(uint16_t a) override { return mem[a]; }
     void    writeMem(uint16_t a, uint8_t v) override { mem[a] = v; }
+    bool intLine = false;
+    bool interruptLevel() const override { return intLine; }
 };
 
 disasm::FetchFn fetchFrom(const std::vector<uint8_t>& bytes, uint16_t base) {
@@ -683,7 +685,7 @@ void test_z80_history_carried_prefix_and_interrupt() {
     // An accepted interrupt leaves an entry of its own.
     bus.mem[0x0006] = 0xFB; // ei
     cpu.step();
-    cpu.setIntLine(true);
+    bus.intLine = true;
     cpu.step(); // the EI shadow: executes the nop
     cpu.step(); // accepts: IM 0 behaves as RST 38H
     CHECK(h.recent(0).interrupt && h.recent(0).len == 0 && h.recent(0).pc == 0x0008 && h.recent(0).pcAfter == 0x0038);

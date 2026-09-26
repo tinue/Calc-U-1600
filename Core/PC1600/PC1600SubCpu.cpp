@@ -76,13 +76,6 @@ uint8_t PC1600SubCpu::takePowerOnCause() {
     return cause;
 }
 
-void PC1600SubCpu::refreshInterrupt() {
-    const bool out = interruptRequest();
-    if (out == m_irqOut) return;
-    m_irqOut = out;
-    if (m_intHook) m_intHook();
-}
-
 void PC1600SubCpu::aclReset() {
     m_timers = {};
     m_irqMask = 0;
@@ -93,7 +86,6 @@ void PC1600SubCpu::aclReset() {
     m_adinLow = m_adinHigh = 0;
     m_paramLen = m_resultLen = m_resultPos = 0;
     m_prefix = 0;
-    refreshInterrupt();
 }
 
 void PC1600SubCpu::storeTimer(Timer t) {
@@ -238,7 +230,6 @@ bool PC1600SubCpu::execute(uint8_t op) {
         // SWMSK (IOCS 10H): the interrupt mask, high nibble first.
         case 0xA0:
             m_irqMask = static_cast<uint8_t>((param(0) << 4) | param(1));
-            refreshInterrupt();
             return false;
         // SRMSK (IOCS 11H).
         case 0xA1: setAnswer(m_irqMask); return true;
@@ -248,7 +239,6 @@ bool PC1600SubCpu::execute(uint8_t op) {
         case 0xA2:
             setAnswer(m_pending);
             m_pending = 0;
-            refreshInterrupt();
             return true;
         // SRINP (IOCS 13H): bit 5 = 0 while CI is asserted (P2-B6 A396H
         // inverts it into INSTAT), bit 2 = a password is set (A905H).

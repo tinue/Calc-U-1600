@@ -400,7 +400,7 @@ bool SC7852::condTrue(int code) const {
 
 void SC7852::requestNMI() { m_nmiPending = true; }
 
-int SC7852::serviceInterrupt(bool maskableBlocked) {
+int SC7852::serviceInterrupt(bool takeInt) {
     if (m_nmiPending) {
         m_nmiPending = false;
         bumpR(); // the acknowledge is an M1 cycle
@@ -411,7 +411,7 @@ int SC7852::serviceInterrupt(bool maskableBlocked) {
         PC = 0x0066;
         return 11 + kM1WaitStates;
     }
-    if (m_intLine && IFF1 && !maskableBlocked) {
+    if (takeInt) {
         bumpR();
         m_halted = false;
         IFF1 = false;
@@ -456,9 +456,11 @@ int SC7852::step() {
     const bool eiShadow = m_eiShadow;
     m_eiShadow = false;
     // No interrupt is accepted between a DD/FD prefix and what follows it.
-    if (!m_pendingPrefix && (m_nmiPending || (m_intLine && IFF1 && !eiShadow))) {
+    // The INT level is only asked for when IFF1 could accept it.
+    const bool takeInt = !m_pendingPrefix && IFF1 && !eiShadow && bus.interruptLevel();
+    if (!m_pendingPrefix && (m_nmiPending || takeInt)) {
         const uint16_t interruptedPC = PC;
-        int serviced = serviceInterrupt(eiShadow);
+        int serviced = serviceInterrupt(takeInt);
         if (serviced >= 0) { // interrupt ack consumes this step() call on its own; no trace frame
             recordHistory(interruptedPC, true);
             return serviced;

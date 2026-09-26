@@ -316,7 +316,7 @@ int PC1600Machine::step() {
             // see latchTimer64InterruptCause()). It latches whatever 35H
             // says (the ROM's ISR filters the 32H byte with 35H itself,
             // P1-B3 4102H/4112H); the mask only gates the INT level -- see
-            // PC1600Memory::updateIntLine().
+            // PC1600Memory::interruptLevel().
             if (!m_timer64State) m_z80Mem.latchTimer64InterruptCause();
             // The sub-CPU's 0.5 s tick comes from the same divider as this
             // 64 Hz signal, see kTimer64EdgesPerHalfSecond. It raises SRIRQ

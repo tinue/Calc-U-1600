@@ -2,7 +2,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 
 #include "../BcdCalendar.hpp"
 #include "PC1600Clocks.hpp"
@@ -179,9 +178,9 @@ public:
     uint8_t pendingInterrupts() const { return m_pending; }
     /// Z7 -> INT6 (port 32H bit 6): a pending event the mask enables. The
     /// SRIRQ read (A2H) clears every pending bit and so drops the line.
+    /// Computed from the current state; PC1600Memory::interruptLevel()
+    /// asks for it.
     bool interruptRequest() const { return (m_pending & m_irqMask) != 0; }
-    /// Called whenever interruptRequest() changes.
-    void setInterruptHook(std::function<void()> hook) { m_intHook = std::move(hook); }
 
     // ── System power (SubCpu §4) ────────────────────────────────────────
     //
@@ -230,8 +229,7 @@ public:
     bool passwordSet() const { return m_password[0] != 0; }
 
 private:
-    void raise(uint8_t bits) { m_pending |= bits; refreshInterrupt(); }
-    void refreshInterrupt();
+    void raise(uint8_t bits) { m_pending |= bits; }
     void storeTimer(Timer t);
     void publishTimer(Timer t);
     void compareTimers();
@@ -274,8 +272,6 @@ private:
     int      m_ackAt{0};
     uint8_t  m_irqMask{0};
     uint8_t  m_pending{0};
-    bool     m_irqOut{false};
-    std::function<void()> m_intHook;
     std::array<Alarm, 3> m_timers{};
     uint8_t  m_analog{0};
     uint8_t  m_adinLow{0}, m_adinHigh{0}; // SWA1A thresholds (3CH), stored only

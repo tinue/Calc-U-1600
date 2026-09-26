@@ -48,6 +48,8 @@ public:
     uint8_t mem[65536]{};
     uint8_t readMem(uint16_t a) override { return mem[a]; }
     void    writeMem(uint16_t a, uint8_t v) override { mem[a] = v; }
+    bool intLine = false;
+    bool interruptLevel() const override { return intLine; }
 };
 
 // ── Expressions ───────────────────────────────────────────────────────────
@@ -157,10 +159,10 @@ void test_z80_skip_is_tied_to_its_address() {
     cpu.step();
     CHECK(cpu.step() == 0 && cpu.consumeBreakpointHit() && cpu.pc() == 0x0001);
     cpu.setIFF1(true);
-    cpu.setIntLine(true);
+    bus.intLine = true;
     cpu.resumePastBreakpoint();
     CHECK(cpu.step() > 0 && cpu.pc() == 0x0038); // interrupt entry
-    cpu.setIntLine(false);
+    bus.intLine = false;
     CHECK(cpu.step() == 0 && cpu.consumeBreakpointHit()); // not eaten by the skip
     cpu.removeBreakpoint(0x0038);
     CHECK(cpu.step() > 0 && cpu.pc() == 0x0001); // ret
@@ -178,7 +180,7 @@ void test_z80_breakpoint_keeps_ei_shadow() {
     bus.mem[0x0000] = 0xFB; bus.mem[0x0001] = 0x00; bus.mem[0x0002] = 0x00; // ei; nop; nop
     SC7852 cpu(bus);
     cpu.reset();
-    cpu.setIntLine(true);
+    bus.intLine = true;
     cpu.setBreakpointsEnabled(true);
     cpu.addBreakpoint(0x0001);
     CHECK(cpu.step() > 0 && cpu.iff1());          // ei

@@ -29,7 +29,7 @@ constexpr uint32_t kXclkHz   = kPC1600Cl2Hz;
 constexpr uint32_t kTStateHz = PC1600Machine::kTStateHz;
 } // namespace
 
-void TC8576F::resetImpl() {
+void TC8576F::resetChip() {
     // CPC §7: the parameter registers, the prescaler and the baud
     // generator are not reset.
     m_txEnable = m_dtr = m_rxEnable = m_sendBreak = m_rts = false;
@@ -69,7 +69,6 @@ void TC8576F::setSerialLink(SerialLink* link) {
     // tick() does nothing without a peer, so a non-empty FIFO would hold
     // TxRDY low for good and hang a transmit poll.
     resetSerialState();
-    refreshInterruptOutput();
 }
 
 int TC8576F::prescaler() const {
@@ -121,14 +120,17 @@ uint8_t TC8576F::psr() const {
     // XBUSY: set by the 21H write, cleared by the sub-CPU's Z9 ACK. The ROM
     // waits for it after each command byte (A98CH).
     if (m_xbusy && !m_sub.acked()) v |= kPsrXBUSY;
-    // IntF: factor 1 (handshake) with PR6 routing it; factor 2 (status-
-    // line edges) is not modelled -- the PC-1600 keeps IM2 set.
-    const bool intF = !m_intMask1 && (((m_pr[6] & 0x01) && m_intp0) || ((m_pr[6] & 0x02) && m_intp1));
-    if (intF) v |= kPsrIntF;
+    if (intF()) v |= kPsrIntF;
     return v;
 }
 
-uint8_t TC8576F::readRegisterImpl(uint8_t reg) {
+bool TC8576F::intF() const {
+    // Factor 1 (handshake) with PR6 routing it; factor 2 (status-line
+    // edges) is not modelled -- the PC-1600 keeps IM2 set.
+    return !m_intMask1 && (((m_pr[6] & 0x01) && m_intp0) || ((m_pr[6] & 0x02) && m_intp1));
+}
+
+uint8_t TC8576F::readRegister(uint8_t reg) {
     switch (reg & 0x03) {
         case 0x00: // 20H -- serial input data
             m_rxReady = false;
@@ -143,7 +145,7 @@ uint8_t TC8576F::readRegisterImpl(uint8_t reg) {
     }
 }
 
-void TC8576F::writeRegisterImpl(uint8_t reg, uint8_t value) {
+void TC8576F::writeRegister(uint8_t reg, uint8_t value) {
     if ((reg & 0x03) == 0x03) { writeControlRegister(value); return; }
     if (m_resetHeld) return; // held in reset: only 23H gets through
     switch (reg & 0x03) {
@@ -241,7 +243,7 @@ void TC8576F::writeControlRegister(uint8_t value) {
     // reset until a parameter-address write with D5 = 0.
     m_par = value & 0x07;
     if (value & 0x20) {
-        resetImpl();
+        resetChip();
         m_resetHeld = true;
     } else {
         m_resetHeld = false;
@@ -286,7 +288,7 @@ void TC8576F::followParallelHandshake() {
     m_lastSubBusy = busy;
 }
 
-void TC8576F::tickImpl(int tstates) {
+void TC8576F::tick(int tstates) {
     followParallelHandshake();
     // Standalone (no peer): nothing in the serial side is time-driven.
     if (!m_link) return;
@@ -343,36 +345,16 @@ void TC8576F::tickImpl(int tstates) {
     }
 }
 
-uint8_t TC8576F::readRegister(uint8_t reg) {
-    const uint8_t v = readRegisterImpl(reg);
-    refreshInterruptOutput();
-    return v;
-}
-
-void TC8576F::writeRegister(uint8_t reg, uint8_t value) {
-    writeRegisterImpl(reg, value);
-    refreshInterruptOutput();
-}
-
-void TC8576F::tick(int tstates) {
-    tickImpl(tstates);
-    refreshInterruptOutput();
-}
-
 void TC8576F::reset() {
-    resetImpl();
+    resetChip();
     m_resetHeld = false;
-    refreshInterruptOutput();
 }
 
-void TC8576F::refreshInterruptOutput() {
+bool TC8576F::interruptOutput() const {
     // DS §5.9 (CPC §6.5).
     const bool txInt = m_txEnable && m_txReady && !m_txIntMask; // /CTS = 0, see tick()
     const bool rxInt = m_rxEnable &&
         ((!m_rxIntMask && (m_rxReady || m_rxBreak)) ||
          (!m_errIntMask && (m_framingError || m_overrunError || m_parityError)));
-    const bool out = txInt || rxInt || (psr() & kPsrIntF);
-    if (out == m_intOut) return;
-    m_intOut = out;
-    if (m_intHook) m_intHook(out);
+    return txInt || rxInt || intF();
 }
