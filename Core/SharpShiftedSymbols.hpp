@@ -14,10 +14,6 @@
 //   * Core/PC1600/PC1600TypedInput.hpp also maps the PC-1600 digit-row
 //     second legends (' [ ] ` { } \ ~ |) plus SHIFT + . = _, which the
 //     PC-1500 lacks.
-//
-// The Swift GUI keeps its own copy (Calc-U-1600/PC1500KeyboardMap.swift's
-// shiftedCharacterBaseKeyName) -- a different layer/language; keep the two
-// in sync by hand until the input paths are unified.
 inline bool sharpShiftedSymbolBaseKey(char c, std::string* base) {
     switch (c) {
         case '!': *base = "f1"; return true;

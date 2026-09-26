@@ -274,10 +274,8 @@ endif()
 
 # ---- App icon (macOS bundle icon; Windows' equivalent is the WIN32
 # block's calc-u-1600.rc above, Linux's is the AppImage's --icon-file in
-# build.yml). Generated once from the Xcode project's own
-# Assets.xcassets/AppIcon.appiconset via `iconutil -c icns` and committed
-# here, same as the vendored libsharpdx.a above -- regenerate with
-# iconutil if the source PNGs ever change.
+# build.yml). A committed .icns, same as the vendored libsharpdx.a above --
+# regenerate it with `iconutil -c icns` from an .iconset if the icon changes.
 if(APPLE)
   set(APP_ICON_FILE ${CMAKE_CURRENT_SOURCE_DIR}/resources/CalcU1600.icns)
   set_source_files_properties(${APP_ICON_FILE} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")

@@ -48,7 +48,7 @@ bool romPresent() {
 }
 
 // ── Minimal CALCU1500_TRACE reader ─────────────────────────────────────
-// Constants MUST match Core/PC1500/PC1500TraceFile.cpp / TraceWriter.swift.
+// Constants MUST match Core/PC1500/PC1500TraceFile.cpp.
 struct TraceSummary {
     bool headerOk = false;
     int firstRecordType = -1;

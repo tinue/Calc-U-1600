@@ -52,7 +52,7 @@
 //     segments (though the TRM models them as three independent bits;
 //     real firmware is assumed to only ever set one at a time, same as
 //     any other angle-mode indicator). One shared start position; the
-//     GUI picks the matching text (see `PC1600LCDDisplayView.swift`).
+//     GUI picks the matching text.
 //   - **RUNPRO is two independently-driven legends** that simply sit
 //     close enough together to visually read as one word.
 //

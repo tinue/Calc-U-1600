@@ -26,8 +26,7 @@ class PC1500Machine;
 // (preset steps, BASIC program text) -- the live interactive keyboard
 // never does this: a physical or on-screen 'a' key press always sends
 // the same "a" key regardless of case, matching how a real keyboard has
-// no separate upper/lowercase keycaps (see PC1500KeyboardMap.swift's own
-// characterName(), which lowercases without any shift logic). No multi-
+// no separate upper/lowercase keycaps. No multi-
 // pass LIST-append handling for lines over the line editor's 79-char
 // limit -- not needed by the debug scenarios driving this port.
 

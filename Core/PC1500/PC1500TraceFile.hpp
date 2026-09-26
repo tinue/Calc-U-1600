@@ -47,7 +47,7 @@ public:
     /// Writes one TRACE_EVENT record (LH5801-shaped -- the PC-1500/1500A's
     /// own CPU, or the PC-1600's LH5803 co-processor). Field groups not
     /// populated by the active TRACE_* flags are simply written as their
-    /// zero-initialised `CpuFrame` values, matching TraceWriter.swift.
+    /// zero-initialised `CpuFrame` values.
     void writeFrame(const CpuFrame& f);
     /// Writes one TRACE_EVENT_Z80 record (the PC-1600's SC7852).
     void writeFrame(const Z80CpuFrame& f);

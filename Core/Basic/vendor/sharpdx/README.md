@@ -16,15 +16,12 @@ frameworks.
 
 ## Architecture
 
-`libsharpdx.a` here is **arm64 only** (matches the default Apple-Silicon
-`ARCHS_STANDARD` / `ONLY_ACTIVE_ARCH` dev build). A universal build needs an
+`libsharpdx.a` here is **arm64 only** (matches an Apple-Silicon dev build). A universal build needs an
 `x86_64-apple-darwin` slice `lipo`-ed in -- `tools/refresh_sharpdx.sh --universal`.
 
 ## Linking
 
-`Core/Basic` is an Xcode file-system-synchronized group, so Xcode links
-`libsharpdx.a` automatically once it is on disk here; the app target just
-adds `Core/Basic/vendor/sharpdx` to `LIBRARY_SEARCH_PATHS`. The headless
+The Qt6 app links `libsharpdx.a` through `Qt6/CMakeLists.txt`. The headless
 CLI / test builds (`tools/*.sh`) pass the archive path on the clang++
 command line.
 

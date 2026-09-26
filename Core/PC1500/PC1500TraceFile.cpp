@@ -71,8 +71,7 @@ void PC1500TraceFile::writeRecord(uint8_t type, const uint8_t* payload, uint16_t
 
 void PC1500TraceFile::writeFrame(const CpuFrame& f) {
     if (!m_fh) return;
-    // 25-byte TRACE_EVENT payload -- field order MUST match
-    // TraceWriter.swift's makeFramePayload() and read_trace.py's
+    // 25-byte TRACE_EVENT payload -- field order MUST match read_trace.py's
     // `<IHHB BBBBBBB HB BBB H B` unpack (trailing B = cpuId, v2).
     uint8_t payload[25];
     ByteSink s{payload};
@@ -101,8 +100,7 @@ void PC1500TraceFile::writeFrame(const CpuFrame& f) {
 void PC1500TraceFile::writeFrame(const Z80CpuFrame& f) {
     if (!m_fh) return;
     // 29-byte TRACE_EVENT_Z80 payload -- field order MUST match
-    // TraceWriter.swift's makeZ80FramePayload() and read_trace.py's
-    // `<IHHBB HHHHHHH BBBBB` unpack.
+    // read_trace.py's `<IHHBB HHHHHHH BBBBB` unpack.
     uint8_t payload[29];
     ByteSink s{payload};
     s.u32(f.seqno);
