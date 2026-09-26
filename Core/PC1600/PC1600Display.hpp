@@ -67,10 +67,11 @@ public:
     /// How long a controller reports busy (status bit 7) after a command or
     /// data write: until the kBusyClocks-th edge of CK0, the LCD base clock
     /// (phi-OS 1.3 MHz / 6 = 216.7 kHz, ~16.5 SC-7852 T-states per edge),
-    /// which free-runs asynchronously to the CPU. CK0 feeds the HD61203's
-    /// oscillator, which halves it into the HD61102s' phi1/phi2, so 4 edges
-    /// are about 2 phi cycles -- a fit inside the datasheet's 1-3 phi
-    /// cycles. See the .cpp's readIO().
+    /// which free-runs asynchronously to the CPU. CK0 is inferred (not yet
+    /// schematic-confirmed) to feed the HD61203's oscillator, which halves
+    /// it into the HD61102s' phi1/phi2, so 4 edges would be about 2 phi
+    /// cycles -- a fit inside the datasheet's 1-3 phi cycles. See the
+    /// .cpp's readIO().
     static constexpr int kBusyClocks = 4;
     /// Credits elapsed SC-7852 T-states to the LCD clock. Only a running
     /// total: edges are derived on demand (lcdEdges()), since they matter

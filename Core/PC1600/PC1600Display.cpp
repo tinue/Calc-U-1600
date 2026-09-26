@@ -37,11 +37,12 @@ uint8_t PC1600Display::readIO(uint8_t port) {
     // left by every BASIC benchmark. 3 edges changes nothing, 4 edges gives
     // 5.854 s (real 5.894 s, i.e. the residual), 5 edges overshoots to
     // 6.257 s. Dampflok.bas drops from 1.8% to 0.87% slow with it. This is
-    // a fit, not a datasheet figure, but it lies inside the datasheet's
-    // bound of 1/fCLK <= T_BUSY <= 3/fCLK: the 216.7 kHz clock is CK0,
-    // the HD61203's oscillator input, and the HD61203 divides it by two
-    // into phi1/phi2, so fCLK = 108.3 kHz (9.2-27.7 us). 3-4 CK0 periods
-    // are 13.8-18.5 us, about 2 phi cycles.
+    // a fit, not a datasheet figure. It lies inside the datasheet's bound
+    // of 1/fCLK <= T_BUSY <= 3/fCLK if the 216.7 kHz CK0 is the HD61203's
+    // oscillator input (inferred, not yet schematic-confirmed): the
+    // HD61203 divides it by two into phi1/phi2, so fCLK = 108.3 kHz
+    // (9.2-27.7 us), and 3-4 CK0 periods are 13.8-18.5 us, about 2 phi
+    // cycles.
     //
     // Per-block offset (see class comment / writeIO's own comment for the
     // full derivation): offset 1 = status read, offset 3 = data read (the

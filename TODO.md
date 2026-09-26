@@ -396,11 +396,15 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   Data Book* U74, 1989, printed pp. 261–290; local copy
   `PC-1600/Hitachi_HD61102_1989.pdf`, HD61203 alongside) bounds the busy
   time at **1/fCLK ≤ T_BUSY ≤ 3/fCLK**, where fCLK is the φ1/φ2
-  frequency. Settled (reference §9.7): CK0 = 216.7 kHz is the HD61203's
-  external oscillator (the 215 kHz / FS = GND case), which halves it into
-  φ, so fCLK = 108.3 kHz and the bound is 9.2–27.7 µs. The fit (busy until
-  the 4th CK0 edge = 3–4 CK0 periods = 13.8–18.5 µs, ~2 φ cycles) is
-  inside it, so the LCD fit is not over the datasheet maximum.
+  frequency. Inferred in the reference (§9.7), not yet confirmed from the
+  schematic: CK0 = 216.7 kHz is the HD61203's external oscillator (the
+  215 kHz / FS = GND case), which halves it into φ, so fCLK = 108.3 kHz
+  and the bound is 9.2–27.7 µs. The fit (busy until the 4th CK0 edge =
+  3–4 CK0 periods = 13.8–18.5 µs, ~2 φ cycles) is then inside it. If
+  instead CK0 were φ itself (the 430 kHz FS option would fit that too),
+  the bound would be 4.6–13.8 µs and the fit would exceed it. To confirm,
+  check in the Service Manual schematic that CK0 goes to the HD61203's CR
+  pin, and its M/S and FS levels.
 
   Datasheet behaviour left out because it moves the fit. The scroll/copy
   routine (bank 6 `8A2C`/`8A66`) reads 4 bytes and writes 4 per column, so
