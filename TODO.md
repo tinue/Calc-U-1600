@@ -5,21 +5,24 @@ obligations.
 
 ## Known issues
 
-- **PC-1600 BASIC runs ~0.65% fast vs a real unit (MODE 0); cause open.**
+- **PC-1600 BASIC runs ~0.4-0.65% fast vs a real unit (MODE 0); cause open.**
   Measured 2026-09-23 from audio recordings (BEEP markers, ms precision;
   the recorder reads 0.22% slow, calibrated from the F-register whistle).
   Every BASIC program is ~0.65% short:
 
-  | Program | Real | Emulator |
-  |---|---|---|
-  | A: `FOR I=1 TO 2000:NEXT I` | 6.275 s | 6.235 s (−0.65%) |
-  | B: 100 scrolling `PRINT`s | 5.894 s | 5.854 s (−0.68%) |
-  | C: A with sub-CPU interrupt masked (`OUT 53,&1F`) | 6.230 s | 6.189 s (−0.65%) |
-  | D: A with all interrupts masked (`OUT 53,0`) | 6.011 s | 5.974 s (−0.62%) |
-  | dampflok.bas, whistle 1→9 | 65.281 s | 64.843 s (−0.67%) |
+  | Program | Real | Emulator (dev-0.5.0) | Emulator (2026-09-26) |
+  |---|---|---|---|
+  | A: `FOR I=1 TO 2000:NEXT I` | 6.275 s | 6.235 s (−0.65%) | 6.251 s (−0.38%) |
+  | B: 100 scrolling `PRINT`s | 5.894 s | 5.854 s (−0.68%) | 5.868 s (−0.44%) |
+  | C: A with sub-CPU interrupt masked (`OUT 53,&1F`) | 6.230 s | 6.189 s (−0.65%) | 6.191 s (−0.63%) |
+  | D: A with all interrupts masked (`OUT 53,0`) | 6.011 s | 5.974 s (−0.62%) | 5.974 s (−0.62%) |
+  | dampflok.bas, whistle 1→9 | 65.281 s | 64.843 s (−0.67%) | not re-run |
 
-  The residual is ~70 T (~19 µs) per `FOR/NEXT` pass in A, C and D alike,
-  i.e. a fixed cost per statement/pass rather than a percentage.
+  C and D still carry ~70 T (~19 µs) per `FOR/NEXT` pass, i.e. a fixed cost
+  per statement/pass rather than a percentage, with no sub-CPU involvement.
+  A and B moved when the sub-CPU's 0.5 s event started being reported on
+  every tick (below); A−C is now 60 ms against the real 45 ms, so the
+  fitted sub-CPU response time is now too long (see the timing-model item).
 
   **Found and fixed on the way** (dev-0.5.0):
   - One wait per M1 cycle (f05e42e): BEEP pitch at two A values.
@@ -27,6 +30,10 @@ obligations.
   - Sub-CPU response time of 1.66 ms per command byte (64538ae): A−C.
   - LCD busy until the 4th LCD-clock edge (c18411b): B.
   - The ON key's live PB7 level (5011e2b).
+  - SRIRQ reports the 0.5 s event on every tick (dev-0.6.0, sub-CPU
+    rework). It used to be a toggling level, so every other INT6 handler
+    skipped the 0.5 s housekeeping (battery check, SRINP, APO countdown):
+    A and B +15 ms.
 
   **Ruled out**, all with interrupts off, emulator matching real within
   ±0.1–0.2%. Test programs are in `headless/beep/bench/timing{,2,3,4,5}.bas`
@@ -54,9 +61,10 @@ obligations.
   `CALL 3860H` every statement) and F88DH (set by a hidden-ROM statement
   pair at P1-B3b 41FEH/4201H; ≠0 → `CALL 41DAH` → `CURUDCHK` 0172H every
   statement). On the real unit a PEEK after benchmark A gave F127H=64
-  (`ON TIME$` pending), F88DH=0, F88EH=2. The emulator can't produce
-  these: the sub-CPU accepts `WAKE$`/`ALARM$`/`ON TIME$` and drops them
-  (see the RTC wake-up feature item). Bit 6 is *not* what 3AC0H tests
+  (`ON TIME$` pending), F88DH=0, F88EH=2. The emulator now models the
+  timers (an `ON TIME$` fires through the ROM, see the machine tests), but
+  ALL RESET clears them (SINIT writes month 0), so F127H=64 on the real
+  unit must come from an `ON TIME$` set on it earlier. Bit 6 is *not* what 3AC0H tests
   (`AND 20H`), so next: find where bit 6 is acted on (e.g. 243FH/3E39H,
   called just before 3AC0H), and re-time benchmark A on the real unit
   with the `ON TIME$` request cleared. If the residual disappears, it's
@@ -79,25 +87,14 @@ obligations.
 
 ## PC-1600 serial port
 
-- **Check the TC8576F model against Toshiba's datasheet.** Found
-  2026-09-26: *Toshiba Microprocessors Volume 2: Peripherals* (1987),
-  "TC8576AF, TC8577AP, TC8578AP (Combination Peripheral Controller)",
-  printed pp. 159–196 (PDF pp. 139–176), on bitsavers
-  (`components/toshiba/_dataBook/1987_Toshiba_Microprocessors_Volume_2_Peripherals.pdf`).
-  It describes the RS-232C ART, the 12-bit baud-rate generator with 4-bit
-  prescaler, and the Centronics port. A first look at the register table
-  (p. 165) matches the SSR bit order, the pr[5] serial-mode bits (RxM, ERM,
-  EP, PEN, L2/L1, TxM, S0) and the pr[7] prescaler. Go through every
-  `TODO(trace)` in `Core/PC1600/TC8576F.*` against it (PSR: IntF, BUSY,
-  PRIM, P5V, PE, SLCT, FALT; command-register bits; interrupt conditions),
-  and cite it in `PC-1600-IO-Ports.md` §3 and
-  `PC-1600-Serial-Hardware-Notes.md`. This may settle the two PSR/SSR
-  items below.
-- Confirm PSR bit polarity/positions (the SIO overlay's CS/CD/DS bits;
-  `CI`/ring is not currently surfaced) and which SSR bit the ROM
-  readiness poll actually gates on, against a ROM trace.
-- Whether the PC-1600 gates its own transmitter on incoming CTS (assumed
-  yes today, CTS defaults asserted).
+- **/CTS and /DSR wiring (TC8576F pins 35/34) unknown.** The ROM reads
+  CS/CD/DR through the parallel status inputs (settled from the data
+  sheet and ROM, `PC-1600-CPC-TC8576.md` §9.5), but the chip's own /CTS
+  still gates its transmitter in hardware. The model lets the peer's CS
+  gate it. Needs the main-board schematic or a measurement.
+- **RS-232C / SIO connector mux.** PRIME (the PRIM select) is tracked in
+  `TC8576F::rs232Selected()`; both connectors still share the one
+  `SerialLink`.
 - Capture the exact on-wire `SAVE"COM1:"`/`LOAD"COM1:"` framing from a
   real ROM trace, and do an end-to-end round-trip against real
   SharpDataExchange.
@@ -252,33 +249,24 @@ What's wrong with that:
 
 ## Feature ideas
 
-- **Sub-CPU (LU-57813P) protocol spec in SharpPC1500Reference.** The chip
-  has no ROM dump and no datasheet, so `PC1600SubCpu` only models what it
-  answers, and its facts are spread over code comments. Write
-  `PC-1600/PC-1600-Sub-CPU-Protocol.md`: one table with every command
-  (0x/5x/6x/7x/9x/Ax/Cx), its argument, answer/effect, its source (TRM
-  §7.1 / ROM address of the caller and what the caller checks /
-  real-unit measurement), and its emulator state (answered, stored but
-  ignored, dropped). Also cover the BUSY handshake over the TC8576F
-  parallel port (PSR bits 5/6, 1.66 ms fitted response time), the reset
-  cause (5AH), the 0.5 s signal (5DH) and the interrupt cause/mask. New
-  ROM findings then extend the table. It's also the starting point for the
-  RTC timers item below.
-- **Real-time-clock timers in the sub-CPU: wake-up (`WAKE$`), `ALARM$`,
-  `ON TIME$`.** The real PC-1600 can switch itself on at a set time and
-  raise BASIC timer interrupts. The emulated sub-CPU stores the clock but
-  accepts and drops the timer commands (67H/69H/6BH). Its interrupt line
-  only carries the 0.5 s tick, and its buzzer input F (click/wake-up/alarm
-  tones) isn't modelled. Needed:
-  - store the three timers;
-  - raise the sub-CPU interrupt cause bits (§7.1: b7 wake-up, b6 alarm 1,
-    b5 alarm 2);
-  - power on from OFF at the wake-up time;
-  - drive F127H's pending bits through the ROM's own handlers;
-  - sound the alarm on the F path.
-
-  Possibly also the source of the remaining ~0.65% BASIC timing gap
-  (Known issues).
+- **Sub-CPU F-pin tones: key click, `ALARM$` beep, wake-up beep, hour
+  signal** (deferred until measured). The sub-CPU's F output drives the
+  buzzer for SBEEP (IOCS 01H, key click with `KEY` click on), the 1 s
+  `ALARM$` beep, the wake-up beep (SWPON bit 2) and the hour signal (SWPON
+  bit 3). No source gives frequency, length or waveform. Record each on
+  the real unit with the calibrated iPhone recorder (as for the BEEP
+  measurements): key click; `ALARM$` a minute ahead; `WAKE$(0)` a minute
+  ahead after `POWER OFF`; the hour signal if SWPON bit 3 can be set from
+  BASIC. Then drive `PiezoSampler` from a modelled F output
+  (`PC1600SubCpu`, `PC1600Memory::updateBuzzerLine()`).
+- **Sub-CPU February: leap year or not?** The Service Manual (§4-2) says the
+  clock has no leap-year handling; the model follows the seeded year's
+  calendar. On the real unit: `DATE$="02/28":TIME$="23:59:50"`, wait, read
+  `DATE$` (02/29 or 03/01).
+- **Sub-CPU commands still unnamed** (IOCS 0CH–0FH, 16H/17H, 1BH–1FH, 26H,
+  the LH-5803's DCH), and the analog-input interrupt / external-keyboard
+  mode: see `PC-1600-SubCpu-LU57813P.md` §8. Tracing `ON ADIN`/`KEY`
+  callers would name them.
 
 - What is the "second program memory" for BASIC programs on the PC-1600
   (relevant for ROM modules and battery-backed RAM modules)?
@@ -388,6 +376,8 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
 - **TC8576F interrupt plumbing.** Four `read/write/tick/reset` →
   `…Impl()` wrappers exist only to call `refreshInterruptOutput()`; the
   `std::function<void(bool)>` hook's one subscriber ignores the bool.
+  `PC1600SubCpu` has the same kind of hook now (Z7 -> INT6), so the fix
+  covers both.
 
   **Before fixing:** check how the SC7852 samples INT (today
   `PC1600Memory::updateIntLine()` pushes it via `setIntLine()`), and what
@@ -417,21 +407,22 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   Service Manual schematic.
 
   **Sub-CPU half.** The 1.66 ms figure comes from the 0.5 s ISR's commands
-  but is applied to every sub-CPU command (key scan, clock, IOCS). Chase
-  the residual first, then re-fit once; consider a per-command response
-  time. Verify with the scrolling-PRINT benchmark.
+  but is applied to every sub-CPU command (clock, IOCS, the power-off
+  byte). It was fitted while SRIRQ's 0.5 s bit toggled, i.e. with the ISR
+  doing its full work (SRIRQ A2H, SRA0 A8H, SRINP A3H) only every other
+  tick. Now it does that every tick, and A−C comes out at 60 ms against
+  the real 45 ms, so the per-command time is too long. Of the total,
+  27.7 us is the CPC's own DSTB delay (now modelled from PR2/PR7); the
+  sub-CPU's share is `PC1600SubCpu::kResponseMicros` = 1632. Re-fit once;
+  consider a per-command response time. Verify with the scrolling-PRINT
+  benchmark.
 
   **Order for the sub-CPU half:**
-  1. The TC8576F datasheet check ("PC-1600 serial port"). `TC8576F::psr()`
-     raises PSR b5 (BUSY) and b6 (XBUSY) together for the whole window. The
-     datasheet separates them (b6 = XBUSY/BUFFUL, the output buffer still
-     full; b5 = the external device's BUSY). It also makes the UART's own
-     handshake time programmable: DSTB delay pr[2] and DSTB width pr[3], on
-     the pr[7]-prescaled clock. Part of the fitted 1.66 ms may be UART
-     strobe timing that the ROM programs, not LU-57813P response time.
-  2. The sub-CPU protocol spec (Feature ideas). A per-command response
-     time needs the command table, including which commands the 0.5 s ISR
-     sends, since that's what the fit came from.
-  3. The residual itself, which may need the RTC timers feature
-     (`ON TIME$`, see the known issue).
-  4. Then re-fit once.
+  1. ~~The TC8576F datasheet check~~ — done (dev-0.6.0): PSR BUSY and
+     XBUSY are separate, the DSTB delay is modelled (27.7 us of the fit).
+  2. ~~The sub-CPU protocol spec~~ — done in the corpus
+     (`PC-1600-SubCpu-LU57813P.md`): the 0.5 s ISR sends A2H, A8H, A3H.
+  3. The residual itself. The RTC timers now exist; the `ON TIME$`
+     hypothesis needs benchmark A re-timed on the real unit with no
+     `ON TIME$` pending (see the known issue).
+  4. Then re-fit once, against A−C = 45 ms.

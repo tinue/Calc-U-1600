@@ -28,17 +28,24 @@ XON/XOFF bytes just become part of the data stream as far as the host
 app is concerned. In practice this makes `X` handshake tricky to use;
 see "Using SharpDataExchange" below for the recommended alternative (no
 handshake, paced with a delay instead). The RS-232C hardware lines are
-modelled inside the TC8576F: RTS/DTR from the serial command register are
-forwarded via `SerialLink::setControl()`, and the peer's CTS/DCD/DSR are
-cached each `tick()` and overlaid on PSR bits b0/b1/b2. A raw PTY carries
-no modem lines, so `PtySerialLink::getStatus()` reports CTS and DSR
-permanently asserted (DCD approximates "a peer holds the slave open").
-The transmitter is gated on CTS but CTS defaults asserted, so a
-line-less PTY never stalls `SAVE"COM1:"`.
+modelled inside the TC8576F as the Toshiba data sheet and the ROM describe
+them (SharpPC1500Reference `PC-1600/PC-1600-CPC-TC8576.md` §9.5): RTS/DTR
+from the serial command register are forwarded via
+`SerialLink::setControl()`, and the peer's CS/CD/DR are cached each
+`tick()` into the parallel status register, bits 0/1/2. CS reads 0 when on,
+CD and DR read 1 (the chip inverts two of the three inputs). The peer's RI
+goes to the sub-CPU, which reports it as CI (`ON PHONE`, `WAKE$(1)`). A raw
+PTY carries no modem lines, so `PtySerialLink::getStatus()` reports CTS and
+DSR permanently asserted (DCD approximates "a peer holds the slave open").
+The transmitter is gated on CTS but CTS defaults asserted, so a line-less
+PTY never stalls `SAVE"COM1:"`. The receiver only takes bytes while the
+ROM has it enabled (RxEN), which it does when a channel is opened; until
+then incoming bytes wait in the PTY.
 
 **Baud pacing.** `TC8576F::tick(tstates)` accumulates SC-7852 T-states
-and, once per emulated character time (derived from the `pr[0]`/`pr[1]`
-baud divisor), shifts one queued TxD byte onto the link and pulls one
+and, once per emulated character time (from the PR7 prescaler and the
+PR1:PR0 divisor: at the ROM's prescaler, baud = 76800 / divisor), shifts
+one queued TxD byte onto the link and pulls one
 RxD byte off it. TxRDY drops only when the 512-byte TX FIFO fills, which
 paces the ROM's transmit loop to the wire. `PtySerialLink` adds fd-level
 back-pressure on the RX side: its reader thread stops draining the
@@ -61,10 +68,11 @@ then `SAVE "COM1:"` / `LOAD "COM1:"`.
 `28` disables the CTS/CD/DSR handshake checks entirely, which is the
 right choice against `PtySerialLink`: a raw PTY carries no real modem
 lines, so `getStatus()` just hardcodes CTS/DSR asserted -- a "must be
-high" check (`24`, which enables the CTS check) would pass trivially
-rather than test anything. On real PC-1600 hardware talking to a real
-UART, use `24` (or the matching `SNDSTAT` value) instead, since genuine
-RTS/CTS flow control is meaningful there.
+high" check (`24`, which enables the CTS check) passes without testing
+anything. On real PC-1600 hardware talking to a real UART, use `24` (or the
+matching `SNDSTAT` value) instead, since genuine RTS/CTS flow control is
+meaningful there. (Before dev-0.6.0 the emulator read CS with the wrong
+polarity, so a CTS check blocked sending.)
 
 On the Mac/Linux side, point `SharpDataExchange` at the stable symlink
 (SharpDataExchange's own auto-detect only scans `cu.usb*`/`ttyACM*`/
@@ -93,8 +101,7 @@ and the stable symlink path.
 
 ## Known limitations
 
-See `TODO.md` for the still-open items (PSR/SSR bit polarity confirmation,
-the exact on-wire `SAVE"COM1:"` framing, and a socket-transport
-follow-on) and `docs/PC1600-Core-Limitations.md` for what isn't modelled
-at all yet (the RS-232C/SIO connector mux, real baud-rate hardware, the
-parallel printer port).
+See `TODO.md` for the still-open items (the exact on-wire `SAVE"COM1:"`
+framing and a socket-transport follow-on) and
+`docs/PC1600-Core-Limitations.md` for what isn't modelled (the RS-232C/SIO
+connector mux, bit-level line timing, the /CTS and /DSR wiring).

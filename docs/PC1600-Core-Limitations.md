@@ -87,36 +87,33 @@ still worth understanding. They say what the code actually does now.
 
 `Core/PC1600/TC8576F.*`, `Core/Serial/SerialLink.hpp`, `Core/Serial/PtySerialLink.*`
 
-- **RS-232C / SIO connector mux not modelled** — "RS-232C and SIO share
-  the one channel and cannot be used at once… the RS-232C/SIO connector
-  mux and real baud hardware remain a later refinement." This is the
-  COM1-vs-SIO ("COM2") split. `TC8576F.hpp:12`, `TC8576F.hpp:55`
-- **Real baud-rate hardware not modelled** — pacing is the emulator's own
-  character-time approximation derived from the `pr[0]`/`pr[1]` divisor;
-  `SerialLink::onBaud()` is advisory and transports ignore it.
-  `TC8576F.hpp:55`, `SerialLink.hpp:55`
-- **SSR / PSR status-bit semantics are partly unconfirmed guesses, not
-  traced** — bits marked `TODO(trace)`: which SSR bit the ROM readiness
-  poll (romIV-6 `A8F0`/`A974`) and the LH-5803 OFF loop (`rom1500 E538`)
-  actually gate on; PSR bit positions and polarity, including the SIO
-  overlay's CS/CD/DS bits (`TC8576F.cpp`) and whether the PC-1600 gates
-  its own transmitter on incoming CTS. `TC8576F.hpp:42`, `TC8576F.hpp:141`,
-  `TC8576F.cpp:76`, `TC8576F.cpp:84`
-- **No `SerialLink` attached** → Phase-1 fallback: TxD is accepted and
-  reported "sent" immediately, RxD never has data. Enough for the internal
-  handshakes the ROM runs before any medium access (RAM disk, power-off
-  clock save) and keeps headless probes deterministic. `TC8576F.hpp:44`
-- **Parallel (Centronics) printer port**: FAULT / SLCT / PE / PRIME /
-  IntF status lines have no model (XBUSY, bit 6, carries the sub-CPU's
-  still-processing state; see `PC1600SubCpu::kResponseMicros`); the low printer-status bits are
-  reused to surface connector inputs. `TC8576F.cpp:78`
+The register model follows Toshiba's TC8576AF data sheet (SharpPC1500Reference
+`PC-1600/PC-1600-CPC-TC8576.md`). Remaining gaps:
+
+- **RS-232C / SIO connector mux not modelled** — the chip's PRIME output
+  (the gate array's PRIM select) is tracked (`TC8576F::rs232Selected()`),
+  but both connectors map to the one `SerialLink`.
+- **Line timing is per character, not per bit** — the character time comes
+  from PR7 and PR1:PR0 exactly, but no start/stop/parity bits are generated:
+  a host transport carries bytes. `SerialLink::onBaud()` is advisory.
+  Parity/framing errors and break (RBRK, SBRK) never occur.
+- **Transmit queue deeper than the chip's double buffer** — 512 bytes, so a
+  host bridge doesn't stall the ROM; TxRDY drops only when it is full.
+- **/CTS (pin 35) and /DSR (pin 34) wiring unknown** — the transmitter
+  follows the peer's CS; SSR bit 7 follows the peer's DSR (the ROM never
+  reads it).
+- **Parallel status-line interrupts (factor 2) not modelled** — the
+  PC-1600 keeps IM2 set, so the ROM never sees them.
+- **No `SerialLink` attached** → nothing connected: modem inputs read off,
+  TxD is accepted and reported "sent" immediately, RxD never has data.
+  Enough for the internal handshakes the ROM runs before any medium access
+  (RAM disk, power-off) and keeps headless probes deterministic.
 - **Raw PTY carries no RS-232C modem lines** — `PtySerialLink::getStatus()`
   reports CTS and DSR permanently asserted; DCD approximates "a peer
   currently holds the slave open". Non-POSIX build: every operation is a
-  no-op and `isOpen()` is false. `PtySerialLink.hpp:28`
-- **Still open** (see `docs/PC1600-Serial-Port.md` and `TODO.md`): a
-  ROM-trace capture of the real `SAVE"COM1:"` / `LOAD"COM1:"` framing, an
-  end-to-end round-trip against real SharpDataExchange, and the follow-on
+  no-op and `isOpen()` is false.
+- **Still open** (see `docs/PC1600-Serial-Port.md` and `TODO.md`): an
+  end-to-end round-trip against real SharpDataExchange and the follow-on
   localhost-socket transport.
 
 ---
@@ -125,26 +122,32 @@ still worth understanding. They say what the code actually does now.
 
 `Core/PC1600/PC1600SubCpu.*`
 
-- **The sub-CPU only answers what the boot ROM is known to check**; the
-  stateful features behind those answers are deliberately inert:
-  - **Password** — stored and compared but never gates anything.
-    `PC1600SubCpu.hpp:41`
-  - **`ALARM$` / `WAKE$` / `TIME_CHECK$`** — accepted and discarded; no
-    source describes their real handling in enough detail to model.
-    `PC1600SubCpu.hpp:41`, `PC1600SubCpu.cpp:84`, `PC1600SubCpu.cpp:169`
-  - **`ON ADIN` sequences** — begin/end commands accepted, inert.
-    `PC1600SubCpu.hpp:34`
-- **Analog input port** (`setAnalogInput()`, request `06H`) is plain
-  injected state — no real battery / voltage model, and nothing in the
-  core drives it. `PC1600SubCpu.hpp:149`, `PC1600SubCpu.cpp:106`
-- **Battery voltage** (request `55H`, CE-1600P Ni-Cd pack) — no model.
-  `PC1600SubCpu.cpp:102`
+No datasheet and no ROM dump exist; the command set comes from the Z-80 ROM
+(SharpPC1500Reference `PC-1600/PC-1600-SubCpu-LU57813P.md`). Modelled: the
+clock, the wake-up and two alarm timers with minute-carry compare and `?`
+wildcards, the interrupt mask/pending bits and INT6, the password, the reset
+/ power-on cause, system off/on, and the handshake timing. Remaining gaps:
+
+- **Commands no source explains** (IOCS 0CH–0FH, 16H/17H, 1BH–1FH, 26H, the
+  LH-5803's DCH) are accepted and leave the previous answer standing.
+- **Analog input / external keyboard** — the SWA1A thresholds and the
+  IOCS 1EH mode are stored, but no analog-input interrupt or external-
+  keyboard event is generated. The analog port (SRA1) is injected state
+  (`setAnalogInput()`); nothing in the core drives it.
+- **Supply voltages** (SRA0 main, SRA2 CE-1600P pack) always read C0H, clear
+  of the ROM's low-battery thresholds. No low-battery (Q3) power-off.
+- **F-pin tones not generated** — key click (SBEEP), the ALARM$ beep, the
+  wake-up beep and the hour signal. Frequency and length are unmeasured
+  (`TODO.md`).
+- **February** follows the seeded year's calendar. The Service Manual says
+  the chip has no leap-year handling, but not which February it keeps.
+- **Response time** is one fitted figure for every command
+  (`kResponseMicros`), see the timing item in `TODO.md`.
 - **Clock is never read from the host clock inside Core** — kept
   deterministic for tests; the GUI/CLI layer injects a real "now". The
-  emulated clock is paced off emulated SC-7852 time, so a seeded time
-  drifts if the host cannot hold the emulation at real speed (exactly as
-  a real PC-1600 drifts against its own crystal). `PC1600SubCpu.hpp:47`,
-  `PC1600Machine.hpp` (RTC accumulator comment)
+  emulated clock is paced off emulated time, so a seeded time drifts if the
+  host cannot hold the emulation at real speed (exactly as a real PC-1600
+  drifts against its own crystal).
 
 ---
 
@@ -152,46 +155,27 @@ still worth understanding. They say what the code actually does now.
 
 `Core/PC1600/PC1600Machine.hpp`, `PC1600Memory.*`
 
-- **Sub-CPU aggregate interrupt (INT6, port 32H bit 6): only the 0.5 s
-  housekeeping timer is modelled.** Everything else that shares that one
-  line stays unraised because nothing generates it —
-  **low-battery, analog-in, CI line, auto-power-off, RS-232C timeout,
-  and the wakeup / alarm1 / alarm2 timers.** `PC1600Machine.hpp:352`
-- **Port 32H / 35H interrupt cause & mask**: stored but "not yet wired to
-  any real interrupt source"; only bit 4 (the 1/64 s timer) is driven.
-  `PC1600Memory.hpp:96`, `PC1600Memory.hpp:395`
-- **Timer clock domain**: the 1/64 s timer, the 0.5 s timer and the RTC
-  all accumulate **only SC7852 T-states** (not LH5803 cycles), so they
-  effectively pause while the SC7852 is parked — "a real but small
-  deviation from true hardware's always-running crystal."
-  `PC1600Machine.hpp` (`m_timer64Accum` comment)
-- **Auto-power-off / power management**: no explicit `m_poweredOff` state
-  is modelled, and none is needed — OFF/APO power-down and ON-key wake-up
-  fall out of the existing HALT + bus-arbiter behavior with zero special
-  casing. The real ROM's OFF/APO shutdown sequence runs to completion and
-  parks both CPUs in genuine HALT with bus ownership handed to the LH5803
-  (`PC1600BusArbiter`); `PC1600Machine::setOnKeyPressed()` wakes whichever
-  CPU is parked on the rising edge, regardless of which one owns the bus.
-  The screen-clear-on-OFF vs. retain-on-APO distinction is likewise
-  emergent: it's the real ROM choosing whether to clear display RAM before
-  its display-off/on commands, and `PC1600Display` already retains pixel
-  and status-symbol RAM across the "off" state, matching the **VGG power
-  rail** (RTC, sub-CPU, internal-RAM retention, HD61102 display latch)
-  staying powered while only **VCC** (CPUs, ROM, UART, LCD driver) drops.
-  The RTC (`m_rtcAccum`) keeps advancing while the LH5803 owns the bus for
-  exactly this reason.
-  - **Reset-cause byte** (sub-CPU request `5AH`, `PC1600SubCpu::request`
-    case `0x0A`, field `m_resetCause`): the boot ROM reads it at
-    `romI-0 0x0346`, bit-shuffles it into `FA1BH`, and branches on the
-    result. Bit 5 set = ALL RESET (wipes clock + internal-RAM work area +
-    settings); clear = preserve them — verified by sweeping the value
-    against the real ROM. `setResetCauseAllReset()` = `0xA0`,
-    `setResetCauseSimple()` = `0x80`. The start-cause bitfield mirrored at
-    `F1ABH`: `b0`=ALL RESET, `b1`=internal RESET, `b2`=external RESET,
-    `b4`=POWER ON (ON key), `b5`=external power-on, `b6`=WAKE$(0), `b7`=CI.
-  - **No auto-power-off suppression / GUI affordance**: the ROM-level
-    `KEYWK3` (F07BH) APO-suppress bit is not driven from Core, and there
-    is no Settings toggle or OFF/ON UI control in the app layer.
+- **Port 32H causes**: bit 0 (TC8576F INT) and bit 6 (sub-CPU Z7) are live
+  levels, bit 3 (LH-5803 hand-back) and bit 4 (1/64 s timer) are latched and
+  cleared by the 32H read. The other bits have no source.
+- **Timer clock domain**: the 1/64 s signal and the sub-CPU's 0.5 s tick
+  accumulate only SC-7852 T-states, so they pause while the LH-5803 owns
+  the bus (MODE 1, the OFF sequence) and while the system is off. On
+  hardware both come from the sub-CPU and never stop. The calendar clock
+  and the timers don't have this gap: they run in every state.
+- **Power**: modelled as on hardware (Decisions.md). The sub-CPU cuts power
+  after the system-off command once the bus owner halts; the ON key, the
+  wake-up timer (SWPON bit 1) and CI (SWPON bit 0) power on through a
+  reset that reports the cause. The OFF key leaves FA08H = AAH (no
+  resume), auto power-off leaves A5H plus the saved SP, and the ROM resumes
+  from that. The PCTRL -> Q0 timing is not documented; "the bus owner
+  halted" stands in for it. `reset()` always leaves the machine on, even
+  from off; whether the real RESET switch powers the system on isn't
+  documented (the Service Manual lists the CE-1600P's reset, KL, but not
+  the RESET switch among the power-on sources).
+- **No auto-power-off suppression / GUI affordance**: the ROM-level
+  `KEYWK3` (F07BH) APO-suppress bit is not driven from Core, and there is
+  no Settings toggle or OFF/ON UI control in the app layer.
 
 ---
 

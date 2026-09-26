@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <deque>
 #include <initializer_list>
 #include <string>
 #include <vector>
@@ -876,7 +877,58 @@ void test_rom_auto_power_off_resumes() {
     CHECK(m.memory().read(0xFF80) == 55);
 }
 
+// Real ROM: a COM1: transfer through the TC8576F to an attached peer --
+// SETCOM, OPEN, PRINT#, CLOSE. Exercises the CPC as the ROM programs it:
+// PR7/PR1:PR0 baud, the serial command shadow (TxEN), and the CS/CD/DR
+// status polarity the ROM checks before it sends (PC-1600-CPC-TC8576.md §9).
+struct RecordingLink : SerialLink {
+    std::vector<uint8_t> tx;
+    std::deque<uint8_t> rx;
+    uint32_t baud = 0;
+    bool poll(uint8_t& out) override {
+        if (rx.empty()) return false;
+        out = rx.front(); rx.pop_front(); return true;
+    }
+    void send(uint8_t b) override { tx.push_back(b); }
+    void onBaud(uint32_t b, int) override { baud = b; }
+    Lines lines;
+    void getStatus(Lines& in) override { in = lines; }
+};
+
+void test_rom_com1_print_reaches_the_peer() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_rom_com1_print_reaches_the_peer: PC-1600 ROM images not found\n");
+        return;
+    }
+    RecordingLink link;
+    m.setSerialLink(&link);
+    tapKey(m, "mode"); waitIdle(m, PC1600Machine::kTStateHz);
+    tapKey(m, "mode"); waitIdle(m, PC1600Machine::kTStateHz);
+    std::string err;
+    auto type = [&](const char* l) {
+        CHECK(typeLine(m, l, /*pressEnter=*/true, &err));
+        waitIdle(m, PC1600Machine::kTStateHz);
+    };
+    // SNDSTAT 24: send only while CS is on, 1 s timeout.
+    for (const char* l : {"MAXFILES=1", "SETCOM \"COM1:\",9600,8,N,1,N,N", "SNDSTAT \"COM1:\",24,2",
+                          "OPEN \"COM1:\" FOR OUTPUT AS #1", "PRINT #1,\"HELLO\"", "CLOSE #1"})
+        type(l);
+    m.runCycles(PC1600Machine::kTStateHz);
+    CHECK(link.baud == 9600);
+    CHECK(std::string(link.tx.begin(), link.tx.end()).find("HELLO") != std::string::npos);
+
+    // CS off: the ROM holds the data back (P2-B6 A524H gating) and times out.
+    link.lines.cts = false;
+    link.tx.clear();
+    for (const char* l : {"OPEN \"COM1:\" FOR OUTPUT AS #1", "PRINT #1,\"WORLD\"", "CLOSE #1"}) type(l);
+    m.runCycles(static_cast<uint64_t>(PC1600Machine::kTStateHz) * 2);
+    CHECK(std::string(link.tx.begin(), link.tx.end()).find("WORLD") == std::string::npos);
+    m.setSerialLink(nullptr);
+}
+
 int run_pc1600_machine_tests() {
+    test_rom_com1_print_reaches_the_peer();
     test_rom_auto_power_off_resumes();
     test_rom_off_on_resumes();
     test_rom_wake_runs_command_at_the_set_time();
