@@ -73,7 +73,7 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
 1. **Install the extension:** run `tools/install_vscode_extension.sh`, then reload the VS Code window. The script packages a `.vsix` and installs it; a symlink into `~/.vscode/extensions` doesn't work with current VS Code.
 2. **Copy the workspace configuration:** `vscode/workspace/tasks.json` and `launch.json` go into the repository's `.vscode/`, which git ignores. If you already have your own files there, merge them in.
    - **tasks.json** has the build tasks. `sdas: build current file` runs sdaslh5801 → sdld → makebin; `zasm: build current file` runs zasm. Their problem matchers put assembler errors in the Problems view. Set `CALCU_SDCC_BIN` / `CALCU_ZASM` if the assemblers aren't in the default checkouts.
-   - **launch.json** has five configurations: *Debug on PC-1600*, *Debug on PC-1500A*, *PC-1500: memtest (stock)*, *ROM: reset and stop* and *Calc-U-1600: attach*.
+   - **launch.json** has three configurations: *Debug on PC-1600*, *Debug on PC-1500A* and *ROM: reset and stop*.
 3. **Debug the `.asm` in focus:** *Debug on PC-1600* and *Debug on PC-1500A* work for any program. With the `.asm` in focus, press F5. The session then:
    - assembles it with the machine's assembler (zasm for the PC-1600, sdaslh5801 for the PC-1500A);
    - does a clean start:
@@ -83,7 +83,7 @@ Breakpoints are only armed while the debugger itself runs the machine. A preset 
    - stops on its first instruction, or on `ENTRY` if the source defines that label (or equate) inside the program.
 
    The configurations set no `address`. A headerless `.bin` without an `address` loads at the lowest address in its listing, which is the source's `.org`. Neither preset reserves memory for the program, so pick an `.org` that BASIC won't overwrite while you debug (the PC-1500A's &7C01 area, or above a `NEW` of your own). Build & Load assembles the file in focus but reloads the one the session started with, so keep that file in focus.
-4. **Add a launch configuration for your own program** (*Add Configuration… ▸ Calc-U-1600: …*). The memtest one:
+4. **Add a launch configuration for your own program** (*Add Configuration… ▸ Calc-U-1600: …*) when it needs its own machine set-up. For example, memtest on a stock PC-1500:
    ```jsonc
    {
      "type": "calcu1600", "request": "attach", "name": "PC-1500: memtest (stock)", "port": 4711,
