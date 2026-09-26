@@ -79,6 +79,20 @@ obligations.
 
 ## PC-1600 serial port
 
+- **Check the TC8576F model against Toshiba's datasheet.** Found
+  2026-09-26: *Toshiba Microprocessors Volume 2: Peripherals* (1987),
+  "TC8576AF, TC8577AP, TC8578AP (Combination Peripheral Controller)",
+  printed pp. 159–196 (PDF pp. 139–176), on bitsavers
+  (`components/toshiba/_dataBook/1987_Toshiba_Microprocessors_Volume_2_Peripherals.pdf`).
+  It describes the RS-232C ART, the 12-bit baud-rate generator with 4-bit
+  prescaler, and the Centronics port. A first look at the register table
+  (p. 165) matches the SSR bit order, the pr[5] serial-mode bits (RxM, ERM,
+  EP, PEN, L2/L1, TxM, S0) and the pr[7] prescaler. Go through every
+  `TODO(trace)` in `Core/PC1600/TC8576F.*` against it (PSR: IntF, BUSY,
+  PRIM, P5V, PE, SLCT, FALT; command-register bits; interrupt conditions),
+  and cite it in `PC-1600-IO-Ports.md` §3 and
+  `PC-1600-Serial-Hardware-Notes.md`. This may settle the two PSR/SSR
+  items below.
 - Confirm PSR bit polarity/positions (the SIO overlay's CS/CD/DS bits;
   `CI`/ring is not currently surfaced) and which SSR bit the ROM
   readiness poll actually gates on, against a ROM trace.
@@ -238,6 +252,18 @@ What's wrong with that:
 
 ## Feature ideas
 
+- **Sub-CPU (LU-57813P) protocol spec in SharpPC1500Reference.** The chip
+  has no ROM dump and no datasheet, so `PC1600SubCpu` only models what it
+  answers, and its facts are spread over code comments. Write
+  `PC-1600/PC-1600-Sub-CPU-Protocol.md`: one table with every command
+  (0x/5x/6x/7x/9x/Ax/Cx), its argument, answer/effect, its source (TRM
+  §7.1 / ROM address of the caller and what the caller checks /
+  real-unit measurement), and its emulator state (answered, stored but
+  ignored, dropped). Also cover the BUSY handshake over the TC8576F
+  parallel port (PSR bits 5/6, 1.66 ms fitted response time), the reset
+  cause (5AH), the 0.5 s signal (5DH) and the interrupt cause/mask. New
+  ROM findings then extend the table. It's also the starting point for the
+  RTC timers item below.
 - **Real-time-clock timers in the sub-CPU: wake-up (`WAKE$`), `ALARM$`,
   `ON TIME$`.** The real PC-1600 can switch itself on at a set time and
   raise BASIC timer interrupts. The emulated sub-CPU stores the clock but
