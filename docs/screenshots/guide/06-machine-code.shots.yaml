@@ -8,7 +8,7 @@ shots:
     preset: ../presets/pc1500a-ready.pc1500a
     steps:
       - action: File > Load Machine Code…
-      - choose-file: ../../../examples/memtest_1500a.bin
+      - choose-file: ../../../examples/machine-code/memtest_1500a.bin
     capture: { target: dialog, file: 06-start-address.png }
 
   # A file with a PC-1600 header: loaded straight away, then the advice.
@@ -17,5 +17,5 @@ shots:
     preset: ../presets/pc1600-ready.pc1600
     steps:
       - action: File > Load Machine Code…
-      - choose-file: ../../../examples/assembly/CALCULAT.BIN
+      - choose-file: ../../../examples/machine-code/CALCULAT.BIN
     capture: { target: dialog, file: 06-loaded.png }

@@ -7,7 +7,7 @@
 #
 # Usage:
 #   tools/build_pc1600_plotter_probe.sh && \
-#     ./headless/pc1600_plotter_probe examples/plotter_test.pc1600
+#     ./headless/pc1600_plotter_probe examples/plotter/ce1600p-text-and-frame.pc1600
 set -e
 cd "$(dirname "$0")/.."
 mkdir -p headless

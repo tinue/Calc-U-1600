@@ -16,8 +16,8 @@ of BASIC programs, write a config file, and so on.
 
    - **Save the card.** Write the card image out under its final name (e.g.
      `CE-1601M - Progs`) and reference that name from a "real" preset such as
-     `examples/DiskWorks.pc1600`. The preset then mounts a card that already has
-     the programs and `DW.CFG` on it.
+     `examples/machine-code/DiskWorks.pc1600`. The preset then mounts a card
+     that already has the programs and `DW.CFG` on it.
 
    - **Dump the card.** Use the debug **"Dump Card YAML"** action to emit a card
      definition, and fold the pre-defined data it captures into one of the

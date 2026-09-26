@@ -81,9 +81,9 @@
 // `keys:`/`program:` blocks, executed top-to-bottom in file order -- so a
 // preset can install a loader/firmware program, run it, then load and run
 // a second payload program, all from one file (see
-// examples/memtest_bank.pc1500a). `pre-load-keys:`/`post-load-keys:` are
-// not recognized at all -- both become a single, repeatable `keys:` block
-// name.
+// examples/machine-code/memtest_bank.pc1500a). `pre-load-keys:`/
+// `post-load-keys:` are not recognized at all -- both become a single,
+// repeatable `keys:` block name.
 struct PresetStep {
     enum class Kind { Key, Type, Wait, Trace, Screenshot, SyncClock, SaveAs };
     Kind kind = Kind::Key;

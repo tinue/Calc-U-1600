@@ -253,7 +253,7 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   format IOCS when `F421` bit 4 is set, which a virgin card leaves clear)
   — so it silently leaves vertical bank 1 blank and `FILES"S2:"` returns
   ERROR 160. `FILES` / `SAVE"S2:"` / `LOAD"S2:"` all work once formatted.
-  See `examples/maxed-out-mem.pc1600` (runs the full `F` → `M` sequence).
+  See `examples/memory/maxed-out-mem.pc1600` (runs the full `F` → `M` sequence).
 
 ---
 

@@ -8,7 +8,7 @@
 // Build & run: see tools/run_tests.sh
 //
 // The card-definition inputs here are inline strings, not the files under
-// examples/memory-cards/ (those are demo assets that get renamed/edited);
+// examples/memory/memory-cards/ (those are demo assets that get renamed/edited);
 // the one file-based test SKIPs if its example is absent.
 
 #include <cstdint>

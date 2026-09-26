@@ -20,31 +20,31 @@ keys:
 
 # Load the programs, and save each one to X:
 program:
-  path: ../globus.bas
+  path: ../plotter/globus.bas
   format: basic-binary
 keys:
   - type: SAVE"X:GLOBUS.BAS"
 
 program:
-  path: ../biorhythmus_1600.bas
+  path: ../plotter/biorhythmus_1600.bas
   format: basic-binary
 keys:
   - type: SAVE"X:BIO.BAS"
 
 program:
-  path: ../lissajou-1600.bas
+  path: ../plotter/lissajou-1600.bas
   format: basic-binary
 keys:
   - type: SAVE"X:LISSAJOU.BAS"
 
 program:
-  path: ../ascii.bas
+  path: ../plotter/ascii.bas
   format: basic-binary
 keys:
   - type: SAVE"X:ASCII.BAS"
 
 program:
-  path: ../setcom1600.bas
+  path: ../interfaces/setcom1600.bas
   format: basic-binary
 keys:
   - type: SAVE"X:COMM.BAS"

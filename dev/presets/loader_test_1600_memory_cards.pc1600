@@ -20,7 +20,7 @@ keys:
 # `format: basic-binary` with a `.bas` path tokenizes the program while
 # loading, which is much faster than simulated typing the ascii version.
 program:
-  path: ../../examples/globus.bas
+  path: ../../examples/plotter/globus.bas
   format: basic-binary
 
 # After loading, switch to RUM mode and start the program. Answer the

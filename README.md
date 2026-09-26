@@ -14,7 +14,8 @@ pocket computers, built as a Qt6 desktop app (macOS / Linux / Windows).
 3. Pick a model (PC-1500, PC-1500A, or PC-1600) from the control bar, and
    attach a memory module and/or a plotter if you'd like to try those.
 4. **File ▸ Load BASIC Program…**, pick a `.bas` file from `examples/`
-   (e.g. `lissajou-1600.bas` on a PC-1600), and `RUN` it.
+   (e.g. `plotter/lissajou-1600.bas` on a PC-1600), and `RUN` it.
+   `examples/README.md` lists what else is in there.
 
 ## Status
 

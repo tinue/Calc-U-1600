@@ -12,7 +12,7 @@ the mapping is called out inline as (spec §N).
 - Chosen over JSON/plist because a definition is hand-authored and
   review-heavy: it needs comments (especially around ROM byte blocks and
   the reasoning behind a dormant sub-region), and it sits next to the
-  project's existing YAML scenario files (`examples/*.pc1600`).
+  project's existing YAML scenario files (`examples/**/*.pc1600`).
 - Integers may be written decimal (`8192`) or hex (`0x2000`); hex is
   conventional for addresses and byte values.
 - `#` starts a comment anywhere.

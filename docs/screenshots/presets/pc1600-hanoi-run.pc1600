@@ -4,7 +4,7 @@ keys:
   - key: mode
   - type: NEW0
 program:
-  path: ../../../examples/hanoi.bas
+  path: ../../../examples/basic/hanoi.bas
   format: basic-binary
 keys:
   - key: mode

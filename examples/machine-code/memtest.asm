@@ -33,11 +33,11 @@
 ;     ENTRY+2..ENTRY+6 to read results ---
 ;
 ; PC-1500A -- machine language area, always present regardless of any
-; module (see examples/memtest_1500a.pc1500a):
+; module (see examples/machine-code/memtest_1500a.pc1500a):
 ;   ENTRY = 0x7C01   NEW: none needed     RUN: CALL &7C01,X
 ;
 ; PC-1500 stock, no module -- built-in 2K RAM starts at &4000 (see
-; examples/memtest_stock.pc1500):
+; examples/machine-code/memtest_stock.pc1500):
 ;   ENTRY = 0x40C5   NEW &417D            RUN: CALL &40C5,X
 ;
 ; PC-1500 + CE-155 -- clamps around the built-in 2K (2K before it, 6K

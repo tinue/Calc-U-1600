@@ -81,4 +81,4 @@ roms/*.bin
 /dev/**/*.rel
 /dev/**/*.rst
 /dev/**/*.sym
-/examples/memtest.bin
+/examples/machine-code/memtest.bin

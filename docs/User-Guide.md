@@ -537,8 +537,8 @@ program:
 - **Files with a header** (PC-1600, CE-158) bring their own address.
 - **Auto-run:** if the header has an auto-run address, the preset types
   `CALL` for you and waits until the code returns.
-- **Examples:** `examples/memtest_bank.pc1500a`, and
-  `examples/assembly/Calculat.pc1600` (which prepares a RAM disk first).
+- **Examples:** `examples/machine-code/memtest_bank.pc1500a`, and
+  `examples/machine-code/Calculat.pc1600` (which prepares a RAM disk first).
 
 ### 8.7 Other steps
 
@@ -661,7 +661,7 @@ why) and [Memory-Card-Definition-Format.md](Memory-Card-Definition-Format.md)
 - **Start from an example:** copy the closest bundled card from
   `Qt6/resources/cards/`. `ce155.card.yaml` is a simple one;
   `ce1638.card.yaml` and `ce1601m.card.yaml` are banked. The fictional
-  [examples/memory-cards/pc1500-maxed-out.card.yaml](../examples/memory-cards/pc1500-maxed-out.card.yaml)
+  [examples/memory/memory-cards/pc1500-maxed-out.card.yaml](../examples/memory/memory-cards/pc1500-maxed-out.card.yaml)
   shows every PC-1500 expansion pin in use, and its preset loads it with
   `modulespecfile:`.
 - **Make it appear in the pickers:** put a file with `template: true` in

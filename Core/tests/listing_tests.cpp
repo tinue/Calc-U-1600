@@ -3,7 +3,7 @@
 // lh5801_tests.cpp. The fixtures under Core/tests/fixtures/listings/ are
 // real assembler output:
 //
-//   sdas-lh5801/memtest.*       examples/memtest.asm (ENTRY 0x40C5) through
+//   sdas-lh5801/memtest.*       examples/machine-code/memtest.asm (ENTRY 0x40C5) through
 //                               sdaslh5801 -plosgff + sdld (the .rst), plus
 //                               its linked image memtest_stock.bin
 //   sdas-lh5801/include_main.*  an .include, and a .db that wraps

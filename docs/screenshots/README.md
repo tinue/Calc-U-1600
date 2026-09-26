@@ -186,4 +186,4 @@ and so on) are garbage:
 - The PC-1600 boots in RUN mode, and `NEW0` is only accepted in PRO mode,
   so use `key: mode`, `type: NEW0`, then `key: mode`. They are ordinary
 presets (see [Preset files](../User-Guide.md#preset-files)) and may point at
-files elsewhere in the repo, e.g. `../../../examples/lissajou-1600.bas`.
+files elsewhere in the repo, e.g. `../../../examples/plotter/lissajou-1600.bas`.

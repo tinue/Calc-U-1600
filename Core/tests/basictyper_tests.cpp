@@ -87,7 +87,7 @@ void test_typeline_lowercase_via_shift() {
     // The quoted string's literal bytes are stored verbatim (only BASIC
     // keywords like PRINT get tokenized) -- "Bank: 7" must survive with
     // its original case, not get silently uppercased to "BANK: 7"
-    // (exercised by examples/ce163_bankswrm.pc1500a's own
+    // (exercised by examples/setup/ce1638_bankswrm.pc1500a's own
     // '10 PRINT "Bank: 7"' line).
     CHECK(memoryContainsBytes(machine, "Bank: 7", 0x4000, 0x7FFF));
     CHECK(!memoryContainsBytes(machine, "BANK: 7", 0x4000, 0x7FFF));

@@ -10,7 +10,7 @@ keys:
   - type: NEW0
 
 program:
-  path: CE1638_BANKSWRM_FIXED.bin
+  path: ce1638_bankswrm_fixed.bin
   format: binary
   address: 0x4100
 
