@@ -67,14 +67,10 @@ public:
     /// (phi-OS 1.3 MHz / 6 = 216.7 kHz, ~16.5 SC-7852 T-states per edge),
     /// which free-runs asynchronously to the CPU. See the .cpp's readIO().
     static constexpr int kBusyClocks = 4;
-    /// Credits elapsed SC-7852 T-states to the LCD clock.
-    void tick(int tstates) {
-        m_lcdClockAccum += static_cast<int64_t>(tstates) * kLcdClockHzTimes6;
-        while (m_lcdClockAccum >= kTStateHzTimes6) {
-            m_lcdClockAccum -= kTStateHzTimes6;
-            ++m_lcdEdges;
-        }
-    }
+    /// Credits elapsed SC-7852 T-states to the LCD clock. Only a running
+    /// total: edges are derived on demand (lcdEdges()), since they matter
+    /// only on an LCD port access.
+    void tick(int tstates) { m_tstates += static_cast<uint64_t>(tstates); }
 
     /// True while CK0 (LCD base clock) is enabled -- Z-80 I/O port 37H bit
     /// 4, see PC1600Memory's I/O decode. The display renders as blank
@@ -127,7 +123,7 @@ private:
         uint8_t addressPage{0};      // current page (0-7) -- direct register access, NOT windowed by addressStartLine (see readIO's own dataByte)
         uint8_t addressStartLine{0}; // display start line (0-63), command 0xC0-0xFF
         bool displayOn{false};
-        uint64_t busyUntilEdge{0};   // status bit 7 stays set until m_lcdEdges reaches this (see kBusyClocks)
+        uint64_t busyUntilEdge{0};   // status bit 7 stays set until lcdEdges() reaches this (see kBusyClocks)
     };
 
     void writeCommand(Controller& c, uint8_t value);
@@ -141,11 +137,17 @@ private:
 
     Controller m_ic2; // panel columns 0-63
     // LCD clock: phi-OS (1.3 MHz) / 6, counted in edges. Scaled by 6 so the
-    // accumulator stays integral: SC-7852 T-states * 1.3 MHz vs 3.58 MHz * 6.
+    // edge count stays integral: SC-7852 T-states * 1.3 MHz vs 3.58 MHz * 6.
     static constexpr int64_t kLcdClockHzTimes6 = kPC1600PhiOsHz;
     static constexpr int64_t kTStateHzTimes6 = int64_t{kPC1600TStateHz} * 6;
-    int64_t  m_lcdClockAccum{0};
-    uint64_t m_lcdEdges{0};
+    uint64_t m_tstates{0};  // SC-7852 T-states credited by tick()
+
+    /// LCD-clock edges since power-on: floor(m_tstates * N / D), split into
+    /// quotient and remainder so the product can't overflow.
+    uint64_t lcdEdges() const {
+        constexpr uint64_t n = kLcdClockHzTimes6, d = kTStateHzTimes6;
+        return (m_tstates / d) * n + (m_tstates % d) * n / d;
+    }
     Controller m_ic3; // panel columns 64-127
     bool m_clockEnabled{false};
     PC1600StatusLine m_statusLine;

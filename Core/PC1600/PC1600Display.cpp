@@ -48,7 +48,7 @@ uint8_t PC1600Display::readIO(uint8_t port) {
 
     // Status byte: bit7 = busy (see above); every other bit (reset
     // status, ON/OFF echo) is left clear.
-    auto statusByte = [this](const Controller& c) -> uint8_t { return m_lcdEdges < c.busyUntilEdge ? 0x80 : 0x00; };
+    auto statusByte = [this](const Controller& c) -> uint8_t { return lcdEdges() < c.busyUntilEdge ? 0x80 : 0x00; };
     // Data byte: real HD61102 hardware lags one column behind the address
     // pointer on reads -- a read returns the byte at `addressCol - 1`, NOT
     // `addressCol`, then advances the pointer (the classic "first read
@@ -91,7 +91,7 @@ void PC1600Display::writeIO(uint8_t port, uint8_t value) {
     bool isData = (offset == 2);
 
     auto apply = [&](Controller& c) {
-        if (offset == 0 || isData) c.busyUntilEdge = m_lcdEdges + kBusyClocks;
+        if (offset == 0 || isData) c.busyUntilEdge = lcdEdges() + kBusyClocks;
         if (!isData) {
             if (offset == 0) writeCommand(c, value);
             return; // offset 1/3: read-only, no write-side meaning

@@ -234,12 +234,7 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   fitted 4 clocks; the 1.66 ms figure comes from the 0.5 s ISR's commands
   but is applied to every sub-CPU command (key scan, clock, IOCS). Chase
   the residual first, then re-fit once; consider a per-command response
-  time. In the same pass: `display().tick()` runs every instruction
-  (`PC1600Machine::step()`) just to keep `m_lcdEdges` current, which is
-  read only on LCD port 50H–5BH access; keep a running T-state total and
-  derive edges lazily in `readIO`/`writeIO`
-  (`total * 1300000 / 21480000`). Verify both with the scrolling-PRINT
-  benchmark.
+  time. Verify with the scrolling-PRINT benchmark.
 - **CE-158 ROM reads on the PC-1500 go through the generic open-bus
   path** *(timing-sensitive)*. Every fetch at 0x8000–0x9FFF runs resolve →
   readOpenBus → SystemBus decode → per-card `respondsToRead`. Option: a
