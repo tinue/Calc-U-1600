@@ -61,10 +61,11 @@ class PC1600BusArbiter;
 //     drives the OFF-path clock save through it -- `rom1500 E538`:
 //     `bii #(0x0023),0x20` (poll a UART status bit), `sta #(0x0021)`
 //     (parallel-out = sub-CPU command), `lda #(0x0033)` (sub-CPU answer).
-//     The `#(...)` addresses are literal ME1 offsets 20H-27H / 33H;
-//     0xA020-0xA033 (the 30-3FH shadow at #A03xH convention, extended to
-//     the UART block) are routed the same way for safety.
-//     TODO(trace): pin down which of the two forms the ROM actually uses.
+//     The `#(...)` addresses are literal ME1 offsets 20H-27H / 33H, and
+//     that is the only form rom1500 uses for this block (its #(A03xH)
+//     accesses all go to the 30-3FH control ports). 0xA020-0xA033 is
+//     routed the same way by analogy with that A03xH shadow; no ROM path
+//     depends on it and it is unverified on hardware.
 class LH5803SharedMemory : public LH5801Bus {
 public:
     explicit LH5803SharedMemory(PC1600Memory& sharedMem) : m_shared(sharedMem) {}

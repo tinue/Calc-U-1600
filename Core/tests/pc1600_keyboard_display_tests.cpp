@@ -704,7 +704,7 @@ void test_subcpu_interrupt_cause_bit6() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
     auto& bus = static_cast<SC7852Bus&>(mem);
-    // Bit 0 is the TC8576F's live INT output (TxRDY on a reset chip), not
+    // Bit 0 is the TC8576F's live INT output, not
     // part of the latch under test here.
     auto latched = [&] { return static_cast<uint8_t>(bus.readIO(0x32) & 0xFE); };
 

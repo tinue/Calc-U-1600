@@ -661,7 +661,15 @@ void test_int_line_follows_cause_and_mask() {
 
     // Bit 0 is the TC8576F's live INT output, not a latch: a 32H read
     // leaves it (and INT) up until the chip itself is serviced.
+    // The transmit interrupt needs a peer's CTS and TxEN (CPC §6.5).
     mem.readIO(0x32);
+    struct CtsLink : SerialLink {
+        bool poll(uint8_t&) override { return false; }
+        void send(uint8_t) override {}
+    } link;
+    m.setSerialLink(&link);
+    mem.uart().tick(1);                         // pick up CTS
+    mem.writeIO(0x23, 0x01);                    // TxEN
     mem.writeIO(0x23, 0xC5);                    // pr[5] = 0: TxINTM clear
     mem.writeIO(0x22, 0x00);
     mem.writeIO(0x35, 0x01);
@@ -673,11 +681,12 @@ void test_int_line_follows_cause_and_mask() {
     mem.writeIO(0x22, 0x02);
     CHECK(!m.sc7852().intLine());
     CHECK((mem.readIO(0x32) & 0x01) == 0x00);
+    m.setSerialLink(nullptr);
 
     // Reset clears cause and mask, and the line with them.
     m.reset();
     CHECK(!m.sc7852().intLine());
-    CHECK((mem.readIO(0x32) & 0xFE) == 0x00); // bit 0: the reset chip's TxRDY, masked at 35H
+    CHECK(mem.readIO(0x32) == 0x00);
     CHECK(mem.intMask() == 0x00);
 }
 
