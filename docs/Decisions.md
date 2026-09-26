@@ -248,6 +248,17 @@ authentic speed for the span that matters.
   module split. Reserve the `batteryBacked` flag and keep
   `ExpansionCard` serialize/deserialize as the single seam for it.
 
+### Repository layout
+- **`examples/` is user-facing only.** It ships as the release's examples
+  zip, so it holds material for learning or using the emulator, grouped by
+  topic and listed in `examples/README.md`. Hardware-verification programs
+  go to `dev/hardware-checks/`, debug and regression presets to
+  `dev/presets/`, the VS Code "Debug on ..." presets to `vscode/presets/`.
+- **Tests don't read from `examples/`.** They use copies under
+  `Core/tests/fixtures/` (e.g. `memtest_stock.bin` next to its `.rst`), so
+  renaming or editing an example can't break a test. The duplicate binary is
+  deliberate.
+
 ### Wording and sources
 - **Comments and docs cite original sources only**: TRM, Service Manual,
   ROM dumps and disassembly. Other emulators aren't cited as an authority.
