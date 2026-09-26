@@ -274,15 +274,14 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
 - **Unrecognised controller commands** (including the write-side handling
   of `0xC0-0xFF`) are silently dropped — the "accepted, not modelled"
   stance. `PC1600Display.cpp:31`, `PC1600Display.cpp:118`
-- **Status-symbol line: the software-side port/bit protocol is still
-  unknown** — the flags are recomputed from display RAM (IC3 column 63,
-  pages 4/6/7) after every write that could have touched that cell, rather
-  than driven by a traced command path. `PC1600Display.hpp:52`,
-  `PC1600StatusLine.hpp:71`
-- **`Kbii` status segment** is read straight off panel bit 7 and simply
-  stays false for the life of a western session; a Japanese machine's
-  firmware is *assumed* to drive bit 7 for kana-entry mode where this ROM
-  folds it into `S`. `PC1600StatusLine.hpp:37`, `PC1600Display.cpp:223`
+- **Status-symbol line** is read from display RAM (IC3 column 63, pages
+  4/6/7), as the ROM's symbol writer (bank 6 8220H) stores it and the
+  Service Manual glass pinout wires it. `PC1600StatusLine.hpp`
+- **`Romaji` / `Kana` segments** (page 4 bit 2 / page 7 bit 2, commons
+  X35 / X59): which part of the "ローマ字→カナ" caption each lights is
+  *inferred* from pin order, and the GUI's `kana` position is estimated.
+  The western ROM never sets either bit. `PC1600StatusLine.hpp`,
+  `Qt6/app/LcdWidget.cpp`
 - **DEG / RAD / GRAD modelled as three independent bits** even though the
   hardware has one physical legend; real firmware is *assumed* to only
   ever set one at a time. `PC1600StatusLine.hpp:58`

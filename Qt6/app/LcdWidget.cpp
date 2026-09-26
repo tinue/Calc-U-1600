@@ -59,7 +59,7 @@ struct P16Item { const char* name; double rawX; };
 // data, remapped below into [kP16RowLeft, kP16RowRight] exactly like
 // Layout.startX(for:) does.
 constexpr P16Item kP16Items[] = {
-    {"busy", 0.04837}, {"shift", 0.10587}, {"s", 0.17526}, {"kbii", 0.19389},
+    {"busy", 0.04837}, {"shift", 0.10587}, {"s", 0.17526}, {"romaji", 0.19389}, {"kana", 0.2502},
     {"small", 0.31047}, {"degrad", 0.39611}, {"run", 0.50436}, {"pro", 0.54401},
     {"reserve", 0.60984}, {"def", 0.72086}, {"roman", 0.76209}, {"ctrl", 0.81562},
     {"batt", 0.87192},
@@ -222,8 +222,10 @@ void LcdWidget::paintPC1600(QPainter& painter) {
         return 0.0;
     };
 
-    const auto drawLabel = [&](const char* itemName, const QString& text) {
-        painter.setFont(font);
+    const auto drawLabel = [&](const char* itemName, const QString& text, double scale = 1.0) {
+        QFont labelFont = font;
+        if (scale != 1.0) labelFont.setPixelSize(std::max(1, static_cast<int>(fontSize * scale)));
+        painter.setFont(labelFont);
         painter.setPen(kInk);
         const double x = xFor(itemName);
         const QRectF box(x, rowTop, totalWidth - x, rowHeight);
@@ -249,7 +251,11 @@ void LcdWidget::paintPC1600(QPainter& painter) {
     if (flag("BUSY")) drawLabel("busy", "BUSY");
     if (flag("SHIFT")) drawLabel("shift", "SHIFT");
     if (flag("S")) drawInvertedLabel("s", "S");
-    if (flag("KBII")) drawLabel("kbii", QString::fromUtf8("\xE3\x82\xAB\xE3\x83\x8A")); // "カナ"
+    // The romaji->kana caption shares the window after S and is printed
+    // small on the glass. The "kana" position is an estimate (the other
+    // positions are measured) that keeps both parts clear of SMALL.
+    if (flag("ROMAJI")) drawLabel("romaji", QString::fromUtf8("ローマ字"), 0.75);
+    if (flag("KANA")) drawLabel("kana", QString::fromUtf8("→カナ"), 0.75);
     if (flag("SMALL")) drawLabel("small", "SMALL");
     if (flag("RUN")) drawLabel("run", "RUN");
     if (flag("PRO")) drawLabel("pro", "PRO");

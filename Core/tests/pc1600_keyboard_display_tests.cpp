@@ -340,7 +340,8 @@ void test_display_status_symbols_wired_to_ic3_column63() {
     CHECK(d.statusLine().isOn(Symbol::S));
     CHECK(d.statusLine().isOn(Symbol::Batt));
     CHECK(!d.statusLine().isOn(Symbol::Ctrl));
-    CHECK(!d.statusLine().isOn(Symbol::Kbii));
+    CHECK(!d.statusLine().isOn(Symbol::Romaji));
+    CHECK(!d.statusLine().isOn(Symbol::Kana));
 }
 
 // A "display off" command (0x3E) to IC3 must also blank the status-symbol
@@ -717,32 +718,41 @@ void test_memory_intmask_reads_back_via_port35() {
     CHECK(mem.intMask() == 0x01);
 }
 
-void test_kbii_segment_is_panel_driven_not_mode_driven() {
+// The romaji->kana caption is on commons X35 / X59 (Service Manual glass
+// pinout): page 4 bit 2 and page 7 bit 2 of IC3 column 63. KBII's bit 7
+// has no electrode, and the KBII mode flag in RAM must not light anything.
+void test_romaji_kana_segments_follow_the_glass_pinout() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
     auto& bus = static_cast<SC7852Bus&>(mem);
     using Symbol = PC1600StatusLine::Symbol;
-    CHECK(!mem.display().statusLine().isOn(Symbol::Kbii));
-
-    // Kbii is panel bit 7 of symbol set 2 (IC3 column 63, page 4) -- a real
-    // segment, independent of S at bit 3.
     bus.writeIO(0x54, 0x3F);        // display on
-    bus.writeIO(0x54, 0xB8 | 4);    // page 4
     bus.writeIO(0x54, 0x40 | 63);   // column 63
-    bus.writeIO(0x56, 0x80);        // kana bit only
-    CHECK(mem.display().statusLine().isOn(Symbol::Kbii));
+
+    bus.writeIO(0x54, 0xB8 | 4);    // page 4
+    bus.writeIO(0x56, 0x04);        // bit 2 = X35
+    CHECK(mem.display().statusLine().isOn(Symbol::Romaji));
+    CHECK(!mem.display().statusLine().isOn(Symbol::Kana));
     CHECK(!mem.display().statusLine().isOn(Symbol::S));
 
     bus.writeIO(0x54, 0x40 | 63);
-    bus.writeIO(0x56, 0x08);        // S bit only -- what this ROM actually writes
-    CHECK(!mem.display().statusLine().isOn(Symbol::Kbii));
-    CHECK(mem.display().statusLine().isOn(Symbol::S));
+    bus.writeIO(0x56, 0x80);        // bit 7 (KBII): no electrode
+    CHECK(!mem.display().statusLine().isOn(Symbol::Romaji));
+    CHECK(!mem.display().statusLine().isOn(Symbol::Kana));
+    CHECK(!mem.display().statusLine().isOn(Symbol::S));
 
-    // The KBII *mode* flag lives in RAM (F3C6H bit 7) and must not reach
-    // the segment: on a western unit the ROM only ever folds KBII into S,
-    // never drives the kana legend directly from the mode flag.
-    mem.write(0xF3C6, 0x80);
-    CHECK(!mem.display().statusLine().isOn(Symbol::Kbii));
+    bus.writeIO(0x54, 0xB8 | 7);    // page 7
+    bus.writeIO(0x54, 0x40 | 63);
+    bus.writeIO(0x56, 0x04);        // bit 2 = X59
+    CHECK(mem.display().statusLine().isOn(Symbol::Kana));
+    CHECK(!mem.display().statusLine().isOn(Symbol::Busy));
+    CHECK(!mem.display().statusLine().isOn(Symbol::Small));
+
+    mem.write(0xF3C6, 0x84);        // RAM shadow only
+    bus.writeIO(0x54, 0xB8 | 4);
+    bus.writeIO(0x54, 0x40 | 63);
+    bus.writeIO(0x56, 0x00);
+    CHECK(!mem.display().statusLine().isOn(Symbol::Romaji));
 }
 
 void test_subcpu_interrupt_cause_bit6() {
@@ -938,7 +948,7 @@ int run_pc1600_keyboard_display_tests() {
     test_subcpu_host_seed_survives_cold_init();
     test_subcpu_interrupt_mask_and_password();
     test_memory_intmask_reads_back_via_port35();
-    test_kbii_segment_is_panel_driven_not_mode_driven();
+    test_romaji_kana_segments_follow_the_glass_pinout();
     test_subcpu_interrupt_cause_bit6();
     test_subcpu_timer_store_readback_and_match();
     test_pb3_reads_high_for_the_alternate_charset_gate();

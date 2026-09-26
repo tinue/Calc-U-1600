@@ -29,22 +29,21 @@
 // (`OR 08H`) if either was set, so the byte reaching the glass can never
 // carry bit 7 with this ROM.
 //
-// **`Kbii` is nevertheless a real, independently-driven segment**: a
-// second printed position next to "S" carries the "ローマ字→カナ"
-// (romaji→kana) caption. With the contrast cranked up far enough to
-// reveal unlit segments, "カナ" is visible alongside "S" even on a
-// **western** unit -- i.e. same glass, same segment wiring on both
-// models, and which of the two lights is a ROM decision. A Japanese
-// machine's firmware is assumed to drive bit 7 for kana-entry mode where
-// this one folds into S.
+// **The "ローマ字→カナ" (romaji→kana) caption is two segments of its
+// own, not KBII.** The Service Manual's key circuit diagram (printed
+// pp. 43-44) lists the glass pin under each legend. Every symbol above sits
+// on the common its bit predicts (common Xn = RAM line n-1), and the caption
+// after S is on **X35 = page 4 bit 2** and **X59 = page 7 bit 2**, both "--"
+// in the TRM table. KBII's own bit (page 4 bit 7 = X40) has no electrode,
+// which fits the ROM folding it into S. `Romaji` and `Kana` follow the pin
+// order after S. Which part of the caption each one lights is inferred, not
+// printed. The western ROM never sets either bit (probe 2026-09-26), so both
+// stay dark unless a program writes them. SMBLSET B=02H keeps bit 2
+// (`AND 77H`).
 //
-// So `Kbii` is read straight off panel bit 7 like every other position
-// (`PC1600Display::refreshStatusSymbols()`), and simply stays false for
-// the life of a western session. It must NOT be wired to the KBII *mode*
-// flag (RAM F3C6H bit 7, SMBLSET's own pre-fold shadow, which is what the
-// key-code translator reads to select the alternate charset): that is
-// machine state rather than a panel segment, and driving the caption from
-// it would light the kana legend on every KBII press.
+// The KBII *mode* flag (RAM F3C6H bit 7, SMBLSET's pre-fold shadow, read
+// by the key-code translator) is machine state, not a segment, and is not
+// surfaced here.
 //
 // **DEGRAD and RUNPRO — how they pack into that grid**, consistent with
 // the TRM's own three-separate-bits DE/RAD/G row above:
@@ -69,7 +68,7 @@
 class PC1600StatusLine {
 public:
     enum class Symbol {
-        Busy, Shift, S, Kbii, Small, Deg, Rad, Grad, Run, Pro, Reserve, Def,
+        Busy, Shift, S, Romaji, Kana, Small, Deg, Rad, Grad, Run, Pro, Reserve, Def,
         I, II, III, Ctrl, Batt,
         Count
     };

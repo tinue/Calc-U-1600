@@ -407,7 +407,7 @@ DisplayFrame MachineController::currentDisplay() const {
         frame.poweredOn = snap.clockEnabled;
 
         static const char* kSymbolNames[] = {
-            "BUSY", "SHIFT", "S", "KBII", "SMALL", "DEG", "RAD", "GRAD",
+            "BUSY", "SHIFT", "S", "ROMAJI", "KANA", "SMALL", "DEG", "RAD", "GRAD",
             "RUN", "PRO", "RESERVE", "DEF", "I", "II", "III", "CTRL", "BATT",
         };
         for (std::size_t i = 0; i < PC1600StatusLine::kCount; ++i) {

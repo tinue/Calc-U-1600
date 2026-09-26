@@ -186,30 +186,12 @@ void PC1600Display::refreshStatusSymbols() {
     m_statusLine.set(Symbol::Grad,     bit(b01, 1));
     m_statusLine.set(Symbol::Deg,      bit(b01, 0));
 
-    // Kbii (the "カナ" romaji->kana legend) is a real, independently-driven
-    // segment at b02 bit7 -- but one this ROM never lights, so on a western
-    // machine it stays dark forever. That is faithful, not dead code.
-    //
-    // SMBLSET (bank 6, 822DH-8239H) implements the TRM's own "if either
-    // KBII or S is set to 1, the S symbol is shown" rule in firmware: for
-    // symbol set 2 it masks bits 3 and 7 out of the caller's byte
-    // (`AND 77H`) and, if either was set, lights bit 3 -- S -- alone
-    // (`OR 08H`). So the panel byte can never carry bit7 with this
-    // firmware, and pressing KBII shows up as S.
-    //
-    // The glass itself carries both legends: with the contrast cranked up
-    // far enough to reveal unlit segments, "カナ" is etched alongside "S"
-    // even on a western unit. Same panel, same segment wiring; which of
-    // the two lights is a ROM decision, and a Japanese machine's firmware
-    // is assumed to drive bit7 for kana-entry mode where this one folds
-    // into S. Reading the bit straight off the panel keeps both cases
-    // right without special-casing either.
-    //
-    // (The KBII *mode* flag is a different thing living elsewhere -- RAM
-    // F3C6H bit7, SMBLSET's own pre-fold shadow, which is what the key-code
-    // translator reads to select the alternate charset table. It is machine
-    // state, not a panel segment, so it is deliberately not surfaced here.)
-    m_statusLine.set(Symbol::Kbii, bit(b02, 7));
+    // The romaji->kana caption: X35 = page 4 bit 2, X59 = page 7 bit 2
+    // (Service Manual glass pinout; see PC1600StatusLine.hpp). KBII's bit 7
+    // has no electrode -- SMBLSET (bank 6 822DH) folds it into S -- so it
+    // is not read.
+    m_statusLine.set(Symbol::Romaji, bit(b02, 2));
+    m_statusLine.set(Symbol::Kana,   bit(b00, 2));
     m_statusLine.set(Symbol::S,    bit(b02, 3));
     m_statusLine.set(Symbol::Ctrl, bit(b02, 1));
     m_statusLine.set(Symbol::Batt, bit(b02, 0));
