@@ -115,6 +115,12 @@ LH5803 7C00H–7FFFH is refused. The `NEW`/`CALL` advice depends on MODE and
 CPU (`NEW &addr` + `XCALL` in MODE 1). Placement follows the live work area,
 so there is no MODE 1 special case. Brings in the shared `+0x8000` helper
 that the bookkeeping work below builds on.
+BASIC also goes to the program area `TITLE` selects: after `TITLE "S1:"` into
+the S1 program module, which needs the S1/S2 work below. `MODE 1` ignores the
+previous `TITLE` and picks the area itself (S1 one-bank program module, else S2,
+else S0; it hides the other slots), and `MODE 0` resets `TITLE` to S0. So the
+loader just reads `TITLE`. The plan's tests also check this ROM behaviour on the
+emulator.
 
 The fast loader pokes BASPRG_END and the PRGADR end triple (`$FE3F`,
 7b327cd) by hand, handles S0 only, and repeats the LH5803↔Z80 `+0x8000`

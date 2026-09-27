@@ -1,4 +1,4 @@
-# PC-1600 loaders follow the current MODE
+# PC-1600 loaders follow the current MODE and program area
 
 ## Context
 
@@ -9,8 +9,8 @@ through the CE-1600P or CE-150, `COM1:`, the CE-158, a floppy) doesn't matter; o
 the result in memory does. For machine code the loader also advises the `NEW` that
 protects it and types the command that starts it, as a convenience.
 
-On the PC-1600 the result depends on the MODE the machine is in. Today the loaders
-ignore MODE: a `.bas` is always tokenized with the PC-1600 keyword table, a
+On the PC-1600 the result depends on the MODE the machine is in and on the selected
+program area (`TITLE`). Today the loaders ignore both: BASIC always goes to S0, and a `.bas` is always tokenized with the PC-1600 keyword table, a
 CE-158-header file is always refused, and headerless code is always taken as Z-80
 code. The ROM analysis behind this plan is in SharpPC1500Reference
 `PC-1600/PC-1600-Load-Save-Matrix.md`.
@@ -31,6 +31,34 @@ code. The ROM analysis behind this plan is in SharpPC1500Reference
    area (`PC15MAP`, P0-B0 1676H). MODE 1 doesn't need a module; with one, it is at most
    one bank. The loader follows whatever the ROM set up and has no MODE 1 special case
    for placement.
+6. **The selected program area decides where BASIC goes.** A BASIC load targets the
+   area `TITLE` (F1D5H) names: S0, or the S1/S2 program module after `TITLE "S1:"` /
+   `"S2:"`. Never change `TITLE` either.
+
+## Program area (`TITLE`)
+
+What the ROM does (SharpPC1500Reference `PC-1600-CPU-LH5803-Compat.md` §4,
+`PC-1600-Work-Area-Map.md` §4.5):
+- `TITLE "Sn:"` (`SELPRG`, P0-B0 1EEFH) selects S0, or S1/S2 if that slot holds a
+  program module (else error 101). The ROM's `LOAD` then writes into that area
+  (`PRGRANGE`, rom3b 71B3H) and finishes it per area (`LOADEND` 70E1H: S0 pointers
+  F867/F02C, or the S1/S2 descriptor end triple and module header +5/+6).
+- **`MODE 1` ignores the previous `TITLE`** and picks the area itself (`PC15MAP`):
+  with S0 in internal RAM only, a one-bank program module in S1, else one in S2, else
+  S0; with one module bank in S0, S0 unless that bank is only part of the window and a
+  one-bank program module sits at `ADTBL` entry 4. It sets `TITLE` to its choice and
+  hides the other slots (SxMTb := FFH), so `TITLE "Sx:"` to them fails with error 101.
+  So after `TITLE "S1:"` + `MODE 1`, a PC-1500 program goes to S1 only if S1 holds a
+  one-bank program module; `TITLE "S2:"` + `MODE 1` with program modules in both slots
+  ends up in S1.
+- `MODE 0` rebuilds the descriptors and resets `TITLE` to S0.
+
+For the loaders this means: read `TITLE` and load into that area, in both MODEs. The
+ROM's choice in MODE 1 is already in `TITLE`, so the loader needs no MODE 1 rule of
+its own. For machine code, `TITLE` decides the default address offered for a
+headerless file (the start of the selected area) and the `NEW` in the advice
+(`NEW "Sn:",size` for that area in MODE 0); the code itself goes where its address
+says.
 
 ## BASIC
 
@@ -75,7 +103,8 @@ code. The ROM analysis behind this plan is in SharpPC1500Reference
   Manual App. H). Refuse loads into it with that explanation instead of overwriting
   the work area.
 - **Advice after loading** depends on MODE and on the code's CPU:
-  - MODE 0: `NEW "S0:",n` to reserve, `CALL #bank,&addr` to start (as today).
+  - MODE 0: `NEW "Sn:",size` for the selected area to reserve (today always
+    `"S0:"`), `CALL #bank,&addr` to start.
   - MODE 1, LH5801 code: `NEW &addr` the PC-1500 way (MODE 1 only, rom3b 4351H: an
     LH5803 address at or above the S0 base + C5H and below the variable area), start
     with `XCALL &addr`.
@@ -101,8 +130,13 @@ code. The ROM analysis behind this plan is in SharpPC1500Reference
 4. **Presets**: the same checks through the same functions, so a preset that loads a
    PC-1500 program switches to MODE 1 (`- type:` steps) before its `program:` step.
    No preset gets a workaround (docs/Decisions.md, "Fix the loader, not the preset").
-5. **Docs**: User Guide §4 and §6 (the MODE rule, the dialog note, the MODE 1
-   advice), docs/Decisions.md entry for the listing rule.
+5. **Program area**: the BASIC loaders target the `TITLE` area. S1/S2 need the
+   descriptor-based placement and the ROM's `LOAD` finish for that area — the
+   program-loading TODO chapter (mirror `LOADEND`), done as part of this step, on top
+   of the shared `+0x8000` helper from step 3. Machine code: default address and `NEW`
+   advice from the `TITLE` area.
+6. **Docs**: User Guide §4 and §6 (the MODE and `TITLE` rules, the dialog note, the
+   MODE 1 advice), docs/Decisions.md entry for the listing rule.
 
 ## Tests
 
@@ -116,14 +150,18 @@ code. The ROM analysis behind this plan is in SharpPC1500Reference
   where the ROM's own `LOAD` puts it (work-area diff typed vs loaded).
 - Headerless ML in MODE 1 at an LH5803 address: bytes at +8000H; `XCALL` runs it.
 - LH5803 7C01H refused with the work-area message.
+- `TITLE "S1:"` with a program module in S1 (MODE 0): the program lands in S1, the
+  S1 descriptor and header match the ROM's `LOAD` (work-area diff); S0 unchanged.
+- `TITLE "S1:"` + `MODE 1`, S1 a one-bank program module: `TITLE ?` gives 1 and the
+  PC-1500 program lands in S1. With a multi-bank program module in S1 instead: `TITLE`
+  is 0 and the program lands in S0.
+- `TITLE "S2:"` + `MODE 1` with program modules in both slots: `TITLE ?` gives 1, the
+  program lands in S1. (Checks the ROM behaviour above on the emulator as well.)
 - The advice strings per MODE/CPU.
 - The existing PC-1500 and PC-1600 MODE 0 loader tests unchanged.
 
 ## Out of scope
 
-- S1/S2 program-area targets and mirroring the ROM's `LOAD` finish (F02C etc.):
-  the separate program-loading TODO chapter; do it on top of the shared `+0x8000`
-  helper from step 3.
 - Whether all shared tokens really have the same values on both machines (matrix
   open question 2). The MODE 1 rule assumes they do; a table comparison would settle
   it.
