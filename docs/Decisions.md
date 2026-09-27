@@ -274,6 +274,13 @@ authentic speed for the span that matters.
   pointer or cache. It would break the rule above and gain nothing
   measurable. If profiling ever shows a real cost, the fix belongs at bus
   level and must work the same way for every card.
+- **A CE-1600P ROM switch swaps the box. It doesn't reset the machine.** The
+  ROM sits in the CE-1600P, so picking the other version on an attached one
+  counts as unplugging one CE-1600P and plugging in another. The switch runs
+  through the attach/detach OFF/ON cycle (`MachineController::swapCE1600PRom()`).
+  RAM survives. The floppy goes into the new drive with the same side up, and
+  the changed-disk latch is armed. The PC-1600's own ROM switch still rebuilds
+  the machine, because that ROM is in the calculator.
 
 ### Typing into the machine
 - **The GUI Paste Text never presses ENTER.** This is deliberate: a careless

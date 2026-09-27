@@ -885,16 +885,11 @@ void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
 
 void MainWindow::applyCE1600PRomVersionSelection(CE1600PRomVersion version) {
     if (version == m_controller->ce1600pRomVersion()) return; // see applyModelSelection()
-    m_moduleManager->flushPendingPersist();
-    m_floppyManager->flushPendingPersist();
-    // Rebuilds the machine only when a CE-1600P is attached; otherwise just
+    // The ROM is in the CE-1600P box: on an attached one this is a box swap
+    // inside an OFF/ON cycle (no rebuild, RAM survives); otherwise it just
     // records the choice for the next attach.
-    if (m_controller->setCE1600PRomVersion(version)) {
-        m_pacer->restart(); // after the rebuild's flat-out boot
-        m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
-        syncControlBarForModel();
-        refreshModuleCombos();
-    }
+    if (m_controller->ce1600pAttached()) m_plotterController->requestCE1600PRomSwap(version);
+    else m_controller->setCE1600PRomVersion(version);
     // The controller may have fallen back to New if the old ROM failed to load.
     m_controlBar->setCE1600PRomVersion(m_controller->ce1600pRomVersion());
     syncMachineMenuFromCE1600PRomVersion(m_controller->ce1600pRomVersion());

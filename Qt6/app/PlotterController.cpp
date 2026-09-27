@@ -1,5 +1,4 @@
 #include "PlotterController.hpp"
-#include "MachineController.hpp"
 
 PlotterController::PlotterController(MachineController* controller, QObject* parent)
     : QObject(parent), m_controller(controller) {}
@@ -28,5 +27,12 @@ void PlotterController::requestToggleCE158() {
         QString error;
         if (m_controller->ce158Attached()) m_controller->detachCE158();
         else if (!m_controller->attachCE158(&error)) emit attachFailed(tr("CE-158"), error);
+    });
+}
+
+void PlotterController::requestCE1600PRomSwap(CE1600PRomVersion version) {
+    runToggle([this, version] {
+        QString error;
+        if (!m_controller->swapCE1600PRom(version, &error)) emit attachFailed(tr("CE-1600P"), error);
     });
 }

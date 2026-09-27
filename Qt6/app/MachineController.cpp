@@ -136,13 +136,6 @@ void MachineController::setPC1600RomVersion(PC1600RomVersion version) {
     if (m_model == Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
 }
 
-bool MachineController::setCE1600PRomVersion(CE1600PRomVersion version) {
-    m_ce1600pRomVersion = version;
-    if (m_model != Model::PC1600 || !ce1600pAttached()) return false;
-    switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new CE-1600P ROM
-    return true;
-}
-
 void MachineController::setPC1500RomRevision(PC1500RomRevision revision) {
     m_pc1500RomRevision = revision;
     if (m_model != Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
@@ -625,6 +618,15 @@ void MachineController::detachCE1600P() {
     if (!m_pc1600) return;
     flushFloppyBeforeDetach();
     m_pc1600->detachCE1600P();
+}
+
+bool MachineController::swapCE1600PRom(CE1600PRomVersion version, QString* error) {
+    const int side = m_pc1600 ? m_pc1600->ce1600fSide() : 0;
+    detachCE1600P();
+    setCE1600PRomVersion(version);
+    if (!attachCE1600P(error)) return false; // re-inserts the selected disk, side A up
+    if (side != 0 && m_pc1600->ce1600fHasDisk()) m_pc1600->ce1600fSetSide(side);
+    return true;
 }
 
 bool MachineController::ce1600pAttached() const {

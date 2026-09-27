@@ -125,10 +125,10 @@ public:
     PC1600RomVersion pc1600RomVersion() const { return m_pc1600RomVersion; }
 
     // CE-1600P ROM version (independent of the PC-1600 one; the CE-1600F
-    // follows it). Rebuilds the machine, keeping the plotter, when a CE-1600P
-    // is attached; otherwise only remembers the choice for the next attach.
-    // Returns whether it rebuilt.
-    bool setCE1600PRomVersion(CE1600PRomVersion version);
+    // follows it). Only records the choice for the next attach -- the ROM sits
+    // in the CE-1600P box, so changing it on an attached one is a box swap,
+    // see swapCE1600PRom().
+    void setCE1600PRomVersion(CE1600PRomVersion version) { m_ce1600pRomVersion = version; }
     CE1600PRomVersion ce1600pRomVersion() const { return m_ce1600pRomVersion; }
 
     // Reset (`allReset` = ALL RESET on the PC-1600; the PC-1500 has one
@@ -330,6 +330,12 @@ public:
     bool ce150Attached() const;
     bool attachCE1600P(QString* error = nullptr); // PC1600 only; false (no-op) otherwise
     void detachCE1600P();
+    // Swaps the attached CE-1600P for one with the `version` ROM: detach,
+    // attach, and the disk moves from the old drive to the new one with the
+    // same side up (changed-disk latch armed, as on a real insert). Run it
+    // inside powerCycleAround() -- like any attach/detach, the calculator must
+    // be off. False (with `error`) if the new box couldn't be attached.
+    bool swapCE1600PRom(CE1600PRomVersion version, QString* error = nullptr);
     bool ce1600pAttached() const;
 
     // CE-158 RS-232C / parallel interface: PC1500(A), or a PC-1600's LH5803
