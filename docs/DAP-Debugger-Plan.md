@@ -215,13 +215,13 @@ Settled before implementation. Both assemblers and the parsers come from here. T
 
 **Assemblers**
 - **zasm**: a local checkout of `github.com/Megatokio/zasm`, run as `~/Development/sharp/zasm/zasm`. It's maintained (4.5.0), and the PC-1600 rom-dumper already uses it (`zasm -uwy src.asm src.lst src.bin`). The listing shows the object code next to the source, and the `-y` symbol table gives each label's `file:line`. That anchors include files for `ZasmListing`.
-- **sdasz80 / sdaslh5801**: a local checkout of `github.com/pchambre/sdcc-pc1500`, run from `~/Development/sharp/sdcc-pc1500/sdcc/bin/`. Both CPUs share one `.lst`/`.rst`/`.sym` format and therefore one parser. `sdld` writes the relocated `.rst`. Use the checkout's own `sdasz80`, not Homebrew's, so both CPUs build with the same SDAS version. The build recipe (`sdas -plosgff` → `sdld` → `makebin -p`) is the one in `examples/memtest.asm`.
+- **sdasz80 / sdaslh5801**: a local checkout of `github.com/pchambre/sdcc-pc1500`, run from `~/Development/sharp/sdcc-pc1500/sdcc/bin/`. Both CPUs share one `.lst`/`.rst`/`.sym` format and therefore one parser. `sdld` writes the relocated `.rst`. Use the checkout's own `sdasz80`, not Homebrew's, so both CPUs build with the same SDAS version. The build recipe (`sdas -plosgff` → `sdld` → `makebin -p`) is the one in `examples/machine-code/memtest.asm`.
 - **Not supported:**
   - tasm is retired.
   - lhasm (lhTools) has its own dialect and listing format.
-  - z80asm (Bas Wijnen's 1.8 from 2007) is used by no source here.
+  - z80asm (Bas Wijnen's 1.8 from 2007) builds no program run in the debugger. Its only use is reassembling the PC-1600 ROM disassemblies (`PC-1600-ROM/disasm/`); a `z80asm` listing parser would matter only if the debugger were to step through ROM source.
   
-  Each one would need its own parser and gain nothing.
+  Each one would need its own parser.
 
 **Disassemblers: our own, not an external tool.**
 - The debug API needs structured decodes: the length, the flow kind and the target (for step over/out), plus symbol names.
