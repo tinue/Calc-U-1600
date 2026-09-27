@@ -137,6 +137,12 @@ SHIFT symbol:
   into the calculator, key by key. It stops at the line break and doesn't
   press ENTER, so you can check the line before running it. For whole
   programs, see [Loading a BASIC program](#4-loading-a-basic-program).
+- **Accented characters (PC-1600).** The PC-1600 types its international
+  characters with the latching `KB II` key: KB II, then the letter, then
+  KB II again. Pressing `ü` on the host keyboard, pasting it, or using it
+  in a preset's `type:` step does that for you. The host keys work like the
+  calculator's own keys, so `ü` and `Ü` both give `Ü`. Paste and `type:`
+  keep the case you wrote. See `docs/Keyboard-Mapping.md` for the full list.
 
 ---
 

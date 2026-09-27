@@ -286,6 +286,20 @@ authentic speed for the span that matters.
 - **The GUI Paste Text never presses ENTER.** This is deliberate: a careless
   paste must not run anything. Tool paths (debugger auto-start, future inbound
   APIs) use `MachineController::typeCommand()`, which does press ENTER.
+- **PC-1600 accented characters are typed through KBII, one sequence per
+  character.** A character from the ROM's KBII tables (`KYCDKB2` /
+  `KYCDSK2`, P2-B6 9592H / 95E5H) is typed as KBII, [SHIFT,] key, KBII.
+  - Host keys fold case, like the letters (the host keys act as the
+    calculator's own keys): `é` and `É` both give É. Paste and `type:` are
+    case-exact, like the ASCII letters: `é` gives é.
+  - SHIFT+KBII is not always the lowercase of the KBII character: for 12
+    keys it is another character (B ù/û, H ¡/½, ( ₧/«, …). Those, and an
+    uppercase the ROM lacks (Ë, Û → the lowercase), are typed as they are,
+    with no attempt to be smart.
+  - A run like `öäü` is not batched under one KBII latch. It would save two
+    taps per adjacent accented character in paste / `type:` only, but every
+    exit path (cancel, untypeable character) would have to release the
+    latch. A self-contained sequence always leaves KBII off.
 
 ### GUI
 - **Hardware pickers (model, memory modules) live on the control bar**, not
