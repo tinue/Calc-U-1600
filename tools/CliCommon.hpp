@@ -22,11 +22,17 @@ inline bool readFileExact(const std::string& path, size_t size, std::vector<uint
 }
 
 /// Writes `text` to `path`, replacing it. False on any open/write/close error.
-inline bool writeFile(const std::string& path, const std::string& text) {
+inline bool writeFile(const std::string& path, const void* data, size_t size) {
     std::FILE* f = std::fopen(path.c_str(), "wb");
     if (!f) return false;
-    const bool ok = std::fwrite(text.data(), 1, text.size(), f) == text.size();
+    const bool ok = std::fwrite(data, 1, size, f) == size;
     return std::fclose(f) == 0 && ok;
+}
+inline bool writeFile(const std::string& path, const std::string& text) {
+    return writeFile(path, text.data(), text.size());
+}
+inline bool writeFile(const std::string& path, const std::vector<uint8_t>& bytes) {
+    return writeFile(path, bytes.data(), bytes.size());
 }
 
 /// Prints the CE-150 plot summary (points, revision, first 60 events) when a

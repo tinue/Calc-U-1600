@@ -1,9 +1,10 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
+
+#include "AddressBits.hpp"
 
 // ── Data breakpoints (memory watches) ────────────────────────────────────
 //
@@ -42,9 +43,9 @@ public:
         if (w.space > 1 || w.lo > w.hi) return;
         for (int write = 0; write < 2; write++) {
             if (!(write ? w.write : w.read)) continue;
-            std::unique_ptr<Bits>& map = m_bits[w.space][write];
-            if (!map) map = std::make_unique<Bits>();
-            for (uint32_t a = w.lo; a <= w.hi; a++) (*map)[a >> 6] |= uint64_t(1) << (a & 63);
+            std::unique_ptr<AddressBits>& map = m_bits[w.space][write];
+            if (!map) map = std::make_unique<AddressBits>();
+            map->addRange(w.lo, w.hi);
         }
     }
     bool empty() const { return m_watches.empty(); }
@@ -54,8 +55,8 @@ public:
     /// instruction are ignored.
     void check(uint16_t addr, uint8_t value, bool write, uint8_t space) {
         if (m_hitPending || space > 1) return;
-        const Bits* map = m_bits[space][write ? 1 : 0].get();
-        if (!map || !(((*map)[addr >> 6] >> (addr & 63)) & 1)) return;
+        const AddressBits* map = m_bits[space][write ? 1 : 0].get();
+        if (!map || !map->contains(addr)) return;
         m_hit = {addr, value, write, space};
         m_hitPending = true;
     }
@@ -63,10 +64,8 @@ public:
     WatchHit consumeHit() { m_hitPending = false; return m_hit; }
 
 private:
-    using Bits = std::array<uint64_t, 1024>;
-
     std::vector<Watch> m_watches;
-    std::unique_ptr<Bits> m_bits[2][2]; // [space][write]; null while no watch needs it
+    std::unique_ptr<AddressBits> m_bits[2][2]; // [space][write]; null while no watch needs it
     WatchHit m_hit;
     bool m_hitPending = false;
 };

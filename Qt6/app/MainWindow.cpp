@@ -29,7 +29,6 @@
 #include <QVBoxLayout>
 #include <QTimer>
 #include <QElapsedTimer>
-#include <QProgressDialog>
 #include <QKeyEvent>
 #include <QCloseEvent>
 #include <QInputDialog>

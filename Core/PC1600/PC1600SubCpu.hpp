@@ -242,6 +242,11 @@ private:
     void setAnswer(uint8_t v) { m_answer = v; m_answerPending = true; }
     /// The nibble at `i` of the parameter buffer, 0 past its end.
     uint8_t param(size_t i) const { return i < m_paramLen ? m_param[i] : 0; }
+    /// The byte sent as nibbles `i` (high) and `i + 1` (low).
+    uint8_t paramByte(size_t i) const { return static_cast<uint8_t>((param(i) << 4) | param(i + 1)); }
+    /// Sets the result for 90H to fetch: `first` as one nibble, then each
+    /// of `bytes` high nibble first.
+    void publish(uint8_t first, const uint8_t* bytes = nullptr, size_t count = 0);
 
     // Parameters arrive one nibble per command: F0H+n starts a block,
     // 80H+n appends. The largest block is 16 nibbles (the 8-byte PASS

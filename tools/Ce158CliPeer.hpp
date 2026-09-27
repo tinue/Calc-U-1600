@@ -84,10 +84,9 @@ public:
             if (!m_rxPath.empty())
                 std::printf("CE-158 serial: received %zu of %zu scripted bytes\n", m_file.rxPos, m_file.rx.size());
             if (!m_txPath.empty() || !m_rxPath.empty()) printCe158Bytes("CE-158 serial output", m_file.tx);
-            if (!m_txPath.empty()) {
-                std::FILE* f = std::fopen(m_txPath.c_str(), "wb");
-                if (!f) { std::fprintf(stderr, "cannot write %s\n", m_txPath.c_str()); ok = false; }
-                else { std::fwrite(m_file.tx.data(), 1, m_file.tx.size(), f); std::fclose(f); }
+            if (!m_txPath.empty() && !cli::writeFile(m_txPath, m_file.tx)) {
+                std::fprintf(stderr, "cannot write %s\n", m_txPath.c_str());
+                ok = false;
             }
         }
         machine.setCE158SerialLink(nullptr);

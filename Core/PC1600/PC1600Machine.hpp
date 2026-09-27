@@ -111,9 +111,9 @@ public:
     /// Runs until `maxCycles` **T-states** (see kTStateHz) have been
     /// consumed across both CPUs combined, returning the number actually
     /// consumed. A step-and-sum loop that returns early on a debugger stop
-    /// (see consumeDebugStop()). A halted step is charged its CPU's
-    /// kHaltTickCycles, the same figure step() charges its own timer
-    /// accumulators -- one function owns both, so they can't drift apart.
+    /// (see consumeDebugStop()). Each step counts the T-states step()
+    /// charged the shared clocks, so the budget and the clocks can't drift
+    /// apart.
     uint64_t runCycles(uint64_t maxCycles);
 
     // ── Debugger stops ────────────────────────────────────────────────────
@@ -294,7 +294,7 @@ public:
     /// the sub-CPU's clock and timers, the LCD and RAM contents stay.
     bool isPoweredOff() const {
         std::lock_guard<std::mutex> lock(m_mutex);
-        return m_poweredOff;
+        return !m_z80Mem.subCpu().systemOn();
     }
     /// A point-in-time copy of the display's pixel state -- safe to read on
     /// a different thread while the emulation loop is mid-step() (see
@@ -526,12 +526,15 @@ private:
     static_assert(kTStateHz * kTimer64AccumScale % 128 == 0, "64 Hz half period must be exact");
     int m_timer64Accum{0};
     bool m_timer64State{false};
-    // System power (SubCpu doc §4): the sub-CPU switched VCC off. step()
-    // then advances only the always-on clocks, kOffSliceTStates at a time,
-    // until a power-on source fires; power-on is a reset with a cause.
-    bool m_poweredOff{false};
+    // System power (SubCpu doc §4) is the sub-CPU's systemOn(). While it
+    // has VCC off, step() advances only the always-on clocks,
+    // kOffSliceTStates at a time, until a power-on source fires; power-on
+    // is a reset with a cause.
     static constexpr int kOffSliceTStates = 256;
     void powerOnLocked();
+    /// step() with m_mutex held; `tstates` receives what the step charged
+    /// the shared clocks (0 when parked on a breakpoint).
+    int stepLocked(uint64_t* tstates);
 
     // The sub-CPU's 0.5 s tick. Its interrupt line (Z7 -> INT6, port 32H
     // bit 6) and the other events that drive it -- the 1 s tick and the

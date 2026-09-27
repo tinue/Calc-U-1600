@@ -185,7 +185,6 @@ std::string headerMismatch(Target target, const File& file) {
 
 LoadPlan planLoad(const File& file, const LoadOptions& o, const std::vector<BasicArea>& basicAreas) {
     LoadPlan p;
-    p.file = file;
     auto refuse = [&p](LoadError e, std::string detail = {}) {
         p.error = e;
         p.detail = std::move(detail);

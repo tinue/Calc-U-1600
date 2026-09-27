@@ -95,8 +95,10 @@ signals:
     void pausedChanged(bool paused);
 
 private:
-    /// A synchronous operation started or ended: the machine is being
-    /// rebuilt or driven directly, so DAP messages wait until it is done.
+    /// A synchronous operation is running (SyncOperations): the machine is
+    /// being rebuilt or driven directly, so DAP messages wait until it is done.
+    bool appBusy() const;
+    /// SyncOperations::busyChanged: drains what waited once it is done.
     void setAppBusy(bool busy);
     void createTarget();
     void onClientConnected();
@@ -120,7 +122,6 @@ private:
     void dispatch(const QJsonObject& message);
     void drainQueue();
     bool m_busy = false;     // handling a message (which may itself load)
-    int m_appBusy = 0;       // synchronous loads in progress
     std::vector<QJsonObject> m_queued;
     bool m_teardownPending = false; // client gone, session not yet ended
     std::vector<std::unique_ptr<DapSession>> m_retiredSessions; // detached, maybe still on the stack

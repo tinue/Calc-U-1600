@@ -99,6 +99,8 @@ private:
     /// D5 command, which also holds the chip in reset (m_resetHeld).
     void    resetChip();
     bool    intF() const; // PSR b7, the parallel side's interrupt flag
+    // Drops the TX FIFO and any character in progress: TxEMP, TxRDY set.
+    void    abortTransmit();
     // No-peer serial defaults: empty transmitter, modem lines off.
     void    resetSerialState();
     void writeControlRegister(uint8_t value); // 23H write
@@ -116,6 +118,8 @@ private:
     /// shared by loadSerialMode()'s SerialLink::onBaud() notification and
     /// updateCharTStates() below so a future word-format change can't be
     /// applied to only one of the two.
+    /// `divisor` is the effective B: PR0/PR1's 0 already means 4096; 0 here
+    /// means B = 1, the generator stopped.
     struct WordFormat { uint32_t divisor; int bits; };
     WordFormat wordFormat() const;
     /// Bits per second for `wf` at the current prescaler; 0 = stopped.

@@ -38,7 +38,7 @@ void MachineDebugTarget<Machine>::reset(bool allReset) {
 template <typename Machine>
 void MachineDebugTarget<Machine>::attachWatches(int thread, WatchSet* watches) {
     // Thread ids beyond the CPUs name the last one (see DebugTarget).
-    m_machine.setWatches(thread == 1 ? 1 : int(threads().size()), watches);
+    m_machine.setWatches(thread == 1 ? 1 : cpuCount(), watches);
 }
 
 template <typename Machine>

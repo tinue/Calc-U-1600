@@ -47,7 +47,7 @@ public:
     bool loadDefaultPreset(const QString& path, Model model, QString* error = nullptr);
     bool resetToPrompt(bool allReset, QString* error = nullptr);
 
-    bool busy() const { return m_depth > 0; }
+    bool busy() const { return m_running; }
 
 signals:
     void busyChanged(bool busy);
@@ -61,5 +61,5 @@ private:
     FloppyDiskManager* m_floppies;
     std::function<void()> m_refreshLcd;
     std::function<void()> m_presetResync;
-    int m_depth = 0;
+    bool m_running = false; // run() doesn't nest: an inner call runs inline
 };

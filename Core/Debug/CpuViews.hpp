@@ -46,23 +46,35 @@ public:
     virtual void clearBreakpointSkip() = 0;
 };
 
-namespace detail {
-
+/// The forwarders that are the same for every CPU core.
 template <typename Cpu>
-void loadBreakpoints(Cpu& cpu, const std::vector<uint16_t>& addrs) {
-    cpu.clearBreakpoints();
-    for (uint16_t a : addrs) cpu.addBreakpoint(a);
-}
+class CpuViewOf : public CpuView {
+public:
+    explicit CpuViewOf(Cpu& cpu) : m_cpu(cpu) {}
 
-} // namespace detail
+    uint16_t pc() const override { return m_cpu.pc(); }
+    uint16_t sp() const override { return m_cpu.sp(); }
+    uint32_t historySize() const override { return m_cpu.history().size(); }
+    uint32_t retired() const override { return m_cpu.history().total(); }
+    void setBreakpoints(const std::vector<uint16_t>& addrs) override {
+        m_cpu.clearBreakpoints();
+        for (uint16_t a : addrs) m_cpu.addBreakpoint(a);
+    }
+    void enableBreakpoints(bool on) override { m_cpu.setBreakpointsEnabled(on); }
+    void resumePastBreakpoint() override { m_cpu.resumePastBreakpoint(); }
+    void clearBreakpointSkip() override { m_cpu.clearBreakpointSkip(); }
+
+protected:
+    Cpu& m_cpu;
+};
 
 /// An LH5801 (PC-1500) or LH5803 (PC-1600). `pupvChanged` pushes an edited
 /// PU/PV to the memory map: those flags select banks, and the bus must see
 /// the new value at once.
-class LhCpuView final : public CpuView {
+class LhCpuView final : public CpuViewOf<LH5801> {
 public:
     LhCpuView(LH5801& cpu, CpuKind kind, const char* name, std::function<void(bool pu, bool pv)> pupvChanged)
-        : m_cpu(cpu), m_kind(kind), m_name(name), m_pupvChanged(std::move(pupvChanged)) {}
+        : CpuViewOf(cpu), m_kind(kind), m_name(name), m_pupvChanged(std::move(pupvChanged)) {}
 
     CpuKind kind() const override { return m_kind; }
     const char* name() const override { return m_name; }
@@ -75,33 +87,24 @@ public:
         if (ok && m_pupvChanged) m_pupvChanged(m_cpu.pu(), m_cpu.pv());
         return ok;
     }
-    uint16_t pc() const override { return m_cpu.pc(); }
-    uint16_t sp() const override { return m_cpu.sp(); }
     bool pu() const override { return m_cpu.pu(); }
     bool pv() const override { return m_cpu.pv(); }
     std::vector<BankField> bankState() const override {
         return {{"PU", m_cpu.pu() ? "1" : "0"}, {"PV", m_cpu.pv() ? "1" : "0"}};
     }
     bool halted() const override { return m_cpu.halted() || m_cpu.poweredOff(); }
-    uint32_t historySize() const override { return m_cpu.history().size(); }
     HistoryEntry history(uint32_t age) const override { return lhHistoryEntry(m_cpu.history().recent(age)); }
-    uint32_t retired() const override { return m_cpu.history().total(); }
-    void setBreakpoints(const std::vector<uint16_t>& addrs) override { detail::loadBreakpoints(m_cpu, addrs); }
-    void enableBreakpoints(bool on) override { m_cpu.setBreakpointsEnabled(on); }
-    void resumePastBreakpoint() override { m_cpu.resumePastBreakpoint(); }
-    void clearBreakpointSkip() override { m_cpu.clearBreakpointSkip(); }
 
 private:
-    LH5801& m_cpu;
     CpuKind m_kind;
     const char* m_name;
     std::function<void(bool, bool)> m_pupvChanged;
 };
 
 /// The PC-1600's SC7852 (Z-80).
-class Z80CpuView final : public CpuView {
+class Z80CpuView final : public CpuViewOf<SC7852> {
 public:
-    explicit Z80CpuView(SC7852& cpu) : m_cpu(cpu) {}
+    explicit Z80CpuView(SC7852& cpu) : CpuViewOf(cpu) {}
 
     CpuKind kind() const override { return CpuKind::Z80; }
     const char* name() const override { return "Z80 (SC7852)"; }
@@ -110,19 +113,8 @@ public:
         return z80ReadRegister(m_cpu, name, value);
     }
     bool writeRegister(const std::string& name, uint32_t value) override { return z80WriteRegister(m_cpu, name, value); }
-    uint16_t pc() const override { return m_cpu.pc(); }
-    uint16_t sp() const override { return m_cpu.sp(); }
     bool halted() const override { return m_cpu.halted(); }
-    uint32_t historySize() const override { return m_cpu.history().size(); }
     HistoryEntry history(uint32_t age) const override { return z80HistoryEntry(m_cpu.history().recent(age)); }
-    uint32_t retired() const override { return m_cpu.history().total(); }
-    void setBreakpoints(const std::vector<uint16_t>& addrs) override { detail::loadBreakpoints(m_cpu, addrs); }
-    void enableBreakpoints(bool on) override { m_cpu.setBreakpointsEnabled(on); }
-    void resumePastBreakpoint() override { m_cpu.resumePastBreakpoint(); }
-    void clearBreakpointSkip() override { m_cpu.clearBreakpointSkip(); }
-
-private:
-    SC7852& m_cpu;
 };
 
 } // namespace debug

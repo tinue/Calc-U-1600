@@ -118,7 +118,7 @@ struct LoadOptions {
 
 enum class LoadError {
     None,
-    BadFile,        // readFile() refused it (detail: its error; plan.file.lengthMismatch tells a length mismatch)
+    BadFile,        // readFile() refused it (detail: its error; the file's lengthMismatch tells a length mismatch)
     HeaderMismatch, // detail: headerMismatch()
     Empty,          // no bytes to load
     NeedsAddress,   // headerless and no address given (defaultAddr: a PC-1600 proposal)
@@ -132,7 +132,6 @@ enum class LoadError {
 struct LoadPlan {
     LoadError error = LoadError::None;
     std::string detail;
-    File file;
     uint32_t addr = 0;         // in the requested CPU's address space
     uint32_t busAddr = 0;      // where the bytes go: `addr`, or the Z-80 address of LH5803 code
     size_t len = 0;

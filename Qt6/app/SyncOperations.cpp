@@ -37,7 +37,7 @@ bool SyncOperations::run(const QString& title, const std::function<bool(QString*
         return ok;
     };
     QString opError;
-    if (m_depth > 0) {
+    if (m_running) {
         // Already inside one: the timer is stopped and the hook installed.
         const bool ok = op(&opError);
         if (afterLoad) afterLoad();
@@ -45,7 +45,7 @@ bool SyncOperations::run(const QString& title, const std::function<bool(QString*
     }
 
     m_pacer->suspend();
-    m_depth++;
+    m_running = true;
     emit busyChanged(true);
     m_modules->flushPendingPersist();
     m_floppies->flushPendingPersist();
@@ -85,7 +85,7 @@ bool SyncOperations::run(const QString& title, const std::function<bool(QString*
     // The operation ran the machine flat out -- whatever it beeped is stale.
     m_machines->discardAudio();
     m_pacer->resume();
-    m_depth--;
+    m_running = false;
     emit busyChanged(false);
     return report(ok, opError);
 }

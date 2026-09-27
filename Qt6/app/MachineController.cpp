@@ -410,6 +410,7 @@ DisplayFrame MachineController::currentDisplay() const {
             "BUSY", "SHIFT", "S", "ROMAJI", "KANA", "SMALL", "DEG", "RAD", "GRAD",
             "RUN", "PRO", "RESERVE", "DEF", "I", "II", "III", "CTRL", "BATT",
         };
+        static_assert(std::size(kSymbolNames) == PC1600StatusLine::kCount, "one name per PC1600StatusLine::Symbol");
         for (std::size_t i = 0; i < PC1600StatusLine::kCount; ++i) {
             frame.statusSymbols.emplace_back(kSymbolNames[i], snap.statusSymbols[i]);
         }

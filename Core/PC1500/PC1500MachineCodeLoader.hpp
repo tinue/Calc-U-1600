@@ -10,7 +10,7 @@ class PC1500Machine;
 // byte poke() reports as not stored (ROM, open bus, a card that drops it)
 // means the range isn't all RAM (`error` says where). Not GUI-
 // thread-safe on its own -- the caller must hold the machine still (the
-// GUI runs it inside runSynchronousLoad(), frame timer stopped).
+// GUI runs it inside SyncOperations::run(), frame timer stopped).
 bool loadPC1500MachineCode(PC1500Machine& machine, uint32_t addr, const uint8_t* data, size_t len,
                            std::string* error);
 

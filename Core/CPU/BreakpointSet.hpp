@@ -1,17 +1,18 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
+
+#include "AddressBits.hpp"
 
 // PC breakpoints of one CPU: a 64K-bit map, so the per-instruction check is
 // one bit test. Single-threaded -- the debugger edits it from the thread
 // that runs the machine, between steps (see HistoryRing.hpp).
 class BreakpointSet {
 public:
-    void add(uint16_t addr) { m_bits[addr >> 6] |= bit(addr); }
-    void remove(uint16_t addr) { m_bits[addr >> 6] &= ~bit(addr); }
-    void clear() { m_bits.fill(0); }
-    bool contains(uint16_t addr) const { return (m_bits[addr >> 6] & bit(addr)) != 0; }
+    void add(uint16_t addr) { m_bits.add(addr); }
+    void remove(uint16_t addr) { m_bits.remove(addr); }
+    void clear() { m_bits.clear(); }
+    bool contains(uint16_t addr) const { return m_bits.contains(addr); }
 
     /// True (and latches a hit for consumeHit()) if `pc` is a breakpoint.
     bool check(uint16_t pc) {
@@ -28,8 +29,6 @@ public:
     void clearHit() { m_hit = false; }
 
 private:
-    static uint64_t bit(uint16_t addr) { return uint64_t(1) << (addr & 63); }
-
-    std::array<uint64_t, 1024> m_bits{};
+    AddressBits m_bits;
     bool m_hit = false;
 };

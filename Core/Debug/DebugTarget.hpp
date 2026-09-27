@@ -178,6 +178,7 @@ protected:
     /// Takes every CPU's breakpoints and watches off (the machine target's
     /// destructor, while the machine is still there).
     void detachAll();
+    int cpuCount() const { return int(m_cpus.size()); }
     /// Hands the thread's watch set to its CPU (nullptr: none).
     virtual void attachWatches(int thread, WatchSet* watches) = 0;
     /// Consumes the machine's latched debugger stop (see DebugStop).

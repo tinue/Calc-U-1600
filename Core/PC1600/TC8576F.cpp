@@ -47,18 +47,19 @@ void TC8576F::resetChip() {
 
     // TXD is forced high and any character in progress is aborted. The
     // peer attachment (m_link) is host-owned and survives a chip reset.
-    m_txFifo.clear();
-    m_serialAccum = 0;
-    m_txEmpty = true;
-    m_txReady = true;
+    abortTransmit();
     if (m_link) m_link->setControl(false, false);
 }
 
-void TC8576F::resetSerialState() {
+void TC8576F::abortTransmit() {
     m_txFifo.clear();
     m_serialAccum = 0;
     m_txEmpty = true;
     m_txReady = true;
+}
+
+void TC8576F::resetSerialState() {
+    abortTransmit();
     m_cts = m_dcd = m_dsr = m_ci = false;
     m_sub.setCiLine(false);
 }
@@ -212,26 +213,26 @@ void TC8576F::loadSerialMode() {
 }
 
 TC8576F::WordFormat TC8576F::wordFormat() const {
-    const uint32_t divisor = uint32_t(m_pr[0]) | (uint32_t(m_pr[1] & 0x0F) << 8);
+    // Baud8x = SYS_CLK / B, B = 0 meaning 4096 and B = 1 stopping the
+    // generator (CPC §5.2).
+    const uint32_t b = uint32_t(m_pr[0]) | (uint32_t(m_pr[1] & 0x0F) << 8);
+    const uint32_t divisor = b == 1 ? 0 : b == 0 ? 4096 : b;
     const int stop = (m_pr[5] & 0x01) ? 2 : 1;
     const int bits = 1 /*start*/ + m_charLength + (m_parityEnable ? 1 : 0) + stop;
     return {divisor, bits};
 }
 
 uint32_t TC8576F::baudRate(WordFormat wf) const {
-    // Baud8x = SYS_CLK / B, B = 0 meaning 4096 and B = 1 stopping the
-    // generator; the receiver samples at 8x (CPC §5.2). At the ROM's PR7 = 2
-    // this is 76800 / B, the TRM's CWCOM divisor rule.
-    if (wf.divisor == 1) return 0;
-    const uint32_t b = wf.divisor == 0 ? 4096 : wf.divisor;
-    return kXclkHz / (static_cast<uint32_t>(prescaler()) * 8 * b);
+    // The receiver samples at 8x the baud rate (CPC §5.2). At the ROM's
+    // PR7 = 2 this is 76800 / B, the TRM's CWCOM divisor rule.
+    if (wf.divisor == 0) return 0;
+    return kXclkHz / (static_cast<uint32_t>(prescaler()) * 8 * wf.divisor);
 }
 
 void TC8576F::updateCharTStates(WordFormat wf) {
-    if (wf.divisor == 1) { m_charTStates = 0; return; } // generator stopped
-    const long long b = wf.divisor == 0 ? 4096 : wf.divisor;
+    if (wf.divisor == 0) { m_charTStates = 0; return; } // generator stopped
     // One bit time = 8 * B * K / XCLK seconds.
-    const long long t = static_cast<long long>(kTStateHz) * 8 * b * prescaler() * wf.bits / kXclkHz;
+    const long long t = static_cast<long long>(kTStateHz) * 8 * wf.divisor * prescaler() * wf.bits / kXclkHz;
     m_charTStates = t < 1 ? 1 : t;
 }
 

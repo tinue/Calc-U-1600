@@ -92,9 +92,9 @@ void PC1600SubCpu::storeTimer(Timer t) {
     // Same 9-nibble block as the clock; a timer has no seconds.
     Alarm& a = m_timers[t];
     a.month  = param(0);
-    a.day    = static_cast<uint8_t>((param(1) << 4) | param(2));
-    a.hour   = static_cast<uint8_t>((param(3) << 4) | param(4));
-    a.minute = static_cast<uint8_t>((param(5) << 4) | param(6));
+    a.day    = paramByte(1);
+    a.hour   = paramByte(3);
+    a.minute = paramByte(5);
 }
 
 void PC1600SubCpu::publishTimer(Timer t) {
@@ -102,11 +102,15 @@ void PC1600SubCpu::publishTimer(Timer t) {
     // A881H fetches 1 + 3 x 2).
     const Alarm& a = m_timers[t];
     const uint8_t fields[3] = {a.day, a.hour, a.minute};
+    publish(a.month, fields, 3);
+}
+
+void PC1600SubCpu::publish(uint8_t first, const uint8_t* bytes, size_t count) {
     m_resultLen = 0;
-    m_result[m_resultLen++] = a.month;
-    for (uint8_t v : fields) {
-        m_result[m_resultLen++] = static_cast<uint8_t>(v >> 4);
-        m_result[m_resultLen++] = static_cast<uint8_t>(v & 0x0F);
+    m_result[m_resultLen++] = first;
+    for (size_t i = 0; i < count; i++) {
+        m_result[m_resultLen++] = static_cast<uint8_t>(bytes[i] >> 4);
+        m_result[m_resultLen++] = static_cast<uint8_t>(bytes[i] & 0x0F);
     }
     m_resultPos = 0;
 }
@@ -144,8 +148,8 @@ bool PC1600SubCpu::execute(uint8_t op) {
             // takes its two threshold bytes as four (P2-B6 A8B4H, A944H).
             if (m_prefix == 0x6A) m_alarmSignal = static_cast<uint8_t>(op & 0x0F);
             if (m_prefix == 0x3C && m_paramLen == 4) {
-                m_adinLow  = static_cast<uint8_t>((param(0) << 4) | param(1));
-                m_adinHigh = static_cast<uint8_t>((param(2) << 4) | param(3));
+                m_adinLow  = paramByte(0);
+                m_adinHigh = paramByte(2);
             }
             return false;
         default: break;
@@ -186,23 +190,18 @@ bool PC1600SubCpu::execute(uint8_t op) {
             for (size_t i = 0; i < kClockPairCount; i++) {
                 const size_t hi = 1 + 2 * i; // month occupies index 0
                 if (param(hi) == 0x0F || param(hi + 1) == 0x0F) continue;
-                m_clock.*kClockPairFields[i] =
-                    static_cast<uint8_t>((param(hi) << 4) | param(hi + 1));
+                m_clock.*kClockPairFields[i] = paramByte(hi);
             }
             return false;
         }
 
         // SRRT (IOCS 03H): publish the clock as nine nibbles for 90H to fetch.
-        case 0x93:
-            m_resultLen = 0;
-            m_result[m_resultLen++] = m_clock.month;
-            for (auto field : kClockPairFields) {
-                const uint8_t v = m_clock.*field;
-                m_result[m_resultLen++] = static_cast<uint8_t>(v >> 4);
-                m_result[m_resultLen++] = static_cast<uint8_t>(v & 0x0F);
-            }
-            m_resultPos = 0;
+        case 0x93: {
+            uint8_t fields[kClockPairCount];
+            for (size_t i = 0; i < kClockPairCount; i++) fields[i] = m_clock.*kClockPairFields[i];
+            publish(m_clock.month, fields, kClockPairCount);
             return false;
+        }
 
         // SWWT / SWA1T / SWA2T (IOCS 04H/06H/08H: WAKE$(0), ON TIME$,
         // ALARM$) and the matching reads SRWT / SRA1T / SRA2T.
@@ -229,7 +228,7 @@ bool PC1600SubCpu::execute(uint8_t op) {
 
         // SWMSK (IOCS 10H): the interrupt mask, high nibble first.
         case 0xA0:
-            m_irqMask = static_cast<uint8_t>((param(0) << 4) | param(1));
+            m_irqMask = paramByte(0);
             return false;
         // SRMSK (IOCS 11H).
         case 0xA1: setAnswer(m_irqMask); return true;
@@ -276,18 +275,12 @@ bool PC1600SubCpu::execute(uint8_t op) {
         case 0xB1: setAnswer(0x55); return true;
 
         // SRPON (IOCS 21H): the SWPON nibble, fetched with one 90H.
-        case 0x69:
-            m_result[0] = m_powerOnMask;
-            m_resultLen = 1;
-            m_resultPos = 0;
-            return false;
+        case 0x69: publish(m_powerOnMask); return false;
         // SWAB / SRAB (IOCS 22H/23H): followed by 80H+n to write the
         // alarm-signal nibble, or by a 90H fetch to read it.
         case 0x6A:
             m_prefix = 0x6A;
-            m_result[0] = m_alarmSignal;
-            m_resultLen = 1;
-            m_resultPos = 0;
+            publish(m_alarmSignal);
             return false;
         // SWA1A (IOCS 24H): the analog-input thresholds follow as four
         // 80H+n nibbles.

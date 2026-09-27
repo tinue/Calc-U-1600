@@ -30,7 +30,6 @@ void PC1600Machine::resetLocked() {
     if (m_ce150Card) m_ce150Card->reset(); // re-anchor, keep it attached (like the CE-1600P)
     m_ce158.reset();
     // Any reset happens with power present.
-    m_poweredOff = false;
     m_z80Mem.subCpu().markSystemOn();
 }
 
@@ -270,10 +269,17 @@ void PC1600Machine::clearCE150Paper() {
 
 int PC1600Machine::step() {
     std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_poweredOff) {
+    uint64_t tstates = 0;
+    return stepLocked(&tstates);
+}
+
+int PC1600Machine::stepLocked(uint64_t* tstates) {
+    *tstates = 0; // a step parked on a breakpoint takes no time
+    if (!m_z80Mem.subCpu().systemOn()) {
         // No CPU has power. The sub-CPU's clock, timers and the peripherals
         // with their own supply keep going; a power-on source ends it.
         advanceSharedClocks(kOffSliceTStates);
+        *tstates = kOffSliceTStates;
         if (m_z80Mem.subCpu().takePowerOnCause()) powerOnLocked();
         return kOffSliceTStates;
     }
@@ -284,8 +290,8 @@ int PC1600Machine::step() {
     if (m_z80Mem.subCpu().powerOffCommanded() &&
         (m_arbiter.sc7852Owns() ? m_sc7852.halted() : m_lh5803.halted())) {
         m_z80Mem.subCpu().switchSystemOff();
-        m_poweredOff = true;
         advanceSharedClocks(kOffSliceTStates);
+        *tstates = kOffSliceTStates;
         return kOffSliceTStates;
     }
     if (m_arbiter.sc7852Owns()) {
@@ -327,6 +333,7 @@ int PC1600Machine::step() {
             }
         }
         advanceSharedClocks(cost);
+        *tstates = static_cast<uint64_t>(cost);
         if (m_ce1600fCard) m_ce1600fCard->advance(static_cast<uint32_t>(cost));
         // The documented handoff is OUT (38H),A then HALT -- the write
         // sets the pending flag (PC1600Memory::writeIO), but the actual
@@ -352,10 +359,9 @@ int PC1600Machine::step() {
     // The LH-5803 also drives the UART / sub-CPU handshake (the OFF-path
     // clock save, rom1500 E538), and the calendar clock and buzzer keep
     // running while it owns the bus -- see advanceSharedClocks(). A halted
-    // step returns 0 and is charged LH5801::kHaltTickCycles, the same
-    // figure runCycles() budgets for it.
-    advanceSharedClocks(static_cast<int>(toTStates(
-        static_cast<uint64_t>(c > 0 ? c : LH5801::kHaltTickCycles), /*sc7852Owned=*/false)));
+    // step returns 0 and is charged LH5801::kHaltTickCycles.
+    *tstates = toTStates(static_cast<uint64_t>(c > 0 ? c : LH5801::kHaltTickCycles), /*sc7852Owned=*/false);
+    advanceSharedClocks(static_cast<int>(*tstates));
     // LH5803->SC7852: the STA #(0A038H) store is the whole handoff, so the
     // switch happens immediately after this step(). It raises cause bit 3,
     // and that INT ends the SC7852's HALT through the ROM's own handler
@@ -399,30 +405,14 @@ void PC1600Machine::advanceSharedClocks(int tstates) {
 uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {
     uint64_t consumed = 0;
     while (consumed < maxCycles) {
-        // Sampled before step(), which may complete a pending handoff and
-        // hand the bus to the other CPU: the cost step() returns belongs to
-        // whichever CPU actually executed, i.e. the owner on entry.
-        const bool z80Owns = sc7852Owns();
-        const bool wasOff = isPoweredOff();
-        const int c = step(); // takes m_mutex per step, as PC1500Machine does
+        // The T-states step() charged the shared clocks, whichever CPU ran
+        // (or none, while powered off).
+        uint64_t tstates = 0;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            stepLocked(&tstates);
+        }
         if (m_debugStop.pending() == DebugStop::Breakpoint) break; // parked on a breakpoint: no time passed
-        // The halted-step fallback must match whichever CPU actually owned
-        // the bus -- step()'s own internal accounting (what its LH5803
-        // branch hands advanceSharedClocks(), which feeds m_rtcAccum among
-        // others) charges a halted LH5803 step LH5801::kHaltTickCycles raw
-        // LH5803 cycles, not SC7852::kHaltTickCycles. Using the
-        // SC7852 figure here regardless of owner would overcount this
-        // budget by ~5.5x during an OFF/auto-power-off span -- runCycles
-        // would then stop calling step() long before step()'s own
-        // m_rtcAccum had actually accumulated the requested amount of real
-        // elapsed time, so the calendar clock would lag during the very
-        // window m_rtcAccum's LH5803 branch (see step()) exists to cover.
-        const uint64_t cycles = static_cast<uint64_t>(
-            c > 0 ? c : (z80Owns ? SC7852::kHaltTickCycles : LH5801::kHaltTickCycles));
-        // A powered-off step (or the step that switches off) reports its
-        // slice in T-states already.
-        const bool offStep = wasOff || isPoweredOff();
-        const uint64_t tstates = offStep ? static_cast<uint64_t>(c) : toTStates(cycles, z80Owns);
         consumed += tstates;
         if (m_debugStop.pending() == DebugStop::Watch) break; // the watched access's instruction has completed
         // See setYieldHook(). step() takes m_mutex per call, so it isn't
@@ -465,7 +455,7 @@ void PC1600Machine::setOnKeyPressed(bool pressed) {
     // rising edge powers a switched-off system on (Service Manual §9-3).
     // step() does the power-on at its next call.
     const bool risingEdge = m_z80Mem.setOnKeyPressed(pressed);
-    if (risingEdge && m_poweredOff) m_z80Mem.subCpu().onKeyPressed();
+    if (risingEdge) m_z80Mem.subCpu().onKeyPressed(); // ignored while the system is on
 }
 
 bool PC1600Machine::pokeMemory(uint16_t address, const uint8_t* data, size_t size) {

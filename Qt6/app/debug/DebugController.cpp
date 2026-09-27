@@ -29,10 +29,10 @@ void DebugController::dispatch(const QJsonObject& message) {
 }
 
 void DebugController::drainQueue() {
-    if (m_busy || m_appBusy > 0) return;
+    if (m_busy || appBusy()) return;
     finishTeardown(); // a client that left meanwhile, before its successor's messages
     m_busy = true;
-    while (!m_queued.empty() && m_appBusy == 0) {
+    while (!m_queued.empty() && !appBusy()) {
         const QJsonObject next = m_queued.front();
         m_queued.erase(m_queued.begin());
         if (m_session) m_session->handle(next);
@@ -41,9 +41,10 @@ void DebugController::drainQueue() {
     finishTeardown();
 }
 
+bool DebugController::appBusy() const { return m_sync && m_sync->busy(); }
+
 void DebugController::setAppBusy(bool busy) {
-    m_appBusy = std::max(0, m_appBusy + (busy ? 1 : -1));
-    if (m_appBusy == 0 && (!m_queued.empty() || m_teardownPending))
+    if (!busy && (!m_queued.empty() || m_teardownPending))
         QTimer::singleShot(0, this, &DebugController::drainQueue);
 }
 
@@ -111,7 +112,7 @@ void DebugController::onClientDisconnected() {
 }
 
 void DebugController::finishTeardown() {
-    if (!m_teardownPending || m_busy || m_appBusy > 0) return;
+    if (!m_teardownPending || m_busy || appBusy()) return;
     m_teardownPending = false;
     endSession();
     m_retiredSessions.clear();
