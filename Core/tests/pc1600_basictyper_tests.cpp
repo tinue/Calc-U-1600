@@ -203,6 +203,47 @@ void test_typeline_kbii_chars_ignore_sml() {
     CHECK(inputBuffer(m).find("\x8E\x84\x96") != std::string::npos);
 }
 
+// ROM-gated: a SHIFT the user latched is un-latched first (with SHIFT on,
+// the KBII key would toggle the key click instead): `ö` still gives ö
+// (94H), and SHIFT (SYMB0 F64EH bit 1), KBII and the key click (KEYWK1
+// F079H bit 1) end up as before.
+void test_typeline_kbii_char_after_latched_shift() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_typeline_kbii_char_after_latched_shift: PC-1600 ROM images not found\n");
+        return;
+    }
+    const uint8_t click = m.memory().peek(0xF079) & 0x02;
+    tapKey(m, "shift");
+    m.runCycles(PC1600Machine::kTStateHz / 4);
+    CHECK((m.memory().peek(0xF64E) & 0x02) != 0);
+    std::string err;
+    CHECK(typeLine(m, "\xC3\xB6", /*pressEnter=*/true, &err));
+    CHECK(inputBuffer(m).find("\x94") != std::string::npos);
+    CHECK((m.memory().peek(0xF64E) & 0x02) == 0);
+    CHECK((m.memory().peek(0xF3C6) & 0x80) == 0);
+    CHECK((m.memory().peek(0xF079) & 0x02) == click);
+}
+
+// ROM-gated: with KBII latched by the user an accented character is
+// dropped, and KBII stays on -- the next plain A types KBII A = á (A0H).
+void test_typeline_kbii_char_ignored_while_kbii_latched() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_typeline_kbii_char_ignored_while_kbii_latched: PC-1600 ROM images not found\n");
+        return;
+    }
+    tapKey(m, "kbii");
+    m.runCycles(PC1600Machine::kTStateHz / 4);
+    CHECK((m.memory().peek(0xF3C6) & 0x80) != 0);
+    std::string err;
+    CHECK(typeLine(m, "\xC3\xB6" "A", /*pressEnter=*/true, &err));
+    const std::string buf = inputBuffer(m);
+    CHECK(buf.find("\xA0\r") != std::string::npos);
+    CHECK(buf.find("\x94") == std::string::npos);
+    CHECK(buf.find("\x99") == std::string::npos);
+}
+
 // No ROM needed: a character without a key (not in the KBII tables) fails
 // the line and names the character.
 void test_typeline_rejects_unknown_non_ascii() {
@@ -218,6 +259,8 @@ int run_pc1600_basictyper_tests() {
     test_typeline_kbii_chars_reach_input_buffer();
     test_typeline_kbii_chars_ignore_sml();
     test_typeline_rejects_unknown_non_ascii();
+    test_typeline_kbii_char_after_latched_shift();
+    test_typeline_kbii_char_ignored_while_kbii_latched();
     test_typeline_rejects_untypeable_char();
     test_typeline_accepts_caret();
     test_typeline_caret_reaches_input_buffer();

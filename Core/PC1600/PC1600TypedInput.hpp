@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 
+#include "../KeyPaste.hpp"
 #include "../SharpShiftedSymbols.hpp"
 #include "PC1600Keyboard.hpp"
 #include "PC1600Machine.hpp"
@@ -94,26 +95,37 @@ inline char32_t latin1CasePartner(char32_t cp) {
     return 0;
 }
 
-/// Maps a host character to its KBII key. Case-exact (`foldCase` false,
-/// paste and `type:`): the character itself, or -- for an uppercase form
-/// the ROM lacks (Ë, Û) -- its case partner. Case-folded (`foldCase` true,
-/// live host keys, which type the way the calculator's own keys do): where
-/// both cases exist (Ä/ä, É/é, ...), always the unshifted uppercase one.
-/// Returns false for a character with no KBII key.
-inline bool pc1600ResolveKbiiChar(char32_t cp, bool foldCase, std::string* baseKey, bool* needsShift) {
-    const Pc1600KbiiChar* self = pc1600FindKbiiChar(cp);
-    const Pc1600KbiiChar* partner = pc1600FindKbiiChar(latin1CasePartner(cp));
-    const Pc1600KbiiChar* hit = self ? self : partner;
-    if (foldCase && self && partner && self->shift) hit = partner;
+/// Maps a host character to its KBII key, case-exact: the character
+/// itself, or -- for an uppercase form the ROM lacks (Ë, Û) -- its case
+/// partner. Every path (host keys, paste, `type:`) types what was typed:
+/// the uppercase default of plain letters exists for BASIC keywords, and
+/// accented characters only appear in strings and REMs. Returns false for
+/// a character with no KBII key.
+inline bool pc1600ResolveKbiiChar(char32_t cp, std::string* baseKey, bool* needsShift) {
+    const Pc1600KbiiChar* hit = pc1600FindKbiiChar(cp);
+    if (!hit) hit = pc1600FindKbiiChar(latin1CasePartner(cp));
     if (!hit) return false;
     *baseKey = std::string(1, hit->key);
     *needsShift = hit->shift;
     return true;
 }
 
-/// buildPasteSteps' non-ASCII resolver for the PC-1600 (case-exact).
+/// buildPasteSteps' non-ASCII resolver for the PC-1600.
 inline bool pc1600ResolveTypedKbiiChar(char32_t cp, std::string* baseKey, bool* needsShift) {
-    return pc1600ResolveKbiiChar(cp, /*foldCase=*/false, baseKey, needsShift);
+    return pc1600ResolveKbiiChar(cp, baseKey, needsShift);
+}
+
+/// SHIFT / KBII as the user has latched them right now -- the ROM's own
+/// flags, read the way GETSYMS (P1-B0 775FH) does: SHIFT = SYMB0 (F64EH)
+/// bit 1, KBII = STAT2 (F3C6H) bit 7. A KBII sequence must look first:
+/// with SHIFT latched the KBII key toggles the key click instead of KBII
+/// (EDKBII 6CB3H, `bit 1,h`), and with KBII latched its taps would turn
+/// the user's KBII off and on again.
+inline KeyLatches pc1600ReadLatches(PC1600Machine& machine) {
+    KeyLatches l;
+    l.shift = (machine.memory().peek(0xF64E) & 0x02) != 0;
+    l.kbii = (machine.memory().peek(0xF3C6) & 0x80) != 0;
+    return l;
 }
 
 /// True when the SC7852 is in the BASIC command loop right now -- a

@@ -244,7 +244,7 @@ bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, 
         std::string name;
         bool needsShift = false;
         const bool kbii = decoded && cp >= 0x80;
-        const bool resolved = decoded && (kbii ? pc1600ResolveKbiiChar(cp, /*foldCase=*/false, &name, &needsShift)
+        const bool resolved = decoded && (kbii ? pc1600ResolveKbiiChar(cp, &name, &needsShift)
                                                : pc1600ResolveTypedChar(static_cast<char>(cp), &name, &needsShift));
         if (!resolved) {
             if (error) *error = "no PC-1600 key for character '" + line.substr(at, i - at) + "'";
@@ -252,7 +252,16 @@ bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, 
         }
         if (kbii) {
             // KBII latches until tapped again; each accented character is
-            // its own KBII-on ... KBII-off sequence (see PC1600TypedInput.hpp).
+            // its own KBII-on ... KBII-off sequence, shaped by what the
+            // user has latched (KeyLatches, KeyPaste.hpp): KBII on -> the
+            // character is dropped; SHIFT on -> un-latched first (with it
+            // the KBII key toggles the key click).
+            const KeyLatches latched = pc1600ReadLatches(machine);
+            if (latched.kbii) continue;
+            if (latched.shift) {
+                tapKey(machine, "shift");
+                machine.runCycles(kFrameTStates * kShiftGapFrames);
+            }
             tapKey(machine, "kbii");
             machine.runCycles(kFrameTStates * kShiftGapFrames);
         }

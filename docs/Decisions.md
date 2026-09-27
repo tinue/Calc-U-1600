@@ -289,9 +289,16 @@ authentic speed for the span that matters.
 - **PC-1600 accented characters are typed through KBII, one sequence per
   character.** A character from the ROM's KBII tables (`KYCDKB2` /
   `KYCDSK2`, P2-B6 9592H / 95E5H) is typed as KBII, [SHIFT,] key, KBII.
-  - Host keys fold case, like the letters (the host keys act as the
-    calculator's own keys): `é` and `É` both give É. Paste and `type:` are
-    case-exact, like the ASCII letters: `é` gives é.
+  - Every path types what was typed: `é` gives é and `É` gives É, on host
+    keys too. This breaks deliberately with the host letters (`g` gives G):
+    their uppercase default is for BASIC keywords, and accented characters
+    only ever appear in strings and REMs.
+  - The sequence checks what the user has latched when it starts (SYMB0
+    F64EH bit 1 SHIFT, STAT2 F3C6H bit 7 KBII). With SHIFT latched it taps
+    SHIFT first to un-latch it: with SHIFT on, the KBII key toggles the key
+    click instead (EDKBII P1-B0 6CB3H). With KBII latched, with or without
+    SHIFT, the character is dropped silently, so the user's KBII stays as
+    it is.
   - SHIFT+KBII is not always the lowercase of the KBII character: for 12
     keys it is another character (B ù/û, H ¡/½, ( ₧/«, …). Those, and an
     uppercase the ROM lacks (Ë, Û → the lowercase), are typed as they are,

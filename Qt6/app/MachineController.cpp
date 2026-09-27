@@ -366,7 +366,8 @@ void MachineController::refreshDebugServer() { m_debug->refreshServer(); }
 
 void MachineController::pasteOnFrame() {
     m_paste.onFrame([this](const std::string& key) { pressKey(key); },
-                    [this](const std::string& key) { releaseKey(key); });
+                    [this](const std::string& key) { releaseKey(key); },
+                    [this] { return m_pc1600 ? pc1600ReadLatches(*m_pc1600) : KeyLatches{}; });
 }
 
 void MachineController::advance(std::uint64_t cyclesBudget) {

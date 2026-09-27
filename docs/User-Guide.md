@@ -140,9 +140,10 @@ SHIFT symbol:
 - **Accented characters (PC-1600).** The PC-1600 types its international
   characters with the latching `KB II` key: KB II, then the letter, then
   KB II again. Pressing `ü` on the host keyboard, pasting it, or using it
-  in a preset's `type:` step does that for you. The host keys work like the
-  calculator's own keys, so `ü` and `Ü` both give `Ü`. Paste and `type:`
-  keep the case you wrote. See `docs/Keyboard-Mapping.md` for the full list.
+  in a preset's `type:` step does that for you, and keeps the case you
+  typed. If you have latched `KB II` yourself, accented host keys do
+  nothing; type the plain letter instead. See `docs/Keyboard-Mapping.md` for
+  the full list.
 
 ---
 

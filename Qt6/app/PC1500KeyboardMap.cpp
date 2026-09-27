@@ -123,11 +123,11 @@ std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
     }
 
     if (text.size() == 1) {
-        // PC-1600 accented characters, case-folded like the letters (the
-        // host keys act as the calculator's own: é and É both give É).
+        // PC-1600 accented characters, typed as typed (é gives é, É gives
+        // É) -- unlike the letters, whose uppercase default is for BASIC.
         if (isPC1600 && text.at(0).unicode() > 0x7f) {
             ResolvedKey r;
-            r.needsKbii = pc1600ResolveKbiiChar(text.at(0).unicode(), /*foldCase=*/true, &r.baseKey, &r.needsShift);
+            r.needsKbii = pc1600ResolveKbiiChar(text.at(0).unicode(), &r.baseKey, &r.needsShift);
             if (r.needsKbii) return r;
         }
         if (auto r = characterName(text.at(0))) return r;

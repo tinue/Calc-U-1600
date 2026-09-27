@@ -149,3 +149,20 @@ KBII+RCL gives BBH. RCL is a function key, not a character, so it is left out.
   - Paste `mérci ÄÖÜ äöü ¿¡ ½` → the same text, exactly.
   - Afterwards the S/KBII indicator is off.
 - Commit on `dev-0.6.0` in three groups: core + tests, GUI, docs.
+
+## Addendum: latched SHIFT / KBII, type what's typed
+
+Found in use: SHIFT latched on the calculator, then host `ö`, gave `R` and left KBII
+latched. With SHIFT on, the KBII key toggles the key click (EDKBII P1-B0 6CB3H), so the
+opening tap was lost and the closing tap latched KBII. A KBII sequence now reads the
+latches when it starts (SYMB0 F64EH bit 1 SHIFT, STAT2 F3C6H bit 7 KBII):
+
+| Latched | Sequence |
+|---|---|
+| nothing | KBII, [SHIFT,] key, KBII |
+| SHIFT | SHIFT (un-latch), KBII, [SHIFT,] key, KBII |
+| KBII, or SHIFT + KBII | nothing: ignored silently |
+
+The case-folding of host keys was dropped at the same time: every path types what was
+typed (`ö` gives ö, `Ö` gives Ö). The uppercase default of the host letters is for BASIC
+keywords, and accented characters only appear in strings and REMs.

@@ -40,6 +40,17 @@ using KbiiCharResolver = bool (*)(char32_t cp, std::string* baseKey, bool* needs
 std::vector<PasteStep> buildPasteSteps(const std::string& text, TypedCharResolver resolve,
                                        KbiiCharResolver resolveKbii = nullptr);
 
+/// SHIFT / KBII as latched on the machine when an accented character's
+/// KBII sequence is about to start (pc1600ReadLatches):
+///   nothing latched  KBII, [SHIFT,] key, KBII
+///   SHIFT            SHIFT (un-latch -- with SHIFT on, the KBII key is the
+///                    key-click toggle), then the same
+///   KBII (+/- SHIFT) nothing: the character is dropped silently
+struct KeyLatches {
+    bool shift = false;
+    bool kbii = false;
+};
+
 /// Per-model cadence, all in emulated 60 Hz frames.
 struct PastePacing {
     int tapFrames = 4;              // key held down
@@ -62,6 +73,7 @@ inline PastePacing pc1600PastePacing() {
 class KeyPasteFeeder {
 public:
     using KeyFn = std::function<void(const std::string&)>;
+    using LatchFn = std::function<KeyLatches()>;
 
     void setPacing(const PastePacing& pacing) { m_pacing = pacing; }
 
@@ -77,20 +89,26 @@ public:
     /// the closing tap stays queued, so KBII isn't left latched.
     void cancel(const KeyFn& release, bool finishKbii = false);
 
-    /// Call once after every emulated frame.
-    void onFrame(const KeyFn& press, const KeyFn& release);
+    /// Call once after every emulated frame. `latches` reports the machine's
+    /// SHIFT / KBII latches when an accented character starts (see
+    /// KeyLatches); without it nothing counts as latched.
+    void onFrame(const KeyFn& press, const KeyFn& release, const LatchFn& latches = {});
 
 private:
     struct Action {
-        enum class Kind { Tap, Wait };
+        enum class Kind { Tap, Wait, KbiiChar };
         Kind kind = Kind::Wait;
-        std::string key;          // Tap
+        std::string key;          // Tap, KbiiChar
         int frames = 0;           // Wait
-        bool closesKbii = false;  // the KBII tap that un-latches a sequence's KBII
+        bool closesKbii = false;  // Tap: the KBII tap that un-latches a sequence's KBII
+        bool shift = false;       // KbiiChar: from the SHIFT+KBII table
     };
     enum class TapPhase { Hold, Gap };
 
     void begin(const Action& action, const KeyFn& press);
+    // Replaces the KbiiChar at the queue's front by its taps, per the
+    // machine's latches (KeyLatches) -- or drops it.
+    void expandKbiiChar(const KeyLatches& latched);
     bool elapse(const KeyFn& release); // true once the current action is done
 
     PastePacing m_pacing;

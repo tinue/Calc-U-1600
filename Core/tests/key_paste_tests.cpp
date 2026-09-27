@@ -60,22 +60,18 @@ void test_build_steps_kbii_case_exact() {
     CHECK(tapsAsText(buildPasteSteps("A\xC3" "B\xFF", pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar)) == "A B ");
 }
 
-void test_kbii_resolver_folded() {
-    // Live host keys fold case: where the ROM has both cases the unshifted
-    // (uppercase) one wins; otherwise the only form there is.
+void test_kbii_resolver() {
+    // One rule everywhere: the character as typed; an uppercase the ROM
+    // lacks falls back to its lowercase.
     std::string key;
     bool shift = true;
-    CHECK(pc1600ResolveKbiiChar(U'\u00E9', true, &key, &shift) && key == "S" && !shift); // é
-    CHECK(pc1600ResolveKbiiChar(U'\u00C9', true, &key, &shift) && key == "S" && !shift); // É
-    CHECK(pc1600ResolveKbiiChar(U'\u00FC', true, &key, &shift) && key == "T" && !shift); // ü
-    CHECK(pc1600ResolveKbiiChar(U'\u00EB', true, &key, &shift) && key == "W" && !shift); // ë
-    CHECK(pc1600ResolveKbiiChar(U'\u00CB', true, &key, &shift) && key == "W" && !shift); // Ë
-    CHECK(pc1600ResolveKbiiChar(U'\u00FB', true, &key, &shift) && key == "B" && shift);  // û
-    CHECK(pc1600ResolveKbiiChar(U'\u00DB', true, &key, &shift) && key == "B" && shift);  // Û
-    CHECK(pc1600ResolveKbiiChar(U'\u00AB', true, &key, &shift) && key == "(" && shift);  // «
-    CHECK(!pc1600ResolveKbiiChar(U'\u00DF', true, &key, &shift));                       // ß
-    // Case-exact keeps é as SHIFT+KBII.
-    CHECK(pc1600ResolveKbiiChar(U'\u00E9', false, &key, &shift) && key == "S" && shift);
+    CHECK(pc1600ResolveKbiiChar(U'ö', &key, &shift) && key == "R" && shift);   // ö
+    CHECK(pc1600ResolveKbiiChar(U'Ö', &key, &shift) && key == "R" && !shift);  // Ö
+    CHECK(pc1600ResolveKbiiChar(U'ë', &key, &shift) && key == "W" && !shift);  // ë
+    CHECK(pc1600ResolveKbiiChar(U'Ë', &key, &shift) && key == "W" && !shift);  // Ë
+    CHECK(pc1600ResolveKbiiChar(U'Û', &key, &shift) && key == "B" && shift);   // Û -> û
+    CHECK(pc1600ResolveKbiiChar(U'«', &key, &shift) && key == "(" && shift);   // «
+    CHECK(!pc1600ResolveKbiiChar(U'ß', &key, &shift));                        // ß
 }
 
 void test_build_steps_line_breaks() {
@@ -125,6 +121,31 @@ void test_feeder_kbii_sequence() {
     const std::vector<std::string> expected = {"0+kbii", "4-kbii", "14+shift", "18-shift",
                                                "28+S",   "32-S",   "36+kbii",  "40-kbii"};
     CHECK(r.events == expected);
+}
+
+// What the user has latched on the machine shapes (or drops) an accented
+// character's sequence -- read when it starts, not when it's queued.
+void test_feeder_kbii_respects_latches() {
+    auto run = [](const KeyLatches& latched) {
+        KeyPasteFeeder f;
+        f.setPacing(pc1600PastePacing());
+        f.append(buildPasteSteps("\xC3\x96" "A", pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar)); // Ö A
+        std::string keys;
+        auto press = [&keys](const std::string& k) { keys += k + " "; };
+        auto release = [](const std::string&) {};
+        bool first = true;
+        auto latches = [&] {
+            const KeyLatches l = first ? latched : KeyLatches{};
+            first = false;
+            return l;
+        };
+        for (int frame = 0; frame < 200 && f.active(); ++frame) f.onFrame(press, release, latches);
+        return keys;
+    };
+    CHECK(run(KeyLatches{}) == "kbii R kbii A ");
+    CHECK(run(KeyLatches{true, false}) == "shift kbii R kbii A ");  // SHIFT un-latched first
+    CHECK(run(KeyLatches{false, true}) == "A ");                    // KBII on: dropped
+    CHECK(run(KeyLatches{true, true}) == "A ");
 }
 
 void test_feeder_cancel_closes_kbii() {
@@ -310,11 +331,12 @@ void test_pc1500_paste_multiline_types_first_line() {
 int run_key_paste_tests() {
     test_build_steps_shift_and_skip();
     test_build_steps_kbii_case_exact();
-    test_kbii_resolver_folded();
+    test_kbii_resolver();
     test_build_steps_line_breaks();
     test_build_steps_pc1500_lacks_digit_row_legends();
     test_feeder_cadence();
     test_feeder_kbii_sequence();
+    test_feeder_kbii_respects_latches();
     test_feeder_cancel_closes_kbii();
     test_feeder_cancel_releases_held_key();
     test_pc1600_paste_line_no_enter();

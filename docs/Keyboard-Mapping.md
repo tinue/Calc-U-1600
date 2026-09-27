@@ -108,11 +108,13 @@ The PC-1600's `KB II` key latches, and while it is on the letters and
 | M | ¢ | ¢ | | Z | à | â |
 | ( | ₧ | « | | ) | ƒ | » |
 
-- **Host keys** fold case like the letters: where both cases exist, `ä`
-  and `Ä` both give `Ä` (KB II Q). Otherwise the one form there is: `ë`
-  and `Ë` give `ë`, `û` and `Û` give `û` (SHIFT+KB II B).
-- **Paste and preset `type:`** keep the case: `ä` gives `ä`, `Ä` gives
-  `Ä`. An uppercase the calculator lacks (`Ë`, `Û`) gives its lowercase.
+- **Host keys, paste and preset `type:`** all keep the case: `ä` gives
+  `ä`, `Ä` gives `Ä`. This is unlike the plain letters, which the host keys
+  type in uppercase. An uppercase the calculator lacks (`Ë`, `Û`) gives its
+  lowercase.
+- With `SHIFT` latched on the calculator, it is released first and the
+  character is typed as usual. With `KB II` latched, an accented host key
+  does nothing: press the letter itself instead (`R` gives `Ö`).
 - `SML` doesn't change these characters.
 
 ## Modifiers

@@ -42,12 +42,14 @@ void KeyPasteFeeder::append(const std::vector<PasteStep>& steps) {
     };
     for (const PasteStep& step : steps) {
         if (step.needsKbii) {
-            // KBII latches until tapped again: every accented character is
-            // its own KBII-on ... KBII-off sequence, so the next character
-            // always starts with KBII off. Each KBII tap gets the SHIFT
-            // gap, so the key-scan sees it before the next key.
-            tap("kbii");
-            wait(m_pacing.shiftGapFrames);
+            // Expanded only when it's next (expandKbiiChar()): what it takes
+            // depends on what is latched on the machine by then.
+            Action a;
+            a.kind = Action::Kind::KbiiChar;
+            a.key = step.key;
+            a.shift = step.needsShift;
+            m_queue.push_back(a);
+            continue;
         }
         if (step.needsShift) {
             // SHIFT is a one-shot latch: tapped, not held, and consumed by
@@ -56,11 +58,48 @@ void KeyPasteFeeder::append(const std::vector<PasteStep>& steps) {
             wait(m_pacing.shiftGapFrames);
         }
         tap(step.key);
-        if (step.needsKbii) {
-            tap("kbii", /*closesKbii=*/true);
-            wait(m_pacing.shiftGapFrames);
-        }
     }
+}
+
+void KeyPasteFeeder::expandKbiiChar(const KeyLatches& latched) {
+    const Action ch = m_queue.front();
+    m_queue.pop_front();
+    if (latched.kbii) return; // the user's own KBII is on: ignored silently
+
+    // KBII latches until tapped again: every accented character is its own
+    // KBII-on ... KBII-off sequence, so the next character always starts
+    // with KBII off. Each KBII / SHIFT tap gets the SHIFT gap, so the
+    // key-scan sees it before the next key.
+    std::deque<Action> seq;
+    auto tap = [&seq](const std::string& key, bool closesKbii = false) {
+        Action a;
+        a.kind = Action::Kind::Tap;
+        a.key = key;
+        a.closesKbii = closesKbii;
+        seq.push_back(a);
+    };
+    auto gap = [this, &seq] {
+        if (m_pacing.shiftGapFrames <= 0) return;
+        Action a;
+        a.kind = Action::Kind::Wait;
+        a.frames = m_pacing.shiftGapFrames;
+        seq.push_back(a);
+    };
+    if (latched.shift) {
+        // With SHIFT on, the KBII key toggles the key click: un-latch it.
+        tap("shift");
+        gap();
+    }
+    tap("kbii");
+    gap();
+    if (ch.shift) {
+        tap("shift");
+        gap();
+    }
+    tap(ch.key);
+    tap("kbii", /*closesKbii=*/true);
+    gap();
+    m_queue.insert(m_queue.begin(), seq.begin(), seq.end());
 }
 
 void KeyPasteFeeder::cancel(const KeyFn& release, bool finishKbii) {
@@ -107,6 +146,8 @@ void KeyPasteFeeder::begin(const Action& action, const KeyFn& press) {
         case Action::Kind::Wait:
             m_framesLeft = action.frames;
             break;
+        case Action::Kind::KbiiChar:
+            break; // expanded before it can start (onFrame())
     }
 }
 
@@ -124,14 +165,19 @@ bool KeyPasteFeeder::elapse(const KeyFn& release) {
             return true;
         case Action::Kind::Wait:
             return --m_framesLeft <= 0;
+        case Action::Kind::KbiiChar:
+            break;
     }
     return true;
 }
 
-void KeyPasteFeeder::onFrame(const KeyFn& press, const KeyFn& release) {
+void KeyPasteFeeder::onFrame(const KeyFn& press, const KeyFn& release, const LatchFn& latches) {
     if (m_hasCurrent) {
         if (!elapse(release)) return;
         m_hasCurrent = false;
+    }
+    while (!m_queue.empty() && m_queue.front().kind == Action::Kind::KbiiChar) {
+        expandKbiiChar(latches ? latches() : KeyLatches{});
     }
     if (m_queue.empty()) return;
     // Start the next action at this frame boundary. Only a Tap/Wait with
