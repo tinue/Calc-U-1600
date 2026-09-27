@@ -65,15 +65,44 @@ uint8_t peekZ80(PC1600Machine& machine, uint32_t a) {
     return machine.memory().peek(static_cast<uint16_t>(a));
 }
 
+// The selected program area (TITLE): S0 keeps its start / end in
+// F865 / F867 (bank F02CH), an S1 / S2 program module in its slot
+// descriptor (Work-Area-Map §4.5: +4..+6 start, +7..+9 end, Z-80 address
+// low byte first + ADTBL index). The end "key" folds the bank index in, so
+// a line that moves the end into another bank still counts as a change.
+struct ProgramArea {
+    uint32_t start = 0;   // Z-80 address of the first line
+    uint32_t end = 0;     // Z-80 address of the end mark
+    uint32_t endKey = 0;  // end address + bank index, for change detection
+};
+
+ProgramArea programArea(PC1600Machine& machine) {
+    ProgramArea a;
+    const int title = machine.programAreaTitle();
+    if (title == 1 || title == 2) {
+        const uint16_t d = title == 1 ? 0xF015 : 0xF01F;
+        auto le = [&](uint16_t at) {
+            return static_cast<uint32_t>(machine.memory().peek(at) | (machine.memory().peek(static_cast<uint16_t>(at + 1)) << 8));
+        };
+        a.start = le(static_cast<uint16_t>(d + 4));
+        a.end = le(static_cast<uint16_t>(d + 7));
+        a.endKey = a.end | (static_cast<uint32_t>(machine.memory().peek(static_cast<uint16_t>(d + 9))) << 16);
+    } else {
+        a.start = toZ80(readBE16(machine, kProgramStartPtr));
+        a.end = toZ80(readBE16(machine, kProgramEndPtr));
+        a.endKey = a.end | (static_cast<uint32_t>(machine.memory().peek(0xF02C)) << 16);
+    }
+    return a;
+}
+
 basic::LineStoreCheck captureProgram(PC1600Machine& machine, const std::string& line) {
-    return basic::LineStoreCheck::capture([&](uint32_t a) { return peekZ80(machine, a); },
-                                          toZ80(readBE16(machine, kProgramStartPtr)),
-                                          toZ80(readBE16(machine, kProgramEndPtr)), line);
+    const ProgramArea area = programArea(machine);
+    return basic::LineStoreCheck::capture([&](uint32_t a) { return peekZ80(machine, a); }, area.start, area.end, line,
+                                          area.endKey);
 }
 
 bool programChanged(PC1600Machine& machine, const basic::LineStoreCheck& check) {
-    return check.changed([&](uint32_t a) { return peekZ80(machine, a); },
-                         toZ80(readBE16(machine, kProgramEndPtr)));
+    return check.changed([&](uint32_t a) { return peekZ80(machine, a); }, programArea(machine).endKey);
 }
 
 // Run frames until the program-end pointer has held the same value for a
@@ -87,10 +116,10 @@ void settleUntilProgramPtrStable(PC1600Machine& machine) {
 
     uint64_t spent = 0;
     int stable = 0;
-    uint16_t last = readBE16(machine, kProgramEndPtr);
+    uint32_t last = programArea(machine).endKey;
     while (stable < kStableFramesNeeded && spent < kCap) {
         spent += machine.runCycles(kFrameTStates);
-        uint16_t now = readBE16(machine, kProgramEndPtr);
+        uint32_t now = programArea(machine).endKey;
         if (now == last) stable++;
         else { stable = 0; last = now; }
     }

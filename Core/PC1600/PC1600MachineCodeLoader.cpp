@@ -58,7 +58,7 @@ std::vector<machinecode::BasicArea> pc1600BasicAreas(PC1600Machine& machine) {
     in.peek = [&machine](uint16_t a) { return machine.debugPeek(a); };
     in.slot1 = pc1600SlotGeometry(machine, 1);
     in.slot2 = pc1600SlotGeometry(machine, 2);
-    const pc1600::PlacementResult plan = pc1600::planS0Placement(in, 0);
+    const pc1600::PlacementResult plan = pc1600::planS0Placement(in, {});
     std::vector<machinecode::BasicArea> areas;
     if (!plan.ok) return areas;
     for (const pc1600::ProgramSegment& seg : plan.segments) {

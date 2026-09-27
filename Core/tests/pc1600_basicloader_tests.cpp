@@ -5,6 +5,7 @@
 //
 // Build & run: see tools/run_tests.sh
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
@@ -227,7 +228,7 @@ void test_reload_over_shorter_program_clears_tail_stock() {
         std::fprintf(stderr, "SKIP pc1600_basicloader reload-shorter: PC-1600 ROM set not found\n");
         return;
     }
-    std::vector<uint8_t> longPayload = {0x00, 0x0A, 0x03, 0xF1, 0x22, 0x48, 0x45, 0x4C, 0x4C, 0x4F,
+    std::vector<uint8_t> longPayload = {0x00, 0x0A, 0x09, 0xF1, 0x22, 0x48, 0x45, 0x4C, 0x4C, 0x4F,
                                        0x22, 0x0D};
     std::vector<uint8_t> shortPayload = {0x00, 0x0A, 0x03, 0xF1, 0x30, 0x0D};
     CHECK(longPayload.size() > shortPayload.size());
@@ -284,7 +285,7 @@ void test_reload_over_shorter_program_clears_tail_module() {
         std::fprintf(stderr, "SKIP pc1600_basicloader reload-shorter-module: PC-1600 ROM set not found\n");
         return;
     }
-    std::vector<uint8_t> longPayload = {0x00, 0x0A, 0x03, 0xF1, 0x22, 0x48, 0x45, 0x4C, 0x4C, 0x4F,
+    std::vector<uint8_t> longPayload = {0x00, 0x0A, 0x09, 0xF1, 0x22, 0x48, 0x45, 0x4C, 0x4C, 0x4F,
                                        0x22, 0x0D};
     std::vector<uint8_t> shortPayload = {0x00, 0x0A, 0x03, 0xF1, 0x30, 0x0D};
 
@@ -337,6 +338,132 @@ void test_rejects_pc1500_transfer_file() {
 
 }  // namespace
 
+// ── Typed vs fast-loaded: the work area must match ──────────────────
+//
+// The ROM's own line editor stores the typed program; the fast loader must
+// leave the same pointers (LOADEND, rom3b 70E1H). Compared: the slot
+// descriptors and S0 banks (F015-F02C), the logical banks + TITLE + ADTBL
+// (F1C1-F1DA), the BASIC pointers (F864-F8BD), PRGADR (FE3C-FE41) and the
+// first 8 bytes of each module (the program-module header).
+//
+// Not compared: what the line editor leaves behind but LOAD doesn't touch
+// (the SEARCH START / FOUND banks F1C2/F1C3, RESTORE and INTERPRET banks
+// F1CD/F1CE, the search cache F8A6-F8AB, display flags F880), and the BASIC
+// interrupt state F1CF-F1D4, which the 0.5 s interrupt sets at any time.
+bool editorOrRuntimeOnly(uint16_t a) {
+    return a == 0xF1C2 || a == 0xF1C3 || (a >= 0xF1CD && a <= 0xF1D4) || a == 0xF880 ||
+           (a >= 0xF8A6 && a <= 0xF8AB);
+}
+
+const char* const kLongProgram =
+    "10 REM AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+    "20 REM BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\n"
+    "30 REM CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\n"
+    "40 REM DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD\n"
+    "50 REM EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\n"
+    "60 POKE &FF80,77\n"
+    "70 END\n";
+
+// The tokenized payload of kLongProgram: typed on a stock machine, where
+// it lies contiguously in internal RAM.
+std::vector<uint8_t> longProgramPayload() {
+    PC1600Machine m;
+    if (!bootIntoProNew0(m)) return {};
+    if (!typeBasicProgramText(m, kLongProgram).ok) return {};
+    return readRange(m, toZ80(be16(m, 0xF865)), toZ80(be16(m, 0xF867)));
+}
+
+struct WorkAreaSnapshot {
+    std::vector<std::pair<uint16_t, uint8_t>> bytes;
+    std::vector<uint8_t> header1, header2;
+};
+
+WorkAreaSnapshot snapshot(PC1600Machine& m) {
+    WorkAreaSnapshot w;
+    const uint16_t ranges[][2] = {{0xF015, 0xF02D}, {0xF1C1, 0xF1DB}, {0xF864, 0xF8BE}, {0xFE3C, 0xFE42}};
+    for (const auto& r : ranges)
+        for (uint16_t a = r[0]; a < r[1]; ++a) w.bytes.push_back({a, m.memory().peek(a)});
+    std::vector<uint8_t> i1 = m.debugSlotImage(1), i2 = m.debugSlotImage(2);
+    w.header1.assign(i1.begin(), i1.begin() + std::min<size_t>(8, i1.size()));
+    w.header2.assign(i2.begin(), i2.begin() + std::min<size_t>(8, i2.size()));
+    return w;
+}
+
+void checkSameWorkArea(const WorkAreaSnapshot& typed, const WorkAreaSnapshot& fast, const char* label) {
+    bool same = true;
+    for (size_t i = 0; i < typed.bytes.size(); ++i) {
+        if (editorOrRuntimeOnly(typed.bytes[i].first)) continue;
+        if (typed.bytes[i].second != fast.bytes[i].second) {
+            same = false;
+            std::fprintf(stderr, "  %s: $%04X typed $%02X, fast $%02X\n", label, typed.bytes[i].first,
+                         typed.bytes[i].second, fast.bytes[i].second);
+        }
+    }
+    if (typed.header1 != fast.header1) { same = false; std::fprintf(stderr, "  %s: slot 1 header differs\n", label); }
+    if (typed.header2 != fast.header2) { same = false; std::fprintf(stderr, "  %s: slot 2 header differs\n", label); }
+    CHECK(same);
+}
+
+// Boot with an optional 32 KB plain RAM module in slot 1, go to PRO mode,
+// type the setup lines.
+bool prepare(PC1600Machine& m, bool slot1Ram, const std::vector<std::string>& setup) {
+    if (slot1Ram) {
+        auto ram = plainRamCard(0x8000);
+        if (!ram) return false;
+        m.memory().attachSlot1Card(std::move(ram));
+    }
+    if (!bootPC1600(m)) return false;
+    tapKey(m, "mode");  // RUN -> PRO
+    waitIdle(m, static_cast<uint64_t>(PC1600Machine::kTStateHz));
+    std::string err;
+    for (const std::string& line : setup) {
+        typeLine(m, line, /*pressEnter=*/true, &err);
+        waitIdle(m, static_cast<uint64_t>(PC1600Machine::kTStateHz) * 2);
+    }
+    return true;
+}
+
+void checkTypedVsFast(const char* label, bool slot1Ram, const std::vector<std::string>& setup,
+                      const std::vector<uint8_t>& payload) {
+    WorkAreaSnapshot typed, fast;
+    {
+        PC1600Machine m;
+        if (!prepare(m, slot1Ram, setup)) return;
+        BasicTypeResult t = typeBasicProgramText(m, kLongProgram);
+        CHECK(t.ok && t.rejectedLines.empty());
+        typed = snapshot(m);
+    }
+    PC1600Machine m;
+    if (!prepare(m, slot1Ram, setup)) return;
+    BasicLoadResult r = loadBasicBinaryPayload(m, payload);
+    CHECK(r.ok);
+    if (!r.ok) {
+        std::fprintf(stderr, "  %s: loader error: %s\n", label, r.error.c_str());
+        return;
+    }
+    fast = snapshot(m);
+    checkSameWorkArea(typed, fast, label);
+    // And it runs: line 60 pokes a marker into the free top of the work area.
+    const uint8_t zero = 0;
+    m.pokeMemory(0xFF80, &zero, 1);
+    runAndReadVarPtr(m);
+    CHECK(m.memory().peek(0xFF80) == 77);
+}
+
+void test_work_area_matches_typed() {
+    const std::vector<uint8_t> payload = longProgramPayload();
+    if (payload.empty()) {
+        std::fprintf(stderr, "SKIP pc1600_basicloader work-area: PC-1600 ROM set not found\n");
+        return;
+    }
+    checkTypedVsFast("stock", false, {"NEW0"}, payload);
+    // A 32 KB module folded into S0, the program start pushed near the end
+    // of its first bank so the program crosses into the second.
+    checkTypedVsFast("S0 across banks", true, {"NEW0", "NEW \"S0:\",&3F00"}, payload);
+    // The module as a program module, selected with TITLE.
+    checkTypedVsFast("S1 program module", true, {"NEW0", "INIT\"S1:\",\"P\"", "TITLE\"S1:\""}, payload);
+}
+
 // The loaders read MODE and TITLE from the machine: after boot MODE 0 and
 // S0; `MODE1` typed on a stock machine is accepted (the ROM needs no module).
 void test_mode_and_title_queries() {
@@ -356,6 +483,7 @@ void test_mode_and_title_queries() {
 
 int run_pc1600_basicloader_tests() {
     test_mode_and_title_queries();
+    test_work_area_matches_typed();
     test_equivalence_against_typer();
     test_ce1600m_module_equivalence_and_run();
     test_reload_over_shorter_program_clears_tail_stock();

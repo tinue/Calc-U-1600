@@ -65,6 +65,26 @@ SlotGeometry bankedRam(uint32_t bankSize, uint32_t bankCount) {
     return g;
 }
 
+// `lines` line records of `recordSize` bytes each ([no hi][no lo][len][len
+// bytes], len = recordSize - 3, the last content byte the 0D terminator).
+std::vector<uint8_t> program(int lines, size_t recordSize) {
+    std::vector<uint8_t> p;
+    for (int n = 1; n <= lines; ++n) {
+        p.push_back(static_cast<uint8_t>(n >> 8));
+        p.push_back(static_cast<uint8_t>(n & 0xFF));
+        p.push_back(static_cast<uint8_t>(recordSize - 3));
+        for (size_t i = 0; i + 4 < recordSize; ++i) p.push_back('A');
+        p.push_back(0x0D);
+    }
+    return p;
+}
+
+size_t writtenBytes(const PlacementResult& r) {
+    size_t n = 0;
+    for (const auto& w : r.writes) n += w.data.size();
+    return n;
+}
+
 // ── Stock machine: one internal-RAM segment at $C0C5 ───────────────────
 void test_stock_single_internal_segment() {
     FakeMem m;
@@ -73,7 +93,7 @@ void test_stock_single_internal_segment() {
     m.setBE(pc1600::kVarPtr, 0x6F00); // -> ceiling $EEFF
     PlacementInput in = makeInput(m);
 
-    PlacementResult r = pc1600::planS0Placement(in, 100);
+    PlacementResult r = pc1600::planS0Placement(in, program(1, 100));
     CHECK(r.ok);
     CHECK(!r.programModuleCase);
     CHECK(r.segments.size() == 1);
@@ -85,8 +105,8 @@ void test_stock_single_internal_segment() {
     CHECK(r.writes.size() == 1);
     CHECK(r.writes[0].kind == ProgramSegment::Kind::InternalRam);
     CHECK(r.writes[0].backingOffset == 0x00C5);
-    CHECK(r.writes[0].sourceOffset == 0);
-    CHECK(r.writes[0].length == 101);   // payload + marker
+    CHECK(r.writes[0].data.size() == 101);   // payload + $FF
+    CHECK(r.writes[0].data.back() == 0xFF);
 }
 
 // ── CE-1600M in Slot 1 as extension memory, boot + NEW0 -- the real
@@ -103,7 +123,7 @@ void test_ce1600m_slot1_extension_memory() {
     PlacementInput in = makeInput(m);
     in.slot1 = ram(0x8000);             // CE-1600M: 32 KB, unbanked
 
-    PlacementResult r = pc1600::planS0Placement(in, 422);
+    PlacementResult r = pc1600::planS0Placement(in, program(2, 211));
     CHECK(r.ok);
     CHECK(!r.programModuleCase);
     CHECK(r.segments.size() == 3);
@@ -118,14 +138,15 @@ void test_ce1600m_slot1_extension_memory() {
     CHECK(r.writes.size() == 1);
     CHECK(r.writes[0].slot == 1);
     CHECK(r.writes[0].backingOffset == 0x00C5);
-    CHECK(r.writes[0].length == 423);
+    CHECK(r.writes[0].data.size() == 423);
 }
 
 // ── TRM §3.12.2 Example 1: CE-159 (8 KB) Slot 1 + CE-1600M (32 KB) Slot 2,
 //    both extension memory. S0MTb=3, ADTBL[3..5] = 01 22 32
-//    -> S0 banks [0, 2, 3] then internal. A payload that straddles the
-//    seg0 -> seg1 boundary splits into two writes. ─────────────────────
-void test_trm_example1_scatter_and_straddle() {
+//    -> S0 banks [0, 2, 3] then internal. No line straddles two module
+//    banks: the line that doesn't fit leaves a 00 00 bank-end mark and
+//    starts the next bank (rom3b LOADSTORE 7074H). ─────────────────────
+void test_trm_example1_scatter_and_bank_end_mark() {
     FakeMem m;
     m.set(pc1600::kS0MTb, 3);
     m.set(pc1600::kS1MTb, 0xFE);
@@ -138,25 +159,48 @@ void test_trm_example1_scatter_and_straddle() {
     in.slot1 = ram(0x2000);             // CE-159: 8 KB, top-justified at $A000
     in.slot2 = ram(0x8000);             // CE-1600M: 32 KB
 
-    // seg0 capacity = $BFFF - $A0C5 + 1 = 8027 bytes.
-    const size_t kSeg0Cap = 0xBFFF - 0xA0C5 + 1;
-    PlacementResult r = pc1600::planS0Placement(in, 8100);
+    // 100-byte lines: 79 fit in $A0C5-$BFFF (a line needs 2 bytes spare
+    // after it: addr + 100 + 2 <= $BFFF), the 80th and 81st go to the next bank.
+    PlacementResult r = pc1600::planS0Placement(in, program(81, 100));
     CHECK(r.ok);
     CHECK(r.segments.size() == 4);
     CHECK(r.segments[0].slot == 1 && r.segments[0].adtblBank == 0 && r.segments[0].base == 0xA0C5);
+    CHECK(r.segments[0].adtblIndex == 3);
     CHECK(r.segments[1].slot == 2 && r.segments[1].adtblBank == 2 && r.segments[1].base == 0x8000);
-    CHECK(r.segments[1].backingBase == 0x0000);
+    CHECK(r.segments[1].backingBase == 0x0000 && r.segments[1].adtblIndex == 4);
     CHECK(r.segments[2].slot == 2 && r.segments[2].adtblBank == 3 && r.segments[2].base == 0x8000);
     CHECK(r.segments[2].backingBase == 0x4000);
-    CHECK(r.segments[3].kind == ProgramSegment::Kind::InternalRam);
+    CHECK(r.segments[3].kind == ProgramSegment::Kind::InternalRam && r.segments[3].adtblIndex == 5);
 
     CHECK(r.writes.size() == 2);
     CHECK(r.writes[0].slot == 1 && r.writes[0].backingOffset == 0x00C5);
-    CHECK(r.writes[0].sourceOffset == 0 && r.writes[0].length == kSeg0Cap);
+    CHECK(r.writes[0].data.size() == 7900 + 2);          // 79 lines + the 00 00 mark
+    CHECK(r.writes[0].data[7900] == 0x00 && r.writes[0].data[7901] == 0x00);
     CHECK(r.writes[1].slot == 2 && r.writes[1].backingOffset == 0x0000);
-    CHECK(r.writes[1].sourceOffset == kSeg0Cap);
-    CHECK(r.writes[1].length == (8100 + 1) - kSeg0Cap);
-    CHECK(r.endAddr == 0x8000 + ((8100 + 1) - kSeg0Cap) - 1);
+    CHECK(r.writes[1].data.size() == 200 + 1);           // lines 80, 81 + $FF
+    CHECK(r.endAddr == 0x8000 + 200);
+    CHECK(r.endSegment == 1);
+}
+
+// ADTBL entry 5's module bank runs straight on into internal RAM ($BFFF ->
+// $C000), so there a line does straddle, with no mark.
+void test_entry5_straddles_into_internal_ram() {
+    FakeMem m;
+    m.set(pc1600::kS0MTb, 5);
+    m.set(pc1600::kAdtbl1 + 4, 0x01);   // ADTBL[5] = bank 0 / slot 1
+    m.setBE(pc1600::kBasPrgSt, 0x3FC5); // -> Z-80 $BFC5, 59 bytes before $C000
+    PlacementInput in = makeInput(m);
+    in.slot1 = ram(0x4000);
+
+    PlacementResult r = pc1600::planS0Placement(in, program(2, 100));
+    CHECK(r.ok);
+    CHECK(r.segments.size() == 2);
+    CHECK(r.writes.size() == 2);
+    CHECK(r.writes[0].slot == 1 && r.writes[0].backingOffset == 0x3FC5 && r.writes[0].data.size() == 59);
+    CHECK(r.writes[1].kind == ProgramSegment::Kind::InternalRam && r.writes[1].backingOffset == 0);
+    CHECK(r.writes[1].data.size() == 200 - 59 + 1);
+    CHECK(r.endAddr == 0xC000 + 200 - 59);
+    CHECK(r.endSegment == 1);
 }
 
 // ── TRM §3.12.2 Example 2: CE-1600M Slot 1 + CE-161 Slot 2 as PROGRAM
@@ -177,7 +221,7 @@ void test_trm_example2_program_module_region() {
     in.slot1 = ram(0x8000);
     in.slot2 = ram(0x4000);
 
-    PlacementResult r = pc1600::planModuleRegionPlacement(in, 1, 50);
+    PlacementResult r = pc1600::planModuleRegionPlacement(in, 1, program(1, 50));
     CHECK(r.ok);
     CHECK(r.programModuleCase);
     CHECK(r.segments.size() == 2);      // no internal-RAM tail for a module region
@@ -187,17 +231,17 @@ void test_trm_example2_program_module_region() {
     CHECK(r.segments[1].slot == 1 && r.segments[1].adtblBank == 1);
     CHECK(r.segments[1].base == 0x8000 && r.segments[1].backingBase == 0x4000);
     CHECK(r.startAddr == 0x80C5);
-    CHECK(r.writes.size() == 1 && r.writes[0].length == 51);
+    CHECK(r.writes.size() == 1 && r.writes[0].data.size() == 51);
 
     // planS0Placement on the same machine still drives S0 (internal), but
     // flags the program-module case.
-    PlacementResult s0 = pc1600::planS0Placement(in, 10);
+    PlacementResult s0 = pc1600::planS0Placement(in, program(1, 10));
     CHECK(s0.ok);
     CHECK(s0.programModuleCase);
     CHECK(s0.segments.size() == 1 && s0.segments[0].kind == ProgramSegment::Kind::InternalRam);
 
     // A slot that isn't a program module is rejected by the region entry point.
-    PlacementResult bad = pc1600::planModuleRegionPlacement(makeInput(FakeMem{}), 2, 10);
+    PlacementResult bad = pc1600::planModuleRegionPlacement(makeInput(FakeMem{}), 2, program(1, 10));
     CHECK(!bad.ok && bad.error.find("not currently a BASIC program module") != std::string::npos);
 }
 
@@ -207,7 +251,7 @@ void test_program_too_large() {
     m.set(pc1600::kS0MTb, 0xFF);
     m.setBE(pc1600::kBasPrgSt, 0x40C5);
     PlacementInput in = makeInput(m);
-    PlacementResult r = pc1600::planS0Placement(in, 0x10000);
+    PlacementResult r = pc1600::planS0Placement(in, program(700, 100));
     CHECK(!r.ok);
     CHECK(r.error.find("too large") != std::string::npos);
 }
@@ -217,7 +261,7 @@ void test_basprgst_outside_first_segment() {
     m.set(pc1600::kS0MTb, 0xFF);
     m.setBE(pc1600::kBasPrgSt, 0x0100);  // -> Z-80 $8100, not in the internal segment
     PlacementInput in = makeInput(m);
-    PlacementResult r = pc1600::planS0Placement(in, 10);
+    PlacementResult r = pc1600::planS0Placement(in, program(1, 10));
     CHECK(!r.ok);
     CHECK(r.error.find("outside the first S0 segment") != std::string::npos);
 }
@@ -227,7 +271,7 @@ void test_adtbl_points_at_absent_module() {
     m.set(pc1600::kS0MTb, 5);
     m.set(pc1600::kAdtbl1 + 4, 0x21);    // ADTBL[5] = bank 2 / slot 2, but slot 2 empty
     PlacementInput in = makeInput(m);
-    PlacementResult r = pc1600::planS0Placement(in, 10);
+    PlacementResult r = pc1600::planS0Placement(in, program(1, 10));
     CHECK(!r.ok);
     CHECK(r.error.find("no module is fitted") != std::string::npos);
 }
@@ -246,7 +290,7 @@ void test_vertical_banked_module_uses_bank0() {
     PlacementInput in = makeInput(m);
     in.slot2 = bankedRam(0x8000, 2);     // CE-1601M: 64 KB image, 32 KB per vertical bank
 
-    PlacementResult r = pc1600::planS0Placement(in, 300);
+    PlacementResult r = pc1600::planS0Placement(in, program(3, 100));
     CHECK(r.ok);
     CHECK(r.segments.size() == 3);
     CHECK(r.segments[0].slot == 2 && r.segments[0].base == 0x80C5);
@@ -256,7 +300,7 @@ void test_vertical_banked_module_uses_bank0() {
     CHECK(r.writes.size() == 1);
     CHECK(r.writes[0].slot == 2);
     CHECK(r.writes[0].backingOffset == 0x00C5);    // within vertical bank 0 (image < $8000)
-    CHECK(r.writes[0].length == 301);
+    CHECK(r.writes[0].data.size() == 301);
 }
 
 // A module whose window is absurdly small is still rejected.
@@ -266,7 +310,7 @@ void test_tiny_module_window_rejected() {
     m.set(pc1600::kAdtbl1 + 4, 0x11);    // ADTBL[5] = bank 1 / slot 1
     PlacementInput in = makeInput(m);
     in.slot1 = ram(0x200);
-    PlacementResult r = pc1600::planS0Placement(in, 10);
+    PlacementResult r = pc1600::planS0Placement(in, program(1, 10));
     CHECK(!r.ok);
     CHECK(r.error.find("too small") != std::string::npos);
 }
@@ -304,7 +348,8 @@ int run_pc1600_program_placement_tests() {
     test_debug_program_areas_match_rom();
     test_stock_single_internal_segment();
     test_ce1600m_slot1_extension_memory();
-    test_trm_example1_scatter_and_straddle();
+    test_trm_example1_scatter_and_bank_end_mark();
+    test_entry5_straddles_into_internal_ram();
     test_trm_example2_program_module_region();
     test_program_too_large();
     test_basprgst_outside_first_segment();

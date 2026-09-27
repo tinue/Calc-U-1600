@@ -38,6 +38,9 @@ constexpr uint16_t kS2MBb = 0xF022;
 constexpr uint16_t kAdtbl1 = 0xF1D6;   // ADTBL+1 .. ADTBL+5 -- five 1-byte bank descriptors
 constexpr uint16_t kBasPrgSt = 0xF865; // BASPRG_ST (big-endian), LH5803-side
 constexpr uint16_t kVarPtr = 0xF899;   // VARIABLE POINTER (big-endian), LH5803-side
+constexpr uint16_t kS1Desc = 0xF015;   // S1 / S2 slot descriptor (10 bytes, Work-Area-Map §4.5):
+constexpr uint16_t kS2Desc = 0xF01F;   //   +0 base page, +1 MTb, +2 limit page, +3 MBb,
+                                       //   +4..+6 start lo/hi/index, +7..+9 end lo/hi/index
 
 // ── LH5803 view <-> Z-80 address ────────────────────────────────────────
 //
@@ -56,6 +59,11 @@ struct ProgramSegment {
     Kind kind = Kind::InternalRam;
     int slot = 0;         // 1 or 2 for SlotModule; 0 for InternalRam
     int adtblBank = 0;    // ADTBL global bank 0..3 (SlotModule only)
+    // ADTBL index 1..5 of the entry this segment comes from -- the "bank"
+    // the ROM keeps with a program address (F02BH / F02CH, the descriptors'
+    // bank bytes). Internal RAM continues the last entry and counts as 5
+    // (the MEM formula: (5 - F02CH) * 4000H).
+    int adtblIndex = 5;
     uint16_t base = 0;
     uint16_t top = 0;
     // Start of the window this segment lives in ($C000 internal RAM, the
@@ -88,43 +96,44 @@ struct PlacementInput {
     SlotGeometry slot2;
 };
 
-// One run of the (payload + $FF) byte stream to copy into one segment's
-// backing store. `sourceOffset` indexes the caller's buffer of
-// `payloadLen + 1` bytes (the tokenised image followed by the $FF marker).
+// Bytes to copy into one segment's backing store: program lines, the ROM's
+// 00 00 bank-end marks and the final $FF end mark, as the ROM lays them down.
 struct PlacementWrite {
     ProgramSegment::Kind kind = ProgramSegment::Kind::InternalRam;
     int slot = 0;
+    size_t segment = 0;          // index into PlacementResult::segments
     uint32_t backingOffset = 0;
-    size_t sourceOffset = 0;
-    size_t length = 0;
+    std::vector<uint8_t> data;
 };
 
 struct PlacementResult {
     bool ok = false;
     std::string error;
     std::vector<ProgramSegment> segments;
-    std::vector<PlacementWrite> writes;  // program body + the single $FF marker
+    std::vector<PlacementWrite> writes;  // program lines, bank-end marks, the $FF end mark
     uint16_t startAddr = 0;             // Z-80 address of the first program byte
     uint16_t endAddr = 0;              // Z-80 address of the $FF marker
+    size_t endSegment = 0;             // index into `segments` of the $FF marker
     uint16_t basPrgStValue = 0;        // raw BASPRG_ST ($F865) value, LH5803-side
     bool programModuleCase = false;    // S1MTb / S2MTb is a valid 1..5 index (informational)
 };
 
-/// Plan the S0 placement for a `payloadLen`-byte tokenised image (the
-/// terminating $FF is accounted for on top). Reads S0MTb / ADTBL /
-/// BASPRG_ST / VARIABLE POINTER via `in.peek`. Safe to call twice against the
-/// same `PlacementInput` with different lengths (e.g. once with the resident
-/// program's length to find which physical segments to erase, once with the
-/// new program's length for the real write plan) -- module/bank geometry
-/// never changes between the two calls, only how far the segment walk goes.
-PlacementResult planS0Placement(const PlacementInput& in, size_t payloadLen);
+/// Plan the S0 placement of a tokenised program (`payload` = its line
+/// records, [lineNo hi][lineNo lo][len][len bytes] each, no end mark). Reads
+/// S0MTb / ADTBL / BASPRG_ST / VARIABLE POINTER via `in.peek`. Lines are laid
+/// down the way the ROM's LOAD does (see placeImage): no line straddles two
+/// module banks. An empty payload gives just the area's segments (and the
+/// $FF end mark at its start).
+PlacementResult planS0Placement(const PlacementInput& in, const std::vector<uint8_t>& payload);
 
 /// Plan placement into an independent PROGRAM-module region (doc §2): the
 /// ADTBL slice [xMTb..xMBb] for `slot`, whose leading bank carries its own
-/// 8-byte header + 189-byte reserve (usable base = window_base + 197) and
-/// which does NOT continue into internal RAM. Errors if that slot is not
-/// currently a program module. Implemented and tested for completeness;
-/// the preset loader drives planS0Placement().
-PlacementResult planModuleRegionPlacement(const PlacementInput& in, int slot, size_t payloadLen);
+/// 8-byte header + 189-byte reserve and which does NOT continue into
+/// internal RAM. The program starts at the slot descriptor's start (window
+/// base + 197 unless `NEW "Sx:",n` moved it; the fallback when the
+/// descriptor is empty) and the last bank ends at the descriptor's limit
+/// page. Errors if that slot is not currently a program module. Used when
+/// TITLE selects S1 / S2.
+PlacementResult planModuleRegionPlacement(const PlacementInput& in, int slot, const std::vector<uint8_t>& payload);
 
 }  // namespace pc1600

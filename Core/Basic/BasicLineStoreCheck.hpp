@@ -26,18 +26,21 @@ namespace basic {
 class LineStoreCheck {
 public:
     /// `peek(addr)` reads one byte; `start`/`end` are the program area
-    /// [BASPRG_ST, BASPRG_END) in the address space `peek` uses.
+    /// [BASPRG_ST, BASPRG_END) in the address space `peek` uses. `endKey`
+    /// is what changed() compares against (default: `end`); the PC-1600
+    /// folds the end's bank index into it.
     template <class Peek>
-    static LineStoreCheck capture(Peek&& peek, uint32_t start, uint32_t end, const std::string& typedLine) {
+    static LineStoreCheck capture(Peek&& peek, uint32_t start, uint32_t end, const std::string& typedLine,
+                                  uint32_t endKey = UINT32_MAX) {
         LineStoreCheck c;
-        c.m_end = end;
+        c.m_end = endKey == UINT32_MAX ? end : endKey;
         int lineNo = leadingLineNumber(typedLine);
         if (lineNo < 0) return c;
         uint32_t a = start;
         while (a + 3 <= end && a + 3 <= 0x10000) {
             const int no = (peek(a) << 8) | peek(a + 1);
             const uint32_t size = 3u + peek(a + 2);
-            if (no > lineNo) break; // records are sorted by line number
+            if (no == 0 || no > lineNo) break; // sorted by number; 00 00 = PC-1600 bank-end mark
             if (no == lineNo) {
                 c.m_lineAddr = a;
                 for (uint32_t i = 0; i < size && a + i <= 0xFFFF; i++) c.m_lineBytes.push_back(peek(a + i));

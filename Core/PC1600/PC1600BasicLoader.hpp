@@ -15,29 +15,26 @@ class PC1600Machine;
 // program area, appends the 0xFF end marker, and writes BASPRG_END --
 // instead of typing the program in character by character.
 //
-// It does NOT type anything and never resets the machine or touches MODE:
-// this is LOAD semantics, not NEW+type. It works off whatever
-// BASPRG_ST/BASPRG_END are currently live -- validates both are plausible,
-// erases the resident program between them, pokes the new payload in from
-// BASPRG_ST, and fixes up BASPRG_END. The caller is responsible for having
-// prepared the machine first (memory cards, `NEW`, mode) exactly as on real
-// hardware; a preset's own `- type: NEW0` step (the same contract
-// `format: basic-text` has) works fine too, since a freshly-NEW0'd program
-// is zero-length and the erase step is then a no-op.
+// It does NOT type anything and never resets the machine or changes MODE
+// or TITLE: this is LOAD semantics, not NEW+type. The target is the program
+// area TITLE (F1D5H) selects -- S0, or the S1 / S2 program module -- and the
+// caller prepares the machine first (memory cards, `INIT`, `NEW`, `TITLE`,
+// mode) exactly as on real hardware.
 //
-// Layout facts (verifiable with tools/pc1600_cli --preset ... --dump-basic
-// against the keystroke typer): the in-RAM line records are
-// byte-identical to the transfer-file payload; the program ends with a
-// single 0xFF at BASPRG_END. Pointer quirks vs. the PC-1500:
-//
-//   * The write address is the little-endian Z-80-native pointer at $F5CF
-//     (stock $C0C5; $80C5 with a Slot-1/Slot-2 RAM module -- it tracks
-//     wherever `NEW` put the program area, with the bank registers parked
-//     there). BASPRG_ST/END/EDT ($F865/$F867/$F869) hold *LH5803-side*
-//     addresses whose absolute value depends on the bank window in use
-//     ($40C5 stock, $00C5 with the program in a switched bank) -- $F865 is
-//     read only to form BASPRG_END in the same representation.
-//   * BASPRG_END ($F867) is big-endian, written as $F865's value + length.
+// What it does, mirroring the ROM's own LOAD (SharpPC1500Reference
+// PC-1600-Work-Area-Map.md §3.5 / §4.5):
+//   * Lays the line records down as LOADSTORE (rom3b 7074H) does: no line
+//     straddles two module banks -- the ROM leaves a 00 00 bank-end mark and
+//     continues in the next bank -- except across ADTBL entry 5 -> internal
+//     RAM, which is contiguous. See pc1600::planS0Placement().
+//   * Erases the resident program first (start through its end mark).
+//   * Finishes as LOADEND (70E1H): the $FF end mark; S0: BASPRG_END (F867,
+//     stored form), the end's ADTBL index (F02CH), VARIABLE POINTER reset if
+//     it isn't above the new end; S1/S2: the descriptor's end triple and the
+//     module header's end offset (+5/+6); then PRGADR (FE3C-FE41), CURRENT
+//     TOP (F89E) and the CURRENT bank (F1C1) as PRGRESET sets them.
+// Checked byte for byte against the keystroke typer's work area
+// (Core/tests/pc1600_basicloader_tests.cpp).
 
 /// `transferFile` = a full PC-1600 transfer file, header included. Requires
 /// only that BASPRG_ST/BASPRG_END are currently valid pointers -- no reset,
