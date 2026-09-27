@@ -1,11 +1,25 @@
 #include "PresetController.hpp"
 
+#include <QDebug>
 #include <functional>
+#include <vector>
 
+#include "AppPaths.hpp"
+#include "AppSettings.hpp"
+#include "Basic/BasicProgramSource.hpp"
+#include "FloppyDiskManager.hpp"
+#include "HostClock.hpp"
+#include "MachineController.hpp"
+#include "MemoryModuleManager.hpp"
+#include "PC1500/PC1500BasicLoader.hpp"
 #include "PC1500/PC1500Machine.hpp"
 #include "PC1500/PC1500MachineCodeLoader.hpp"
+#include "PC1500/PC1500PresetLoader.hpp"
+#include "PC1600/PC1600BasicLoader.hpp"
 #include "PC1600/PC1600Machine.hpp"
 #include "PC1600/PC1600MachineCodeLoader.hpp"
+#include "PC1600/PC1600PresetLoader.hpp"
+#include "Preset/PresetFile.hpp"
 
 namespace {
 
@@ -81,27 +95,6 @@ bool PresetController::loadMachineCodeLive(const MachineCodeLoadRequest& request
     if (!ok) *error = QString::fromStdString(err);
     return ok;
 }
-
-#ifdef CALCU1600_PRESET_LOADER_AVAILABLE
-
-#include "MachineController.hpp"
-#include "MemoryModuleManager.hpp"
-#include "FloppyDiskManager.hpp"
-#include "AppPaths.hpp"
-#include "AppSettings.hpp"
-
-#include <QDebug>
-#include <vector>
-
-#include "Preset/PresetFile.hpp"
-#include "PC1500/PC1500PresetLoader.hpp"
-#include "PC1500/PC1500Machine.hpp"
-#include "PC1500/PC1500BasicLoader.hpp"
-#include "PC1600/PC1600PresetLoader.hpp"
-#include "PC1600/PC1600Machine.hpp"
-#include "PC1600/PC1600BasicLoader.hpp"
-#include "Basic/BasicProgramSource.hpp"
-#include "HostClock.hpp"
 
 namespace {
 
@@ -289,23 +282,3 @@ bool PresetController::loadBasicProgramLive(const QString& path, QString* error)
     const ScopedYieldHook<PC1500Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
     return loadBasicProgramLiveOn(*machine, basic::TransferModel::PC1500, path.toStdString(), error);
 }
-
-#else  // !CALCU1600_PRESET_LOADER_AVAILABLE
-
-bool PresetController::loadPreset(const QString&, QString* error) {
-    *error = tr("Preset loading isn't available in this build yet (it currently requires the macOS build -- "
-                "see Qt6/CMakeLists.txt).");
-    return false;
-}
-
-bool PresetController::loadDefaultPreset(const QString& path, Model, QString* error) {
-    return loadPreset(path, error);
-}
-
-bool PresetController::loadBasicProgramLive(const QString&, QString* error) {
-    *error = tr("Loading a BASIC program isn't available in this build yet (it currently requires the macOS "
-                "build -- see Qt6/CMakeLists.txt).");
-    return false;
-}
-
-#endif

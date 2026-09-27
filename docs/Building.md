@@ -25,22 +25,21 @@ PR.
   compiler — one file, `MacClipboardImage.mm`, needs it for the
   plotter-paper clipboard export).
 
-### Optional: BASIC preset loading (`libsharpdx`)
+### `libsharpdx`
 
-Loading BASIC programs from `.pc1500`/`.pc1600` preset files (`type:`
-typing and the fast `basic-binary` loader) depends on a vendored Rust
-static library, `Core/Basic/vendor/sharpdx/`:
+Every program loader (Load BASIC Program…, Load Machine Code…, presets,
+the debugger's Build & Load) reads files through a vendored Rust static
+library, `Core/Basic/vendor/sharpdx/`: it tells what a file is and
+tokenizes BASIC listings.
 
 - On **macOS** it's committed directly to the repo — nothing to do.
 - On **Linux/Windows** it's fetched at configure time by
   `tools/fetch_sharpdx.sh` (see below) from a `SharpDataExchange`
   GitHub release.
 
-This is a *soft* dependency: if the library isn't present, CMake skips
-those source files and the app still builds and runs — "Open Preset…"
-just reports the feature unavailable. You don't need a Rust toolchain
-either way; only a prebuilt `.a`/`.lib` is needed, and CI fetches or
-commits it for you.
+It is required: CMake stops with an error if the library is missing. You
+don't need a Rust toolchain; only a prebuilt `.a`/`.lib` is needed, and CI
+fetches or commits it for you.
 
 ## 1. Get the source
 
@@ -63,7 +62,7 @@ Skipping this step doesn't fail the build — CMake just globs an empty
 `roms/` directory — but the resulting binary ships with no firmware and
 won't boot any machine.
 
-If you also want BASIC preset loading on Linux/Windows (see above):
+On Linux/Windows, fetch `libsharpdx` too (see above):
 
 ```sh
 tools/fetch_sharpdx.sh

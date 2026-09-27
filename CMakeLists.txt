@@ -36,13 +36,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/Core)
 set(TOOLS_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/tools)
 
-# Preset loading (libsharpdx)
+# libsharpdx: every program loader needs it (Core/Basic/vendor/sharpdx/README.md)
 if(WIN32)
   set(SHARPDX_LIB ${CORE_ROOT}/Basic/vendor/sharpdx/sharpdx.lib)
 elseif(APPLE)
   set(SHARPDX_LIB ${CORE_ROOT}/Basic/vendor/sharpdx/libsharpdx.a)
 else()
   set(SHARPDX_LIB ${CORE_ROOT}/Basic/vendor/sharpdx/libsharpdx-linux.a)
+endif()
+if(NOT EXISTS ${SHARPDX_LIB})
+  message(FATAL_ERROR "${SHARPDX_LIB} is missing -- run tools/fetch_sharpdx.sh (Linux/Windows) "
+                      "or tools/refresh_sharpdx.sh (macOS)")
 endif()
 
 # Core sources used by tools and tests
@@ -89,20 +93,15 @@ set(CORE_COMMON_SOURCES
   ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
   ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
   ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
+  ${CORE_ROOT}/Preset/PresetFile.cpp
+  ${CORE_ROOT}/Preset/PresetRunner.cpp
+  ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
+  ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
+  ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
+  ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
+  ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
+  ${CORE_ROOT}/Basic/BasicProgramSource.cpp
 )
-
-if(EXISTS ${SHARPDX_LIB})
-  list(APPEND CORE_COMMON_SOURCES
-    ${CORE_ROOT}/Preset/PresetFile.cpp
-    ${CORE_ROOT}/Preset/PresetRunner.cpp
-    ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
-    ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
-    ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
-    ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
-    ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
-    ${CORE_ROOT}/Basic/BasicProgramSource.cpp
-  )
-endif()
 
 # -----------------------------------------------------------------------------
 # Qt6 GUI Application target
@@ -138,9 +137,7 @@ set(PC1500_CLI_SOURCES
 )
 add_executable(pc1500_cli ${PC1500_CLI_SOURCES})
 target_include_directories(pc1500_cli PRIVATE ${CORE_ROOT})
-if(EXISTS ${SHARPDX_LIB})
-  target_link_libraries(pc1500_cli PRIVATE ${SHARPDX_LIB})
-endif()
+target_link_libraries(pc1500_cli PRIVATE ${SHARPDX_LIB})
 
 # pc1600_cli
 set(PC1600_CLI_SOURCES
@@ -174,9 +171,7 @@ set(PC1600_CLI_SOURCES
 )
 add_executable(pc1600_cli ${PC1600_CLI_SOURCES})
 target_include_directories(pc1600_cli PRIVATE ${CORE_ROOT})
-if(EXISTS ${SHARPDX_LIB})
-  target_link_libraries(pc1600_cli PRIVATE ${SHARPDX_LIB})
-endif()
+target_link_libraries(pc1600_cli PRIVATE ${SHARPDX_LIB})
 
 # pc1600_power_probe
 set(PC1600_POWER_PROBE_SOURCES
@@ -259,9 +254,7 @@ set(PC1600_PLOTTER_PROBE_SOURCES
 )
 add_executable(pc1600_plotter_probe ${PC1600_PLOTTER_PROBE_SOURCES})
 target_include_directories(pc1600_plotter_probe PRIVATE ${CORE_ROOT})
-if(EXISTS ${SHARPDX_LIB})
-  target_link_libraries(pc1600_plotter_probe PRIVATE ${SHARPDX_LIB})
-endif()
+target_link_libraries(pc1600_plotter_probe PRIVATE ${SHARPDX_LIB})
 
 # -----------------------------------------------------------------------------
 # Test Suite target
@@ -316,9 +309,7 @@ set(TEST_SOURCES
 add_executable(CoreTests ${TEST_SOURCES})
 target_include_directories(CoreTests PRIVATE ${CORE_ROOT})
 target_link_libraries(CoreTests PRIVATE ZLIB::ZLIB)
-if(EXISTS ${SHARPDX_LIB})
-  target_link_libraries(CoreTests PRIVATE ${SHARPDX_LIB})
-endif()
+target_link_libraries(CoreTests PRIVATE ${SHARPDX_LIB})
 
 enable_testing()
 add_test(NAME CoreTests COMMAND CoreTests WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

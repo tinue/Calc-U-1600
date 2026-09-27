@@ -111,26 +111,19 @@ set(CORE_SOURCES
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
   ${CORE_ROOT}/KeyPaste.cpp
-  # "Load Machine Code…" -- no libsharpdx dependency, so always built.
+  # "Load Machine Code…"
   ${CORE_ROOT}/MachineCodeFile.cpp
   ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600MachineImage.cpp
   ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
-  # Reset's boot-to-prompt (runBootToPrompt) -- no libsharpdx dependency.
+  # Reset's boot-to-prompt (runBootToPrompt)
   ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
   ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
 )
 
-# Preset loading, entire (PresetFile.cpp, *PresetLoader.cpp,
-# *BasicLoader.cpp, Core/Basic/*), needs the vendored Rust
-# `libsharpdx` static library (Core/Basic/vendor/sharpdx/) that
-# Core/Basic/BasicProgramSource.cpp tokenizes BASIC programs through --
-# rather than split the loader files themselves at a finer grain
-# (PC1500PresetLoader.cpp's basic-text/basic-binary program branches call
-# straight into PC1500BasicLoader.cpp, which calls
-# BasicProgramSource.cpp -- pulling that thread apart isn't worth it), the
-# whole feature is gated on that library being present:
+# libsharpdx (Core/Basic/vendor/sharpdx/) classifies and tokenizes every
+# program the loaders read; it is required.
 #  - macOS: Core/Basic/vendor/sharpdx/libsharpdx.a is committed directly
 #    (refreshed via tools/refresh_sharpdx.sh from a local
 #    SharpDataExchange checkout).
@@ -140,11 +133,6 @@ set(CORE_SOURCES
 #    libsharpdx-linux.a / sharpdx.lib respectively -- deliberately
 #    different filenames from the macOS binary so a fetch here can never
 #    collide with, or dirty the git status of, the committed one.
-# SHARPDX_LIB below just resolves to whichever of those a given build is
-# expected to have; if it isn't there (fetch step skipped, release not
-# reachable, etc.) the whole block is skipped and CalcU1600Qt still builds
-# and runs -- the "Open Preset…" action just reports it's unavailable
-# (see CALCU1600_PRESET_LOADER_AVAILABLE, PresetController.cpp).
 if(WIN32)
   set(SHARPDX_LIB ${CORE_ROOT}/Basic/vendor/sharpdx/sharpdx.lib)
 elseif(APPLE)
@@ -152,19 +140,21 @@ elseif(APPLE)
 else()
   set(SHARPDX_LIB ${CORE_ROOT}/Basic/vendor/sharpdx/libsharpdx-linux.a)
 endif()
-
-if(EXISTS ${SHARPDX_LIB})
-  list(APPEND CORE_SOURCES
-    ${CORE_ROOT}/Preset/PresetFile.cpp
-    ${CORE_ROOT}/Preset/PresetRunner.cpp
-    ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
-    ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
-    ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
-    ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
-    ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
-    ${CORE_ROOT}/Basic/BasicProgramSource.cpp
-  )
+if(NOT EXISTS ${SHARPDX_LIB})
+  message(FATAL_ERROR "${SHARPDX_LIB} is missing -- run tools/fetch_sharpdx.sh (Linux/Windows) "
+                      "or tools/refresh_sharpdx.sh (macOS)")
 endif()
+
+list(APPEND CORE_SOURCES
+  ${CORE_ROOT}/Preset/PresetFile.cpp
+  ${CORE_ROOT}/Preset/PresetRunner.cpp
+  ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
+  ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
+  ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
+  ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
+  ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
+  ${CORE_ROOT}/Basic/BasicProgramSource.cpp
+)
 
 # MACOSX_BUNDLE: build a real .app on macOS (Contents/MacOS + Contents/
 # Resources), not a bare executable -- needed both for normal macOS app
@@ -228,48 +218,44 @@ endif()
 target_include_directories(CalcU1600Qt PRIVATE ${CORE_ROOT} app ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(CalcU1600Qt PRIVATE Qt6::Widgets Qt6::Multimedia Qt6::Network)
 
-if(EXISTS ${SHARPDX_LIB})
-  # See the CORE_SOURCES SHARPDX_LIB block above.
-  target_link_libraries(CalcU1600Qt PRIVATE ${SHARPDX_LIB})
-  # The vendored/fetched libs are sharpdx's serial-free build (release
-  # archives since v0.2.1, and tools/refresh_sharpdx.sh), so there's no
-  # libudev (Linux), IOKit (macOS) or serialport import lib (Windows) to
-  # link -- only Rust std's own Windows system libs, below.
-  if(WIN32)
-    # `cargo build` links the Windows system import libs Rust's std needs
-    # (sockets, CSPRNG seeding, futex-based sync, ...) into sde.exe
-    # automatically -- consuming the raw sharpdx.lib straight from CMake
-    # doesn't get that for free, so without this the link fails with
-    # unresolved externals like __imp_freeaddrinfo (ws2_32). Rather than
-    # hand-maintain a guessed list here (which silently drifts as
-    # sharpdx's own dependencies change), prefer the authoritative list
-    # rustc itself reported for that exact build -- SharpDataExchange's
-    # release packaging captures it via `rustc --print=native-static-libs`
-    # into native-libs-windows.txt, and tools/fetch_sharpdx.sh vendors it
-    # alongside sharpdx.lib when the release has one (see its own doc
-    # comment). Only fall back to a hardcoded guess for a hand-placed
-    # sharpdx.lib that came without this file.
-    #
-    # On *-pc-windows-msvc rustc's note is MSVC linker syntax --
-    # space-separated bare `name.lib` filenames and the occasional
-    # `/defaultlib:x` flag -- NOT the `-lname` GCC form, so this is passed
-    # to the linker as raw link options (target_link_options), not treated
-    # as a list of plain library names (target_link_libraries would try to
-    # look up a library literally named "/defaultlib:msvcrt" and fail).
-    set(SHARPDX_NATIVE_LIBS_FILE ${CORE_ROOT}/Basic/vendor/sharpdx/native-libs-windows.txt)
-    if(EXISTS ${SHARPDX_NATIVE_LIBS_FILE})
-      file(READ ${SHARPDX_NATIVE_LIBS_FILE} SHARPDX_NATIVE_LIBS_RAW)
-      string(STRIP "${SHARPDX_NATIVE_LIBS_RAW}" SHARPDX_NATIVE_LIBS_RAW)
-      separate_arguments(SHARPDX_NATIVE_LINK_OPTS UNIX_COMMAND "${SHARPDX_NATIVE_LIBS_RAW}")
-      message(STATUS "sharpdx: linking native libs from native-libs-windows.txt: ${SHARPDX_NATIVE_LINK_OPTS}")
-      target_link_options(CalcU1600Qt PRIVATE ${SHARPDX_NATIVE_LINK_OPTS})
-    else()
-      set(SHARPDX_NATIVE_LIBS_FALLBACK ws2_32 userenv advapi32 bcrypt ntdll synchronization)
-      message(STATUS "sharpdx: native-libs-windows.txt not found, using hardcoded fallback: ${SHARPDX_NATIVE_LIBS_FALLBACK}")
-      target_link_libraries(CalcU1600Qt PRIVATE ${SHARPDX_NATIVE_LIBS_FALLBACK})
-    endif()
+target_link_libraries(CalcU1600Qt PRIVATE ${SHARPDX_LIB})
+# The vendored/fetched libs are sharpdx's serial-free build (release
+# archives since v0.2.1, and tools/refresh_sharpdx.sh), so there's no
+# libudev (Linux), IOKit (macOS) or serialport import lib (Windows) to
+# link -- only Rust std's own Windows system libs, below.
+if(WIN32)
+  # `cargo build` links the Windows system import libs Rust's std needs
+  # (sockets, CSPRNG seeding, futex-based sync, ...) into sde.exe
+  # automatically -- consuming the raw sharpdx.lib straight from CMake
+  # doesn't get that for free, so without this the link fails with
+  # unresolved externals like __imp_freeaddrinfo (ws2_32). Rather than
+  # hand-maintain a guessed list here (which silently drifts as
+  # sharpdx's own dependencies change), prefer the authoritative list
+  # rustc itself reported for that exact build -- SharpDataExchange's
+  # release packaging captures it via `rustc --print=native-static-libs`
+  # into native-libs-windows.txt, and tools/fetch_sharpdx.sh vendors it
+  # alongside sharpdx.lib when the release has one (see its own doc
+  # comment). Only fall back to a hardcoded guess for a hand-placed
+  # sharpdx.lib that came without this file.
+  #
+  # On *-pc-windows-msvc rustc's note is MSVC linker syntax --
+  # space-separated bare `name.lib` filenames and the occasional
+  # `/defaultlib:x` flag -- NOT the `-lname` GCC form, so this is passed
+  # to the linker as raw link options (target_link_options), not treated
+  # as a list of plain library names (target_link_libraries would try to
+  # look up a library literally named "/defaultlib:msvcrt" and fail).
+  set(SHARPDX_NATIVE_LIBS_FILE ${CORE_ROOT}/Basic/vendor/sharpdx/native-libs-windows.txt)
+  if(EXISTS ${SHARPDX_NATIVE_LIBS_FILE})
+    file(READ ${SHARPDX_NATIVE_LIBS_FILE} SHARPDX_NATIVE_LIBS_RAW)
+    string(STRIP "${SHARPDX_NATIVE_LIBS_RAW}" SHARPDX_NATIVE_LIBS_RAW)
+    separate_arguments(SHARPDX_NATIVE_LINK_OPTS UNIX_COMMAND "${SHARPDX_NATIVE_LIBS_RAW}")
+    message(STATUS "sharpdx: linking native libs from native-libs-windows.txt: ${SHARPDX_NATIVE_LINK_OPTS}")
+    target_link_options(CalcU1600Qt PRIVATE ${SHARPDX_NATIVE_LINK_OPTS})
+  else()
+    set(SHARPDX_NATIVE_LIBS_FALLBACK ws2_32 userenv advapi32 bcrypt ntdll synchronization)
+    message(STATUS "sharpdx: native-libs-windows.txt not found, using hardcoded fallback: ${SHARPDX_NATIVE_LIBS_FALLBACK}")
+    target_link_libraries(CalcU1600Qt PRIVATE ${SHARPDX_NATIVE_LIBS_FALLBACK})
   endif()
-  target_compile_definitions(CalcU1600Qt PRIVATE CALCU1600_PRESET_LOADER_AVAILABLE)
 endif()
 
 # ---- App icon (macOS bundle icon; Windows' equivalent is the WIN32

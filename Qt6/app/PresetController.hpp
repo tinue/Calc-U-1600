@@ -25,13 +25,6 @@ struct PresetLoadResult;
 // installs a yield hook (setYieldHook()) that the machine calls
 // periodically from inside its run loop, so the window keeps repainting
 // and can show a "Loading..." popup instead of freezing.
-//
-// Only meaningful when CALCU1600_PRESET_LOADER_AVAILABLE is defined
-// (macOS for now -- see Qt6/CMakeLists.txt's CORE_SOURCES if(APPLE) block:
-// BASIC program loading needs the vendored Rust libsharpdx, currently only
-// built for macOS). MainWindow checks that macro itself and disables the
-// "Load Preset…" action instead of constructing this class when it's
-// undefined, so this header is safe to include unconditionally.
 class PresetController : public QObject {
     Q_OBJECT
 public:

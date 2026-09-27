@@ -21,8 +21,7 @@ cd "$(dirname "$0")/.."
 tools/fetch_roms.sh || echo "cloud_session_start.sh: fetch_roms.sh failed -- CoreTests and the app need roms/" >&2
 
 if [ ! -f Core/Basic/vendor/sharpdx/libsharpdx-linux.a ]; then
-  # Soft-fail, as in CI: without it the preset/BASIC sources just drop out.
-  tools/fetch_sharpdx.sh || echo "cloud_session_start.sh: fetch_sharpdx.sh failed -- building without preset/BASIC loading" >&2
+  tools/fetch_sharpdx.sh || echo "cloud_session_start.sh: fetch_sharpdx.sh failed -- CMake won't configure without libsharpdx" >&2
 fi
 
 # fetch_sharpdx.sh overwrites the tracked sharpdx.h with the release's
