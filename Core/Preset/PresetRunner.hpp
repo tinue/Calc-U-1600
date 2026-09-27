@@ -116,8 +116,9 @@ public:
 
     /// `format: basic-text`: type the program in through the ROM's editor.
     virtual BasicTypeResult typeBasicProgram(const std::string& text) = 0;
-    /// `format: basic-binary`: which dialect to tokenize for, and the loader
-    /// that pokes the tokenized payload into the program area.
+    /// `format: basic-binary`: which dialect to tokenize for (on the PC-1600
+    /// it follows the current MODE), and the loader that pokes the tokenized
+    /// payload into the program area (on the PC-1600 the TITLE area).
     virtual basic::TransferModel transferModel() const = 0;
     virtual BasicLoadResult loadBasicPayload(const std::vector<uint8_t>& payload) = 0;
     /// `format: binary`: which machine-code header family this machine

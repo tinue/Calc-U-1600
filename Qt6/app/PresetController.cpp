@@ -276,7 +276,10 @@ bool PresetController::loadBasicProgramLive(const QString& path, QString* error)
             return false;
         }
         const ScopedYieldHook<PC1600Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
-        return loadBasicProgramLiveOn(*machine, basic::TransferModel::PC1600, path.toStdString(), error);
+        // The keyword table follows the machine's current MODE, the target its TITLE.
+        const BasicLoadResult loaded = loadBasicListing(*machine, path.toStdString());
+        if (!loaded.ok) *error = QString::fromStdString(loaded.error);
+        return loaded.ok;
     }
     PC1500Machine* machine = m_controller->pc1500();
     if (!machine) {

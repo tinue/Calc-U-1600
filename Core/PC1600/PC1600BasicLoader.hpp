@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "../Basic/BasicBinaryImage.hpp"  // basic::TransferModel
 #include "../Basic/BasicLoadResults.hpp"
 
 class PC1600Machine;
@@ -36,9 +37,19 @@ class PC1600Machine;
 // Checked byte for byte against the keystroke typer's work area
 // (Core/tests/pc1600_basicloader_tests.cpp).
 
+/// The keyword table a BASIC listing is tokenized with on this machine right
+/// now: the PC-1600's in MODE 0, the PC-1500's in MODE 1 (docs/Loader-Mode-
+/// Plan.md). The loader never switches MODE itself.
+basic::TransferModel pc1600ListingModel(PC1600Machine& machine);
+
+/// Load BASIC Program on the PC-1600: tokenize the `.bas` listing at `path`
+/// with pc1600ListingModel() and load it with loadBasicBinaryPayload().
+BasicLoadResult loadBasicListing(PC1600Machine& machine, const std::string& path);
+
 /// `transferFile` = a full PC-1600 transfer file, header included. Requires
 /// only that BASPRG_ST/BASPRG_END are currently valid pointers -- no reset,
-/// mode change, or NEW0 is performed. Nothing in the app calls this today --
+/// mode change, or NEW0 is performed. A CE-158 (PC-1500) image is accepted
+/// in MODE 1 only. Nothing in the app calls this today --
 /// the GUI and presets load `.bas` listings (loadBasicBinaryPayload() below);
 /// it stays for already-tokenized transfer files and is covered by the tests.
 BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,

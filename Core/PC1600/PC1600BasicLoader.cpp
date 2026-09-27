@@ -3,6 +3,7 @@
 #include <cstdio>
 
 #include "../Basic/BasicBinaryImage.hpp"
+#include "../Basic/BasicProgramSource.hpp"
 #include "PC1600Machine.hpp"
 #include "PC1600MachineCodeLoader.hpp"
 #include "PC1600ProgramPlacement.hpp"
@@ -54,11 +55,24 @@ BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,
                                        const std::vector<uint8_t>& transferFile) {
     basic::BasicBinaryImage img = basic::parseBasicBinaryTransfer(transferFile);
     if (!img.ok) return fail(img.error);
-    if (img.model != basic::TransferModel::PC1600) {
-        return fail("this is a PC-1500 (CE-158) tokenized-BASIC transfer file -- load it in a "
-                    "PC-1500 preset");
-    }
+    if (img.model != basic::TransferModel::PC1600 && !machine.mode1())
+        return fail("this is a PC-1500 (CE-158) tokenized-BASIC transfer file -- the PC-1600 takes it in MODE 1 "
+                    "only (type MODE1 first)");
     return loadBasicBinaryPayload(machine, img.payload);
+}
+
+basic::TransferModel pc1600ListingModel(PC1600Machine& machine) {
+    return machine.mode1() ? basic::TransferModel::PC1500 : basic::TransferModel::PC1600;
+}
+
+BasicLoadResult loadBasicListing(PC1600Machine& machine, const std::string& path) {
+    basic::BasicProgramSource src = basic::readBasicProgramSource(path, pc1600ListingModel(machine));
+    if (!src.ok) {
+        std::string error = src.error;
+        if (machine.mode1()) error += " (MODE 1: the listing is read as PC-1500 BASIC)";
+        return fail(error);
+    }
+    return loadBasicBinaryPayload(machine, src.payload);
 }
 
 namespace {
