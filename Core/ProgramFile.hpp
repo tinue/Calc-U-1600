@@ -50,11 +50,8 @@ struct ProgramFile {
 
 ProgramFile classify(const std::vector<uint8_t>& bytes);
 
-/// True for the kinds with a header.
-inline bool hasHeader(Kind kind) {
-    return kind == Kind::BasicPC1500 || kind == Kind::BasicPC1600 || kind == Kind::CodeLH5801 ||
-           kind == Kind::CodeZ80;
-}
+/// A Kind::Other file's token in words ("plain text", "a Reserve Area as text", ...).
+std::string describe(const std::string& token);
 
 /// "CE-158" or "PC-1600" for a headered kind.
 inline const char* headerName(Kind kind) {

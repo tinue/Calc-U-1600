@@ -114,7 +114,7 @@ void test_equivalence_against_typer() {
 
     PC1600Machine m;
     if (!bootIntoProNew0(m)) return;
-    BasicLoadResult r = loadBasicBinaryProgram(m, wrapPc1600(payload));
+    BasicLoadResult r = loadBasicProgram(m, wrapPc1600(payload));
     CHECK(r.ok);
     if (!r.ok) {
         std::fprintf(stderr, "  loader error: %s\n", r.error.c_str());
@@ -332,7 +332,7 @@ void test_rejects_pc1500_transfer_file() {
     f[0x17] = static_cast<uint8_t>(wire >> 8);
     f[0x18] = static_cast<uint8_t>(wire & 0xFF);
     f.insert(f.end(), payload.begin(), payload.end());
-    BasicLoadResult r = loadBasicBinaryProgram(m, f);
+    BasicLoadResult r = loadBasicProgram(m, f);
     CHECK(!r.ok);
     CHECK(r.error.find("PC-1500") != std::string::npos);
 }
@@ -503,7 +503,7 @@ void test_listing_follows_mode() {
     for (bool mode1 : {false, true}) {
         PC1600Machine m;
         if (!bootMode(m, mode1)) return;
-        BasicLoadResult r = loadBasicListing(m, path);
+        BasicLoadResult r = loadBasicProgramFile(m, path);
         CHECK(r.ok);
         if (!r.ok) continue;
         const uint8_t hi = m.memory().peek(static_cast<uint16_t>(r.baseAddr + 3));
@@ -518,12 +518,12 @@ void test_mode1_refuses_non_ascii() {
     {
         PC1600Machine m;
         if (!bootMode(m, false)) return;
-        CHECK(loadBasicListing(m, path).ok);
+        CHECK(loadBasicProgramFile(m, path).ok);
     }
     PC1600Machine m;
     if (!bootMode(m, true)) return;
     const WorkAreaSnapshot before = snapshot(m);
-    BasicLoadResult r = loadBasicListing(m, path);
+    BasicLoadResult r = loadBasicProgramFile(m, path);
     CHECK(!r.ok);
     CHECK(r.error.find("MODE 1") != std::string::npos);
     const WorkAreaSnapshot after = snapshot(m);
@@ -544,9 +544,32 @@ void test_pc1500_transfer_file_in_mode1() {
     f.insert(f.end(), payload.begin(), payload.end());
     PC1600Machine m;
     if (!bootMode(m, true)) return;
-    BasicLoadResult r = loadBasicBinaryProgram(m, f);
+    BasicLoadResult r = loadBasicProgram(m, f);
     CHECK(r.ok);
     if (r.ok) CHECK(readRange(m, r.baseAddr, static_cast<uint16_t>(r.baseAddr + payload.size())) == payload);
+}
+
+// A tokenized PC-1600 file (.bbin) loads in both MODEs, and in MODE 0 lands
+// byte for byte where its listing does.
+void test_pc1600_bbin_file() {
+    const std::string bbin = "Core/tests/fixtures/basic/lissajou-1600.bbin";
+    const std::string bas = "Core/tests/fixtures/basic/lissajou-1600.bas";
+    std::vector<uint8_t> fromListing;
+    {
+        PC1600Machine m;
+        if (!bootMode(m, false)) return;
+        BasicLoadResult r = loadBasicProgramFile(m, bas);
+        CHECK(r.ok);
+        if (r.ok) fromListing = readRange(m, r.baseAddr, r.endAddr);
+    }
+    for (bool mode1 : {false, true}) {
+        PC1600Machine m;
+        if (!bootMode(m, mode1)) return;
+        BasicLoadResult r = loadBasicProgramFile(m, bbin);
+        CHECK(r.ok);
+        if (!r.ok) std::fprintf(stderr, "  loader error: %s\n", r.error.c_str());
+        if (r.ok && !mode1) CHECK(readRange(m, r.baseAddr, r.endAddr) == fromListing);
+    }
 }
 
 // The loaders read MODE and TITLE from the machine: after boot MODE 0 and
@@ -572,6 +595,7 @@ int run_pc1600_basicloader_tests() {
     test_listing_follows_mode();
     test_mode1_refuses_non_ascii();
     test_pc1500_transfer_file_in_mode1();
+    test_pc1600_bbin_file();
     test_equivalence_against_typer();
     test_ce1600m_module_equivalence_and_run();
     test_reload_over_shorter_program_clears_tail_stock();

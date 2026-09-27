@@ -11,8 +11,8 @@ class PC1500Machine;
 //
 // The keystroke typer (PC1500BasicTyper) drives the ROM's line editor one
 // character at a time -- exact, but minutes of emulated time for a real
-// program. This path takes an already-tokenized program (a SharpDataExchange
-// CE-158 transfer file, parsed by Core/Basic/BasicBinaryImage), pokes the
+// program. This path takes a BASIC listing (tokenized in-process) or an
+// already-tokenized CE-158 file (basic::readBasicProgram()), pokes the
 // payload straight into the BASIC program area, appends the 0xFF program-end
 // marker, and writes BASPRG_END.
 //
@@ -31,18 +31,17 @@ class PC1500Machine;
 // ($7867, big-endian), and BASPRG_ST ($7865) is the load address (stock
 // $40C5, lower with a low-window RAM module).
 
-/// Loads a pre-tokenized PC-1500 BASIC program (`transferFile` = a full
-/// CE-158 transfer file, header included) into `machine`. Requires only that
-/// BASPRG_ST/BASPRG_END are currently valid pointers -- no reset, mode
-/// change, or NEW0 is performed. Nothing in the app calls this today -- the
-/// GUI and presets load `.bas` listings (loadBasicBinaryPayload() below); it
-/// stays for already-tokenized transfer files and is covered by the tests.
-BasicLoadResult loadBasicBinaryProgram(PC1500Machine& machine,
-                                       const std::vector<uint8_t>& transferFile);
+/// Loads a BASIC program into `machine`: `file` is a `.bas` listing or
+/// tokenized BASIC behind a CE-158 header (a PC-1600 file is refused).
+/// Requires only that BASPRG_ST/BASPRG_END are currently valid pointers --
+/// no reset, mode change, or NEW0 is performed.
+BasicLoadResult loadBasicProgram(PC1500Machine& machine, const std::vector<uint8_t>& file);
 
-/// Same, but takes the bare tokenized payload (no CE-158 header) -- the run
-/// of in-RAM line records. Used by the preset runner (`format: basic-binary`)
-/// and the GUI's Load BASIC Program, which both tokenize a `.bas` listing
-/// headerless via basic::readBasicProgramSource().
+/// Same, for the file at `path`: Load BASIC Program and a preset's
+/// `format: basic-binary`.
+BasicLoadResult loadBasicProgramFile(PC1500Machine& machine, const std::string& path);
+
+/// The bare tokenized payload (no header) -- the run of in-RAM line records
+/// basic::readBasicProgram() yields.
 BasicLoadResult loadBasicBinaryPayload(PC1500Machine& machine,
                                        const std::vector<uint8_t>& payload);

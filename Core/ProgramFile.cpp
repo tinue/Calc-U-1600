@@ -57,4 +57,13 @@ ProgramFile classify(const std::vector<uint8_t>& bytes) {
     return f;
 }
 
+std::string describe(const std::string& token) {
+    if (token == "reserve") return "a Reserve Area (CE-158 header)";
+    if (token == "reserve-text") return "a Reserve Area as text";
+    if (token == "variables") return "variables (CE-158 header)";
+    if (token == "variables-text") return "variables as text";
+    if (token == "text") return "plain text";
+    return token;
+}
+
 }  // namespace programfile

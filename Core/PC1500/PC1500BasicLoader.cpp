@@ -2,7 +2,7 @@
 
 #include <cstdio>
 
-#include "../Basic/BasicBinaryImage.hpp"
+#include "../Basic/BasicProgramSource.hpp"
 #include "PC1500Machine.hpp"
 #include "PC1500MachineCodeLoader.hpp"
 
@@ -32,14 +32,23 @@ BasicLoadResult fail(const std::string& msg) {
 
 }  // namespace
 
-BasicLoadResult loadBasicBinaryProgram(PC1500Machine& machine,
-                                       const std::vector<uint8_t>& transferFile) {
-    basic::BasicBinaryImage img = basic::parseBasicBinaryTransfer(transferFile);
-    if (!img.ok) return fail(img.error);
-    if (img.model != basic::TransferModel::PC1500) {
-        return fail("this is a PC-1600 tokenized-BASIC transfer file -- load it in a PC-1600 preset");
-    }
-    return loadBasicBinaryPayload(machine, img.payload);
+namespace {
+
+BasicLoadResult loadSource(PC1500Machine& machine, const basic::BasicProgramSource& src) {
+    if (!src.ok) return fail(src.error);
+    if (src.source != basic::TransferModel::PC1500)
+        return fail("this is a PC-1600 tokenized BASIC program -- load it on a PC-1600");
+    return loadBasicBinaryPayload(machine, src.payload);
+}
+
+}  // namespace
+
+BasicLoadResult loadBasicProgram(PC1500Machine& machine, const std::vector<uint8_t>& file) {
+    return loadSource(machine, basic::readBasicProgram(file, basic::TransferModel::PC1500));
+}
+
+BasicLoadResult loadBasicProgramFile(PC1500Machine& machine, const std::string& path) {
+    return loadSource(machine, basic::readBasicProgramFile(path, basic::TransferModel::PC1500));
 }
 
 BasicLoadResult loadBasicBinaryPayload(PC1500Machine& machine,

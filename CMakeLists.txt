@@ -99,7 +99,6 @@ set(CORE_COMMON_SOURCES
   ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
-  ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
   ${CORE_ROOT}/Basic/BasicProgramSource.cpp
 )
 
@@ -129,7 +128,6 @@ set(PC1500_CLI_SOURCES
   ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
   ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
-  ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
   ${CORE_ROOT}/Basic/BasicProgramSource.cpp
   ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
   ${CORE_ROOT}/Serial/PtySerialLink.cpp
@@ -165,7 +163,6 @@ set(PC1600_CLI_SOURCES
   ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
-  ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
   ${CORE_ROOT}/Basic/BasicProgramSource.cpp
   ${TOOLS_ROOT}/pc1600_cli.cpp
 )
@@ -244,7 +241,6 @@ set(PC1600_PLOTTER_PROBE_SOURCES
   ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
-  ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
   ${CORE_ROOT}/Basic/BasicProgramSource.cpp
   ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
@@ -290,7 +286,6 @@ set(TEST_SOURCES
   ${CORE_ROOT}/tests/ce150_tests.cpp
   ${CORE_ROOT}/tests/pc1600_ce150_tests.cpp
   ${CORE_ROOT}/tests/ce158_tests.cpp
-  ${CORE_ROOT}/tests/basic_binary_image_tests.cpp
   ${CORE_ROOT}/tests/basic_fastloader_tests.cpp
   ${CORE_ROOT}/tests/pc1600_basicloader_tests.cpp
   ${CORE_ROOT}/tests/basic_program_source_tests.cpp

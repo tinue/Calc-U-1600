@@ -109,7 +109,7 @@ void runEquivalenceCase(const char* label, const std::string& src) {
         return;
     }
     primeNew0(m);
-    BasicLoadResult r = loadBasicBinaryProgram(m, wrapCe158(payload));
+    BasicLoadResult r = loadBasicProgram(m, wrapCe158(payload));
     CHECK(r.ok);
     if (!r.ok) {
         std::fprintf(stderr, "  (%s) loader error: %s\n", label, r.error.c_str());
@@ -156,7 +156,7 @@ void test_rejects_pc1600_transfer_file() {
     f[5] = static_cast<uint8_t>(payload.size());
     f[0x0F] = 0x0F;
     f.insert(f.end(), payload.begin(), payload.end());
-    BasicLoadResult r = loadBasicBinaryProgram(m, f);
+    BasicLoadResult r = loadBasicProgram(m, f);
     CHECK(!r.ok);
     CHECK(r.error.find("PC-1600") != std::string::npos);
 }
@@ -183,7 +183,7 @@ void test_rejects_uninitialized_basprg_st() {
         return;
     }
     // Deliberately do NOT primeNew0(m).
-    BasicLoadResult r = loadBasicBinaryProgram(m, wrapCe158(payload));
+    BasicLoadResult r = loadBasicProgram(m, wrapCe158(payload));
     CHECK(!r.ok);
     CHECK(r.error.find("BASPRG_ST") != std::string::npos);
 }
@@ -204,8 +204,8 @@ void test_rejects_invalid_basprg_end() {
     m.memory().poke(0x7867, static_cast<uint8_t>(badEnd >> 8));
     m.memory().poke(0x7868, static_cast<uint8_t>(badEnd & 0xFF));
 
-    std::vector<uint8_t> payload = {0x0A, 0x03, 0xF1, 0x8E, 0x0D};  // "10 PRINT" (rough shape)
-    BasicLoadResult r = loadBasicBinaryProgram(m, wrapCe158(payload));
+    std::vector<uint8_t> payload = {0x00, 0x0A, 0x03, 0xF1, 0x8E, 0x0D};  // 10 END
+    BasicLoadResult r = loadBasicProgram(m, wrapCe158(payload));
     CHECK(!r.ok);
     CHECK(r.error.find("BASPRG_END") != std::string::npos);
 }
@@ -234,12 +234,12 @@ void test_reload_over_shorter_program_clears_tail() {
         return;
     }
     primeNew0(m);
-    BasicLoadResult first = loadBasicBinaryProgram(m, wrapCe158(longPayload));
+    BasicLoadResult first = loadBasicProgram(m, wrapCe158(longPayload));
     CHECK(first.ok);
     if (!first.ok) return;
     uint16_t oldEnd = first.endAddr;
 
-    BasicLoadResult second = loadBasicBinaryProgram(m, wrapCe158(shortPayload));
+    BasicLoadResult second = loadBasicProgram(m, wrapCe158(shortPayload));
     CHECK(second.ok);
     if (!second.ok) return;
 
@@ -258,8 +258,28 @@ void test_rejects_garbage() {
     PC1500Machine m;
     if (!bootMachine(m)) return;
     std::vector<uint8_t> junk(40, 0xAB);
-    BasicLoadResult r = loadBasicBinaryProgram(m, junk);
+    BasicLoadResult r = loadBasicProgram(m, junk);
     CHECK(!r.ok);
+}
+
+// A tokenized CE-158 file (.bbin) lands byte for byte where its listing does.
+void test_bbin_file_equals_listing() {
+    std::vector<uint8_t> fromListing, fromBbin;
+    for (const char* path : {"Core/tests/fixtures/basic/lissajou-1500.bas",
+                             "Core/tests/fixtures/basic/lissajou-1500.bbin"}) {
+        PC1500Machine m;
+        if (!bootMachine(m)) return;
+        primeNew0(m);
+        BasicLoadResult r = loadBasicProgramFile(m, path);
+        CHECK(r.ok);
+        if (!r.ok) {
+            std::fprintf(stderr, "  %s: loader error: %s\n", path, r.error.c_str());
+            return;
+        }
+        (fromListing.empty() ? fromListing : fromBbin) = readRange(m, r.baseAddr, static_cast<uint16_t>(r.endAddr + 1));
+    }
+    CHECK(!fromListing.empty());
+    CHECK(fromBbin == fromListing);
 }
 
 }  // namespace
@@ -272,6 +292,7 @@ int run_basic_fastloader_tests() {
     test_rejects_invalid_basprg_end();
     test_reload_over_shorter_program_clears_tail();
     test_rejects_garbage();
+    test_bbin_file_equals_listing();
 
     std::printf("basic_fastloader_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

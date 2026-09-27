@@ -32,16 +32,6 @@ std::string hex(uint32_t v) {
     return b;
 }
 
-// sde_file_info's token for a file that is neither a program nor code, in words.
-std::string describe(const std::string& token) {
-    if (token == "reserve") return "a Reserve Area (CE-158 header)";
-    if (token == "reserve-text") return "a Reserve Area as text";
-    if (token == "variables") return "variables (CE-158 header)";
-    if (token == "variables-text") return "variables as text";
-    if (token == "text") return "plain text";
-    return token;
-}
-
 }  // namespace
 
 const char* slotName(Slot slot) {
@@ -77,7 +67,7 @@ File readFile(const std::vector<uint8_t>& bytes) {
                       " BASIC program, not machine code -- use Load BASIC Program.";
             return f;
         case Kind::Other:
-            f.error = "This file holds " + describe(pf.token) + ", not machine code.";
+            f.error = "This file holds " + programfile::describe(pf.token) + ", not machine code.";
             return f;
         case Kind::CodeLH5801:
         case Kind::CodeZ80:

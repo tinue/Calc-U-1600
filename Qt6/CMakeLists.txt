@@ -152,7 +152,6 @@ list(APPEND CORE_SOURCES
   ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
-  ${CORE_ROOT}/Basic/BasicBinaryImage.cpp
   ${CORE_ROOT}/Basic/BasicProgramSource.cpp
 )
 

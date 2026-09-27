@@ -51,7 +51,6 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/KeyPaste.cpp \
   Core/MachineCodeFile.cpp \
   Core/ProgramFile.cpp \
-  Core/Basic/BasicBinaryImage.cpp \
   Core/Basic/BasicProgramSource.cpp \
   Core/tests/lh5801_tests.cpp \
   Core/tests/connector_tests.cpp \
@@ -80,7 +79,6 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/ce150_tests.cpp \
   Core/tests/pc1600_ce150_tests.cpp \
   Core/tests/ce158_tests.cpp \
-  Core/tests/basic_binary_image_tests.cpp \
   Core/tests/basic_fastloader_tests.cpp \
   Core/tests/pc1600_basicloader_tests.cpp \
   Core/tests/pc1600_program_placement_tests.cpp \

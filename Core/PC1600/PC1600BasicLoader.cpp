@@ -2,7 +2,6 @@
 
 #include <cstdio>
 
-#include "../Basic/BasicBinaryImage.hpp"
 #include "../Basic/BasicProgramSource.hpp"
 #include "PC1600Machine.hpp"
 #include "PC1600MachineCodeLoader.hpp"
@@ -51,28 +50,35 @@ bool writeBacking(PC1600Machine& machine, pc1600::ProgramSegment::Kind kind, int
 
 }  // namespace
 
-BasicLoadResult loadBasicBinaryProgram(PC1600Machine& machine,
-                                       const std::vector<uint8_t>& transferFile) {
-    basic::BasicBinaryImage img = basic::parseBasicBinaryTransfer(transferFile);
-    if (!img.ok) return fail(img.error);
-    if (img.model != basic::TransferModel::PC1600 && !machine.mode1())
-        return fail("this is a PC-1500 (CE-158) tokenized-BASIC transfer file -- the PC-1600 takes it in MODE 1 "
-                    "only (type MODE1 first)");
-    return loadBasicBinaryPayload(machine, img.payload);
-}
-
 basic::TransferModel pc1600ListingModel(PC1600Machine& machine) {
     return machine.mode1() ? basic::TransferModel::PC1500 : basic::TransferModel::PC1600;
 }
 
-BasicLoadResult loadBasicListing(PC1600Machine& machine, const std::string& path) {
-    basic::BasicProgramSource src = basic::readBasicProgramSource(path, pc1600ListingModel(machine));
+namespace {
+
+BasicLoadResult loadSource(PC1600Machine& machine, const basic::BasicProgramSource& src) {
     if (!src.ok) {
         std::string error = src.error;
-        if (machine.mode1()) error += " (MODE 1: the listing is read as PC-1500 BASIC)";
+        if (src.listing && machine.mode1())
+            error += " (MODE 1: the listing is read as PC-1500 BASIC)";
         return fail(error);
     }
+    // The ROM's LOAD takes a PC-1600 program in both MODEs; a PC-1500 one
+    // only in MODE 1 (docs/Loader-Mode-Plan.md).
+    if (!src.listing && src.source == basic::TransferModel::PC1500 && !machine.mode1())
+        return fail("this is a PC-1500 (CE-158) tokenized BASIC program -- the PC-1600 takes it in MODE 1 "
+                    "only (type MODE1 first)");
     return loadBasicBinaryPayload(machine, src.payload);
+}
+
+}  // namespace
+
+BasicLoadResult loadBasicProgram(PC1600Machine& machine, const std::vector<uint8_t>& file) {
+    return loadSource(machine, basic::readBasicProgram(file, pc1600ListingModel(machine)));
+}
+
+BasicLoadResult loadBasicProgramFile(PC1600Machine& machine, const std::string& path) {
+    return loadSource(machine, basic::readBasicProgramFile(path, pc1600ListingModel(machine)));
 }
 
 namespace {

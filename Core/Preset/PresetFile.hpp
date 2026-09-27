@@ -160,9 +160,10 @@ struct PresetProgram {
     // BasicText   -- `format: basic-text`: BASIC source typed in through the
     //                ROM's line editor (slow, but exact); `text` holds it.
     // BasicBinary -- `format: basic-binary` (alias `basic-tokenized`): a
-    //                plain-text BASIC listing at `path`, tokenized in-process
-    //                on load (via libsharpdx, headerless) into the run of
-    //                in-RAM line records. The loader pokes it into the BASIC
+    //                plain-text BASIC listing at `path` (tokenized in-process
+    //                on load via libsharpdx) or tokenized BASIC behind a
+    //                CE-158 / PC-1600 header, as the run of in-RAM line
+    //                records. The loader pokes it into the BASIC
     //                program area and fixes BASPRG_END -- fast, unlike the
     //                keystroke typer `basic-text` uses. `address` is unused
     //                (the base comes from the ROM's own pointers). Like
@@ -170,7 +171,7 @@ struct PresetProgram {
     //                loadable -- a
     //                `keys:` section with `- key: cl` / `- type: NEW0`
     //                (PC-1600 also needs `- key: mode` for PRO). See
-    //                Core/Basic/BasicBinaryImage.hpp and the model loaders.
+    //                Core/Basic/BasicProgramSource.hpp and the model loaders.
     enum class Format { Binary, BasicText, BasicBinary };
     Format format = Format::Binary;
     std::string path;   // resolved absolute/relative-to-cwd path (Binary / BasicBinary, or BasicText loaded from a file)

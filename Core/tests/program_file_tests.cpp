@@ -162,8 +162,8 @@ void test_pc1600_end_marker_ignored() {
 void test_real_sample_files() {
     struct Case { const char* path; Kind kind; };
     const Case cases[] = {
-        {"Core/tests/fixtures/basic/lissajou-1500_tokenized.bas", Kind::BasicPC1500},
-        {"Core/tests/fixtures/basic/lissajou-1600_tokenized.bas", Kind::BasicPC1600},
+        {"Core/tests/fixtures/basic/lissajou-1500.bbin", Kind::BasicPC1500},
+        {"Core/tests/fixtures/basic/lissajou-1600.bbin", Kind::BasicPC1600},
     };
     for (const auto& c : cases) {
         std::ifstream in(c.path, std::ios::binary);

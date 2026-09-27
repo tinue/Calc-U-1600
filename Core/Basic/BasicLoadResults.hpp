@@ -18,7 +18,7 @@ struct BasicTypeResult {
     std::string error;  // set when ok is false
 };
 
-/// loadBasicBinaryProgram() / loadBasicBinaryPayload()'s outcome. Addresses
+/// loadBasicProgram() / loadBasicBinaryPayload()'s outcome. Addresses
 /// are in the main CPU's address space (LH5801 on the PC-1500, SC7852 on the
 /// PC-1600).
 struct BasicLoadResult {

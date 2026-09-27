@@ -6,7 +6,6 @@
 #include <fstream>
 #include <iterator>
 
-#include "../Basic/BasicProgramSource.hpp"
 #include "../Connector/MemoryCardCatalog.hpp"
 #include "../Connector/SoftwareDefinedCard.hpp"
 #include "../TraceTypes.hpp"
@@ -266,16 +265,10 @@ bool runProgram(PresetMachine& machine, const PresetProgram& program, const std:
             return true;
         }
         case PresetProgram::Format::BasicBinary: {
-            basic::BasicProgramSource src = basic::readBasicProgramSource(program.path, machine.transferModel());
-            if (!src.ok) {
-                result->error = tag + src.error;
-                if (log) log(tag + "basic-binary FAILED: " + src.error);
-                return false;
-            }
-            if (log) log(tag + "program (basic-binary, " + std::to_string(src.payload.size()) + " tokenized bytes)");
-            BasicLoadResult loaded = machine.loadBasicPayload(src.payload);
+            if (log) log(tag + "program (basic-binary, " + program.path + ")");
+            BasicLoadResult loaded = machine.loadBasicFile(program.path);
             if (!loaded.ok) {
-                result->error = "basic-binary load failed: " + loaded.error;
+                result->error = tag + "basic-binary load failed: " + loaded.error;
                 if (log) log("  " + result->error);
                 return false;
             }

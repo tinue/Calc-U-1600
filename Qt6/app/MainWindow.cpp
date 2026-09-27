@@ -156,7 +156,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         // Starts in Settings' "Basic folder" (fixed or <last used>).
         const QString path = QFileDialog::getOpenFileName(this, tr("Load BASIC Program"),
                                                             AppSettings::openStartDir(AppSettings::OpenFolder::Basic),
-                                                            tr("BASIC Programs (*.bas);;All Files (*)"));
+                                                            tr("BASIC Programs (*.bas *.bbin);;All Files (*)"));
         if (path.isEmpty()) return;
         AppSettings::rememberOpenFile(AppSettings::OpenFolder::Basic, path);
 

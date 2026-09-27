@@ -6,7 +6,7 @@
 // ── "Did the line editor store the line just typed?" ────────────────────
 //
 // Shared by the PC-1500 and PC-1600 BASIC typers. Both ROMs keep the
-// program as sorted in-RAM line records (see BasicBinaryImage.hpp):
+// program as sorted in-RAM line records (see BasicProgramSource.hpp):
 //
 //   [lineNo hi][lineNo lo][len][content ...][0x0D]   len = content + 1
 //

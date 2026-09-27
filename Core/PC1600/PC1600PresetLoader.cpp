@@ -122,10 +122,8 @@ public:
     BasicTypeResult typeBasicProgram(const std::string& text) override {
         return typeBasicProgramText(m_machine, text);
     }
-    // MODE decides: the PC-1500 keyword table in MODE 1 (the preset switches MODE itself).
-    basic::TransferModel transferModel() const override { return pc1600ListingModel(m_machine); }
-    BasicLoadResult loadBasicPayload(const std::vector<uint8_t>& payload) override {
-        return loadBasicBinaryPayload(m_machine, payload);
+    BasicLoadResult loadBasicFile(const std::string& path) override {
+        return loadBasicProgramFile(m_machine, path);
     }
 
     machinecode::Target codeTarget() const override { return machinecode::Target::PC1600; }

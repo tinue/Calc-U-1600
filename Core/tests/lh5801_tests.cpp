@@ -1391,17 +1391,14 @@ int run_pc1600_ce150_tests();
 // Defined in ce158_tests.cpp -- Ce158Card (ROM window, LH5811, CDP1854 UART,
 // Centronics) and the CE-158 driven by BASIC on a PC1500Machine.
 int run_ce158_tests();
-// Defined in basic_binary_image_tests.cpp -- the SharpDataExchange
-// tokenized-BASIC transfer-file parser (Core/Basic/BasicBinaryImage).
-int run_basic_binary_image_tests();
 // Defined in basic_fastloader_tests.cpp -- PC1500BasicLoader (poke +
 // BASPRG_END fix), checked byte-for-byte against the keystroke typer.
 int run_basic_fastloader_tests();
 // Defined in pc1600_basicloader_tests.cpp -- PC1600BasicLoader, same
 // byte-for-byte check against the PC-1600 keystroke typer.
 int run_pc1600_basicloader_tests();
-// Defined in basic_program_source_tests.cpp -- readBasicProgramSource:
-// .bas-vs-tokenized dispatch + libsharpdx tokenize-on-load.
+// Defined in basic_program_source_tests.cpp -- readBasicProgram: listing
+// or tokenized file, libsharpdx tokenize-on-load.
 int run_basic_program_source_tests();
 // Defined in pc1600_program_placement_tests.cpp -- the scattered-bank
 // segment-list + placement logic for the fast BASIC loader.
@@ -1503,7 +1500,6 @@ int main() {
     int ce150Failures = run_ce150_tests();
     int pc1600Ce150Failures = run_pc1600_ce150_tests();
     int ce158Failures = run_ce158_tests();
-    int basicBinaryImageFailures = run_basic_binary_image_tests();
     int basicFastLoaderFailures = run_basic_fastloader_tests();
     int pc1600BasicLoaderFailures = run_pc1600_basicloader_tests();
     int basicProgramSourceFailures = run_basic_program_source_tests();
@@ -1517,7 +1513,7 @@ int main() {
     int debugTargetFailures = run_debug_target_tests();
     int listingFailures = run_listing_tests();
     int runControlFailures = run_run_control_tests();
-    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && basicBinaryImageFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
+    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
             ce163fFailures == 0 && memoryCardFailures == 0 && batteryCardInstanceFailures == 0 &&
             presetFailures == 0 &&
             basicTyperFailures == 0 && pc1600BasicTyperFailures == 0 &&

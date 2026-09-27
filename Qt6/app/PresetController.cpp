@@ -6,7 +6,6 @@
 
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
-#include "Basic/BasicProgramSource.hpp"
 #include "FloppyDiskManager.hpp"
 #include "HostClock.hpp"
 #include "MachineController.hpp"
@@ -102,33 +101,6 @@ Model modelForPreset(const PresetFile& preset) {
     if (preset.isPC1600()) return Model::PC1600;
     return preset.variant == PC1500Variant::PC1500A ? Model::PC1500A : Model::PC1500;
 }
-
-// Live-machine LOAD: mirrors real hardware LOAD semantics, not NEW+type. No
-// reset, no mode change, no NEW0 typed here -- the user is expected to have
-// already prepared the machine themselves (memory cards, `NEW`, mode,
-// peripherals), exactly as they would before typing LOAD on a real machine.
-// loadBasicBinaryPayload() validates whatever BASPRG_ST/BASPRG_END are
-// currently live, erases the resident program between them, and pokes the
-// new one in from BASPRG_ST -- see its own header doc comment.
-template <class Machine>
-bool loadBasicProgramLiveOn(Machine& machine, basic::TransferModel model, const std::string& path,
-                            QString* error) {
-    basic::BasicProgramSource src = basic::readBasicProgramSource(path, model);
-    if (!src.ok) {
-        *error = QString::fromStdString(src.error);
-        return false;
-    }
-    BasicLoadResult loaded = loadBasicBinaryPayload(machine, src.payload);
-    if (!loaded.ok) {
-        *error = QString::fromStdString(loaded.error);
-        return false;
-    }
-    return true;
-}
-
-}  // namespace
-
-namespace {
 
 bool parsePreset(const QString& path, PresetFile* preset, QString* error) {
     std::string parseError;
@@ -262,6 +234,12 @@ PresetLoadResult PresetController::runPC1600Preset(const PresetFile& preset, con
 }
 
 bool PresetController::loadBasicProgramLive(const QString& path, QString* error) {
+    // Live-machine LOAD, like LOAD on the real machine: no reset, MODE
+    // change or NEW0 -- the user has prepared the machine (memory cards,
+    // `NEW`, MODE, TITLE) as they would before typing LOAD. A listing or a
+    // tokenized file; on the PC-1600 the MODE picks the keyword table and
+    // the TITLE area is the target.
+    BasicLoadResult loaded;
     if (m_controller->currentModel() == Model::PC1600) {
         PC1600Machine* machine = m_controller->pc1600();
         if (!machine) {
@@ -269,16 +247,16 @@ bool PresetController::loadBasicProgramLive(const QString& path, QString* error)
             return false;
         }
         const ScopedYieldHook<PC1600Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
-        // The keyword table follows the machine's current MODE, the target its TITLE.
-        const BasicLoadResult loaded = loadBasicListing(*machine, path.toStdString());
-        if (!loaded.ok) *error = QString::fromStdString(loaded.error);
-        return loaded.ok;
+        loaded = loadBasicProgramFile(*machine, path.toStdString());
+    } else {
+        PC1500Machine* machine = m_controller->pc1500();
+        if (!machine) {
+            *error = tr("No PC-1500 machine is running.");
+            return false;
+        }
+        const ScopedYieldHook<PC1500Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
+        loaded = loadBasicProgramFile(*machine, path.toStdString());
     }
-    PC1500Machine* machine = m_controller->pc1500();
-    if (!machine) {
-        *error = tr("No PC-1500 machine is running.");
-        return false;
-    }
-    const ScopedYieldHook<PC1500Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
-    return loadBasicProgramLiveOn(*machine, basic::TransferModel::PC1500, path.toStdString(), error);
+    if (!loaded.ok) *error = QString::fromStdString(loaded.error);
+    return loaded.ok;
 }
