@@ -1416,6 +1416,8 @@ int run_lcd_screenshot_tests();
 // Defined in machine_code_file_tests.cpp -- "Load Machine Code…": header
 // recognition, load plan, NEW/CALL advice, and the two writers.
 int run_machine_code_file_tests();
+// Defined in program_file_tests.cpp -- what a program file is (libsharpdx).
+int run_program_file_tests();
 int run_disasm_tests();
 int run_debug_target_tests();
 int run_listing_tests();
@@ -1514,11 +1516,12 @@ int main() {
     int keyPasteFailures = run_key_paste_tests();
     int lcdScreenshotFailures = run_lcd_screenshot_tests();
     int machineCodeFileFailures = run_machine_code_file_tests();
+    int programFileFailures = run_program_file_tests();
     int disasmFailures = run_disasm_tests();
     int debugTargetFailures = run_debug_target_tests();
     int listingFailures = run_listing_tests();
     int runControlFailures = run_run_control_tests();
-    return (g_fail == 0 && machineCodeFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && basicBinaryImageFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && pc1600MachineImageFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
+    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && basicBinaryImageFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && pc1600MachineImageFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
             ce163fFailures == 0 && memoryCardFailures == 0 && batteryCardInstanceFailures == 0 &&
             presetFailures == 0 &&
             basicTyperFailures == 0 && pc1600BasicTyperFailures == 0 &&

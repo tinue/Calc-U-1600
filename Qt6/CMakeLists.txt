@@ -113,6 +113,7 @@ set(CORE_SOURCES
   ${CORE_ROOT}/KeyPaste.cpp
   # "Load Machine Code…"
   ${CORE_ROOT}/MachineCodeFile.cpp
+  ${CORE_ROOT}/ProgramFile.cpp
   ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600MachineImage.cpp
   ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp

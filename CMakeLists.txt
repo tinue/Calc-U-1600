@@ -87,6 +87,7 @@ set(CORE_COMMON_SOURCES
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
   ${CORE_ROOT}/KeyPaste.cpp
   ${CORE_ROOT}/MachineCodeFile.cpp
+  ${CORE_ROOT}/ProgramFile.cpp
   ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600MachineImage.cpp
   ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
@@ -123,6 +124,7 @@ set(PC1500_CLI_SOURCES
   ${CORE_ROOT}/Preset/PresetFile.cpp
   ${CORE_ROOT}/Preset/PresetRunner.cpp
   ${CORE_ROOT}/MachineCodeFile.cpp
+  ${CORE_ROOT}/ProgramFile.cpp
   ${CORE_ROOT}/PC1600/PC1600MachineImage.cpp
   ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
   ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
@@ -148,6 +150,7 @@ set(PC1600_CLI_SOURCES
   ${CORE_ROOT}/Preset/PresetFile.cpp
   ${CORE_ROOT}/Preset/PresetRunner.cpp
   ${CORE_ROOT}/MachineCodeFile.cpp
+  ${CORE_ROOT}/ProgramFile.cpp
   ${CORE_ROOT}/PC1500/PC1500Keyboard.cpp
   ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
   ${CORE_ROOT}/Audio/PiezoSampler.cpp
@@ -227,6 +230,7 @@ set(PC1600_PLOTTER_PROBE_SOURCES
   ${CORE_ROOT}/Preset/PresetFile.cpp
   ${CORE_ROOT}/Preset/PresetRunner.cpp
   ${CORE_ROOT}/MachineCodeFile.cpp
+  ${CORE_ROOT}/ProgramFile.cpp
   ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
   ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
   ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
@@ -300,6 +304,7 @@ set(TEST_SOURCES
   ${CORE_ROOT}/tests/key_paste_tests.cpp
   ${CORE_ROOT}/tests/lcd_screenshot_tests.cpp
   ${CORE_ROOT}/tests/machine_code_file_tests.cpp
+  ${CORE_ROOT}/tests/program_file_tests.cpp
   ${CORE_ROOT}/tests/disasm_tests.cpp
   ${CORE_ROOT}/tests/debug_target_tests.cpp
   ${CORE_ROOT}/tests/listing_tests.cpp

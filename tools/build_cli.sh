@@ -14,6 +14,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/Preset/PresetFile.cpp \
   Core/Preset/PresetRunner.cpp \
   Core/MachineCodeFile.cpp \
+  Core/ProgramFile.cpp \
   Core/PC1600/PC1600MachineImage.cpp \
   Core/PC1500/PC1500BasicTyper.cpp \
   Core/PC1500/PC1500BasicLoader.cpp \

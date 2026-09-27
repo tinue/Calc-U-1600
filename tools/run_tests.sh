@@ -51,6 +51,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/Display/LcdScreenshot.cpp \
   Core/KeyPaste.cpp \
   Core/MachineCodeFile.cpp \
+  Core/ProgramFile.cpp \
   Core/Basic/BasicBinaryImage.cpp \
   Core/Basic/BasicProgramSource.cpp \
   Core/tests/lh5801_tests.cpp \
@@ -90,6 +91,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/key_paste_tests.cpp \
   Core/tests/lcd_screenshot_tests.cpp \
   Core/tests/machine_code_file_tests.cpp \
+  Core/tests/program_file_tests.cpp \
   Core/tests/disasm_tests.cpp \
   Core/tests/debug_target_tests.cpp \
   Core/tests/listing_tests.cpp \
