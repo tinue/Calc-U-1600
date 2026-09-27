@@ -244,6 +244,12 @@ authentic speed for the span that matters.
 - **The debugger names the CPU itself** (`cpu` in the launch config): the
   toolchain knows it, so Build & Load doesn't take the MODE's CPU for a
   headerless file. Every other caller does.
+- **libsharpdx says what a file is** (`sde_file_info`, wrapped once in
+  `Core/ProgramFile`). Don't bring back hand-written header parsing. Its
+  `raw-lh5801` / `raw-z80` guess for headerless code is ignored on purpose:
+  the MODE (or the debugger's `cpu`) decides, never the bytes. A header
+  auto-run of `0` or `FFFF` means no auto-run (the library only knows
+  `FFFF`). The library is therefore a required build dependency.
 - **Machine code may go into the work area F000-FFFF, with a warning.**
   Many PC-1600 programs live up there, above all in the area of the CE-1F01A
   bar-code reader pen, &FF40-&FFFF (e.g. CLOCK.BIN at &FF3A-&FFFB, which also

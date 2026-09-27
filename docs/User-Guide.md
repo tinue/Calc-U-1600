@@ -185,8 +185,10 @@ paper scrolls, and it follows the pen as long as you are at the bottom:
 
 ## 4. Loading a BASIC program
 
-**File ▸ Load BASIC Program…** opens a plain-text BASIC listing (`.bas`),
-converts it to BASIC's internal form, and writes it straight into the
+**File ▸ Load BASIC Program…** opens a plain-text BASIC listing (`.bas`)
+or an already tokenized program (`.bbin`, as SharpDataExchange's
+`sde convert` writes it, with a CE-158 or PC-1600 header), converts a
+listing to BASIC's internal form, and writes the program straight into the
 program memory. It behaves like the real `LOAD`: it doesn't reset the
 machine, change the mode, or run `NEW` for you. So prepare the machine the
 same way you would for `LOAD`:
@@ -222,6 +224,11 @@ Good to know:
   `CLOAD`. A listing the PC-1500 can't hold (for example one with `ä`) is
   refused in MODE 1. PC-1600-only keywords stay plain text in MODE 1 and
   fail when the program runs.
+- **Tokenized files carry their machine.** A PC-1600 `.bbin` loads in both
+  MODEs, as with the calculator's own `LOAD`. A PC-1500 one (CE-158 header)
+  loads on a PC-1500/1500A, and on a PC-1600 in MODE 1 only.
+- **The right menu for the file.** Machine code is refused here with a
+  pointer to Load Machine Code, and a BASIC program is refused there.
 - **Nothing is switched for you.** The app never changes MODE or `TITLE`;
   set them first, as on the real calculator.
 - **Single lines.** **Edit ▸ Paste Text** types one line from the clipboard
@@ -527,7 +534,8 @@ keys:
   `TITLE"S1:"`. The loader follows MODE and `TITLE`, as Load BASIC Program
   does.
 - `format: basic-binary` works like **File ▸ Load BASIC Program…**
-  ([chapter 4](#4-loading-a-basic-program)) and is fast.
+  ([chapter 4](#4-loading-a-basic-program)) and is fast: `path:` is a
+  `.bas` listing or a tokenized `.bbin`.
 - `format: basic-text` types the program line by line, the way you would.
   It's slow but works everywhere, and the program can sit in the preset
   itself:

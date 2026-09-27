@@ -2,7 +2,19 @@
 
 ## [0.6.0] - work in progress
 
+### New
+
+- **Load BASIC Program** and a preset's `format: basic-binary` also take a
+  tokenized program (`.bbin`, CE-158 or PC-1600 header). A PC-1500 one
+  loads on the PC-1600 in MODE 1 only.
+
 ### Changed
+
+- **Loaders** What a file is now comes from SharpDataExchange's library
+  (0.3.1): Load Machine Code refuses a BASIC listing or tokenized BASIC
+  (instead of loading it as raw bytes), skips `00` bytes before a header,
+  and no longer checks the PC-1600 header's end marker. Building now
+  requires the library on every platform.
 
 - **Settings** Folder and serial-port paths show as `~/Calc-U-1600/…`
   (and `~/…` elsewhere under the home folder), as the User Guide writes
@@ -16,6 +28,8 @@
 - **Presets** On the PC-1500, a `program:` line that replaces a line of
   the same length (`10 A=1`, then `10 A=2`) is no longer reported as
   rejected.
+- **Machine code** A header auto-run address of `&FFFF` (what the
+  calculators write for "none") no longer proposes `CALL &FFFF`.
 - **Presets** A machine-code header's auto-run into slot S2 now types
   `CALL #2,&<addr>`, as Load Machine Code proposes, instead of
   `CALL &<addr>`, which ran whatever bank 0 maps there.
