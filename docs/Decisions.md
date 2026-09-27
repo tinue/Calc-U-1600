@@ -119,7 +119,9 @@ The level is `(intCause() & port 35H) != 0`, computed by
 `PC1600Memory::interruptLevel()` when the SC7852 asks for it at the start of
 each `step()`. It isn't an edge or a queued event, and no device pushes
 updates. The ROM dispatcher reads the causes whatever the mask is, and the
-mask only gates INT.
+mask only gates INT. `interruptLevel()` spells out the live bits instead of
+calling `intCause()` so that a masked live source (UART, sub-CPU) isn't even
+evaluated on this per-step path; keep the two bit assignments in step.
 
 ### Absolute-deadline emulation pacing
 `Qt6/app/EmulationPacer.cpp` schedules each batch against
@@ -258,6 +260,10 @@ authentic speed for the span that matters.
   `Core/tests/fixtures/` (e.g. `memtest_stock.bin` next to its `.rst`), so
   renaming or editing an example can't break a test. The duplicate binary is
   deliberate.
+- **`Core/tests/LegacyExpression.hpp` is a test oracle.** It keeps the old
+  interpreted debugger expression evaluator, hit conditions and log
+  interpolation, and the tests check the compiled forms against it. The
+  duplication is deliberate.
 
 ### Wording and sources
 - **Comments and docs cite original sources only**: TRM, Service Manual,
