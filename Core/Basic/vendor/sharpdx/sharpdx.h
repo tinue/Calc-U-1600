@@ -85,6 +85,41 @@
 #define SDE_DISK_NO_RUN 4294967295
 
 /*
+ `SdeFileInfo::problems`: the payload is shorter than the header says.
+ */
+#define SDE_PROBLEM_TRUNCATED 1
+
+/*
+ Bytes follow the payload.
+ */
+#define SDE_PROBLEM_TRAILING 2
+
+/*
+ `00` bytes precede the header.
+ */
+#define SDE_PROBLEM_LEADING_NOISE 4
+
+/*
+ Starts with header magic, but no complete header with a known type follows.
+ */
+#define SDE_PROBLEM_HEADER_CUT 8
+
+/*
+ Tokenized BASIC that doesn't de-tokenize, or Reserve Area / Variables that don't decode.
+ */
+#define SDE_PROBLEM_BAD_PAYLOAD 16
+
+/*
+ The problems that make a file unusable (`sde_file_kind` reports these as `damaged`).
+ */
+#define SDE_PROBLEM_FATAL 25
+
+/*
+ Bytes in `SdeFileInfo::name`: 16 CP437 characters as UTF-8, plus the NUL.
+ */
+#define SDE_FILE_NAME_SIZE 49
+
+/*
  Detected input content kind.
  */
 typedef enum {
@@ -264,6 +299,45 @@ typedef struct {
     uint8_t second;
 } SdeDiskTime;
 
+/*
+ What a buffer holds (`sde_file_info`).
+ */
+typedef struct {
+    /*
+     Static token, as `sde_file_kind` returns it but never `damaged`: check `problems`.
+     */
+    const char *kind;
+    /*
+     `SDE_PROBLEM_*` bits.
+     */
+    uint32_t problems;
+    /*
+     First payload byte in the input: after the header, `0` for headerless content.
+     */
+    size_t payload_offset;
+    /*
+     Payload bytes present in the input (never past its end, even when truncated).
+     */
+    size_t payload_len;
+    /*
+     `ml-*`: load address (PC-1600: bank in bits 16-23). Else `0`.
+     */
+    uint32_t load_addr;
+    /*
+     `ml-*`: run address. Else `0`.
+     */
+    uint32_t run_addr;
+    /*
+     `ml-*`: `1` if `run_addr` is a real auto-start, else `0`.
+     */
+    int32_t autorun;
+    /*
+     CE-158 header filename, or the name in SDAR / SDAV text; UTF-8, NUL-terminated,
+     empty if none.
+     */
+    char name[SDE_FILE_NAME_SIZE];
+} SdeFileInfo;
+
 
 
 #ifdef __cplusplus
@@ -415,6 +489,27 @@ int32_t sde_disk_delete(uint8_t *side_buf,
                         const char *name_or_pattern,
                         uint32_t flags,
                         size_t *out_deleted);
+
+/*
+ Classify `in` as a one-word token: `basic-ascii`, `basic-pc1500`, `basic-pc1600`,
+ `ml-lh5801`, `ml-z80`, `raw-lh5801`, `raw-z80`, `raw`, `reserve`, `reserve-text`,
+ `variables`, `variables-text`, `text`, `empty` — or `damaged` if the file has a
+ fatal problem (`SDE_PROBLEM_FATAL`). `raw-*` are heuristic CPU guesses.
+ `*out_kind` receives a static NUL-terminated string: do not free it.
+
+ # Safety
+ `in`/`in_len` describe a readable buffer; `out_kind` is writable.
+ */
+int32_t sde_file_kind(const uint8_t *input, size_t in_len, const char **out_kind);
+
+/*
+ Classify `in` and fill `*out` with what a loader needs: the kind token, problem
+ flags, where the payload is, the load/run address, and the name. Nothing to free.
+
+ # Safety
+ `in`/`in_len` describe a readable buffer; `out` is a writable `SdeFileInfo`.
+ */
+int32_t sde_file_info(const uint8_t *input, size_t in_len, SdeFileInfo *out);
 
 #ifdef __cplusplus
 }  // extern "C"

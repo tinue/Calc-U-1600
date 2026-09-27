@@ -1,14 +1,15 @@
 # Vendored `libsharpdx` (SharpDataExchange C ABI)
 
 `libsharpdx.a` + `sharpdx.h` are the prebuilt static library and generated C
-header of the **`convert`**-verb tokenizer from
-[`SharpDataExchange`](../../../../SharpDataExchange) (crate `sharpdx`,
-version 0.3.0). Calc-U-1600 links it so a `program: format: basic-binary`
-preset section can point `path:` at a plain-text `.bas` listing and have it
-tokenized in-process at load time (see `Core/Basic/BasicProgramSource.cpp`).
+header of [`SharpDataExchange`](../../../../SharpDataExchange) (crate `sharpdx`,
+version 0.3.1). Every program loader uses it: `sde_file_info` tells what a
+file is (BASIC listing, tokenized BASIC, machine code with or without a
+header) and where its payload is (`Core/ProgramFile.cpp`), and `sde_tokenize`
+turns a `.bas` listing into in-RAM line records
+(`Core/Basic/BasicProgramSource.cpp`). It is a required dependency.
 
 We vendor the built artifact rather than adding a Rust toolchain to the
-Calc-U-1600 build. Only `sde_tokenize` / `sde_detect` / `sde_last_error` /
+Calc-U-1600 build. Only `sde_file_info` / `sde_tokenize` / `sde_last_error` /
 `sde_buf_free` are used; the library does no file I/O and never panics across
 the FFI boundary. It is built without sharpdx's `serial` feature
 (`--lib --no-default-features`), so it links no serial-port code or
