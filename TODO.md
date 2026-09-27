@@ -366,6 +366,13 @@ What's wrong with that:
   other and the preset parser rejects the pair (blocked on "Expansion
   connectors: one model on both machines"; User Guide says "not yet
   supported").
+- **Review the Debug panel's content against the full ROM disassembly.** The
+  pointer dump and the other views were built before the ROM was fully
+  commented. Go through the disassembly's work-area symbols and pick what
+  helps when debugging: e.g. `TITLE`, the S1/S2 slot tables, `ADTBL`,
+  `BMODE`, `BINTREQ`/`F1CF`–`F1D4`, TRON state, `OPNDV`, the logical banks
+  F1C1–F1CE, PRGADR FE3C–FE41. Also check every existing label and note for
+  accuracy (address space, byte order, meaning).
 - Allow saving a diskette or memory module into a preset after it has been
   set up (e.g. formatted / populated in a session), so the preset carries
   that media state.
