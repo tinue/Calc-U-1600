@@ -172,6 +172,9 @@ status byte reports display-off in bit 5, and busy doesn't clear while CK0
   sets F127H b6. Only a dispatched `ON TIME$ GOSUB` (P0-B0 3D40H) or a new
   `ON TIME$` time (P2-B6 A85DH) clears it. `RUN` writes TRONMODE F88EH = 2 even with TRON off (P1-B0 5803H).
   Neither affects execution.
+- **`MEM` ignores `TITLE`.** `MEM` / `STATUS 0` always reports the S0 area
+  (LH5803 $CC30 reads only the S0 pointers), even with `TITLE "S1:"`. The free
+  space of an S1/S2 program module is `STATUS 259` / `260`.
 
 ## Accepted limitations: won't fix
 
