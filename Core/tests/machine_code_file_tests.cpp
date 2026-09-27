@@ -207,14 +207,27 @@ void test_plan_pc1600_target() {
     auto crossing = machinecode::readFile(pc1600File(kCode, 0xBFFE, 0));
     CHECK(!machinecode::plan(Target::PC1600, crossing, kSlot1First).error.empty());
 
-    // The running system work area is refused; the free top &FF40- is fine.
+    // The work area is allowed, with a warning -- many programs live up
+    // there, e.g. CLOCK.BIN at &FF3A-&FFFB (WAKE$ + the CE-1F01A pen area).
     auto work = machinecode::readFile(pc1600File(kCode, 0xF800, 0));
-    CHECK(machinecode::plan(Target::PC1600, work, kStock).error.find("work area") != std::string::npos);
-    auto top = machinecode::readFile(pc1600File(kCode, 0xFF40, 0));
-    CHECK(machinecode::plan(Target::PC1600, top, kStock).error.empty());
-    // In MODE 1 the message names the PC-1500A's ML area.
-    auto pc1500a = machinecode::readFile(ce158File(kCode, 0x7C01, 0));
-    CHECK(machinecode::plan(Target::PC1600, pc1500a, state(kStockAreas, true)).error.find("7C01") != std::string::npos);
+    CHECK(machinecode::plan(Target::PC1600, work, kStock).error.empty());
+    CHECK(machinecode::pc1600WorkAreaWarning(0xF800, kCode.size(), Cpu::Z80).find("work area") != std::string::npos);
+    auto clock = machinecode::readFile(pc1600File(kCode, 0xFF3A, 0xFF3A));
+    CHECK(machinecode::plan(Target::PC1600, clock, kStock).error.empty());
+    CHECK(machinecode::pc1600WorkAreaWarning(0xFF3A, 0xC2, Cpu::Z80).find("WAKE$") != std::string::npos);
+    CHECK(machinecode::pc1600WorkAreaWarning(0xFF40, 0xC0, Cpu::Z80).find("CE-1F01A") != std::string::npos);
+    auto sys = machinecode::readFile(ce158File(kCode, 0x7800, 0));
+    auto pp = machinecode::plan(Target::PC1600, sys, state(kStockAreas, true));
+    CHECK(pp.error.empty() && pp.busAddr == 0xF800 && pp.slot == Slot::S0);
+    const std::string w = machinecode::pc1600WorkAreaWarning(0xF800, kCode.size(), Cpu::LH5803);
+    CHECK(w.find("LH5803 &7000") != std::string::npos && w.find("7C01") != std::string::npos);
+    CHECK(machinecode::pc1600WorkAreaWarning(0xEF00, 0x10, Cpu::Z80).empty());
+
+    // In MODE 1 a refusal names the address as typed, in the LH5803 view.
+    auto lhModule = machinecode::readFile(ce158File(kCode, 0x00C5, 0));
+    p = machinecode::plan(Target::PC1600, lhModule, state(kStockAreas, true));
+    CHECK(p.error.find("LH5803 &C5") != std::string::npos && p.error.find("&40C5") != std::string::npos);
+    CHECK(p.error.find("&80C5") == std::string::npos);
 }
 
 void test_plan_load_configurations() {

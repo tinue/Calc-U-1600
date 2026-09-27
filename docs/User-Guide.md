@@ -334,10 +334,13 @@ flowchart TD
 A file without a header needs a start address. On a PC-1600 the dialog
 says which address space it expects: in MODE 0 a Z-80 address (Z-80 code
 is assumed), in MODE 1 an LH5803 address as on a PC-1500 (LH5801 code is
-assumed; the internal RAM is &4000-&7FFF there). The system work area
-(&F000-&FEFF, LH5803 &7000-&7EFF) is refused, which also rules out the
-PC-1500A's machine-code area &7C01 -- one reason the PC-1600 is compatible
-with the PC-1500 only.
+assumed; the internal RAM is &4000-&7FFF there). An address in the work
+area (&F000-&FFFF, LH5803 &7000-&7FFF) is allowed with a warning that
+says what lies there. Many programs live at the top, in the area of the
+CE-1F01A bar-code reader pen (&FF40-&FFFF); `CLOCK.BIN`, for example, loads
+at &FF3A and so also covers part of the WAKE$ strings. The PC-1500A's
+machine-code area &7C01 is PC-1600 system work area -- one reason the
+PC-1600 is compatible with the PC-1500 only.
 
 ![Start address for a file without a header](images/guide/06-start-address.png)
 

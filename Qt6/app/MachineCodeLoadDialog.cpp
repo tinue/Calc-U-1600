@@ -7,6 +7,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <string>
 
 #include "PC1600/PC1600ProgramPlacement.hpp"
@@ -17,6 +18,9 @@ MachineCodeLoadDialog::MachineCodeLoadDialog(QWidget* parent, machinecode::Targe
     : QDialog(parent), m_target(target), m_length(length), m_state(state), m_cpu(cpu) {
     setWindowTitle(tr("Load Machine Code"));
     setObjectName(QStringLiteral("dialog.machinecode"));
+    // Wide enough that the wrapped notes read as sentences; the height
+    // follows the text (refresh() re-fits it whenever the hint changes).
+    setMinimumWidth(460);
 
     auto* layout = new QVBoxLayout(this);
     auto* form = new QFormLayout();
@@ -55,6 +59,7 @@ MachineCodeLoadDialog::MachineCodeLoadDialog(QWidget* parent, machinecode::Targe
     connect(m_buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(m_buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
+    resize(minimumWidth(), height());
     refresh();
 }
 
@@ -75,13 +80,12 @@ void MachineCodeLoadDialog::refresh() {
         } else {
             m_busAddress = lh5803 ? pc1600::lh5803ToZ80(static_cast<uint16_t>(addr)) : addr;
             std::string why;
-            const std::string work = machinecode::pc1600WorkAreaProblem(m_busAddress, m_length, m_cpu);
-            if (!machinecode::pc1600TargetFor(m_busAddress, m_length, m_state, &m_slot, &why)) {
+            const std::string work = machinecode::pc1600WorkAreaWarning(m_busAddress, m_length, m_cpu);
+            if (!machinecode::pc1600TargetFor(m_busAddress, m_length, m_state, &m_slot, &why, m_cpu)) {
                 valid = false;
                 hint = QString::fromStdString(why);
             } else if (!work.empty()) {
-                valid = false;
-                hint = QString::fromStdString(work);
+                hint = QString::fromStdString(work);  // a warning; loading stays possible
             } else if (m_slot != machinecode::Slot::S0) {
                 hint = m_state.title != 0
                            ? tr("Goes into the slot %1 program module, the selected program area.")
@@ -101,4 +105,9 @@ void MachineCodeLoadDialog::refresh() {
     m_hint->setText(hint);
     m_hint->setVisible(!hint.isEmpty());
     m_buttons->button(QDialogButtonBox::Ok)->setEnabled(valid);
+    // Re-fit the height to the wrapped text at the current width, or a long
+    // hint gets clipped.
+    layout()->activate();
+    const int h = layout()->hasHeightForWidth() ? layout()->totalHeightForWidth(width()) : sizeHint().height();
+    resize(width(), std::max(h, layout()->totalMinimumSize().height()));
 }

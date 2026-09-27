@@ -197,7 +197,7 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
         case machinecode::LoadError::LhRange:
             *error = tag + program.path + ": LH5803 code must sit in &0000-&7FFF";
             return false;
-        default: // HeaderMismatch, NoSlot, WorkArea
+        default: // HeaderMismatch, NoSlot
             *error = tag + program.path + ": " + plan.detail;
             return false;
     }

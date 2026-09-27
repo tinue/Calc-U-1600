@@ -244,8 +244,10 @@ authentic speed for the span that matters.
 - **The debugger names the CPU itself** (`cpu` in the launch config): the
   toolchain knows it, so Build & Load doesn't take the MODE's CPU for a
   headerless file. Every other caller does.
-- **The running work area F000-FEFF is refused** for machine code in both
-  MODEs (it used to be a warning); FF00-FFFF keeps its warnings.
+- **Machine code may go into the work area F000-FFFF, with a warning.**
+  Many PC-1600 programs live up there, above all in the area of the CE-1F01A
+  bar-code reader pen, &FF40-&FFFF (e.g. CLOCK.BIN at &FF3A-&FFFB, which also
+  reaches into WAKE$). Don't turn it into a refusal.
 
 ### Expansion bus
 - **Cards know only the bus.** A peripheral card (CE-150, CE-158, memory

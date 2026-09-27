@@ -123,32 +123,38 @@ File readFile(const std::vector<uint8_t>& bytes) {
     return f;
 }
 
-bool pc1600TargetFor(uint32_t busAddr, size_t len, const PC1600State& state, Slot* slot, std::string* why) {
+bool pc1600TargetFor(uint32_t busAddr, size_t len, const PC1600State& state, Slot* slot, std::string* why, Cpu cpu) {
+    // Messages name addresses the way the user gave them: LH5803 addresses
+    // in MODE 1 (LH5801 code), Z-80 addresses otherwise.
+    const bool lh = cpu == Cpu::LH5803;
+    auto show = [lh](uint32_t z80) {
+        return lh ? hex(pc1600::z80ToLh5803(static_cast<uint16_t>(z80))) : hex(z80);
+    };
+    const std::string at = (lh ? "LH5803 " : "") + show(busAddr);
     const uint64_t end = static_cast<uint64_t>(busAddr) + len;  // one past the last byte
     if (busAddr >= kPc1600S0Base) {
         if (end > 0x10000) {
-            if (why) *why = hex(busAddr) + " + " + std::to_string(len) + " bytes runs past &FFFF.";
+            if (why) *why = at + " + " + std::to_string(len) + " bytes runs past " + show(0xFFFF) + ".";
             return false;
         }
         *slot = Slot::S0;
         return true;
     }
     if (busAddr < kPc1600SlotBase) {
-        if (why) *why = hex(busAddr) + " is ROM -- machine code goes into RAM, from " +
-                        hex(pc1600DefaultAddress(state)) + ".";
+        if (why) *why = at + " is ROM -- machine code goes into RAM, from " + show(pc1600DefaultAddress(state)) + ".";
         return false;
     }
     if (end > kPc1600S0Base) {
         if (why)
-            *why = hex(busAddr) + " + " + std::to_string(len) +
-                   " bytes crosses &C000 -- a memory module's window is &8000-&BFFF.";
+            *why = at + " + " + std::to_string(len) + " bytes crosses " + show(kPc1600S0Base) +
+                   " -- a memory module's window is " + show(kPc1600SlotBase) + "-" + show(kPc1600S0Base - 1) + ".";
         return false;
     }
     // $8000-$BFFF: the module behind the selected program area.
     if (state.title == 1 || state.title == 2) {
         if (busAddr < state.titleBase) {
-            if (why) *why = hex(busAddr) + " is below the slot " + std::to_string(state.title) +
-                            " module, which starts at " + hex(state.titleBase) + ".";
+            if (why) *why = at + " is below the slot " + std::to_string(state.title) + " module, which starts at " +
+                            show(state.titleBase) + ".";
             return false;
         }
         *slot = state.title == 1 ? Slot::S1 : Slot::S2;
@@ -157,20 +163,20 @@ bool pc1600TargetFor(uint32_t busAddr, size_t len, const PC1600State& state, Slo
     // TITLE S0: the module folded into S0 as extension memory (the area's
     // first run), if any.
     if (state.basicAreas.empty()) {
-        if (why) *why = "BASIC's program area couldn't be read, so " + hex(busAddr) + " can't be placed.";
+        if (why) *why = "BASIC's program area couldn't be read, so " + at + " can't be placed.";
         return false;
     }
     const BasicArea& first = state.basicAreas.front();
     if (first.slot == 0) {
         if (why)
-            *why = hex(busAddr) + " is in a memory module, which isn't part of the selected program area -- that "
-                   "starts in internal RAM at " + hex(first.windowBase + kReserve) +
-                   ". For a program module, select it first (TITLE\"Sx:\").";
+            *why = at + " would be in a memory module, but no module is part of the selected program area -- "
+                   "that is internal RAM, from " + show(first.windowBase + kReserve) +
+                   ". (A program module has to be selected first: TITLE\"Sx:\".)";
         return false;
     }
     if (busAddr < first.windowBase) {
-        if (why) *why = hex(busAddr) + " is below the slot " + std::to_string(first.slot) + " module, which starts at " +
-                        hex(first.windowBase) + ".";
+        if (why) *why = at + " is below the slot " + std::to_string(first.slot) + " module, which starts at " +
+                        show(first.windowBase) + ".";
         return false;
     }
     *slot = first.slot == 1 ? Slot::S1 : Slot::S2;
@@ -182,16 +188,29 @@ uint32_t pc1600DefaultAddress(const PC1600State& state) {
     return (state.basicAreas.empty() ? kPc1600S0Base : state.basicAreas.front().windowBase) + kReserve;
 }
 
-std::string pc1600WorkAreaProblem(uint32_t busAddr, size_t len, Cpu cpu) {
+std::string pc1600WorkAreaWarning(uint32_t busAddr, size_t len, Cpu cpu) {
     const uint64_t end = static_cast<uint64_t>(busAddr) + len;
-    if (end <= kPc1600WorkArea || busAddr >= kPc1600Wake) return {};
-    if (cpu == Cpu::LH5803)
-        return "LH5803 " + hex(pc1600::z80ToLh5803(static_cast<uint16_t>(std::max<uint32_t>(busAddr, kPc1600WorkArea)))) +
-               " is the PC-1600's system work area (&F000-&FEFF on the Z-80 side), which is running. The PC-1500A's "
-               "machine-code area &7C01 lies there -- one reason the PC-1600 is compatible with the PC-1500 only, "
-               "not the PC-1500A. Load the code lower.";
-    return "The code would overwrite the PC-1600's system work area (&F000-&FEFF), which is running. Load it lower "
-           "(or at &FF40 or higher).";
+    if (end <= kPc1600WorkArea || busAddr > 0xFFFF) return {};
+    const bool lh = cpu == Cpu::LH5803;
+    auto show = [lh](uint32_t z80) {
+        return lh ? hex(pc1600::z80ToLh5803(static_cast<uint16_t>(z80))) : hex(z80);
+    };
+    if (busAddr < kPc1600Wake) {
+        if (lh)
+            return "Warning: LH5803 " + show(kPc1600WorkArea) + "-" + show(kPc1600Wake - 1) +
+                   " is the PC-1600's system work area (Z-80 &F000-&FEFF): whatever the system uses there and the "
+                   "code overwrite each other. The PC-1500A's machine-code area &7C01 lies there -- one reason the "
+                   "PC-1600 is compatible with the PC-1500 only.";
+        return "Warning: the code lies in the system work area (&F000-&FEFF): whatever the system uses there and the "
+               "code overwrite each other.";
+    }
+    if (busAddr < kPc1600FreeTop)
+        return "Warning: " + show(kPc1600Wake) + "-" + show(kPc1600FreeTop - 1) +
+               " holds the WAKE$ strings -- a long WAKE$ and the code overwrite each other. Load it at " +
+               show(kPc1600FreeTop) + " or higher.";
+    return show(kPc1600FreeTop) + "-" + show(0xFFFF) +
+           " is unused by the system but officially reserved for the CE-1F01A bar-code reader software, so don't use "
+           "both.";
 }
 
 std::string headerMismatch(Target target, const File& file, bool mode1) {
@@ -241,9 +260,7 @@ LoadPlan planLoad(const File& file, const LoadOptions& o, const PC1600State& sta
     }
     if (pc1600) {
         std::string why;
-        if (!pc1600TargetFor(p.busAddr, p.len, state, &p.slot, &why)) return refuse(LoadError::NoSlot, why);
-        const std::string work = pc1600WorkAreaProblem(p.busAddr, p.len, p.cpu);
-        if (!work.empty()) return refuse(LoadError::WorkArea, work);
+        if (!pc1600TargetFor(p.busAddr, p.len, state, &p.slot, &why, p.cpu)) return refuse(LoadError::NoSlot, why);
     }
     if (o.checkRange && static_cast<uint64_t>(p.busAddr) + p.len > 0x10000) return refuse(LoadError::PastEnd);
     return p;
@@ -277,7 +294,7 @@ Plan plan(Target target, const File& file, const PC1600State& state) {
         case LoadError::PastEnd:
             p.error = "The code (" + std::to_string(file.payload.size()) + " bytes at " + hex(file.loadAddr) + ") runs past &FFFF.";
             break;
-        default: p.error = lp.detail; break; // BadFile, HeaderMismatch, WorkArea
+        default: p.error = lp.detail; break; // BadFile, HeaderMismatch
     }
     return p;
 }
@@ -347,13 +364,9 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
     };
 
     std::string workAreaWarning;
-    if (slot == Slot::S0 && end > kPc1600WorkArea) {
-        if (bus < kPc1600FreeTop)
-            workAreaWarning = " Warning: &FF00-&FF3F holds the WAKE$ strings -- a long WAKE$ and the code "
-                              "overwrite each other. Load it at &FF40 or higher.";
-        else
-            workAreaWarning = " &FF40-&FFFF is unused by the system but officially reserved for the CE-1F01A "
-                              "bar-code reader software, so don't use both.";
+    if (slot == Slot::S0) {
+        const std::string w = pc1600WorkAreaWarning(bus, len, cpu);
+        if (!w.empty()) workAreaWarning = " " + w;
     }
 
     // Code in the selected S1 / S2 program module: NEW "Sn:",size reserves

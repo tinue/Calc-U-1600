@@ -87,8 +87,10 @@ struct PC1600State {
 // The PC-1600 target for `len` bytes at the Z-80 address `busAddr`: S0 for
 // $C000-$FFFF; for $8000-$BFFF the module behind the selected program area
 // -- the S1/S2 program module TITLE selects, or with TITLE S0 the module
-// folded into S0 (its first run). False => `why` explains.
-bool pc1600TargetFor(uint32_t busAddr, size_t len, const PC1600State& state, Slot* slot, std::string* why);
+// folded into S0 (its first run). False => `why` explains, naming addresses
+// in `cpu`'s space (the one the user typed).
+bool pc1600TargetFor(uint32_t busAddr, size_t len, const PC1600State& state, Slot* slot, std::string* why,
+                     Cpu cpu = Cpu::Z80);
 
 // Where headerless PC-1600 code goes by default, as a Z-80 address: the
 // start of the selected program area -- S0: its first run's window base +
@@ -96,10 +98,13 @@ bool pc1600TargetFor(uint32_t busAddr, size_t len, const PC1600State& state, Slo
 // the program module's program start.
 uint32_t pc1600DefaultAddress(const PC1600State& state);
 
-// Non-empty when [busAddr, busAddr + len) touches the PC-1600's system work
-// area &F000-&FEFF: loading there would overwrite the running system.
-// `cpu` only words the message (in MODE 1 it names the PC-1500A's &7C01).
-std::string pc1600WorkAreaProblem(uint32_t busAddr, size_t len, Cpu cpu);
+// A warning when [busAddr, busAddr + len) reaches into the PC-1600's work
+// area &F000-&FFFF: the system work area, the WAKE$ strings, or the CE-1F01A
+// area. Not a refusal -- many PC-1600 programs live up there, above all in the
+// CE-1F01A bar-code reader pen's area &FF40-&FFFF (e.g. CLOCK.BIN, &FF3A-&FFFB,
+// which also reaches into WAKE$). `cpu` words it (addresses in the LH5803 view
+// for LH5801 code). Empty: nothing to say.
+std::string pc1600WorkAreaWarning(uint32_t busAddr, size_t len, Cpu cpu);
 
 struct Plan {
     std::string error;          // non-empty => refuse to load
@@ -145,7 +150,6 @@ enum class LoadError {
     OutsideBank0,   // the address is above $FFFF
     LhRange,        // LH5803 code outside its 0000-7FFF
     NoSlot,         // detail: pc1600TargetFor()'s reason
-    WorkArea,       // detail: pc1600WorkAreaProblem()
     PastEnd,        // the code runs past $FFFF
 };
 

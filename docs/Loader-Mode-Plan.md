@@ -9,8 +9,10 @@
 - **PC-1600-only keywords aren't refused in MODE 1.** The PC-1500 tokenizer
   doesn't know them and stores them as plain text (they fail at `RUN`). Only
   text the PC-1500 can't hold (non-ASCII) is refused.
-- **The work-area check is F000-FEFF** (Z-80; LH5803 7000-7EFF) in both MODEs,
-  not just LH5803 7C00-7FFF, because all of it is the running system.
+- **The work area is a warning, not a refusal** (F000-FFFF, LH5803 7000-7FFF):
+  many programs live up there, above all in the CE-1F01A bar-code reader pen's
+  area &FF40-&FFFF (e.g. CLOCK.BIN at &FF3A). A refusal of F000-FEFF was tried
+  first and dropped.
 - **The fast loader had to learn the ROM's line placement.** Lines don't
   straddle two module banks: the ROM writes a `00 00` bank-end mark and starts
   the next bank (LOADSTORE, rom3b 7074H); only ADTBL entry 5 -> internal RAM is
