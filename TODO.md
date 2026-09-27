@@ -104,63 +104,21 @@ obligations.
   `OUTSTAT 0-3` and buffer-full RTS become effective end-to-end, for
   serial-only tooling to bridge via `socat`.
 
-## PC-1600 program loading and pointer bookkeeping
+## PC-1600 loading: still open
 
-**First: the loaders follow the current MODE** (docs/Loader-Mode-Plan.md,
-agreed 2026-09-27). The loader reads `BMODE` b6 and never switches MODE. In
-MODE 1 a `.bas` is tokenized with the PC-1500 table (a failure such as
-non-ASCII text is an error), CE-158-header files load, and headerless code
-is LH5801 code at an LH5803 address (the dialog says so). The work area
-LH5803 7C00H–7FFFH is refused. The `NEW`/`CALL` advice depends on MODE and
-CPU (`NEW &addr` + `XCALL` in MODE 1). Placement follows the live work area,
-so there is no MODE 1 special case. Brings in the shared `+0x8000` helper
-that the bookkeeping work below builds on.
-BASIC also goes to the program area `TITLE` selects: after `TITLE "S1:"` into
-the S1 program module, which needs the S1/S2 work below. `MODE 1` ignores the
-previous `TITLE` and picks the area itself (S1 one-bank program module, else S2,
-else S0; it hides the other slots), and `MODE 0` resets `TITLE` to S0. So the
-loader just reads `TITLE`. The plan's tests also check this ROM behaviour on the
-emulator.
+The loaders follow MODE and `TITLE` (docs/Loader-Mode-Plan.md, done). Left:
 
-The fast loader pokes BASPRG_END and the PRGADR end triple (`$FE3F`,
-7b327cd) by hand, handles S0 only, and repeats the LH5803↔Z80 `+0x8000`
-mapping in `PC1600BasicLoader`, `PC1600BasicTyper` (`toZ80`) and
-`PC1600ProgramPlacement`. The ROM trace is done (2026-09-27; details in
-SharpPC1500Reference `PC-1600-Work-Area-Map.md` §3.5 note and §4.5).
-
-**Direction: mirror the ROM's `LOAD` finish** (`LOADEND`, rom3b 70E1H)
-instead of the loader's own subset:
-1. `FF` terminator at the end;
-2. S0: F867 = end (BE), **F02C = end bank**; if F899 ≤ the new end,
-   F899 = (F864):00;
-3. S1/S2: end triple → F01C–F01E / F026–F028, and the module header's
-   end offset at +5/+6 (high byte first; +4000H when the end is in the
-   next bank);
-4. PRGADR, F89E (CURRENT TOP) = start, F1C1 (CURRENT bank) = FE3E.
-
-Today's gaps against that: F02C is never written, FE41 is copied from FE3E,
-and F899/F89E/F1C1 are skipped. The ROM writes F02C wherever the end moves
-(`NEW` rom3b 44BCH/44CBH, `INIT` S0-moved 65E4H, `LOAD` 70F8H, `CLOAD`
-CE-1600P bank 5 74E3H, line delete P1-B0 4EF9H, line insert 54D3H), and
-PRGADR propagates a stale one. S1/S2 targets are new work: the descriptor
-and header layout is now known (Work-Area-Map §4.5). Do it together with
-the one `+0x8000` helper.
-
-**Check afterwards:** diff the work area (F000–FFFF) typed vs `LOAD`ed vs
-fast-loaded (same preset, `pc1600_cli`), including a program that crosses a
-bank boundary and one loaded into an S1 program area.
-
-**Settled by the ROM, no loader work:**
-- `INIT"Sx:","P",n` writes the header `55 base 00 C5 n·4 00 C5 80` plus FF
-  at base+C5, then `SSLOTMP` rebuilds ADTBL: the slot gets its own entry,
-  and the S0 program is emptied if S0's base moved.
-- PC-1500 files: tapes load only in MODE 1 (the format follows `BMODE` b6;
-  `CLOAD -1`'s `-1` is ignored), to the header address, unconverted. Disk
-  and COM `LOAD` take only the PC-1600 binary format (header type 21H) or
-  ASCII, which is tokenized as PC-1600 BASIC. The ROM never converts PC-1500
-  tokens.
-- MODE 1: `INIT` is refused (ERROR 110) and `PC15MAP` (P0-B0 1676H) narrows
-  ADTBL to one program area. `CLOAD` uses the same end bookkeeping.
+- **The open questions of the load/save matrix** (SharpPC1500Reference
+  `PC-1600/PC-1600-Load-Save-Matrix.md` §6), to be discussed: are all tokens
+  the PC-1500 and PC-1600 share identical (the MODE 1 listing rule assumes
+  so; a table comparison of libsharpdx's two tables against the ROM's would
+  settle it); `INPUT#-1` in MODE 1 through the CE-1600P (the ROM allows it,
+  the TRM doesn't); `SAVE`/`LOAD "CAS:"` in MODE 1; whether the CE-158's own
+  `SETDEV` is reachable on the PC-1600; CE-150/CE-158 `PRINT#`/`INPUT#` in
+  MODE 0.
+- **Guide screenshots for chapter 6** (`docs/screenshots/guide/06-*`): the
+  Load Machine Code dialog now shows which CPU / address space is assumed,
+  so `06-start-address.png` and `06-loaded.png` are out of date.
 
 ## Expansion connectors: one model on both machines
 

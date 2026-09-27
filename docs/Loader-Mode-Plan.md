@@ -1,5 +1,23 @@
 # PC-1600 loaders follow the current MODE and program area
 
+**Status: done** (dev-0.6.0, 2026-09-27: phases 1-4 = b7fba81, e3114cb, 0d096ff,
+6512474). What changed against the plan below while implementing:
+
+- **`slot:` was dropped** from presets and the DAP launch config: every loader
+  derives the target from MODE, `TITLE` and the address. In MODE 1 a preset's
+  `address:` is an LH5803 address.
+- **PC-1600-only keywords aren't refused in MODE 1.** The PC-1500 tokenizer
+  doesn't know them and stores them as plain text (they fail at `RUN`). Only
+  text the PC-1500 can't hold (non-ASCII) is refused.
+- **The work-area check is F000-FEFF** (Z-80; LH5803 7000-7EFF) in both MODEs,
+  not just LH5803 7C00-7FFF, because all of it is the running system.
+- **The fast loader had to learn the ROM's line placement.** Lines don't
+  straddle two module banks: the ROM writes a `00 00` bank-end mark and starts
+  the next bank (LOADSTORE, rom3b 7074H); only ADTBL entry 5 -> internal RAM is
+  contiguous. Found with the typed-vs-loaded work-area tests.
+- **The debugger keeps the CPU its launch config names** instead of the MODE's.
+- The BASIC typer (`format: basic-text`) follows `TITLE` too.
+
 ## Context
 
 **File ▸ Load BASIC Program…**, **File ▸ Load Machine Code…**, a preset's

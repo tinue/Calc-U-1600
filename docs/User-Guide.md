@@ -211,8 +211,19 @@ and `RUN` starts it:
 
 Good to know:
 - **Where the program goes.** It goes to the same place a `LOAD` would put
-  it. On a PC-1600 with a RAM module that holds BASIC's program area, it
-  starts in the module and continues in internal RAM.
+  it: on a PC-1600, into the program area `TITLE` selects. That is S0
+  (internal RAM, plus a RAM module folded into it), or a program module
+  after `INIT"S1:","P"` and `TITLE"S1:"`. Across a module's 16 KB banks
+  lines are never split, just as the calculator itself stores them.
+- **MODE decides how the listing is read (PC-1600).** In MODE 0 it is
+  PC-1600 BASIC; in MODE 1 it is PC-1500 BASIC, so a PC-1500 listing's
+  `CALL` becomes the PC-1500 `CALL` (which the PC-1600 lists as `XCALL`),
+  exactly as if the program had been saved on a PC-1500 and loaded with
+  `CLOAD`. A listing the PC-1500 can't hold (for example one with `ä`) is
+  refused in MODE 1. PC-1600-only keywords stay plain text in MODE 1 and
+  fail when the program runs.
+- **Nothing is switched for you.** The app never changes MODE or `TITLE`;
+  set them first, as on the real calculator.
 - **Single lines.** **Edit ▸ Paste Text** types one line from the clipboard
   without pressing ENTER (see [Getting started](#copy-screen-and-paste-text)).
   That's handy for a long command or one program line, but not for a whole
@@ -299,38 +310,50 @@ stateDiagram-v2
 ## 6. Machine-code programs
 
 **File ▸ Load Machine Code…** opens a `.bin` file and writes it into the
-calculator's memory. It never runs the code. What happens next depends on
+calculator's memory. It never runs the code. On a PC-1600 the calculator's
+MODE and the program area `TITLE` selects decide where it goes and which
+CPU it is for; the app never changes them. What happens next depends on
 the file:
 
 ```mermaid
 flowchart TD
     F["File ▸ Load Machine Code… (.bin)"] --> H{"Header?"}
-    H -->|"PC-1600 header (16 bytes)"| A["load address known"]
-    H -->|"CE-158 header (27 bytes)<br/>PC-1500 / 1500A only"| A
-    H -->|none| D["dialog: enter the start address"]
-    D --> A
-    A --> P{"PC-1600?"}
-    P -->|no| L["write it"]
-    P -->|yes| S{"Where in BASIC's program area?"}
-    S -->|"&C000–&FFFF"| S0["S0 (internal RAM)"] --> L
-    S -->|"&8000–&BFFF, with a RAM module<br/>holding BASIC's program area"| S12["S1 / S2 (the module)"] --> L
-    L --> B["'Machine Code Loaded':<br/>NEW that protects the code, CALL that starts it"]
-    B --> C["the CALL is typed for you — press ENTER"]
+    H -->|"PC-1600 header (16 bytes)"| Z["Z-80 code, address known"]
+    H -->|"CE-158 header (27 bytes)<br/>PC-1500/1500A, or a PC-1600 in MODE 1"| L["LH5801 code, LH5803 address known"]
+    H -->|none| D{"MODE (PC-1600)"}
+    D -->|"MODE 0"| DZ["dialog: Z-80 address"]
+    D -->|"MODE 1"| DL["dialog: LH5803 address"]
+    Z --> P["target: &C000-&FFFF internal RAM;<br/>&8000-&BFFF the module of the selected program area"]
+    L --> P
+    DZ --> P
+    DL --> P
+    P --> B["'Machine Code Loaded':<br/>NEW that protects the code, CALL / XCALL that starts it"]
+    B --> C["the command is typed for you — press ENTER"]
 ```
 
-A file without a header needs a start address:
+A file without a header needs a start address. On a PC-1600 the dialog
+says which address space it expects: in MODE 0 a Z-80 address (Z-80 code
+is assumed), in MODE 1 an LH5803 address as on a PC-1500 (LH5801 code is
+assumed; the internal RAM is &4000-&7FFF there). The system work area
+(&F000-&FEFF, LH5803 &7000-&7EFF) is refused, which also rules out the
+PC-1500A's machine-code area &7C01 -- one reason the PC-1600 is compatible
+with the PC-1500 only.
 
 ![Start address for a file without a header](images/guide/06-start-address.png)
 
 After loading, the app tells you two things:
-- which `NEW` keeps BASIC from overwriting the code;
-- how to start it. The `CALL` is already typed on the calculator, so you
-  only have to press ENTER.
+- which `NEW` keeps BASIC from overwriting the code: `NEW "S0:",size` in
+  MODE 0, `NEW &addr` the PC-1500 way in MODE 1, `NEW "S1:",size` for code
+  in a selected program module;
+- how to start it: `CALL` for Z-80 code, `XCALL` for LH5801 code. The
+  command is already typed on the calculator, so you only have to press
+  ENTER.
 
 ![The advice after loading a PC-1600 program](images/guide/06-loaded.png)
 
-To load code into a program module or a RAM disk, or to load several files
-in one go, use a preset (see [Machine code in a preset](#86-machine-code)).
+To load code into a program module, select it first (`TITLE"S1:"`); to
+load several files in one go, use a preset (see
+[Machine code in a preset](#86-machine-code)).
 
 **Debugging.** With **Settings ▸ Debugger** turned on, VS Code can attach
 to the emulator and debug the program. It can build, load and start the
@@ -496,7 +519,10 @@ keys:
 ```
 
 - **Before a `program:` block,** leave the machine in PRO mode after `NEW0`,
-  as above. Switch to RUN mode afterwards.
+  as above. Switch to RUN mode afterwards. For a PC-1500 program on the
+  PC-1600, type `MODE1` first; for a program module, `INIT"S1:","P"` and
+  `TITLE"S1:"`. The loader follows MODE and `TITLE`, as Load BASIC Program
+  does.
 - `format: basic-binary` works like **File ▸ Load BASIC Program…**
   ([chapter 4](#4-loading-a-basic-program)) and is fast.
 - `format: basic-text` types the program line by line, the way you would.
@@ -530,11 +556,15 @@ program:
   path: memtest_bank.bin
   format: binary
   address: 0x7C01             # needed if the file has no header
-# slot: S0 | S1 | S2          # PC-1600: which memory the address is in
 # length: 0x200               # load only part of the file
 ```
 
 - **Files with a header** (PC-1600, CE-158) bring their own address.
+- **PC-1600:** the loader places the code the way Load Machine Code does,
+  by MODE, `TITLE` and the address: in MODE 1 `address:` is an LH5803
+  address. Switch MODE or `TITLE` in a `keys:` section first. (There is no
+  `slot:` any more; a preset that still has one is refused with an
+  explanation.)
 - **Auto-run:** if the header has an auto-run address, the preset types
   `CALL` for you and waits until the code returns.
 - **Examples:** `examples/machine-code/memtest_bank.pc1500a`, and
@@ -593,7 +623,7 @@ This is what it leaves on the LCD:
 | `memory-expansion:` | PC-1500/1500A: one `- modulespec: <name>` or `- modulespecfile: <path>` |
 | `memory-expansion-1:`, `-2:` | PC-1600 slot 1 / slot 2, same form |
 | `keys:` | a list of steps (below); may appear any number of times |
-| `program:` | `format:`, `path:` or `text: \|`, `address:`, `slot:`, `length:`; may appear any number of times |
+| `program:` | `format:`, `path:` or `text: \|`, `address:`, `length:`; may appear any number of times |
 
 **Steps:** `key:`, `type:`, `wait:`, `saveas:`, `screenshot:`, `syncclock:`, `trace:`.
 

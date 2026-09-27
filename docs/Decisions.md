@@ -215,11 +215,37 @@ authentic speed for the span that matters.
 - **Hardcoding the PC-1600 idle PC ($92xx)** in `waitUntilBasicIdle` is fine,
   because the ROM set is fixed. "Small stable PC span" alone isn't enough:
   INPUT, plot and FOR/NEXT waits are tight loops too.
-- **The PC-1600 fast loader writes PRGADR ($FE3E-$FE41)** in addition to the
-  BASIC pointers. LIST reads it, so without it a loaded program lists as empty
-  (7b327cd).
+- **The PC-1600 fast loader finishes like the ROM's `LOAD`.** Besides the
+  program bytes it writes F867/F02C (or an S1/S2 descriptor end and module
+  header), the VARIABLE POINTER check, PRGADR (FE3C-FE41), F89E and F1C1
+  (LOADEND, rom3b 70E1H). LIST reads PRGADR, so without it a loaded program
+  lists as empty (7b327cd). Checked byte for byte against the typer.
+- **No line straddles two module banks** (`PC1600ProgramPlacement`). The ROM
+  leaves a `00 00` bank-end mark and starts the next bank (LOADSTORE 7074H);
+  only ADTBL entry 5 -> internal RAM is contiguous and may be straddled.
+  Don't "simplify" placement back to one linear byte stream.
 - **`kMaxBasicLineLength` (79)** is a guessed limit on the raw typed line.
   It stays until the real limit is measured.
+
+### Loading programs (docs/Loader-Mode-Plan.md)
+- **The loaders follow MODE and `TITLE` and never change them.** Load
+  BASIC, Load Machine Code, presets and the debugger read BMODE b6 and F1D5H
+  at load time; the real machine doesn't switch either, it shows an error.
+  A preset switches MODE / `TITLE` itself in `keys:`.
+- **A listing is tokenized by MODE.** MODE 1 uses the PC-1500 keyword table,
+  so a PC-1500 listing's `CALL` is the PC-1500 token (listed as `XCALL`), as
+  after a PC-1500 `CSAVE` + `CLOAD`. This differs on purpose from the ROM,
+  whose ASCII `LOAD` and keyboard use the PC-1600 names even in MODE 1.
+  PC-1600-only keywords stay plain text in MODE 1 (the tokenizer can't
+  know them); only text the PC-1500 can't hold (non-ASCII) is refused.
+- **`slot:` is gone from presets and the DAP launch config.** The target
+  follows from MODE, `TITLE` and the address. A preset that still has
+  `slot:` is refused with an explanation rather than silently ignored.
+- **The debugger names the CPU itself** (`cpu` in the launch config): the
+  toolchain knows it, so Build & Load doesn't take the MODE's CPU for a
+  headerless file. Every other caller does.
+- **The running work area F000-FEFF is refused** for machine code in both
+  MODEs (it used to be a warning); FF00-FFFF keeps its warnings.
 
 ### Expansion bus
 - **Cards know only the bus.** A peripheral card (CE-150, CE-158, memory
