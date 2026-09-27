@@ -15,8 +15,7 @@
 // the CALL that starts it). The writes themselves live in
 // PC1500MachineCodeLoader / PC1600MachineCodeLoader.
 //
-// Header layouts: SharpPC1500Reference Data-Formats/Binary-Exchange-
-// Formats.md §2 (CE-158, PC-1500/1500A) and §3 (PC-1600).
+// What a file is comes from programfile::classify() (libsharpdx).
 
 namespace machinecode {
 
@@ -36,7 +35,7 @@ struct File {
     bool ok = false;               // false => `error` says why (bad/unsupported header)
     std::string error;
     uint32_t loadAddr = 0;         // header only
-    uint32_t autorunAddr = 0;      // header only; 0 = none (a header &FFFF reads as 0)
+    uint32_t autorunAddr = 0;      // header only; 0 = none (the header held 0 or &FFFF)
     std::vector<uint8_t> payload;  // the bytes to load (header stripped)
     /// The header's length field disagrees with the bytes that follow it.
     /// `ok` is false and `error` says so, but `loadAddr`/`autorunAddr` and
@@ -45,11 +44,12 @@ struct File {
     bool lengthMismatch = false;
 };
 
-// Recognises the header and splits off the payload. A header that is
-// present but not machine language (e.g. tokenized BASIC) or whose length
-// doesn't match the file is an error; anything without a known magic is a
-// headerless payload. Shared by the GUI's "Load Machine Code…" and the
-// preset loaders' `format: binary`.
+// Recognises the header and splits off the payload. A BASIC program
+// (listing or tokenized), a Reserve Area, variables or plain text is an
+// error, and so is a header whose length doesn't match the file; any other
+// binary is a headerless payload -- its CPU is never guessed. Shared by
+// every machine-code load (Load Machine Code…, `format: binary`, the
+// debugger).
 File readFile(const std::vector<uint8_t>& bytes);
 
 // Empty when `file`'s header (or lack of one) suits `target`; otherwise why

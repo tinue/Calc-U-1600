@@ -115,7 +115,6 @@ set(CORE_SOURCES
   ${CORE_ROOT}/MachineCodeFile.cpp
   ${CORE_ROOT}/ProgramFile.cpp
   ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600MachineImage.cpp
   ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
   # Reset's boot-to-prompt (runBootToPrompt)

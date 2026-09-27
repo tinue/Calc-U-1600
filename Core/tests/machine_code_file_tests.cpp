@@ -117,6 +117,45 @@ void test_read_pc1600_basic_type_rejected() {
     CHECK(f.error.find("Load BASIC Program") != std::string::npos);
 }
 
+void test_read_basic_listing_rejected() {
+    const std::string bas = "10 PRINT \"HI\"\n20 END\n";
+    File f = machinecode::readFile(std::vector<uint8_t>(bas.begin(), bas.end()));
+    CHECK(!f.ok);
+    CHECK(f.error.find("BASIC listing") != std::string::npos);
+    CHECK(f.error.find("Load BASIC Program") != std::string::npos);
+}
+
+void test_read_other_kinds_rejected() {
+    const std::string notes = "Just some notes,\nnot a program.\n";
+    File text = machinecode::readFile(std::vector<uint8_t>(notes.begin(), notes.end()));
+    CHECK(!text.ok);
+    CHECK(text.error.find("plain text") != std::string::npos);
+    // A CE-158 header of an unknown type ('Z'): magic without a known header.
+    File cut = machinecode::readFile(ce158File(kCode, 0x40C5, 0, /*type=*/'Z'));
+    CHECK(!cut.ok);
+    CHECK(cut.error.find("no complete header") != std::string::npos);
+}
+
+void test_read_truncated() {
+    auto bytes = pc1600File(kCode, 0xC0C5, 0);
+    bytes.pop_back();
+    File f = machinecode::readFile(bytes);
+    CHECK(!f.ok);
+    CHECK(f.lengthMismatch);
+    CHECK(f.error.find("promises more code") != std::string::npos);
+    CHECK(f.payload.size() == kCode.size() - 1);
+}
+
+// `00` bytes before the header (e.g. from a serial capture) are skipped.
+void test_read_leading_noise() {
+    auto bytes = ce158File(kCode, 0x40C5, 0x40C7);
+    bytes.insert(bytes.begin(), {0x00, 0x00});
+    File f = machinecode::readFile(bytes);
+    CHECK(f.ok);
+    CHECK(f.header == File::Header::CE158);
+    CHECK(f.payload == kCode);
+}
+
 void test_read_headerless() {
     File f = machinecode::readFile(kCode);
     CHECK(f.ok);
@@ -465,6 +504,10 @@ int run_machine_code_file_tests() {
     test_read_ce158_basic_type_rejected();
     test_read_pc1600();
     test_read_pc1600_basic_type_rejected();
+    test_read_basic_listing_rejected();
+    test_read_other_kinds_rejected();
+    test_read_truncated();
+    test_read_leading_noise();
     test_read_headerless();
     test_plan_model_mismatch();
     test_plan_headerless_needs_address();

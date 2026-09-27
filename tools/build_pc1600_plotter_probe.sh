@@ -36,7 +36,6 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/CPU/LH5803/LH5803SharedMemory.cpp \
   Core/PC1600/PC1600Machine.cpp \
   Core/PC1600/PC1600BasicTyper.cpp \
-  Core/PC1600/PC1600MachineImage.cpp \
   Core/PC1600/PC1600MachineCodeLoader.cpp \
   Core/PC1600/PC1600PresetLoader.cpp \
   Core/Display/LcdScreenshot.cpp \

@@ -45,7 +45,6 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/PC1600/PC1600BasicTyper.cpp \
   Core/PC1600/PC1600BasicLoader.cpp \
   Core/PC1600/PC1600ProgramPlacement.cpp \
-  Core/PC1600/PC1600MachineImage.cpp \
   Core/PC1600/PC1600MachineCodeLoader.cpp \
   Core/PC1600/PC1600PresetLoader.cpp \
   Core/Display/LcdScreenshot.cpp \
@@ -85,7 +84,6 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/basic_fastloader_tests.cpp \
   Core/tests/pc1600_basicloader_tests.cpp \
   Core/tests/pc1600_program_placement_tests.cpp \
-  Core/tests/pc1600_machine_image_tests.cpp \
   Core/tests/basic_program_source_tests.cpp \
   Core/tests/piezo_sampler_tests.cpp \
   Core/tests/key_paste_tests.cpp \

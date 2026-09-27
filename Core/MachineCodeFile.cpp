@@ -4,17 +4,12 @@
 #include <cctype>
 #include <cstdio>
 
-#include "PC1600/PC1600MachineImage.hpp"
 #include "PC1600/PC1600ProgramPlacement.hpp"
+#include "ProgramFile.hpp"
 
 namespace machinecode {
 
 namespace {
-
-constexpr size_t kCe158HeaderSize = 27;
-constexpr uint8_t kCe158TypeMachine = 0x42;  // 'B'
-constexpr uint8_t kPc1600TypeMachine = 0x10;
-constexpr uint8_t kPc1600TypeBasic = 0x21;
 
 // The system keeps the first &C5 (197) bytes of a program area for itself
 // -- PC-1500 BASIC can't start lower (`NEW 0` == RAM start + &C5), and a
@@ -37,16 +32,14 @@ std::string hex(uint32_t v) {
     return b;
 }
 
-bool hasPc1600Magic(const std::vector<uint8_t>& d) {
-    return d.size() >= 16 && d[0] == 0xFF && d[1] == 0x10 && d[2] == 0x00 && d[3] == 0x00;
-}
-
-bool hasCe158Magic(const std::vector<uint8_t>& d) {
-    return d.size() >= kCe158HeaderSize && d[0] == 0x01 && d[2] == 'C' && d[3] == 'O' && d[4] == 'M';
-}
-
-uint32_t be16(const std::vector<uint8_t>& d, size_t at) {
-    return (static_cast<uint32_t>(d[at]) << 8) | d[at + 1];
+// sde_file_info's token for a file that is neither a program nor code, in words.
+std::string describe(const std::string& token) {
+    if (token == "reserve") return "a Reserve Area (CE-158 header)";
+    if (token == "reserve-text") return "a Reserve Area as text";
+    if (token == "variables") return "variables (CE-158 header)";
+    if (token == "variables-text") return "variables as text";
+    if (token == "text") return "plain text";
+    return token;
 }
 
 }  // namespace
@@ -61,65 +54,51 @@ const char* slotName(Slot slot) {
 }
 
 File readFile(const std::vector<uint8_t>& bytes) {
+    using programfile::Kind;
+    const programfile::ProgramFile pf = programfile::classify(bytes);
     File f;
-    if (hasPc1600Magic(bytes)) {
-        f.header = File::Header::PC1600;
-        if (bytes[4] == kPc1600TypeBasic) {
-            f.error = "This is a tokenized PC-1600 BASIC program, not machine code -- use Load BASIC Program.";
+    switch (pf.kind) {
+        case Kind::Empty:
+        case Kind::Headerless:
+            if (pf.damaged) {
+                f.error = "The file starts like a CE-158 or PC-1600 header, but has no complete header of a known type.";
+                return f;
+            }
+            f.payload = bytes;
+            f.ok = true;
             return f;
-        }
-        if (bytes[4] != kPc1600TypeMachine) {
-            char b[96];
-            std::snprintf(b, sizeof(b), "PC-1600 transfer file of type &%02X is not machine code.", bytes[4]);
-            f.error = b;
+        case Kind::BasicListing:
+            f.error = "This is a BASIC listing, not machine code -- use Load BASIC Program.";
             return f;
-        }
-        pc1600::MachineImage img = pc1600::parsePC1600MachineImage(bytes);
-        if (!img.ok) {
-            f.error = img.error;
+        case Kind::BasicPC1500:
+        case Kind::BasicPC1600:
+            f.header = pf.kind == Kind::BasicPC1600 ? File::Header::PC1600 : File::Header::CE158;
+            f.error = std::string("This is a tokenized ") + programfile::headerName(pf.kind) +
+                      " BASIC program, not machine code -- use Load BASIC Program.";
             return f;
-        }
-        f.loadAddr = img.loadAddr;
-        f.autorunAddr = img.autorunAddr;
-        f.payload.assign(bytes.begin() + static_cast<std::ptrdiff_t>(img.headerSize), bytes.end());
-        if (img.headerPayloadLen != f.payload.size()) {
-            char b[160];
-            std::snprintf(b, sizeof(b), "The PC-1600 header says %u bytes of code, but %zu follow it.",
-                          img.headerPayloadLen, f.payload.size());
-            f.error = b;
-            f.lengthMismatch = true;
+        case Kind::Other:
+            f.error = "This file holds " + describe(pf.token) + ", not machine code.";
             return f;
-        }
-        f.ok = true;
+        case Kind::CodeLH5801:
+        case Kind::CodeZ80:
+            break;
+    }
+    f.header = pf.kind == Kind::CodeZ80 ? File::Header::PC1600 : File::Header::CE158;
+    f.loadAddr = pf.loadAddr;
+    f.autorunAddr = pf.autorunAddr;
+    f.payload = pf.payload;
+    if (pf.lengthMismatch) {
+        char b[160];
+        if (pf.truncated)
+            std::snprintf(b, sizeof(b), "The %s header promises more code than the %zu bytes that follow it.",
+                          programfile::headerName(pf.kind), f.payload.size());
+        else
+            std::snprintf(b, sizeof(b), "The %s header says %zu bytes of code, but %zu follow it.",
+                          programfile::headerName(pf.kind), pf.headerPayloadLen, f.payload.size());
+        f.error = b;
+        f.lengthMismatch = true;
         return f;
     }
-    if (hasCe158Magic(bytes)) {
-        f.header = File::Header::CE158;
-        if (bytes[1] != kCe158TypeMachine) {
-            char b[96];
-            std::snprintf(b, sizeof(b), "CE-158 transfer file of type '%c' (&%02X) is not machine code.",
-                          std::isprint(bytes[1]) ? bytes[1] : '?', bytes[1]);
-            f.error = b;
-            return f;
-        }
-        // Length field is stored as (length - 1) -- Binary-Exchange-Formats.md §2.3.
-        const size_t len = static_cast<size_t>(be16(bytes, 0x17)) + 1;
-        f.loadAddr = be16(bytes, 0x15);
-        f.autorunAddr = be16(bytes, 0x19);
-        if (f.autorunAddr == 0xFFFF) f.autorunAddr = 0;  // &FFFF = no auto-start, same as 0
-        f.payload.assign(bytes.begin() + kCe158HeaderSize, bytes.end());
-        if (len != f.payload.size()) {
-            char b[160];
-            std::snprintf(b, sizeof(b), "The CE-158 header says %zu bytes of code, but %zu follow it.", len,
-                          f.payload.size());
-            f.error = b;
-            f.lengthMismatch = true;
-            return f;
-        }
-        f.ok = true;
-        return f;
-    }
-    f.payload = bytes;
     f.ok = true;
     return f;
 }
