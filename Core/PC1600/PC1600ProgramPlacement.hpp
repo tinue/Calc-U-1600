@@ -39,6 +39,16 @@ constexpr uint16_t kAdtbl1 = 0xF1D6;   // ADTBL+1 .. ADTBL+5 -- five 1-byte bank
 constexpr uint16_t kBasPrgSt = 0xF865; // BASPRG_ST (big-endian), LH5803-side
 constexpr uint16_t kVarPtr = 0xF899;   // VARIABLE POINTER (big-endian), LH5803-side
 
+// ── LH5803 view <-> Z-80 address ────────────────────────────────────────
+//
+// The LH5803's $0000-$7FFF is the Z-80's $8000-$FFFF (module window, then
+// internal RAM), and the BASIC pointers the ROM keeps the PC-1500 way (F865,
+// F867, F899, CURTOP, ...) are stored in that view: bit 15 inverted, e.g.
+// $40C5 = Z-80 $C0C5, $00C5 = $80C5 in a module bank. The one place this
+// mapping lives.
+constexpr uint16_t lh5803ToZ80(uint16_t lh5803) { return static_cast<uint16_t>(lh5803 ^ 0x8000); }
+constexpr uint16_t z80ToLh5803(uint16_t z80) { return static_cast<uint16_t>(z80 ^ 0x8000); }
+
 // One contiguous run of the user area, ascending Z-80 (SC7852) address
 // order. `base`/`top` are inclusive Z-80 addresses.
 struct ProgramSegment {

@@ -4,6 +4,7 @@
 #include <cstdio>
 
 #include "PC1600/PC1600MachineImage.hpp"
+#include "PC1600/PC1600ProgramPlacement.hpp"
 
 namespace machinecode {
 
@@ -206,7 +207,7 @@ LoadPlan planLoad(const File& file, const LoadOptions& o, const std::vector<Basi
     p.busAddr = p.addr;
     if (o.lh5803) {
         if (p.addr + p.len > 0x8000) return refuse(LoadError::LhRange);
-        p.busAddr = p.addr + 0x8000;
+        p.busAddr = pc1600::lh5803ToZ80(static_cast<uint16_t>(p.addr));
     }
     p.slot = o.slot;
     if (o.target == Target::PC1600 && o.slotPolicy != SlotPolicy::Explicit) {

@@ -485,6 +485,10 @@ uint8_t PC1600Machine::debugPeek(uint16_t addr) {
     return m_z80Mem.peek(addr);
 }
 
+bool PC1600Machine::mode1() { return (debugPeek(0xF1BC) & 0x40) != 0; }
+
+int PC1600Machine::programAreaTitle() { return debugPeek(0xF1D5); }
+
 bool PC1600Machine::debugSc7852Owns() {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_arbiter.sc7852Owns();

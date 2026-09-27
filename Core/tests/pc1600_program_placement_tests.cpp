@@ -294,6 +294,8 @@ void test_debug_program_areas_match_rom() {
     CHECK(!a.slot[1].programModule);
     CHECK(CoreDebug::pc1600PointerToZ80(0x40C5) == 0xC0C5);
     CHECK(CoreDebug::pc1600PointerToZ80(0x6B00) == 0xEB00);
+    CHECK(pc1600::lh5803ToZ80(0x00C5) == 0x80C5);
+    CHECK(pc1600::z80ToLh5803(0xC0C5) == 0x40C5);
 }
 
 }  // namespace

@@ -346,6 +346,12 @@ public:
     /// state as-is) -- same semantics as PC1500Machine::debugPeek().
     uint8_t debugPeek(uint16_t addr);
 
+    /// MODE 1 (PC-1500 compatible) is on: BMODE (F1BCH) bit 6. The loaders
+    /// read it to decide the keyword table and the address space.
+    bool mode1();
+    /// The selected program area, TITLE (F1D5H): 0 = S0, 1 = S1, 2 = S2.
+    int programAreaTitle();
+
     /// True while SC7852 owns the bus -- false means the OFF-key/auto-
     /// power-off handoff has parked the machine on the LH5803 side (see
     /// `sc7852Owns()`, the unlocked headless-tools accessor above, whose

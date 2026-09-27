@@ -2,6 +2,8 @@
 #include <cstdint>
 #include <functional>
 
+#include "../PC1600/PC1600ProgramPlacement.hpp"
+
 // ── Shared debug-pointer tables ──────────────────────────────────────────
 //
 // Plain data consumed by the GUI's debug panel (Qt6's DebugPanel): the
@@ -44,7 +46,7 @@ extern const int kPC1600PointerMaxNameLength;
 
 // The Z-80 address of a stored BASIC pointer (F865, F867, F899, ...): bit 15
 // is stored inverted, e.g. $40C5 = Z-80 C0C5, $00C5 = 80C5 in a module bank.
-constexpr uint16_t pc1600PointerToZ80(uint16_t stored) { return stored ^ 0x8000; }
+constexpr uint16_t pc1600PointerToZ80(uint16_t stored) { return pc1600::lh5803ToZ80(stored); }
 
 // ── PC-1600 program areas (S0, and S1/S2 program modules) ────────────────
 //

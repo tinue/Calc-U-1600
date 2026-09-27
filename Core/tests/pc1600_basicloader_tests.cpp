@@ -337,7 +337,25 @@ void test_rejects_pc1500_transfer_file() {
 
 }  // namespace
 
+// The loaders read MODE and TITLE from the machine: after boot MODE 0 and
+// S0; `MODE1` typed on a stock machine is accepted (the ROM needs no module).
+void test_mode_and_title_queries() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) return;
+    CHECK(!m.mode1());
+    CHECK(m.programAreaTitle() == 0);
+    std::string err;
+    typeLine(m, "MODE1", /*pressEnter=*/true, &err);
+    waitIdle(m, static_cast<uint64_t>(PC1600Machine::kTStateHz));
+    CHECK(m.mode1());
+    CHECK(m.programAreaTitle() == 0);
+    typeLine(m, "MODE0", /*pressEnter=*/true, &err);
+    waitIdle(m, static_cast<uint64_t>(PC1600Machine::kTStateHz));
+    CHECK(!m.mode1());
+}
+
 int run_pc1600_basicloader_tests() {
+    test_mode_and_title_queries();
     test_equivalence_against_typer();
     test_ce1600m_module_equivalence_and_run();
     test_reload_over_shorter_program_clears_tail_stock();

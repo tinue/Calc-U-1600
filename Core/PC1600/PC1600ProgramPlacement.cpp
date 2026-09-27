@@ -67,7 +67,7 @@ const SlotGeometry& geomForSlot(const PlacementInput& in, int slot) {
 uint16_t internalCeiling(const PlacementInput& in) {
     uint16_t vp = peekBE(in, kVarPtr);
     if (vp >= 0x4000 && vp < 0x7000) {
-        uint16_t z = static_cast<uint16_t>(vp + 0x8000);
+        uint16_t z = lh5803ToZ80(vp);
         if (z > kInternalBase && z <= kWorkAreaBase)
             return static_cast<uint16_t>(z - 1);
     }
@@ -185,7 +185,7 @@ PlacementResult buildPlacement(const PlacementInput& in, int firstIdx, int lastI
     // Segment 0's true start.
     ProgramSegment& seg0 = r.segments.front();
     if (leadingBaseFromBasPrgSt) {
-        uint32_t z = static_cast<uint32_t>(r.basPrgStValue) + 0x8000u;
+        uint32_t z = lh5803ToZ80(r.basPrgStValue);
         if (z < seg0.base || z > seg0.top)
             return fail("BASPRG_ST ($F865=" + hex(r.basPrgStValue, 4) +
                         ") lands outside the first S0 segment " + hex(seg0.base, 4) + ".." +

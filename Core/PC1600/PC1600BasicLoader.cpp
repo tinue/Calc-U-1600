@@ -174,7 +174,7 @@ BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
     // two CE-1600M banks, spilling into internal RAM): each address is the
     // LH5803-side pointer with bit 15 set, the bank byte is the one NEW0 left
     // in the start triple ($FE3E).
-    const uint16_t endLogical = static_cast<uint16_t>(endLh | 0x8000);
+    const uint16_t endLogical = pc1600::lh5803ToZ80(static_cast<uint16_t>(endLh));
     uint8_t prgEnd[3] = {static_cast<uint8_t>(endLogical & 0xFF), static_cast<uint8_t>(endLogical >> 8),
                          machine.debugPeek(kPrgAdrStartBank)};
     if (!machine.pokeMemory(kPrgAdrEnd, prgEnd, 3)) {

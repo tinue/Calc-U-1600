@@ -7,6 +7,7 @@
 #include "PC1600Display.hpp"
 #include "PC1600Keyboard.hpp"
 #include "PC1600Machine.hpp"
+#include "PC1600ProgramPlacement.hpp"
 #include "PC1600StatusLine.hpp"
 #include "PC1600TypedInput.hpp"
 
@@ -58,7 +59,7 @@ uint16_t readBE16(PC1600Machine& machine, uint16_t addr) {
 // pc1600_cli --dump-basic).
 constexpr uint16_t kProgramStartPtr = 0xF865;
 
-uint32_t toZ80(uint16_t a) { return a < 0x8000 ? a + 0x8000u : a; }
+uint32_t toZ80(uint16_t a) { return pc1600::lh5803ToZ80(a); }
 
 uint8_t peekZ80(PC1600Machine& machine, uint32_t a) {
     return machine.memory().peek(static_cast<uint16_t>(a));
