@@ -26,14 +26,19 @@
 struct PasteStep {
     std::string key;         // key name in the machine's vocabulary
     bool needsShift = false; // tap SHIFT (a one-shot latch) first
+    bool needsKbii = false;  // PC-1600: wrap in KBII taps (latch on, off again)
 };
 
 using TypedCharResolver = bool (*)(char c, std::string* baseKey, bool* needsShift);
+/// Resolves a non-ASCII character to a KBII key (pc1600ResolveTypedKbiiChar).
+using KbiiCharResolver = bool (*)(char32_t cp, std::string* baseKey, bool* needsShift);
 
-/// Turns pasted text into steps. Only the text before the first line break
-/// (CR or LF) is used; control characters, non-ASCII bytes and characters
-/// `resolve` has no key for are skipped.
-std::vector<PasteStep> buildPasteSteps(const std::string& text, TypedCharResolver resolve);
+/// Turns pasted (UTF-8) text into steps. Only the text before the first
+/// line break (CR or LF) is used; control characters, characters `resolve`
+/// has no key for, and non-ASCII characters `resolveKbii` has no key for
+/// (all of them without one) are skipped.
+std::vector<PasteStep> buildPasteSteps(const std::string& text, TypedCharResolver resolve,
+                                       KbiiCharResolver resolveKbii = nullptr);
 
 /// Per-model cadence, all in emulated 60 Hz frames.
 struct PastePacing {
@@ -75,8 +80,9 @@ private:
     struct Action {
         enum class Kind { Tap, Wait };
         Kind kind = Kind::Wait;
-        std::string key; // Tap
-        int frames = 0;  // Wait
+        std::string key;          // Tap
+        int frames = 0;           // Wait
+        bool closesKbii = false;  // the KBII tap that un-latches a sequence's KBII
     };
     enum class TapPhase { Hold, Gap };
 
@@ -89,4 +95,5 @@ private:
     Action m_current;
     TapPhase m_tapPhase = TapPhase::Hold;
     int m_framesLeft = 0;
+    bool m_kbiiLatched = false; // an opening KBII tap has been typed, its closing one not yet
 };

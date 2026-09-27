@@ -4,6 +4,7 @@
 #include <sstream>
 
 #include "../Basic/BasicLineStoreCheck.hpp"
+#include "../Utf8.hpp"
 #include "PC1600Display.hpp"
 #include "PC1600Keyboard.hpp"
 #include "PC1600Machine.hpp"
@@ -30,6 +31,14 @@ constexpr int kIdleFrames = 4;
 // to notice and latch it, then tap the base key (which consumes the
 // latch). ~100 ms, the gap interactive shifted keys have always used.
 constexpr int kShiftGapFrames = 6;
+
+// Characters in a UTF-8 line (what the editor sees: one per character).
+int codePointCount(const std::string& line) {
+    int n = 0;
+    for (char c : line)
+        if ((static_cast<unsigned char>(c) & 0xC0) != 0x80) n++;
+    return n;
+}
 
 // Settle after a line's ENTER, from typeLine() -- a short interval (poll
 // BUSY briefly in case a `type:` line ran real BASIC, then a fixed floor).
@@ -228,12 +237,24 @@ bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, 
     // of this line would otherwise land unseen. No-op without a plotter.
     waitForKeyboardScanLoop(machine);
 
-    for (char c : line) {
+    for (std::size_t i = 0; i < line.size();) {
+        const std::size_t at = i;
+        char32_t cp = 0;
+        const bool decoded = decodeUtf8(line, i, cp);
         std::string name;
         bool needsShift = false;
-        if (!pc1600ResolveTypedChar(c, &name, &needsShift)) {
-            if (error) *error = "no PC-1600 key for character '" + std::string(1, c) + "'";
+        const bool kbii = decoded && cp >= 0x80;
+        const bool resolved = decoded && (kbii ? pc1600ResolveKbiiChar(cp, /*foldCase=*/false, &name, &needsShift)
+                                               : pc1600ResolveTypedChar(static_cast<char>(cp), &name, &needsShift));
+        if (!resolved) {
+            if (error) *error = "no PC-1600 key for character '" + line.substr(at, i - at) + "'";
             return false;
+        }
+        if (kbii) {
+            // KBII latches until tapped again; each accented character is
+            // its own KBII-on ... KBII-off sequence (see PC1600TypedInput.hpp).
+            tapKey(machine, "kbii");
+            machine.runCycles(kFrameTStates * kShiftGapFrames);
         }
         if (needsShift) {
             // SHIFT tapped (not held) immediately before the base key; the
@@ -244,6 +265,10 @@ bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, 
             machine.runCycles(kFrameTStates * kShiftGapFrames);
         }
         tapKey(machine, name);
+        if (kbii) {
+            tapKey(machine, "kbii");
+            machine.runCycles(kFrameTStates * kShiftGapFrames);
+        }
     }
     if (pressEnter) {
         tapKey(machine, "enter");
@@ -269,7 +294,7 @@ BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& 
 
         // An over-length line would be truncated by the editor and stored
         // wrong -- reject it up front rather than type a mangled line.
-        if (static_cast<int>(line.size()) > kMaxBasicLineLength) {
+        if (codePointCount(line) > kMaxBasicLineLength) {
             result.rejectedLines.push_back(line);
             continue;
         }

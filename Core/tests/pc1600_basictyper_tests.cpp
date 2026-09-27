@@ -164,9 +164,60 @@ void test_typeline_caret_reaches_input_buffer() {
     CHECK(buf.find("X^Y") != std::string::npos);
 }
 
+std::string inputBuffer(PC1600Machine& m) {
+    std::string buf;
+    for (uint16_t a = 0xFBB0; a <= 0xFBFF; ++a) buf.push_back(static_cast<char>(m.memory().read(a)));
+    return buf;
+}
+
+// ROM-gated: accented characters (UTF-8) are typed through the ROM's KBII
+// tables, case-exact: `é` is KBII SHIFT S (82H), `É` KBII S (90H), `Ë`
+// (no uppercase in the ROM) falls back to ë (89H), and `û` / `«` exist only
+// as SHIFT+KBII (96H / AEH). Plain letters keep their case around them, and
+// KBII (RAM F3C6H bit 7) is off again afterwards.
+void test_typeline_kbii_chars_reach_input_buffer() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_typeline_kbii_chars_reach_input_buffer: PC-1600 ROM images not found\n");
+        return;
+    }
+    std::string err;
+    CHECK(typeLine(m, "m\xC3\xA9rci\xC3\x84\xC3\xA4\xC3\x8B\xC3\xBB\xC3\x9C\xC2\xAB\xC3\x89", /*pressEnter=*/true, &err));
+    CHECK(err.empty());
+    CHECK(inputBuffer(m).find("m\x82rci\x8E\x84\x89\x96\x9A\xAE\x90") != std::string::npos);
+    CHECK((m.memory().peek(0xF3C6) & 0x80) == 0);
+}
+
+// ROM-gated: SML doesn't change a KBII character (KEYCONV tests KBII
+// before the SML/caps bit), so a locked SML still gives the same codes.
+void test_typeline_kbii_chars_ignore_sml() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_typeline_kbii_chars_ignore_sml: PC-1600 ROM images not found\n");
+        return;
+    }
+    tapKey(m, "sml");
+    m.runCycles(PC1600Machine::kTStateHz / 4);
+    std::string err;
+    CHECK(typeLine(m, "\xC3\x84\xC3\xA4\xC3\xBB", /*pressEnter=*/true, &err));
+    CHECK(inputBuffer(m).find("\x8E\x84\x96") != std::string::npos);
+}
+
+// No ROM needed: a character without a key (not in the KBII tables) fails
+// the line and names the character.
+void test_typeline_rejects_unknown_non_ascii() {
+    PC1600Machine m;
+    std::string err;
+    CHECK(!typeLine(m, "Gr\xC3\x9F" "e", /*pressEnter=*/true, &err));
+    CHECK(err.find("\xC3\x9F") != std::string::npos);
+}
+
 } // namespace
 
 int run_pc1600_basictyper_tests() {
+    test_typeline_kbii_chars_reach_input_buffer();
+    test_typeline_kbii_chars_ignore_sml();
+    test_typeline_rejects_unknown_non_ascii();
     test_typeline_rejects_untypeable_char();
     test_typeline_accepts_caret();
     test_typeline_caret_reaches_input_buffer();

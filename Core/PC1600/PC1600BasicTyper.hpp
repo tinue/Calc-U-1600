@@ -45,8 +45,12 @@ class PC1600Machine;
 // (tap, don't hold; the next key consumes it), the same mechanism the
 // digit-row second legends and the shared punctuation table use. This is
 // NOT the SML lock (a separate persistent lowercase/kana toggle).
+// Accented characters (UTF-8) are case-sensitive too: each is typed as
+// KBII, [SHIFT,] key, KBII from the ROM's KBII tables, so `é` gives é and
+// `É` gives É (PC1600TypedInput.hpp).
 
-/// The longest source line typeBasicProgramText() will send. A longer line
+/// The longest source line typeBasicProgramText() will send, in characters
+/// (not UTF-8 bytes). A longer line
 /// is collected as rejected without typing it (the editor would truncate
 /// and store it wrong). 79 matches the classic Sharp BASIC editor limit;
 /// pending a hardware-confirmed PC-1600 figure it is deliberately
@@ -95,8 +99,9 @@ void waitForKeyboardScanLoop(PC1600Machine& machine);
 /// Used by the preset loader and by the GUI's Reset.
 void runBootToPrompt(PC1600Machine& machine);
 
-/// Types `line` character by character (a lowercase letter and the
-/// shifted punctuation / digit-row symbols each get a SHIFT-tap first),
+/// Types the UTF-8 `line` character by character (a lowercase letter and the
+/// shifted punctuation / digit-row symbols each get a SHIFT-tap first, an
+/// accented character a KBII sequence),
 /// optionally tapping ENTER afterward, then a short settle. Returns false
 /// only for a character with no PC-1600 key (`error` names it).
 bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, std::string* error);
