@@ -63,19 +63,18 @@ void KeyPasteFeeder::append(const std::vector<PasteStep>& steps) {
     }
 }
 
-void KeyPasteFeeder::cancel(const KeyFn& release) {
+void KeyPasteFeeder::cancel(const KeyFn& release, bool finishKbii) {
     const bool holdingOpeningKbii = m_hasCurrent && m_current.kind == Action::Kind::Tap &&
                                     m_current.key == "kbii" && !m_current.closesKbii &&
                                     m_tapPhase == TapPhase::Hold;
-    if (release && (m_kbiiLatched || holdingOpeningKbii)) {
+    if (finishKbii && (m_kbiiLatched || holdingOpeningKbii)) {
         // Stopped inside an accented character. Finish its KBII sequence:
         // an opening KBII tap still held runs to the end (a cut-short tap
         // may or may not have been scanned), then only the closing tap
         // follows, so the next key typed isn't turned into an accented one.
-        // (No `release` = the machine is going away: nothing to finish.)
         m_queue.clear();
         if (!holdingOpeningKbii) {
-            if (m_hasCurrent && m_current.kind == Action::Kind::Tap && m_tapPhase == TapPhase::Hold) {
+            if (m_hasCurrent && m_current.kind == Action::Kind::Tap && m_tapPhase == TapPhase::Hold && release) {
                 release(m_current.key);
             }
             m_hasCurrent = false;

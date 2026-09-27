@@ -547,7 +547,7 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
     // out of a long one, and it keeps the two from fighting over the key
     // matrix. (Checked after resolve() so bare modifiers -- the Cmd of a
     // second Cmd-V, Cmd-Tab -- don't count.)
-    if (m_controller->pasteActive()) m_controller->cancelPaste();
+    if (m_controller->pasteActive()) m_controller->interruptPaste();
 
     // A real held press/release, tracked for the matching .up event --
     // used for any key that bypasses the live-typing queue.
@@ -557,8 +557,15 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
     };
 
     if (isPC1600) {
-        // PC-1600 keystroke buffering is out of scope for now -- this
-        // branch is unchanged.
+        // An accented character is a KBII key sequence, and a key typed
+        // while one is still running must wait behind it (KBII is still
+        // latched) -- both go through the controller's frame-paced queue.
+        // Everything else is unbuffered, as before.
+        if (resolved->needsKbii || m_controller->liveTypingActive()) {
+            m_controller->typeLiveStep(PasteStep{resolved->baseKey, resolved->needsShift, resolved->needsKbii});
+            event->accept();
+            return;
+        }
         if (resolved->needsShift) {
             // Self-contained fire-and-forget sequence -- nothing to track
             // for the matching .up event, so release skips it too.
@@ -634,8 +641,9 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event) {
         const bool tapped = m_shiftTapArmed && m_shiftTapClock.elapsed() <= kShiftTapMaxMs;
         disarmShiftTap();
         if (tapped) {
-            if (m_controller->pasteActive()) m_controller->cancelPaste();
-            m_controller->tapKey("shift");
+            if (m_controller->pasteActive()) m_controller->interruptPaste();
+            if (m_controller->liveTypingActive()) m_controller->typeLiveStep(PasteStep{"shift"});
+            else m_controller->tapKey("shift");
             event->accept();
             return;
         }

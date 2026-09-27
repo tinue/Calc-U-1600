@@ -198,9 +198,22 @@ public:
     // `line` at the same cadence, then presses ENTER -- it is meant to run
     // something. Both models. Shares the paste queue.
     void typeCommand(const std::string& line);
-    bool pasteActive() const { return m_paste.active(); }
-    // Drops the rest of the paste, releasing a key it holds down.
+    bool pasteActive() const { return m_paste.active() && !m_liveTyping; }
+    // Drops the rest of the paste, releasing a key it holds down (resets,
+    // machine swaps: nothing is finished).
     void cancelPaste();
+    // A live keystroke stops a paste: like cancelPaste(), but an accented
+    // character's KBII sequence under way is finished (its closing KBII tap
+    // stays queued, as live typing) so KBII isn't left latched.
+    void interruptPaste();
+
+    // PC-1600 live host keys that need a key *sequence*: an accented
+    // character (KBII, [SHIFT,] key, KBII), and any key typed while such a
+    // sequence is still running -- queued behind it on the paste feeder's
+    // frame-paced cadence, so a fast "für" can't press R while KBII is
+    // still latched.
+    void typeLiveStep(const PasteStep& step);
+    bool liveTypingActive() const { return m_paste.active() && m_liveTyping; }
 
     // Edit > Copy Screen: the active display's dot matrix as a physically
     // sized greyscale image (Core/Display/LcdScreenshot.hpp) -- the same
@@ -392,6 +405,7 @@ private:
     std::unique_ptr<PC1500Machine> m_pc1500;
     std::unique_ptr<PC1600Machine> m_pc1600;
     KeyPasteFeeder m_paste;
+    bool m_liveTyping = false; // m_paste holds live keystrokes (typeLiveStep()), not a paste
     std::uint64_t m_pasteFrameCycles = 0; // cycles run since the paste feeder's last frame boundary
     void runActive(std::uint64_t cycles);
     // Drops the live machine before a rebuild: ends its TRACE capture (the

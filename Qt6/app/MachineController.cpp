@@ -319,14 +319,31 @@ void MachineController::typeCommand(const std::string& line) { enqueueTyped(line
 void MachineController::enqueueTyped(const std::string& text, bool pressEnter) {
     if (!m_pc1500 && !m_pc1600) return;
     if (!m_paste.active()) m_pasteFrameCycles = 0;
-    std::vector<PasteStep> steps = buildPasteSteps(text, m_pc1600 ? pc1600ResolveTypedChar : pc1500ResolveTypedChar);
+    std::vector<PasteStep> steps =
+        m_pc1600 ? buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar)
+                 : buildPasteSteps(text, pc1500ResolveTypedChar);
     if (pressEnter) steps.push_back(PasteStep{"enter", false});
     m_paste.setPacing(m_pc1600 ? pc1600PastePacing() : pc1500PastePacing());
     m_paste.append(steps);
+    m_liveTyping = false;
+}
+
+void MachineController::typeLiveStep(const PasteStep& step) {
+    if (!m_pc1600) return;
+    if (!m_paste.active()) m_pasteFrameCycles = 0;
+    m_paste.setPacing(pc1600PastePacing());
+    m_paste.append({step});
+    m_liveTyping = true;
 }
 
 void MachineController::cancelPaste() {
     m_paste.cancel([this](const std::string& key) { releaseKey(key); });
+    m_liveTyping = false;
+}
+
+void MachineController::interruptPaste() {
+    m_paste.cancel([this](const std::string& key) { releaseKey(key); }, /*finishKbii=*/true);
+    m_liveTyping = m_paste.active(); // what's left is a KBII sequence's closing tap
 }
 
 GrayImage MachineController::currentScreenImage() const {
@@ -536,6 +553,7 @@ void MachineController::discardMachine() {
     if (m_debug) m_debug->machineAboutToChange();
     endTrace();
     m_paste.cancel({}); // the machine it was typing into is going away
+    m_liveTyping = false;
     m_pc1500.reset();
     m_pc1600.reset();
 }

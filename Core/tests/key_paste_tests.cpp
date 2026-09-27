@@ -136,7 +136,7 @@ void test_feeder_cancel_closes_kbii() {
         f.append(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar));
         Recorder r;
         for (r.frame = 0; r.frame <= 14; ++r.frame) f.onFrame(r.press(), r.release()); // Q pressed at 14, cancel at 15
-        f.cancel(r.release());
+        f.cancel(r.release(), /*finishKbii=*/true);
         for (; r.frame < 100 && f.active(); ++r.frame) f.onFrame(r.press(), r.release());
         const std::vector<std::string> expected = {"0+kbii", "4-kbii", "14+Q", "15-Q", "15+kbii", "19-kbii"};
         CHECK(r.events == expected);
@@ -148,7 +148,7 @@ void test_feeder_cancel_closes_kbii() {
         f.append(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar));
         Recorder r;
         f.onFrame(r.press(), r.release()); // kbii pressed at frame 0
-        f.cancel(r.release());
+        f.cancel(r.release(), /*finishKbii=*/true);
         for (r.frame = 1; r.frame < 100 && f.active(); ++r.frame) f.onFrame(r.press(), r.release());
         const std::vector<std::string> expected = {"0+kbii", "4-kbii", "8+kbii", "12-kbii"};
         CHECK(r.events == expected);
@@ -160,6 +160,16 @@ void test_feeder_cancel_closes_kbii() {
         f.append(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar));
         Recorder r;
         for (r.frame = 0; r.frame <= 38; ++r.frame) f.onFrame(r.press(), r.release()); // B held (36-40)
+        f.cancel(r.release(), /*finishKbii=*/true);
+        CHECK(!f.active());
+    }
+    // A reset-style cancel drops everything, KBII sequence or not.
+    {
+        KeyPasteFeeder f;
+        f.setPacing(pc1600PastePacing());
+        f.append(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar));
+        Recorder r;
+        for (r.frame = 0; r.frame <= 14; ++r.frame) f.onFrame(r.press(), r.release());
         f.cancel(r.release());
         CHECK(!f.active());
     }

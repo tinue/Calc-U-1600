@@ -1,5 +1,6 @@
 #include "PC1500KeyboardMap.hpp"
 
+#include "PC1600/PC1600TypedInput.hpp"
 #include "SharpShiftedSymbols.hpp"
 
 namespace PC1500KeyboardMap {
@@ -122,6 +123,13 @@ std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
     }
 
     if (text.size() == 1) {
+        // PC-1600 accented characters, case-folded like the letters (the
+        // host keys act as the calculator's own: é and É both give É).
+        if (isPC1600 && text.at(0).unicode() > 0x7f) {
+            ResolvedKey r;
+            r.needsKbii = pc1600ResolveKbiiChar(text.at(0).unicode(), /*foldCase=*/true, &r.baseKey, &r.needsShift);
+            if (r.needsKbii) return r;
+        }
         if (auto r = characterName(text.at(0))) return r;
         if (auto r = shiftedCharacterBaseKeyName(text.at(0))) return r;
         if (isPC1600) {

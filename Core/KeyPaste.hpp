@@ -71,7 +71,11 @@ public:
     bool active() const { return m_hasCurrent || !m_queue.empty(); }
 
     /// Drops everything still queued; releases a key currently held down.
-    void cancel(const KeyFn& release);
+    /// With `finishKbii` (a live keystroke interrupting a paste -- not a
+    /// reset, which drops everything), a KBII sequence already under way is
+    /// finished instead: an opening KBII tap still held runs to the end and
+    /// the closing tap stays queued, so KBII isn't left latched.
+    void cancel(const KeyFn& release, bool finishKbii = false);
 
     /// Call once after every emulated frame.
     void onFrame(const KeyFn& press, const KeyFn& release);

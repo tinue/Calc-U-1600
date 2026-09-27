@@ -15,6 +15,9 @@ namespace PC1500KeyboardMap {
 struct ResolvedKey {
     std::string baseKey;
     bool needsShift = false;
+    // PC-1600 only: an accented character, typed as KBII, [SHIFT,] baseKey,
+    // KBII (KBII latches; see Core/PC1600/PC1600TypedInput.hpp).
+    bool needsKbii = false;
 
     // PC-1500 only: the ROM itself auto-repeats these when held (confirmed
     // on real hardware) -- they must bypass the live-typing keystroke queue
