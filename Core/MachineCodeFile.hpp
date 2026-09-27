@@ -36,7 +36,7 @@ struct File {
     bool ok = false;               // false => `error` says why (bad/unsupported header)
     std::string error;
     uint32_t loadAddr = 0;         // header only
-    uint32_t autorunAddr = 0;      // header only; 0 = none
+    uint32_t autorunAddr = 0;      // header only; 0 = none (a header &FFFF reads as 0)
     std::vector<uint8_t> payload;  // the bytes to load (header stripped)
     /// The header's length field disagrees with the bytes that follow it.
     /// `ok` is false and `error` says so, but `loadAddr`/`autorunAddr` and

@@ -65,6 +65,15 @@ void test_zero_autorun() {
     CHECK(img.autorunAddr == 0);
 }
 
+void test_ffff_autorun_is_none() {
+    for (uint32_t none : {0xFFFFu, 0xFFFFFFu}) {
+        auto img = pc1600::parsePC1600MachineImage(
+            makeHeader(samplePayload(), /*type=*/0x10, /*load=*/0x8000, /*autorun=*/none));
+        CHECK(img.hasHeader && img.ok);
+        CHECK(img.autorunAddr == 0);
+    }
+}
+
 void test_length_not_checked_here() {
     // Claim one extra payload byte -- the parser must NOT reject this
     // (the loader compares against the real file size).
@@ -122,6 +131,7 @@ void test_headerless_blob() {
 int run_pc1600_machine_image_tests() {
     test_valid_header_fields();
     test_zero_autorun();
+    test_ffff_autorun_is_none();
     test_length_not_checked_here();
     test_bad_magic_not_a_header();
     test_basic_type_byte_not_a_machine_header();

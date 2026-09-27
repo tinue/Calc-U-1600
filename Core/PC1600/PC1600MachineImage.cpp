@@ -42,6 +42,9 @@ MachineImage parsePC1600MachineImage(const uint8_t* data, std::size_t len) {
     img.headerPayloadLen = le24(data + 0x05);
     img.loadAddr = le24(data + 0x08);
     img.autorunAddr = le24(data + 0x0B);
+    // &FFFF is the "no auto-start" default writers put there (SharpDataExchange's
+    // PC1600_NO_AUTORUN), as is the bank-qualified &FFFFFF -- same as 0.
+    if ((img.autorunAddr & 0xFFFF) == 0xFFFF) img.autorunAddr = 0;
     img.ok = true;
     return img;
 }

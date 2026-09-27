@@ -106,6 +106,7 @@ File readFile(const std::vector<uint8_t>& bytes) {
         const size_t len = static_cast<size_t>(be16(bytes, 0x17)) + 1;
         f.loadAddr = be16(bytes, 0x15);
         f.autorunAddr = be16(bytes, 0x19);
+        if (f.autorunAddr == 0xFFFF) f.autorunAddr = 0;  // &FFFF = no auto-start, same as 0
         f.payload.assign(bytes.begin() + kCe158HeaderSize, bytes.end());
         if (len != f.payload.size()) {
             char b[160];

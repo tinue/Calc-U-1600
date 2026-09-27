@@ -15,7 +15,7 @@
 //   0x04        type    0x10 = MACHINE   (0x21 = tokenized BASIC)
 //   0x05..0x07  payload length, little-endian, direct byte count
 //   0x08..0x0A  load start address, little-endian     (Z-80 / SC7852 view)
-//   0x0B..0x0D  auto-run address, little-endian, 0 = none   (ditto)
+//   0x0B..0x0D  auto-run address, little-endian, 0 or FFFF = none   (ditto)
 //   0x0E..0x0F  end marker  00 0F   (SharpDataExchange `convert` emits 00 F0)
 //
 // Addresses are Z-80-native -- BASIC's `CALL [#<bank>,]<address>` and
@@ -42,7 +42,7 @@ struct MachineImage {
     // malformed (bad end marker) and `error` says how.
     bool        ok = false;
     uint32_t    loadAddr = 0;          // 0x08..0x0A
-    uint32_t    autorunAddr = 0;       // 0x0B..0x0D, 0 = none
+    uint32_t    autorunAddr = 0;       // 0x0B..0x0D, 0 = none (a header FFFF reads as 0)
     uint32_t    headerPayloadLen = 0;  // 0x05..0x07
     std::size_t headerSize = 0;        // 16 when hasHeader, else 0
     std::string error;

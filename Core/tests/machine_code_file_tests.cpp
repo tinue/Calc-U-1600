@@ -77,6 +77,12 @@ void test_read_ce158() {
     CHECK(f.payload == kCode);
 }
 
+void test_read_ffff_autorun_is_none() {
+    // &FFFF is the header's "no auto-start" default -- no XCALL/CALL advice.
+    CHECK(machinecode::readFile(ce158File(kCode, 0x40C5, 0xFFFF)).autorunAddr == 0);
+    CHECK(machinecode::readFile(pc1600File(kCode, 0xC0C5, 0xFFFF)).autorunAddr == 0);
+}
+
 void test_read_ce158_length_mismatch() {
     auto bytes = ce158File(kCode, 0x40C5, 0);
     bytes.push_back(0xAA);  // one byte more than the header's (length - 1) + 1
@@ -454,6 +460,7 @@ void test_pc1600_basic_areas() {
 
 int run_machine_code_file_tests() {
     test_read_ce158();
+    test_read_ffff_autorun_is_none();
     test_read_ce158_length_mismatch();
     test_read_ce158_basic_type_rejected();
     test_read_pc1600();
