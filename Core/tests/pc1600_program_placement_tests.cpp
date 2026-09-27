@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <map>
 
+#include "../Debug/BasicPointerTable.hpp"
 #include "../PC1600/PC1600ProgramPlacement.hpp"
 
 namespace {
@@ -270,9 +271,35 @@ void test_tiny_module_window_rejected() {
     CHECK(r.error.find("too small") != std::string::npos);
 }
 
+// The Debug panel's MEM / STATUS 259 figures, checked against a real unit:
+// CE-1600M in slot 1 after INIT"S1:","P" -- MEM 10810, STATUS 259 32571.
+void test_debug_program_areas_match_rom() {
+    FakeMem m;
+    m.set(0xF1D5, 0x01);            // TITLE "S1:"
+    m.set(0xF02B, 0x05);
+    m.set(0xF02C, 0x05);
+    m.set(0xF864, 0x6B);            // RAM_END page
+    m.setBE(0xF867, 0x40C5);        // empty S0 program (Z-80 C0C5)
+    // S1 descriptor: base 80H, ADTBL 1..2, limit C000H in the second bank,
+    // start = end = 80C5H (empty).
+    const uint8_t s1[10] = {0x80, 0x01, 0xC0, 0x02, 0xC5, 0x80, 0x01, 0xC5, 0x80, 0x01};
+    for (int i = 0; i < 10; ++i) m.set(static_cast<uint16_t>(0xF015 + i), s1[i]);
+    m.set(0xF020, 0xFF);            // S2: no program module
+    CoreDebug::PC1600ProgramAreas a =
+        CoreDebug::readPC1600ProgramAreas([&m](uint16_t addr) { return m.peek(addr); });
+    CHECK(a.title == 1);
+    CHECK(a.memS0 == 10810);
+    CHECK(a.slot[0].programModule);
+    CHECK(a.slot[0].freeBytes == 32571);
+    CHECK(!a.slot[1].programModule);
+    CHECK(CoreDebug::pc1600PointerToZ80(0x40C5) == 0xC0C5);
+    CHECK(CoreDebug::pc1600PointerToZ80(0x6B00) == 0xEB00);
+}
+
 }  // namespace
 
 int run_pc1600_program_placement_tests() {
+    test_debug_program_areas_match_rom();
     test_stock_single_internal_segment();
     test_ce1600m_slot1_extension_memory();
     test_trm_example1_scatter_and_straddle();

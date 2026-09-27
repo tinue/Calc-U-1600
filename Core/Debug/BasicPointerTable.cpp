@@ -39,19 +39,22 @@ const int kPC1500BasicPointerMaxNameLength = 11;  // "TRACE_PARAM" / "STK_FOR_GS
 using V = PC1600PointerEntry::Value;
 
 // PC-1600 BASIC/system-variable pointer table, used by the debug panel's
-// "Dump Pointers" view.
+// "Dump Pointers" view. The BASIC pointers are the PC-1500's at F800H+ and
+// describe the S0 area only (the S1/S2 program modules keep theirs in the
+// slot descriptors, see readPC1600ProgramAreas()).
 const PC1600PointerEntry kPC1600Pointers[] = {
-    {"BASPRG_ST",    0xF865, V::WordBE, "BASIC program start (\xE2\x89\x88 C0C5)"},
-    {"BASPRG_END",   0xF867, V::WordBE, "BASIC program end \xE2\x80\x94 advances in PRO mode; MEM basis"},
-    {"BASPRG_EDT",   0xF869, V::WordBE, "Editor line-edit pointer"},
-    {"CURRENT_TOP",  0xF89E, V::WordBE, "Start addr of current line's block (= program start)"},
+    {"BASPRG_ST",    0xF865, V::AddrBE, "S0 program start (bank F02BH)"},
+    {"BASPRG_END",   0xF867, V::AddrBE, "S0 program end, the FFH mark (bank F02CH)"},
+    {"BASPRG_EDT",   0xF869, V::AddrBE, "Edit / merge head"},
+    {"RAM_END",      0xF864, V::Byte,   "Page of the S0 user-area top (MEM, VARIABLE_PTR reset)"},
+    {"VARIABLE_PTR", 0xF899, V::AddrBE, "Start of the variables (they grow down)"},
+    {"CURRENT_TOP",  0xF89E, V::AddrBE, "Start of the current line's block (bank F1C1H)"},
     {"CURRENT_LINE", 0xF89C, V::WordBE, "Current program line number"},
-    {"VARIABLE_PTR", 0xF899, V::WordBE, "Pointer to variables"},
     {"SEARCH_LINE",  0xF8A8, V::WordBE, "Line after SEARCH hit / last-entered line"},
     {"ERL",          0xF89B, V::Byte,   "Last error number"},
-    {"BREAK_ADDR",   0xF8AC, V::WordBE, "Address of last BREAK"},
-    {"ERROR_ADDR",   0xF8B2, V::WordBE, "Address of last error"},
-    {"ON_ERR_ADDR",  0xF8B8, V::WordBE, "ON ERROR GOTO handler address"},
+    {"BREAK_ADDR",   0xF8AC, V::AddrBE, "Address of last BREAK"},
+    {"ERROR_ADDR",   0xF8B2, V::AddrBE, "Address of last error"},
+    {"ON_ERR_ADDR",  0xF8B8, V::AddrBE, "ON ERROR GOTO target (stored bit 15 set: off)"},
     {"FBNO",         0xF02D, V::Byte,   "MAXFILES value"},
     {"FBBP",         0xF04C, V::WordLE, "Communication-buffer start"},
     {"FCBPTR",       0xF04E, V::WordLE, "FCB / file-buffer start"},
@@ -62,7 +65,36 @@ const PC1600PointerEntry kPC1600Pointers[] = {
     {"KEYWK1",       0xF079, V::Byte,   "key work 1 (click / repeat flags)"},
 };
 const int kPC1600PointerCount = sizeof(kPC1600Pointers) / sizeof(kPC1600Pointers[0]);
-const int kPC1600BasPrgEndIndex = 1;  // "BASPRG_END"
 const int kPC1600PointerMaxNameLength = 12;  // "CURRENT_LINE" / "VARIABLE_PTR"
+
+PC1600ProgramAreas readPC1600ProgramAreas(const std::function<uint8_t(uint16_t)>& peek) {
+    PC1600ProgramAreas a;
+    a.title = peek(0xF1D5);
+    a.startIndex = peek(0xF02B);
+    a.endIndex = peek(0xF02C);
+    a.ramEndPage = peek(0xF864);
+    // MEM (LH5803 $CC30): RAM_END:00 - (BASPRG_END + 1) + (5 - F02CH) * 4000H,
+    // all in the stored (LH5803-view) representation.
+    const int s0End = (peek(0xF867) << 8) | peek(0xF868);
+    a.memS0 = (a.ramEndPage << 8) - (s0End + 1) + (5 - a.endIndex) * 0x4000;
+    // Slot descriptors F015H / F01FH (10 bytes, see PC-1600-Work-Area-Map.md §4.5).
+    for (int i = 0; i < 2; ++i) {
+        const uint16_t d = i == 0 ? 0xF015 : 0xF01F;
+        PC1600SlotProgramArea& s = a.slot[i];
+        s.basePage = peek(d);
+        s.mtb = peek(d + 1);
+        s.limitPage = peek(d + 2);
+        s.limitIndex = peek(d + 3);
+        s.start = static_cast<uint16_t>(peek(d + 4) | (peek(d + 5) << 8));
+        s.startIndex = peek(d + 6);
+        s.end = static_cast<uint16_t>(peek(d + 7) | (peek(d + 8) << 8));
+        s.endIndex = peek(d + 9);
+        s.programModule = (s.mtb & 0x80) == 0;
+        // STATUS 259 / 260 (LH5803 $CE41): limit:00 - end + (SxMBb - end bank) * 4000H.
+        if (s.programModule)
+            s.freeBytes = (s.limitPage << 8) - s.end + (s.limitIndex - s.endIndex) * 0x4000;
+    }
+    return a;
+}
 
 }  // namespace CoreDebug
