@@ -177,15 +177,13 @@ struct PresetProgram {
     uint16_t address = 0; // Binary only -- load address (overrides the file header's)
     std::string text;   // BasicText only -- the program source, one statement per line
 
-    // `format: binary` only. `slot` is required for a PC-1600
-    // machine-language block (and rejected on a PC-1500); `S0` = internal
-    // RAM ($C000-$FFFF), `S1`/`S2` = the two 40-pin memory slots
-    // ($8000-$BFFF window). `length` (bytes) overrides the header's length
+    // `format: binary` only. `length` (bytes) overrides the header's length
     // field, or the whole-file length of a headerless file. `hasAddress` /
-    // `hasLength` / `hasSlot` record whether the field was present in the
-    // preset (0 / S0 are legal explicit values).
-    machinecode::Slot slot = machinecode::Slot::S0;
-    bool hasSlot = false;
+    // `hasLength` record whether the field was present in the preset (0 is
+    // a legal explicit value). There is no target slot: on the PC-1600 the
+    // loader places code by MODE, TITLE and the address, as for Load Machine
+    // Code (docs/Loader-Mode-Plan.md); `address:` is an LH5803 address in
+    // MODE 1.
     uint32_t length = 0;
     bool hasAddress = false;
     bool hasLength = false;

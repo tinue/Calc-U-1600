@@ -39,19 +39,19 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
     }
 
     // Build & Load's rules: a header length mismatch still loads, the
-    // request's address and slot override, LH5803 code goes to the Z-80's
-    // 8000-FFFF, and a PC-1600 slot is otherwise the BASIC area's (internal
-    // RAM always).
+    // request's address overrides, the CPU is the one the launch
+    // configuration names (the toolchain knows it -- the one caller that
+    // does), LH5803 code goes to the Z-80's 8000-FFFF, and the PC-1600
+    // target follows the machine's MODE and TITLE like every other load.
     machinecode::LoadOptions options;
     options.target = pc1600 ? machinecode::Target::PC1600 : machinecode::Target::PC1500;
     options.acceptLengthMismatch = true;
     options.hasAddress = hasAddress;
     options.address = address;
-    options.lh5803 = pc1600 && req.thread == 2;
-    if (req.slot >= 0) options.slot = machinecode::Slot(req.slot);
-    else options.slotPolicy = machinecode::SlotPolicy::DeriveOrInternal;
-    const std::vector<machinecode::BasicArea> areas = pc1600 ? pc1600BasicAreas(*pc1600) : std::vector<machinecode::BasicArea>{};
-    const machinecode::LoadPlan plan = machinecode::planLoad(file, options, areas);
+    options.hasCpu = pc1600;
+    options.cpu = req.thread == 2 ? machinecode::Cpu::LH5803 : machinecode::Cpu::Z80;
+    const machinecode::PC1600State state = pc1600 ? pc1600LoadState(*pc1600) : machinecode::PC1600State{};
+    const machinecode::LoadPlan plan = machinecode::planLoad(file, options, state);
     switch (plan.error) {
         case machinecode::LoadError::None: break;
         case machinecode::LoadError::Empty: r.error = req.bin + " is empty"; return r;
@@ -111,7 +111,9 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
     } else {
         // advice() starts at r.entry (the `entry` override, the header's
         // auto-run address, or the load address) and adds slot 2's bank.
-        r.callCommand = machinecode::advice(options.target, plan.slot, plan.busAddr, plan.len, r.entry, ramStart, ramEnd, areas).callCommand;
+        r.callCommand = machinecode::advice(options.target, plan.slot, plan.busAddr, plan.len, r.entry, ramStart, ramEnd,
+                                            state, machinecode::Cpu::Z80)
+                            .callCommand;
     }
 
     // The listing and symbols bind to the loaded range; symbols alone too.

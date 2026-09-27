@@ -144,7 +144,10 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
 // (PC-1500) or PC-1600 header (machinecode::readFile()) giving the load
 // address, length and an auto-run address; the preset's `address:` /
 // `length:` override the header's fields, and a headerless file needs
-// `address:` (its length defaults to the whole file). A non-zero auto-run
+// `address:` (its length defaults to the whole file). On the PC-1600 the
+// machine's MODE and TITLE decide the CPU and the target, as for Load
+// Machine Code (in MODE 1 a headerless file's `address:` is an LH5803
+// address); the preset switches MODE / TITLE itself. A non-zero auto-run
 // address makes the loader type `CALL &<addr>` afterwards and wait for the
 // interpreter to come back -- the machine must be in RUN mode by then.
 bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, const std::string& tag,
@@ -163,8 +166,9 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
 
     const machinecode::File file = machinecode::readFile(bytes);
     // A preset's rules: `address:` / `length:` override the header (a
-    // `length:` also accepts a header whose length disagrees), the slot is
-    // the preset's, and the machine's writer checks the range.
+    // `length:` also accepts a header whose length disagrees), the target
+    // follows the machine's MODE / TITLE, and the writer checks the range.
+    const machinecode::PC1600State state = machine.codeState();
     machinecode::LoadOptions options;
     options.target = machine.codeTarget();
     options.acceptLengthMismatch = program.hasLength;
@@ -173,8 +177,7 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
     options.hasLength = program.hasLength;
     options.length = program.length;
     options.checkRange = false;
-    options.slot = program.slot;
-    const machinecode::LoadPlan plan = machinecode::planLoad(file, options, {});
+    const machinecode::LoadPlan plan = machinecode::planLoad(file, options, state);
     switch (plan.error) {
         case machinecode::LoadError::None: break;
         case machinecode::LoadError::BadFile:
@@ -191,7 +194,10 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
             *error = tag + "'length' " + std::to_string(program.length) + " exceeds the " +
                      std::to_string(file.payload.size()) + " program bytes available in " + program.path;
             return false;
-        default: // HeaderMismatch
+        case machinecode::LoadError::LhRange:
+            *error = tag + program.path + ": LH5803 code must sit in &0000-&7FFF";
+            return false;
+        default: // HeaderMismatch, NoSlot, WorkArea
             *error = tag + program.path + ": " + plan.detail;
             return false;
     }
@@ -199,12 +205,15 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
     const uint32_t addr = plan.addr;
     const size_t len = plan.len;
     std::string loadError;
-    if (!machine.loadMachineCode(program, addr, file.payload.data(), len, &loadError)) {
+    if (!machine.loadMachineCode(plan.slot, plan.busAddr, file.payload.data(), len, &loadError)) {
         *error = tag + "binary " + program.path + ": " + loadError;
         return false;
     }
     if (log) {
-        const std::string slot = program.hasSlot ? std::string(", slot ") + machinecode::slotName(program.slot) : "";
+        const bool pc1600 = machine.codeTarget() == machinecode::Target::PC1600;
+        const std::string slot = pc1600 ? std::string(", ") + machinecode::slotName(plan.slot) +
+                                              (plan.cpu == machinecode::Cpu::LH5803 ? ", LH5803 address" : "")
+                                        : "";
         char range[40];
         std::snprintf(range, sizeof(range), "$%04X..$%04X", addr, static_cast<uint32_t>(addr + len - 1));
         log(tag + "binary " + program.path + " (" + std::to_string(len) + " bytes" + (hasHeader ? ", header" : "") +
@@ -222,9 +231,10 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
             return false;
         }
         // The same CALL Load Machine Code proposes: `CALL #2,&<addr>` for
-        // code in slot 2 (global bank 2), `CALL &<addr>` otherwise.
-        const std::string line = machinecode::advice(machine.codeTarget(), program.slot, addr, len,
-                                                     file.autorunAddr, 0, 0, {})
+        // code in slot 2 (global bank 2), `XCALL` for LH5801 code, `CALL
+        // &<addr>` otherwise.
+        const std::string line = machinecode::advice(machine.codeTarget(), plan.slot, addr, len,
+                                                     file.autorunAddr, 0, 0, state, plan.cpu)
                                      .callCommand;
         std::string typeError;
         if (!machine.typeLine(line, &typeError)) {

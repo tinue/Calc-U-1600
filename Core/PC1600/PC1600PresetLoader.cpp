@@ -129,13 +129,14 @@ public:
     }
 
     machinecode::Target codeTarget() const override { return machinecode::Target::PC1600; }
-    // Linear, into exactly the one slot the preset names: S0 = internal RAM
-    // ($C000-$FFFF), S1/S2 = the $8000-$BFFF memory-slot window. Straight
-    // into the backing store, so the current bank state doesn't matter and
-    // no ADTBL scatter applies (unlike the BASIC fast loader).
-    bool loadMachineCode(const PresetProgram& program, uint32_t addr, const uint8_t* data, size_t len,
+    machinecode::PC1600State codeState() override { return pc1600LoadState(m_machine); }
+    // Linear, into the slot planLoad() derived from MODE, TITLE and the
+    // address: S0 = internal RAM ($C000-$FFFF), S1/S2 = the $8000-$BFFF
+    // memory-slot window. Straight into the backing store, so the current
+    // bank state doesn't matter.
+    bool loadMachineCode(machinecode::Slot slot, uint32_t busAddr, const uint8_t* data, size_t len,
                          std::string* error) override {
-        return loadPC1600MachineCode(m_machine, static_cast<int>(program.slot), addr, data, len, error);
+        return loadPC1600MachineCode(m_machine, static_cast<int>(slot), busAddr, data, len, error);
     }
 };
 

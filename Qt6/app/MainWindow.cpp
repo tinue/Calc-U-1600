@@ -342,11 +342,11 @@ void MainWindow::loadMachineCode() {
 
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     const machinecode::Target target = isPC1600 ? machinecode::Target::PC1600 : machinecode::Target::PC1500;
-    // PC-1600 code always goes into BASIC's program area ("S0"); where that
-    // starts (internal RAM or a folded-in RAM module) decides the target.
-    std::vector<machinecode::BasicArea> basicAreas;
-    if (isPC1600 && m_controller->pc1600()) basicAreas = pc1600BasicAreas(*m_controller->pc1600());
-    const machinecode::Plan plan = machinecode::plan(target, code, basicAreas);
+    // On the PC-1600 the machine's MODE and TITLE decide the address space
+    // and the target (docs/Loader-Mode-Plan.md); the loader never changes them.
+    machinecode::PC1600State state;
+    if (isPC1600 && m_controller->pc1600()) state = pc1600LoadState(*m_controller->pc1600());
+    const machinecode::Plan plan = machinecode::plan(target, code, state);
     if (!plan.error.empty()) {
         QMessageBox::warning(this, title, QString::fromStdString(plan.error));
         return;
@@ -354,12 +354,14 @@ void MainWindow::loadMachineCode() {
 
     PresetController::MachineCodeLoadRequest request;
     request.payload = code.payload;
-    request.addr = code.loadAddr;
+    uint32_t addr = code.loadAddr;  // in the code's CPU's address space
+    request.addr = plan.busAddr;
     machinecode::Slot slot = plan.slot;
     if (plan.needsAddress) {
-        MachineCodeLoadDialog dialog(this, target, code.payload.size(), plan.defaultAddr, basicAreas);
+        MachineCodeLoadDialog dialog(this, target, code.payload.size(), plan.defaultAddr, state, plan.cpu);
         if (dialog.exec() != QDialog::Accepted) return;
-        request.addr = dialog.address();
+        addr = dialog.address();
+        request.addr = dialog.busAddress();
         slot = dialog.slot();
     }
     request.slot = static_cast<int>(slot);
@@ -381,11 +383,14 @@ void MainWindow::loadMachineCode() {
     }
     const size_t len = request.payload.size();
     const machinecode::Advice advice =
-        machinecode::advice(target, slot, request.addr, len, code.autorunAddr, ramStart, ramEnd, basicAreas);
+        machinecode::advice(target, slot, addr, len, code.autorunAddr, ramStart, ramEnd, state, plan.cpu);
 
     auto hex = [](uint32_t v) { return QStringLiteral("&") + QString::number(v, 16).toUpper(); };
-    QString where = tr("Loaded %1 bytes at %2–%3").arg(len).arg(hex(request.addr), hex(request.addr + len - 1));
-    if (isPC1600) where += tr(" (%1)").arg(QString::fromLatin1(machinecode::slotName(slot)));
+    QString where = tr("Loaded %1 bytes at %2–%3").arg(len).arg(hex(addr), hex(addr + len - 1));
+    if (isPC1600 && plan.cpu == machinecode::Cpu::LH5803)
+        where += tr(" (LH5803 addresses; Z-80 %1, %2)").arg(hex(request.addr), QString::fromLatin1(machinecode::slotName(slot)));
+    else if (isPC1600)
+        where += tr(" (%1)").arg(QString::fromLatin1(machinecode::slotName(slot)));
     QString html = QStringLiteral("<p>%1.</p>").arg(where.toHtmlEscaped());
     html += QStringLiteral("<p>%1<br>").arg(tr("Keep BASIC from overwriting it:").toHtmlEscaped());
     if (!advice.newCommand.empty())

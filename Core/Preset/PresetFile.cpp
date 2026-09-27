@@ -362,7 +362,7 @@ bool parseProgramBlock(const std::vector<RawLine>& lines, size_t& idx, const std
     int blockIndent = lines[idx].indent;
     PresetProgram prog;
     std::string formatStr = "binary";
-    bool hasPath = false, hasAddress = false, hasText = false, hasSlot = false, hasLength = false;
+    bool hasPath = false, hasAddress = false, hasText = false, hasLength = false;
 
     while (idx < lines.size() && lines[idx].indent == blockIndent) {
         const RawLine& line = lines[idx];
@@ -392,18 +392,11 @@ bool parseProgramBlock(const std::vector<RawLine>& lines, size_t& idx, const std
             hasAddress = true;
             prog.hasAddress = true;
         } else if (key == "slot") {
-            if (!hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'slot' requires a value"; return false; }
-            std::string v = value;
-            lowerAscii(v);
-            if (v == "s0") prog.slot = machinecode::Slot::S0;
-            else if (v == "s1") prog.slot = machinecode::Slot::S1;
-            else if (v == "s2") prog.slot = machinecode::Slot::S2;
-            else {
-                *error = "line " + std::to_string(line.lineNo) + ": 'slot' must be S0, S1, or S2";
-                return false;
-            }
-            hasSlot = true;
-            prog.hasSlot = true;
+            *error = "line " + std::to_string(line.lineNo) +
+                     ": 'slot:' was removed -- the loader places code by the machine's MODE, the program area "
+                     "TITLE selects, and the address. Switch MODE / TITLE in a 'keys:' section before the "
+                     "program if needed.";
+            return false;
         } else if (key == "length") {
             if (!hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'length' requires a value"; return false; }
             bool bad = value.empty();
@@ -452,12 +445,11 @@ bool parseProgramBlock(const std::vector<RawLine>& lines, size_t& idx, const std
         }
     }
 
-    // `slot:` / `length:` belong to a machine-language block only -- reject
-    // them for the BASIC formats up front, before any per-format work
-    // (e.g. opening the `path:` file) can mask the message.
-    if (formatStr != "binary" && (hasSlot || hasLength)) {
-        *error = std::string("'") + (hasSlot ? "slot" : "length") +
-                 "' is only valid with 'format: binary'";
+    // `length:` belongs to a machine-language block only -- reject it for
+    // the BASIC formats up front, before any per-format work (e.g. opening
+    // the `path:` file) can mask the message.
+    if (formatStr != "binary" && hasLength) {
+        *error = "'length' is only valid with 'format: binary'";
         return false;
     }
 
@@ -688,21 +680,6 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             *error = "use 'memory-expansion-1:' / 'memory-expansion-2:' for a PC-1600 preset, not 'memory-expansion:'";
             return false;
         }
-        for (const PresetSection& s : out->sections) {
-            // `format: basic-text` (typed through the line editor),
-            // `format: basic-binary` (a tokenized transfer file / a `.bas`
-            // listing tokenized on load) and `format: binary` (a machine-
-            // language block loaded linearly into one slot -- see
-            // PC1600PresetLoader.cpp) are all supported. A `binary` block
-            // must name its target slot.
-            if (s.kind == PresetSection::Kind::Program &&
-                s.program.format == PresetProgram::Format::Binary &&
-                !s.program.hasSlot) {
-                *error = "'program: format: binary' requires 'slot: S0|S1|S2' for a PC-1600 preset "
-                         "(S0 = internal RAM, S1/S2 = the memory slots)";
-                return false;
-            }
-        }
         out->plotter = plotter;  // already validated/normalized above
         if (!interfaceName.empty() && plotter == "ce1600p") {
             *error = "'interface: ce158' cannot be combined with 'plotter: ce1600p' (the CE-158 does "
@@ -726,12 +703,6 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         return false;
     }
     for (const PresetSection& s : out->sections) {
-        if (s.kind == PresetSection::Kind::Program &&
-            s.program.hasSlot) {
-            *error = "'program: slot:' is only valid for a PC-1600 preset (a PC-1500 'format: "
-                     "binary' block pokes the whole file at 'address:')";
-            return false;
-        }
         if (s.kind == PresetSection::Kind::Keys) {
             for (const PresetStep& step : s.keys) {
                 if (step.kind == PresetStep::Kind::SaveAs &&

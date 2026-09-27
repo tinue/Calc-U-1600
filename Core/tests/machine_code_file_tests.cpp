@@ -121,19 +121,44 @@ void test_read_headerless() {
 // ── plan ─────────────────────────────────────────────────────────────────
 
 using machinecode::BasicArea;
+using machinecode::Cpu;
+using machinecode::PC1600State;
 
-const std::vector<BasicArea> kStock = {{0, 0xC000, 0xEFFF, 0}};
-const std::vector<BasicArea> kSlot1First = {{1, 0x8000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
-const std::vector<BasicArea> kSlot2First = {{2, 0x8000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
+const std::vector<BasicArea> kStockAreas = {{0, 0xC000, 0xEFFF, 0}};
+const std::vector<BasicArea> kSlot1FirstAreas = {{1, 0x8000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
+const std::vector<BasicArea> kSlot2FirstAreas = {{2, 0x8000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
+
+PC1600State state(const std::vector<BasicArea>& areas, bool mode1 = false, int title = 0) {
+    PC1600State st;
+    st.mode1 = mode1;
+    st.title = title;
+    st.basicAreas = areas;
+    st.ramEnd = 0xEB00;
+    if (title != 0) {
+        st.titleBase = 0x8000;
+        st.titleStart = 0x80C5;
+    }
+    return st;
+}
+const PC1600State kStock = state(kStockAreas);
+const PC1600State kSlot1First = state(kSlot1FirstAreas);
+const PC1600State kSlot2First = state(kSlot2FirstAreas);
 
 void test_plan_model_mismatch() {
+    // A CE-158 (PC-1500) file: the PC-1600 takes it in MODE 1 only.
     auto ce158 = machinecode::readFile(ce158File(kCode, 0x40C5, 0));
-    CHECK(!machinecode::plan(Target::PC1600, ce158, kStock).error.empty());
+    auto p = machinecode::plan(Target::PC1600, ce158, kStock);
+    CHECK(p.error.find("MODE 1") != std::string::npos);
+    p = machinecode::plan(Target::PC1600, ce158, state(kStockAreas, true));
+    CHECK(p.error.empty() && p.cpu == Cpu::LH5803 && p.busAddr == 0xC0C5 && p.slot == Slot::S0);
     CHECK(machinecode::plan(Target::PC1500, ce158, {}).error.empty());
 
+    // A PC-1600 file is Z-80 code in either MODE.
     auto pc1600 = machinecode::readFile(pc1600File(kCode, 0xC0C5, 0));
     CHECK(!machinecode::plan(Target::PC1500, pc1600, {}).error.empty());
     CHECK(machinecode::plan(Target::PC1600, pc1600, kStock).error.empty());
+    p = machinecode::plan(Target::PC1600, pc1600, state(kStockAreas, true));
+    CHECK(p.error.empty() && p.cpu == Cpu::Z80 && p.busAddr == 0xC0C5);
 }
 
 void test_plan_headerless_needs_address() {
@@ -141,11 +166,16 @@ void test_plan_headerless_needs_address() {
     auto p1500 = machinecode::plan(Target::PC1500, f, {});
     CHECK(p1500.error.empty() && p1500.needsAddress && p1500.defaultAddr == 0);
 
-    // PC-1600 default: the start of BASIC's program area, + &C5.
+    // PC-1600 default: the start of the selected program area, in the
+    // MODE's address space.
     auto p1600 = machinecode::plan(Target::PC1600, f, kStock);
-    CHECK(p1600.error.empty() && p1600.needsAddress && p1600.defaultAddr == 0xC0C5);
+    CHECK(p1600.error.empty() && p1600.needsAddress && p1600.defaultAddr == 0xC0C5 && p1600.cpu == Cpu::Z80);
     CHECK(machinecode::plan(Target::PC1600, f, kSlot2First).defaultAddr == 0x80C5);
-    CHECK(machinecode::plan(Target::PC1600, f, {}).defaultAddr == 0xC0C5);
+    CHECK(machinecode::plan(Target::PC1600, f, PC1600State{}).defaultAddr == 0xC0C5);
+    auto m1 = machinecode::plan(Target::PC1600, f, state(kStockAreas, true));
+    CHECK(m1.cpu == Cpu::LH5803 && m1.defaultAddr == 0x40C5);
+    // TITLE "S1:": the program module's start.
+    CHECK(machinecode::plan(Target::PC1600, f, state(kStockAreas, false, 1)).defaultAddr == 0x80C5);
 }
 
 void test_plan_pc1600_target() {
@@ -154,19 +184,21 @@ void test_plan_pc1600_target() {
     auto p = machinecode::plan(Target::PC1600, s0, kSlot1First);
     CHECK(p.error.empty() && p.slot == Slot::S0);
 
-    // $8000-$BFFF: only when a RAM module is the program area's first run.
+    // $8000-$BFFF: the module behind the selected program area.
     auto slot = machinecode::readFile(pc1600File(kCode, 0x80C5, 0));
     p = machinecode::plan(Target::PC1600, slot, kStock);
-    CHECK(p.error.find("preset") != std::string::npos);
+    CHECK(p.error.find("TITLE") != std::string::npos);
     p = machinecode::plan(Target::PC1600, slot, kSlot1First);
     CHECK(p.error.empty() && p.slot == Slot::S1);
     p = machinecode::plan(Target::PC1600, slot, kSlot2First);
     CHECK(p.error.empty() && p.slot == Slot::S2);
-    CHECK(!machinecode::plan(Target::PC1600, slot, {}).error.empty());
+    CHECK(!machinecode::plan(Target::PC1600, slot, PC1600State{}).error.empty());
+    // TITLE "S2:": the slot 2 program module, whatever S0 holds.
+    p = machinecode::plan(Target::PC1600, slot, state(kSlot1FirstAreas, false, 2));
+    CHECK(p.error.empty() && p.slot == Slot::S2);
 
     // An 8 KB module's window starts at $A000.
-    const std::vector<BasicArea> small = {{1, 0xA000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
-    CHECK(!machinecode::plan(Target::PC1600, slot, small).error.empty());
+    CHECK(!machinecode::plan(Target::PC1600, slot, state({{1, 0xA000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}})).error.empty());
 
     auto rom = machinecode::readFile(pc1600File(kCode, 0x7000, 0));
     CHECK(!machinecode::plan(Target::PC1600, rom, kSlot1First).error.empty());
@@ -174,12 +206,20 @@ void test_plan_pc1600_target() {
     // $BFFE + 5 bytes crosses into $C000.
     auto crossing = machinecode::readFile(pc1600File(kCode, 0xBFFE, 0));
     CHECK(!machinecode::plan(Target::PC1600, crossing, kSlot1First).error.empty());
+
+    // The running system work area is refused; the free top &FF40- is fine.
+    auto work = machinecode::readFile(pc1600File(kCode, 0xF800, 0));
+    CHECK(machinecode::plan(Target::PC1600, work, kStock).error.find("work area") != std::string::npos);
+    auto top = machinecode::readFile(pc1600File(kCode, 0xFF40, 0));
+    CHECK(machinecode::plan(Target::PC1600, top, kStock).error.empty());
+    // In MODE 1 the message names the PC-1500A's ML area.
+    auto pc1500a = machinecode::readFile(ce158File(kCode, 0x7C01, 0));
+    CHECK(machinecode::plan(Target::PC1600, pc1500a, state(kStockAreas, true)).error.find("7C01") != std::string::npos);
 }
 
 void test_plan_load_configurations() {
     using machinecode::LoadError;
     using machinecode::LoadOptions;
-    using machinecode::SlotPolicy;
     // A header whose length disagrees with the file (one byte too many).
     std::vector<uint8_t> longer = pc1600File(kCode, 0xC0C5, 0);
     longer.push_back(0x00);
@@ -187,17 +227,17 @@ void test_plan_load_configurations() {
     CHECK(!mismatched.ok && mismatched.lengthMismatch);
     const File headerless = machinecode::readFile(kCode);
 
-    // Build & Load: a mismatch loads; LH5803 addresses map to the Z-80's
-    // 8000-FFFF; internal RAM is always a place for Z-80 code.
+    // Build & Load: a mismatch loads; the debugger names the CPU; LH5803
+    // addresses map to the Z-80's 8000-FFFF.
     LoadOptions dbg;
     dbg.target = Target::PC1600;
     dbg.acceptLengthMismatch = true;
-    dbg.slotPolicy = SlotPolicy::DeriveOrInternal;
+    dbg.hasCpu = true;
     auto p = machinecode::planLoad(mismatched, dbg, kStock);
     CHECK(p.error == LoadError::None && p.slot == Slot::S0 && p.busAddr == 0xC0C5);
     CHECK(machinecode::planLoad(headerless, dbg, kStock).error == LoadError::NeedsAddress);
     LoadOptions lh = dbg;
-    lh.lh5803 = true;
+    lh.cpu = Cpu::LH5803;
     lh.hasAddress = true;
     lh.address = 0x1000;
     p = machinecode::planLoad(headerless, lh, kSlot1First);
@@ -208,30 +248,36 @@ void test_plan_load_configurations() {
     LoadOptions atEnd = dbg;
     atEnd.hasAddress = true;
     atEnd.address = 0xFFFE;
-    CHECK(machinecode::planLoad(headerless, atEnd, kStock).error == LoadError::PastEnd);
+    p = machinecode::planLoad(headerless, atEnd, kStock);
+    CHECK(p.error == LoadError::NoSlot && p.detail.find("runs past") != std::string::npos);
     atEnd.address = 0x10000;
     CHECK(machinecode::planLoad(headerless, atEnd, kStock).error == LoadError::OutsideBank0);
 
-    // Presets: `length:` trims and accepts a mismatch; the slot is as
-    // given; the range is the writer's business.
+    // Without a CPU from the caller, the MODE decides a headerless file's.
+    LoadOptions gui;
+    gui.target = Target::PC1600;
+    gui.hasAddress = true;
+    gui.address = 0x40C5;
+    p = machinecode::planLoad(headerless, gui, state(kStockAreas, true));
+    CHECK(p.error == LoadError::None && p.cpu == Cpu::LH5803 && p.busAddr == 0xC0C5);
+    CHECK(machinecode::planLoad(headerless, gui, kStock).error == LoadError::NoSlot);  // Z-80 &40C5 is ROM
+
+    // Presets: `length:` trims and accepts a mismatch; the target follows
+    // MODE / TITLE; the range is the writer's business.
     LoadOptions preset;
     preset.target = Target::PC1600;
     preset.checkRange = false;
-    preset.slot = Slot::S2;
-    CHECK(machinecode::planLoad(mismatched, preset, {}).error == LoadError::BadFile);
+    CHECK(machinecode::planLoad(mismatched, preset, kStock).error == LoadError::BadFile);
     preset.hasLength = preset.acceptLengthMismatch = true; // as PresetRunner sets them
     preset.length = 3;
-    p = machinecode::planLoad(mismatched, preset, {});
-    CHECK(p.error == LoadError::None && p.len == 3 && p.slot == Slot::S2 && p.addr == 0xC0C5);
+    p = machinecode::planLoad(mismatched, preset, kStock);
+    CHECK(p.error == LoadError::None && p.len == 3 && p.slot == Slot::S0 && p.addr == 0xC0C5);
     preset.length = 99;
-    CHECK(machinecode::planLoad(mismatched, preset, {}).error == LoadError::LengthExceeds);
+    CHECK(machinecode::planLoad(mismatched, preset, kStock).error == LoadError::LengthExceeds);
     preset.length = 0;
-    CHECK(machinecode::planLoad(mismatched, preset, {}).error == LoadError::Empty);
+    CHECK(machinecode::planLoad(mismatched, preset, kStock).error == LoadError::Empty);
     preset.hasLength = preset.acceptLengthMismatch = false;
-    CHECK(machinecode::planLoad(headerless, preset, {}).error == LoadError::NeedsAddress);
-    preset.hasAddress = true;
-    preset.address = 0x1FFFF;
-    CHECK(machinecode::planLoad(headerless, preset, {}).error == LoadError::None);
+    CHECK(machinecode::planLoad(headerless, preset, kStock).error == LoadError::NeedsAddress);
 
     // Load Machine Code… (plan()): a CE-158 header running past &FFFF.
     const File past = machinecode::readFile(ce158File(kCode, 0xFFFE, 0));
@@ -243,71 +289,79 @@ void test_plan_load_configurations() {
 
 void test_advice_pc1500() {
     // PC-1500A-style RAM $4000-$57FF: BASIC can start at $40C5 at the lowest.
-    auto a = machinecode::advice(Target::PC1500, Slot::S0, 0x40C5, 0x20, 0, 0x4000, 0x5800, {});
+    auto a = machinecode::advice(Target::PC1500, Slot::S0, 0x40C5, 0x20, 0, 0x4000, 0x5800, {}, Cpu::Z80);
     CHECK(a.newCommand == "NEW &40E5");
     CHECK(a.callCommand == "CALL &40C5");
     CHECK(a.callNote.find("first byte") != std::string::npos);
 
-    a = machinecode::advice(Target::PC1500, Slot::S0, 0x4010, 0x20, 0x4012, 0x4000, 0x5800, {});
+    a = machinecode::advice(Target::PC1500, Slot::S0, 0x4010, 0x20, 0x4012, 0x4000, 0x5800, {}, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("reserve") != std::string::npos);
     CHECK(a.callCommand == "CALL &4012");
     CHECK(a.callNote.find("auto-run") != std::string::npos);
 
-    a = machinecode::advice(Target::PC1500, Slot::S0, 0x7C01, 0x10, 0, 0x4000, 0x5800, {});
+    a = machinecode::advice(Target::PC1500, Slot::S0, 0x7C01, 0x10, 0, 0x4000, 0x5800, {}, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("outside") != std::string::npos);
 }
 
 void test_advice_pc1600() {
-    const auto& stock = kStock;
-    const auto& slot1First = kSlot1First;
-    const auto& slot2First = kSlot2First;
-
     // Stock: the S0 area starts in internal RAM.
-    auto a = machinecode::advice(Target::PC1600, Slot::S0, 0xC0C5, 0x100, 0, 0, 0, stock);
+    auto a = machinecode::advice(Target::PC1600, Slot::S0, 0xC0C5, 0x100, 0, 0, 0, kStock, Cpu::Z80);
     CHECK(a.newCommand == "NEW \"S0:\",&1C5");
     CHECK(a.newNote.find("Warning") == std::string::npos);
     CHECK(a.callCommand == "CALL &C0C5");
 
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0xC000, 0x10, 0, 0, 0, stock);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0xC000, 0x10, 0, 0, 0, kStock, Cpu::Z80);
     CHECK(a.newNote.find("Warning") != std::string::npos);
 
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0xEFF0, 0x20, 0, 0, 0, stock);
-    CHECK(a.newNote.find("work area") != std::string::npos);
-
     // Top of the work area: WAKE$ storage, then the de-facto free FF40-FFFF.
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0xFF3A, 0xC2, 0, 0, 0, stock);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0xFF3A, 0xC2, 0, 0, 0, kStock, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("WAKE$") != std::string::npos);
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0xFF40, 0xBC, 0, 0, 0, stock);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0xFF40, 0xBC, 0, 0, 0, kStock, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("Warning") == std::string::npos);
     CHECK(a.newNote.find("CE-1F01A") != std::string::npos);
 
     // Module in slot 1: BASIC starts there, so NEW "S0:" counts from $8000.
-    a = machinecode::advice(Target::PC1600, Slot::S1, 0x80C5, 0x40, 0x80D0, 0, 0, slot1First);
+    a = machinecode::advice(Target::PC1600, Slot::S1, 0x80C5, 0x40, 0x80D0, 0, 0, kSlot1First, Cpu::Z80);
     CHECK(a.newCommand == "NEW \"S0:\",&105");
     CHECK(a.callCommand == "CALL &80D0");
 
     // ... and internal RAM is the area's LAST run: NEW can't protect code there.
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0xC0C5, 0x40, 0, 0, 0, slot1First);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0xC0C5, 0x40, 0, 0, 0, kSlot1First, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("&80C5") != std::string::npos);
 
     // Slot 2 outside the BASIC area: no NEW needed; CALL goes through bank 2.
-    a = machinecode::advice(Target::PC1600, Slot::S2, 0x80C5, 0x40, 0, 0, 0, slot1First);
+    a = machinecode::advice(Target::PC1600, Slot::S2, 0x80C5, 0x40, 0, 0, 0, kSlot1First, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("doesn't use") != std::string::npos);
     CHECK(a.callCommand == "CALL #2,&80C5");
 
-    a = machinecode::advice(Target::PC1600, Slot::S2, 0x80C5, 0x40, 0, 0, 0, slot2First);
+    a = machinecode::advice(Target::PC1600, Slot::S2, 0x80C5, 0x40, 0, 0, 0, kSlot2First, Cpu::Z80);
     CHECK(a.newCommand == "NEW \"S0:\",&105");
     CHECK(a.callCommand == "CALL #2,&80C5");
 
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0xC0C5, 0x40, 0, 0, 0, {});
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0xC0C5, 0x40, 0, 0, 0, PC1600State{}, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("couldn't be read") != std::string::npos);
+
+    // TITLE "S1:": code in that program module is reserved with NEW "S1:".
+    a = machinecode::advice(Target::PC1600, Slot::S1, 0x80C5, 0x40, 0, 0, 0, state(kStockAreas, false, 1), Cpu::Z80);
+    CHECK(a.newCommand == "NEW \"S1:\",&105");
+
+    // MODE 1, LH5801 code: XCALL an LH5803 address; NEW <address> the
+    // PC-1500 way, BASIC right after the code.
+    const PC1600State mode1 = state(kStockAreas, true);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0x40C5, 0x40, 0, 0, 0, mode1, Cpu::LH5803);
+    CHECK(a.callCommand == "XCALL &40C5");
+    CHECK(a.newCommand == "NEW &4105");
+    // MODE 1, Z-80 code (PC-1600 header): still CALL, NEW is the MODE's.
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0xC0C5, 0x40, 0, 0, 0, mode1, Cpu::Z80);
+    CHECK(a.callCommand == "CALL &C0C5");
+    CHECK(a.newCommand == "NEW &4105");
 }
 
 // ── parseHexAddress ──────────────────────────────────────────────────────

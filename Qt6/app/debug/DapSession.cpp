@@ -217,12 +217,10 @@ bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* e
             return false;
         }
     }
-    const QJsonValue slot = d.value(QStringLiteral("slot"));
-    if (slot.isString()) {
-        const QString s = slot.toString().toUpper();
-        req.slot = s == QLatin1String("S1") ? 1 : s == QLatin1String("S2") ? 2 : 0;
-    } else if (slot.isDouble()) {
-        req.slot = slot.toInt();
+    if (d.contains(QStringLiteral("slot"))) {
+        *error = QStringLiteral("\"slot\" was removed: the loader places code by the machine's MODE, the program "
+                                "area TITLE selects, and the address. Set MODE / TITLE on the calculator first.");
+        return false;
     }
     // A number is the entry; text is a symbol of the listing or an address,
     // which the loader resolves once the listing is read.

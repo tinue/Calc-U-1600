@@ -22,4 +22,3 @@ keys:
 program:
   path: dwx.bin
   format: binary
-  slot: S0

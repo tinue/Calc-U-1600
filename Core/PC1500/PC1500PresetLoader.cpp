@@ -70,9 +70,9 @@ public:
     }
 
     machinecode::Target codeTarget() const override { return machinecode::Target::PC1500; }
-    bool loadMachineCode(const PresetProgram&, uint32_t addr, const uint8_t* data, size_t len,
+    bool loadMachineCode(machinecode::Slot, uint32_t busAddr, const uint8_t* data, size_t len,
                          std::string* error) override {
-        return loadPC1500MachineCode(m_machine, addr, data, len, error);
+        return loadPC1500MachineCode(m_machine, busAddr, data, len, error);
     }
 };
 

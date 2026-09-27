@@ -79,12 +79,6 @@ std::vector<uint8_t> program(int lines, size_t recordSize) {
     return p;
 }
 
-size_t writtenBytes(const PlacementResult& r) {
-    size_t n = 0;
-    for (const auto& w : r.writes) n += w.data.size();
-    return n;
-}
-
 // ── Stock machine: one internal-RAM segment at $C0C5 ───────────────────
 void test_stock_single_internal_segment() {
     FakeMem m;

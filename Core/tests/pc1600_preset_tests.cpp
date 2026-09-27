@@ -89,14 +89,10 @@ void test_parser_rejects_cross_model_fields() {
     CHECK(!err.empty());
     // PC-1600 preset with the unsuffixed memory-expansion: block.
     CHECK(!parse("model: PC-1600\nmemory-expansion:\n  - modulespec: CE-155\n", &p, &err));
-    // PC-1600 `format: binary` (machine-language) without a target slot --
-    // rejected; a slot is mandatory (see test_parser_pc1600_machine_binary).
-    // Fresh PresetFile: parsePresetFile() merges into *out rather than
-    // resetting it, so a stale memory-expansion from an earlier case would
-    // otherwise mask the slot error.
+    // PC-1600 `format: binary` needs no target slot any more: the loader
+    // follows MODE / TITLE (see test_parser_pc1600_machine_binary).
     p = PresetFile{};
-    CHECK(!parse("model: PC-1600\nprogram:\n  format: binary\n  path: x.bin\n  address: 0x8000\n", &p, &err));
-    CHECK(err.find("slot") != std::string::npos);
+    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  path: x.bin\n  address: 0x8000\n", &p, &err));
     // PC-1500 preset with a per-slot block.
     p = PresetFile{};
     CHECK(!parse("model: PC-1500A\nmemory-expansion-1:\n  - modulespec: CE-155\n", &p, &err));
@@ -111,14 +107,12 @@ void test_parser_pc1600_machine_binary() {
     // case that inspects the parse result gets its own PresetFile.
     std::string err;
 
-    // `slot: S0` accepted; `address` / `length` optional (a header may
-    // supply them). `slot` string is case-insensitive.
+    // `address` / `length` optional (a header may supply them).
     {
         PresetFile p;
-        CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: s0\n  path: x.bin\n", &p, &err));
+        CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  path: x.bin\n", &p, &err));
         CHECK(p.sections.size() == 1);
         CHECK(p.sections[0].program.format == PresetProgram::Format::Binary);
-        CHECK(p.sections[0].program.hasSlot && p.sections[0].program.slot == machinecode::Slot::S0);
         CHECK(!p.sections[0].program.hasAddress);
         CHECK(!p.sections[0].program.hasLength);
     }
@@ -126,44 +120,35 @@ void test_parser_pc1600_machine_binary() {
     // `address` / `length` overrides, both bases.
     {
         PresetFile p;
-        CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S2\n  path: x.bin\n"
+        CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  path: x.bin\n"
                     "  address: 0x8100\n  length: 0x40\n",
                     &p, &err));
-        CHECK(p.sections[0].program.slot == machinecode::Slot::S2);
         CHECK(p.sections[0].program.hasAddress && p.sections[0].program.address == 0x8100);
         CHECK(p.sections[0].program.hasLength && p.sections[0].program.length == 0x40);
     }
     {
         PresetFile p;
-        CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S1\n  path: x.bin\n"
-                    "  length: 256\n",
-                    &p, &err));
+        CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  path: x.bin\n  length: 256\n", &p, &err));
         CHECK(p.sections[0].program.length == 256);
     }
 
-    // Bad slot / bad length / slot on the wrong format / slot on PC-1500.
-    {
+    // `slot:` was removed (the loader follows MODE / TITLE) -- on every
+    // model and format; bad length; length on the wrong format.
+    for (const char* preset : {"model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: x.bin\n",
+                               "model: PC-1600\nprogram:\n  format: basic-binary\n  slot: S0\n  path: x.bas\n",
+                               "model: PC-1500A\nprogram:\n  format: binary\n  slot: S0\n  path: x.bin\n"}) {
         PresetFile p;
-        CHECK(!parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S3\n  path: x.bin\n", &p, &err));
+        CHECK(!parse(preset, &p, &err));
+        CHECK(err.find("'slot:' was removed") != std::string::npos);
     }
     {
         PresetFile p;
-        CHECK(!parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: x.bin\n"
-                     "  length: 12x\n",
-                     &p, &err));
+        CHECK(!parse("model: PC-1600\nprogram:\n  format: binary\n  path: x.bin\n  length: 12x\n", &p, &err));
     }
     {
         PresetFile p;
-        CHECK(!parse("model: PC-1600\nprogram:\n  format: basic-binary\n  slot: S0\n  path: x.bas\n",
-                     &p, &err));
-        CHECK(err.find("slot") != std::string::npos);
-    }
-    {
-        PresetFile p;
-        CHECK(!parse("model: PC-1500A\nprogram:\n  format: binary\n  slot: S0\n  path: x.bin\n"
-                     "  address: 0x40C5\n",
-                     &p, &err));
-        CHECK(err.find("PC-1600") != std::string::npos);
+        CHECK(!parse("model: PC-1600\nprogram:\n  format: basic-binary\n  length: 8\n  path: x.bas\n", &p, &err));
+        CHECK(err.find("length") != std::string::npos);
     }
 
     // PC-1500 `format: binary` takes `address` / `length` like the PC-1600:
@@ -228,7 +213,7 @@ void test_loader_machine_binary_header() {
 
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin + "\n",
+    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  path: " + bin + "\n",
                 &p, &err));
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
@@ -252,7 +237,7 @@ void test_loader_machine_binary_length_mismatch() {
 
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin + "\n",
+    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  path: " + bin + "\n",
                 &p, &err));
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
@@ -262,7 +247,7 @@ void test_loader_machine_binary_length_mismatch() {
     PC1600Machine m2;
     loadPC1600Roms(m2);
     PresetFile p2;
-    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin +
+    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  path: " + bin +
                     "\n  length: 4\n",
                 &p2, &err));
     PresetLoadResult r2 = applyPC1600Preset(m2, p2);
@@ -283,7 +268,7 @@ void test_loader_machine_binary_headerless() {
 
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin + "\n",
+    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  path: " + bin + "\n",
                 &p, &err));
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
@@ -292,7 +277,7 @@ void test_loader_machine_binary_headerless() {
     PC1600Machine m2;
     loadPC1600Roms(m2);
     PresetFile p2;
-    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin +
+    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  path: " + bin +
                     "\n  address: 0xD200\n  length: 4\n",
                 &p2, &err));
     PresetLoadResult r2 = applyPC1600Preset(m2, p2);
@@ -314,7 +299,7 @@ void test_loader_machine_binary_headerless_address_only_and_ce158() {
     CHECK(writeFile(bin, {0x12, 0x34, 0x56}));
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin +
+    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  path: " + bin +
                     "\n  address: 0xD400\n",
                 &p, &err));
     PresetLoadResult r = applyPC1600Preset(m, p);
@@ -334,11 +319,11 @@ void test_loader_machine_binary_headerless_address_only_and_ce158() {
     PC1600Machine m2;
     loadPC1600Roms(m2);
     PresetFile p2;
-    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + ce158Bin +
+    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  path: " + ce158Bin +
                     "\n  address: 0xD500\n",
                 &p2, &err));
     PresetLoadResult r2 = applyPC1600Preset(m2, p2);
-    CHECK(!r2.ok);
+    CHECK(!r2.ok);  // MODE 0: a PC-1500 file needs MODE 1
     CHECK(r2.error.find("CE-158") != std::string::npos);
 }
 
@@ -356,7 +341,7 @@ void test_loader_machine_binary_autorun() {
 
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  slot: S0\n  path: " + bin + "\n",
+    CHECK(parse("model: PC-1600\nprogram:\n  format: binary\n  path: " + bin + "\n",
                 &p, &err));
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
@@ -382,7 +367,7 @@ void test_loader_machine_binary_autorun_slot2() {
     PresetFile p;
     std::string err;
     CHECK(parse("model: PC-1600\nmemory-expansion-2:\n  - modulespec: CE-1600M\n"
-                "program:\n  format: binary\n  slot: S2\n  path: " + bin + "\n",
+                "program:\n  format: binary\n  path: " + bin + "\n",
                 &p, &err));
     std::string logText;
     PresetLoadResult r = applyPC1600Preset(m, p, [&](const std::string& line) { logText += line + "\n"; }, ".",
@@ -390,6 +375,60 @@ void test_loader_machine_binary_autorun_slot2() {
     CHECK(r.ok);
     CHECK(logText.find("auto-run CALL #2,&8100") != std::string::npos);
     CHECK(m.debugPeek(0xD300) == 0x5A);
+}
+
+// ROM-gated: the target follows MODE and TITLE (docs/Loader-Mode-Plan.md).
+// MODE 1: a headerless file's `address:` is an LH5803 address (&5000 =
+// Z-80 &D000), and a CE-158 file loads at its header's LH5803 address.
+void test_loader_machine_binary_mode1() {
+    PC1600Machine m;
+    if (!loadPC1600Roms(m)) {
+        std::fprintf(stderr, "SKIP test_loader_machine_binary_mode1: PC-1600 ROM images not found\n");
+        return;
+    }
+    const std::string bin = "/tmp/pc1600_ml_mode1.bin";
+    CHECK(writeFile(bin, {0x5A, 0xA5}));
+    std::vector<uint8_t> ce158 = {0x01, 0x42, 'C', 'O', 'M'};
+    ce158.resize(5 + 16, 0);
+    for (uint16_t v : {uint16_t{0x5100}, uint16_t{0}, uint16_t{0}}) {
+        ce158.push_back(static_cast<uint8_t>(v >> 8));
+        ce158.push_back(static_cast<uint8_t>(v & 0xFF));
+    }
+    ce158.push_back(0x9A);
+    const std::string ce158Bin = "/tmp/pc1600_ml_mode1_ce158.bin";
+    CHECK(writeFile(ce158Bin, ce158));
+    PresetFile p;
+    std::string err;
+    CHECK(parse("model: PC-1600\nkeys:\n  - type: MODE1\nprogram:\n  format: binary\n  path: " + bin +
+                    "\n  address: 0x5000\nprogram:\n  format: binary\n  path: " + ce158Bin + "\n",
+                &p, &err));
+    PresetLoadResult r = applyPC1600Preset(m, p);
+    CHECK(r.ok);
+    if (!r.ok) std::fprintf(stderr, "  %s\n", r.error.c_str());
+    CHECK(m.debugPeek(0xD000) == 0x5A && m.debugPeek(0xD001) == 0xA5);
+    CHECK(m.debugPeek(0xD100) == 0x9A);
+}
+
+// TITLE "S1:": $8000-$BFFF is the S1 program module.
+void test_loader_machine_binary_title_s1() {
+    PC1600Machine m;
+    if (!loadPC1600Roms(m)) {
+        std::fprintf(stderr, "SKIP test_loader_machine_binary_title_s1: PC-1600 ROM images not found\n");
+        return;
+    }
+    const std::string bin = "/tmp/pc1600_ml_title_s1.bin";
+    CHECK(writeFile(bin, {0x11, 0x22, 0x33}));
+    PresetFile p;
+    std::string err;
+    CHECK(parse("model: PC-1600\nmemory-expansion-1:\n  - modulespec: CE-1600M\n"
+                "keys:\n  - type: INIT\"S1:\",\"P\"\n  - type: TITLE\"S1:\"\n"
+                "program:\n  format: binary\n  path: " + bin + "\n  address: 0x8100\n",
+                &p, &err));
+    PresetLoadResult r = applyPC1600Preset(m, p, nullptr, ".", "Qt6/resources/cards");
+    CHECK(r.ok);
+    if (!r.ok) std::fprintf(stderr, "  %s\n", r.error.c_str());
+    const std::vector<uint8_t> img = m.debugSlotImage(1);
+    CHECK(img.size() > 0x102 && img[0x100] == 0x11 && img[0x102] == 0x33);
 }
 
 void test_parser_accepts_basic_text_program() {
@@ -899,6 +938,8 @@ int run_pc1600_preset_tests() {
     test_loader_machine_binary_headerless_address_only_and_ce158();
     test_loader_machine_binary_autorun();
     test_loader_machine_binary_autorun_slot2();
+    test_loader_machine_binary_mode1();
+    test_loader_machine_binary_title_s1();
     test_loader_rejects_unknown_key_defensively();
     test_loader_ce150_plotter_needs_rom_path();
     test_loader_ce150_plotter_attaches_with_rom_path();

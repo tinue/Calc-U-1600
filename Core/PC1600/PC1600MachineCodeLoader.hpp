@@ -29,3 +29,8 @@ pc1600::SlotGeometry pc1600SlotGeometry(PC1600Machine& machine, int slot);
 // from the work area (S0MTb / ADTBL / BASPRG_ST) via the placement logic;
 // empty if that can't be read (e.g. a machine that hasn't booted).
 std::vector<machinecode::BasicArea> pc1600BasicAreas(PC1600Machine& machine);
+
+// What the machine-code placement rules read (machinecode::PC1600State):
+// MODE, TITLE, the S0 areas, and for TITLE S1/S2 that module's window base
+// and program start from its slot descriptor.
+machinecode::PC1600State pc1600LoadState(PC1600Machine& machine);

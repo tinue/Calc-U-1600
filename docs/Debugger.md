@@ -100,7 +100,7 @@ The attach settings:
 | `preset` | a preset applied first; it rebuilds the machine |
 | `reset` | `none`, `reset` or `allReset`: reset without the boot run |
 | `stopOnEntry` | stop right after attaching; after a reset, that is before the first instruction |
-| `program` | Build & Load: `bin`, `listing`, `source`, `symbols`, `cpu` (`lh5801` / `z80` / `lh5803`), `address` (for a headerless file; default: the listing's lowest address), `slot` (`S0`–`S2`), `entry` (an address or a symbol of the listing; default: the header's auto-run address, else the listing's `ENTRY` if it lies in the program, else the load address), `after` (`none` / `call` / `stopOnEntry`), `cleanStart` (default `true`), and the bank qualifiers below |
+| `program` | Build & Load: `bin`, `listing`, `source`, `symbols`, `cpu` (`lh5801` / `z80` / `lh5803`), `address` (for a headerless file, in `cpu`'s address space; default: the listing's lowest address; on the PC-1600 the target follows the calculator's MODE and the program area `TITLE` selects), `entry` (an address or a symbol of the listing; default: the header's auto-run address, else the listing's `ENTRY` if it lies in the program, else the load address), `after` (`none` / `call` / `stopOnEntry`), `cleanStart` (default `true`), and the bank qualifiers below |
 | `listings` | static listings, e.g. of ROM code: `{path, source, cpu, bank, me, pu, pv}` |
 | `symbols` | `.SYMBOLS:` tables: a path (main CPU), or `{path, cpu, bank, me, pu, pv}` like `listings` |
 | `buildTask` | the task Build & Load runs |

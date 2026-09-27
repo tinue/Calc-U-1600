@@ -122,10 +122,13 @@ public:
     virtual basic::TransferModel transferModel() const = 0;
     virtual BasicLoadResult loadBasicPayload(const std::vector<uint8_t>& payload) = 0;
     /// `format: binary`: which machine-code header family this machine
-    /// takes (machinecode::headerMismatch()), and the write of `len` bytes
-    /// at `addr` -- on the PC-1600 into the preset's `program.slot`.
+    /// takes (machinecode::headerMismatch()), the PC-1600's MODE / TITLE /
+    /// program areas the placement follows (PC-1500: none), and the write
+    /// of `len` bytes at the Z-80 / LH5801 bus address `busAddr` -- on the
+    /// PC-1600 into the target `slot` machinecode::planLoad() picked.
     virtual machinecode::Target codeTarget() const = 0;
-    virtual bool loadMachineCode(const PresetProgram& program, uint32_t addr, const uint8_t* data, size_t len,
+    virtual machinecode::PC1600State codeState() { return {}; }
+    virtual bool loadMachineCode(machinecode::Slot slot, uint32_t busAddr, const uint8_t* data, size_t len,
                                  std::string* error) = 0;
 };
 

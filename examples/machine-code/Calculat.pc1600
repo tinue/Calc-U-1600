@@ -110,4 +110,3 @@ keys:
 program:
   path: CALCULAT.BIN
   format: binary
-  slot: S0

@@ -71,8 +71,8 @@ public:
     // Doesn't need libsharpdx, so it works in every build.
     struct MachineCodeLoadRequest {
         std::vector<uint8_t> payload;
-        uint32_t addr = 0;
-        int slot = 0;
+        uint32_t addr = 0;  // where the bytes go: the Z-80 / LH5801 bus address
+        int slot = 0;       // PC-1600: machinecode::Slot from the plan / dialog
     };
     bool loadMachineCodeLive(const MachineCodeLoadRequest& request, QString* error);
 

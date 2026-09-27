@@ -53,6 +53,21 @@ pc1600::SlotGeometry pc1600SlotGeometry(PC1600Machine& machine, int slot) {
     return g;
 }
 
+machinecode::PC1600State pc1600LoadState(PC1600Machine& machine) {
+    machinecode::PC1600State st;
+    st.mode1 = machine.mode1();
+    st.title = machine.programAreaTitle();
+    st.basicAreas = pc1600BasicAreas(machine);
+    st.ramEnd = pc1600::lh5803ToZ80(static_cast<uint16_t>(machine.debugPeek(0xF864) << 8));
+    if (st.title == 1 || st.title == 2) {
+        const uint16_t d = st.title == 1 ? pc1600::kS1Desc : pc1600::kS2Desc;
+        st.titleBase = static_cast<uint32_t>(machine.debugPeek(d)) << 8;
+        st.titleStart = static_cast<uint32_t>(machine.debugPeek(static_cast<uint16_t>(d + 4)) |
+                                              (machine.debugPeek(static_cast<uint16_t>(d + 5)) << 8));
+    }
+    return st;
+}
+
 std::vector<machinecode::BasicArea> pc1600BasicAreas(PC1600Machine& machine) {
     pc1600::PlacementInput in;
     in.peek = [&machine](uint16_t a) { return machine.debugPeek(a); };
