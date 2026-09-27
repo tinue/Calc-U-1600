@@ -162,6 +162,16 @@ status byte reports display-off in bit 5, and busy doesn't clear while CK0
   `SUPERRAM.BIN`.
 - **F89B = 160 right after boot** is left over from the boot drive scan. It
   doesn't signal a failed command.
+- **`INIT"Sx:","P"` / `"M"` can wipe the S0 program.** When the S0 area moves
+  (a slot leaves or joins it), `PRGMOVED` (rom3b 65C8H) empties the S0
+  program at the new base.
+- **`CLOAD -1` doesn't read a PC-1500 tape in MODE 0.** The `-1` is parsed
+  and skipped (CE-1600P bank 5 77F6H); only MODE (BMODE b6) picks the tape
+  format. Through the CE-1600P, `CSAVE` in MODE 1 is ERROR 110 (66A0H).
+- **F127H bit 6 stays set, and F88EH reads 2.** The default `ON TIME$` hook
+  sets F127H b6. Only a dispatched `ON TIME$ GOSUB` (P0-B0 3D40H) or a new
+  `ON TIME$` time (P2-B6 A85DH) clears it. `RUN` writes TRONMODE F88EH = 2 even with TRON off (P1-B0 5803H).
+  Neither affects execution.
 
 ## Accepted limitations: won't fix
 

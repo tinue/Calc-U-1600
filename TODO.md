@@ -54,23 +54,21 @@ obligations.
   - How the program got into memory (typed vs binary-loaded: identical).
   - The other bundled ROM set: "old" is a further 0.65% faster.
 
-  **Current hypothesis: the real unit takes a longer per-statement path
-  because of work-area state the emulator never produces.** The statement
-  loop (P0-B0 3AC0H) makes extra calls depending on F127H (pending BASIC
-  timer interrupts: b7 `WAKE$(0)`, b6 `ON TIME$`, b5 `ALARM$`; b5 →
-  `CALL 3860H` every statement) and F88DH (set by a hidden-ROM statement
-  pair at P1-B3b 41FEH/4201H; ≠0 → `CALL 41DAH` → `CURUDCHK` 0172H every
-  statement). On the real unit a PEEK after benchmark A gave F127H=64
-  (`ON TIME$` pending), F88DH=0, F88EH=2. The emulator now models the
-  timers (an `ON TIME$` fires through the ROM, see the machine tests), but
-  ALL RESET clears them (SINIT writes month 0), so F127H=64 on the real
-  unit must come from an `ON TIME$` set on it earlier. Bit 6 is *not* what 3AC0H tests
-  (`AND 20H`), so next: find where bit 6 is acted on (e.g. 243FH/3E39H,
-  called just before 3AC0H), and re-time benchmark A on the real unit
-  with the `ON TIME$` request cleared. If the residual disappears, it's
-  this. If not, copy the FOR/NEXT arithmetic routine into RAM and time it
-  there. Forcing F127H/F88DH by POKE in the emulator hangs or changes
-  program flow, so it's no substitute for the real mechanism.
+  **Ruled out by the ROM (2026-09-27): work-area state the emulator never
+  produces.** The idea was that the real unit took a longer per-statement
+  path because of F127H/F88DH. The disassembly settles it:
+  - The statement loop (P0-B0 3AC0H) reads F127H only for b5 (`ALARM$`).
+    b6 (`ON TIME$`) is set by the default hook and cleared only by a
+    dispatched `ON TIME$ GOSUB` (3D40H) or a new timer write, so F127H=64
+    is a leftover flag with no per-statement cost.
+  - The BASIC-interrupt check costs extra only while F1CFH/F1D0H ≠ 0, and
+    `RUN` clears F1CFH–F1D4H (`RUNSET`, 1CA2H–1CA8H).
+  - F88DH is the TRON flag (0 = TROFF). F88EH=2 is TRONMODE, which `RUN`
+    writes every time (P1-B0 5803H).
+
+  So benchmark A takes the same path on both. Re-timing it on the real unit
+  with `ON TIME$` cleared would show nothing. Next: copy the FOR/NEXT
+  arithmetic routine into RAM and time it there.
 
   MODE 1 (LH-5803) hasn't been re-measured since the host-pacing fix; the
   old "~7% fast" figure predates it.
@@ -84,6 +82,15 @@ obligations.
   timer ISR runs every iteration and `TIME` reports the (arguably more
   realistic) larger cost. If so, this is a "timers freeze under LH5803
   ownership" gap, not a `wait:`-specific bug.
+  **What the ROM says (2026-09-27):** BASIC runs on the Z-80 in both MODEs.
+  The LH5803 gets the bus only through `CALLH`, but that happens often:
+  every relational operator (`CMPNUM`/`CMPSTR`, P1-B3 5D3FH), `^`,
+  `AND`/`OR` and the functions. An integer `FOR/NEXT` never calls it (Z-80
+  add, inline compare at P1-B0 5AA1H). So the premise holds only for
+  programs that compare or call functions in their loop, and then only
+  for the length of each call. Check which program showed the 2.3x, and
+  what the emulator does differently on the headless and `- wait: <n>`
+  paths.
 
 ## PC-1600 serial port
 
@@ -102,59 +109,42 @@ obligations.
 The fast loader pokes BASPRG_END and the PRGADR end triple (`$FE3F`,
 7b327cd) by hand, handles S0 only, and repeats the LH5803↔Z80 `+0x8000`
 mapping in `PC1600BasicLoader`, `PC1600BasicTyper` (`toZ80`) and
-`PC1600ProgramPlacement`. PRGADR was found missing late, so the real risk
-is other work-area bookkeeping the loader skips. **Trace the scenarios
-below on the ROM before deciding anything** (a pointer helper, or
-mirroring the ROM's own sequence).
+`PC1600ProgramPlacement`. The ROM trace is done (2026-09-27; details in
+SharpPC1500Reference `PC-1600-Work-Area-Map.md` §3.5 note and §4.5).
 
-### Scenarios to trace
-- **A memory module split into program area and base memory**
-  (`INIT"Sx:","P",n`). What goes into ADTBL, SxMTb/SxMBb, the S1/S2
-  descriptors (F019–F01E / F023–F028) and the module header, and how S0's
-  bank list changes.
-- **Loading a BASIC program into a program area** (TITLE = S1/S2). Not
-  supported by the fast loader today. The ROM's `LOAD` finish takes a
-  separate S1/S2 path (see below).
-- **Loading a program saved on a PC-1500**, both machine code and BASIC.
-  The PC-1600 accepts both. Machine code lands in LH5803-visible memory.
-  Where BASIC goes, and whether it's converted or retokenised, is unknown.
-- **Loading while the calculator is in MODE 1** (LH5803 owns the bus).
-- For each scenario: diff the whole work area (F000–FFFF) typed vs
-  loaded vs fast-loaded (same preset, `pc1600_cli`). Include a program
-  that crosses a bank boundary, to settle the F02C question below.
+**Direction: mirror the ROM's `LOAD` finish** (`LOADEND`, rom3b 70E1H)
+instead of the loader's own subset:
+1. `FF` terminator at the end;
+2. S0: F867 = end (BE), **F02C = end bank**; if F899 ≤ the new end,
+   F899 = (F864):00;
+3. S1/S2: end triple → F01C–F01E / F026–F028, and the module header's
+   end offset at +5/+6 (high byte first; +4000H when the end is in the
+   next bank);
+4. PRGADR, F89E (CURRENT TOP) = start, F1C1 (CURRENT bank) = FE3E.
 
-### Found in the ROM so far (2026-09-26)
-- **PRGADR** (jump table 02F4H = `RST 18H` → romI-0 188BH) only derives
-  FE3C–FE41 and writes nothing else. With TITLE (F1D5) = 0 (S0):
-  FE3C/FE3D = F865 (BE → LE, bit 15 set), FE3E = F02B (start bank),
-  FE3F/FE40 = F867 (same conversion), FE41 = F02C (end bank). For S1/S2 it
-  copies the 6-byte descriptor F019–F01E / F023–F028 to FE3C. If that
-  slot's SxMTb (F016/F020) is ≥ FEh (not a program module), it resets
-  TITLE to 0 and takes the S0 path.
-- **romI-0 1874H** ("program empty?") compares FE3E with FE41, then
-  FE3C with FE3F, so the start and end banks can differ.
-- **`LOAD` finish, rom3b 70E1H**: the ROM's own "program placed in
-  memory" sequence, with the end in FA00/FA01 and the end bank in FA02:
-  1. writes the `FF` terminator at the end;
-  2. S0: F867 = end (BE), **F02C = end bank**;
-  3. S0: if the variable pointer F899 ≤ the new end (LOGEND, 02DAH),
-     sets F899 = (F864):00;
-  4. S1/S2 instead: end triple → F01C / F026, patches the module header
-     (+5/+6, clears b7 of +7 when F3DB b1 is set);
-  5. calls PRGADR;
-  6. F89E (CURRENT TOP) = start, F1C1 (CURRENT bank) = FE3E;
-  7. FA02 = FFh.
-- **`LOAD` start, rom3b 71B3H**, fills FA00–FA05 from F865/F02B/F867/F02C
-  (S0) or copies the S1/S2 descriptor.
-- **Writers of F02C**: rom3b 44BCH/44CBH, 65E4H (`NEW`: F02B = F02C =
-  F02AH), 70F8H (`LOAD` finish), and romce1600-2 34E3H (not looked at yet).
-- **Gaps in the fast loader** compared with 70E1H: it never writes F02C,
-  and it copies FE41 from FE3E instead of taking the end bank. That is
-  correct only while the end stays in the start bank. The loader comment
-  says that held on a measured program spilling into internal RAM, but the
-  ROM treats the two banks as independent. A MODE switch re-runs PRGADR
-  and propagates a stale F02C. It also skips F899, F89E and F1C1, which is
-  probably harmless after NEW0 but unconfirmed.
+Today's gaps against that: F02C is never written, FE41 is copied from FE3E,
+and F899/F89E/F1C1 are skipped. The ROM writes F02C wherever the end moves
+(`NEW` rom3b 44BCH/44CBH, `INIT` S0-moved 65E4H, `LOAD` 70F8H, `CLOAD`
+CE-1600P bank 5 74E3H, line delete P1-B0 4EF9H, line insert 54D3H), and
+PRGADR propagates a stale one. S1/S2 targets are new work: the descriptor
+and header layout is now known (Work-Area-Map §4.5). Do it together with
+the one `+0x8000` helper.
+
+**Check afterwards:** diff the work area (F000–FFFF) typed vs `LOAD`ed vs
+fast-loaded (same preset, `pc1600_cli`), including a program that crosses a
+bank boundary and one loaded into an S1 program area.
+
+**Settled by the ROM, no loader work:**
+- `INIT"Sx:","P",n` writes the header `55 base 00 C5 n·4 00 C5 80` plus FF
+  at base+C5, then `SSLOTMP` rebuilds ADTBL: the slot gets its own entry,
+  and the S0 program is emptied if S0's base moved.
+- PC-1500 files: tapes load only in MODE 1 (the format follows `BMODE` b6;
+  `CLOAD -1`'s `-1` is ignored), to the header address, unconverted. Disk
+  and COM `LOAD` take only the PC-1600 binary format (header type 21H) or
+  ASCII, which is tokenized as PC-1600 BASIC. The ROM never converts PC-1500
+  tokens.
+- MODE 1: `INIT` is refused (ERROR 110) and `PC15MAP` (P0-B0 1676H) narrows
+  ADTBL to one program area. `CLOAD` uses the same end bookkeeping.
 
 ## Expansion connectors: one model on both machines
 
@@ -347,15 +337,13 @@ What's wrong with that:
   clock has no leap-year handling; the model follows the seeded year's
   calendar. On the real unit: `DATE$="02/28":TIME$="23:59:50"`, wait, read
   `DATE$` (02/29 or 03/01).
-- **Sub-CPU commands still unnamed** (IOCS 0CH–0FH, 16H/17H, 1BH–1FH, 26H,
-  the LH-5803's DCH), and the analog-input interrupt / external-keyboard
-  mode: see `PC-1600-SubCpu-LU57813P.md` §8. Tracing `ON ADIN`/`KEY`
-  callers would name them.
+- **Sub-CPU commands still unnamed** (IOCS 0CH–0FH, 1BH, 1FH, 26H, what
+  1CH/1DH mean, the LH-5803's DCH): see `PC-1600-SubCpu-LU57813P.md` §8.
+  The ROM trace is done (2026-09-27): 1EH is the port-mode select
+  (F12CH b0 analog input, b1 external keyboard; `ON ADIN`, `KEYSTAT`),
+  16H/17H are the external keyboard, 1CH/1DH come from `SINIT`. The rest have
+  no caller in the system ROMs, so only real-unit tests can name them.
 
-- What is the "second program memory" for BASIC programs on the PC-1600
-  (relevant for ROM modules and battery-backed RAM modules)?
-- Research MODE 1 (LH-5803/PC-1500-compat mode): does it genuinely reuse
-  the old ROM for things like `PRINT`?
 - CE-158 together with the CE-1600P. The real CE-1600P has its own
   connector at the back (like the CE-150), so both can be attached at
   once; today `PC1600Machine::attachCE1600P`/`attachCE158` detach each
@@ -510,7 +498,7 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
      XBUSY are separate, the DSTB delay is modelled (27.7 us of the fit).
   2. ~~The sub-CPU protocol spec~~ — done in the corpus
      (`PC-1600-SubCpu-LU57813P.md`): the 0.5 s ISR sends A2H, A8H, A3H.
-  3. The residual itself. The RTC timers now exist; the `ON TIME$`
-     hypothesis needs benchmark A re-timed on the real unit with no
-     `ON TIME$` pending (see the known issue).
+  3. The residual itself. The `ON TIME$` hypothesis is ruled out by the
+     ROM (see the known issue); next is timing the FOR/NEXT routine from
+     RAM.
   4. Then re-fit once, against A−C = 45 ms.
