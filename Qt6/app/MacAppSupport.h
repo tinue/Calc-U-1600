@@ -11,4 +11,11 @@
 // The prompt's modal loop then waits for a click that can't arrive, and the
 // load waits for the prompt: a beachball.
 void macDisableWindowRestoration();
+
+// Turns off the press-and-hold accent picker for this app (registers
+// ApplePressAndHoldEnabled = NO). The main window takes part in input-method
+// composition (so dead keys compose), which would otherwise let a held
+// letter open the picker instead of simply being held. Call before
+// QApplication exists.
+void macDisablePressAndHold();
 #endif

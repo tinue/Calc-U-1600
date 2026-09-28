@@ -7,3 +7,9 @@ void macDisableWindowRestoration() {
         [[NSUserDefaults standardUserDefaults] registerDefaults:@{@"ApplePersistenceIgnoreState" : @YES}];
     }
 }
+
+void macDisablePressAndHold() {
+    @autoreleasepool {
+        [[NSUserDefaults standardUserDefaults] registerDefaults:@{@"ApplePressAndHoldEnabled" : @NO}];
+    }
+}

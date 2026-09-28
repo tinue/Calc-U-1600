@@ -26,6 +26,7 @@
 #include "PC1600/PC1600MachineCodeLoader.hpp"
 
 #include <QHBoxLayout>
+#include <QInputMethodEvent>
 #include <QVBoxLayout>
 #include <QTimer>
 #include <QElapsedTimer>
@@ -59,6 +60,12 @@ constexpr qint64 kShiftTapMaxMs = 400;
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle(tr("Calc-U-1600"));
     setFocusPolicy(Qt::StrongFocus);
+    // Take part in input-method composition, or dead keys never compose:
+    // Qt hands a widget without it the raw Key_Dead_* press (empty text,
+    // dropped by resolve()) and the next letter uncombined. Plain keys
+    // still arrive as key events; a composed character comes as
+    // inputMethodEvent()'s commit string.
+    setAttribute(Qt::WA_InputMethodEnabled);
 
     m_controller = std::make_unique<MachineController>(this);
     m_moduleManager = std::make_unique<MemoryModuleManager>(m_controller.get(), this);
@@ -594,6 +601,53 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
         m_controller->enqueueKey(resolved->baseKey);
     }
     event->accept();
+}
+
+void MainWindow::inputMethodEvent(QInputMethodEvent* event) {
+    // The preedit (a pending ¨) isn't shown -- the calculator shows nothing
+    // until the letter either. Each committed character is typed as a tap,
+    // resolved like a key press's text; one with no key is dropped (a bare
+    // ¨ after dead key + Space, ...).
+    disarmShiftTap();
+    const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
+    for (const QChar c : event->commitString()) {
+        auto resolved = PC1500KeyboardMap::resolve(Qt::Key_unknown, Qt::NoModifier, QString(c), isPC1600);
+        if (!resolved) continue;
+        if (m_controller->pasteActive()) m_controller->interruptPaste();
+        if (isPC1600) {
+            if (resolved->needsKbii || m_controller->liveTypingActive()) {
+                m_controller->typeLiveStep(PasteStep{resolved->baseKey, resolved->needsShift, resolved->needsKbii});
+            } else if (resolved->needsShift) {
+                m_controller->tapShiftedKey(resolved->baseKey);
+            } else {
+                m_controller->tapKey(resolved->baseKey);
+            }
+        } else if (resolved->needsShift) {
+            m_controller->enqueueShiftedKey(resolved->baseKey);
+        } else {
+            m_controller->enqueueKey(resolved->baseKey);
+        }
+    }
+    event->accept();
+}
+
+QVariant MainWindow::inputMethodQuery(Qt::InputMethodQuery query) const {
+    switch (query) {
+    case Qt::ImEnabled:
+        return true;
+    case Qt::ImHints:
+        return static_cast<int>(Qt::ImhNoPredictiveText | Qt::ImhNoAutoUppercase);
+    case Qt::ImCursorRectangle:
+        // No text cursor: put input-method popups (candidate lists, the
+        // character viewer) at the LCD, where the typing shows.
+        if (m_faceplate && m_faceplate->lcdWidget()) {
+            const QWidget* lcd = m_faceplate->lcdWidget();
+            return QRect(lcd->mapTo(this, QPoint(0, 0)), lcd->size());
+        }
+        return QRect();
+    default:
+        return QMainWindow::inputMethodQuery(query);
+    }
 }
 
 QImage MainWindow::toQImage(const GrayImage& screen) {

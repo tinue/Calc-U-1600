@@ -303,6 +303,11 @@ authentic speed for the span that matters.
     keys it is another character (B ù/û, H ¡/½, ( ₧/«, …). Those, and an
     uppercase the ROM lacks (Ë, Û → the lowercase), are typed as they are,
     with no attempt to be smart.
+  - Dead keys go through the OS input method (`MainWindow` has
+    `WA_InputMethodEnabled`), not a table of our own: the composed character
+    arrives as the commit string and is typed as a tap. On macOS the
+    press-and-hold accent picker is switched off for the app, so a held
+    letter stays a held key.
   - A run like `öäü` is not batched under one KBII latch. It would save two
     taps per adjacent accented character in paste / `type:` only, but every
     exit path (cancel, untypeable character) would have to release the

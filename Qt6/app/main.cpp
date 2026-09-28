@@ -19,6 +19,7 @@ int main(int argc, char** argv) {
     AppLogging::install();
 #ifdef __APPLE__
     macDisableWindowRestoration(); // see MacAppSupport.h: the restore prompt deadlocks the startup preset
+    macDisablePressAndHold();      // see MacAppSupport.h: held letters stay held keys
 #endif
     QApplication app(argc, argv);
     // Without this, the running window's title-bar/taskbar icon is

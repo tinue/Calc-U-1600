@@ -116,6 +116,9 @@ The PC-1600's `KB II` key latches, and while it is on the letters and
   character is typed as usual. With `KB II` latched, an accented host key
   does nothing: press the letter itself instead (`R` gives `Ö`).
 - `SML` doesn't change these characters.
+- Dead keys compose as usual (`¨` then `U` gives `Ü` on a Swiss or German
+  layout, Option-U then U on a US Mac): the app takes part in the OS input
+  method and types the composed character.
 
 ## Modifiers
 
