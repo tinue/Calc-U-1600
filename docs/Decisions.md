@@ -230,7 +230,9 @@ authentic speed for the span that matters.
   template is never written again, and a live copy autosaves, so the preset
   author has to pick one. The `file:` form writes exactly the named file.
   That skips the catalog-name checks, and it may overwrite a template file,
-  which is how a make preset refreshes its templates.
+  which is how a make preset refreshes its templates. By name, a `template`
+  save may replace one of the user's templates, but a bundled name is always
+  refused.
 
 ### Loading programs (docs/Loader-Mode-Plan.md)
 - **The loaders follow MODE and `TITLE` and never change them.** Load

@@ -349,6 +349,14 @@ void test_saveas_step_rejects_malformed_forms() {
 
 // `s1:` is valid on a PC-1500/1500A preset (its one expansion slot); `s2:`
 // and `floppy:` are PC-1600 only.
+// The pre-rename key is just an unknown item.
+void test_old_modulespecfile_key_is_invalid() {
+    PresetFile p;
+    std::string err;
+    CHECK(!parse("model: PC-1600\nmemory-expansion-1:\n  - modulespecfile: x.card.yaml\n", &p, &err));
+    CHECK(err.find("modulespec-file") != std::string::npos);
+}
+
 void test_saveas_step_pc1500_scope() {
     PresetFile p;
     std::string err;
@@ -418,7 +426,7 @@ void test_plotter_absent_leaves_field_empty() {
 // ── memory-expansion / general parser rules (moved from ce155_tests.cpp) ──
 
 // The built-in `- module: <name>` form is gone -- modules come from
-// definition files (`modulespec:` / `modulespecfile:`).
+// definition files (`modulespec:` / `modulespec-file:`).
 void test_preset_parser_rejects_module_form() {
     PresetFile preset;
     std::string error;
@@ -658,6 +666,7 @@ int run_preset_tests() {
     test_syncclock_step();
     test_saveas_step_parses_all_targets_pc1600();
     test_saveas_file_form_resolves_against_the_preset();
+    test_old_modulespecfile_key_is_invalid();
     test_saveas_step_rejects_malformed_forms();
     test_saveas_step_pc1500_scope();
     test_wait_step_rejects_negative_value();

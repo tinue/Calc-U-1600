@@ -250,7 +250,11 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
     // An explicit file (a preset's `saveas: ... file:`) is exactly what the
     // preset asked for: no catalog-name or template-file checks.
     const bool explicitFile = !filePath.isEmpty();
-    if (!explicitFile && templateNames().contains(name)) {
+    // A bundled name is always refused (the bundled card would shadow the
+    // saved one). One of the user's own templates may only be replaced by
+    // another template save -- a preset re-making its template.
+    if (!explicitFile &&
+        (bundledNames().contains(name) || (!asTemplate && templateNames().contains(name)))) {
         *error = tr("\"%1\" is a template's name. Choose a different name.").arg(name);
         return false;
     }

@@ -21,7 +21,7 @@
 // `Calc-U-1600/Resources`, the repo's bundled-module directory -- same
 // cwd-relative convention as `roms/`). Repeat it to add fallback
 // directories, searched in the order given after the first. A
-// `- modulespecfile: <path>` reference ignores it.
+// `- modulespec-file: <path>` reference ignores it.
 //
 // --wav <out.wav> records the buzzer (PC6, see PiezoSampler.hpp) for the
 // whole run -- preset script included -- as 48 kHz mono 16-bit PCM.

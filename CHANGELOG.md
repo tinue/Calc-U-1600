@@ -24,8 +24,9 @@
 ### Changed
 
 - **Presets** `saveas:` now needs `live` or `template` first:
-  `saveas: live s2:My Card`. A preset with the old form is refused and told
-  why.
+  `saveas: live s2:My Card`.
+- **Presets** `- modulespecfile:` is now `- modulespec-file:`, like
+  `floppy-file:`.
 
 - **Loaders** What a file is now comes from SharpDataExchange's library
   (0.3.1): Load Machine Code refuses a BASIC listing or tokenized BASIC

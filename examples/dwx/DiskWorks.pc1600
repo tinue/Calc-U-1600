@@ -18,7 +18,7 @@ host-drive: S3
 memory-expansion-1:
   - modulespec: CE-1600M
 memory-expansion-2:
-  - modulespecfile: CE-1601M - Progs.card.yaml
+  - modulespec-file: CE-1601M - Progs.card.yaml
 
 # The card is pre-populated, only reserve the machine-code area in S0:
 keys:

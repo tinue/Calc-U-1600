@@ -28,7 +28,7 @@
 //      in each CLI.
 //
 // `memory-expansion:` accepts exactly one module, named by definition
-// (`- modulespec: <module-name>` / `- modulespecfile: <path>`, see
+// (`- modulespec: <module-name>` / `- modulespec-file: <path>`, see
 // PresetFile::memoryExpansionModuleSpecName); a PC-1600 preset instead uses
 // `memory-expansion-1:` / `memory-expansion-2:`. Every other extra field, or
 // `rom-modules:`/`check` step remains rejected. `PC-1500`, `PC-1500A` and
@@ -307,7 +307,7 @@ struct PresetFile {
     std::string floppy;
     // PC-1600 only: `floppy-file: <path>` names a `.floppy.yaml` FILE
     // instead, resolved relative to the preset's own directory (the floppy
-    // counterpart of `- modulespecfile:`), with the same optional `,A`/`,B`
+    // counterpart of `- modulespec-file:`), with the same optional `,A`/`,B`
     // suffix. At most one of `floppy` / `floppyFile` is set; same
     // `plotter: ce1600p` requirement.
     std::string floppyFile;
@@ -331,7 +331,7 @@ struct PresetFile {
     // PC1600PresetLoader) turns whichever is set into a card via
     // Core/Connector/SoftwareDefinedCard.hpp's makeSoftwareDefinedCard().
     //
-    //  * `- modulespecfile: <path>` -- a definition FILE. Resolved here to
+    //  * `- modulespec-file: <path>` -- a definition FILE. Resolved here to
     //    an absolute / cwd-relative path (like `program.path`, relative to
     //    the preset's own directory).
     std::string memoryExpansionModuleSpecFile;

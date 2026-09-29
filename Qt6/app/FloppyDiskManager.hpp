@@ -84,8 +84,9 @@ public:
     // autosaves there, a template doesn't), but unlike it: works even when
     // the drive's disk is already saved (a "save as" -- the previous
     // instance file just stops being autosaved), and silently overwrites an
-    // existing file of the same name. A by-name save still refuses a
-    // template's name, and a live one never overwrites a template file.
+    // existing file of the same name. A by-name save refuses a bundled name;
+    // a live one also refuses the name of a user template and never
+    // overwrites a template file, a template one may replace a user template.
     // `filePath` (the `file:` form) writes exactly that file, with no name
     // checks; empty = the instance directory.
     bool saveAsFromPreset(const QString& diskName, const QString& filePath, bool asTemplate, QString* error);
@@ -104,6 +105,7 @@ private:
     bool nameCollides(const QString& diskName) const;
     // Every template disk's name (bundled or in the storage folder).
     QVector<DiskEntry> templateEntries() const;
+    bool isBundledName(const QString& diskName) const;
     // Records the file the disk came from: a template is never written, an
     // instance autosaves in place (never into the bundle).
     void classifySource(const QString& resolvedPathOrEmpty, bool isTemplate);

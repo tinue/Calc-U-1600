@@ -46,6 +46,12 @@ FloppyDiskManager::DiskLists FloppyDiskManager::diskLists() const {
     return lists;
 }
 
+bool FloppyDiskManager::isBundledName(const QString& diskName) const {
+    for (const auto& e : scanFloppyDirectory(AppPaths::bundledResourcesDir().toStdString(), nullptr))
+        if (QString::fromStdString(e.diskName) == diskName) return true;
+    return false;
+}
+
 QVector<FloppyDiskManager::DiskEntry> FloppyDiskManager::templateEntries() const {
     return diskLists().templates;
 }
@@ -148,7 +154,10 @@ bool FloppyDiskManager::saveDiskAs(const QString& diskName, bool fromPreset, QSt
     // An explicit file (a preset's `saveas: ... file:`) is exactly what the
     // preset asked for: no catalog-name or template-file checks.
     const bool explicitFile = !filePath.isEmpty();
-    if (!explicitFile && containsName(templateEntries(), name)) {
+    // A bundled name is always refused (the bundled disk would shadow the
+    // saved one). One of the user's own templates may only be replaced by
+    // another template save -- a preset re-making its template.
+    if (!explicitFile && (isBundledName(name) || (!asTemplate && containsName(templateEntries(), name)))) {
         *error = tr("\"%1\" is a template's name. Choose a different name.").arg(name);
         return false;
     }

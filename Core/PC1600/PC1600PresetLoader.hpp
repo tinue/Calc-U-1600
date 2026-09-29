@@ -81,7 +81,7 @@ class PC1600Machine;
 /// passes its iCloud-Drive `BatteryCards/` folder so a preset can name a
 /// user's saved battery-card instance; the CLI passes any repeated
 /// `--modules-dir`. A missing/unreadable extra directory is skipped
-/// silently. Only consulted for the name form; `- modulespecfile: <path>`
+/// silently. Only consulted for the name form; `- modulespec-file: <path>`
 /// is resolved by the parser and never looks here.
 /// `romDirs` is where the plotter's bundled ROM(s) live, needed only when
 /// the preset has `plotter: ce150`/`plotter: ce1600p` (the plotter is

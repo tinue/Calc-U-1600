@@ -72,7 +72,7 @@ public:
     // have. The module's name is read from the machine's slot itself
     // (ExpansionCard::moduleName()) -- an empty slot clears the selection.
     // `resolvedPathOrEmpty` is
-    // the on-disk file a `modulespec:`/`modulespecfile:` reference resolved
+    // the on-disk file a `modulespec:`/`modulespec-file:` reference resolved
     // to (PresetLoadResult::slot1ResolvedPath / slot2ResolvedPath), empty
     // for an empty slot. The file itself says what it is (classifySlot()):
     // an instance becomes autosave-eligible exactly as if it had been
@@ -90,8 +90,9 @@ public:
     // autosaves there, a template doesn't), but unlike it: works even when
     // the slot is already saved (a "save as" -- the previous instance file
     // just stops being autosaved), and silently overwrites an existing file
-    // of the same name. A by-name live save still refuses a template's name
-    // and never overwrites a template file. `filePath` (the `file:` form)
+    // of the same name. A by-name save refuses a bundled name; a live one
+    // also refuses the name of a user template and never overwrites a
+    // template file, a template one may replace a user template. `filePath` (the `file:` form)
     // writes exactly that file, with no name checks; empty = the instance
     // directory.
     bool saveAsFromPreset(int slot, const QString& instanceName, const QString& filePath, bool asTemplate,

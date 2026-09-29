@@ -54,7 +54,7 @@ class PC1500Machine;
 /// `BatteryCards/` folder here so a preset can name a user's saved
 /// battery-card instance; the CLI passes any repeated `--modules-dir`. A
 /// missing/unreadable extra directory is skipped silently. Only consulted
-/// when a preset actually uses the name form; a `- modulespecfile: <path>`
+/// when a preset actually uses the name form; a `- modulespec-file: <path>`
 /// reference is resolved by the parser and never looks here.
 /// `onArmed` fires right before reset(), once the module/plotter are
 /// attached but the machine is still powered off -- see PresetArmedFn.

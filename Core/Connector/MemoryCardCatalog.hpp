@@ -13,7 +13,7 @@
 //   * the GUI lists every module whose `compatible-hosts` covers the open
 //     model / slot (see the control-bar module picker);
 //   * a preset's `modulespec: <module-name>` (as opposed to the by-path
-//     `modulespecfile: <path>`) resolves the name to a file here, then
+//     `modulespec-file: <path>`) resolves the name to a file here, then
 //     hands the path to makeSoftwareDefinedCard() unchanged.
 //
 // No notion of "app resource" reaches the core: the caller supplies the
@@ -59,7 +59,7 @@ inline std::vector<MemoryCardCatalogEntry> scanMemoryCardDirectory(const std::st
 }
 
 // The catalogue entry for one `.card.yaml` file -- e.g. to classify the
-// file a preset's `modulespec:`/`modulespecfile:` resolved to (template or
+// file a preset's `modulespec:`/`modulespec-file:` resolved to (template or
 // instance) without scanning its whole directory.
 inline bool readMemoryCardCatalogEntry(const std::string& path, MemoryCardCatalogEntry* out, std::string* error) {
     return readNamedFile(path, memory_card_catalog_detail::parseEntry, out, error);

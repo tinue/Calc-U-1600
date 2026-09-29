@@ -320,7 +320,7 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
 // address:/banks:/etc.; a second item or an extra field is a hard parse
 // error, matching this parser's all-or-nothing philosophy). The item is
 // one of:
-//   * `- modulespecfile: <path>` -- a software-defined-module definition
+//   * `- modulespec-file: <path>` -- a software-defined-module definition
 //                                   FILE, resolved relative to `presetDir`
 //                                   and written to `*specFileTarget`.
 //   * `- modulespec: <module-name>` -- a bundled/standard module named by
@@ -342,7 +342,7 @@ bool parseModuleListBlock(const std::vector<RawLine>& lines, size_t& idx, const 
         const RawLine& line = lines[idx];
         if (line.content.size() < 2 || line.content[0] != '-' || line.content[1] != ' ') {
             *error = "line " + std::to_string(line.lineNo) +
-                     ": expected '- modulespec: <module-name>' or '- modulespecfile: <path>' list item";
+                     ": expected '- modulespec: <module-name>' or '- modulespec-file: <path>' list item";
             return false;
         }
         itemCount++;
@@ -354,15 +354,15 @@ bool parseModuleListBlock(const std::vector<RawLine>& lines, size_t& idx, const 
         std::string key, value;
         bool hasInline;
         if (!splitKeyValue(line.content.substr(2), &key, &value, &hasInline) || !hasInline ||
-            (key != "modulespec" && key != "modulespecfile")) {
+            (key != "modulespec" && key != "modulespec-file")) {
             *error = "line " + std::to_string(line.lineNo) +
-                     ": expected 'modulespec: <module-name>' or 'modulespecfile: <path>'" +
+                     ": expected 'modulespec: <module-name>' or 'modulespec-file: <path>'" +
                      (key == "module" ? " (the built-in 'module:' names are gone -- use e.g. "
                                         "'modulespec: CE-155')"
                                       : "");
             return false;
         }
-        if (key == "modulespecfile") {
+        if (key == "modulespec-file") {
             *specFileTarget = resolvePath(presetDir, value);
         } else {
             *specNameTarget = value;

@@ -49,7 +49,7 @@ struct PresetLoadResult {
     /// editor didn't store (see BasicTypeResult::rejectedLines). Non-empty
     /// implies `ok == false`.
     std::vector<std::string> rejectedBasicLines;
-    /// The on-disk file a `modulespec:`/`modulespecfile:` reference resolved
+    /// The on-disk file a `modulespec:`/`modulespec-file:` reference resolved
     /// to, per slot -- empty for an empty slot. The PC-1500/1500A has one
     /// expansion slot and reports it as slot 1. (Which module it is, the GUI
     /// reads from the slot itself.) Lets the GUI tell a bundled read-only
@@ -177,7 +177,7 @@ protected:
 std::vector<std::string> presetModuleDirs(const std::string& moduleDir,
                                           const std::vector<std::string>& extraModuleDirs);
 
-/// Builds the software-defined card a `modulespecfile:` path (`specFile`) or
+/// Builds the software-defined card a `modulespec-file:` path (`specFile`) or
 /// `modulespec:` name (`specName`, looked up in `moduleDirs`) names, for
 /// `host`. Returns null with `error` set on failure; `resolvedPath` receives
 /// the spec file used.

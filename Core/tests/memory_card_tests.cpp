@@ -1298,12 +1298,12 @@ void test_reject_initial_content_missing_bank_on_banked_region() {
 std::string makeScratchCardDir();  // defined below, in the catalogue section
 
 void test_preset_parses_modulespec() {
-    // `modulespecfile:` -- a path, resolved relative to the preset dir.
+    // `modulespec-file:` -- a path, resolved relative to the preset dir.
     PresetFile preset;
     std::string err;
     CHECK(parsePresetString("model: PC-1500\n"
                             "memory-expansion:\n"
-                            "  - modulespecfile: /abs/path/foo.card.yaml\n",
+                            "  - modulespec-file: /abs/path/foo.card.yaml\n",
                             "/tmp/memory_card_tests_scratch.pc1500", &preset, &err));
     CHECK(preset.memoryExpansionModuleSpecFile == "/abs/path/foo.card.yaml");
     CHECK(preset.memoryExpansionModuleSpecName.empty());
@@ -1311,7 +1311,7 @@ void test_preset_parses_modulespec() {
     PresetFile p2;
     CHECK(parsePresetString("model: PC-1600\n"
                             "memory-expansion-2:\n"
-                            "  - modulespecfile: cards/x.card.yaml\n",
+                            "  - modulespec-file: cards/x.card.yaml\n",
                             "/tmp/memory_card_tests_scratch.pc1600", &p2, &err));
     CHECK(p2.slot2ModuleSpecFile == "/tmp/cards/x.card.yaml");  // relative to the scratch dir
 
@@ -1337,7 +1337,7 @@ void test_preset_rejects_second_modulespec_item() {
 
 void test_ce1601m_end_to_end_through_pc1600() {
     // Drive a CE-1601M through a full preset load two ways -- a
-    // `modulespecfile:` path and a `modulespec:` module-name resolved from
+    // `modulespec-file:` path and a `modulespec:` module-name resolved from
     // a scratch module directory -- both exercising the OUT (28H) -> Slot 2
     // route. `run` asserts the vertical-bank behaviour for a loaded preset.
     auto run = [&](const PresetFile& preset, const std::string& moduleDir) {
@@ -1367,7 +1367,7 @@ void test_ce1601m_end_to_end_through_pc1600() {
     std::string err;
     CHECK(parsePresetString(std::string("model: PC-1600\n"
                                         "memory-expansion-2:\n"
-                                        "  - modulespecfile: ") +
+                                        "  - modulespec-file: ") +
                                 cardPath + "\n",
                             "/tmp/memory_card_tests_e2e.pc1600", &byFile, &err));
     CHECK(byFile.slot2ModuleSpecFile == cardPath);

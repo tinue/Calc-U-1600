@@ -534,7 +534,7 @@ memory-expansion-1:           # PC-1600 slot 1 (slot 2: memory-expansion-2:)
 ```
 
 - **PC-1500/1500A:** the one slot is `memory-expansion:`.
-- **Your own module definition:** `- modulespecfile: my.card.yaml`, with the
+- **Your own module definition:** `- modulespec-file: my.card.yaml`, with the
   path relative to the preset.
 - **CE-158:** `interface: ce158` attaches it (not yet together with the CE-1600P).
 
@@ -667,7 +667,7 @@ This is what it leaves on the LCD:
 | `floppy:` | disk name, optionally `,A` / `,B` (PC-1600 with `ce1600p`) |
 | `floppy-file:` | a `.floppy.yaml` file next to the preset instead, optionally `,A` / `,B` |
 | `host-drive:` | a folder mounted as drive `S3:` (PC-1600), relative to the preset or `~/…`; see [A folder as a drive](#a-folder-as-a-drive-pc-1600) |
-| `memory-expansion:` | PC-1500/1500A: one `- modulespec: <name>` or `- modulespecfile: <path>` |
+| `memory-expansion:` | PC-1500/1500A: one `- modulespec: <name>` or `- modulespec-file: <path>` |
 | `memory-expansion-1:`, `-2:` | PC-1600 slot 1 / slot 2, same form |
 | `keys:` | a list of steps (below); may appear any number of times |
 | `program:` | `format:`, `path:` or `text: \|`, `address:`, `length:`; may appear any number of times |
@@ -740,7 +740,7 @@ why) and [Memory-Card-Definition-Format.md](Memory-Card-Definition-Format.md)
   `ce1638.card.yaml` and `ce1601m.card.yaml` are banked. The fictional
   [examples/memory/memory-cards/pc1500-maxed-out.card.yaml](../examples/memory/memory-cards/pc1500-maxed-out.card.yaml)
   shows every PC-1500 expansion pin in use, and its preset loads it with
-  `modulespecfile:`.
+  `modulespec-file:`.
 - **Make it appear in the pickers:** put a file with `template: true` in
   the Battery-card saves folder. Like the bundled cards it is never written
   to, and Name & Save makes your own copy.

@@ -322,7 +322,7 @@ threaded through the loader, which nothing else currently needs.
 
 ---
 
-## 8. Loading a card — `modulespec:` and `modulespecfile:` preset keys
+## 8. Loading a card — `modulespec:` and `modulespec-file:` preset keys
 
 A definition is plugged in from a preset scenario file, in the same
 `memory-expansion*` block that takes a built-in `- module:` name — one
@@ -345,7 +345,7 @@ memory-expansion-2:
 # By path to a definition file, relative to the preset's own directory
 # (same rule as `program.path`). For a one-off card not in the directory.
 memory-expansion:
-  - modulespecfile: ../cards/prototype.card.yaml
+  - modulespec-file: ../cards/prototype.card.yaml
 ```
 
 - `modulespec: <module-name>` is resolved by scanning one or more **module
@@ -365,7 +365,7 @@ memory-expansion:
   load error; two files claiming one name **within a single directory** is
   an ambiguity error. A missing/unreadable fallback directory is skipped
   silently.
-- `modulespecfile: <path>` names a file directly and never consults the
+- `modulespec-file: <path>` names a file directly and never consults the
   module directory.
 
 **Templates and instances.** What happens to a loaded card's file is decided
