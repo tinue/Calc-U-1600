@@ -89,9 +89,19 @@ uint16_t internalCeiling(const PlacementInput& in) {
 // endAddr / endSegment.
 bool placeImage(PlacementResult& r, const std::vector<uint8_t>& payload) {
     const auto& segs = r.segments;
-    // Split into line records: [lineNo hi][lineNo lo][len][len bytes].
+    // Split into line records: [lineNo hi][lineNo lo][len][len bytes]. A lone
+    // $FF is the end mark between two program segments (a `#SEGMENT` /
+    // `99999` line in a listing); LOADLINE (rom3b 6F70H) makes it a 1-byte
+    // record that LOADSTORE places like any line. A saved file carries it as
+    // FF 00 00 (line 0 can't exist); LOADLINE reads all three, stores the FF.
     std::vector<std::pair<size_t, size_t>> records;  // offset, size
     for (size_t i = 0; i < payload.size();) {
+        if (payload[i] == 0xFF) {
+            records.push_back({i, 1});
+            const bool wire = i + 2 < payload.size() && payload[i + 1] == 0x00 && payload[i + 2] == 0x00;
+            i += wire ? 3 : 1;
+            continue;
+        }
         if (i + 3 > payload.size() || i + 3 + payload[i + 2] > payload.size()) {
             r.error = "the tokenized program is malformed (a line record runs past its end)";
             return false;

@@ -103,6 +103,38 @@ void test_stock_single_internal_segment() {
     CHECK(r.writes[0].data.back() == 0xFF);
 }
 
+// Two program segments (a `#SEGMENT` / `99999` listing line): the lone $FF
+// between them is a 1-byte record, and the second segment restarts its line
+// numbers -- rom3b LOADLINE 6F70H.
+void test_two_program_segments() {
+    FakeMem m;
+    m.set(pc1600::kS0MTb, 0xFF);
+    m.setBE(pc1600::kBasPrgSt, 0x40C5);
+    PlacementInput in = makeInput(m);
+
+    std::vector<uint8_t> p = program(2, 50);
+    p.push_back(0xFF);
+    const std::vector<uint8_t> second = program(3, 20);
+    p.insert(p.end(), second.begin(), second.end());
+
+    PlacementResult r = pc1600::planS0Placement(in, p);
+    CHECK(r.ok);
+    CHECK(r.writes.size() == 1);
+    CHECK(r.writes[0].data.size() == 100 + 1 + 60 + 1);
+    CHECK(r.writes[0].data[100] == 0xFF);
+    CHECK(r.writes[0].data[101] == 0x00 && r.writes[0].data[102] == 0x01);  // line 1 again
+    CHECK(r.writes[0].data.back() == 0xFF);
+    CHECK(r.endAddr == 0xC0C5 + 161);
+
+    // The wire form FF 00 00 of a saved file stores the same bytes.
+    std::vector<uint8_t> w = program(2, 50);
+    w.insert(w.end(), {0xFF, 0x00, 0x00});
+    w.insert(w.end(), second.begin(), second.end());
+    PlacementResult rw = pc1600::planS0Placement(in, w);
+    CHECK(rw.ok);
+    CHECK(rw.writes.size() == 1 && rw.writes[0].data == r.writes[0].data);
+}
+
 // ── CE-1600M in Slot 1 as extension memory, boot + NEW0 -- the real
 //    intro.pc1600 case observed on the emulated machine:
 //    S0MTb=$04, ADTBL[4..5] = 01 11, BASPRG_ST=$00C5. ──────────────────
@@ -174,6 +206,20 @@ void test_trm_example1_scatter_and_bank_end_mark() {
     CHECK(r.writes[1].data.size() == 200 + 1);           // lines 80, 81 + $FF
     CHECK(r.endAddr == 0x8000 + 200);
     CHECK(r.endSegment == 1);
+
+    // A segment $FF after line 79 still fits ($BF81 + 1 + 2 <= $BFFF): it
+    // stays in the CE-159 bank, then the 00 00 mark, then the next lines.
+    std::vector<uint8_t> p = program(79, 100);
+    p.push_back(0xFF);
+    const std::vector<uint8_t> second = program(2, 100);
+    p.insert(p.end(), second.begin(), second.end());
+    PlacementResult s = pc1600::planS0Placement(in, p);
+    CHECK(s.ok);
+    CHECK(s.writes.size() == 2);
+    CHECK(s.writes[0].data.size() == 7900 + 1 + 2);
+    CHECK(s.writes[0].data[7900] == 0xFF);
+    CHECK(s.writes[0].data[7901] == 0x00 && s.writes[0].data[7902] == 0x00);
+    CHECK(s.writes[1].data.size() == 200 + 1);
 }
 
 // ADTBL entry 5's module bank runs straight on into internal RAM ($BFFF ->
@@ -341,6 +387,7 @@ void test_debug_program_areas_match_rom() {
 int run_pc1600_program_placement_tests() {
     test_debug_program_areas_match_rom();
     test_stock_single_internal_segment();
+    test_two_program_segments();
     test_ce1600m_slot1_extension_memory();
     test_trm_example1_scatter_and_bank_end_mark();
     test_entry5_straddles_into_internal_ram();

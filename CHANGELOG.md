@@ -33,6 +33,9 @@
 - **Presets** A machine-code header's auto-run into slot S2 now types
   `CALL #2,&<addr>`, as Load Machine Code proposes, instead of
   `CALL &<addr>`, which ran whatever bank 0 maps there.
+- **Loaders** On the PC-1600, a BASIC program made of several program
+  segments (a `#SEGMENT` or `99999` line in the listing) loads instead of
+  failing with "the tokenized program is malformed".
 
 ## [0.5.0] - 2026-09-25
 
