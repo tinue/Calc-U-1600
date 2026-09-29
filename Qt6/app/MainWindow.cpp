@@ -340,9 +340,11 @@ bool MainWindow::isLoading() const { return m_sync && m_sync->busy(); }
 // while one is mounted is a live media swap.
 void MainWindow::mountHostDirectory() {
     const QString title = tr("Mount Directory as S3:");
-    const QString current = m_controller->hostDriveDirectory();
-    const QString dir = QFileDialog::getExistingDirectory(this, title, current.isEmpty() ? QDir::homePath() : current);
+    // Starts in Settings' "Host drive folder" (fixed or <last used>).
+    const QString dir =
+        QFileDialog::getExistingDirectory(this, title, AppSettings::openStartDir(AppSettings::OpenFolder::HostDrive));
     if (dir.isEmpty()) return;
+    AppSettings::rememberOpenDir(AppSettings::OpenFolder::HostDrive, dir);
     if (m_controller->hostDriveAttached()) {
         m_controller->attachHostDrive(dir);
     } else {

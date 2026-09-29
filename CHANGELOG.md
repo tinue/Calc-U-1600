@@ -20,7 +20,9 @@
   shown, and INIT is refused. Subfolders work as on a MEP USB drive:
   `CDIR "path"` changes the current folder and `LDIR` lists subfolders.
   Programs written for the MEP module, such as FILEX, browse it. See
-  docs/PC1600-Host-Drive.md and docs/PC1600-FILEX.md.
+  docs/PC1600-Host-Drive.md and docs/PC1600-FILEX.md. The dialog opens in
+  the directory last mounted, or in a fixed **Settings ▸ Host drive
+  folder**.
 - **Presets** New keys:
   - `host-drive: <folder>` mounts a folder as S3:.
   - `floppy-file: <file>` loads a `.floppy.yaml` next to the preset.

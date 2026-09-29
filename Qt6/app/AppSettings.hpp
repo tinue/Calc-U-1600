@@ -45,7 +45,8 @@ inline void setInstanceDirOverride(const QString& dir) {
 //   Samples  -- "Load Preset…" (and Settings' default-preset pickers)
 //   Basic    -- "Load BASIC Program…" (.bas listings)
 //   Assembly -- "Load Machine Code…" (.bin files)
-enum class OpenFolder { Samples, Basic, Assembly };
+//   HostDrive -- "Mount Directory…" (PC-1600 host drive S3:)
+enum class OpenFolder { Samples, Basic, Assembly, HostDrive };
 
 // Key group per folder. Samples keeps the original "preset/" keys so a
 // folder configured before the split carries over.
@@ -54,6 +55,7 @@ inline QString openFolderKeyGroup(OpenFolder folder) {
         case OpenFolder::Samples: return QStringLiteral("preset/");
         case OpenFolder::Basic: return QStringLiteral("basic/");
         case OpenFolder::Assembly: return QStringLiteral("assembly/");
+        case OpenFolder::HostDrive: return QStringLiteral("hostDrive/");
     }
     return QStringLiteral("preset/");
 }
@@ -76,7 +78,8 @@ inline void setOpenDir(OpenFolder folder, const QString& dir) {
 }
 
 // Key: "<group>lastOpenDir" -- the folder of the file last picked in that
-// dialog. Recorded on every pick (rememberOpenFile()), but only used while
+// dialog (for HostDrive: the directory last mounted). Recorded on every
+// pick (rememberOpenFile() / rememberOpenDir()), but only used while
 // openDir() is unset.
 inline QString lastOpenDir(OpenFolder folder) {
     return backingStore().value(openFolderKeyGroup(folder) + QStringLiteral("lastOpenDir"), QString()).toString();
@@ -85,6 +88,10 @@ inline QString lastOpenDir(OpenFolder folder) {
 inline void rememberOpenFile(OpenFolder folder, const QString& filePath) {
     backingStore().setValue(openFolderKeyGroup(folder) + QStringLiteral("lastOpenDir"),
                             QFileInfo(filePath).absolutePath());
+}
+
+inline void rememberOpenDir(OpenFolder folder, const QString& dir) {
+    backingStore().setValue(openFolderKeyGroup(folder) + QStringLiteral("lastOpenDir"), QDir(dir).absolutePath());
 }
 
 // The start directory for that dialog: the fixed openDir() if set, else

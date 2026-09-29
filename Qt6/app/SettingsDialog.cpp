@@ -144,11 +144,14 @@ PathRowSpec directorySpec(QWidget* parent, const QString& label, const QString& 
 
 // One file-open start folder row (AppSettings::OpenFolder). Unset -- the
 // default, and what Reset restores -- shows "<last used>": that dialog
-// starts wherever a file was last picked from.
+// starts wherever a file was last picked from (or, for HostDrive, in the
+// directory last mounted).
 void addOpenFolderRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids& sections, const QString& label,
                       const QString& dialogTitle, AppSettings::OpenFolder folder) {
     PathRowSpec spec = directorySpec(parent, label, dialogTitle, [folder] { return AppSettings::openStartDir(folder); });
-    spec.resetToolTip = SettingsDialog::tr("Start in the folder a file was last loaded from");
+    spec.resetToolTip = folder == AppSettings::OpenFolder::HostDrive
+                            ? SettingsDialog::tr("Start in the directory last mounted")
+                            : SettingsDialog::tr("Start in the folder a file was last loaded from");
     spec.display = [folder] {
         const QString dir = AppSettings::openDir(folder);
         return dir.isEmpty() ? SettingsDialog::tr("<last used>") : dir;
@@ -218,6 +221,8 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
                      AppSettings::OpenFolder::Basic);
     addOpenFolderRow(general, 3, this, sections, tr("Assembly folder:"), tr("Choose Assembly Folder"),
                      AppSettings::OpenFolder::Assembly);
+    addOpenFolderRow(general, 4, this, sections, tr("Host drive folder:"), tr("Choose Host Drive Folder"),
+                     AppSettings::OpenFolder::HostDrive);
 
     // ── Default presets ──────────────────────────────────────────────────
     // Applied whenever that model gets selected (including at startup) --

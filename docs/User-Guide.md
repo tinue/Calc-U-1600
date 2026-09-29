@@ -712,6 +712,8 @@ elsewhere. Changes apply immediately; there is only **Close**.
     A04), PC-1500A or PC-1600.
   - **Samples / Basic / Assembly folder:** where Load Preset…, Load BASIC
     Program… and Load Machine Code… open. `<last used>` by default.
+  - **Host drive folder:** where Mount Directory… opens. `<last used>` (the
+    directory last mounted) by default.
 - **Default presets:** one per model, see [Startup presets](#88-startup-presets).
 - **Storage ▸ Battery-card saves:** where saved modules and disks go.
 - **Tracing:** where CPU traces go, and the size at which a trace stops.

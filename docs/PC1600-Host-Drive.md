@@ -168,6 +168,8 @@ No directory mounted: status 20H, ERL A0H.
 
 - **Mount Directory…** (PC-1600 only) plugs the drive in with the same OFF/ON
   cycle as a plotter attach, because the ROM only finds modules at power-on.
+  The dialog opens in **Settings ▸ Host drive folder**: the directory last
+  mounted by default, or a fixed folder.
 - **Mount again** while mounted swaps the folder live.
 - **Unmount** power-cycles the drive out.
 - The mount survives a ROM switch but not a model switch, and is not saved
