@@ -1,0 +1,28 @@
+# PC-1600 DiskWorks program by Christian Becker (KiKiSoft, 1993):
+# https://github.com/hzprky/DiskWorks
+#
+# Self-contained: everything comes from this folder.
+#   - S3/ is mounted as drive S3: (host-drive). It holds DWX.BIN and the
+#     DW.CFG that DiskWorks reads from the drive it was loaded from.
+#   - "CE-1601M - Progs.card.yaml" (S2:) and "Progs.floppy.yaml" (X:) are
+#     templates made by make_diskworks_media.pc1600: every run starts from
+#     them, changes are not saved back (Name & Save keeps a copy).
+#
+# BLOAD starts DiskWorks by itself: DWX.BIN's header runs it at $D000.
+
+model: PC-1600
+plotter: ce1600p
+floppy-file: Progs.floppy.yaml
+host-drive: S3
+
+memory-expansion-1:
+  - modulespec: CE-1600M
+memory-expansion-2:
+  - modulespecfile: CE-1601M - Progs.card.yaml
+
+# The card is pre-populated, only reserve the machine-code area in S0:
+keys:
+  - key: mode
+  - type: NEW"S0:",&E900
+  - key: mode
+  - type: BLOAD"S3:DWX.BIN"

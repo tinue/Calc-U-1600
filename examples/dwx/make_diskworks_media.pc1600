@@ -1,0 +1,85 @@
+# PC-1600 Prepare the media for DiskWorks.pc1600: the same few BASIC programs
+# and a DW.CFG on a CE-1601M RAM card (S2:) and on a CE-1600F floppy (X:).
+# Both are saved as templates next to this preset -- "CE-1601M - Progs.card.yaml"
+# and "Progs.floppy.yaml" -- so DiskWorks.pc1600 always starts from them.
+
+model: PC-1600
+plotter: ce1600p
+floppy: Formatted
+
+memory-expansion-1:
+  - modulespec: CE-1600M
+memory-expansion-2:
+  - modulespec: CE-1601M
+
+# Set the power-on title, format + split the CE-1601M as a RAM disk,
+# then initialize the floppy
+keys:
+  - type: TITLE
+  - type: INIT"S2:","F"
+  - type: INIT"S2:","M"
+  - key: mode
+  - type: NEW0
+  - key: mode
+  - type: INIT"X:"
+  - key: enter
+
+# Load the programs, and save each one to S2: and X:
+program:
+  path: ../plotter/globus.bas
+  format: basic-binary
+keys:
+  - type: SAVE"S2:GLOBUS.BAS"
+  - type: SAVE"X:GLOBUS.BAS"
+
+program:
+  path: ../plotter/biorhythmus_1600.bas
+  format: basic-binary
+keys:
+  - type: SAVE"S2:BIO.BAS"
+  - type: SAVE"X:BIO.BAS"
+
+program:
+  path: ../plotter/lissajou-1600.bas
+  format: basic-binary
+keys:
+  - type: SAVE"S2:LISSAJOU.BAS"
+  - type: SAVE"X:LISSAJOU.BAS"
+
+program:
+  path: ../plotter/ascii.bas
+  format: basic-binary
+keys:
+  - type: SAVE"S2:ASCII.BAS"
+  - type: SAVE"X:ASCII.BAS"
+
+program:
+  path: ../interfaces/setcom1600.bas
+  format: basic-binary
+keys:
+  - type: SAVE"S2:COMM.BAS"
+  - type: SAVE"X:COMM.BAS"
+
+# Set up the DW.CFG file on S2: and on X:
+keys:
+  - type: MAXFILES=1
+  - type: OPEN"S2:DW.CFG" FOR OUTPUT AS #1
+  - type: PRINT#1,"C \31\LOAD"+CHR$(&22)+"S2:COMM.BAS"+CHR$(&22)
+  - type: PRINT#1,"^"
+  - type: CLOSE #1
+  - type: OPEN"X:DW.CFG" FOR OUTPUT AS #1
+  - type: PRINT#1,"C \31\LOAD"+CHR$(&22)+"X:COMM.BAS"+CHR$(&22)
+  - type: PRINT#1,"^"
+  - type: CLOSE #1
+
+# Some debug output at the end
+keys:
+  - type: DSKF"S2:"
+  - type: FILES"S2:"
+  - type: DSKF"X:"
+  - type: FILES"X:"
+
+# Save both as templates next to this preset, for DiskWorks.pc1600
+keys:
+  - saveas: template s2:file:CE-1601M - Progs.card.yaml
+  - saveas: template floppy:file:Progs.floppy.yaml

@@ -47,7 +47,13 @@ loaded on its own with **File ▸ Load BASIC Program…**. See
 | `memtest_bank.pc1500a` | PC-1500A + CE-1638 | Memory test across all banks of a banked module |
 | `memtest.asm`, `memtest_bank.asm` | | Sources of the memory tests (LH5801, sdas syntax) |
 | `Calculat.pc1600` | PC-1600 | CalCula, an HP-style RPN calculator (KiKiSoft); user guide in the preset header |
-| `DiskWorks.pc1600` | PC-1600 + CE-1600M + CE-1601M | DiskWorks v2 (KiKiSoft), on a card preloaded with the sample programs (made by `setup/make_diskworks_card.pc1600`) |
+
+## dwx/ — DiskWorks, self-contained
+
+| File | Machine | What it does |
+|---|---|---|
+| `DiskWorks.pc1600` | PC-1600 + CE-1600P/F + CE-1600M + CE-1601M + host drive | DiskWorks v3 (KiKiSoft), loaded from the folder `S3/` mounted as `S3:`; S2: and X: hold the sample programs |
+| `make_diskworks_media.pc1600` | same | Makes the card `CE-1601M - Progs.card.yaml` and the disk `Progs.floppy.yaml` next to it, as templates |
 
 ## memory/ — memory modules and cards
 

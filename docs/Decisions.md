@@ -226,6 +226,11 @@ authentic speed for the span that matters.
   Don't "simplify" placement back to one linear byte stream.
 - **`kMaxBasicLineLength` (79)** is a guessed limit on the raw typed line.
   It stays until the real limit is measured.
+- **`saveas:` always says `template` or `live`.** There is no default: a
+  template is never written again, and a live copy autosaves, so the preset
+  author has to pick one. The `file:` form writes exactly the named file.
+  That skips the catalog-name checks, and it may overwrite a template file,
+  which is how a make preset refreshes its templates.
 
 ### Loading programs (docs/Loader-Mode-Plan.md)
 - **The loaders follow MODE and `TITLE` and never change them.** Load

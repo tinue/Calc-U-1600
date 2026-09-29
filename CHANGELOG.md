@@ -8,11 +8,24 @@
   becomes drive `S3:` (also `Y:` without a CE-1600F). LOAD/SAVE, OPEN,
   FILES, KILL, NAME, COPY, SET and DSKF work on it. Only 8.3 names are
   shown, and INIT is refused. See docs/PC1600-Host-Drive.md.
+- **Presets** New keys:
+  - `host-drive: <folder>` mounts a folder as S3:.
+  - `floppy-file: <file>` loads a `.floppy.yaml` next to the preset.
+- **Presets** `saveas:` can write a file next to the preset
+  (`saveas: template s2:file:Card.card.yaml`) and can save a template.
+- **`pc1600_cli --preset`** runs `saveas:` for cards too.
+- **examples/dwx/** holds DiskWorks v3, self-contained: its card, floppy and
+  S3: folder live next to the preset, and `make_diskworks_media.pc1600`
+  replaces the two `setup/make_diskworks_*` presets.
 - **Load BASIC Program** and a preset's `format: basic-binary` also take a
   tokenized program (`.bbin`, CE-158 or PC-1600 header). A PC-1500 one
   loads on the PC-1600 in MODE 1 only.
 
 ### Changed
+
+- **Presets** `saveas:` now needs `live` or `template` first:
+  `saveas: live s2:My Card`. A preset with the old form is refused and told
+  why.
 
 - **Loaders** What a file is now comes from SharpDataExchange's library
   (0.3.1): Load Machine Code refuses a BASIC listing or tokenized BASIC

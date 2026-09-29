@@ -118,6 +118,9 @@ No directory mounted: status 20H, ERL A0H.
 - **Unmount** power-cycles the drive out.
 - The mount survives a ROM switch but not a model switch, and is not saved
   across launches.
+- **Preset:** `host-drive: <dir>` mounts a folder before the preset's cold
+  boot. The path is relative to the preset, or starts with `~/`. The GUI then
+  shows the drive under File ▸ Unmount (`examples/dwx/DiskWorks.pc1600`).
 
 ## Tests
 

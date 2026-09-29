@@ -290,6 +290,24 @@ attaches the drive. Its row in the control bar has:
 - **The lamp** lights while the drive is busy. Wait for it to go dark before
   turning the disk over.
 
+### A folder as a drive (PC-1600)
+
+**File ▸ Mount Directory…** makes a folder on your computer drive `S3:`
+(also `Y:` without a CE-1600F). `LOAD`, `SAVE`, `BLOAD`, `BSAVE`, `OPEN`,
+`FILES`, `KILL`, `NAME`, `COPY`, `SET` and `DSKF` work on it. The files
+are ordinary files in the folder, stored byte for byte.
+- **Names:** only 8.3 names the PC-1600 accepts are shown, in capitals.
+  Longer names and subfolders stay hidden and are never touched.
+- **Dates:** the PC-1600 shows each file's month, day and time. Your
+  computer keeps the full date.
+- **Refused:** `INIT "S3:"`, so a format can never wipe the folder.
+- **Mounting:** the first mount switches the calculator off and on, as
+  plugging in any peripheral does. Mounting another folder swaps it at
+  once. **Unmount** unplugs the drive.
+- **In a preset:** `host-drive: <folder>` mounts a folder.
+
+More in [PC1600-Host-Drive.md](PC1600-Host-Drive.md).
+
 ### Naming and saving
 
 The bundled modules and disks are **templates**, and templates are never
@@ -592,13 +610,22 @@ program:
 
 | Step | What it does |
 |---|---|
-| `- saveas: s1:My card` | Name & Save the module in slot 1. `s2:` and `floppy:` are PC-1600 only. Overwrites a file of the same name. |
+| `- saveas: live s1:My card` | Name & Save the module in slot 1 into your save folder. `s2:` and `floppy:` are PC-1600 only. Overwrites a file of the same name. |
+| `- saveas: template s2:file:Card.card.yaml` | Saves to that file, next to the preset (`.card.yaml` for a card, `.floppy.yaml` for `floppy:`). The name is the file name. |
 | `- screenshot: shot.png` | Saves the LCD image (as Copy Screen does) in the trace directory. |
 | `- syncclock:` | Sets the calculator's clock from your computer. Put it last, because a preset runs at full speed and the clock runs ahead. |
 | `- trace: run.bin` / `- trace: off` | Starts / stops a CPU trace (see the [Debug panel](#92-debug-panel)). |
 
-A preset that prepares a card and saves it:
-[examples/setup/make_diskworks_card.pc1600](../examples/setup/make_diskworks_card.pc1600).
+`saveas:` needs `live` or `template` first:
+- **`live`** saves an ordinary copy. Later changes are saved into it
+  automatically, as after Name & Save.
+- **`template`** saves a read-only starting point. Every use starts from the
+  saved contents, and changes are not written back.
+
+A preset that prepares a card and a floppy and saves both as templates next to
+itself, and the preset that uses them:
+[examples/dwx/make_diskworks_media.pc1600](../examples/dwx/make_diskworks_media.pc1600),
+[examples/dwx/DiskWorks.pc1600](../examples/dwx/DiskWorks.pc1600).
 
 ### 8.8 Startup presets
 
@@ -638,6 +665,8 @@ This is what it leaves on the LCD:
 | `plotter:` | `ce150`, `ce1600p[:new\|old]` (PC-1600) |
 | `interface:` | `ce158` |
 | `floppy:` | disk name, optionally `,A` / `,B` (PC-1600 with `ce1600p`) |
+| `floppy-file:` | a `.floppy.yaml` file next to the preset instead, optionally `,A` / `,B` |
+| `host-drive:` | a folder mounted as drive `S3:` (PC-1600), relative to the preset or `~/…`; see [A folder as a drive](#a-folder-as-a-drive-pc-1600) |
 | `memory-expansion:` | PC-1500/1500A: one `- modulespec: <name>` or `- modulespecfile: <path>` |
 | `memory-expansion-1:`, `-2:` | PC-1600 slot 1 / slot 2, same form |
 | `keys:` | a list of steps (below); may appear any number of times |
