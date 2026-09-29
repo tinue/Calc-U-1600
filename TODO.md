@@ -437,7 +437,7 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   (`MemoryModuleManager::saveSlotAs`, `FloppyDiskManager::saveDiskAs`)
   and `Core/PC1600/PC1600PresetMedia.hpp` for the CLIs each splice the card
   / format the floppy and write it. They share `namedFileName()` since
-  7dcd61b, nothing else. The Core copy is PC-1600 only, although
+  04d83d3, nothing else. The Core copy is PC-1600 only, although
   `saveas: s1:` is valid on the PC-1500, and `pc1500_cli` has no saveas.
   Fix: one model-neutral Core function (card image + source text, or disk
   image, plus the request → text and path); the managers keep only the
