@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -183,6 +184,16 @@ void test_save_load_kill_name_copy() {
     CHECK(copyErr == 0);
     CHECK(readFile(dir.path / "V.BAS") == saved);
     CHECK(readFile(dir.path / "a-long-host-name.bas") == "not visible");
+
+    // BSAVE 16 bytes of the page-C bank-6 ROM: MCHDR header + the bytes.
+    std::vector<uint8_t> bank6;
+    CHECK(readRomImage("roms/PC1600-P2-B6-new.bin", &bank6));
+    CHECK(errorOf(m, dir.path, "BSAVE \"S3:M.BIN\",#6,&8000,&800F") == 0);
+    const std::string bin = readFile(dir.path / "M.BIN");
+    CHECK(bin.size() == 32);
+    CHECK(bin.size() == 32 && bank6.size() >= 16 && std::equal(bank6.begin(), bank6.begin() + 16, bin.begin() + 16,
+                                                             [](uint8_t a, char b) { return a == static_cast<uint8_t>(b); }));
+    CHECK(errorOf(m, dir.path, "BLOAD \"S3:M.BIN\"") == 0);
 }
 
 void test_protect_and_errors() {

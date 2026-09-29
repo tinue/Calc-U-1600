@@ -4,6 +4,10 @@
 
 ### New
 
+- **Mount Directory** (File menu, PC-1600): a folder on the computer
+  becomes drive `S3:` (also `Y:` without a CE-1600F). LOAD/SAVE, OPEN,
+  FILES, KILL, NAME, COPY, SET and DSKF work on it. Only 8.3 names are
+  shown, and INIT is refused. See docs/PC1600-Host-Drive.md.
 - **Load BASIC Program** and a preset's `format: basic-binary` also take a
   tokenized program (`.bbin`, CE-158 or PC-1600 header). A PC-1500 one
   loads on the PC-1600 in MODE 1 only.

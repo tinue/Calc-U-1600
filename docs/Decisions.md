@@ -281,6 +281,19 @@ authentic speed for the span that matters.
   RAM survives. The floppy goes into the new drive with the same side up, and
   the changed-disk latch is armed. The PC-1600's own ROM switch still rebuilds
   the machine, because that ROM is in the calculator.
+- **The host-directory drive lives in page-1 bank 7 and loses `Y:` to the
+  CE-1600F.** Bank 7 is where the MEP rev3 module sits on the real 60-pin
+  bus. FILE_I searches modules in bank order, so with a CE-1600P attached
+  `Y:` is the floppy's second drive and only `S3:` reaches the host folder.
+  Don't move it to bank 2 to win `Y:` (docs/PC1600-Host-Drive.md).
+- **The host drive's protocol is our own, not the MEP's.** The ROM ships the
+  FCB header over ports 90H/91H and takes back status, ERL, FCB and DMA data.
+  All file logic stays in `HostDirectoryDrive`, where it can be tested. The
+  MEP ROM is a guideline only, and isn't copied or emulated.
+- **Host-drive WRITE stores whole records; CLOSE trims.** That is the
+  CE-1600F's model (FDWRITE/FDCLOSE). BASIC and COPY both rely on CLOSE
+  trimming the last record to FCB+06H bytes. Writing only FCB+06H bytes per
+  record would trim twice.
 
 ### Typing into the machine
 - **The GUI Paste Text never presses ENTER.** This is deliberate: a careless
@@ -317,6 +330,8 @@ authentic speed for the span that matters.
 - **Hardware pickers (model, memory modules) live on the control bar**, not
   in Settings. The picks reset on a model switch and aren't saved. Settings
   holds app-level preferences only.
+- **Mount Directory is in the File menu**, not on the control bar, at the
+  user's request. Like the hardware pickers, it isn't saved across launches.
 - **The app registers `ApplePersistenceIgnoreState = YES`**
   (`Qt6/app/MacAppSupport.mm`). Without it, the macOS "reopen windows?" prompt
   deadlocks the synchronous load of the startup preset.
@@ -326,6 +341,13 @@ authentic speed for the span that matters.
   backward compatibility is wanted. Any format change bumps `format-version`.
 - **Cards and floppies resolve bundled-first**, then the configured save
   folder, in both the GUI and the preset loader.
+- **`INIT "S3:"` is refused.** The host-drive ROM has no token table, so INIT
+  finds no handler. A format must never wipe a host folder.
+- **Host-drive directory dates say 1986.** The PC-1600 clock has no year, so
+  the ROM's own FATTIME writes year field 6, and the host drive does the
+  same. FILES shows no year. The host file keeps its real time stamp.
+- **The host drive shows only 8.3 names** the ROM's parser accepts, and
+  stores bytes unchanged: there is no line-ending conversion.
 - **The slot-record layout stays additive** for the planned battery-backed
   module split. Reserve the `batteryBacked` flag and keep
   `ExpansionCard` serialize/deserialize as the single seam for it.
