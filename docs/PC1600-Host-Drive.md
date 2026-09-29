@@ -7,7 +7,10 @@ like a RAM-disk drive, and the files are ordinary host files.
 This is a Calc-U-1600 peripheral with no Sharp original. It has the same
 shape as the MEP rev3 module, a 60-pin bus module with a ROM at page-1 bank 7
 and a microcontroller behind I/O port 90H. The ROM, the protocol and the host
-side are our own.
+side are our own. To software it looks like a MEP rev3 USB drive: the same
+device names, subdirectories through `CDIR` / `LDIR`, and the MEP's fixed
+entries, so MEP programs such as FILEX ([PC1600-FILEX.md](PC1600-FILEX.md))
+work on it.
 
 ## What works
 
@@ -19,6 +22,8 @@ side are our own.
 | `KILL`, `NAME`, `COPY`, `SET "…","P"` / `"I"` / `" "` | Wildcards work as on the RAM disk: every matching file, protected ones skipped (error 159) |
 | `DSKF("S3:")` | The host volume's free space, capped at 2 147 450 880 bytes, the most DSKF can compute |
 | `INIT "S3:"` | Refused: a format must never wipe a host folder |
+| `CDIR "path"` | Changes the current directory and shows the prompt, e.g. `S3:/DEV/ASM>`. `/` starts at the top folder, `..` goes up, `.` stays |
+| `LDIR` | Lists the subdirectories of the current directory, in the FILES format |
 
 Nothing is converted on the way. A text file written on the computer needs
 CR LF line ends to read line by line with `INPUT#`.
@@ -30,8 +35,11 @@ characters its file-name parser accepts (FNCHAROK, PC1600-P1-B3B 79E2H):
 letters, digits and ``` `@#$%^&()-_{}' ```.
 
 - Names are shown upper-case: `prog.bas` is `PROG.BAS`.
-- Long names, extra dots, spaces, non-ASCII names, directories and dotfiles
-  are not shown and are never touched.
+- Long names, extra dots, spaces, non-ASCII names and dotfiles are not shown
+  and are never touched.
+- Subdirectories follow the same name rule. FILES lists only the files of the
+  current directory; `LDIR` lists its subdirectories. Symbolic links to
+  folders are left out, so the drive never leaves the mounted folder.
 - On a case-sensitive file system, two files that fold to the same name show
   as one. The exact upper-case spelling wins, otherwise the first in sort
   order.
@@ -83,7 +91,7 @@ One transaction per FILE call:
 
 | Direction | Bytes |
 |---|---|
-| `OUT (91H)` | function (FFH = reset: drop searches, file mode; nothing follows) |
+| `OUT (91H)` | function (FFH = module reset: `OUT (90H)` the +02H function code, nothing comes back; the host drops searches and returns to file mode, and on power-on/resume/reset to the top folder) |
 | `OUT (90H)` × n | DE lo, DE hi, DEVNAME (FC16H), FCB+00H..+38H; for 15H also the 256 bytes at (DMA) |
 | `IN (90H)` × n | status, ERL, FCB+00H..+38H, payload length lo/hi, payload → (DMA), BC, DE, HL (lo/hi) |
 
@@ -93,20 +101,48 @@ One transaction per FILE call:
 - The protocol deliberately differs from the MEP's, so that all file logic
   lives in testable C++.
 
-### MEP fixed entries
+### Subdirectories (MEP compatible)
 
-Software written for the MEP (FILEX, for one) takes `S3:` for the MEP and
-calls its fixed entries in bank 7 with `RST 20H` directly. The drive has no
-subdirectories, so they give it a root only:
+The drive keeps a current directory, and every FILE call works in it. A
+file name never has a path, just as on the MEP. The public side matches the
+MEP rev3 manual and ROM, so its software runs unchanged:
 
 | Entry | MEP name | ROM → host | Behaviour |
 |---|---|---|---|
-| 4020H | CDIR (DE = path, B = length) | `OUT (91H)` FCH, length, path; `IN` status, ERL | `/` (or empty) is OK; any other path gives CY, 01H, ERL 98H |
-| 4023H | DIRMODE | `OUT (91H)` FEH | SEARCH FIRST/NEXT find nothing |
-| 4026H | FILEMODE | `OUT (91H)` FDH | SEARCH FIRST/NEXT list files again (the default; a reset also returns to it) |
+| 4020H | CDIR (DE = path, B = length) | `OUT (91H)` FCH, length, path; `IN` status, ERL, then 27 prompt bytes on success | UNIX-style path: `/` absolute, `..` up (the top folder stays the top), `.` stays; components match visible 8.3 folders in any case. The prompt `S3:/DEV/ASM>` + CR goes to FB10H, the MEP's buffer. A prompt longer than 26 characters keeps the end (`S3:../ASM>`). An unknown folder gives CY, 01H, ERL 98H and leaves the directory unchanged |
+| 4023H | DIRMODE | `OUT (91H)` FEH | SEARCH FIRST/NEXT list the subdirectories, sorted, without `.`/`..` |
+| 4026H | FILEMODE | `OUT (91H)` FDH | SEARCH FIRST/NEXT list files again (the default) |
 
-4018H..401FH are RET, as on the MEP. CDIR doesn't write the MEP's prompt
-buffer (FB10H).
+- **Directory-mode entries** carry attribute 00H, size 0 and the folder's
+  modification time. They can't carry FAT's 10H: FILES skips every entry
+  with a bit of DCH set (PC1600-P1-B3B K_FILES 6AD5H), and `LDIR` is FILES in
+  directory mode.
+- **BASIC:** the token table (module +13H) holds `CDIR` = F2D0H and `LDIR` =
+  F2D1H, the MEP's tokens and attributes, so tokenized programs run on both.
+  `CDIR` takes a string (07H if not, 12H if empty); `LDIR` takes nothing
+  (12H).
+- **LDIR** runs the built-in FILES (token F098H, bank 3b) on the text
+  `"S3:"`. FILES is in page 1 like this ROM, so a small trampoline copied onto
+  the stack maps bank 3b, calls it and maps bank 7 back. The MEP copies its
+  trampoline to LISTBUF (FBB0H). We don't, because a direct command is
+  tokenized there.
+- **The current directory** goes back to the top folder on power-on, on the
+  power-on after an APO and on reset: a MEP loses power with the calculator.
+  NEW and boot keep it. A new mount starts at the top. If the current folder
+  is deleted on the computer, file calls fail with 01H/98H until the next
+  `CDIR`, so nothing lands in another folder.
+- 4018H..401FH are RET, as on the MEP.
+
+### S3 compared with a real MEP rev3
+
+| Area | MEP rev3 | S3 |
+|---|---|---|
+| Subdirectories, CDIR / LDIR, fixed entries 4020H/4023H/4026H, prompt at FB10H | Yes | Yes |
+| Current directory after power-on | Top folder | Top folder |
+| APPEND, DSKF, SET, GET LENGTH | ERROR 158 | Supported |
+| Files open at once | One for reading, one for writing | As many as MAXFILES |
+| Names | 8.3 recommended | Only 8.3 names are visible |
+| INIT | Not handled | Refused |
 
 ### FILE functions
 

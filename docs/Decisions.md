@@ -297,11 +297,21 @@ authentic speed for the span that matters.
   FCB header over ports 90H/91H and takes back status, ERL, FCB and DMA data.
   All file logic stays in `HostDirectoryDrive`, where it can be tested. The
   MEP ROM is a guideline only, and isn't copied or emulated.
-- **The host-drive ROM still answers the MEP's fixed entries 4020H/4023H/
-  4026H.** MEP software (FILEX) calls them by address for `S3:` without any
-  check, and crashed on the device table that used to sit there. They give
-  a drive with only the root directory. Don't move the device table back
-  below 4029H.
+- **The host drive matches the MEP's public interface, not its protocol.**
+  The fixed entries 4020H/4023H/4026H, the tokens F2D0H/F2D1H (CDIR/LDIR)
+  and the prompt buffer FB10H are the MEP's, because MEP software (FILEX)
+  calls them by address without any check. It crashed on the device table
+  that used to sit at 4020H. Don't move the device table back below 4029H.
+- **S3 stays a superset of the MEP.** APPEND, DSKF, SET, GET LENGTH and
+  several open files keep working, although a real MEP answers ERROR 158 or
+  allows one file per direction. MEP software doesn't depend on those errors.
+- **Host-drive subdirectories:** `..` at the top folder stays there; DIRMODE
+  lists no `.`/`..` (FILEX builds its own path); directory entries have
+  attribute 00H, because FILES hides 10H and LDIR is FILES; symlinked folders
+  are hidden. The current directory resets on power-on, resume after APO and
+  reset only, not on NEW (docs/PC1600-Host-Drive.md).
+- **LDIR's trampoline lives on the stack, not in LISTBUF** as on the MEP: a
+  direct command is tokenized in LISTBUF (FBB0H).
 - **Host-drive WRITE stores whole records; CLOSE trims.** That is the
   CE-1600F's model (FDWRITE/FDCLOSE). BASIC and COPY both rely on CLOSE
   trimming the last record to FCB+06H bytes. Writing only FCB+06H bytes per
