@@ -209,6 +209,25 @@ inline bool attachCE1600P(PC1600Machine& machine, const std::vector<std::string>
     return true;
 }
 
+// Attaches Calc-U-1600's host-directory drive (S3: / Y:, PC1600HostDriveCard)
+// to a PC-1600, serving `dir`. The ROM is our own
+// (firmware/pc1600-hostdrive/), bundled next to the dumped ones.
+inline bool attachHostDrive(PC1600Machine& machine, const std::vector<std::string>& dirs,
+                            const std::filesystem::path& dir, std::string* error) {
+    std::string path;
+    std::vector<uint8_t> rom;
+    if (!resolveBundledRomPath(dirs, "PC1600-P1-B7-HOSTDRIVE.bin", &path, error) ||
+        !detail::readWholeFileCached(path, &rom)) {
+        if (error && error->empty()) *error = "could not read the host-drive ROM";
+        return false;
+    }
+    if (!machine.attachHostDrive(rom.data(), rom.size(), dir)) {
+        if (error) *error = "host-drive attach failed -- ROM size rejected";
+        return false;
+    }
+    return true;
+}
+
 // Attaches the plotter named by `plotterName` ("ce150"/"ce1600p"/"" for
 // none) to a PC-1600 -- the shape a preset's `plotter:` field or the GUI's
 // two toggle buttons both want. Returns true and does nothing for "".

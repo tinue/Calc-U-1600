@@ -112,6 +112,43 @@ void PC1600Machine::detachCE1600PLocked() {
     m_ce1600pCard.reset();
 }
 
+bool PC1600Machine::attachHostDrive(const uint8_t* rom, size_t romSize, const std::filesystem::path& dir) {
+    auto card = std::make_unique<PC1600HostDriveCard>();
+    if (!card->loadRom(rom, romSize)) return false;
+    card->drive().setDirectory(dir);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachHostDriveLocked();
+    m_z80Mem.ce1600pBus().attach(card.get());
+    m_hostDriveCard = std::move(card);
+    return true;
+}
+
+void PC1600Machine::detachHostDrive() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    detachHostDriveLocked();
+}
+
+void PC1600Machine::detachHostDriveLocked() {
+    if (!m_hostDriveCard) return;
+    m_z80Mem.ce1600pBus().detach(m_hostDriveCard.get());
+    m_hostDriveCard.reset();
+}
+
+bool PC1600Machine::hostDriveAttached() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_hostDriveCard != nullptr;
+}
+
+void PC1600Machine::setHostDriveDirectory(const std::filesystem::path& dir) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_hostDriveCard) m_hostDriveCard->drive().setDirectory(dir);
+}
+
+std::filesystem::path PC1600Machine::hostDriveDirectory() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_hostDriveCard ? m_hostDriveCard->drive().directory() : std::filesystem::path{};
+}
+
 // The three below take m_mutex so the GUI thread can read/clear the
 // plotter mechanism while the emulation loop runs -- the mechanism's
 // stroke and event containers are mutated from inside step() on every

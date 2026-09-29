@@ -11,6 +11,7 @@
 
 #include "../Connector/CE1600FCard.hpp"
 #include "../Connector/CE1600PCard.hpp"
+#include "../Connector/PC1600HostDriveCard.hpp"
 #include "../Connector/Ce150Card.hpp"
 #include "../Connector/Ce158Port.hpp"
 #include "../Connector/ExpansionCard.hpp"
@@ -209,6 +210,20 @@ public:
     /// The "green lamp" (drive-active indicator) -- see CE1600FCard::
     /// motorOn(). False when no floppy is attached.
     bool ce1600fMotorOn() const;
+
+    // ── Host-directory drive S3: / Y: (60-pin system bus, page-1 bank 7) ─
+    //
+    // Calc-U-1600's own peripheral (PC1600HostDriveCard): a host directory
+    // as a PC-1600 file device. Independent of the CE-1600P; both share the
+    // bus. Attach/detach like any peripheral with the machine off -- the
+    // ROM's SCANMODS only finds the module at power-on/reset. Changing the
+    // directory of an attached drive is a live media swap. All GUI-safe
+    // (take m_mutex: the card runs inside step()).
+    bool attachHostDrive(const uint8_t* rom, size_t romSize, const std::filesystem::path& dir);
+    void detachHostDrive();
+    bool hostDriveAttached() const;
+    void setHostDriveDirectory(const std::filesystem::path& dir);
+    std::filesystem::path hostDriveDirectory() const;
 
     // ── CE-150 plotter (LH5803 side, MODE 1) ────────────────────────────
     //
@@ -459,6 +474,7 @@ private:
     /// attach/detach calls take it because step() dereferences these
     /// cards (and the buses dispatch to them) on the emulation thread.
     void detachCE1600PLocked();
+    void detachHostDriveLocked();
     void detachCE150Locked();
     void detachCE158Locked();
 
@@ -477,6 +493,7 @@ private:
 
     std::unique_ptr<CE1600PCard> m_ce1600pCard; // see attachCE1600P()
     std::unique_ptr<CE1600FCard> m_ce1600fCard; // union-attached with m_ce1600pCard
+    std::unique_ptr<PC1600HostDriveCard> m_hostDriveCard; // see attachHostDrive()
     std::unique_ptr<Ce150Card> m_ce150Card;     // see attachCE150() -- LH5803-side plotter (MODE 1)
     Ce158Port m_ce158;                          // see attachCE158() -- LH5803-side interface (MODE 1)
 

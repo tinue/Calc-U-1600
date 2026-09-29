@@ -209,6 +209,28 @@ void test_open_fills_the_fcb_like_the_floppy() {
     CHECK(r.erl == Drive::kErlNotFound);
 }
 
+// BASIC's own sequence: full records with FCB+06H = 0, the last partial
+// one flushed as a whole record, then CLOSE with FCB+06H = its byte count.
+std::array<uint8_t, Drive::kFcbImageSize> writeRecord(Drive& drive, const std::string& name,
+                                                     std::array<uint8_t, Drive::kFcbImageSize> fcb,
+                                                     uint8_t fill) {
+    auto wr = request(Drive::kSeqWrite, name);
+    wr.fcb = fcb;
+    wr.fcb[Drive::kFcbCount] = 0;
+    for (size_t i = 0; i < Drive::kRecordSize; ++i) wr.data[i] = static_cast<uint8_t>(fill + i);
+    const auto r = drive.execute(wr);
+    CHECK(r.status == 0);
+    return r.fcb;
+}
+
+Drive::Response closeWithCount(Drive& drive, const std::string& name,
+                               std::array<uint8_t, Drive::kFcbImageSize> fcb, uint8_t count) {
+    auto cl = request(Drive::kClose, name);
+    cl.fcb = fcb;
+    cl.fcb[Drive::kFcbCount] = count;
+    return drive.execute(cl);
+}
+
 void test_write_then_read_records_beyond_32k() {
     TempDir dir;
     Drive drive;
@@ -218,18 +240,14 @@ void test_write_then_read_records_beyond_32k() {
     CHECK(fs::exists(dir.path / "BIG.DAT"));
     // 200 full records (51200 bytes, past the 7-bit record field) + 10 bytes.
     std::array<uint8_t, Drive::kFcbImageSize> fcb = r.fcb;
-    for (int rec = 0; rec <= 200; ++rec) {
-        auto wr = request(Drive::kSeqWrite, "BIG     DAT");
-        wr.fcb = fcb;
-        wr.fcb[Drive::kFcbCount] = rec == 200 ? 10 : 0;
-        for (size_t i = 0; i < Drive::kRecordSize; ++i) wr.data[i] = static_cast<uint8_t>(rec + i);
-        r = drive.execute(wr);
-        CHECK(r.status == 0);
-        fcb = r.fcb;
-    }
+    for (int rec = 0; rec <= 200; ++rec) fcb = writeRecord(drive, "BIG     DAT", fcb, static_cast<uint8_t>(rec));
+    CHECK(fs::file_size(dir.path / "BIG.DAT") == 201 * 256);
+    CHECK((fcb[Drive::kFcbModified] & 0x03) == 0x03);
+    r = closeWithCount(drive, "BIG     DAT", fcb, 10);
+    CHECK(r.status == 0);
     CHECK(fs::file_size(dir.path / "BIG.DAT") == 200 * 256 + 10);
-    CHECK(size32(fcb) == 200 * 256 + 10);
-    CHECK(drive.execute(request(Drive::kClose, "BIG     DAT")).status == 0);
+    CHECK(size32(r.fcb) == 200 * 256 + 10);
+    CHECK(r.fcb[Drive::kFcbModified] == 0);
 
     r = drive.execute(request(Drive::kOpen, "BIG     DAT"));
     fcb = r.fcb;
@@ -250,8 +268,19 @@ void test_write_then_read_records_beyond_32k() {
     auto rd = request(Drive::kSeqRead, "BIG     DAT");
     rd.fcb = fcb;
     r = drive.execute(rd);
-    CHECK(r.status == 0x08);  // ERL A2H: end of file
+    CHECK(r.status == 0x04);  // bit 2: end of file, what FREADREC and COPY test
     CHECK(r.erl == Drive::kErlEof);
+}
+
+void test_close_without_writes_keeps_the_file() {
+    TempDir dir;
+    writeFile(dir.path / "R.TXT", std::string(300, 'r'));
+    Drive drive;
+    drive.setDirectory(dir.path);
+    auto r = drive.execute(request(Drive::kOpen, "R       TXT"));
+    r = closeWithCount(drive, "R       TXT", r.fcb, 5);  // read-only FCB: no trim
+    CHECK(r.status == 0);
+    CHECK(fs::file_size(dir.path / "R.TXT") == 300);
 }
 
 void test_append_rewrite_truncates_after_the_last_record() {
@@ -263,10 +292,10 @@ void test_append_rewrite_truncates_after_the_last_record() {
     // BASIC's APPENDPOS rewrites record 0 with the old bytes minus the 1AH.
     auto wr = request(Drive::kSeqWrite, "LOG     TXT");
     wr.fcb = r.fcb;
-    wr.fcb[Drive::kFcbCount] = 3;
     std::memcpy(wr.data.data(), "abd", 3);
     r = drive.execute(wr);
     CHECK(r.status == 0);
+    r = closeWithCount(drive, "LOG     TXT", r.fcb, 3);
     CHECK(readFile(dir.path / "LOG.TXT") == "abd");
 }
 
@@ -388,6 +417,7 @@ int run_host_directory_drive_tests() {
     test_case_collision_keeps_one_file();
     test_open_fills_the_fcb_like_the_floppy();
     test_write_then_read_records_beyond_32k();
+    test_close_without_writes_keeps_the_file();
     test_append_rewrite_truncates_after_the_last_record();
     test_create_existing_file_keeps_its_host_spelling();
     test_protect_attribute_round_trips_through_permissions();

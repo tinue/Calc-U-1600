@@ -284,6 +284,7 @@ set(TEST_SOURCES
   ${CORE_ROOT}/tests/ce1600p_tests.cpp
   ${CORE_ROOT}/tests/ce1600f_tests.cpp
   ${CORE_ROOT}/tests/host_directory_drive_tests.cpp
+  ${CORE_ROOT}/tests/pc1600_host_drive_tests.cpp
   ${CORE_ROOT}/tests/ce150_tests.cpp
   ${CORE_ROOT}/tests/pc1600_ce150_tests.cpp
   ${CORE_ROOT}/tests/ce158_tests.cpp

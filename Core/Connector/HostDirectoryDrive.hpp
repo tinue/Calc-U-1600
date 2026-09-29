@@ -105,12 +105,14 @@ public:
     Response execute(const Request& req) {
         Response r;
         r.fcb = req.fcb;
+        r.bc = req.function;     // registers a call doesn't define: C = function,
+        r.de = req.fcbAddress;   // DE = FCB, as the caller passed them
         if (req.function >= 0x80) return r;  // disk IOCS: not a file call, ignored like FDBADFN
         std::error_code ec;
         if (!mounted() || !std::filesystem::is_directory(m_dir, ec)) return fail(r, kErlNoMedia);
         switch (req.function) {
             case kOpen:        return doOpen(req, r);
-            case kClose:       return r;
+            case kClose:       return doClose(req, r);
             case kSearchFirst: return doSearchFirst(req, r);
             case kSearchNext:  return doSearchNext(req, r);
             case kDelete:      return doDelete(req, r);
@@ -209,6 +211,14 @@ private:
     static Response& fail(Response& r, uint8_t erl) {
         r.erl = erl;
         r.status = statusFor(erl);
+        return r;
+    }
+
+    // Reading past the end: the floppy's internal 96H, reported as ERL A2H
+    // with status bit 2 -- what FREADREC (7B8DH) and COPY (758CH) test.
+    static Response& failEof(Response& r) {
+        r.erl = kErlEof;
+        r.status = 0x04;
         return r;
     }
 
@@ -393,7 +403,7 @@ private:
         if (ec) return fail(r, kErlNotFound);
         const uint32_t record = fcbRecord(req.fcb);
         const uint64_t pos = static_cast<uint64_t>(record) * kRecordSize;
-        if (pos >= size) return fail(r, kErlEof);
+        if (pos >= size) return failEof(r);
         r.payload.assign(kRecordSize, 0);
         std::ifstream f(path, std::ios::binary);
         if (!f) return fail(r, kErlIo);
@@ -403,25 +413,24 @@ private:
         return r;
     }
 
-    // One record of FCB+06H bytes (0 = 256, FPUTC wraps) at record * 256;
-    // the file ends after it -- output is sequential, and an append
-    // (APPENDPOS 7B1CH) rewrites the last record, so this is also where an
-    // appended file's old 1AH mark goes.
+    // One whole 256-byte record at record * 256, like the floppy's FDWRITE:
+    // the file ends after it (output is sequential; an append, APPENDPOS
+    // 7B1CH, rewrites the last record). FCB+36H bits 0/1 mark the file
+    // written; CLOSE trims the last record to FCB+06H bytes.
     Response& doWrite(const Request& req, Response& r) {
         const std::string name = fcbName(req.fcb, kFcbName);
         Entry e;
         if (!findOne(name, e)) return fail(r, kErlNotFound);
         if (e.attr & kAttrProtected) return fail(r, kErlProtected);
         const uint32_t record = fcbRecord(req.fcb);
-        const size_t count = req.fcb[kFcbCount] == 0 ? kRecordSize : req.fcb[kFcbCount];
         const uint64_t pos = static_cast<uint64_t>(record) * kRecordSize;
-        const uint64_t end = pos + count;
+        const uint64_t end = pos + kRecordSize;
         if (end > 0xFFFFFFFFu) return fail(r, kErlDiskFull);
         {
             std::fstream f(e.path, std::ios::binary | std::ios::in | std::ios::out);
             if (!f) return fail(r, kErlIo);
             f.seekp(static_cast<std::streamoff>(pos));
-            f.write(reinterpret_cast<const char*>(req.data.data()), static_cast<std::streamsize>(count));
+            f.write(reinterpret_cast<const char*>(req.data.data()), kRecordSize);
             f.flush();
             if (!f) return fail(r, kErlDiskFull);
         }
@@ -430,6 +439,27 @@ private:
         if (ec) return fail(r, kErlIo);
         setFcbSize(r.fcb, static_cast<uint32_t>(end));
         setFcbRecord(r.fcb, record + 1);
+        r.fcb[kFcbModified] |= 0x03;
+        return r;
+    }
+
+    // FDCLOSE 4B66H: a written file whose last record holds FCB+06H/+37H =
+    // n bytes (1..255) loses the 256 - n it was padded with. BASIC's
+    // CLOSEFCB (7A83H) leaves n there after the final flush; COPY (7584H)
+    // puts the source's size mod 256 there.
+    Response& doClose(const Request& req, Response& r) {
+        const bool written = (req.fcb[kFcbModified] & 0x03) == 0x03;
+        r.fcb[kFcbModified] = 0;
+        const uint32_t count = req.fcb[kFcbCount] | (req.fcb[kFcbModified + 1] << 8);
+        if (!written || count == 0 || count >= kRecordSize) return r;
+        Entry e;
+        if (!findOne(fcbName(req.fcb, kFcbName), e)) return fail(r, kErlIo);  // A3H, as FDCLOSE
+        if (e.size < kRecordSize - count) return r;
+        const uint32_t size = e.size - (kRecordSize - count);
+        std::error_code ec;
+        std::filesystem::resize_file(e.path, size, ec);
+        if (ec) return fail(r, kErlIo);
+        setFcbSize(r.fcb, size);
         return r;
     }
 

@@ -1385,6 +1385,9 @@ int run_ce1600f_tests();
 // Defined in host_directory_drive_tests.cpp -- HostDirectoryDrive, the
 // file-level half of the PC-1600 host-directory drive (S3: / Y:).
 int run_host_directory_drive_tests();
+// Defined in pc1600_host_drive_tests.cpp -- the host-directory drive end to
+// end: real PC-1600 ROM + driver ROM + PC1600HostDriveCard, BASIC typed.
+int run_pc1600_host_drive_tests();
 // Defined in ce150_tests.cpp -- Ce150Card (LH5810 + ROM window decode) and
 // its PC1500Machine / 60-pin SystemBus integration.
 int run_ce150_tests();
@@ -1501,6 +1504,7 @@ int main() {
     int ce1600pFailures = run_ce1600p_tests();
     int ce1600fFailures = run_ce1600f_tests();
     int hostDirectoryDriveFailures = run_host_directory_drive_tests();
+    int pc1600HostDriveFailures = run_pc1600_host_drive_tests();
     int ce150Failures = run_ce150_tests();
     int pc1600Ce150Failures = run_pc1600_ce150_tests();
     int ce158Failures = run_ce158_tests();
@@ -1526,7 +1530,7 @@ int main() {
             lh5803Failures == 0 && pc1600MachineFailures == 0 && pc1600Phase54Failures == 0 &&
             pc1600KeyboardDisplayFailures == 0 && pc1600SlotRamFailures == 0 &&
             pc1600SlotModuleFailures == 0 && pc1600PresetFailures == 0 && ce1600pFailures == 0 &&
-            ce1600fFailures == 0 && hostDirectoryDriveFailures == 0 &&
+            ce1600fFailures == 0 && hostDirectoryDriveFailures == 0 && pc1600HostDriveFailures == 0 &&
             ce150Failures == 0 && pc1600Ce150Failures == 0 && ce158Failures == 0)
                ? 0
                : 1;
