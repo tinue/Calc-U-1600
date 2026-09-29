@@ -21,9 +21,10 @@
 // --ce1600p-rom new|old (--preset only) overrides the preset's CE-1600P ROM
 // version (`plotter: ce1600p:new|old`, default new); independent of --rom.
 //
-// --save-dir <dir> (--preset only) makes a `- saveas: floppy:<name>` step
-// write the live disk to <dir>/<name>.floppy.yaml (without it, saveas is a
-// logged no-op). Card saveas targets are not supported here.
+// `- saveas:` steps write cards and floppies like the GUI (Core/PC1600/
+// PC1600PresetMedia.hpp): the `file:<path>` form writes that file; a by-name
+// save goes to --save-dir <dir> (<dir>/<name>.card.yaml / .floppy.yaml) and
+// fails without it.
 //
 // CE-158 (--preset only, a preset with `interface: ce158`): --ce158-pty,
 // --ce158-rx <file>, --ce158-rx-hold <n>, --ce158-tx <file> -- same as
@@ -49,6 +50,7 @@
 #include "../Core/PC1600/PC1600Machine.hpp"
 #include "../Core/PC1600/PC1600Memory.hpp"
 #include "../Core/PC1600/PC1600PresetLoader.hpp"
+#include "../Core/PC1600/PC1600PresetMedia.hpp"
 #include "../Core/Preset/PresetFile.hpp"
 #include "../Core/Resources/BundledRomCatalog.hpp"
 #include "Ce158CliPeer.hpp"
@@ -97,27 +99,21 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
     };
     if (!wavPath.empty()) machine.setYieldHook(drainWav, PC1600Machine::kTStateHz / 20);
     if (!ce158Peer.attach(machine)) return 1; // before the preset attaches the card
-    PresetSaveAsFn onSaveAs;
-    if (!saveDir.empty()) {
-        onSaveAs = [&machine, &saveDir](PresetStep::SaveAsTarget target, const std::string& name,
-                                        std::string* err) {
-            if (target != PresetStep::SaveAsTarget::Floppy) {
-                *err = "pc1600_cli --save-dir only saves floppies";
-                return false;
-            }
-            const std::string path = saveDir + "/" + name + kFloppyFileSuffix;
-            if (!cli::writeFile(path, formatFloppyFile(name, machine.ce1600fDiskImage()))) {
-                *err = "cannot write " + path;
-                return false;
-            }
-            return true;
-        };
-    }
+    // `saveas:` -- the file form always works; a by-name save needs
+    // --save-dir. Cards splice into the file the loader attached them from
+    // (reported by onArmed, before any step runs).
+    PresetLoadResult armedResult;
+    const auto onArmed = [&armedResult](const PresetLoadResult& r) { armedResult = r; };
+    const PresetSaveAsFn onSaveAs = [&machine, &saveDir, &armedResult](const PresetSaveAsRequest& request,
+                                                                       std::string* err) {
+        return savePC1600PresetMedia(machine, request, saveDir, armedResult.slot1ResolvedPath,
+                                     armedResult.slot2ResolvedPath, err);
+    };
     PresetLoadResult loaded = applyPC1600Preset(
         machine, preset,
         [](const std::string& line) { std::fprintf(stderr, "[preset] %s\n", line.c_str()); }, ".",
         moduleDir,
-        /*onBooted=*/{}, /*romDirs=*/{"roms"}, extraModuleDirs, /*onArmed=*/{}, onSaveAs);
+        /*onBooted=*/{}, /*romDirs=*/{"roms", "firmware/pc1600-hostdrive"}, extraModuleDirs, onArmed, onSaveAs);
     for (const std::string& r : loaded.rejectedBasicLines)
         std::fprintf(stderr, "preset: rejected BASIC line: %s\n", r.c_str());
     if (!loaded.ok && dumpBasic) {

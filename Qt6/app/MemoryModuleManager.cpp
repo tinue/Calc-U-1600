@@ -194,7 +194,8 @@ bool MemoryModuleManager::nameCollides(const QString& instanceName) const {
 
 bool MemoryModuleManager::spliceCardImageInto(int bankCount, const std::vector<uint8_t>& image,
                                                const QString& sourcePath, const QString& sourceModuleName,
-                                               const QString& targetName, std::string* spliced, QString* error) {
+                                               const QString& targetName, std::string* spliced, QString* error,
+                                               bool asTemplate) {
     QFile srcFile(sourcePath);
     if (!srcFile.open(QIODevice::ReadOnly)) {
         if (error) *error = tr("Couldn't read \"%1\".").arg(sourcePath);
@@ -206,7 +207,7 @@ bool MemoryModuleManager::spliceCardImageInto(int bankCount, const std::vector<u
 
     std::string splErr;
     if (!spliceBatteryCardInstance(sourceText, targetName.toStdString(), sourceModuleName.toStdString(),
-                                   contentLines, spliced, &splErr)) {
+                                   contentLines, spliced, &splErr, currentIso8601Timestamp(), asTemplate)) {
         if (error) *error = tr("Couldn't generate the instance file: %1").arg(QString::fromStdString(splErr));
         return false;
     }
@@ -217,11 +218,13 @@ bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QSt
     return saveSlotAs(slot, instanceName, /*fromPreset=*/false, error);
 }
 
-bool MemoryModuleManager::saveAsFromPreset(int slot, const QString& instanceName, QString* error) {
-    return saveSlotAs(slot, instanceName, /*fromPreset=*/true, error);
+bool MemoryModuleManager::saveAsFromPreset(int slot, const QString& instanceName, const QString& filePath,
+                                           bool asTemplate, QString* error) {
+    return saveSlotAs(slot, instanceName, /*fromPreset=*/true, error, filePath, asTemplate);
 }
 
-bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool fromPreset, QString* error) {
+bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool fromPreset, QString* error,
+                                     const QString& filePath, bool asTemplate) {
     const QString name = instanceName.trimmed();
     if (name.isEmpty()) {
         *error = tr("Name cannot be empty.");
@@ -244,7 +247,10 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
         *error = tr("Name cannot contain '\"'.");
         return false;
     }
-    if (templateNames().contains(name)) {
+    // An explicit file (a preset's `saveas: ... file:`) is exactly what the
+    // preset asked for: no catalog-name or template-file checks.
+    const bool explicitFile = !filePath.isEmpty();
+    if (!explicitFile && templateNames().contains(name)) {
         *error = tr("\"%1\" is a template's name. Choose a different name.").arg(name);
         return false;
     }
@@ -252,9 +258,10 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
         *error = tr("A card named \"%1\" already exists. Choose a different name.").arg(name);
         return false;
     }
-    const QString newPath = AppPaths::instancePathFor(name);
+    const QString newPath = explicitFile ? filePath : AppPaths::instancePathFor(name);
     MemoryCardCatalogEntry existing;
-    if (readMemoryCardCatalogEntry(newPath.toStdString(), &existing, nullptr) && existing.isTemplate) {
+    if (!explicitFile && !asTemplate && readMemoryCardCatalogEntry(newPath.toStdString(), &existing, nullptr) &&
+        existing.isTemplate) {
         *error = tr("\"%1\" is a template file and is never overwritten. Choose a different name.").arg(newPath);
         return false;
     }
@@ -269,7 +276,8 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
         return false;
     }
     std::string spliced;
-    if (!spliceCardImageInto(bankCount, image, st.sourcePath, st.moduleName, name, &spliced, error)) return false;
+    if (!spliceCardImageInto(bankCount, image, st.sourcePath, st.moduleName, name, &spliced, error, asTemplate))
+        return false;
 
     if (!AppPaths::atomicWriteFile(newPath, spliced)) {
         *error = tr("Couldn't write \"%1\".").arg(newPath);
@@ -277,11 +285,11 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
     }
 
     // Retarget the slot at the saved copy: it now shows under its new name
-    // and autosaves there.
+    // and -- unless it was saved as a template -- autosaves there.
     st.moduleName = name;
     st.sourcePath = newPath;
-    st.isTemplate = false;  // the splice never writes `template:`; `battery` carries over
-    st.instanceFilePath = newPath;
+    st.isTemplate = asTemplate;  // `battery` carries over
+    st.instanceFilePath = asTemplate ? QString() : newPath;
     st.persistPending = false;
     st.persistedRevision = revision;
     emit moduleChanged(slot);

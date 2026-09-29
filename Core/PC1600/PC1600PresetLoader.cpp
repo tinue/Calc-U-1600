@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <utility>
 #include <vector>
@@ -49,35 +50,66 @@ std::string stepTag(PC1600Machine& machine) {
 // `- modulespec:` resolution searches. Returns false with result->error
 // set on any problem.
 bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter,
-                         const std::string& ce1600pRom, const std::string& floppy, int floppySide, const std::vector<std::string>& romDirs,
+                         const std::string& ce1600pRom, const std::string& floppy, const std::string& floppyFile,
+                         int floppySide, const std::vector<std::string>& romDirs,
                          const std::vector<std::string>& moduleDirs, const PresetLogFn& log,
                          PresetLoadResult* result) {
     if (plotter.empty()) return true;
 
     FloppyFile disk;
+    std::string diskLabel;
     if (!floppy.empty()) {
         std::string path, err;
         if (!resolveFloppyByName(moduleDirs, floppy, &path, &err) || !readFloppyFile(path, &disk, &err)) {
             result->error = "floppy: " + err;
             return false;
         }
+        diskLabel = floppy;
         result->floppyImageLabel = floppy;
         result->floppyResolvedPath = path;
+    } else if (!floppyFile.empty()) {
+        std::string err;
+        if (!readFloppyFile(floppyFile, &disk, &err)) {
+            result->error = "floppy-file: " + floppyFile + ": " + err;
+            return false;
+        }
+        diskLabel = disk.diskName;
+        result->floppyImageLabel = disk.diskName;
+        result->floppyResolvedPath = floppyFile;
     }
 
     if (!BundledRoms::attachPlotterByName(machine, plotter, romDirs, &result->error, &result->ce150Attached,
                                           ce1600pRom)) {
         return false;
     }
-    if (!floppy.empty()) {
+    if (!diskLabel.empty()) {
         machine.ce1600fLoadImage(disk.image.data(), disk.image.size());  // resets to side A
         if (floppySide != 0) machine.ce1600fSetSide(floppySide);
     }
     if (log) {
         log(plotter == "ce150" ? "plotter: CE-150 attached (LH5803 side)"
                                 : "plotter: " + plotter + (plotter == "ce1600p" ? ":" + ce1600pRom : "") + " attached" +
-                                      (floppy.empty() ? "" : " (floppy: " + floppy + ")"));
+                                      (diskLabel.empty() ? "" : " (floppy: " + diskLabel + ")"));
     }
+    return true;
+}
+
+// `host-drive:` -- mount the directory as S3: / Y: before the cold boot,
+// so the ROM's module scan finds the drive (docs/PC1600-Host-Drive.md).
+bool attachPresetHostDrive(PC1600Machine& machine, const std::string& dir, const std::vector<std::string>& romDirs,
+                           const PresetLogFn& log, PresetLoadResult* result) {
+    if (dir.empty()) return true;
+    std::error_code ec;
+    if (!std::filesystem::is_directory(dir, ec)) {
+        result->error = "host-drive: '" + dir + "' is not a directory";
+        return false;
+    }
+    std::string err;
+    if (!BundledRoms::attachHostDrive(machine, romDirs, dir, &err)) {
+        result->error = "host-drive: " + err;
+        return false;
+    }
+    if (log) log("host-drive: " + dir + " mounted as S3:");
     return true;
 }
 
@@ -182,8 +214,9 @@ PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& pre
     const bool armed = plug(preset.slot1ModuleSpecFile, preset.slot1ModuleSpecName, 1) &&
                        plug(preset.slot2ModuleSpecFile, preset.slot2ModuleSpecName, 2) &&
                        attachPresetPlotter(machine, preset.plotter, preset.ce1600pRomVariant, preset.floppy,
-                                           preset.floppySide, romDirs, moduleDirs, log, &result) &&
-                       attachPresetInterface(machine, preset.interfaceName, romDirs, log, &result);
+                                           preset.floppyFile, preset.floppySide, romDirs, moduleDirs, log, &result) &&
+                       attachPresetInterface(machine, preset.interfaceName, romDirs, log, &result) &&
+                       attachPresetHostDrive(machine, preset.hostDrive, romDirs, log, &result);
 
     // Machine is now armed (model/cards/plotter wired) but still powered
     // off -- give the caller a chance to repaint that state before the

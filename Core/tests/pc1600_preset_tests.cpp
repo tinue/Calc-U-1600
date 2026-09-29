@@ -8,6 +8,8 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -19,6 +21,7 @@
 #include "../Connector/FloppyImageFile.hpp"
 #include "../PC1600/PC1600Machine.hpp"
 #include "../PC1600/PC1600PresetLoader.hpp"
+#include "../PC1600/PC1600PresetMedia.hpp"
 #include "PresetTestSupport.hpp"
 #include "TestRoms.hpp"
 
@@ -863,25 +866,30 @@ void test_loader_saveas_step_invokes_callback() {
         "model: PC-1600\n"
         "keys:\n"
         "  - type: 1\n"
-        "  - saveas: s2:My Card\n"
-        "  - saveas: floppy:My Disk\n",
+        "  - saveas: live s2:My Card\n"
+        "  - saveas: template floppy:file:My Disk.floppy.yaml\n",
         &p, &err));
 
     PC1600Machine m;
-    std::vector<std::pair<PresetStep::SaveAsTarget, std::string>> calls;
-    PresetSaveAsFn onSaveAs = [&](PresetStep::SaveAsTarget target, const std::string& name,
-                                        std::string*) {
-        calls.push_back({target, name});
+    std::vector<PresetSaveAsRequest> calls;
+    PresetSaveAsFn onSaveAs = [&](const PresetSaveAsRequest& request, std::string*) {
+        calls.push_back(request);
         return true;
     };
     PresetLoadResult r =
         applyPC1600Preset(m, p, {}, ".", ".", {}, {}, {}, {}, onSaveAs);
     CHECK(r.ok);
     CHECK(calls.size() == 2);
-    CHECK(calls[0].first == PresetStep::SaveAsTarget::S2);
-    CHECK(calls[0].second == "My Card");
-    CHECK(calls[1].first == PresetStep::SaveAsTarget::Floppy);
-    CHECK(calls[1].second == "My Disk");
+    if (calls.size() == 2) {
+        CHECK(calls[0].target == PresetStep::SaveAsTarget::S2);
+        CHECK(calls[0].name == "My Card");
+        CHECK(calls[0].path.empty());
+        CHECK(!calls[0].isTemplate);
+        CHECK(calls[1].target == PresetStep::SaveAsTarget::Floppy);
+        CHECK(calls[1].name == "My Disk");
+        CHECK(calls[1].path == "/tmp/My Disk.floppy.yaml");
+        CHECK(calls[1].isTemplate);
+    }
 }
 
 // An onSaveAs failure surfaces its error and stops the preset, exactly
@@ -889,11 +897,10 @@ void test_loader_saveas_step_invokes_callback() {
 void test_loader_saveas_step_failure_stops_preset() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nkeys:\n  - saveas: s1:Bad\n  - type: 1\n", &p, &err));
+    CHECK(parse("model: PC-1600\nkeys:\n  - saveas: live s1:Bad\n  - type: 1\n", &p, &err));
 
     PC1600Machine m;
-    PresetSaveAsFn onSaveAs = [](PresetStep::SaveAsTarget, const std::string&,
-                                       std::string* error) {
+    PresetSaveAsFn onSaveAs = [](const PresetSaveAsRequest&, std::string* error) {
         *error = "disk full";
         return false;
     };
@@ -908,7 +915,7 @@ void test_loader_saveas_step_failure_stops_preset() {
 void test_loader_saveas_step_without_callback_is_noop() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nkeys:\n  - saveas: s1:Whatever\n", &p, &err));
+    CHECK(parse("model: PC-1600\nkeys:\n  - saveas: live s1:Whatever\n", &p, &err));
 
     PC1600Machine m;
     PresetLoadResult r = applyPC1600Preset(m, p);
@@ -917,7 +924,98 @@ void test_loader_saveas_step_without_callback_is_noop() {
 
 } // namespace
 
+// `floppy-file:` and `host-drive:` resolve against the preset's directory;
+// `~/` is the home directory. One disk key at most; the usual scope rules.
+void test_parser_floppy_file_and_host_drive() {
+    std::filesystem::create_directories("/tmp/calcu_preset_dir");
+    PresetFile p;
+    std::string err;
+    CHECK(parsePresetString("model: PC-1600\nplotter: ce1600p\nfloppy-file: disks/P.floppy.yaml,B\nhost-drive: S3\n",
+                            "/tmp/calcu_preset_dir/x.pc1600", &p, &err));
+    CHECK(p.floppyFile == "/tmp/calcu_preset_dir/disks/P.floppy.yaml");
+    CHECK(p.floppy.empty());
+    CHECK(p.floppySide == 1);
+    CHECK(p.hostDrive == "/tmp/calcu_preset_dir/S3");
+    const char* home = std::getenv("HOME");
+    CHECK(parsePresetString("model: PC-1600\nhost-drive: ~/share\n", "/tmp/calcu_preset_dir/x.pc1600", &p, &err));
+    CHECK(home && p.hostDrive == std::string(home) + "/share");
+
+    CHECK(!parse("model: PC-1600\nplotter: ce1600p\nfloppy: a\nfloppy-file: b.floppy.yaml\n", &p, &err));
+    CHECK(err.find("only one") != std::string::npos);
+    CHECK(!parse("model: PC-1600\nfloppy-file: b.floppy.yaml\n", &p, &err));
+    CHECK(err.find("floppy-file") != std::string::npos);
+    CHECK(!parse("model: PC-1500\nhost-drive: S3\n", &p, &err));
+    CHECK(err.find("host-drive") != std::string::npos);
+}
+
+// End to end with the ROMs: `floppy-file:` loads the disk, `host-drive:`
+// mounts S3: before the boot, and `saveas: template ... file:` writes
+// template files through PC1600PresetMedia.hpp.
+void test_loader_host_drive_floppy_file_and_template_saves() {
+    char tmpl[] = "/tmp/pc1600_preset_media_XXXXXX";
+    const char* dir = mkdtemp(tmpl);
+    CHECK(dir != nullptr);
+    if (!dir) return;
+    const std::string d(dir);
+    std::filesystem::create_directories(d + "/S3");
+    const std::string presetPath = d + "/make.pc1600";
+    const std::string floppyPath = std::filesystem::absolute("Qt6/resources/cards/formatted.floppy.yaml").string();
+    PresetFile p;
+    std::string err;
+    CHECK(parsePresetString("model: PC-1600\n"
+                            "plotter: ce1600p\n"
+                            "floppy-file: " + floppyPath + "\n"
+                            "host-drive: S3\n"
+                            "memory-expansion-2:\n"
+                            "  - modulespec: CE-1601M\n"
+                            "keys:\n"
+                            "  - key: mode\n"
+                            "  - type: 10 END\n"
+                            "  - key: mode\n"
+                            "  - type: SAVE\"S3:T.BAS\"\n"
+                            "  - saveas: template s2:file:Card.card.yaml\n"
+                            "  - saveas: template floppy:file:Disk.floppy.yaml\n"
+                            "  - saveas: live floppy:file:Live.floppy.yaml\n",
+                            presetPath, &p, &err));
+    CHECK(err.empty());
+
+    PC1600Machine m;
+    if (!loadPC1600Roms(m)) {
+        std::fprintf(stderr, "SKIP test_loader_host_drive_floppy_file_and_template_saves: ROM images not found\n");
+        return;
+    }
+    PresetLoadResult armedResult;
+    const PresetArmedFn onArmed = [&](const PresetLoadResult& r) { armedResult = r; };
+    const PresetSaveAsFn onSaveAs = [&](const PresetSaveAsRequest& request, std::string* e) {
+        return savePC1600PresetMedia(m, request, "", armedResult.slot1ResolvedPath, armedResult.slot2ResolvedPath, e);
+    };
+    PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "Qt6/resources/cards", {},
+                                           {"roms", "firmware/pc1600-hostdrive"}, {}, onArmed, onSaveAs);
+    CHECK(r.ok);
+    if (!r.ok) std::fprintf(stderr, "  error: %s\n", r.error.c_str());
+    CHECK(m.hostDriveAttached());
+    CHECK(m.hostDriveDirectory() == std::filesystem::path(d + "/S3"));
+    CHECK(r.floppyResolvedPath == floppyPath);
+    CHECK(m.ce1600fHasDisk());
+    CHECK(std::filesystem::exists(d + "/S3/T.BAS"));
+
+    MemoryCardCatalogEntry card;
+    CHECK(readMemoryCardCatalogEntry(d + "/Card.card.yaml", &card, nullptr));
+    CHECK(card.moduleName == "Card");
+    CHECK(card.isTemplate);
+    FloppyFile disk;
+    CHECK(readFloppyFile(d + "/Disk.floppy.yaml", &disk, &err));
+    CHECK(disk.diskName == "Disk");
+    CHECK(disk.isTemplate);
+    FloppyFile live;
+    CHECK(readFloppyFile(d + "/Live.floppy.yaml", &live, &err));
+    CHECK(!live.isTemplate);
+    std::filesystem::remove_all(d);
+}
+
 int run_pc1600_preset_tests() {
+    test_parser_floppy_file_and_host_drive();
+    test_loader_host_drive_floppy_file_and_template_saves();
     test_parser_accepts_pc1600_with_slot_and_keys();
     test_parser_rejects_multichar_key();
     test_parser_both_slots();

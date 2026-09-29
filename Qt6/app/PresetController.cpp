@@ -134,19 +134,20 @@ namespace {
 // below (the PC-1500 side only ever sees SaveAsTarget::S1, per
 // PresetFile.cpp's per-model validation).
 bool saveAsFromPreset(MemoryModuleManager* moduleManager, FloppyDiskManager* floppyManager,
-                       PresetStep::SaveAsTarget target, const std::string& name, std::string* error) {
+                      const PresetSaveAsRequest& request, std::string* error) {
     QString qerror;
-    const QString qname = QString::fromStdString(name);
+    const QString qname = QString::fromStdString(request.name);
+    const QString qpath = QString::fromStdString(request.path);
     bool ok = false;
-    switch (target) {
+    switch (request.target) {
         case PresetStep::SaveAsTarget::S1:
-            ok = moduleManager->saveAsFromPreset(1, qname, &qerror);
+            ok = moduleManager->saveAsFromPreset(1, qname, qpath, request.isTemplate, &qerror);
             break;
         case PresetStep::SaveAsTarget::S2:
-            ok = moduleManager->saveAsFromPreset(2, qname, &qerror);
+            ok = moduleManager->saveAsFromPreset(2, qname, qpath, request.isTemplate, &qerror);
             break;
         case PresetStep::SaveAsTarget::Floppy:
-            ok = floppyManager->saveAsFromPreset(qname, &qerror);
+            ok = floppyManager->saveAsFromPreset(qname, qpath, request.isTemplate, &qerror);
             break;
     }
     if (!ok && error) *error = qerror.toStdString();
@@ -181,8 +182,8 @@ bool PresetController::runPreset(const PresetFile& preset, QString* error) {
     const QString traceDirSetting = AppSettings::traceDirOverride();
     env.traceDir = (traceDirSetting.isEmpty() ? AppPaths::instanceDir() : traceDirSetting).toStdString();
     env.log = [](const std::string& line) { qDebug().noquote() << "[preset]" << QString::fromStdString(line); };
-    env.onSaveAs = [this](PresetStep::SaveAsTarget target, const std::string& name, std::string* saveError) {
-        return ::saveAsFromPreset(m_moduleManager, m_floppyManager, target, name, saveError);
+    env.onSaveAs = [this](const PresetSaveAsRequest& request, std::string* saveError) {
+        return ::saveAsFromPreset(m_moduleManager, m_floppyManager, request, saveError);
     };
 
     const PresetLoadResult result = preset.isPC1600() ? runPC1600Preset(preset, env) : runPC1500Preset(preset, env);
@@ -226,6 +227,7 @@ PresetLoadResult PresetController::runPC1600Preset(const PresetFile& preset, con
         m_moduleManager->syncFromPresetLoad(2, QString::fromStdString(armedSoFar.slot2ResolvedPath));
         m_floppyManager->syncFromPresetLoad(QString::fromStdString(armedSoFar.floppyImageLabel),
                                             QString::fromStdString(armedSoFar.floppyResolvedPath));
+        m_controller->adoptHostDriveFromMachine();
         emit armed();
     };
     return applyPC1600Preset(machine, preset, env.log, env.traceDir, env.moduleDir,

@@ -182,6 +182,7 @@ PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion vers
                                                            CE1600PRomVersion ce1600pVersion) {
     m_pc1600RomVersion = version;
     m_ce1600pRomVersion = ce1600pVersion;
+    m_hostDriveDir.clear();  // the preset decides (`host-drive:`) -- see adoptHostDriveFromMachine()
     discardMachine();
     makePC1600WithRomFallback();
     wireNewMachine(); // see resetBareForPresetPC1500
@@ -656,6 +657,12 @@ bool MachineController::attachHostDrive(const QString& dir, QString* error) {
     }
     m_hostDriveDir = dir;
     return true;
+}
+
+void MachineController::adoptHostDriveFromMachine() {
+    m_hostDriveDir = hostDriveAttached()
+                         ? QString::fromStdString(std::filesystem::path(m_pc1600->hostDriveDirectory()).u8string())
+                         : QString();
 }
 
 void MachineController::detachHostDrive() {

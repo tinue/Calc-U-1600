@@ -84,15 +84,18 @@ public:
     // and a user template must never be overwritten).
     bool nameAndSave(int slot, const QString& instanceName, QString* error);
 
-    // Preset `saveas:s1:<name>` / `saveas:s2:<name>` (PresetController's
-    // PresetSaveAsFn callback). Like nameAndSave(),
-    // the slot is then retargeted at the new instance (shown under that
-    // name, autosaving there), but unlike it: works even when the slot is
-    // already saved (a "save as" -- the previous instance file just stops
-    // being autosaved), and silently overwrites an existing instance file
-    // of the same name instead of refusing. A template's name is still
-    // refused, and a template file is never overwritten.
-    bool saveAsFromPreset(int slot, const QString& instanceName, QString* error);
+    // Preset `saveas: template|live s1:<name>` / `s2:` (PresetController's
+    // PresetSaveAsFn callback). Like nameAndSave(), the slot is then
+    // retargeted at the saved file (shown under that name; a live save
+    // autosaves there, a template doesn't), but unlike it: works even when
+    // the slot is already saved (a "save as" -- the previous instance file
+    // just stops being autosaved), and silently overwrites an existing file
+    // of the same name. A by-name live save still refuses a template's name
+    // and never overwrites a template file. `filePath` (the `file:` form)
+    // writes exactly that file, with no name checks; empty = the instance
+    // directory.
+    bool saveAsFromPreset(int slot, const QString& instanceName, const QString& filePath, bool asTemplate,
+                          QString* error);
 
     void markDirtyAndSchedulePersist();  // called once per frame tick
     void flushPendingPersist();          // called before select/model-switch/quit
@@ -116,7 +119,8 @@ signals:
 private:
     // Shared body of nameAndSave()/saveAsFromPreset(); `fromPreset` skips
     // the already-saved and name-collision checks.
-    bool saveSlotAs(int slot, const QString& instanceName, bool fromPreset, QString* error);
+    bool saveSlotAs(int slot, const QString& instanceName, bool fromPreset, QString* error,
+                    const QString& filePath = QString(), bool asTemplate = false);
     // Every template's module-name (bundled or in the storage folder, all
     // hosts), and every bundled card's module-name.
     QSet<QString> templateNames() const;
@@ -156,7 +160,7 @@ private:
     // (best-effort re-splice; pass `error` as nullptr to fail silently).
     bool spliceCardImageInto(int bankCount, const std::vector<uint8_t>& image, const QString& sourcePath,
                              const QString& sourceModuleName, const QString& targetName, std::string* spliced,
-                             QString* error);
+                             QString* error, bool asTemplate = false);
 
     // The name of the module in `slot` of the live machine, "" when empty.
 

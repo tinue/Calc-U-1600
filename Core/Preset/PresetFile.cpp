@@ -6,6 +6,7 @@
 #include <cctype>
 #include <cerrno>
 #include <cstring>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -243,20 +244,29 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
             }
             step.kind = PresetStep::Kind::SyncClock;
         } else if (verb == "saveas") {
-            // `- saveas: s1:<name>` / `s2:<name>` / `floppy:<name>` -- the
-            // scripted counterpart of the control bar's "Name & Save" icon
-            // (see PresetFile.hpp's top-of-file doc comment). `value` is
-            // everything after the verb's own colon, e.g. "s1:CE-1601M -
-            // Progs" -- split it on ITS first colon (mirroring
-            // splitKeyValue's own rule) into target/name.
-            const size_t targetColon = value.find(':');
-            if (targetColon == std::string::npos) {
-                *error = "line " + std::to_string(line.lineNo) +
-                         ": expected 'saveas: s1:<name>', 'saveas: s2:<name>' or 'saveas: floppy:<name>'";
+            // `- saveas: template|live <target>:<name>` or `... <target>:file:<path>`
+            // (see PresetFile.hpp's top-of-file doc comment). The leading
+            // word is required; the rest splits on ITS first colon
+            // (mirroring splitKeyValue's own rule) into target/name.
+            const std::string usage = "line " + std::to_string(line.lineNo) +
+                                      ": expected 'saveas: template|live <s1|s2|floppy>:<name>' or "
+                                      "'saveas: template|live <s1|s2|floppy>:file:<path>'";
+            const size_t space = value.find_first_of(" \t");
+            std::string kind = space == std::string::npos ? value : value.substr(0, space);
+            lowerAscii(kind);
+            if (kind != "template" && kind != "live") {
+                *error = usage + " -- the first word must be 'template' or 'live'";
                 return false;
             }
-            std::string target = trim(value.substr(0, targetColon));
-            std::string name = trim(value.substr(targetColon + 1));
+            step.saveAsTemplate = kind == "template";
+            const std::string rest = space == std::string::npos ? "" : trim(value.substr(space + 1));
+            const size_t targetColon = rest.find(':');
+            if (targetColon == std::string::npos) {
+                *error = usage;
+                return false;
+            }
+            std::string target = trim(rest.substr(0, targetColon));
+            std::string name = trim(rest.substr(targetColon + 1));
             lowerAscii(target);
             if (target == "s1") step.saveAsTarget = PresetStep::SaveAsTarget::S1;
             else if (target == "s2") step.saveAsTarget = PresetStep::SaveAsTarget::S2;
@@ -265,6 +275,23 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
                 *error = "line " + std::to_string(line.lineNo) + ": 'saveas: " + value +
                          "' -- target must be 's1', 's2' or 'floppy'";
                 return false;
+            }
+            if (name.rfind("file:", 0) == 0) {
+                // The file form: the name is the file name minus the suffix
+                // the target's catalog uses. The path is resolved against
+                // the preset's directory by parsePresetFile().
+                const std::string path = trim(name.substr(5));
+                const std::string suffix =
+                    step.saveAsTarget == PresetStep::SaveAsTarget::Floppy ? ".floppy.yaml" : ".card.yaml";
+                const std::string fileName = std::filesystem::path(path).filename().string();
+                if (fileName.size() <= suffix.size() ||
+                    fileName.compare(fileName.size() - suffix.size(), suffix.size(), suffix) != 0) {
+                    *error = "line " + std::to_string(line.lineNo) + ": 'saveas: " + value + "' -- the file must end in '" +
+                             suffix + "'";
+                    return false;
+                }
+                step.saveAsPath = path;
+                name = fileName.substr(0, fileName.size() - suffix.size());
             }
             if (name.empty()) {
                 *error = "line " + std::to_string(line.lineNo) + ": 'saveas:' needs a name";
@@ -499,6 +526,19 @@ bool parseProgramBlock(const std::vector<RawLine>& lines, size_t& idx, const std
 
 } // namespace
 
+namespace {
+
+// `saveas: ... file:<path>` is relative to the preset's directory, like
+// every other path in the file; the step parser doesn't know that directory.
+void resolveSaveAsPaths(PresetFile* out, const std::filesystem::path& presetDir) {
+    for (PresetSection& s : out->sections)
+        for (PresetStep& step : s.keys)
+            if (step.kind == PresetStep::Kind::SaveAs && !step.saveAsPath.empty())
+                step.saveAsPath = resolvePath(presetDir, step.saveAsPath);
+}
+
+}  // namespace
+
 bool parsePresetFile(const std::string& path, PresetFile* out, std::string* error) {
     std::vector<RawLine> lines;
     if (!readLines(path, &lines, error)) return false;
@@ -511,9 +551,11 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
     std::string plotterRom;  // the ROM suffix of `plotter: NAME:ROM`, lower-cased ("" = none given)
     bool hasPlotter = false;
     std::string interfaceName;  // normalized `interface:` name ("" / "ce158")
-    std::string floppy;  // `floppy:` value with any `,A`/`,B` suffix stripped
+    std::string floppy;  // `floppy:` / `floppy-file:` value with any `,A`/`,B` suffix stripped
     int floppySide = 0;  // 0 = A, 1 = B, parsed from that suffix
     bool hasFloppy = false;
+    bool floppyIsFile = false;  // `floppy-file:` (a resolved path) rather than `floppy:` (a disk-name)
+    std::string hostDrive;  // `host-drive:`, resolved
 
     size_t idx = 0;
     while (idx < lines.size()) {
@@ -627,9 +669,22 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
                          "' is not a known interface (expected ce158)";
                 return false;
             }
-        } else if (key == "floppy") {
-            if (!hasInline) { *error = "'floppy' requires a value"; return false; }
+        } else if (key == "host-drive") {
+            if (!hasInline) { *error = "'host-drive' requires a directory"; return false; }
+            std::string dir = value;
+            if (dir == "~" || dir.rfind("~/", 0) == 0) {
+                const char* home = std::getenv("HOME");
+                if (home) dir = std::string(home) + dir.substr(1);
+            }
+            hostDrive = resolvePath(presetDir, dir);
+        } else if (key == "floppy" || key == "floppy-file") {
+            if (!hasInline) { *error = "'" + key + "' requires a value"; return false; }
+            if (hasFloppy) {
+                *error = "line " + std::to_string(line.lineNo) + ": only one of 'floppy:' / 'floppy-file:' is allowed";
+                return false;
+            }
             hasFloppy = true;
+            floppyIsFile = key == "floppy-file";
             floppy = value;
             // Strip an optional trailing `,A`/`,B` (case-insensitive) side
             // selector -- e.g. `floppy: mydisk,B`.
@@ -646,6 +701,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
                     return false;
                 }
             }
+            if (floppyIsFile) floppy = resolvePath(presetDir, floppy);
         } else if (key == "rom-modules") {
             *error = "'" + key + "' is not yet supported by this loader";
             return false;
@@ -688,11 +744,14 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         }
         out->interfaceName = interfaceName;
         if (hasFloppy && plotter != "ce1600p") {
-            *error = "'floppy:' requires 'plotter: ce1600p' (the CE-1600F attaches as a union with it)";
+            *error = std::string("'") + (floppyIsFile ? "floppy-file" : "floppy") +
+                     ":' requires 'plotter: ce1600p' (the CE-1600F attaches as a union with it)";
             return false;
         }
-        out->floppy = floppy;
+        (floppyIsFile ? out->floppyFile : out->floppy) = floppy;
         out->floppySide = floppySide;
+        out->hostDrive = hostDrive;
+        resolveSaveAsPaths(out, presetDir);
         return true;
     }
     // The remaining branches are PC-1500/1500A -- the per-slot blocks are
@@ -715,9 +774,14 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         }
     }
     if (hasFloppy) {
-        *error = "'floppy:' is only valid for a PC-1600 preset (the CE-1600F is a PC-1600 device)";
+        *error = "'floppy:' / 'floppy-file:' are only valid for a PC-1600 preset (the CE-1600F is a PC-1600 device)";
         return false;
     }
+    if (!hostDrive.empty()) {
+        *error = "'host-drive:' is only valid for a PC-1600 preset (the host drive is a PC-1600 device)";
+        return false;
+    }
+    resolveSaveAsPaths(out, presetDir);
     if (hasPlotter) {
         // The PC-1500 family takes the CE-150 (via the 60-pin bus); the
         // CE-1600P is a PC-1600 device.

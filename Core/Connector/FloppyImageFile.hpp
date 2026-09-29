@@ -48,7 +48,7 @@ struct FloppyFile {
     std::string diskName;
     // `template: true`: a read-only starting disk the app never writes to,
     // wherever the file lives; Name & Save copies it into an instance
-    // (formatFloppyFile() never writes the key). No key = an instance,
+    // (formatFloppyFile() writes the key only when asked to). No key = an instance,
     // autosaved in place.
     bool isTemplate = false;
     std::vector<uint8_t> image;  // CE1600FCard::kImageSize bytes, side A then side B
@@ -108,13 +108,17 @@ inline bool readHeader(const YamlNode& root, std::string* diskName, bool* isTemp
 // Serializes `image` (must be CE1600FCard::kImageSize bytes) as a complete
 // version-1 file. `diskName` is written double-quoted verbatim (the YAML
 // reader does no escape processing), so it must not contain '"' or a newline.
-inline std::string formatFloppyFile(const std::string& diskName, const std::vector<uint8_t>& image) {
+// `asTemplate` writes `template: true` (a preset's `saveas: template
+// floppy:...`); the app itself only ever writes instances.
+inline std::string formatFloppyFile(const std::string& diskName, const std::vector<uint8_t>& image,
+                                    bool asTemplate = false) {
     std::string out;
     out.reserve(4096);
     out += "# Calc-U-1600 CE-1600F floppy disk image\n";
     out += std::string("format: ") + floppy_detail::kFormatTag + "\n";
     out += "format-version: " + std::to_string(kFloppyFormatVersion) + "\n";
     out += "disk-name: \"" + diskName + "\"\n";
+    if (asTemplate) out += "template: true\n";
     out += "saved: " + currentIso8601Timestamp() + "\n";
     out += "sides:\n";
     for (size_t side = 0; side < 2; ++side) {

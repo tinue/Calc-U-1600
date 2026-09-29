@@ -62,20 +62,30 @@
 // preset files (this project's own samples) actually use, not a
 // general-purpose YAML implementation.
 //
-// `- saveas: s1:<name>` / `- saveas: s2:<name>` / `- saveas: floppy:<name>`
-// saves the live battery card in slot 1/2, or the live floppy disk, to the
-// environment's configured save directory under `<name>` -- the scripted
-// counterpart of the control bar's "Name & Save" icon. `s2:`/`floppy:` are
-// PC-1600 only (rejected on a PC-1500/1500A preset); `s1:` works on either
-// model. Unlike the GUI's Name & Save, it works even when the slot/floppy
-// was already saved/loaded from a named instance, and it silently
-// overwrites an existing file of the same name -- so a preset can
-// `saveas:` a card or floppy more than once, under different names, as it
-// evolves through the script. See PC1600PresetLoader.hpp's
-// PresetSaveAsFn (below) -- WHERE
-// the save goes is environment-specific (the GUI's configured instance
-// directory), so Core only parses the step; a caller that doesn't supply
-// the callback gets a logged no-op.
+// `- saveas: template|live <target>:<name>` saves the live battery card in
+// slot 1/2 (target `s1`/`s2`), or the live floppy disk (`floppy`) -- the
+// scripted counterpart of the control bar's "Name & Save" icon. The leading
+// word is required:
+//   * `live`     -- an ordinary instance: the GUI autosaves later changes
+//                   into it.
+//   * `template` -- written with `template: true`: read-only from then on,
+//                   every use starts from the saved contents.
+// `<name>` saves into the environment's configured save directory under that
+// module-name / disk-name. `file:<path>` instead writes exactly that file,
+// relative to the preset's own directory; the path must end in `.card.yaml`
+// (s1/s2) or `.floppy.yaml` (floppy), and the name is the file name without
+// that suffix:
+//   - saveas: template s2:file:CE-1601M - Progs.card.yaml
+//   - saveas: live floppy:Progs
+// `s2:`/`floppy:` are PC-1600 only (rejected on a PC-1500/1500A preset);
+// `s1:` works on either model. Unlike the GUI's Name & Save, it works even
+// when the slot/floppy was already saved/loaded from a named instance, and it
+// silently overwrites an existing file of the same name (a template too) --
+// so a preset can `saveas:` a card or floppy more than once, under different
+// names, as it evolves through the script. WHERE a by-name save goes is
+// environment-specific (the GUI's configured instance directory), so Core
+// only parses the step and hands a PresetSaveAsRequest to PresetSaveAsFn
+// (below); a caller that doesn't supply the callback gets a logged no-op.
 //
 // This project's loader treats a preset as an ordered SEQUENCE of
 // `keys:`/`program:` blocks, executed top-to-bottom in file order -- so a
@@ -103,25 +113,37 @@ struct PresetStep {
     static constexpr double kWaitUntilIdle = -1.0;
 
     // (SaveAs) which slot/device `text` (the name) should be saved under --
-    // parsed from `- saveas: s1:<name>` / `s2:<name>` / `floppy:<name>`.
+    // parsed from `- saveas: template|live s1:<name>` / `s2:` / `floppy:`.
     // S2/Floppy are PC-1600 only; see parsePresetFile()'s per-model
     // validation.
     enum class SaveAsTarget { S1, S2, Floppy };
     SaveAsTarget saveAsTarget = SaveAsTarget::S1;
+    // (SaveAs) `template` (true) or `live` (false).
+    bool saveAsTemplate = false;
+    // (SaveAs) the `file:<path>` form: the file to write, resolved relative
+    // to the preset's directory. Empty = save by name into the save folder.
+    std::string saveAsPath;
 };
 
-/// Fired for a `- saveas: s1:<name>` / `s2:<name>` / `floppy:<name>` step
-/// (see the top-of-file doc comment) -- WHERE the save goes, and how to
-/// splice/format it, are environment-specific (Qt6/app's AppPaths/
-/// MemoryModuleManager/FloppyDiskManager), so Core only calls out here,
-/// mirroring onArmed/onBooted. `target` is which slot/device to save
-/// (always S1 on a PC-1500/1500A -- the parser rejects the others); `name`
-/// is the name to save it under. Returns true on success, or false with
-/// `*error` filled in -- a failure stops the preset exactly like any other
-/// step failure. Left unset (the default) makes a `saveas:` step a logged
-/// no-op, for a caller (CLI, tests) with no configured save directory.
-using PresetSaveAsFn =
-    std::function<bool(PresetStep::SaveAsTarget target, const std::string& name, std::string* error)>;
+/// One `saveas:` step, as handed to PresetSaveAsFn.
+struct PresetSaveAsRequest {
+    PresetStep::SaveAsTarget target = PresetStep::SaveAsTarget::S1;
+    std::string name;      // module-name / disk-name to save under
+    std::string path;      // `file:` form: the file to write; "" = by name, into the save folder
+    bool isTemplate = false;
+};
+
+/// Fired for a `- saveas:` step (see the top-of-file doc comment) -- WHERE a
+/// by-name save goes, and how to splice/format it, are environment-specific
+/// (Qt6/app's AppPaths/MemoryModuleManager/FloppyDiskManager, or
+/// PC1600PresetMedia.hpp for the headless tools), so Core only calls out
+/// here, mirroring onArmed/onBooted. `request.target` is always S1 on a
+/// PC-1500/1500A (the parser rejects the others). Returns true on success,
+/// or false with `*error` filled in -- a failure stops the preset exactly
+/// like any other step failure. Left unset (the default) makes a `saveas:`
+/// step a logged no-op, for a caller (tests) with no configured save
+/// directory.
+using PresetSaveAsFn = std::function<bool(const PresetSaveAsRequest& request, std::string* error)>;
 
 /// Runs one `saveas:` step through `onSaveAs` (both preset loaders share
 /// this). Returns false with `*error` set ("saveas: ...") on failure.
@@ -131,13 +153,20 @@ inline bool runPresetSaveAsStep(const PresetStep& step, const PresetSaveAsFn& on
         if (log) log("  saveas: skipped (no save handler configured)");
         return true;
     }
+    PresetSaveAsRequest request;
+    request.target = step.saveAsTarget;
+    request.name = step.text;
+    request.path = step.saveAsPath;
+    request.isTemplate = step.saveAsTemplate;
     std::string saveError;
-    if (!onSaveAs(step.saveAsTarget, step.text, &saveError)) {
+    if (!onSaveAs(request, &saveError)) {
         if (error) *error = "saveas: " + saveError;
         if (log) log("  saveas: FAILED: " + saveError);
         return false;
     }
-    if (log) log("  saveas: -> \"" + step.text + "\"");
+    if (log)
+        log(std::string("  saveas: ") + (request.isTemplate ? "template" : "live") + " -> \"" + request.name + "\"" +
+            (request.path.empty() ? "" : " (" + request.path + ")"));
     return true;
 }
 
@@ -276,9 +305,22 @@ struct PresetFile {
     // PC1600Machine::attachCE1600P()); `floppy:` without `plotter:
     // ce1600p` is a parse error. See Core/PC1600/PC1600PresetLoader.cpp.
     std::string floppy;
-    // 0 = side A (default), 1 = side B -- parsed from `floppy:`'s `,A`/`,B`
-    // suffix. Meaningless when `floppy` is empty (no disk).
+    // PC-1600 only: `floppy-file: <path>` names a `.floppy.yaml` FILE
+    // instead, resolved relative to the preset's own directory (the floppy
+    // counterpart of `- modulespecfile:`), with the same optional `,A`/`,B`
+    // suffix. At most one of `floppy` / `floppyFile` is set; same
+    // `plotter: ce1600p` requirement.
+    std::string floppyFile;
+    // 0 = side A (default), 1 = side B -- parsed from the `,A`/`,B` suffix of
+    // `floppy:` / `floppy-file:`. Meaningless without a disk.
     int floppySide = 0;
+
+    // PC-1600 only: `host-drive: <dir>` mounts that host directory as drive
+    // S3: (Y: without a CE-1600F) -- PC1600HostDriveCard, attached before the
+    // cold boot like the other peripherals. Resolved relative to the
+    // preset's own directory; `~/` is the home directory. Empty = no host
+    // drive. docs/PC1600-Host-Drive.md.
+    std::string hostDrive;
 
     // The module in `memory-expansion:` (PC-1500/1500A) or in
     // `memory-expansion-1:` / `memory-expansion-2:` (the PC-1600's two

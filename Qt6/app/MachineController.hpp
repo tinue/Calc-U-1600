@@ -362,6 +362,9 @@ public:
     void detachHostDrive();
     bool hostDriveAttached() const;
     QString hostDriveDirectory() const { return m_hostDriveDir; }
+    // After a preset armed the machine: take over the drive its
+    // `host-drive:` attached (or none), so the File menu shows it.
+    void adoptHostDriveFromMachine();
 
     // CE-158 RS-232C / parallel interface: PC1500(A), or a PC-1600's LH5803
     // side (MODE 1). Same live power-cycled attach as the plotters; it
