@@ -32,7 +32,7 @@ protects it and types the command that starts it, as a convenience.
 On the PC-1600 the result depends on the MODE the machine is in and on the selected
 program area (`TITLE`). Today the loaders ignore both: BASIC always goes to S0, and a `.bas` is always tokenized with the PC-1600 keyword table, a
 CE-158-header file is always refused, and headerless code is always taken as Z-80
-code. The ROM analysis behind this plan is in SharpPC1500Reference
+code. The ROM analysis behind this plan is in Sharp1500-1600-Ref
 `PC-1600/PC-1600-Load-Save-Matrix.md`.
 
 ## Principles
@@ -57,7 +57,7 @@ code. The ROM analysis behind this plan is in SharpPC1500Reference
 
 ## Program area (`TITLE`)
 
-What the ROM does (SharpPC1500Reference `PC-1600-CPU-LH5803-Compat.md` §4,
+What the ROM does (Sharp1500-1600-Ref `PC-1600-CPU-LH5803-Compat.md` §4,
 `PC-1600-Work-Area-Map.md` §4.5):
 - `TITLE "Sn:"` (`SELPRG`, P0-B0 1EEFH) selects S0, or S1/S2 if that slot holds a
   program module (else error 101). The ROM's `LOAD` then writes into that area

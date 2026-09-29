@@ -2,7 +2,7 @@
 // pure segment-list + scatter-placement logic for the PC-1600 fast BASIC
 // loader. Driven entirely by a synthetic `peek` over the work-area bytes
 // (no CPU, no ROM), checked against the two worked examples in
-// SharpPC1500Reference/PC-1600/PC-1600-BASIC-Program-Placement.md.
+// Sharp1500-1600-Ref/PC-1600/PC-1600-BASIC-Program-Placement.md.
 //
 // Build & run: see tools/run_tests.sh
 

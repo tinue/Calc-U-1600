@@ -5,7 +5,7 @@
 // ── PC-1600 LCD status-symbol line ───────────────────────────────────────
 //
 // The 16-symbol strip above the 156x32 graphics area (TRM §7.3;
-// SharpPC1500Reference/PC-1600/PC-1600-Display-HD61202.md §1). These are
+// Sharp1500-1600-Ref/PC-1600/PC-1600-Display-HD61202.md §1). These are
 // printed fixed-legend text permanently etched on the LCD glass, each
 // with its own small individually-drivable segment -- the same style as a
 // scientific calculator's fixed DEG/RAD/GRAD strip. This class is

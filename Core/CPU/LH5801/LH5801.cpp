@@ -19,7 +19,7 @@ constexpr int kInterruptAckCycles = 14;
 } // namespace
 
 // Opcode/cycle/flag data below is transcribed directly from
-// SharpPC1500Reference/Assembly-Programming/LH5801_Guide.md's "Instruction
+// Sharp1500-1600-Ref/PC-1500/Assembly-Programming/LH5801_Guide.md's "Instruction
 // Set Reference" section. Two points where the guide's prose was
 // internally ambiguous are flagged at their point of use below: DRL/DRR
 // nibble rotation, and CPA/CPI/CIN's carry-in (see the CPA case below).

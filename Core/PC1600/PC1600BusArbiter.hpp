@@ -5,7 +5,7 @@
 // Tracks which of the two PC-1600 CPUs currently owns the shared bus
 // (`ELH#` high = SC7852 running, the reset default; low =
 // LH5803 running; never both), per
-// SharpPC1500Reference/PC-1600/PC-1600-Machine-Overview.md §3.
+// Sharp1500-1600-Ref/PC-1600/PC-1600-Machine-Overview.md §3.
 //
 // This class only tracks state and pending-switch requests -- it does not
 // itself drive either CPU. PC1600Machine::step() is what actually

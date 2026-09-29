@@ -7,7 +7,7 @@
 // (ExpansionConnector) and 60-pin (SystemBus) connectors. The underlying
 // TC40H139F (Y0-Y3) / TC40H138F (S0-S7) decoders are identical on both
 // models and reach both connectors identically -- see
-// SharpPC1500Reference/Memory-Architecture/PC-1500-Address-Decoding.md §2
+// Sharp1500-1600-Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md §2
 // and Expansion-Connectors.md §3.1. Only *pin routing* (which of these
 // strobes reaches a given physical pin, on a given connector, on a given
 // model) differs -- that's each connector class's own concern, not this

@@ -113,7 +113,7 @@ Both are ROM behavior, not emulator bugs.
 All of the above is backed by `Core/tests/ce1600f_tests.cpp` (1116
 assertions) and `Core/tests/pc1600_preset_tests.cpp`. Primary-source
 citations for the register bit layout: **Systemhandbuch Appendix 6**, via
-`~/Development/sharp/SharpPC1500Reference/PC-1600/PC-1600-Peripherals-Hardware.md`
+`~/Development/sharp/Sharp1500-1600-Ref/PC-1600/PC-1600-Peripherals-Hardware.md`
 §2.6 ("Port-level command/status registers, 78H-7FH") — this independently
 confirms the bit table in `CE1600FCard.hpp`'s own comments.
 
@@ -346,7 +346,7 @@ much they diverge from the current approach:
   (`test_loader_*floppy*`).
 - `Qt6/app/FloppyDiskManager.{hpp,cpp}`, `Qt6/app/ControlBar.{hpp,cpp}` —
   GUI.
-- `~/Development/sharp/SharpPC1500Reference/PC-1600/PC-1600-Peripherals-Hardware.md`
+- `~/Development/sharp/Sharp1500-1600-Ref/PC-1600/PC-1600-Peripherals-Hardware.md`
   §2 (floppy: geometry, IOCS routines, §2.6 port table) — primary-source
   reference, already fully mined for this investigation.
 - `~/Development/sharp/pc1600/roms/romce1600-2.bin` — the real, already-

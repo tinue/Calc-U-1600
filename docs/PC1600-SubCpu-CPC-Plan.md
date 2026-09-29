@@ -2,7 +2,7 @@
 
 ## Context
 
-Two new documents in SharpPC1500Reference (commits 72a1c13, 462de33, 2026-09-26):
+Two new documents in Sharp1500-1600-Ref (commits 72a1c13, 462de33, 2026-09-26):
 `PC-1600/PC-1600-CPC-TC8576.md` (register-level TC8576AF reference from the Toshiba data
 sheet, plus how the ROM programs the chip) and `PC-1600/PC-1600-SubCpu-LU57813P.md`
 (Service Manual pin/power/interrupt facts, command set rebuilt from the ROM).
@@ -62,7 +62,7 @@ Still unknown and **left inert and documented, not guessed**: operands `9C–9EH
 mode (1EH/24H/16H/1CH/1DH), SWAB's two bits, `/CTS` and `/DSR` wiring, and the **F-pin
 tones** (click, alarm, wake beep; frequency and length unmeasured).
 
-## Phase 0: research corpus (SharpPC1500Reference, commit on `main`)
+## Phase 0: research corpus (Sharp1500-1600-Ref, commit on `main`)
 
 - `PC-1600-SubCpu-LU57813P.md`: add findings 1–6. Fill in the IOCS 15H/20H rows and the
   SRIRQ/SWPON bit tables, and shrink §8 to what is still open.

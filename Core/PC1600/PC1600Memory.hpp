@@ -23,7 +23,7 @@
 //
 // Resolves each of the SC7852's four 16KB pages against a PC1600Bank's
 // current register state, per the "Memory Map by Bank" table in
-// SharpPC1500Reference/PC-1600/PC-1600-Memory-Bank-Switching.md.
+// Sharp1500-1600-Ref/PC-1600/PC-1600-Memory-Bank-Switching.md.
 //
 // Pages (Z-80 address space):
 //   Page A  0000-3FFF  system ROM, CS001 — always resident, regardless of

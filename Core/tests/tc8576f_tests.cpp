@@ -1,6 +1,6 @@
 // Headless C++ tests for the TC8576F CPC model (Core/PC1600/TC8576F.hpp)
 // and the sub-CPU parallel-port handshake in PC1600SubCpu. Expected
-// behaviour: SharpPC1500Reference PC-1600/PC-1600-CPC-TC8576.md ("CPC §n").
+// behaviour: Sharp1500-1600-Ref PC-1600/PC-1600-CPC-TC8576.md ("CPC §n").
 // Same no-framework assert-and-tally style as sc7852_tests.cpp.
 //
 // Build & run: see tools/run_tests.sh

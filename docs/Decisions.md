@@ -83,7 +83,7 @@ then resumes through the FA08H signature, or runs the WAKE$ command string.
   own resume logic only work through the reset.
 - `m_rtcAccum` isn't touched by any reset or power cycle: it's the
   sub-CPU's divider.
-Source: SharpPC1500Reference PC-1600-SubCpu-LU57813P.md §4.1.
+Source: Sharp1500-1600-Ref PC-1600-SubCpu-LU57813P.md §4.1.
 
 ### Sub-CPU SRIRQ clears on read; INT6 is a level
 `PC1600SubCpu` keeps events as pending bits. SRIRQ (A2H) returns and clears

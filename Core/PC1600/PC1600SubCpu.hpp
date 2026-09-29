@@ -13,7 +13,7 @@
 // (battery levels, analog jack) and the INT6 interrupt line. It runs on
 // the always-on VGG rail. No datasheet exists and its ROM is undumped, so
 // this is a high-level model of what the Z-80 ROM asks of it. The command
-// set and every fact below are in SharpPC1500Reference
+// set and every fact below are in Sharp1500-1600-Ref
 // `PC-1600/PC-1600-SubCpu-LU57813P.md` (cited as "SubCpu §n"), rebuilt from
 // the PC-1600 Service Manual §4-3/§9-3 and the ROM's timer IOCS module
 // (P2-B6 A74AH-AA40H).

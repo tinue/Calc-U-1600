@@ -2,7 +2,7 @@
 
 ## Context
 
-The reference corpus (`SharpPC1500Reference/PC-1600/PC-1600-Display-HD61202.md`,
+The reference corpus (`Sharp1500-1600-Ref/PC-1600/PC-1600-Display-HD61202.md`,
 commit 22436aa) now has a §9 with facts from the Hitachi 1989 datasheets: the status
 byte layout, the read pipeline (output register, dummy read), clocking (the HD61203's
 fosc = 2·fφ; CK0 217 kHz is the "215 kHz / FS = GND" external clock, so φ ≈ 108.5 kHz),
@@ -86,7 +86,7 @@ per the TODO's order:
 
 ## Reference corpus feedback (separate repo, own commit)
 
-`SharpPC1500Reference/PC-1600/PC-1600-Display-HD61202.md`:
+`Sharp1500-1600-Ref/PC-1600/PC-1600-Display-HD61202.md`:
 - §6.3/§9.4: SMBLSET storage is ROM-confirmed as IC3 column 63, pages 7 (B=00H),
   6 (B=01H) and 4 (B=02H), plus `DSPLPTR` F05CH (bank 6 `822D`, `81F0`, `81FC`). Page 4
   lies on commons X33–X40, so the "X49–X64 only" inference needs a note.

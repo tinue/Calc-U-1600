@@ -14,7 +14,7 @@ namespace {
 // (PC-1600-Work-Area-Map.md, Block C). Their *values* are LH5803-side
 // addresses -- $40C5 on a stock machine, $00C5 once a Slot-1/Slot-2 RAM
 // module has moved the program area into a parked bank window. See
-// SharpPC1500Reference/PC-1600/PC-1600-BASIC-Program-Placement.md.
+// Sharp1500-1600-Ref/PC-1600/PC-1600-BASIC-Program-Placement.md.
 constexpr uint16_t kBasPrgSt = 0xF865;
 constexpr uint16_t kBasPrgEnd = 0xF867;
 constexpr uint16_t kPrgAdrStart = 0xFE3C;  // start lo, hi, bank; end lo, hi, bank (FE3C-FE41)
@@ -139,7 +139,7 @@ void eraseOld(PC1600Machine& machine, const std::vector<pc1600::ProgramSegment>&
 // S0 (placement across S0's ADTBL banks and internal RAM, planS0Placement)
 // or the S1 / S2 program module (planModuleRegionPlacement). The bytes go
 // straight into the backing store; the pointers are then left exactly as
-// the ROM's own LOAD leaves them (LOADEND, rom3b 70E1H -- SharpPC1500Reference
+// the ROM's own LOAD leaves them (LOADEND, rom3b 70E1H -- Sharp1500-1600-Ref
 // PC-1600-Work-Area-Map.md §3.5 / §4.5).
 BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
                                        const std::vector<uint8_t>& payload) {

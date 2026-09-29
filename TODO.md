@@ -108,7 +108,7 @@ obligations.
 
 The loaders follow MODE and `TITLE` (docs/Loader-Mode-Plan.md, done). Left:
 
-- **The open questions of the load/save matrix** (SharpPC1500Reference
+- **The open questions of the load/save matrix** (Sharp1500-1600-Ref
   `PC-1600/PC-1600-Load-Save-Matrix.md` §6), to be discussed: are all tokens
   the PC-1500 and PC-1600 share identical (the MODE 1 listing rule assumes
   so; a table comparison of libsharpdx's two tables against the ROM's would
@@ -256,7 +256,7 @@ What's wrong with that:
     connector wiring (its Service Manual schematic) or a continuity check.
     Not blocking: the model can route PVOUT to the cards' PV input on the
     SM's word.
-    Checked 2026-09-26 (details in SharpPC1500Reference
+    Checked 2026-09-26 (details in Sharp1500-1600-Ref
     `Expansion-Connectors.md` §2.2b):
     - The PC-1500 TRM scan really prints 15 = PV; it isn't an OCR slip.
     - No online erratum turned up.
