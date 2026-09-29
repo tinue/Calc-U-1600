@@ -304,8 +304,69 @@ void test_mep_fixed_entries() {
     CHECK(m.memory().peek(0xC100) == 0x00);
     CHECK(m.memory().peek(0xC101) == 0x01);
     CHECK(m.memory().peek(0xC102) == 0x98);
+    // The prompt of the successful CDIR "/" in the MEP's buffer FB10H.
+    std::string prompt;
+    for (uint16_t a = 0xFB10; a < 0xFB16; ++a) prompt += static_cast<char>(m.memory().peek(a));
+    CHECK(prompt == "S3:/>\r");
     // Still alive: BASIC runs and the drive works.
     CHECK(errorOf(m, dir.path, "OPEN \"S3:X.TXT\" FOR OUTPUT AS #1:CLOSE #1") == 0);
+}
+
+// Presses OFF, then ON, and waits for the prompt.
+void powerCycle(PC1600Machine& m) {
+    tapKey(m, "off");
+    m.runCycles(static_cast<uint64_t>(PC1600Machine::kTStateHz) * 3);
+    m.setOnKeyPressed(true);
+    m.runCycles(PC1600Machine::kTStateHz / 10);
+    m.setOnKeyPressed(false);
+    for (int k = 0; k < 30 && !(m.sc7852().halted() && m.sc7852().pc() == 0x92B3); k++)
+        m.runCycles(PC1600Machine::kTStateHz / 10);
+    waitIdle(m, static_cast<uint64_t>(PC1600Machine::kTStateHz) * 2);
+}
+
+// The MEP's BASIC statements CDIR / LDIR: the current directory is where
+// every file statement works; power on goes back to the root.
+void test_cdir_and_ldir_statements() {
+    TempDir dir;
+    fs::create_directories(dir.path / "Sub" / "INNER");
+    PC1600Machine m;
+    if (!bootWithHostDrive(m, dir.path)) {
+        std::fprintf(stderr, "SKIP test_cdir_and_ldir_statements: PC-1600 ROM images not found\n");
+        return;
+    }
+    CHECK(errorOf(m, dir.path, "CDIR \"NOPE\"") == 152);
+    CHECK(errorOf(m, dir.path, "CDIR 5") == 7);
+    CHECK(errorOf(m, dir.path, "CDIR \"\"") == 18);
+    CHECK(errorOf(m, dir.path, "LDIR 1") == 18);
+    CHECK(errorOf(m, dir.path, "LDIR") == 0);
+
+    // Tokenized: LISTs back as CDIR / LDIR.
+    enterProgram(m, "10 CDIR \"SUB\":LDIR\n");
+    type(m, "SAVE \"S3:L.BAS\",A");
+    const std::string text = readFile(dir.path / "L.BAS");
+    CHECK(text.find("CDIR \"SUB\"") != std::string::npos);
+    CHECK(text.find("LDIR") != std::string::npos);
+
+    // A string variable, a relative path, then files in the subfolder.
+    runProgram(m,
+               "10 MAXFILES=1:A$=\"sub\":CDIR A$:CDIR \"INNER\"\n"
+               "20 OPEN \"S3:IN.TXT\" FOR OUTPUT AS #1:PRINT #1,\"HI\":CLOSE #1\n"
+               "30 CDIR \"..\":SAVE \"S3:P.BAS\"\n");
+    CHECK(fs::exists(dir.path / "Sub" / "INNER" / "IN.TXT"));
+    CHECK(fs::exists(dir.path / "Sub" / "P.BAS"));
+    CHECK(!fs::exists(dir.path / "P.BAS"));
+
+    // NEW keeps the directory, power on goes back to the root.
+    tapKey(m, "mode");
+    waitIdle(m, PC1600Machine::kTStateHz);
+    type(m, "NEW");
+    tapKey(m, "mode");
+    waitIdle(m, PC1600Machine::kTStateHz);
+    type(m, "SAVE \"S3:N.BAS\"");
+    CHECK(fs::exists(dir.path / "Sub" / "N.BAS"));
+    powerCycle(m);
+    type(m, "SAVE \"S3:R.BAS\"");
+    CHECK(fs::exists(dir.path / "R.BAS"));
 }
 
 }  // namespace
@@ -317,6 +378,7 @@ int run_pc1600_host_drive_tests() {
     test_y_alias_follows_the_floppy();
     test_unmounted_drive_creates_nothing();
     test_mep_fixed_entries();
+    test_cdir_and_ldir_statements();
 
     std::printf("pc1600_host_drive_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

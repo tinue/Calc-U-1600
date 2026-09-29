@@ -1,6 +1,6 @@
                         ; --------------------------------------
                         ; zasm: assemble "hostdrive.asm"
-                        ; date: 2026-09-29 12:11:59
+                        ; date: 2026-09-29 12:50:55
                         ; --------------------------------------
 
 
@@ -23,24 +23,29 @@
                         ; device table and jumps to the file handler (+15H) with C = function, DE =
                         ; FCB, page 1 = this bank. A CE-1600F (bank 5) is searched first, so with a
                         ; CE-1600P attached "Y:" is its second floppy drive and only "S3:" comes
-                        ; here. No token table: INIT "S3:" finds no handler and is refused.
+                        ; here. The token table has no INIT: INIT "S3:" finds no handler and is
+                        ; refused.
                         ;
                         ; PROTOCOL (one transaction per FILE call)
-                        ;   OUT (91H),fn        start: function byte (FFH = reset, no further bytes)
+                        ;   OUT (91H),fn        start: function byte (FFH = module reset: OUT (90H)
+                        ;                       the +02H function code, nothing comes back)
                         ;   OUT (90H) x ...     DE lo, DE hi, DEVNAME, FCB+00H..+38H (57 bytes),
                         ;                       and for 15H (write) the 256 bytes at (DMAADR)
                         ;   IN  (90H) x ...     status, ERL, FCB+00H..+38H (57 bytes),
                         ;                       length lo, length hi, <length> bytes -> (DMAADR),
                         ;                       BC lo/hi, DE lo/hi, HL lo/hi
                         ;
-                        ; MEP FIXED ENTRIES
-                        ; Programs written for the MEP rev3 module (e.g. FILEX) take "S3:" for the
-                        ; MEP and call its fixed entries 4020H/4023H/4026H in bank 7 directly. The
-                        ; same addresses here give them a drive without subdirectories:
-                        ;   OUT (91H),FCH       CDIR: OUT (90H) length, path bytes;
-                        ;                       IN (90H) status, ERL (only the root "/" exists)
+                        ; MEP COMPATIBILITY
+                        ; Subdirectories work as on the MEP rev3 module: the host keeps a current
+                        ; directory that every FILE call works in. Programs written for the MEP
+                        ; (e.g. FILEX) call its fixed entries 4020H/4023H/4026H in bank 7 directly,
+                        ; and BASIC gets the MEP's statements CDIR "path" and LDIR under the MEP's
+                        ; tokens F2D0H / F2D1H:
+                        ;   OUT (91H),FCH       CDIR: OUT (90H) length, path bytes; IN (90H)
+                        ;                       status, ERL, and on success the 27-byte prompt
+                        ;                       ("S3:/DEV/ASM>", CR) -> MEPPROMPT (FB10H)
                         ;   OUT (91H),FDH       FILEMODE: SEARCH FIRST/NEXT list files (default)
-                        ;   OUT (91H),FEH       DIRMODE: SEARCH FIRST/NEXT list directories (none)
+                        ;   OUT (91H),FEH       DIRMODE: SEARCH FIRST/NEXT list subdirectories
                         ; ============================================================================
                         
 0090:                   P_HDDATA:   equ 90H     ; host drive: request / response byte stream
@@ -55,6 +60,26 @@
 FC16:                   DEVNAME:    equ 0FC16H  ; device code of the FILE call (set by FILE_I)
 FC46:                   DMAADR:     equ 0FC46H  ; FILE 1AH SET DMA address
 F89B:                   ERL:        equ 0F89BH  ; error code of the last file operation
+FE00:                   PROCPTR:    equ 0FE00H  ; interpreter processing pointer
+F07D:                   PORT3D_M:   equ 0F07DH  ; mirror of the write-only port 3DH
+FA04:                   XX_TYPE:    equ 0FA04H  ; XX+4: >= B3H for a string
+FA05:                   XX_STRAD:   equ 0FA05H  ; XX+5/+6: string address (high without b7, low)
+FA07:                   XX_STRLEN:  equ 0FA07H  ; XX+7: string length
+FB10:                   MEPPROMPT:  equ 0FB10H  ; CDIR prompt, the MEP's documented result buffer
+001B:                   PROMPTLEN:  equ 27      ; 26 characters + CR
+                        
+0031:                   P_BANK:     equ 31H     ; bank select (b3-b1 = page 1)
+003D:                   P_ROMSEL:   equ 3DH     ; bank 3 variant: 00H = bank 3b
+                        
+00EB:                   PRTASTR:    equ 00EBH   ; print the text at DE up to the character A
+0115:                   CRSRSET:    equ 0115H   ; cursor to column D, row E
+0118:                   CRSRPOS:    equ 0118H   ; cursor position -> D column, E row
+012D:                   UPSCRL:     equ 012DH   ; scroll the display up one row
+025C:                   EOCHK2:     equ 025CH   ; Z = statement end at (HL)
+0274:                   EXPRESS:    equ 0274H   ; evaluate an expression at (HL) -> XX
+02BC:                   COMMADR:    equ 02BCH   ; token DE -> handler HL, bank field C
+                        
+F098:                   TOKFILES:   equ 0F098H  ; built-in FILES statement (bank 3b)
                         
 4000:                   	org 4000H
                         
@@ -65,7 +90,7 @@ F89B:                   ERL:        equ 0F89BH  ; error code of the last file op
                         ;------------------------------------------------------------------------------
 4000:                   MODID:
 4000: 4316              	defb 43H,16H
-4002: C34F40   [10]     	jp HDRESET              ; +02H: reset / power functions (A = function)
+4002: C3A240   [10]     	jp HDRESET              ; +02H: reset / power functions (A = function)
 4005: C9       [20]     	ret                     ; +05H: interrupt hook: nothing
 4006: 00       [24]     	nop
 4007: 00       [28]     	nop
@@ -75,16 +100,16 @@ F89B:                   ERL:        equ 0F89BH  ; error code of the last file op
 400B: 37       [50]     	scf                     ; +0BH: spare
 400C: C9       [60]     	ret
 400D: 00       [64]     	nop
-400E: C35D40   [74]     	jp HDNOAUTO             ; +0EH: AUTORUN.BAS search: not supported
+400E: C3B240   [74]     	jp HDNOAUTO             ; +0EH: AUTORUN.BAS search: not supported
 4011: 2940              	defw HDDEVTAB           ; +11H: device-name table
-4013: 0000              	defw 0000H              ; +13H: no token table
-4015: C38640   [84]     	jp HDFILE               ; +15H: file handler
+4013: 4F40              	defw HDTOKTAB           ; +13H: token table (CDIR, LDIR)
+4015: C3DE41   [84]     	jp HDFILE               ; +15H: file handler
 4018: C9C9C9C9          	defs 4020H-$,0C9H       ; +18H..+1FH: RET, as the MEP module
 401C: C9C9C9C9          
                         
-4020: C36040   [94]     	jp HDCDIR               ; 4020H: MEP CDIR (DE = path, B = length)
-4023: C37C40   [104]    	jp HDDIRMODE            ; 4023H: MEP DIRMODE
-4026: C38040   [114]    	jp HDFILEMODE           ; 4026H: MEP FILEMODE
+4020: C3B540   [94]     	jp HDCDIR               ; 4020H: MEP CDIR (DE = path, B = length)
+4023: C3D441   [104]    	jp HDDIRMODE            ; 4023H: MEP DIRMODE
+4026: C3D841   [114]    	jp HDFILEMODE           ; 4026H: MEP FILEMODE
                         
 4029:                   HDDEVTAB:
 4029: 53330000          	defb "S3",00H,00H,42H
@@ -93,74 +118,299 @@ F89B:                   ERL:        equ 0F89BH  ; error code of the last file op
 4032: 43                
 4033: 00                	defb 00H
                         
-4034: 43616C63          	defb "Calc-U-1600 host drive 1.0",00H
+4034: 43616C63          	defb "Calc-U-1600 host drive 1.1",00H
 4038: 2D552D31          
 403C: 36303020          
 4040: 686F7374          
 4044: 20647269          
 4048: 76652031          
-404C: 2E3000            
+404C: 2E3100            
+                        
+                        
+                        
+                        ;------------------------------------------------------------------------------
+                        ; Token table: the letter index (27 words, "C" and "L" pointing at the
+                        ; length byte of their entry), then the entries (bank field 0EH = page-1
+                        ; bank 7, handler, token, attribute, length, name) as TOKFIND (11D6H)
+                        ; walks them from table+39H. Tokens and attributes are the MEP's, so a
+                        ; program with CDIR / LDIR lines runs on both.
+                        ;------------------------------------------------------------------------------
+404F:                   HDTOKTAB:
+404F: 00000000          	defw 0000H,0000H,0000H  ; index: -, A, B
+4053: 0000              
+4055: 8B40              	defw TOKCDIR+6          ; C
+4057: 00000000          	defw 0000H,0000H,0000H,0000H,0000H,0000H,0000H,0000H ; D..K
+405B: 00...             
+4067: 9640              	defw TOKLDIR+6          ; L
+4069: 00000000          	defw 0000H,0000H,0000H,0000H,0000H,0000H,0000H ; M..S
+406D: 00...             
+4077: 00000000          	defw 0000H,0000H,0000H,0000H,0000H,0000H,0000H ; T..Z
+407B: 00...             
+4085:                   TOKCDIR:
+4085: 0E                	defb 0EH
+4086: DA40              	defw CMDCDIR
+4088: D0F2              	defw 0F2D0H
+408A: BD044344          	defb 0BDH,4,"CDIR"
+408E: 4952              
+4090:                   TOKLDIR:
+4090: 0E                	defb 0EH
+4091: 3C41              	defw CMDLDIR
+4093: D1F2              	defw 0F2D1H
+4095: AD044C44          	defb 0ADH,4,"LDIR"
+4099: 4952              
+409B: 00000000          	defb 00H,00H,00H,00H,00H,00H,00H
+409F: 000000            
                         
                         
                         
                         ;------------------------------------------------------------------------------
                         ; Reset / power functions (module +02H)
-                        ; Tells the host to forget searches in progress on every call (new, power
-                        ; on/off, reset, boot). Returns like the other modules: A = 0..2 -> A := 0,
-                        ; NC; everything else CY.
+                        ; Passes the function code to the host, which forgets searches in progress
+                        ; on every call and goes back to the root on power on and reset (a MEP
+                        ; loses its current directory with the power). Returns like the other
+                        ; modules: A = 0..2 -> A := 0, NC; everything else CY.
                         ;------------------------------------------------------------------------------
-404F:                   HDRESET:
-404F: F5       [11]     	push af
-4050: 3EFF     [18]     	ld a,HDRESETCMD
-4052: D391     [29]     	out (P_HDCMD),a
-4054: F1       [39]     	pop af
-4055: FE03     [46]     	cp 03H
-4057: 3002     [53|58]  	jr nc,HDRESETCY
-4059: AF       [57]     	xor a
-405A: C9       [67]     	ret
-405B:                   HDRESETCY:
-405B: 37       [ 4]     	scf
-405C: C9       [14]     	ret
+40A2:                   HDRESET:
+40A2: F5       [11]     	push af
+40A3: 3EFF     [18]     	ld a,HDRESETCMD
+40A5: D391     [29]     	out (P_HDCMD),a
+40A7: F1       [39]     	pop af
+40A8: D390     [50]     	out (P_HDDATA),a
+40AA: FE03     [57]     	cp 03H
+40AC: 3002     [64|69]  	jr nc,HDRESETCY
+40AE: AF       [68]     	xor a
+40AF: C9       [78]     	ret
+40B0:                   HDRESETCY:
+40B0: 37       [ 4]     	scf
+40B1: C9       [14]     	ret
                         
                         
                         
                         ;------------------------------------------------------------------------------
                         ; AUTORUN search (module +0EH): A := 9BH (device not available)
                         ;------------------------------------------------------------------------------
-405D:                   HDNOAUTO:
-405D: 3E9B     [ 7]     	ld a,9BH
-405F: C9       [17]     	ret
+40B2:                   HDNOAUTO:
+40B2: 3E9B     [ 7]     	ld a,9BH
+40B4: C9       [17]     	ret
                         
                         
                         
                         ;------------------------------------------------------------------------------
                         ; MEP fixed entry 4020H: change the directory
                         ;
-                        ;   Entry parameters: DE = path, B = length
-                        ; Modified registers: AF, BC, HL
-                        ;   Error conditions: CY, A = IOCS status, ERL set (a path other than the
-                        ;                     root: 01H, 98H file not found)
+                        ;   Entry parameters: DE = path ("/" root, ".", "..", relative), B = length
+                        ; Modified registers: AF, BC, HL; MEPPROMPT = "S3:/path>" + CR on success
+                        ;   Error conditions: CY, A = IOCS status, ERL set (no such directory:
+                        ;                     01H, 98H file not found)
                         ;------------------------------------------------------------------------------
-4060:                   HDCDIR:
-4060: 3EFC     [ 7]     	ld a,HDCDIRCMD
-4062: D391     [18]     	out (P_HDCMD),a
-4064: 0E90     [25]     	ld c,P_HDDATA
-4066: ED41     [37]     	out (c),b
-4068: EB       [41]     	ex de,hl                ; HL = path
-4069: 78       [45]     	ld a,b
-406A: B7       [49]     	or a
-406B: 2802     [56|61]  	jr z,HDCDIRST
-406D: EDB3     [72|21]  	otir
-406F:                   HDCDIRST:
-406F: EB       [ 4]     	ex de,hl
-4070: ED78     [16]     	in a,(c)                ; IOCS status
-4072: ED40     [28]     	in b,(c)
-4074: 219BF8   [38]     	ld hl,ERL
-4077: 70       [45]     	ld (hl),b
-4078: B7       [49]     	or a
-4079: C8       [54|60]  	ret z
-407A: 37       [58]     	scf
-407B: C9       [68]     	ret
+40B5:                   HDCDIR:
+40B5: 3EFC     [ 7]     	ld a,HDCDIRCMD
+40B7: D391     [18]     	out (P_HDCMD),a
+40B9: 0E90     [25]     	ld c,P_HDDATA
+40BB: ED41     [37]     	out (c),b
+40BD: EB       [41]     	ex de,hl                ; HL = path
+40BE: 78       [45]     	ld a,b
+40BF: B7       [49]     	or a
+40C0: 2802     [56|61]  	jr z,HDCDIRST
+40C2: EDB3     [72|21]  	otir
+40C4:                   HDCDIRST:
+40C4: EB       [ 4]     	ex de,hl
+40C5: ED78     [16]     	in a,(c)                ; IOCS status
+40C7: ED40     [28]     	in b,(c)
+40C9: 219BF8   [38]     	ld hl,ERL
+40CC: 70       [45]     	ld (hl),b
+40CD: B7       [49]     	or a
+40CE: 2008     [56|61]  	jr nz,HDCDIRERR
+40D0: 2110FB   [66]     	ld hl,MEPPROMPT
+40D3: 061B     [73]     	ld b,PROMPTLEN
+40D5: EDB2     [89|21]  	inir
+40D7: C9       [99]     	ret                     ; A = 0, NC
+40D8:                   HDCDIRERR:
+40D8: 37       [ 4]     	scf
+40D9: C9       [14]     	ret
+                        
+                        
+                        
+                        ;------------------------------------------------------------------------------
+                        ; BASIC statement CDIR "path": change the directory, show the prompt on the
+                        ; next display row
+                        ;
+                        ;   Entry parameters: HL = processing pointer after the token
+                        ; Modified registers: HL = processing pointer (PROCPTR); all others
+                        ;   Error conditions: CY and A = BASIC error code (01H syntax, 07H not a
+                        ;                     string, 12H empty or 255+ characters, ERL of CDIR)
+                        ;------------------------------------------------------------------------------
+40DA:                   CMDCDIR:
+40DA: CD7402   [17]     	call EXPRESS
+40DD: 3851     [24|29]  	jr c,CMDERR01
+40DF: 3A04FA   [37]     	ld a,(XX_TYPE)
+40E2: FEB3     [44]     	cp 0B3H
+40E4: 384E     [51|56]  	jr c,CMDERR07
+40E6: 2A05FA   [67]     	ld hl,(XX_STRAD)        ; L = high (b7 clear), H = low
+40E9: 7C       [71]     	ld a,h
+40EA: 65       [75]     	ld h,l
+40EB: 6F       [79]     	ld l,a
+40EC: CBFC     [87]     	set 7,h
+40EE: 3A07FA   [100]    	ld a,(XX_STRLEN)
+40F1: B7       [104]    	or a
+40F2: 2844     [111|116]	jr z,CMDERR12
+40F4: FEFF     [118]    	cp 0FFH
+40F6: 3040     [125|130]	jr nc,CMDERR12
+40F8: 47       [129]    	ld b,a
+40F9: EB       [133]    	ex de,hl                ; DE = path
+40FA: D5       [144]    	push de
+40FB: C5       [155]    	push bc
+40FC: 2A00FE   [171]    	ld hl,(PROCPTR)
+40FF: CD5C02   [188]    	call EOCHK2
+4102: C1       [198]    	pop bc
+4103: D1       [208]    	pop de
+4104: 202A     [215|220]	jr nz,CMDERR01
+4106: CDB540   [232]    	call HDCDIR
+4109: 3005     [239|244]	jr nc,CMDCDIROK
+410B: 3A9BF8   [252]    	ld a,(ERL)
+410E: 37       [256]    	scf
+410F: C9       [266]    	ret
+4110:                   CMDCDIROK:
+4110: CD1801   [17]     	call CRSRPOS            ; to the start of the next row
+4113: 1600     [24]     	ld d,00H
+4115: 7B       [28]     	ld a,e
+4116: FE03     [35]     	cp 03H
+4118: 3805     [42|47]  	jr c,CMDNEXTROW
+411A: CD2D01   [59]     	call UPSCRL
+411D: 1E02     [66]     	ld e,02H
+411F:                   CMDNEXTROW:
+411F: 1C       [ 4]     	inc e
+4120: CD1501   [21]     	call CRSRSET
+4123: 1110FB   [31]     	ld de,MEPPROMPT
+4126: 3E0D     [38]     	ld a,0DH
+4128: CDEB00   [55]     	call PRTASTR
+412B: 2A00FE   [71]     	ld hl,(PROCPTR)         ; the statement continues from here
+412E: AF       [75]     	xor a
+412F: C9       [85]     	ret
+                        
+4130:                   CMDERR01:
+4130: 3E01     [ 7]     	ld a,01H
+4132: 37       [11]     	scf
+4133: C9       [21]     	ret
+4134:                   CMDERR07:
+4134: 3E07     [ 7]     	ld a,07H
+4136: 37       [11]     	scf
+4137: C9       [21]     	ret
+4138:                   CMDERR12:
+4138: 3E12     [ 7]     	ld a,12H
+413A: 37       [11]     	scf
+413B: C9       [21]     	ret
+                        
+                        
+                        
+                        ;------------------------------------------------------------------------------
+                        ; BASIC statement LDIR: list the subdirectories -- the built-in FILES "S3:"
+                        ; in directory mode
+                        ; FILES lives in bank 3b of page 1, where this ROM is too, so it runs from a
+                        ; trampoline copied onto the stack: it maps bank 3b, calls FILES with the
+                        ; text "S3:" as its processing pointer, and maps this bank back.
+                        ;
+                        ;   Entry parameters: HL = processing pointer after the token
+                        ; Modified registers: HL = processing pointer (PROCPTR); all others
+                        ;   Error conditions: CY and A = BASIC error code (12H: parameters given;
+                        ;                     those of FILES)
+                        ;------------------------------------------------------------------------------
+413C:                   CMDLDIR:
+413C: CD5C02   [17]     	call EOCHK2
+413F: 20F7     [24|29]  	jr nz,CMDERR12
+4141: 1198F0   [34]     	ld de,TOKFILES
+4144: CDBC02   [51]     	call COMMADR            ; HL = handler, C = its bank field
+4147: 79       [55]     	ld a,c
+4148: E60E     [62]     	and 0EH
+414A: 4F       [66]     	ld c,a
+414B: DB31     [77]     	in a,(P_BANK)
+414D: E6F1     [84]     	and 0F1H
+414F: B1       [88]     	or c
+4150: 47       [92]     	ld b,a                  ; B = port 31H for FILES
+4151: EB       [96]     	ex de,hl                ; DE = handler
+4152: 21DBFF   [106]    	ld hl,-TRAMPLEN
+4155: 39       [117]    	add hl,sp
+4156: F9       [123]    	ld sp,hl                ; HL = SP = trampoline
+4157: E5       [134]    	push hl
+4158: D5       [145]    	push de
+4159: C5       [156]    	push bc
+415A: EB       [160]    	ex de,hl
+415B: 21AF41   [170]    	ld hl,LDIRTRAMP
+415E: 012500   [180]    	ld bc,TRAMPLEN
+4161: EDB0     [196|21] 	ldir
+4163: C1       [206]    	pop bc
+4164: D1       [216]    	pop de
+4165: DDE1     [230]    	pop ix                  ; IX = trampoline
+4167: DD7007   [249]    	ld (ix+TRBANK),b
+416A: DD730F   [268]    	ld (ix+TRCALL),e
+416D: DD7210   [287]    	ld (ix+TRCALL+1),d
+4170: DB31     [298]    	in a,(P_BANK)
+4172: DD771A   [317]    	ld (ix+TROLDBANK),a
+4175: 3A7DF0   [330]    	ld a,(PORT3D_M)
+4178: DD7713   [349]    	ld (ix+TROLD3D),a
+417B: DDE5     [364]    	push ix
+417D: E1       [374]    	pop hl
+417E: 111F00   [384]    	ld de,TRTEXT
+4181: 19       [395]    	add hl,de               ; HL = the text "S3:"
+4182: DD750B   [414]    	ld (ix+TRTEXTP),l
+4185: DD740C   [433]    	ld (ix+TRTEXTP+1),h
+4188: ED5B00FE [453]    	ld de,(PROCPTR)
+418C: D5       [464]    	push de
+418D: 2200FE   [480]    	ld (PROCPTR),hl
+4190: 3EFE     [487]    	ld a,HDDIRCMD
+4192: D391     [498]    	out (P_HDCMD),a         ; DIRMODE
+4194: 219A41   [508]    	ld hl,CMDLDIRRET
+4197: E5       [519]    	push hl
+4198: DDE9     [527]    	jp (ix)
+419A:                   CMDLDIRRET:
+419A: E1       [10]     	pop hl
+419B: 2200FE   [26]     	ld (PROCPTR),hl
+419E: F5       [37]     	push af
+419F: D1       [47]     	pop de                  ; DE = AF of FILES
+41A0: 212500   [57]     	ld hl,TRAMPLEN
+41A3: 39       [68]     	add hl,sp
+41A4: F9       [74]     	ld sp,hl                ; drop the trampoline
+41A5: D5       [85]     	push de
+41A6: 3EFD     [92]     	ld a,HDFILECMD
+41A8: D391     [103]    	out (P_HDCMD),a         ; FILEMODE again
+41AA: 2A00FE   [119]    	ld hl,(PROCPTR)         ; the statement continues from here
+41AD: F1       [129]    	pop af
+41AE: C9       [139]    	ret
+                        
+                        ; The trampoline, copied onto the stack; TR... are offsets of the bytes
+                        ; CMDLDIR fills in.
+41AF:                   LDIRTRAMP:
+41AF: AF       [ 4]     	xor a                   ; port 3DH := 00H: bank 3b
+41B0: D33D     [15]     	out (P_ROMSEL),a
+41B2: 327DF0   [28]     	ld (PORT3D_M),a
+41B5:                   TRBANKI:
+41B5: 3E00     [ 7]     	ld a,00H                ; port 31H with page 1 = FILES's bank
+41B7: D331     [18]     	out (P_BANK),a
+41B9:                   TRTEXTI:
+41B9: 210000   [10]     	ld hl,0000H             ; HL = processing pointer = the text
+41BC: AF       [14]     	xor a
+41BD:                   TRCALLI:
+41BD: CD0000   [17]     	call 0000H              ; FILES
+41C0: F5       [28]     	push af
+41C1:                   TROLD3DI:
+41C1: 3E00     [ 7]     	ld a,00H                ; the caller's port 3DH
+41C3: D33D     [18]     	out (P_ROMSEL),a
+41C5: 327DF0   [31]     	ld (PORT3D_M),a
+41C8:                   TROLDBANKI:
+41C8: 3E00     [ 7]     	ld a,00H                ; the caller's port 31H: this bank again
+41CA: D331     [18]     	out (P_BANK),a
+41CC: F1       [28]     	pop af
+41CD: C9       [38]     	ret
+41CE:                   LDIRTEXT:
+41CE: 2253333A          	defb 22H,"S3:",22H,0DH
+41D2: 220D              
+0025:                   TRAMPLEN:   equ $-LDIRTRAMP
+0007:                   TRBANK:     equ TRBANKI+1-LDIRTRAMP     ; operand offsets
+000B:                   TRTEXTP:    equ TRTEXTI+1-LDIRTRAMP
+000F:                   TRCALL:     equ TRCALLI+1-LDIRTRAMP
+0013:                   TROLD3D:    equ TROLD3DI+1-LDIRTRAMP
+001A:                   TROLDBANK:  equ TROLDBANKI+1-LDIRTRAMP
+001F:                   TRTEXT:     equ LDIRTEXT-LDIRTRAMP
                         
                         
                         
@@ -168,15 +418,15 @@ F89B:                   ERL:        equ 0F89BH  ; error code of the last file op
                         ; MEP fixed entries 4023H / 4026H: what SEARCH FIRST / NEXT list, until the
                         ; other one or a module reset. Return A = 0, NC.
                         ;------------------------------------------------------------------------------
-407C:                   HDDIRMODE:
-407C: 3EFE     [ 7]     	ld a,HDDIRCMD
-407E: 1802     [19]     	jr HDMODE
-4080:                   HDFILEMODE:
-4080: 3EFD     [ 7]     	ld a,HDFILECMD
-4082:                   HDMODE:
-4082: D391     [11]     	out (P_HDCMD),a
-4084: AF       [15]     	xor a
-4085: C9       [25]     	ret
+41D4:                   HDDIRMODE:
+41D4: 3EFE     [ 7]     	ld a,HDDIRCMD
+41D6: 1802     [19]     	jr HDMODE
+41D8:                   HDFILEMODE:
+41D8: 3EFD     [ 7]     	ld a,HDFILECMD
+41DA:                   HDMODE:
+41DA: D391     [11]     	out (P_HDCMD),a
+41DC: AF       [15]     	xor a
+41DD: C9       [25]     	ret
                         
                         
                         
@@ -189,60 +439,60 @@ F89B:                   ERL:        equ 0F89BH  ; error code of the last file op
                         ;                     GET LENGTH: DE:HL = records); AF
                         ;   Error conditions: A = IOCS status (0 = OK), ERL set
                         ;------------------------------------------------------------------------------
-4086:                   HDFILE:
-4086: 79       [ 4]     	ld a,c
-4087: FE1A     [11]     	cp 1AH                  ; SET DMA stays in the PC-1600
-4089: 2848     [18|23]  	jr z,HDSETDMA
-408B: D5       [29]     	push de
-408C: D391     [40]     	out (P_HDCMD),a         ; start the transaction
-408E: 0E90     [47]     	ld c,P_HDDATA
-4090: ED59     [59]     	out (c),e
-4092: ED51     [71]     	out (c),d
-4094: 2116FC   [81]     	ld hl,DEVNAME
-4097: EDA3     [97]     	outi
-4099: EB       [101]    	ex de,hl                ; HL = FCB
-409A: 0639     [108]    	ld b,FCBHDRLEN
-409C: EDB3     [124|21] 	otir
-409E: FE15     [131]    	cp 15H                  ; SEQUENTIAL WRITE: the record follows
-40A0: 2007     [138|143]	jr nz,HDREPLY
-40A2: 2A46FC   [154]    	ld hl,(DMAADR)
-40A5: 0600     [161]    	ld b,00H                ; 256 bytes
-40A7: EDB3     [177|21] 	otir
-40A9:                   HDREPLY:
-40A9: E1       [10]     	pop hl                  ; HL = FCB
-40AA: ED78     [22]     	in a,(c)                ; IOCS status
-40AC: F5       [33]     	push af
-40AD: ED78     [45]     	in a,(c)
-40AF: 329BF8   [58]     	ld (ERL),a
-40B2: 0639     [65]     	ld b,FCBHDRLEN
-40B4: EDB2     [81|21]  	inir                    ; FCB+00H..+38H back
-40B6: ED40     [93]     	in b,(c)                ; payload length lo (0 with hi 1 = 256)
-40B8: ED78     [105]    	in a,(c)                ; payload length hi
-40BA: B0       [109]    	or b
-40BB: 2805     [116|121]	jr z,HDREGS
-40BD: 2A46FC   [132]    	ld hl,(DMAADR)
-40C0: EDB2     [148|21] 	inir
-40C2:                   HDREGS:
-40C2: ED58     [12]     	in e,(c)
-40C4: ED50     [24]     	in d,(c)
-40C6: D5       [35]     	push de                 ; BC
-40C7: ED58     [47]     	in e,(c)
-40C9: ED50     [59]     	in d,(c)                ; DE
-40CB: ED68     [71]     	in l,(c)
-40CD: ED60     [83]     	in h,(c)                ; HL
-40CF: C1       [93]     	pop bc
-40D0: F1       [103]    	pop af
-40D1: B7       [107]    	or a
-40D2: C9       [117]    	ret
+41DE:                   HDFILE:
+41DE: 79       [ 4]     	ld a,c
+41DF: FE1A     [11]     	cp 1AH                  ; SET DMA stays in the PC-1600
+41E1: 2848     [18|23]  	jr z,HDSETDMA
+41E3: D5       [29]     	push de
+41E4: D391     [40]     	out (P_HDCMD),a         ; start the transaction
+41E6: 0E90     [47]     	ld c,P_HDDATA
+41E8: ED59     [59]     	out (c),e
+41EA: ED51     [71]     	out (c),d
+41EC: 2116FC   [81]     	ld hl,DEVNAME
+41EF: EDA3     [97]     	outi
+41F1: EB       [101]    	ex de,hl                ; HL = FCB
+41F2: 0639     [108]    	ld b,FCBHDRLEN
+41F4: EDB3     [124|21] 	otir
+41F6: FE15     [131]    	cp 15H                  ; SEQUENTIAL WRITE: the record follows
+41F8: 2007     [138|143]	jr nz,HDREPLY
+41FA: 2A46FC   [154]    	ld hl,(DMAADR)
+41FD: 0600     [161]    	ld b,00H                ; 256 bytes
+41FF: EDB3     [177|21] 	otir
+4201:                   HDREPLY:
+4201: E1       [10]     	pop hl                  ; HL = FCB
+4202: ED78     [22]     	in a,(c)                ; IOCS status
+4204: F5       [33]     	push af
+4205: ED78     [45]     	in a,(c)
+4207: 329BF8   [58]     	ld (ERL),a
+420A: 0639     [65]     	ld b,FCBHDRLEN
+420C: EDB2     [81|21]  	inir                    ; FCB+00H..+38H back
+420E: ED40     [93]     	in b,(c)                ; payload length lo (0 with hi 1 = 256)
+4210: ED78     [105]    	in a,(c)                ; payload length hi
+4212: B0       [109]    	or b
+4213: 2805     [116|121]	jr z,HDREGS
+4215: 2A46FC   [132]    	ld hl,(DMAADR)
+4218: EDB2     [148|21] 	inir
+421A:                   HDREGS:
+421A: ED58     [12]     	in e,(c)
+421C: ED50     [24]     	in d,(c)
+421E: D5       [35]     	push de                 ; BC
+421F: ED58     [47]     	in e,(c)
+4221: ED50     [59]     	in d,(c)                ; DE
+4223: ED68     [71]     	in l,(c)
+4225: ED60     [83]     	in h,(c)                ; HL
+4227: C1       [93]     	pop bc
+4228: F1       [103]    	pop af
+4229: B7       [107]    	or a
+422A: C9       [117]    	ret
                         
-40D3:                   HDSETDMA:
-40D3: ED5346FC [20]     	ld (DMAADR),de
-40D7: AF       [24]     	xor a
-40D8: 329BF8   [37]     	ld (ERL),a
-40DB: C9       [47]     	ret
+422B:                   HDSETDMA:
+422B: ED5346FC [20]     	ld (DMAADR),de
+422F: AF       [24]     	xor a
+4230: 329BF8   [37]     	ld (ERL),a
+4233: C9       [47]     	ret
                         
-40DC: FFFFFFFF          	defs 8000H-$,0FFH       ; rest of the bank: FFH, no module at 6000H
-40E0: FF...             
+4234: FFFFFFFF          	defs 8000H-$,0FFH       ; rest of the bank: FFH, no module at 6000H
+4238: FF...             
 
 
 ; +++ segments +++
@@ -251,33 +501,76 @@ F89B:                   ERL:        equ 0F89BH  ; error code of the last file op
 
 ; +++ global symbols +++
 
-DEVNAME    = $FC16 = 64534          hostdrive.asm:49
-DMAADR     = $FC46 = 64582          hostdrive.asm:50
-ERL        = $F89B = 63643          hostdrive.asm:51
-FCBHDRLEN  = $0039 =    57          hostdrive.asm:47
-HDCDIR     = $4060 = 16480          hostdrive.asm:129
-HDCDIRCMD  = $00FC =   252          hostdrive.asm:46
-HDCDIRST   = $406F = 16495          hostdrive.asm:139
-HDDEVTAB   = $4029 = 16425          hostdrive.asm:82
-HDDIRCMD   = $00FE =   254          hostdrive.asm:44
-HDDIRMODE  = $407C = 16508          hostdrive.asm:156
-HDFILE     = $4086 = 16518          hostdrive.asm:177
-HDFILECMD  = $00FD =   253          hostdrive.asm:45
-HDFILEMODE = $4080 = 16512          hostdrive.asm:159
-HDMODE     = $4082 = 16514          hostdrive.asm:161
-HDNOAUTO   = $405D = 16477          hostdrive.asm:115
-HDREGS     = $40C2 = 16578          hostdrive.asm:210
-HDREPLY    = $40A9 = 16553          hostdrive.asm:196
-HDRESET    = $404F = 16463          hostdrive.asm:97
-HDRESETCMD = $00FF =   255          hostdrive.asm:43
-HDRESETCY  = $405B = 16475          hostdrive.asm:106
-HDSETDMA   = $40D3 = 16595          hostdrive.asm:223
-MODID      = $4000 = 16384          hostdrive.asm:60 (unused)
-P_HDCMD    = $0091 =   145          hostdrive.asm:41
-P_HDDATA   = $0090 =   144          hostdrive.asm:40
-_end       = $8000 = 32768          hostdrive.asm:53 (unused)
-_size      = $4000 = 16384          hostdrive.asm:53 (unused)
+CMDCDIR    = $40DA = 16602          hostdrive.asm:221
+CMDCDIROK  = $4110 = 16656          hostdrive.asm:251
+CMDERR01   = $4130 = 16688          hostdrive.asm:269
+CMDERR07   = $4134 = 16692          hostdrive.asm:273
+CMDERR12   = $4138 = 16696          hostdrive.asm:277
+CMDLDIR    = $413C = 16700          hostdrive.asm:296
+CMDLDIRRET = $419A = 16794          hostdrive.asm:343
+CMDNEXTROW = $411F = 16671          hostdrive.asm:259
+COMMADR    = $02BC =   700          hostdrive.asm:74
+CRSRPOS    = $0118 =   280          hostdrive.asm:70
+CRSRSET    = $0115 =   277          hostdrive.asm:69
+DEVNAME    = $FC16 = 64534          hostdrive.asm:54
+DMAADR     = $FC46 = 64582          hostdrive.asm:55
+EOCHK2     = $025C =   604          hostdrive.asm:72
+ERL        = $F89B = 63643          hostdrive.asm:56
+EXPRESS    = $0274 =   628          hostdrive.asm:73
+FCBHDRLEN  = $0039 =    57          hostdrive.asm:52
+HDCDIR     = $40B5 = 16565          hostdrive.asm:184
+HDCDIRCMD  = $00FC =   252          hostdrive.asm:51
+HDCDIRERR  = $40D8 = 16600          hostdrive.asm:206
+HDCDIRST   = $40C4 = 16580          hostdrive.asm:194
+HDDEVTAB   = $4029 = 16425          hostdrive.asm:107
+HDDIRCMD   = $00FE =   254          hostdrive.asm:49
+HDDIRMODE  = $41D4 = 16852          hostdrive.asm:398
+HDFILE     = $41DE = 16862          hostdrive.asm:419
+HDFILECMD  = $00FD =   253          hostdrive.asm:50
+HDFILEMODE = $41D8 = 16856          hostdrive.asm:401
+HDMODE     = $41DA = 16858          hostdrive.asm:403
+HDNOAUTO   = $40B2 = 16562          hostdrive.asm:170
+HDREGS     = $421A = 16922          hostdrive.asm:452
+HDREPLY    = $4201 = 16897          hostdrive.asm:438
+HDRESET    = $40A2 = 16546          hostdrive.asm:151
+HDRESETCMD = $00FF =   255          hostdrive.asm:48
+HDRESETCY  = $40B0 = 16560          hostdrive.asm:161
+HDSETDMA   = $422B = 16939          hostdrive.asm:465
+HDTOKTAB   = $404F = 16463          hostdrive.asm:123
+LDIRTEXT   = $41CE = 16846          hostdrive.asm:382
+LDIRTRAMP  = $41AF = 16815          hostdrive.asm:360
+MEPPROMPT  = $FB10 = 64272          hostdrive.asm:62
+MODID      = $4000 = 16384          hostdrive.asm:85 (unused)
+PORT3D_M   = $F07D = 61565          hostdrive.asm:58
+PROCPTR    = $FE00 = 65024          hostdrive.asm:57
+PROMPTLEN  = $001B =    27          hostdrive.asm:63
+PRTASTR    = $00EB =   235          hostdrive.asm:68
+P_BANK     = $0031 =    49          hostdrive.asm:65
+P_HDCMD    = $0091 =   145          hostdrive.asm:46
+P_HDDATA   = $0090 =   144          hostdrive.asm:45
+P_ROMSEL   = $003D =    61          hostdrive.asm:66
+TOKCDIR    = $4085 = 16517          hostdrive.asm:130
+TOKFILES   = $F098 = 61592          hostdrive.asm:76
+TOKLDIR    = $4090 = 16528          hostdrive.asm:135
+TRAMPLEN   = $0025 =    37          hostdrive.asm:384
+TRBANK     = $0007 =     7          hostdrive.asm:385
+TRBANKI    = $41B5 = 16821          hostdrive.asm:364
+TRCALL     = $000F =    15          hostdrive.asm:387
+TRCALLI    = $41BD = 16829          hostdrive.asm:370
+TROLD3D    = $0013 =    19          hostdrive.asm:388
+TROLD3DI   = $41C1 = 16833          hostdrive.asm:373
+TROLDBANK  = $001A =    26          hostdrive.asm:389
+TROLDBANKI = $41C8 = 16840          hostdrive.asm:377
+TRTEXT     = $001F =    31          hostdrive.asm:390
+TRTEXTI    = $41B9 = 16825          hostdrive.asm:367
+TRTEXTP    = $000B =    11          hostdrive.asm:386
+UPSCRL     = $012D =   301          hostdrive.asm:71
+XX_STRAD   = $FA05 = 64005          hostdrive.asm:60
+XX_STRLEN  = $FA07 = 64007          hostdrive.asm:61
+XX_TYPE    = $FA04 = 64004          hostdrive.asm:59
+_end       = $8000 = 32768          hostdrive.asm:78 (unused)
+_size      = $4000 = 16384          hostdrive.asm:78 (unused)
 
 
-total time: 0.0009 sec.
+total time: 0.0014 sec.
 no errors
