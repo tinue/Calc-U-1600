@@ -51,3 +51,23 @@ author's permission; not covered by this project's GPLv3 license.
 `firmware_bootstrap_util*.pc1500a` presets that load them are CE-163F
 firmware-flashing utilities from [Soigeneris](https://www.soigeneris.com/sharp-pc-1500-memory-modules).
 Bundled with permission; not covered by this project's GPLv3 license.
+
+## Acknowledgments
+
+**MEP rev3, (c) spellbound, 2024.** The host-directory drive (**File ▸
+Mount Directory…**) is based on the MEP rev3 (Modular Extension Platform)
+with its USB memory-stick application, a 60-pin bus module for the
+PC-1600. The MEP provided:
+
+- the idea of offering external storage as the PC-1600 file device `S3:`
+  (alias `Y:`), through a ROM module in page-1 bank 7 with a controller
+  behind I/O port 90H;
+- the BASIC statements `CDIR` and `LDIR`, with the same keyword tokens, so
+  tokenized programs run on both;
+- the machine-code entry points CDIR (`&4020`), DIRMODE (`&4023`) and
+  FILEMODE (`&4026`) in bank 7, and the CDIR prompt at `&FB10`, so software
+  written for the MEP, such as FILEX, runs unchanged.
+
+Calc-U-1600's driver ROM, its protocol to the host and the host side are
+its own work, and no MEP code is included. The MEP rev3 manual served as
+the reference for the public interface.

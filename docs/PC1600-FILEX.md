@@ -5,7 +5,8 @@ sharp-pc-1600.de) is a Z-80 drive and file browser. It shows the registered
 drives, directories as text or graphics, drive and module details, and
 fragmented files, and it can print a directory to a file. It treats `S3:` as
 a MEP rev3 USB drive, so on the host drive it also browses subfolders
-([PC1600-Host-Drive.md](PC1600-Host-Drive.md)).
+([PC1600-Host-Drive.md](PC1600-Host-Drive.md); the MEP is credited in
+[THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md#acknowledgments)).
 
 This guide follows FILEX 1.31 (`FILEX13E.BIN`, English; `FILEX13G.BIN` is
 German). It was worked out from the program itself, and 1.4x additions are
