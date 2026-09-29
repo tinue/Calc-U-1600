@@ -1,7 +1,5 @@
 #include "MachineCodeFile.hpp"
 
-#include <algorithm>
-#include <cctype>
 #include <cstdio>
 
 #include "PC1600/PC1600ProgramPlacement.hpp"
@@ -31,6 +29,14 @@ std::string hex(uint32_t v) {
     std::snprintf(b, sizeof(b), "&%X", v);
     return b;
 }
+
+// A Z-80 address the way `cpu` sees it: messages name addresses the way
+// the user gave them (LH5803 addresses for LH5801 code).
+uint32_t inCpu(uint32_t z80, Cpu cpu) {
+    return cpu == Cpu::LH5803 ? pc1600::z80ToLh5803(static_cast<uint16_t>(z80)) : z80;
+}
+
+std::string hexIn(uint32_t z80, Cpu cpu) { return hex(inCpu(z80, cpu)); }
 
 }  // namespace
 
@@ -94,37 +100,31 @@ File readFile(const std::vector<uint8_t>& bytes) {
 }
 
 bool pc1600TargetFor(uint32_t busAddr, size_t len, const PC1600State& state, Slot* slot, std::string* why, Cpu cpu) {
-    // Messages name addresses the way the user gave them: LH5803 addresses
-    // in MODE 1 (LH5801 code), Z-80 addresses otherwise.
-    const bool lh = cpu == Cpu::LH5803;
-    auto show = [lh](uint32_t z80) {
-        return lh ? hex(pc1600::z80ToLh5803(static_cast<uint16_t>(z80))) : hex(z80);
-    };
-    const std::string at = (lh ? "LH5803 " : "") + show(busAddr);
+    const std::string at = (cpu == Cpu::LH5803 ? "LH5803 " : "") + hexIn(busAddr, cpu);
     const uint64_t end = static_cast<uint64_t>(busAddr) + len;  // one past the last byte
     if (busAddr >= kPc1600S0Base) {
         if (end > 0x10000) {
-            if (why) *why = at + " + " + std::to_string(len) + " bytes runs past " + show(0xFFFF) + ".";
+            if (why) *why = at + " + " + std::to_string(len) + " bytes runs past " + hexIn(0xFFFF, cpu) + ".";
             return false;
         }
         *slot = Slot::S0;
         return true;
     }
     if (busAddr < kPc1600SlotBase) {
-        if (why) *why = at + " is ROM -- machine code goes into RAM, from " + show(pc1600DefaultAddress(state)) + ".";
+        if (why) *why = at + " is ROM -- machine code goes into RAM, from " + hexIn(pc1600DefaultAddress(state), cpu) + ".";
         return false;
     }
     if (end > kPc1600S0Base) {
         if (why)
-            *why = at + " + " + std::to_string(len) + " bytes crosses " + show(kPc1600S0Base) +
-                   " -- a memory module's window is " + show(kPc1600SlotBase) + "-" + show(kPc1600S0Base - 1) + ".";
+            *why = at + " + " + std::to_string(len) + " bytes crosses " + hexIn(kPc1600S0Base, cpu) +
+                   " -- a memory module's window is " + hexIn(kPc1600SlotBase, cpu) + "-" + hexIn(kPc1600S0Base - 1, cpu) + ".";
         return false;
     }
     // $8000-$BFFF: the module behind the selected program area.
     if (state.title == 1 || state.title == 2) {
         if (busAddr < state.titleBase) {
             if (why) *why = at + " is below the slot " + std::to_string(state.title) + " module, which starts at " +
-                            show(state.titleBase) + ".";
+                            hexIn(state.titleBase, cpu) + ".";
             return false;
         }
         *slot = state.title == 1 ? Slot::S1 : Slot::S2;
@@ -140,13 +140,13 @@ bool pc1600TargetFor(uint32_t busAddr, size_t len, const PC1600State& state, Slo
     if (first.slot == 0) {
         if (why)
             *why = at + " would be in a memory module, but no module is part of the selected program area -- "
-                   "that is internal RAM, from " + show(first.windowBase + kReserve) +
+                   "that is internal RAM, from " + hexIn(first.windowBase + kReserve, cpu) +
                    ". (A program module has to be selected first: TITLE\"Sx:\".)";
         return false;
     }
     if (busAddr < first.windowBase) {
         if (why) *why = at + " is below the slot " + std::to_string(first.slot) + " module, which starts at " +
-                        show(first.windowBase) + ".";
+                        hexIn(first.windowBase, cpu) + ".";
         return false;
     }
     *slot = first.slot == 1 ? Slot::S1 : Slot::S2;
@@ -161,13 +161,9 @@ uint32_t pc1600DefaultAddress(const PC1600State& state) {
 std::string pc1600WorkAreaWarning(uint32_t busAddr, size_t len, Cpu cpu) {
     const uint64_t end = static_cast<uint64_t>(busAddr) + len;
     if (end <= kPc1600WorkArea || busAddr > 0xFFFF) return {};
-    const bool lh = cpu == Cpu::LH5803;
-    auto show = [lh](uint32_t z80) {
-        return lh ? hex(pc1600::z80ToLh5803(static_cast<uint16_t>(z80))) : hex(z80);
-    };
     if (busAddr < kPc1600Wake) {
-        if (lh)
-            return "Warning: LH5803 " + show(kPc1600WorkArea) + "-" + show(kPc1600Wake - 1) +
+        if (cpu == Cpu::LH5803)
+            return "Warning: LH5803 " + hexIn(kPc1600WorkArea, cpu) + "-" + hexIn(kPc1600Wake - 1, cpu) +
                    " is the PC-1600's system work area (Z-80 &F000-&FEFF): whatever the system uses there and the "
                    "code overwrite each other. The PC-1500A's machine-code area &7C01 lies there -- one reason the "
                    "PC-1600 is compatible with the PC-1500 only.";
@@ -175,10 +171,10 @@ std::string pc1600WorkAreaWarning(uint32_t busAddr, size_t len, Cpu cpu) {
                "code overwrite each other.";
     }
     if (busAddr < kPc1600FreeTop)
-        return "Warning: " + show(kPc1600Wake) + "-" + show(kPc1600FreeTop - 1) +
+        return "Warning: " + hexIn(kPc1600Wake, cpu) + "-" + hexIn(kPc1600FreeTop - 1, cpu) +
                " holds the WAKE$ strings -- a long WAKE$ and the code overwrite each other. Load it at " +
-               show(kPc1600FreeTop) + " or higher.";
-    return show(kPc1600FreeTop) + "-" + show(0xFFFF) +
+               hexIn(kPc1600FreeTop, cpu) + " or higher.";
+    return hexIn(kPc1600FreeTop, cpu) + "-" + hexIn(0xFFFF, cpu) +
            " is unused by the system but officially reserved for the CE-1F01A bar-code reader software, so don't use "
            "both.";
 }
@@ -214,7 +210,7 @@ LoadPlan planLoad(const File& file, const LoadOptions& o, const PC1600State& sta
     if (file.header == File::Header::None && !o.hasAddress) {
         if (pc1600) {
             const uint32_t def = pc1600DefaultAddress(state);
-            p.defaultAddr = p.cpu == Cpu::LH5803 ? pc1600::z80ToLh5803(static_cast<uint16_t>(def)) : def;
+            p.defaultAddr = inCpu(def, p.cpu);
         }
         return refuse(LoadError::NeedsAddress);
     }
@@ -329,9 +325,6 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
     // The rest works on Z-80 addresses.
     const uint32_t bus = cpu == Cpu::LH5803 ? pc1600::lh5803ToZ80(static_cast<uint16_t>(addr)) : addr;
     const uint32_t end = bus + static_cast<uint32_t>(len);
-    auto inCpu = [cpu](uint32_t z80) {
-        return cpu == Cpu::LH5803 ? pc1600::z80ToLh5803(static_cast<uint16_t>(z80)) : z80;
-    };
 
     std::string workAreaWarning;
     if (slot == Slot::S0) {
@@ -345,10 +338,10 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
         const uint32_t start = state.titleBase + kReserve;
         a.newCommand = "NEW \"S" + std::to_string(state.title) + ":\"," + hex(end - state.titleBase);
         a.newNote = "BASIC's selected program area is the slot " + std::to_string(state.title) +
-                    " program module; this reserves " + hex(inCpu(start)) + "-" + hex(inCpu(end - 1)) +
+                    " program module; this reserves " + hexIn(start, cpu) + "-" + hexIn(end - 1, cpu) +
                     " there for machine code.";
         if (bus < start)
-            a.newNote += " Warning: the code starts below " + hex(inCpu(start)) +
+            a.newNote += " Warning: the code starts below " + hexIn(start, cpu) +
                          ", inside the module header and reserve area.";
         return a;
     }
@@ -383,9 +376,9 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
             a.newNote = "MODE 1 moves BASIC's start the PC-1500 way: BASIC then starts right after the code, at LH5803 " +
                         hex(pc1600::z80ToLh5803(static_cast<uint16_t>(end))) + ".";
         } else {
-            a.newNote = "The code starts below " + hex(inCpu(areaStart)) +
+            a.newNote = "The code starts below " + hexIn(areaStart, cpu) +
                         ", inside the area the system keeps for itself, so NEW can't protect it -- load it at " +
-                        hex(inCpu(areaStart)) + " or higher.";
+                        hexIn(areaStart, cpu) + " or higher.";
         }
         a.newNote += workAreaWarning;
         return a;
@@ -412,9 +405,9 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
         }
         a.newNote += workAreaWarning;
     } else if (hit > 0) {
-        a.newNote = "BASIC's program area starts at " + hex(inCpu(areaStart)) + areaWhere(first.slot) +
+        a.newNote = "BASIC's program area starts at " + hexIn(areaStart, cpu) + areaWhere(first.slot) +
                     " and continues into this memory, so a long BASIC program can overwrite the code. NEW only "
-                    "reserves from the start of that area -- load the code at " + hex(inCpu(areaStart)) +
+                    "reserves from the start of that area -- load the code at " + hexIn(areaStart, cpu) +
                     areaWhere(first.slot) + " to protect it." + workAreaWarning;
     } else {
         // No run of the program area covers the code. In internal RAM that
@@ -431,8 +424,8 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
             if (area.slot == 0) internal = &area;
         if (slot == Slot::S0 && internal && bus > internal->top && end <= kPc1600WorkArea) {
             a.newNote = "Nothing uses this memory right now: the BASIC program area reaches up to " +
-                        hex(inCpu(internal->top)) + ", and " + hex(inCpu(internal->top + 1)) + "-" +
-                        hex(inCpu(kPc1600WorkArea - 1)) +
+                        hexIn(internal->top, cpu) + ", and " + hexIn(internal->top + 1, cpu) + "-" +
+                        hexIn(kPc1600WorkArea - 1, cpu) +
                         " above it is the variable area, which grows downwards. No NEW is needed -- and one long "
                         "enough to reach here would reserve everything below it as well, giving up most of the free "
                         "memory -- but variables growing down can still overwrite the code.";

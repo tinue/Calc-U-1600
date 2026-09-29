@@ -366,7 +366,7 @@ void MainWindow::unmountHostDirectory() {
 
 void MainWindow::syncHostDriveActions() {
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
-    const QString dir = m_controller->hostDriveAttached() ? m_controller->hostDriveDirectory() : QString();
+    const QString dir = m_controller->hostDriveDirectory();
     m_mountDirectoryAction->setEnabled(isPC1600);
     m_unmountDirectoryAction->setEnabled(isPC1600 && !dir.isEmpty());
     m_unmountDirectoryAction->setText(dir.isEmpty() ? tr("Unmount Directory")
@@ -600,6 +600,13 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
     // second Cmd-V, Cmd-Tab -- don't count.)
     if (m_controller->pasteActive()) m_controller->interruptPaste();
 
+    typeResolved(*resolved, event);
+    event->accept();
+}
+
+// Types one resolved key. `event` is the real key press behind it, or null
+// for a character the input method committed, which is always a tap.
+void MainWindow::typeResolved(const PC1500KeyboardMap::ResolvedKey& resolved, QKeyEvent* event) {
     // A real held press/release, tracked for the matching .up event --
     // used for any key that bypasses the live-typing queue.
     auto trackAndPress = [this, event](const std::string& baseKey) {
@@ -607,24 +614,22 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
         m_physicalKeysDown.insert(physicalKeyId(event), baseKey);
     };
 
-    if (isPC1600) {
+    if (m_controller->currentModel() == Model::PC1600) {
         // An accented character is a KBII key sequence, and a key typed
         // while one is still running must wait behind it (KBII is still
         // latched) -- both go through the controller's frame-paced queue.
         // Everything else is unbuffered, as before.
-        if (resolved->needsKbii || m_controller->liveTypingActive()) {
-            m_controller->typeLiveStep(PasteStep{resolved->baseKey, resolved->needsShift, resolved->needsKbii});
-            event->accept();
-            return;
-        }
-        if (resolved->needsShift) {
+        if (resolved.needsKbii || m_controller->liveTypingActive()) {
+            m_controller->typeLiveStep(PasteStep{resolved.baseKey, resolved.needsShift, resolved.needsKbii});
+        } else if (resolved.needsShift) {
             // Self-contained fire-and-forget sequence -- nothing to track
             // for the matching .up event, so release skips it too.
-            m_controller->tapShiftedKey(resolved->baseKey);
+            m_controller->tapShiftedKey(resolved.baseKey);
+        } else if (event) {
+            trackAndPress(resolved.baseKey);
         } else {
-            trackAndPress(resolved->baseKey);
+            m_controller->tapKey(resolved.baseKey);
         }
-        event->accept();
         return;
     }
 
@@ -633,18 +638,17 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
     // everything else (including shifted keys) is queued so fast typing
     // can't outrun the key-scan loop and lose keystrokes -- see
     // MachineController::enqueueKey()/enqueueShiftedKey().
-    if (resolved->needsShift) {
+    if (resolved.needsShift) {
         // Self-contained: the queue owns shift's whole tap-then-base-key
         // sequence, nothing to track for the matching .up event.
-        m_controller->enqueueShiftedKey(resolved->baseKey);
-    } else if (resolved->isPc1500RepeatKey()) {
-        trackAndPress(resolved->baseKey);
+        m_controller->enqueueShiftedKey(resolved.baseKey);
+    } else if (event && resolved.isPc1500RepeatKey()) {
+        trackAndPress(resolved.baseKey);
     } else {
         // Self-contained: the queue owns the whole press/hold/release/idle
         // cycle, nothing to track for the matching .up event.
-        m_controller->enqueueKey(resolved->baseKey);
+        m_controller->enqueueKey(resolved.baseKey);
     }
-    event->accept();
 }
 
 void MainWindow::inputMethodEvent(QInputMethodEvent* event) {
@@ -658,19 +662,7 @@ void MainWindow::inputMethodEvent(QInputMethodEvent* event) {
         auto resolved = PC1500KeyboardMap::resolve(Qt::Key_unknown, Qt::NoModifier, QString(c), isPC1600);
         if (!resolved) continue;
         if (m_controller->pasteActive()) m_controller->interruptPaste();
-        if (isPC1600) {
-            if (resolved->needsKbii || m_controller->liveTypingActive()) {
-                m_controller->typeLiveStep(PasteStep{resolved->baseKey, resolved->needsShift, resolved->needsKbii});
-            } else if (resolved->needsShift) {
-                m_controller->tapShiftedKey(resolved->baseKey);
-            } else {
-                m_controller->tapKey(resolved->baseKey);
-            }
-        } else if (resolved->needsShift) {
-            m_controller->enqueueShiftedKey(resolved->baseKey);
-        } else {
-            m_controller->enqueueKey(resolved->baseKey);
-        }
+        typeResolved(*resolved, nullptr);
     }
     event->accept();
 }

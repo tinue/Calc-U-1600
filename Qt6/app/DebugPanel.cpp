@@ -381,7 +381,7 @@ void DebugPanel::debugDumpPointersPC1600() {
                 if (word & 0x8000)
                     value = fmt("$%04X off", word);
                 else
-                    value = fmt("$%04X \xE2\x86\x92 %04X", word, CoreDebug::pc1600PointerToZ80(word));
+                    value = fmt("$%04X \xE2\x86\x92 %04X", word, pc1600::lh5803ToZ80(word));
             } else {
                 value = fmt("$%04X (%d)", word, word);
             }
@@ -403,8 +403,8 @@ void DebugPanel::debugDumpPointersPC1600() {
     for (int i = 0; i < 2; ++i) {
         const CoreDebug::PC1600SlotProgramArea& sl = areas.slot[i];
         const std::string name = padRight(fmt("S%d area", i + 1), nameWidth);
-        const std::uint16_t desc = i == 0 ? 0xF015 : 0xF01F;
-        if (!sl.programModule) {
+        const std::uint16_t desc = pc1600::slotDescriptorAddress(i + 1);
+        if (!sl.programModule()) {
             lines.push_back(fmt("%s $%04X   no program module (S%dMTb = $%02X%s)", name.c_str(), desc, i + 1,
                                 sl.mtb, sl.mtb == 0xFE ? ", folded into S0" : ""));
             continue;

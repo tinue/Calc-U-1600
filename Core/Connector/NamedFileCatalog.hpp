@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -33,6 +34,25 @@ inline bool readTextFile(const std::string& path, std::string* out) {
 }
 
 }  // namespace named_file_detail
+
+// The file name a save under the user-typed `name` gets: '/' and ':' become
+// '-' (a name can't escape its folder), whitespace is trimmed and runs of
+// it collapse to one space, an empty name is "Untitled"; then `suffix`.
+// The GUI (AppPaths) and the headless tools share it.
+inline std::string namedFileName(const std::string& name, const std::string& suffix) {
+    std::string s;
+    bool space = false;
+    for (char c : name) {
+        if (std::isspace(static_cast<unsigned char>(c))) {
+            space = !s.empty();
+            continue;
+        }
+        if (space) s += ' ';
+        space = false;
+        s += c == '/' || c == ':' ? '-' : c;
+    }
+    return (s.empty() ? "Untitled" : s) + suffix;
+}
 
 // Parses every "*<suffix>" file in `dir` (non-recursive) with
 // `parse(text, path, Entry* out, std::string* err) -> bool`. A file that

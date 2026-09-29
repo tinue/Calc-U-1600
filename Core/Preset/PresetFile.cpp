@@ -2,6 +2,8 @@
 
 #include "../PC1500/PC1500Keyboard.hpp"
 #include "../MachineCodeFile.hpp"
+#include "../Connector/FloppyImageFile.hpp"
+#include "../Connector/MemoryCardCatalog.hpp"
 
 #include <cctype>
 #include <cerrno>
@@ -282,10 +284,9 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, std::vector<P
                 // the preset's directory by parsePresetFile().
                 const std::string path = trim(name.substr(5));
                 const std::string suffix =
-                    step.saveAsTarget == PresetStep::SaveAsTarget::Floppy ? ".floppy.yaml" : ".card.yaml";
+                    step.saveAsTarget == PresetStep::SaveAsTarget::Floppy ? kFloppyFileSuffix : kCardFileSuffix;
                 const std::string fileName = std::filesystem::path(path).filename().string();
-                if (fileName.size() <= suffix.size() ||
-                    fileName.compare(fileName.size() - suffix.size(), suffix.size(), suffix) != 0) {
+                if (!named_file_detail::hasSuffix(fileName, suffix)) {
                     *error = "line " + std::to_string(line.lineNo) + ": 'saveas: " + value + "' -- the file must end in '" +
                              suffix + "'";
                     return false;

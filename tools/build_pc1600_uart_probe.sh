@@ -21,6 +21,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 -DPC1600_POWER_PROBE \
   Core/Serial/PtySerialLink.cpp \
   Core/PC1600/PC1600Machine.cpp \
   Core/PC1600/PC1600BasicTyper.cpp \
+  Core/PC1600/PC1600ProgramPlacement.cpp \
   Core/PC1500/PC1500TraceFile.cpp \
   tools/pc1600_uart_probe.cpp \
   -o headless/pc1600_uart_probe

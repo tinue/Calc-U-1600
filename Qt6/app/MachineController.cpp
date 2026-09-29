@@ -85,8 +85,7 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
     const bool restoreCE150 = keepPlotter && ce150Attached();
     const bool restoreCE1600P = keepPlotter && ce1600pAttached();
     const bool restoreCE158 = keepPlotter && ce158Attached();
-    const QString restoreHostDrive = keepPlotter && model == Model::PC1600 ? m_hostDriveDir : QString();
-    m_hostDriveDir.clear();
+    const QString restoreHostDrive = keepPlotter && model == Model::PC1600 ? hostDriveDirectory() : QString();
     flushFloppyBeforeDetach(); // the old machine (and its disk) is going away
     discardMachine();
     m_model = model;
@@ -182,7 +181,6 @@ PC1600Machine& MachineController::resetBareForPresetPC1600(PC1600RomVersion vers
                                                            CE1600PRomVersion ce1600pVersion) {
     m_pc1600RomVersion = version;
     m_ce1600pRomVersion = ce1600pVersion;
-    m_hostDriveDir.clear();  // the preset decides (`host-drive:`) -- see adoptHostDriveFromMachine()
     discardMachine();
     makePC1600WithRomFallback();
     wireNewMachine(); // see resetBareForPresetPC1500
@@ -324,7 +322,7 @@ void MachineController::enqueueTyped(const std::string& text, bool pressEnter) {
     if (!m_pc1500 && !m_pc1600) return;
     if (!m_paste.active()) m_pasteFrameCycles = 0;
     std::vector<PasteStep> steps =
-        m_pc1600 ? buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar)
+        m_pc1600 ? buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveKbiiChar)
                  : buildPasteSteps(text, pc1500ResolveTypedChar);
     if (pressEnter) steps.push_back(PasteStep{"enter", false});
     m_paste.setPacing(m_pc1600 ? pc1600PastePacing() : pc1500PastePacing());
@@ -655,19 +653,15 @@ bool MachineController::attachHostDrive(const QString& dir, QString* error) {
             return false;
         }
     }
-    m_hostDriveDir = dir;
     return true;
 }
 
-void MachineController::adoptHostDriveFromMachine() {
-    m_hostDriveDir = hostDriveAttached()
-                         ? QString::fromStdString(std::filesystem::path(m_pc1600->hostDriveDirectory()).u8string())
-                         : QString();
+QString MachineController::hostDriveDirectory() const {
+    return m_pc1600 ? QString::fromStdString(m_pc1600->hostDriveDirectory().u8string()) : QString();
 }
 
 void MachineController::detachHostDrive() {
     if (m_pc1600) m_pc1600->detachHostDrive();
-    m_hostDriveDir.clear();
 }
 
 bool MachineController::hostDriveAttached() const {

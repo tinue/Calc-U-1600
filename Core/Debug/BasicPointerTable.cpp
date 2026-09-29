@@ -77,21 +77,11 @@ PC1600ProgramAreas readPC1600ProgramAreas(const std::function<uint8_t(uint16_t)>
     // all in the stored (LH5803-view) representation.
     const int s0End = (peek(0xF867) << 8) | peek(0xF868);
     a.memS0 = (a.ramEndPage << 8) - (s0End + 1) + (5 - a.endIndex) * 0x4000;
-    // Slot descriptors F015H / F01FH (10 bytes, see PC-1600-Work-Area-Map.md §4.5).
     for (int i = 0; i < 2; ++i) {
-        const uint16_t d = i == 0 ? 0xF015 : 0xF01F;
         PC1600SlotProgramArea& s = a.slot[i];
-        s.basePage = peek(d);
-        s.mtb = peek(d + 1);
-        s.limitPage = peek(d + 2);
-        s.limitIndex = peek(d + 3);
-        s.start = static_cast<uint16_t>(peek(d + 4) | (peek(d + 5) << 8));
-        s.startIndex = peek(d + 6);
-        s.end = static_cast<uint16_t>(peek(d + 7) | (peek(d + 8) << 8));
-        s.endIndex = peek(d + 9);
-        s.programModule = (s.mtb & 0x80) == 0;
+        static_cast<pc1600::SlotDescriptor&>(s) = pc1600::readSlotDescriptor(peek, i + 1);
         // STATUS 259 / 260 (LH5803 $CE41): limit:00 - end + (SxMBb - end bank) * 4000H.
-        if (s.programModule)
+        if (s.programModule())
             s.freeBytes = (s.limitPage << 8) - s.end + (s.limitIndex - s.endIndex) * 0x4000;
     }
     return a;

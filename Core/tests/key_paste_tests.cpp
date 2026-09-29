@@ -52,12 +52,12 @@ void test_build_steps_kbii_case_exact() {
     // é/É: SHIFT+KBII S / KBII S. Ë has no uppercase in the ROM -> ë (W).
     // û only exists as SHIFT+KBII. ß has no key and is skipped.
     const std::string text = "m\xC3\xA9rci \xC3\x89\xC3\x8B\xC3\xAB\xC3\xBB\xC3\x9B\xC3\x9F";
-    CHECK(tapsAsText(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar)) ==
+    CHECK(tapsAsText(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveKbiiChar)) ==
           "^M ~^S ^R ^C ^I _ ~S ~W ~W ~^B ~^B ");
     // Without a KBII resolver (the PC-1500) non-ASCII is skipped.
     CHECK(tapsAsText(buildPasteSteps(text, pc1500ResolveTypedChar)) == "^M ^R ^C ^I _ ");
     // A malformed byte is skipped, the rest still typed.
-    CHECK(tapsAsText(buildPasteSteps("A\xC3" "B\xFF", pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar)) == "A B ");
+    CHECK(tapsAsText(buildPasteSteps("A\xC3" "B\xFF", pc1600ResolveTypedChar, pc1600ResolveKbiiChar)) == "A B ");
 }
 
 void test_kbii_resolver() {
@@ -114,7 +114,7 @@ void test_feeder_cadence() {
 void test_feeder_kbii_sequence() {
     KeyPasteFeeder f;
     f.setPacing(pc1600PastePacing());
-    f.append(buildPasteSteps("\xC3\xA9", pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar)); // é
+    f.append(buildPasteSteps("\xC3\xA9", pc1600ResolveTypedChar, pc1600ResolveKbiiChar)); // é
     Recorder r;
     for (r.frame = 0; r.frame < 200 && f.active(); ++r.frame) f.onFrame(r.press(), r.release());
     // kbii 4+4 +6, shift 4+4 +6, S 4+4, kbii 4+4 +6.
@@ -129,7 +129,7 @@ void test_feeder_kbii_respects_latches() {
     auto run = [](const KeyLatches& latched) {
         KeyPasteFeeder f;
         f.setPacing(pc1600PastePacing());
-        f.append(buildPasteSteps("\xC3\x96" "A", pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar)); // Ö A
+        f.append(buildPasteSteps("\xC3\x96" "A", pc1600ResolveTypedChar, pc1600ResolveKbiiChar)); // Ö A
         std::string keys;
         auto press = [&keys](const std::string& k) { keys += k + " "; };
         auto release = [](const std::string&) {};
@@ -154,7 +154,7 @@ void test_feeder_cancel_closes_kbii() {
     {
         KeyPasteFeeder f;
         f.setPacing(pc1600PastePacing());
-        f.append(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar));
+        f.append(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveKbiiChar));
         Recorder r;
         for (r.frame = 0; r.frame <= 14; ++r.frame) f.onFrame(r.press(), r.release()); // Q pressed at 14, cancel at 15
         f.cancel(r.release(), /*finishKbii=*/true);
@@ -166,7 +166,7 @@ void test_feeder_cancel_closes_kbii() {
     {
         KeyPasteFeeder f;
         f.setPacing(pc1600PastePacing());
-        f.append(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar));
+        f.append(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveKbiiChar));
         Recorder r;
         f.onFrame(r.press(), r.release()); // kbii pressed at frame 0
         f.cancel(r.release(), /*finishKbii=*/true);
@@ -178,7 +178,7 @@ void test_feeder_cancel_closes_kbii() {
     {
         KeyPasteFeeder f;
         f.setPacing(pc1600PastePacing());
-        f.append(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar));
+        f.append(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveKbiiChar));
         Recorder r;
         for (r.frame = 0; r.frame <= 38; ++r.frame) f.onFrame(r.press(), r.release()); // B held (36-40)
         f.cancel(r.release(), /*finishKbii=*/true);
@@ -188,7 +188,7 @@ void test_feeder_cancel_closes_kbii() {
     {
         KeyPasteFeeder f;
         f.setPacing(pc1600PastePacing());
-        f.append(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveTypedKbiiChar));
+        f.append(buildPasteSteps(text, pc1600ResolveTypedChar, pc1600ResolveKbiiChar));
         Recorder r;
         for (r.frame = 0; r.frame <= 14; ++r.frame) f.onFrame(r.press(), r.release());
         f.cancel(r.release());

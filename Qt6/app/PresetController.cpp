@@ -227,7 +227,6 @@ PresetLoadResult PresetController::runPC1600Preset(const PresetFile& preset, con
         m_moduleManager->syncFromPresetLoad(2, QString::fromStdString(armedSoFar.slot2ResolvedPath));
         m_floppyManager->syncFromPresetLoad(QString::fromStdString(armedSoFar.floppyImageLabel),
                                             QString::fromStdString(armedSoFar.floppyResolvedPath));
-        m_controller->adoptHostDriveFromMachine();
         emit armed();
     };
     return applyPC1600Preset(machine, preset, env.log, env.traceDir, env.moduleDir,

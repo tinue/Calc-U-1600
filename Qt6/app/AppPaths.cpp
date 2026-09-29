@@ -1,5 +1,7 @@
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
+#include "Connector/FloppyImageFile.hpp"
+#include "Connector/MemoryCardCatalog.hpp"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -67,11 +69,7 @@ QString instanceDir() {
 }
 
 QString sanitizedInstanceFileName(const QString& instanceName) {
-    QString s = instanceName;
-    s.replace('/', '-').replace(':', '-');
-    s = s.simplified();  // trims + collapses internal whitespace runs
-    if (s.isEmpty()) s = QStringLiteral("Untitled");
-    return s + QStringLiteral(".card.yaml");
+    return QString::fromStdString(namedFileName(instanceName.toStdString(), kCardFileSuffix));
 }
 
 QString instancePathFor(const QString& instanceName) {
@@ -79,11 +77,7 @@ QString instancePathFor(const QString& instanceName) {
 }
 
 QString sanitizedFloppyFileName(const QString& diskName) {
-    QString s = diskName;
-    s.replace('/', '-').replace(':', '-');
-    s = s.simplified();
-    if (s.isEmpty()) s = QStringLiteral("Untitled");
-    return s + QStringLiteral(".floppy.yaml");
+    return QString::fromStdString(namedFileName(diskName.toStdString(), kFloppyFileSuffix));
 }
 
 QString floppyInstancePathFor(const QString& diskName) {

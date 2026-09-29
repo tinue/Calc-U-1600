@@ -361,10 +361,7 @@ public:
     bool attachHostDrive(const QString& dir, QString* error = nullptr);
     void detachHostDrive();
     bool hostDriveAttached() const;
-    QString hostDriveDirectory() const { return m_hostDriveDir; }
-    // After a preset armed the machine: take over the drive its
-    // `host-drive:` attached (or none), so the File menu shows it.
-    void adoptHostDriveFromMachine();
+    QString hostDriveDirectory() const; // empty = no host drive
 
     // CE-158 RS-232C / parallel interface: PC1500(A), or a PC-1600's LH5803
     // side (MODE 1). Same live power-cycled attach as the plotters; it
@@ -417,7 +414,6 @@ private:
     PC1500RomRevision m_pc1500RomRevision = PC1500RomRevision::A04;
     PC1600RomVersion m_pc1600RomVersion = PC1600RomVersion::New;
     CE1600PRomVersion m_ce1600pRomVersion = CE1600PRomVersion::New;
-    QString m_hostDriveDir; // mounted directory; empty = no host drive
     std::unique_ptr<PC1500Machine> m_pc1500;
     std::unique_ptr<PC1600Machine> m_pc1600;
     KeyPasteFeeder m_paste;

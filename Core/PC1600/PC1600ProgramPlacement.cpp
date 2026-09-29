@@ -270,6 +270,21 @@ PlacementResult planS0Placement(const PlacementInput& in, const std::vector<uint
     return r;
 }
 
+SlotDescriptor readSlotDescriptor(const std::function<uint8_t(uint16_t)>& peek, int slot) {
+    const uint16_t d = slotDescriptorAddress(slot);
+    auto at = [&](int off) { return peek(static_cast<uint16_t>(d + off)); };
+    SlotDescriptor s;
+    s.basePage = at(0);
+    s.mtb = at(1);
+    s.limitPage = at(2);
+    s.limitIndex = at(3);
+    s.start = static_cast<uint16_t>(at(4) | (at(5) << 8));
+    s.startIndex = at(6);
+    s.end = static_cast<uint16_t>(at(7) | (at(8) << 8));
+    s.endIndex = at(9);
+    return s;
+}
+
 PlacementResult planModuleRegionPlacement(const PlacementInput& in, int slot, const std::vector<uint8_t>& payload) {
     const uint16_t mtbAddr = slot == 2 ? kS2MTb : kS1MTb;
     const uint16_t mbbAddr = slot == 2 ? kS2MBb : kS1MBb;
@@ -279,12 +294,9 @@ PlacementResult planModuleRegionPlacement(const PlacementInput& in, int slot, co
         return fail("slot " + std::to_string(slot) + " is not currently a BASIC program module (" +
                     (slot == 2 ? "S2MTb" : "S1MTb") + " is not a 1..5 index)");
 
-    const uint16_t desc = slot == 2 ? kS2Desc : kS1Desc;
-    const uint16_t start = static_cast<uint16_t>(in.peek(static_cast<uint16_t>(desc + 4)) |
-                                                 (in.peek(static_cast<uint16_t>(desc + 5)) << 8));
-    const uint8_t limitPage = in.peek(static_cast<uint16_t>(desc + 2));
+    const SlotDescriptor desc = readSlotDescriptor(in.peek, slot);
     PlacementResult r = buildPlacement(in, mtb, mbb, /*appendInternal=*/false,
-                                       /*leadingBaseFromBasPrgSt=*/false, payload, start, limitPage);
+                                       /*leadingBaseFromBasPrgSt=*/false, payload, desc.start, desc.limitPage);
     r.programModuleCase = true;
     return r;
 }

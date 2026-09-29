@@ -68,8 +68,6 @@ uint16_t readBE16(PC1600Machine& machine, uint16_t addr) {
 // pc1600_cli --dump-basic).
 constexpr uint16_t kProgramStartPtr = 0xF865;
 
-uint32_t toZ80(uint16_t a) { return pc1600::lh5803ToZ80(a); }
-
 uint8_t peekZ80(PC1600Machine& machine, uint32_t a) {
     return machine.memory().peek(static_cast<uint16_t>(a));
 }
@@ -89,16 +87,14 @@ ProgramArea programArea(PC1600Machine& machine) {
     ProgramArea a;
     const int title = machine.programAreaTitle();
     if (title == 1 || title == 2) {
-        const uint16_t d = title == 1 ? 0xF015 : 0xF01F;
-        auto le = [&](uint16_t at) {
-            return static_cast<uint32_t>(machine.memory().peek(at) | (machine.memory().peek(static_cast<uint16_t>(at + 1)) << 8));
-        };
-        a.start = le(static_cast<uint16_t>(d + 4));
-        a.end = le(static_cast<uint16_t>(d + 7));
-        a.endKey = a.end | (static_cast<uint32_t>(machine.memory().peek(static_cast<uint16_t>(d + 9))) << 16);
+        const pc1600::SlotDescriptor d =
+            pc1600::readSlotDescriptor([&](uint16_t at) { return machine.memory().peek(at); }, title);
+        a.start = d.start;
+        a.end = d.end;
+        a.endKey = a.end | (static_cast<uint32_t>(d.endIndex) << 16);
     } else {
-        a.start = toZ80(readBE16(machine, kProgramStartPtr));
-        a.end = toZ80(readBE16(machine, kProgramEndPtr));
+        a.start = pc1600::lh5803ToZ80(readBE16(machine, kProgramStartPtr));
+        a.end = pc1600::lh5803ToZ80(readBE16(machine, kProgramEndPtr));
         a.endKey = a.end | (static_cast<uint32_t>(machine.memory().peek(0xF02C)) << 16);
     }
     return a;
@@ -251,19 +247,12 @@ bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, 
             return false;
         }
         if (kbii) {
-            // KBII latches until tapped again; each accented character is
-            // its own KBII-on ... KBII-off sequence, shaped by what the
-            // user has latched (KeyLatches, KeyPaste.hpp): KBII on -> the
-            // character is dropped; SHIFT on -> un-latched first (with it
-            // the KBII key toggles the key click).
-            const KeyLatches latched = pc1600ReadLatches(machine);
-            if (latched.kbii) continue;
-            if (latched.shift) {
-                tapKey(machine, "shift");
-                machine.runCycles(kFrameTStates * kShiftGapFrames);
+            // Shaped by what the user has latched (kbiiSequence, KeyPaste.hpp).
+            for (const KbiiTap& tap : kbiiSequence(name, needsShift, pc1600ReadLatches(machine))) {
+                tapKey(machine, tap.key);
+                if (tap.gapAfter) machine.runCycles(kFrameTStates * kShiftGapFrames);
             }
-            tapKey(machine, "kbii");
-            machine.runCycles(kFrameTStates * kShiftGapFrames);
+            continue;
         }
         if (needsShift) {
             // SHIFT tapped (not held) immediately before the base key; the
@@ -274,10 +263,6 @@ bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, 
             machine.runCycles(kFrameTStates * kShiftGapFrames);
         }
         tapKey(machine, name);
-        if (kbii) {
-            tapKey(machine, "kbii");
-            machine.runCycles(kFrameTStates * kShiftGapFrames);
-        }
     }
     if (pressEnter) {
         tapKey(machine, "enter");

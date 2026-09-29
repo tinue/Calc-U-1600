@@ -205,6 +205,7 @@ set(PC1600_UART_PROBE_SOURCES
   ${CORE_ROOT}/Serial/PtySerialLink.cpp
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp
   ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
+  ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
   ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
   ${TOOLS_ROOT}/pc1600_uart_probe.cpp
 )

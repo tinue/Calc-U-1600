@@ -103,9 +103,8 @@ private:
     bool saveDiskAs(const QString& diskName, bool fromPreset, QString* error, const QString& filePath = QString(),
                     bool asTemplate = false);
     bool nameCollides(const QString& diskName) const;
-    // Every template disk's name (bundled or in the storage folder).
-    QVector<DiskEntry> templateEntries() const;
-    bool isBundledName(const QString& diskName) const;
+    // A template disk in the storage folder (bundled ones aside).
+    bool isUserTemplateName(const QString& diskName) const;
     // Records the file the disk came from: a template is never written, an
     // instance autosaves in place (never into the bundle).
     void classifySource(const QString& resolvedPathOrEmpty, bool isTemplate);

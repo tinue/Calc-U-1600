@@ -122,9 +122,9 @@ private:
     // the already-saved and name-collision checks.
     bool saveSlotAs(int slot, const QString& instanceName, bool fromPreset, QString* error,
                     const QString& filePath = QString(), bool asTemplate = false);
-    // Every template's module-name (bundled or in the storage folder, all
-    // hosts), and every bundled card's module-name.
-    QSet<QString> templateNames() const;
+    // Every template's module-name in the storage folder (all hosts), and
+    // every bundled card's module-name.
+    QSet<QString> userTemplateNames() const;
     QSet<QString> bundledNames() const;
     bool nameCollides(const QString& instanceName) const;
 

@@ -153,11 +153,12 @@ BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
 
     if (title == 1 || title == 2) {
         // ── S1 / S2 program module ─────────────────────────────────────
-        const uint16_t desc = title == 1 ? pc1600::kS1Desc : pc1600::kS2Desc;
+        const uint16_t desc = pc1600::slotDescriptorAddress(title);
+        const pc1600::SlotDescriptor oldDesc = pc1600::readSlotDescriptor(in.peek, title);
         pc1600::PlacementResult areaPlan = pc1600::planModuleRegionPlacement(in, title, {});
         if (!areaPlan.ok) return fail("TITLE selects S" + std::to_string(title) + ", but " + areaPlan.error);
-        const uint16_t oldEnd = static_cast<uint16_t>(machine.debugPeek(desc + 7) | (machine.debugPeek(desc + 8) << 8));
-        const int oldEndSegment = segmentOf(areaPlan.segments, oldEnd, machine.debugPeek(desc + 9));
+        const uint16_t oldEnd = oldDesc.end;
+        const int oldEndSegment = segmentOf(areaPlan.segments, oldEnd, oldDesc.endIndex);
         if (oldEndSegment < 0 || (oldEndSegment == 0 && oldEnd < areaPlan.startAddr)) {
             char buf[160];
             std::snprintf(buf, sizeof(buf), "the S%d program end ($%04X) is not inside its program area -- run NEW \"S%d:\" first",
@@ -177,7 +178,7 @@ BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
         // Module header +5/+6: the end as an offset from the base page, high
         // byte first; one bank further on counts from base 4000H (LOADEND 7134H).
         const pc1600::ProgramSegment& seg0 = plan.segments.front();
-        const uint16_t from = endSeg.adtblIndex == seg0.adtblIndex ? static_cast<uint16_t>(machine.debugPeek(desc) << 8)
+        const uint16_t from = endSeg.adtblIndex == seg0.adtblIndex ? static_cast<uint16_t>(oldDesc.basePage << 8)
                                                                    : 0x4000;
         const uint16_t offset = static_cast<uint16_t>((plan.endAddr - from) & 0x7FFF);
         const uint8_t hdr[2] = {static_cast<uint8_t>(offset >> 8), static_cast<uint8_t>(offset & 0xFF)};
@@ -243,8 +244,7 @@ BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
 
     BasicLoadResult r;
     r.ok = true;
-    const uint16_t start = startZ80;
-    r.baseAddr = start;
+    r.baseAddr = startZ80;
     r.endAddr = static_cast<uint16_t>(machine.debugPeek(kPrgAdrStart + 3) | (machine.debugPeek(kPrgAdrStart + 4) << 8));
     return r;
 }

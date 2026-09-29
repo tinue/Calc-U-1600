@@ -168,8 +168,8 @@ bool MemoryModuleManager::currentSlotImage(int slot, int* bankCount, std::vector
     return false;
 }
 
-QSet<QString> MemoryModuleManager::templateNames() const {
-    QSet<QString> names = bundledNames();
+QSet<QString> MemoryModuleManager::userTemplateNames() const {
+    QSet<QString> names;
     for (const auto& e : scanMemoryCardDirectory(AppPaths::instanceDir().toStdString(), nullptr))
         if (e.isTemplate) names.insert(QString::fromStdString(e.moduleName));
     return names;
@@ -254,7 +254,7 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
     // saved one). One of the user's own templates may only be replaced by
     // another template save -- a preset re-making its template.
     if (!explicitFile &&
-        (bundledNames().contains(name) || (!asTemplate && templateNames().contains(name)))) {
+        (bundledNames().contains(name) || (!asTemplate && userTemplateNames().contains(name)))) {
         *error = tr("\"%1\" is a template's name. Choose a different name.").arg(name);
         return false;
     }

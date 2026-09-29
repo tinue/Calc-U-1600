@@ -52,6 +52,25 @@ constexpr uint16_t kS2Desc = 0xF01F;   //   +0 base page, +1 MTb, +2 limit page,
 constexpr uint16_t lh5803ToZ80(uint16_t lh5803) { return static_cast<uint16_t>(lh5803 ^ 0x8000); }
 constexpr uint16_t z80ToLh5803(uint16_t z80) { return static_cast<uint16_t>(z80 ^ 0x8000); }
 
+// ── S1 / S2 slot descriptor (kS1Desc / kS2Desc, Work-Area-Map §4.5) ─────
+//
+// The one place its 10-byte layout is decoded. Addresses are Z-80 page-2
+// addresses, low byte first; each comes with its ADTBL index.
+struct SlotDescriptor {
+    uint8_t basePage = 0;    // +0: Z-80 page of the module window base
+    uint8_t mtb = 0;         // +1: SxMTb, first ADTBL index (FEH folded into S0, FFH none)
+    uint8_t limitPage = 0;   // +2: area limit (Z-80 page; C0H = top of the window)
+    uint8_t limitIndex = 0;  // +3: SxMBb, ADTBL index of the limit
+    uint16_t start = 0;      // +4/+5: program start
+    uint8_t startIndex = 0;  // +6
+    uint16_t end = 0;        // +7/+8: program end (the FFH mark)
+    uint8_t endIndex = 0;    // +9
+    bool programModule() const { return (mtb & 0x80) == 0; }
+};
+
+constexpr uint16_t slotDescriptorAddress(int slot) { return slot == 2 ? kS2Desc : kS1Desc; }
+SlotDescriptor readSlotDescriptor(const std::function<uint8_t(uint16_t)>& peek, int slot);
+
 // One contiguous run of the user area, ascending Z-80 (SC7852) address
 // order. `base`/`top` are inclusive Z-80 addresses.
 struct ProgramSegment {

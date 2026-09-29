@@ -61,7 +61,6 @@ public:
     // *currently running* machine -- no reset, no BASIC involvement, just
     // the bytes. `slot` is PC-1600 only: 0 = S0, 1 / 2 = memory slots. Same
     // caller contract as the loaders above (stop the frame timer first).
-    // Doesn't need libsharpdx, so it works in every build.
     struct MachineCodeLoadRequest {
         std::vector<uint8_t> payload;
         uint32_t addr = 0;  // where the bytes go: the Z-80 / LH5801 bus address

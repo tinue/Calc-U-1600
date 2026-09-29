@@ -110,11 +110,6 @@ inline bool pc1600ResolveKbiiChar(char32_t cp, std::string* baseKey, bool* needs
     return true;
 }
 
-/// buildPasteSteps' non-ASCII resolver for the PC-1600.
-inline bool pc1600ResolveTypedKbiiChar(char32_t cp, std::string* baseKey, bool* needsShift) {
-    return pc1600ResolveKbiiChar(cp, baseKey, needsShift);
-}
-
 /// SHIFT / KBII as the user has latched them right now -- the ROM's own
 /// flags, read the way GETSYMS (P1-B0 775FH) does: SHIFT = SYMB0 (F64EH)
 /// bit 1, KBII = STAT2 (F3C6H) bit 7. A KBII sequence must look first:

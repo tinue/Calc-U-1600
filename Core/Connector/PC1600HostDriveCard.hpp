@@ -77,7 +77,12 @@ public:
         if (m_rx.size() < m_rxExpected) {
             m_rx.push_back(value);
             if (m_function == kChangeDirCommand && m_rx.size() == 1) m_rxExpected += value;  // the path length
-            if (m_rx.size() == m_rxExpected) run();
+            if (m_rx.size() == m_rxExpected) {
+                run();
+                m_rx.clear();
+                m_rxExpected = 0;
+                m_txPos = 0;
+            }
         }
         return true;
     }
@@ -102,20 +107,16 @@ private:
                        (function == HostDirectoryDrive::kSeqWrite ? HostDirectoryDrive::kRecordSize : 0);
     }
 
+    // Runs the complete request; respondsToWrite() then resets the transfer.
     void run() {
         if (m_function == kResetCommand) {
             m_drive.reset(m_rx[0]);
-            m_rx.clear();
-            m_rxExpected = 0;
             return;
         }
         if (m_function == kChangeDirCommand) {
             const auto r = m_drive.changeDirectory(std::string(m_rx.begin() + 1, m_rx.end()));
             m_tx = {r.status, r.erl};
             m_tx.insert(m_tx.end(), r.payload.begin(), r.payload.end());
-            m_txPos = 0;
-            m_rx.clear();
-            m_rxExpected = 0;
             return;
         }
         HostDirectoryDrive::Request req;
@@ -127,9 +128,7 @@ private:
             std::memcpy(req.data.data(), &m_rx[kRequestHeader + req.fcb.size()], req.data.size());
         const auto r = m_drive.execute(req);
 
-        m_tx.clear();
-        m_tx.push_back(r.status);
-        m_tx.push_back(r.erl);
+        m_tx = {r.status, r.erl};
         m_tx.insert(m_tx.end(), r.fcb.begin(), r.fcb.end());
         const auto len = static_cast<uint16_t>(r.payload.size());
         m_tx.push_back(static_cast<uint8_t>(len));
@@ -139,9 +138,6 @@ private:
             m_tx.push_back(static_cast<uint8_t>(reg));
             m_tx.push_back(static_cast<uint8_t>(reg >> 8));
         }
-        m_txPos = 0;
-        m_rx.clear();
-        m_rxExpected = 0;
     }
 
     std::array<uint8_t, kRomSize> m_rom{};

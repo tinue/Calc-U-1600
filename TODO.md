@@ -392,7 +392,7 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   hard-coded pairs.
 - **Card/floppy template-vs-instance rules are written twice and re-parse
   files.** `MemoryModuleManager` (`moduleLists`, `classifySlot`,
-  `templateNames`, `saveSlotAs`) and `FloppyDiskManager` (`diskLists`,
+  `userTemplateNames`, `saveSlotAs`) and `FloppyDiskManager` (`diskLists`,
   `classifySource`, `saveDiskAs`) each hold bundled-first shadowing, the
   template/instance split, the Name & Save checks and the "never
   autosave under the bundle" rule. They also re-read files Core just
@@ -433,6 +433,50 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   - a shared `NamedFileCatalog`-level helper for lists / classify /
     save-name validation, leaving the managers only Qt glue;
   - one directory scan per refresh.
+- **`saveas:` media is written by two pipelines.** The GUI managers
+  (`MemoryModuleManager::saveSlotAs`, `FloppyDiskManager::saveDiskAs`)
+  and `Core/PC1600/PC1600PresetMedia.hpp` for the CLIs each splice the card
+  / format the floppy and write it. They share `namedFileName()` since
+  7dcd61b, nothing else. The Core copy is PC-1600 only, although
+  `saveas: s1:` is valid on the PC-1500, and `pc1500_cli` has no saveas.
+  Fix: one model-neutral Core function (card image + source text, or disk
+  image, plus the request → text and path); the managers keep only the
+  name/template policy and retargeting the autosave. Goes with the
+  template-vs-instance entry above. The two managers' identical
+  explicit-file / template refusal checks fold into it too.
+- **PC-1600 live typing rides on the paste feeder.** `MachineController`
+  runs PC-1600 live keys through the paste `KeyPasteFeeder` with a
+  `m_liveTyping` flag that changes what `pasteActive()` means; every paste
+  entry point (`enqueueTyped`, `cancelPaste`, `discardMachine`,
+  `interruptPaste`) has to reset it. The PC-1500 has a Core key queue
+  (`PC1500Machine::enqueueKey`). Fix: the same queue on `PC1600Machine`,
+  expanding KBII there with `kbiiSequence()`; then the feeder loses its
+  PC-1600-only `KbiiChar` action, `closesKbii` and `m_kbiiLatched`.
+  **Before fixing:** the interrupt-a-paste-mid-KBII behaviour
+  (`cancel(..., finishKbii)`) must survive the move; check it against the
+  KBII entry in docs/Decisions.md.
+- **`MachineCodeLoadDialog::refresh()` repeats `planLoad()`'s PC-1600
+  steps** (the LH5803 range check, `lh5803ToZ80`, `pc1600TargetFor`). The
+  dialog gets only the length, not the `File`. Fix: hand it the `File` and
+  `LoadOptions`, call `planLoad()` and add `pc1600WorkAreaWarning` on top.
+  **Before fixing:** the dialog's own texts ("The LH5803's RAM is
+  &0000-&7FFF.") differ from `planLoad()`'s; decide which wording stays.
+- **Preset paths: `~/` is expanded for `host-drive:` only**
+  (`PresetFile.cpp`), and `saveas: file:` paths are fixed up in a
+  post-pass (`resolveSaveAsPaths`) because `parseStepList` doesn't know
+  the preset directory. Fix: expand `~` inside `resolvePath()`, which
+  every path key goes through, and pass the preset directory to
+  `parseStepList`. *(behaviour)*: `floppy-file:`, `modulespec-file:`,
+  `path:` and `saveas file:` would then accept `~/` too.
+- **Host drive: small leftovers in `HostDirectoryDrive.hpp`.** A wildcard
+  `doRename` calls `findOne()` (a folder listing) per matching file; check
+  collisions against one name set instead. `doCreate` lists files, then
+  directories: one pass could collect both. `doWrite` stats the file again
+  after writing to decide on `resize_file`; the size before the write
+  already tells.
+- **`PC1600BasicTyper.cpp` `codePointCount` counts UTF-8 lead bytes by
+  hand**; count with `decodeUtf8` (Core/Utf8.hpp) so malformed bytes count
+  the way the typer then types them.
 - **PC-1600 LCD / sub-CPU timing model** *(behaviour/timing)*.
   `PC1600Display::kBusyClocks = 4` and `PC1600SubCpu::kResponseMicros =
   1660` were both fitted to real-unit benchmarks on 2026-09-23 while the

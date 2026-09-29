@@ -30,7 +30,7 @@ struct PasteStep {
 };
 
 using TypedCharResolver = bool (*)(char c, std::string* baseKey, bool* needsShift);
-/// Resolves a non-ASCII character to a KBII key (pc1600ResolveTypedKbiiChar).
+/// Resolves a non-ASCII character to a KBII key (pc1600ResolveKbiiChar).
 using KbiiCharResolver = bool (*)(char32_t cp, std::string* baseKey, bool* needsShift);
 
 /// Turns pasted (UTF-8) text into steps. Only the text before the first
@@ -50,6 +50,33 @@ struct KeyLatches {
     bool shift = false;
     bool kbii = false;
 };
+
+/// One tap of an accented character's KBII sequence. Every KBII / SHIFT tap
+/// is followed by the SHIFT gap, so the key-scan sees it before the next key.
+struct KbiiTap {
+    std::string key;
+    bool gapAfter = false;
+};
+
+/// The taps that type `key` (with SHIFT first when `shift`) under KBII,
+/// given what is latched (see KeyLatches); empty when the character is
+/// dropped. The last tap is the closing KBII. The one place the rule lives:
+/// the paste feeder and PC1600BasicTyper both play it.
+inline std::vector<KbiiTap> kbiiSequence(const std::string& key, bool shift, const KeyLatches& latched) {
+    if (latched.kbii) return {}; // the user's own KBII is on: ignored silently
+
+    // KBII latches until tapped again: every accented character is its own
+    // KBII-on ... KBII-off sequence, so the next character always starts
+    // with KBII off.
+    std::vector<KbiiTap> seq;
+    // With SHIFT on, the KBII key toggles the key click: un-latch it.
+    if (latched.shift) seq.push_back({"shift", true});
+    seq.push_back({"kbii", true});
+    if (shift) seq.push_back({"shift", true});
+    seq.push_back({key, false});
+    seq.push_back({"kbii", true});
+    return seq;
+}
 
 /// Per-model cadence, all in emulated 60 Hz frames.
 struct PastePacing {

@@ -12,6 +12,7 @@
 
 class QTimer;
 class QKeyEvent;
+namespace PC1500KeyboardMap { struct ResolvedKey; }
 class QCloseEvent;
 class QHBoxLayout;
 class QAction;
@@ -89,6 +90,8 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
+    void typeResolved(const PC1500KeyboardMap::ResolvedKey& resolved, QKeyEvent* event);
+
     std::unique_ptr<MachineController> m_controller;
     std::unique_ptr<MemoryModuleManager> m_moduleManager;
     std::unique_ptr<FloppyDiskManager> m_floppyManager;

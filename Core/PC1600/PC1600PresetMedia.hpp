@@ -2,7 +2,6 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
 #include <string>
 #include <vector>
 
@@ -20,15 +19,9 @@
 // from (`slotSourcePath`, the loader's slot<N>ResolvedPath -- a card file
 // keeps its layout and comments), a floppy is formatted whole. A request
 // with a `path` writes that file; a by-name one goes to
-// `<saveDir>/<name>.card.yaml` / `.floppy.yaml` (the name's '/' and ':'
-// become '-', as in AppPaths).
+// `<saveDir>/<name>.card.yaml` / `.floppy.yaml` (namedFileName(), as in
+// AppPaths).
 namespace pc1600_preset_media {
-
-inline std::string fileNameFor(std::string name, const char* suffix) {
-    for (char& c : name)
-        if (c == '/' || c == ':') c = '-';
-    return name + suffix;
-}
 
 inline bool writeAtomically(const std::filesystem::path& path, const std::string& text, std::string* error) {
     const std::filesystem::path tmp = path.string() + ".tmp";
@@ -61,7 +54,7 @@ inline bool savePC1600PresetMedia(PC1600Machine& machine, const PresetSaveAsRequ
             *error = "no save directory for '" + request.name + "' (a by-name saveas needs one)";
             return false;
         }
-        path = std::filesystem::path(saveDir) / fileNameFor(request.name, floppy ? kFloppyFileSuffix : ".card.yaml");
+        path = std::filesystem::path(saveDir) / namedFileName(request.name, floppy ? kFloppyFileSuffix : kCardFileSuffix);
     }
 
     if (floppy) {
@@ -79,12 +72,11 @@ inline bool savePC1600PresetMedia(PC1600Machine& machine, const PresetSaveAsRequ
         *error = std::string("slot ") + (slot1 ? "1" : "2") + " has no card file to save from";
         return false;
     }
-    std::ifstream in(source, std::ios::binary);
-    if (!in) {
+    std::string sourceText;
+    if (!named_file_detail::readTextFile(source, &sourceText)) {
         *error = "cannot read " + source;
         return false;
     }
-    const std::string sourceText((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     const std::vector<uint8_t> image = slot1 ? machine.memory().slot1CardImage() : machine.memory().slot2CardImage();
     const int bankCount = slot1 ? machine.memory().slot1CardBankCount() : machine.memory().slot2CardBankCount();
     if (image.empty()) {

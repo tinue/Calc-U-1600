@@ -1,15 +1,7 @@
 #pragma once
 #include <cctype>
 #include <cstdint>
-#include <cstdio>
 #include <string>
-
-// Formats a byte as "0xXX" for error messages and diagnostics.
-inline std::string hex2(uint8_t b) {
-    char buf[8];
-    std::snprintf(buf, sizeof(buf), "0x%02X", b);
-    return buf;
-}
 
 // Parses exactly `len` hex digits of `s` starting at `pos`. False if the
 // field runs past the end or holds a non-hex character.

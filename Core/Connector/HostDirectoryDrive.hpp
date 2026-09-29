@@ -16,6 +16,7 @@
 #include <map>
 #include <string>
 #include <system_error>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -179,7 +180,7 @@ public:
         if (!mounted() || !std::filesystem::is_directory(m_dir, ec)) return fail(r, kErlNoMedia);
         // The current directory vanished on the host: nothing may land in
         // another folder, so every call fails until the next CDIR.
-        if (!std::filesystem::is_directory(here(), ec)) return fail(r, kErlNotFound);
+        if (!m_cwd.empty() && !std::filesystem::is_directory(here(), ec)) return fail(r, kErlNotFound);
         switch (req.function) {
             case kOpen:        return doOpen(req, r);
             case kClose:       return doClose(req, r);
@@ -306,22 +307,30 @@ private:
         }
     }
 
-    static uint8_t hostAttributes(const std::filesystem::path& p) {
-        uint8_t attr = kAttrArchive;
-        std::error_code ec;
-        const auto perms = std::filesystem::status(p, ec).permissions();
-        if (!ec && (perms & std::filesystem::perms::owner_write) == std::filesystem::perms::none)
-            attr |= kAttrProtected;
-#if defined(__APPLE__)
+    /// Attributes, size and time stamp of a host file (or, with
+    /// `directory`, a subdirectory), from one stat.
+    static void statInto(Entry& e, bool directory = false) {
         struct stat st{};
-        if (::stat(p.c_str(), &st) == 0 && (st.st_flags & UF_HIDDEN)) attr |= kAttrInvisible;
+        const bool ok = ::stat(e.path.string().c_str(), &st) == 0;
+        e.mtime = ok ? st.st_mtime : std::time(nullptr);
+        if (directory) {
+            e.attr = kAttrDirectory;
+            return;
+        }
+        e.attr = kAttrArchive;
+        if (!ok) {
+            e.size = 0;
+            return;
+        }
+#if defined(S_IWUSR)
+        if (!(st.st_mode & S_IWUSR)) e.attr |= kAttrProtected;
+#else
+        if (!(st.st_mode & _S_IWRITE)) e.attr |= kAttrProtected;
 #endif
-        return attr;
-    }
-
-    static std::time_t hostMtime(const std::filesystem::path& p) {
-        struct stat st{};
-        return ::stat(p.string().c_str(), &st) == 0 ? st.st_mtime : std::time(nullptr);
+#if defined(__APPLE__)
+        if (st.st_flags & UF_HIDDEN) e.attr |= kAttrInvisible;
+#endif
+        e.size = static_cast<uint32_t>(std::min<uintmax_t>(static_cast<uintmax_t>(st.st_size), 0xFFFFFFFFu));
     }
 
     /// The host folder for a current directory `cwd`.
@@ -350,41 +359,43 @@ private:
     /// to the same 8.3 name (case-sensitive file systems) is hidden; the
     /// exact upper-case spelling wins. Symlinked directories are left out,
     /// so a current directory never leaves the mounted folder.
-    std::vector<Entry> listing(const std::filesystem::path& dir, bool directories = false) const {
-        std::vector<std::filesystem::path> files;
+    std::vector<Entry> listing(const std::filesystem::path& dir, bool directories = false,
+                               const std::string* pattern = nullptr) const {
+        struct Candidate {
+            bool inexact;      // not the exact upper-case spelling of its 8.3 name
+            std::string host;  // host file name
+            std::string name;  // 8.3 FCB name
+            std::filesystem::path path;
+        };
+        std::vector<Candidate> files;
         std::error_code ec;
         for (auto it = std::filesystem::directory_iterator(dir, ec);
              !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) {
             std::error_code fec;
             const bool wanted = directories ? it->is_directory(fec) && !it->is_symlink(fec)
                                             : it->is_regular_file(fec);
-            if (wanted) files.push_back(it->path());
+            if (!wanted) continue;
+            std::string host = it->path().filename().string();
+            std::string name = toFcbName(host);
+            if (name.empty()) continue;
+            const bool inexact = host != toHostName(name);
+            files.push_back({inexact, std::move(host), std::move(name), it->path()});
         }
         // Exact upper-case spellings first, then by host name: the first
         // file claiming an 8.3 name keeps it.
-        const auto rank = [](const std::filesystem::path& p) {
-            const std::string host = p.filename().string();
-            const std::string name = toFcbName(host);
-            return std::make_pair(name.empty() || host != toHostName(name), host);
-        };
-        std::sort(files.begin(), files.end(), [&](const auto& a, const auto& b) { return rank(a) < rank(b); });
+        std::sort(files.begin(), files.end(), [](const Candidate& a, const Candidate& b) {
+            return std::tie(a.inexact, a.host) < std::tie(b.inexact, b.host);
+        });
         std::map<std::string, Entry> byName;
-        for (const auto& path : files) {
-            const std::string name = toFcbName(path.filename().string());
-            if (name.empty() || byName.count(name)) continue;
+        for (auto& c : files) {
+            // Only the entries asked for get stat'ed (a pattern matches on the
+            // 8.3 name, so every host file claiming that name matches alike).
+            if (byName.count(c.name) || (pattern && !matches(*pattern, c.name))) continue;
             Entry e;
-            e.fcbName = name;
-            e.path = path;
-            e.mtime = hostMtime(path);
-            if (directories) {
-                e.attr = kAttrDirectory;
-            } else {
-                e.attr = hostAttributes(path);
-                std::error_code fec;
-                const auto size = std::filesystem::file_size(path, fec);
-                e.size = fec ? 0 : static_cast<uint32_t>(std::min<uintmax_t>(size, 0xFFFFFFFFu));
-            }
-            byName.emplace(name, std::move(e));
+            e.fcbName = c.name;
+            e.path = std::move(c.path);
+            statInto(e, directories);
+            byName.emplace(c.name, std::move(e));
         }
         std::vector<Entry> out;
         out.reserve(byName.size());
@@ -393,10 +404,7 @@ private:
     }
 
     std::vector<Entry> find(const std::string& pattern, bool directories = false) const {
-        std::vector<Entry> out;
-        for (auto& e : listing(here(), directories))
-            if (matches(pattern, e.fcbName)) out.push_back(e);
-        return out;
+        return listing(here(), directories, &pattern);
     }
 
     static bool findIn(const std::vector<Entry>& entries, const std::string& name, Entry& out) {
@@ -499,9 +507,7 @@ private:
         std::ofstream f(e.path, std::ios::binary | std::ios::trunc);
         if (!f) return fail(r, kErlIo);
         f.close();
-        e.attr = hostAttributes(e.path);
-        e.size = 0;
-        e.mtime = hostMtime(e.path);
+        statInto(e);
         fillOpenFcb(r.fcb, e);
         return r;
     }

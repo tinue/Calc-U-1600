@@ -373,11 +373,11 @@ void test_debug_program_areas_match_rom() {
         CoreDebug::readPC1600ProgramAreas([&m](uint16_t addr) { return m.peek(addr); });
     CHECK(a.title == 1);
     CHECK(a.memS0 == 10810);
-    CHECK(a.slot[0].programModule);
+    CHECK(a.slot[0].programModule());
     CHECK(a.slot[0].freeBytes == 32571);
-    CHECK(!a.slot[1].programModule);
-    CHECK(CoreDebug::pc1600PointerToZ80(0x40C5) == 0xC0C5);
-    CHECK(CoreDebug::pc1600PointerToZ80(0x6B00) == 0xEB00);
+    CHECK(!a.slot[1].programModule());
+    CHECK(pc1600::lh5803ToZ80(0x40C5) == 0xC0C5);
+    CHECK(pc1600::lh5803ToZ80(0x6B00) == 0xEB00);
     CHECK(pc1600::lh5803ToZ80(0x00C5) == 0x80C5);
     CHECK(pc1600::z80ToLh5803(0xC0C5) == 0x40C5);
 }

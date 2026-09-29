@@ -46,14 +46,10 @@ FloppyDiskManager::DiskLists FloppyDiskManager::diskLists() const {
     return lists;
 }
 
-bool FloppyDiskManager::isBundledName(const QString& diskName) const {
-    for (const auto& e : scanFloppyDirectory(AppPaths::bundledResourcesDir().toStdString(), nullptr))
-        if (QString::fromStdString(e.diskName) == diskName) return true;
+bool FloppyDiskManager::isUserTemplateName(const QString& diskName) const {
+    for (const auto& e : scanFloppyDirectory(AppPaths::instanceDir().toStdString(), nullptr))
+        if (e.isTemplate && QString::fromStdString(e.diskName) == diskName) return true;
     return false;
-}
-
-QVector<FloppyDiskManager::DiskEntry> FloppyDiskManager::templateEntries() const {
-    return diskLists().templates;
 }
 
 void FloppyDiskManager::classifySource(const QString& resolvedPathOrEmpty, bool isTemplate) {
@@ -157,7 +153,8 @@ bool FloppyDiskManager::saveDiskAs(const QString& diskName, bool fromPreset, QSt
     // A bundled name is always refused (the bundled disk would shadow the
     // saved one). One of the user's own templates may only be replaced by
     // another template save -- a preset re-making its template.
-    if (!explicitFile && (isBundledName(name) || (!asTemplate && containsName(templateEntries(), name)))) {
+    if (!explicitFile && (containsName(entriesFor(AppPaths::bundledResourcesDir()), name) ||
+                          (!asTemplate && isUserTemplateName(name)))) {
         *error = tr("\"%1\" is a template's name. Choose a different name.").arg(name);
         return false;
     }

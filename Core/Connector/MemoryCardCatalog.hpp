@@ -6,6 +6,8 @@
 #include "MemoryCardDefinition.hpp"
 #include "NamedFileCatalog.hpp"
 
+constexpr const char* kCardFileSuffix = ".card.yaml";
+
 // ── Catalogue of on-disk memory-card definition files ─────────────────
 //
 // Scans a directory of docs/Memory-Card-Definition-Format.md `.card.yaml`
@@ -54,7 +56,7 @@ inline bool parseEntry(const std::string& text, const std::string& path, MemoryC
 inline std::vector<MemoryCardCatalogEntry> scanMemoryCardDirectory(const std::string& dir,
                                                                    std::string* error) {
     return scanNamedFiles<MemoryCardCatalogEntry>(
-        dir, ".card.yaml", "module", memory_card_catalog_detail::parseEntry,
+        dir, kCardFileSuffix, "module", memory_card_catalog_detail::parseEntry,
         [](const MemoryCardCatalogEntry& e) { return e.moduleName; }, error);
 }
 
