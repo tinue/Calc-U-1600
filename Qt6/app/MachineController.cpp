@@ -85,6 +85,8 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
     const bool restoreCE150 = keepPlotter && ce150Attached();
     const bool restoreCE1600P = keepPlotter && ce1600pAttached();
     const bool restoreCE158 = keepPlotter && ce158Attached();
+    const QString restoreHostDrive = keepPlotter && model == Model::PC1600 ? m_hostDriveDir : QString();
+    m_hostDriveDir.clear();
     flushFloppyBeforeDetach(); // the old machine (and its disk) is going away
     discardMachine();
     m_model = model;
@@ -100,6 +102,7 @@ void MachineController::switchModel(Model model, bool keepPlotter) {
         if (restoreCE150) attachCE150();
         if (restoreCE1600P) attachCE1600P();
         if (restoreCE158) attachCE158();
+        if (!restoreHostDrive.isEmpty()) attachHostDrive(restoreHostDrive);
     } else {
         const auto variant = (model == Model::PC1500A) ? PC1500Variant::PC1500A : PC1500Variant::PC1500;
         // PC-1500A is A04-only (PC1500Variant.hpp) -- clamp regardless of
@@ -637,6 +640,31 @@ void MachineController::detachCE1600P() {
     if (!m_pc1600) return;
     flushFloppyBeforeDetach();
     m_pc1600->detachCE1600P();
+}
+
+bool MachineController::attachHostDrive(const QString& dir, QString* error) {
+    if (!m_pc1600) return false;
+    const std::filesystem::path path = std::filesystem::u8path(dir.toStdString());
+    if (m_pc1600->hostDriveAttached()) {
+        m_pc1600->setHostDriveDirectory(path);
+    } else {
+        std::string err;
+        if (!BundledRoms::attachHostDrive(*m_pc1600, bundledRomDirs(), path, &err)) {
+            if (error) *error = QString::fromStdString(err);
+            return false;
+        }
+    }
+    m_hostDriveDir = dir;
+    return true;
+}
+
+void MachineController::detachHostDrive() {
+    if (m_pc1600) m_pc1600->detachHostDrive();
+    m_hostDriveDir.clear();
+}
+
+bool MachineController::hostDriveAttached() const {
+    return m_pc1600 && m_pc1600->hostDriveAttached();
 }
 
 bool MachineController::swapCE1600PRom(CE1600PRomVersion version, QString* error) {

@@ -156,6 +156,8 @@ private:
     QAction* m_openPresetAction = nullptr;
     QAction* m_loadBasicProgramAction = nullptr;
     QAction* m_loadMachineCodeAction = nullptr;
+    QAction* m_mountDirectoryAction = nullptr;   // File > Mount Directory… (PC-1600 host drive S3:)
+    QAction* m_unmountDirectoryAction = nullptr;
     QAction* m_settingsAction = nullptr;
     QAction* m_aboutAction = nullptr;
 
@@ -188,6 +190,9 @@ private:
     // needed (MachineCodeLoadDialog), write it, then show the NEW that
     // protects it and the CALL that starts it. Never runs the code.
     void loadMachineCode();
+    void mountHostDirectory();
+    void unmountHostDirectory();
+    void syncHostDriveActions();
     // Reset / Reset All (control bar, Machine menu): see resetMachine() in
     // MainWindow.cpp.
     void resetMachine(bool allReset);

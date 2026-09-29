@@ -36,6 +36,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QFile>
+#include <QDir>
 #include <QFileDialog>
 #include <QApplication>
 #include <QCoreApplication>
@@ -172,6 +173,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         });
     });
     connect(m_loadMachineCodeAction, &QAction::triggered, this, &MainWindow::loadMachineCode);
+    connect(m_mountDirectoryAction, &QAction::triggered, this, &MainWindow::mountHostDirectory);
+    connect(m_unmountDirectoryAction, &QAction::triggered, this, &MainWindow::unmountHostDirectory);
     connect(m_moduleManager.get(), &MemoryModuleManager::errorMessage, this,
             [this](const QString& text) { QMessageBox::warning(this, tr("Memory Module"), text); });
     connect(m_controlBar, &ControlBar::floppyDiskSelected, this, [this](QString diskNameOrEmpty) {
@@ -324,11 +327,52 @@ void MainWindow::syncControlBarForModel() {
     m_romMenuAction->setVisible(romPickerVisible);
     m_controlBar->setPC1600RomPickerVisible(isPC1600);
     m_rom1600MenuAction->setVisible(isPC1600);
+    syncHostDriveActions();
 }
 
 void MainWindow::resetMachine(bool allReset) { m_sync->resetToPrompt(allReset); }
 
 bool MainWindow::isLoading() const { return m_sync && m_sync->busy(); }
+
+// File > Mount Directory…: the host directory becomes drive S3: (alias Y:
+// without a CE-1600F). The first mount plugs the host drive in, with the
+// power cycle every peripheral attach gets; mounting another directory
+// while one is mounted is a live media swap.
+void MainWindow::mountHostDirectory() {
+    const QString title = tr("Mount Directory as S3:");
+    const QString current = m_controller->hostDriveDirectory();
+    const QString dir = QFileDialog::getExistingDirectory(this, title, current.isEmpty() ? QDir::homePath() : current);
+    if (dir.isEmpty()) return;
+    if (m_controller->hostDriveAttached()) {
+        m_controller->attachHostDrive(dir);
+    } else {
+        m_sync->run(title, [this, &dir](QString* error) {
+            bool attached = false;
+            const bool cycled = m_presetController->powerCycleLive(
+                [this, &dir, &attached, error] { attached = m_controller->attachHostDrive(dir, error); }, error);
+            return cycled && attached;
+        });
+    }
+    syncHostDriveActions();
+}
+
+void MainWindow::unmountHostDirectory() {
+    if (!m_controller->hostDriveAttached()) return;
+    m_sync->run(tr("Unmount Directory"), [this](QString* error) {
+        return m_presetController->powerCycleLive([this] { m_controller->detachHostDrive(); }, error);
+    });
+    syncHostDriveActions();
+}
+
+void MainWindow::syncHostDriveActions() {
+    const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
+    const QString dir = m_controller->hostDriveAttached() ? m_controller->hostDriveDirectory() : QString();
+    m_mountDirectoryAction->setEnabled(isPC1600);
+    m_unmountDirectoryAction->setEnabled(isPC1600 && !dir.isEmpty());
+    m_unmountDirectoryAction->setText(dir.isEmpty() ? tr("Unmount Directory")
+                                                    : tr("Unmount \"%1\"").arg(QDir(dir).dirName()));
+    m_unmountDirectoryAction->setToolTip(dir);
+}
 
 void MainWindow::loadMachineCode() {
     const QString title = tr("Load Machine Code");
@@ -773,6 +817,9 @@ void MainWindow::buildMenuBar() {
     m_openPresetAction = fileMenu->addAction(tr("Load Preset…"));
     m_loadBasicProgramAction = fileMenu->addAction(tr("Load BASIC Program…"));
     m_loadMachineCodeAction = fileMenu->addAction(tr("Load Machine Code…"));
+    fileMenu->addSeparator();
+    m_mountDirectoryAction = fileMenu->addAction(tr("Mount Directory…"));
+    m_unmountDirectoryAction = fileMenu->addAction(tr("Unmount Directory"));
     fileMenu->addSeparator();
     QAction* quitAction = fileMenu->addAction(tr("Quit"));
     quitAction->setMenuRole(QAction::QuitRole);

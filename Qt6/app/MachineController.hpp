@@ -351,6 +351,18 @@ public:
     bool swapCE1600PRom(CE1600PRomVersion version, QString* error = nullptr);
     bool ce1600pAttached() const;
 
+    // Host-directory drive S3: / Y: (PC-1600 only): a host directory as a
+    // PC-1600 file device (PC1600HostDriveCard). attachHostDrive() on a
+    // drive that isn't attached must run inside powerCycleAround() (the ROM
+    // finds the module at power-on); with the drive attached it only swaps
+    // the directory, live. detachHostDrive() likewise needs the power cycle.
+    // The mount survives a same-model rebuild (ROM switch), not a model
+    // switch, and is not saved across launches.
+    bool attachHostDrive(const QString& dir, QString* error = nullptr);
+    void detachHostDrive();
+    bool hostDriveAttached() const;
+    QString hostDriveDirectory() const { return m_hostDriveDir; }
+
     // CE-158 RS-232C / parallel interface: PC1500(A), or a PC-1600's LH5803
     // side (MODE 1). Same live power-cycled attach as the plotters; it
     // shares the bus with the CE-150, but on a PC-1600 attaching it drops
@@ -402,6 +414,7 @@ private:
     PC1500RomRevision m_pc1500RomRevision = PC1500RomRevision::A04;
     PC1600RomVersion m_pc1600RomVersion = PC1600RomVersion::New;
     CE1600PRomVersion m_ce1600pRomVersion = CE1600PRomVersion::New;
+    QString m_hostDriveDir; // mounted directory; empty = no host drive
     std::unique_ptr<PC1500Machine> m_pc1500;
     std::unique_ptr<PC1600Machine> m_pc1600;
     KeyPasteFeeder m_paste;
