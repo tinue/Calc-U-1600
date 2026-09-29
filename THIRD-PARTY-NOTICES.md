@@ -40,7 +40,7 @@ CE-502B Statistics module, from Jeff Birt's dump
 (https://github.com/Jeff-Birt/PC-1500_ROM_Modules).
 
 `examples/dwx/S3/dwx.bin` is the PC-1600 DiskWorks v3 program by
-Christian Becker (KiKiSoft, 1993) -- see
+Christian Becker (KiKiSoft, 1993-2026) -- see
 [github.com/hzprky/DiskWorks](https://github.com/hzprky/DiskWorks) and
 `examples/dwx/DiskWorks.pc1600`. `examples/machine-code/CALCULAT.BIN` is
 CalCula, a PC-1600 RPN calculator by the same author (KiKiSoft, 1993) --
