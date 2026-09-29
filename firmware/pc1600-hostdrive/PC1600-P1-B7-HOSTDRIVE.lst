@@ -1,0 +1,210 @@
+                        ; --------------------------------------
+                        ; zasm: assemble "hostdrive.asm"
+                        ; date: 2026-09-29 09:05:46
+                        ; --------------------------------------
+
+
+                        ; ============================================================================
+                        ; Calc-U-1600 host-directory drive -- PC-1600 ROM module, Page 1 / Bank 7
+                        ; (4000H-7FFFH). Original work, part of Calc-U-1600.
+                        ;
+                        ; Build: tools/build_hostdrive_rom.sh (zasm) -> PC1600-P1-B7-HOSTDRIVE.bin,
+                        ; committed next to this file. docs/PC1600-Host-Drive.md has the design.
+                        ;
+                        ; OVERVIEW
+                        ; A ROM module (ID 43H,16H) that makes a directory on the host computer a
+                        ; PC-1600 file device, "S3:" (device code 42H), alias "Y:" (43H). The ROM
+                        ; only forwards: every FILE IOCS call (01DEH, C = 0FH..23H, DE = FCB) goes
+                        ; over I/O ports 90H/91H to the emulator's PC1600HostDriveCard, which does
+                        ; the work on the host file system (HostDirectoryDrive) and answers with the
+                        ; IOCS status, ERL, the updated FCB and any data for the DMA buffer.
+                        ;
+                        ; SCANMODS (07C5H) finds the module at reset; FILE_I (105FH) matches the
+                        ; device table and jumps to the file handler (+15H) with C = function, DE =
+                        ; FCB, page 1 = this bank. A CE-1600F (bank 5) is searched first, so with a
+                        ; CE-1600P attached "Y:" is its second floppy drive and only "S3:" comes
+                        ; here. No token table: INIT "S3:" finds no handler and is refused.
+                        ;
+                        ; PROTOCOL (one transaction per FILE call)
+                        ;   OUT (91H),fn        start: function byte (FFH = reset, no further bytes)
+                        ;   OUT (90H) x ...     DE lo, DE hi, DEVNAME, FCB+00H..+38H (57 bytes),
+                        ;                       and for 15H (write) the 256 bytes at (DMAADR)
+                        ;   IN  (90H) x ...     status, ERL, FCB+00H..+38H (57 bytes),
+                        ;                       length lo, length hi, <length> bytes -> (DMAADR),
+                        ;                       BC lo/hi, DE lo/hi, HL lo/hi
+                        ; ============================================================================
+                        
+0090:                   P_HDDATA:   equ 90H     ; host drive: request / response byte stream
+0091:                   P_HDCMD:    equ 91H     ; host drive: write = start a transaction (function)
+                        
+00FF:                   HDRESETCMD: equ 0FFH    ; transaction without payload: drop open searches
+0039:                   FCBHDRLEN:  equ 39H     ; FCB+00H..+38H travel; the buffer at +39H does not
+                        
+FC16:                   DEVNAME:    equ 0FC16H  ; device code of the FILE call (set by FILE_I)
+FC46:                   DMAADR:     equ 0FC46H  ; FILE 1AH SET DMA address
+F89B:                   ERL:        equ 0F89BH  ; error code of the last file operation
+                        
+4000:                   	org 4000H
+                        
+                        
+                        
+                        ;------------------------------------------------------------------------------
+                        ; 4000H - ROM module header (same layout as banks 3 and 5)
+                        ;------------------------------------------------------------------------------
+4000:                   MODID:
+4000: 4316              	defb 43H,16H
+4002: C33E40   [10]     	jp HDRESET              ; +02H: reset / power functions (A = function)
+4005: C9       [20]     	ret                     ; +05H: interrupt hook: nothing
+4006: 00       [24]     	nop
+4007: 00       [28]     	nop
+4008: 37       [32]     	scf                     ; +08H: device IOCS 80H..8FH: none
+4009: C9       [42]     	ret
+400A: 00       [46]     	nop
+400B: 37       [50]     	scf                     ; +0BH: spare
+400C: C9       [60]     	ret
+400D: 00       [64]     	nop
+400E: C34C40   [74]     	jp HDNOAUTO             ; +0EH: AUTORUN.BAS search: not supported
+4011: 1840              	defw HDDEVTAB           ; +11H: device-name table
+4013: 0000              	defw 0000H              ; +13H: no token table
+4015: C34F40   [84]     	jp HDFILE               ; +15H: file handler
+                        
+4018:                   HDDEVTAB:
+4018: 53330000          	defb "S3",00H,00H,42H
+401C: 42                
+401D: 59000000          	defb "Y",00H,00H,00H,43H
+4021: 43                
+4022: 00                	defb 00H
+                        
+4023: 43616C63          	defb "Calc-U-1600 host drive 1.0",00H
+4027: 2D552D31          
+402B: 36303020          
+402F: 686F7374          
+4033: 20647269          
+4037: 76652031          
+403B: 2E3000            
+                        
+                        
+                        
+                        ;------------------------------------------------------------------------------
+                        ; Reset / power functions (module +02H)
+                        ; Tells the host to forget searches in progress on every call (new, power
+                        ; on/off, reset, boot). Returns like the other modules: A = 0..2 -> A := 0,
+                        ; NC; everything else CY.
+                        ;------------------------------------------------------------------------------
+403E:                   HDRESET:
+403E: F5       [11]     	push af
+403F: 3EFF     [18]     	ld a,HDRESETCMD
+4041: D391     [29]     	out (P_HDCMD),a
+4043: F1       [39]     	pop af
+4044: FE03     [46]     	cp 03H
+4046: 3002     [53|58]  	jr nc,HDRESETCY
+4048: AF       [57]     	xor a
+4049: C9       [67]     	ret
+404A:                   HDRESETCY:
+404A: 37       [ 4]     	scf
+404B: C9       [14]     	ret
+                        
+                        
+                        
+                        ;------------------------------------------------------------------------------
+                        ; AUTORUN search (module +0EH): A := 9BH (device not available)
+                        ;------------------------------------------------------------------------------
+404C:                   HDNOAUTO:
+404C: 3E9B     [ 7]     	ld a,9BH
+404E: C9       [17]     	ret
+                        
+                        
+                        
+                        ;------------------------------------------------------------------------------
+                        ; File handler (module +15H), entered from FILE (01DEH)
+                        ;
+                        ;   Entry parameters: C = IOCS function, DE = FCB, (DMAADR) = buffer
+                        ; Modified registers: BC, DE, HL as returned by the host (GET ALLOC: BC =
+                        ;                     bytes/sector, E = sectors/cluster, HL = free clusters;
+                        ;                     GET LENGTH: DE:HL = records); AF
+                        ;   Error conditions: A = IOCS status (0 = OK), ERL set
+                        ;------------------------------------------------------------------------------
+404F:                   HDFILE:
+404F: 79       [ 4]     	ld a,c
+4050: FE1A     [11]     	cp 1AH                  ; SET DMA stays in the PC-1600
+4052: 2848     [18|23]  	jr z,HDSETDMA
+4054: D5       [29]     	push de
+4055: D391     [40]     	out (P_HDCMD),a         ; start the transaction
+4057: 0E90     [47]     	ld c,P_HDDATA
+4059: ED59     [59]     	out (c),e
+405B: ED51     [71]     	out (c),d
+405D: 2116FC   [81]     	ld hl,DEVNAME
+4060: EDA3     [97]     	outi
+4062: EB       [101]    	ex de,hl                ; HL = FCB
+4063: 0639     [108]    	ld b,FCBHDRLEN
+4065: EDB3     [124|21] 	otir
+4067: FE15     [131]    	cp 15H                  ; SEQUENTIAL WRITE: the record follows
+4069: 2007     [138|143]	jr nz,HDREPLY
+406B: 2A46FC   [154]    	ld hl,(DMAADR)
+406E: 0600     [161]    	ld b,00H                ; 256 bytes
+4070: EDB3     [177|21] 	otir
+4072:                   HDREPLY:
+4072: E1       [10]     	pop hl                  ; HL = FCB
+4073: ED78     [22]     	in a,(c)                ; IOCS status
+4075: F5       [33]     	push af
+4076: ED78     [45]     	in a,(c)
+4078: 329BF8   [58]     	ld (ERL),a
+407B: 0639     [65]     	ld b,FCBHDRLEN
+407D: EDB2     [81|21]  	inir                    ; FCB+00H..+38H back
+407F: ED40     [93]     	in b,(c)                ; payload length lo (0 with hi 1 = 256)
+4081: ED78     [105]    	in a,(c)                ; payload length hi
+4083: B0       [109]    	or b
+4084: 2805     [116|121]	jr z,HDREGS
+4086: 2A46FC   [132]    	ld hl,(DMAADR)
+4089: EDB2     [148|21] 	inir
+408B:                   HDREGS:
+408B: ED58     [12]     	in e,(c)
+408D: ED50     [24]     	in d,(c)
+408F: D5       [35]     	push de                 ; BC
+4090: ED58     [47]     	in e,(c)
+4092: ED50     [59]     	in d,(c)                ; DE
+4094: ED68     [71]     	in l,(c)
+4096: ED60     [83]     	in h,(c)                ; HL
+4098: C1       [93]     	pop bc
+4099: F1       [103]    	pop af
+409A: B7       [107]    	or a
+409B: C9       [117]    	ret
+                        
+409C:                   HDSETDMA:
+409C: ED5346FC [20]     	ld (DMAADR),de
+40A0: AF       [24]     	xor a
+40A1: 329BF8   [37]     	ld (ERL),a
+40A4: C9       [47]     	ret
+                        
+40A5: FFFFFFFF          	defs 8000H-$,0FFH       ; rest of the bank: FFH, no module at 6000H
+40A9: FF...             
+
+
+; +++ segments +++
+
+#CODE          = $4000 = 16384,  size = $4000 = 16384
+
+; +++ global symbols +++
+
+DEVNAME    = $FC16 = 64534          hostdrive.asm:37
+DMAADR     = $FC46 = 64582          hostdrive.asm:38
+ERL        = $F89B = 63643          hostdrive.asm:39
+FCBHDRLEN  = $0039 =    57          hostdrive.asm:35
+HDDEVTAB   = $4018 = 16408          hostdrive.asm:65
+HDFILE     = $404F = 16463          hostdrive.asm:113
+HDNOAUTO   = $404C = 16460          hostdrive.asm:98
+HDREGS     = $408B = 16523          hostdrive.asm:146
+HDREPLY    = $4072 = 16498          hostdrive.asm:132
+HDRESET    = $403E = 16446          hostdrive.asm:80
+HDRESETCMD = $00FF =   255          hostdrive.asm:34
+HDRESETCY  = $404A = 16458          hostdrive.asm:89
+HDSETDMA   = $409C = 16540          hostdrive.asm:159
+MODID      = $4000 = 16384          hostdrive.asm:48 (unused)
+P_HDCMD    = $0091 =   145          hostdrive.asm:32
+P_HDDATA   = $0090 =   144          hostdrive.asm:31
+_end       = $8000 = 32768          hostdrive.asm:41 (unused)
+_size      = $4000 = 16384          hostdrive.asm:41 (unused)
+
+
+total time: 0.0015 sec.
+no errors

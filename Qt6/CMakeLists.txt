@@ -296,6 +296,10 @@ file(GLOB CARD_YAML_FILES ${CARD_RESOURCES_SRC_DIR}/*.card.yaml)
 file(GLOB FLOPPY_FILES ${CARD_RESOURCES_SRC_DIR}/*.floppy.yaml)
 set(ROM_RESOURCES_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../roms)
 file(GLOB BUNDLED_ROM_FILES ${ROM_RESOURCES_SRC_DIR}/*.ROM ${ROM_RESOURCES_SRC_DIR}/*.bin)
+# Calc-U-1600's own PC-1600 host-directory drive ROM: tracked in the repo
+# (roms/ holds only the gitignored original dumps).
+list(APPEND BUNDLED_ROM_FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/../firmware/pc1600-hostdrive/PC1600-P1-B7-HOSTDRIVE.bin)
 set(BUNDLED_RESOURCE_FILES ${CARD_YAML_FILES} ${FLOPPY_FILES} ${BUNDLED_ROM_FILES})
 
 if(APPLE)
