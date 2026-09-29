@@ -297,6 +297,11 @@ authentic speed for the span that matters.
   FCB header over ports 90H/91H and takes back status, ERL, FCB and DMA data.
   All file logic stays in `HostDirectoryDrive`, where it can be tested. The
   MEP ROM is a guideline only, and isn't copied or emulated.
+- **The host-drive ROM still answers the MEP's fixed entries 4020H/4023H/
+  4026H.** MEP software (FILEX) calls them by address for `S3:` without any
+  check, and crashed on the device table that used to sit there. They give
+  a drive with only the root directory. Don't move the device table back
+  below 4029H.
 - **Host-drive WRITE stores whole records; CLOSE trims.** That is the
   CE-1600F's model (FDWRITE/FDCLOSE). BASIC and COPY both rely on CLOSE
   trimming the last record to FCB+06H bytes. Writing only FCB+06H bytes per

@@ -1,6 +1,6 @@
                         ; --------------------------------------
                         ; zasm: assemble "hostdrive.asm"
-                        ; date: 2026-09-29 09:05:46
+                        ; date: 2026-09-29 12:11:59
                         ; --------------------------------------
 
 
@@ -32,12 +32,24 @@
                         ;   IN  (90H) x ...     status, ERL, FCB+00H..+38H (57 bytes),
                         ;                       length lo, length hi, <length> bytes -> (DMAADR),
                         ;                       BC lo/hi, DE lo/hi, HL lo/hi
+                        ;
+                        ; MEP FIXED ENTRIES
+                        ; Programs written for the MEP rev3 module (e.g. FILEX) take "S3:" for the
+                        ; MEP and call its fixed entries 4020H/4023H/4026H in bank 7 directly. The
+                        ; same addresses here give them a drive without subdirectories:
+                        ;   OUT (91H),FCH       CDIR: OUT (90H) length, path bytes;
+                        ;                       IN (90H) status, ERL (only the root "/" exists)
+                        ;   OUT (91H),FDH       FILEMODE: SEARCH FIRST/NEXT list files (default)
+                        ;   OUT (91H),FEH       DIRMODE: SEARCH FIRST/NEXT list directories (none)
                         ; ============================================================================
                         
 0090:                   P_HDDATA:   equ 90H     ; host drive: request / response byte stream
 0091:                   P_HDCMD:    equ 91H     ; host drive: write = start a transaction (function)
                         
 00FF:                   HDRESETCMD: equ 0FFH    ; transaction without payload: drop open searches
+00FE:                   HDDIRCMD:   equ 0FEH    ; transaction without payload: DIRMODE
+00FD:                   HDFILECMD:  equ 0FDH    ; transaction without payload: FILEMODE
+00FC:                   HDCDIRCMD:  equ 0FCH    ; CDIR: length and path follow, status and ERL back
 0039:                   FCBHDRLEN:  equ 39H     ; FCB+00H..+38H travel; the buffer at +39H does not
                         
 FC16:                   DEVNAME:    equ 0FC16H  ; device code of the FILE call (set by FILE_I)
@@ -53,7 +65,7 @@ F89B:                   ERL:        equ 0F89BH  ; error code of the last file op
                         ;------------------------------------------------------------------------------
 4000:                   MODID:
 4000: 4316              	defb 43H,16H
-4002: C33E40   [10]     	jp HDRESET              ; +02H: reset / power functions (A = function)
+4002: C34F40   [10]     	jp HDRESET              ; +02H: reset / power functions (A = function)
 4005: C9       [20]     	ret                     ; +05H: interrupt hook: nothing
 4006: 00       [24]     	nop
 4007: 00       [28]     	nop
@@ -63,25 +75,31 @@ F89B:                   ERL:        equ 0F89BH  ; error code of the last file op
 400B: 37       [50]     	scf                     ; +0BH: spare
 400C: C9       [60]     	ret
 400D: 00       [64]     	nop
-400E: C34C40   [74]     	jp HDNOAUTO             ; +0EH: AUTORUN.BAS search: not supported
-4011: 1840              	defw HDDEVTAB           ; +11H: device-name table
+400E: C35D40   [74]     	jp HDNOAUTO             ; +0EH: AUTORUN.BAS search: not supported
+4011: 2940              	defw HDDEVTAB           ; +11H: device-name table
 4013: 0000              	defw 0000H              ; +13H: no token table
-4015: C34F40   [84]     	jp HDFILE               ; +15H: file handler
+4015: C38640   [84]     	jp HDFILE               ; +15H: file handler
+4018: C9C9C9C9          	defs 4020H-$,0C9H       ; +18H..+1FH: RET, as the MEP module
+401C: C9C9C9C9          
                         
-4018:                   HDDEVTAB:
-4018: 53330000          	defb "S3",00H,00H,42H
-401C: 42                
-401D: 59000000          	defb "Y",00H,00H,00H,43H
-4021: 43                
-4022: 00                	defb 00H
+4020: C36040   [94]     	jp HDCDIR               ; 4020H: MEP CDIR (DE = path, B = length)
+4023: C37C40   [104]    	jp HDDIRMODE            ; 4023H: MEP DIRMODE
+4026: C38040   [114]    	jp HDFILEMODE           ; 4026H: MEP FILEMODE
                         
-4023: 43616C63          	defb "Calc-U-1600 host drive 1.0",00H
-4027: 2D552D31          
-402B: 36303020          
-402F: 686F7374          
-4033: 20647269          
-4037: 76652031          
-403B: 2E3000            
+4029:                   HDDEVTAB:
+4029: 53330000          	defb "S3",00H,00H,42H
+402D: 42                
+402E: 59000000          	defb "Y",00H,00H,00H,43H
+4032: 43                
+4033: 00                	defb 00H
+                        
+4034: 43616C63          	defb "Calc-U-1600 host drive 1.0",00H
+4038: 2D552D31          
+403C: 36303020          
+4040: 686F7374          
+4044: 20647269          
+4048: 76652031          
+404C: 2E3000            
                         
                         
                         
@@ -91,27 +109,74 @@ F89B:                   ERL:        equ 0F89BH  ; error code of the last file op
                         ; on/off, reset, boot). Returns like the other modules: A = 0..2 -> A := 0,
                         ; NC; everything else CY.
                         ;------------------------------------------------------------------------------
-403E:                   HDRESET:
-403E: F5       [11]     	push af
-403F: 3EFF     [18]     	ld a,HDRESETCMD
-4041: D391     [29]     	out (P_HDCMD),a
-4043: F1       [39]     	pop af
-4044: FE03     [46]     	cp 03H
-4046: 3002     [53|58]  	jr nc,HDRESETCY
-4048: AF       [57]     	xor a
-4049: C9       [67]     	ret
-404A:                   HDRESETCY:
-404A: 37       [ 4]     	scf
-404B: C9       [14]     	ret
+404F:                   HDRESET:
+404F: F5       [11]     	push af
+4050: 3EFF     [18]     	ld a,HDRESETCMD
+4052: D391     [29]     	out (P_HDCMD),a
+4054: F1       [39]     	pop af
+4055: FE03     [46]     	cp 03H
+4057: 3002     [53|58]  	jr nc,HDRESETCY
+4059: AF       [57]     	xor a
+405A: C9       [67]     	ret
+405B:                   HDRESETCY:
+405B: 37       [ 4]     	scf
+405C: C9       [14]     	ret
                         
                         
                         
                         ;------------------------------------------------------------------------------
                         ; AUTORUN search (module +0EH): A := 9BH (device not available)
                         ;------------------------------------------------------------------------------
-404C:                   HDNOAUTO:
-404C: 3E9B     [ 7]     	ld a,9BH
-404E: C9       [17]     	ret
+405D:                   HDNOAUTO:
+405D: 3E9B     [ 7]     	ld a,9BH
+405F: C9       [17]     	ret
+                        
+                        
+                        
+                        ;------------------------------------------------------------------------------
+                        ; MEP fixed entry 4020H: change the directory
+                        ;
+                        ;   Entry parameters: DE = path, B = length
+                        ; Modified registers: AF, BC, HL
+                        ;   Error conditions: CY, A = IOCS status, ERL set (a path other than the
+                        ;                     root: 01H, 98H file not found)
+                        ;------------------------------------------------------------------------------
+4060:                   HDCDIR:
+4060: 3EFC     [ 7]     	ld a,HDCDIRCMD
+4062: D391     [18]     	out (P_HDCMD),a
+4064: 0E90     [25]     	ld c,P_HDDATA
+4066: ED41     [37]     	out (c),b
+4068: EB       [41]     	ex de,hl                ; HL = path
+4069: 78       [45]     	ld a,b
+406A: B7       [49]     	or a
+406B: 2802     [56|61]  	jr z,HDCDIRST
+406D: EDB3     [72|21]  	otir
+406F:                   HDCDIRST:
+406F: EB       [ 4]     	ex de,hl
+4070: ED78     [16]     	in a,(c)                ; IOCS status
+4072: ED40     [28]     	in b,(c)
+4074: 219BF8   [38]     	ld hl,ERL
+4077: 70       [45]     	ld (hl),b
+4078: B7       [49]     	or a
+4079: C8       [54|60]  	ret z
+407A: 37       [58]     	scf
+407B: C9       [68]     	ret
+                        
+                        
+                        
+                        ;------------------------------------------------------------------------------
+                        ; MEP fixed entries 4023H / 4026H: what SEARCH FIRST / NEXT list, until the
+                        ; other one or a module reset. Return A = 0, NC.
+                        ;------------------------------------------------------------------------------
+407C:                   HDDIRMODE:
+407C: 3EFE     [ 7]     	ld a,HDDIRCMD
+407E: 1802     [19]     	jr HDMODE
+4080:                   HDFILEMODE:
+4080: 3EFD     [ 7]     	ld a,HDFILECMD
+4082:                   HDMODE:
+4082: D391     [11]     	out (P_HDCMD),a
+4084: AF       [15]     	xor a
+4085: C9       [25]     	ret
                         
                         
                         
@@ -124,60 +189,60 @@ F89B:                   ERL:        equ 0F89BH  ; error code of the last file op
                         ;                     GET LENGTH: DE:HL = records); AF
                         ;   Error conditions: A = IOCS status (0 = OK), ERL set
                         ;------------------------------------------------------------------------------
-404F:                   HDFILE:
-404F: 79       [ 4]     	ld a,c
-4050: FE1A     [11]     	cp 1AH                  ; SET DMA stays in the PC-1600
-4052: 2848     [18|23]  	jr z,HDSETDMA
-4054: D5       [29]     	push de
-4055: D391     [40]     	out (P_HDCMD),a         ; start the transaction
-4057: 0E90     [47]     	ld c,P_HDDATA
-4059: ED59     [59]     	out (c),e
-405B: ED51     [71]     	out (c),d
-405D: 2116FC   [81]     	ld hl,DEVNAME
-4060: EDA3     [97]     	outi
-4062: EB       [101]    	ex de,hl                ; HL = FCB
-4063: 0639     [108]    	ld b,FCBHDRLEN
-4065: EDB3     [124|21] 	otir
-4067: FE15     [131]    	cp 15H                  ; SEQUENTIAL WRITE: the record follows
-4069: 2007     [138|143]	jr nz,HDREPLY
-406B: 2A46FC   [154]    	ld hl,(DMAADR)
-406E: 0600     [161]    	ld b,00H                ; 256 bytes
-4070: EDB3     [177|21] 	otir
-4072:                   HDREPLY:
-4072: E1       [10]     	pop hl                  ; HL = FCB
-4073: ED78     [22]     	in a,(c)                ; IOCS status
-4075: F5       [33]     	push af
-4076: ED78     [45]     	in a,(c)
-4078: 329BF8   [58]     	ld (ERL),a
-407B: 0639     [65]     	ld b,FCBHDRLEN
-407D: EDB2     [81|21]  	inir                    ; FCB+00H..+38H back
-407F: ED40     [93]     	in b,(c)                ; payload length lo (0 with hi 1 = 256)
-4081: ED78     [105]    	in a,(c)                ; payload length hi
-4083: B0       [109]    	or b
-4084: 2805     [116|121]	jr z,HDREGS
-4086: 2A46FC   [132]    	ld hl,(DMAADR)
-4089: EDB2     [148|21] 	inir
-408B:                   HDREGS:
-408B: ED58     [12]     	in e,(c)
-408D: ED50     [24]     	in d,(c)
-408F: D5       [35]     	push de                 ; BC
-4090: ED58     [47]     	in e,(c)
-4092: ED50     [59]     	in d,(c)                ; DE
-4094: ED68     [71]     	in l,(c)
-4096: ED60     [83]     	in h,(c)                ; HL
-4098: C1       [93]     	pop bc
-4099: F1       [103]    	pop af
-409A: B7       [107]    	or a
-409B: C9       [117]    	ret
+4086:                   HDFILE:
+4086: 79       [ 4]     	ld a,c
+4087: FE1A     [11]     	cp 1AH                  ; SET DMA stays in the PC-1600
+4089: 2848     [18|23]  	jr z,HDSETDMA
+408B: D5       [29]     	push de
+408C: D391     [40]     	out (P_HDCMD),a         ; start the transaction
+408E: 0E90     [47]     	ld c,P_HDDATA
+4090: ED59     [59]     	out (c),e
+4092: ED51     [71]     	out (c),d
+4094: 2116FC   [81]     	ld hl,DEVNAME
+4097: EDA3     [97]     	outi
+4099: EB       [101]    	ex de,hl                ; HL = FCB
+409A: 0639     [108]    	ld b,FCBHDRLEN
+409C: EDB3     [124|21] 	otir
+409E: FE15     [131]    	cp 15H                  ; SEQUENTIAL WRITE: the record follows
+40A0: 2007     [138|143]	jr nz,HDREPLY
+40A2: 2A46FC   [154]    	ld hl,(DMAADR)
+40A5: 0600     [161]    	ld b,00H                ; 256 bytes
+40A7: EDB3     [177|21] 	otir
+40A9:                   HDREPLY:
+40A9: E1       [10]     	pop hl                  ; HL = FCB
+40AA: ED78     [22]     	in a,(c)                ; IOCS status
+40AC: F5       [33]     	push af
+40AD: ED78     [45]     	in a,(c)
+40AF: 329BF8   [58]     	ld (ERL),a
+40B2: 0639     [65]     	ld b,FCBHDRLEN
+40B4: EDB2     [81|21]  	inir                    ; FCB+00H..+38H back
+40B6: ED40     [93]     	in b,(c)                ; payload length lo (0 with hi 1 = 256)
+40B8: ED78     [105]    	in a,(c)                ; payload length hi
+40BA: B0       [109]    	or b
+40BB: 2805     [116|121]	jr z,HDREGS
+40BD: 2A46FC   [132]    	ld hl,(DMAADR)
+40C0: EDB2     [148|21] 	inir
+40C2:                   HDREGS:
+40C2: ED58     [12]     	in e,(c)
+40C4: ED50     [24]     	in d,(c)
+40C6: D5       [35]     	push de                 ; BC
+40C7: ED58     [47]     	in e,(c)
+40C9: ED50     [59]     	in d,(c)                ; DE
+40CB: ED68     [71]     	in l,(c)
+40CD: ED60     [83]     	in h,(c)                ; HL
+40CF: C1       [93]     	pop bc
+40D0: F1       [103]    	pop af
+40D1: B7       [107]    	or a
+40D2: C9       [117]    	ret
                         
-409C:                   HDSETDMA:
-409C: ED5346FC [20]     	ld (DMAADR),de
-40A0: AF       [24]     	xor a
-40A1: 329BF8   [37]     	ld (ERL),a
-40A4: C9       [47]     	ret
+40D3:                   HDSETDMA:
+40D3: ED5346FC [20]     	ld (DMAADR),de
+40D7: AF       [24]     	xor a
+40D8: 329BF8   [37]     	ld (ERL),a
+40DB: C9       [47]     	ret
                         
-40A5: FFFFFFFF          	defs 8000H-$,0FFH       ; rest of the bank: FFH, no module at 6000H
-40A9: FF...             
+40DC: FFFFFFFF          	defs 8000H-$,0FFH       ; rest of the bank: FFH, no module at 6000H
+40E0: FF...             
 
 
 ; +++ segments +++
@@ -186,25 +251,33 @@ F89B:                   ERL:        equ 0F89BH  ; error code of the last file op
 
 ; +++ global symbols +++
 
-DEVNAME    = $FC16 = 64534          hostdrive.asm:37
-DMAADR     = $FC46 = 64582          hostdrive.asm:38
-ERL        = $F89B = 63643          hostdrive.asm:39
-FCBHDRLEN  = $0039 =    57          hostdrive.asm:35
-HDDEVTAB   = $4018 = 16408          hostdrive.asm:65
-HDFILE     = $404F = 16463          hostdrive.asm:113
-HDNOAUTO   = $404C = 16460          hostdrive.asm:98
-HDREGS     = $408B = 16523          hostdrive.asm:146
-HDREPLY    = $4072 = 16498          hostdrive.asm:132
-HDRESET    = $403E = 16446          hostdrive.asm:80
-HDRESETCMD = $00FF =   255          hostdrive.asm:34
-HDRESETCY  = $404A = 16458          hostdrive.asm:89
-HDSETDMA   = $409C = 16540          hostdrive.asm:159
-MODID      = $4000 = 16384          hostdrive.asm:48 (unused)
-P_HDCMD    = $0091 =   145          hostdrive.asm:32
-P_HDDATA   = $0090 =   144          hostdrive.asm:31
-_end       = $8000 = 32768          hostdrive.asm:41 (unused)
-_size      = $4000 = 16384          hostdrive.asm:41 (unused)
+DEVNAME    = $FC16 = 64534          hostdrive.asm:49
+DMAADR     = $FC46 = 64582          hostdrive.asm:50
+ERL        = $F89B = 63643          hostdrive.asm:51
+FCBHDRLEN  = $0039 =    57          hostdrive.asm:47
+HDCDIR     = $4060 = 16480          hostdrive.asm:129
+HDCDIRCMD  = $00FC =   252          hostdrive.asm:46
+HDCDIRST   = $406F = 16495          hostdrive.asm:139
+HDDEVTAB   = $4029 = 16425          hostdrive.asm:82
+HDDIRCMD   = $00FE =   254          hostdrive.asm:44
+HDDIRMODE  = $407C = 16508          hostdrive.asm:156
+HDFILE     = $4086 = 16518          hostdrive.asm:177
+HDFILECMD  = $00FD =   253          hostdrive.asm:45
+HDFILEMODE = $4080 = 16512          hostdrive.asm:159
+HDMODE     = $4082 = 16514          hostdrive.asm:161
+HDNOAUTO   = $405D = 16477          hostdrive.asm:115
+HDREGS     = $40C2 = 16578          hostdrive.asm:210
+HDREPLY    = $40A9 = 16553          hostdrive.asm:196
+HDRESET    = $404F = 16463          hostdrive.asm:97
+HDRESETCMD = $00FF =   255          hostdrive.asm:43
+HDRESETCY  = $405B = 16475          hostdrive.asm:106
+HDSETDMA   = $40D3 = 16595          hostdrive.asm:223
+MODID      = $4000 = 16384          hostdrive.asm:60 (unused)
+P_HDCMD    = $0091 =   145          hostdrive.asm:41
+P_HDDATA   = $0090 =   144          hostdrive.asm:40
+_end       = $8000 = 32768          hostdrive.asm:53 (unused)
+_size      = $4000 = 16384          hostdrive.asm:53 (unused)
 
 
-total time: 0.0015 sec.
+total time: 0.0009 sec.
 no errors

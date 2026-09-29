@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "../Connector/HostDirectoryDrive.hpp"
+#include "../Connector/PC1600HostDriveCard.hpp"
 
 namespace {
 
@@ -397,6 +398,77 @@ void test_reset_ends_searches() {
     CHECK(drive.execute(next).erl == Drive::kErlEof);
 }
 
+void test_mep_change_directory_knows_only_the_root() {
+    TempDir dir;
+    fs::create_directories(dir.path / "SUBDIR");
+    Drive drive;
+    CHECK(drive.changeDirectory("/").erl == Drive::kErlNoMedia);
+    drive.setDirectory(dir.path);
+    auto r = drive.changeDirectory("/");
+    CHECK(r.status == 0 && r.erl == Drive::kErlOk);
+    CHECK(drive.changeDirectory("").status == 0);
+    r = drive.changeDirectory("/SUBDIR");  // host subdirectories stay hidden
+    CHECK(r.status == 0x01);
+    CHECK(r.erl == Drive::kErlNotFound);
+}
+
+void test_mep_directory_mode_lists_nothing() {
+    TempDir dir;
+    writeFile(dir.path / "A.TXT", "a");
+    fs::create_directories(dir.path / "SUBDIR");
+    Drive drive;
+    drive.setDirectory(dir.path);
+    drive.setListDirectories(true);
+    CHECK(listNames(drive, "???????????").empty());
+    drive.setListDirectories(false);
+    CHECK(listNames(drive, "???????????").size() == 1);
+    drive.setListDirectories(true);
+    drive.reset();  // power / reset: back to listing files
+    CHECK(listNames(drive, "???????????").size() == 1);
+}
+
+// The MEP fixed entries' bus protocol, as the driver ROM speaks it.
+void test_card_mep_commands() {
+    TempDir dir;
+    writeFile(dir.path / "A.TXT", "a");
+    PC1600HostDriveCard card;
+    card.drive().setDirectory(dir.path);
+    auto out = [&card](uint8_t port, uint8_t value) {
+        PC1600BusPins pins;
+        pins.io = true;
+        pins.forWrite = true;
+        pins.address = port;
+        CHECK(card.respondsToWrite(pins, value));
+    };
+    auto in = [&card]() {
+        PC1600BusPins pins;
+        pins.io = true;
+        pins.address = PC1600HostDriveCard::kDataPort;
+        uint8_t v = 0;
+        CHECK(card.respondsToRead(pins, v));
+        return v;
+    };
+    auto cdir = [&](const std::string& path, uint8_t& status, uint8_t& erl) {
+        out(PC1600HostDriveCard::kCommandPort, PC1600HostDriveCard::kChangeDirCommand);
+        out(PC1600HostDriveCard::kDataPort, static_cast<uint8_t>(path.size()));
+        for (char c : path) out(PC1600HostDriveCard::kDataPort, static_cast<uint8_t>(c));
+        status = in();
+        erl = in();
+    };
+    uint8_t status = 0xFF, erl = 0xFF;
+    cdir("/", status, erl);
+    CHECK(status == 0 && erl == 0);
+    cdir("/DOCS", status, erl);
+    CHECK(status == 0x01 && erl == Drive::kErlNotFound);
+    cdir("", status, erl);
+    CHECK(status == 0 && erl == 0);
+
+    out(PC1600HostDriveCard::kCommandPort, PC1600HostDriveCard::kDirModeCommand);
+    CHECK(listNames(card.drive(), "???????????").empty());
+    out(PC1600HostDriveCard::kCommandPort, PC1600HostDriveCard::kFileModeCommand);
+    CHECK(listNames(card.drive(), "???????????").size() == 1);
+}
+
 void test_unsupported_function() {
     TempDir dir;
     Drive drive;
@@ -425,6 +497,9 @@ int run_host_directory_drive_tests() {
     test_get_alloc_fits_dskf();
     test_get_length_in_records();
     test_reset_ends_searches();
+    test_mep_change_directory_knows_only_the_root();
+    test_mep_directory_mode_lists_nothing();
+    test_card_mep_commands();
     test_unsupported_function();
 
     std::printf("host_directory_drive_tests: %d passed, %d failed\n", g_pass, g_fail);

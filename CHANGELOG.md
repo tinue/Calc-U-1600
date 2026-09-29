@@ -17,7 +17,9 @@
 - **Mount Directory** (File menu, PC-1600): a folder on the computer
   becomes drive `S3:` (also `Y:` without a CE-1600F). LOAD/SAVE, OPEN,
   FILES, KILL, NAME, COPY, SET and DSKF work on it. Only 8.3 names are
-  shown, and INIT is refused. See docs/PC1600-Host-Drive.md.
+  shown, and INIT is refused. Programs written for the MEP module, such as
+  FILEX, take it for a MEP drive with no subdirectories. See
+  docs/PC1600-Host-Drive.md.
 - **Presets** New keys:
   - `host-drive: <folder>` mounts a folder as S3:.
   - `floppy-file: <file>` loads a `.floppy.yaml` next to the preset.

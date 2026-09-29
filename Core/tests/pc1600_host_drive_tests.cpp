@@ -266,6 +266,48 @@ void test_unmounted_drive_creates_nothing() {
     CHECK(fs::exists(dir.path / "X.TXT"));
 }
 
+// MEP software (e.g. FILEX) takes "S3:" for the MEP module and calls its
+// fixed entries in bank 7 with RST 20H: they must be code, not data.
+void test_mep_fixed_entries() {
+    TempDir dir;
+    PC1600Machine m;
+    if (!bootWithHostDrive(m, dir.path)) {
+        std::fprintf(stderr, "SKIP test_mep_fixed_entries: PC-1600 ROM images not found\n");
+        return;
+    }
+    tapKey(m, "mode");  // RUN -> PRO: reserve &C0C5.. for the code
+    waitIdle(m, PC1600Machine::kTStateHz);
+    type(m, "NEW \"S0:\",&200");
+    tapKey(m, "mode");
+    waitIdle(m, PC1600Machine::kTStateHz);
+    const uint8_t code[] = {
+        0xE7, 0x07, 0x23, 0x40,  // RST 20H: bank 7 4023H DIRMODE
+        0xE7, 0x07, 0x26, 0x40,  // RST 20H: bank 7 4026H FILEMODE
+        0x11, 0xF0, 0xC0,        // LD DE,C0F0H ("/X")
+        0x06, 0x01,              // LD B,1: "/"
+        0xE7, 0x07, 0x20, 0x40,  // RST 20H: bank 7 4020H CDIR
+        0x32, 0x00, 0xC1,        // LD (C100H),A
+        0x11, 0xF0, 0xC0,
+        0x06, 0x02,              // "/X"
+        0xE7, 0x07, 0x20, 0x40,
+        0x32, 0x01, 0xC1,        // LD (C101H),A
+        0x3A, 0x9B, 0xF8,        // LD A,(ERL)
+        0x32, 0x02, 0xC1,        // LD (C102H),A
+        0xC9,
+    };
+    const uint8_t path[] = {'/', 'X'};
+    const uint8_t marks[] = {0xAA, 0xAA, 0xAA};
+    CHECK(m.debugWriteInternalRam(0x00C5, code, sizeof(code)));
+    CHECK(m.debugWriteInternalRam(0x00F0, path, sizeof(path)));
+    CHECK(m.debugWriteInternalRam(0x0100, marks, sizeof(marks)));
+    type(m, "CALL &C0C5");
+    CHECK(m.memory().peek(0xC100) == 0x00);
+    CHECK(m.memory().peek(0xC101) == 0x01);
+    CHECK(m.memory().peek(0xC102) == 0x98);
+    // Still alive: BASIC runs and the drive works.
+    CHECK(errorOf(m, dir.path, "OPEN \"S3:X.TXT\" FOR OUTPUT AS #1:CLOSE #1") == 0);
+}
+
 }  // namespace
 
 int run_pc1600_host_drive_tests() {
@@ -274,6 +316,7 @@ int run_pc1600_host_drive_tests() {
     test_protect_and_errors();
     test_y_alias_follows_the_floppy();
     test_unmounted_drive_creates_nothing();
+    test_mep_fixed_entries();
 
     std::printf("pc1600_host_drive_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

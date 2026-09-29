@@ -19,7 +19,9 @@
 //   - Page B bank 7 ROM read window (4000-7FFF): the driver ROM
 //     (firmware/pc1600-hostdrive/, PC1600-P1-B7-HOSTDRIVE.bin).
 //   - I/O port 0x91 write: start a transaction with the FILE function byte
-//     (FFH = reset: drop searches in progress, nothing else follows).
+//     (FFH = reset: drop searches in progress, nothing else follows), or
+//     one of the MEP fixed entries: FEH DIRMODE / FDH FILEMODE (nothing
+//     follows), FCH CDIR (length and path follow; status and ERL back).
 //   - I/O port 0x90 write: the request stream -- FCB address (DE) lo/hi,
 //     DEVNAME, FCB+00H..+38H, and for SEQUENTIAL WRITE the 256-byte record.
 //     The last byte runs the call on HostDirectoryDrive.
@@ -35,6 +37,9 @@ public:
     static constexpr uint8_t kDataPort = 0x90;
     static constexpr uint8_t kCommandPort = 0x91;
     static constexpr uint8_t kResetCommand = 0xFF;
+    static constexpr uint8_t kDirModeCommand = 0xFE;
+    static constexpr uint8_t kFileModeCommand = 0xFD;
+    static constexpr uint8_t kChangeDirCommand = 0xFC;
 
     bool loadRom(const uint8_t* data, size_t size) {
         if (size != kRomSize) return false;
@@ -70,6 +75,7 @@ public:
         if (pins.address != kDataPort) return false;
         if (m_rx.size() < m_rxExpected) {
             m_rx.push_back(value);
+            if (m_function == kChangeDirCommand && m_rx.size() == 1) m_rxExpected += value;  // the path length
             if (m_rx.size() == m_rxExpected) run();
         }
         return true;
@@ -83,16 +89,27 @@ private:
         m_tx.clear();
         m_txPos = 0;
         m_rxExpected = 0;
-        if (function == kResetCommand) {
-            m_drive.reset();
-            return;
-        }
         m_function = function;
+        switch (function) {
+            case kResetCommand: m_drive.reset(); return;
+            case kDirModeCommand: m_drive.setListDirectories(true); return;
+            case kFileModeCommand: m_drive.setListDirectories(false); return;
+            case kChangeDirCommand: m_rxExpected = 1; return;
+            default: break;
+        }
         m_rxExpected = kRequestHeader + HostDirectoryDrive::kFcbImageSize +
                        (function == HostDirectoryDrive::kSeqWrite ? HostDirectoryDrive::kRecordSize : 0);
     }
 
     void run() {
+        if (m_function == kChangeDirCommand) {
+            const auto r = m_drive.changeDirectory(std::string(m_rx.begin() + 1, m_rx.end()));
+            m_tx = {r.status, r.erl};
+            m_txPos = 0;
+            m_rx.clear();
+            m_rxExpected = 0;
+            return;
+        }
         HostDirectoryDrive::Request req;
         req.function = m_function;
         req.fcbAddress = static_cast<uint16_t>(m_rx[0] | (m_rx[1] << 8));

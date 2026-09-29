@@ -99,8 +99,29 @@ public:
     const std::filesystem::path& directory() const { return m_dir; }
     bool mounted() const { return !m_dir.empty(); }
 
-    /// Drop every search in progress (module reset / power functions).
-    void reset() { m_searches.clear(); }
+    /// Drop every search in progress and go back to listing files (module
+    /// reset / power functions).
+    void reset() {
+        m_searches.clear();
+        m_listDirectories = false;
+    }
+
+    // ── MEP fixed entries (4020H CDIR, 4023H DIRMODE, 4026H FILEMODE) ──
+    // Software written for the MEP rev3 module calls them for "S3:". The
+    // host drive has no subdirectories: only the root exists, and a search
+    // in directory mode finds nothing.
+
+    /// DIRMODE (true) / FILEMODE (false): what SEARCH FIRST/NEXT list.
+    void setListDirectories(bool on) { m_listDirectories = on; }
+
+    /// CDIR: status and ERL for changing to `path` ("/" = the root).
+    Response changeDirectory(const std::string& path) const {
+        Response r;
+        std::error_code ec;
+        if (!mounted() || !std::filesystem::is_directory(m_dir, ec)) return fail(r, kErlNoMedia);
+        if (path.find_first_not_of('/') != std::string::npos) return fail(r, kErlNotFound);
+        return r;
+    }
 
     Response execute(const Request& req) {
         Response r;
@@ -465,7 +486,7 @@ private:
 
     Response& doSearchFirst(const Request& req, Response& r) {
         Search s;
-        s.entries = find(fcbName(req.fcb, kFcbName));
+        if (!m_listDirectories) s.entries = find(fcbName(req.fcb, kFcbName));
         m_searches[req.fcbAddress] = std::move(s);
         return nextEntry(req, r);
     }
@@ -576,4 +597,5 @@ private:
 
     std::filesystem::path m_dir;
     std::map<uint16_t, Search> m_searches;
+    bool m_listDirectories = false;
 };

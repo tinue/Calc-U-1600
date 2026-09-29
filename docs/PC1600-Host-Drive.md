@@ -65,6 +65,8 @@ PC-1600 BASIC ──FILE 01DEH──▶ FILE_I (105FH) ──device "S3"/"Y"─�
   and bundled with the app.
   - It is a ROM module (ID `43 16`) with device table `S3`=42H and `Y`=43H,
     and no token table.
+  - 4020H/4023H/4026H are the MEP's fixed entries CDIR, DIRMODE and
+    FILEMODE (see below), so the device table starts at 4029H.
   - SCANMODS (07C5H) finds it at power-on/reset.
   - FILE_I searches modules in bank order, so a CE-1600F in bank 5 keeps
     `Y:`.
@@ -81,7 +83,7 @@ One transaction per FILE call:
 
 | Direction | Bytes |
 |---|---|
-| `OUT (91H)` | function (FFH = reset: drop searches; nothing follows) |
+| `OUT (91H)` | function (FFH = reset: drop searches, file mode; nothing follows) |
 | `OUT (90H)` × n | DE lo, DE hi, DEVNAME (FC16H), FCB+00H..+38H; for 15H also the 256 bytes at (DMA) |
 | `IN (90H)` × n | status, ERL, FCB+00H..+38H, payload length lo/hi, payload → (DMA), BC, DE, HL (lo/hi) |
 
@@ -90,6 +92,21 @@ One transaction per FILE call:
 - SET DMA (1AH) stays in the ROM.
 - The protocol deliberately differs from the MEP's, so that all file logic
   lives in testable C++.
+
+### MEP fixed entries
+
+Software written for the MEP (FILEX, for one) takes `S3:` for the MEP and
+calls its fixed entries in bank 7 with `RST 20H` directly. The drive has no
+subdirectories, so they give it a root only:
+
+| Entry | MEP name | ROM → host | Behaviour |
+|---|---|---|---|
+| 4020H | CDIR (DE = path, B = length) | `OUT (91H)` FCH, length, path; `IN` status, ERL | `/` (or empty) is OK; any other path gives CY, 01H, ERL 98H |
+| 4023H | DIRMODE | `OUT (91H)` FEH | SEARCH FIRST/NEXT find nothing |
+| 4026H | FILEMODE | `OUT (91H)` FDH | SEARCH FIRST/NEXT list files again (the default; a reset also returns to it) |
+
+4018H..401FH are RET, as on the MEP. CDIR doesn't write the MEP's prompt
+buffer (FB10H).
 
 ### FILE functions
 
