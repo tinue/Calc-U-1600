@@ -22,7 +22,7 @@ AboutDialog::AboutDialog(QWidget* parent) : QDialog(parent) {
     layout->addWidget(new QLabel(tr("A Sharp PC-1500/1500A/1600 pocket-computer emulator."), this));
 
     auto* licenseLabel = new QLabel(
-        tr("See LICENSE and THIRD-PARTY-NOTICES.md, shipped alongside this app, for licensing details."), this);
+        tr("See LICENSE, NOTICE and THIRD-PARTY-NOTICES.md, shipped alongside this app, for licensing details."), this);
     licenseLabel->setWordWrap(true);
     layout->addWidget(licenseLabel);
 
