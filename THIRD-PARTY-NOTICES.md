@@ -39,11 +39,13 @@ under `Qt6/resources/cards/` — currently `ce502b.card.yaml`, Sharp's
 CE-502B Statistics module, from Jeff Birt's dump
 (https://github.com/Jeff-Birt/PC-1500_ROM_Modules).
 
-`examples/dwx/S3/dwx.bin` (also `examples/machine-code/dwx.bin`) is the
-PC-1600 DiskWorks v3 program by Christian Becker (KiKiSoft, 1993) -- see
+`examples/dwx/S3/dwx.bin` is the PC-1600 DiskWorks v3 program by
+Christian Becker (KiKiSoft, 1993) -- see
 [github.com/hzprky/DiskWorks](https://github.com/hzprky/DiskWorks) and
-`examples/dwx/DiskWorks.pc1600`. Bundled with the author's
-permission; not covered by this project's GPLv3 license.
+`examples/dwx/DiskWorks.pc1600`. `examples/machine-code/CALCULAT.BIN` is
+CalCula, a PC-1600 RPN calculator by the same author (KiKiSoft, 1993) --
+see `examples/machine-code/Calculat.pc1600`. Both are bundled with the
+author's permission; not covered by this project's GPLv3 license.
 
 `examples/setup/util_15.bas`, `utilrm_15.bas`, `utilrm_20.bas`, and the
 `firmware_bootstrap_util*.pc1500a` presets that load them are CE-163F
