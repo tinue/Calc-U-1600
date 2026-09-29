@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
 
     // CE-1601M into Slot 2 (the RAM disk lives here).
     std::string err;
-    auto card = makeSoftwareDefinedCard("Calc-U-1600/Resources/ce1601m.card.yaml",
+    auto card = makeSoftwareDefinedCard("Qt6/resources/cards/ce1601m.card.yaml",
                                         CardHost::PC1600Slot2, &err);
     if (!card) {
         std::fprintf(stderr, "CE-1601M card build failed: %s\n", err.c_str());

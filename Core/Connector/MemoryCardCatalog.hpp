@@ -18,7 +18,7 @@
 //
 // No notion of "app resource" reaches the core: the caller supplies the
 // directory -- the GUI its bundled resource path, the CLIs their
-// `--modules-dir` (default the repo's Calc-U-1600/Resources) -- exactly as
+// `--modules-dir` (default the repo's Qt6/resources/cards) -- exactly as
 // it already supplies romPath / traceDir to the preset loaders.
 
 struct MemoryCardCatalogEntry {

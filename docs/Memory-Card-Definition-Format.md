@@ -20,8 +20,8 @@ the mapping is called out inline as (spec §N).
   load silently.
 
 The standard cards are bundled with the app under `Qt6/resources/cards/`
-(new definitions go straight there); the CLIs take `--modules-dir` to point
-at a directory of definitions.
+(new definitions go straight there); the CLIs' `--modules-dir` defaults to
+the same directory.
 
 ---
 
@@ -357,8 +357,9 @@ memory-expansion:
     name a user's own saved battery-card instance (matched by the `module-name:` written into it,
     e.g. `- modulespec: CE-1601M - Programs`; the on-disk filename, blanks
     and all, is not consulted);
-  - the **CLIs** use `--modules-dir`, which may be repeated to add
-    fallback directories.
+  - the **CLIs** use `--modules-dir` (default `Qt6/resources/cards`,
+    relative to the working directory like `roms/`), which may be repeated
+    to add fallback directories.
 
   The first directory with exactly one match wins (so a bundled card
   shadows an instance of the same name). No match in any directory is a

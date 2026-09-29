@@ -92,6 +92,8 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/debug_target_tests.cpp \
   Core/tests/listing_tests.cpp \
   Core/tests/run_control_tests.cpp \
+  Core/tests/host_directory_drive_tests.cpp \
+  Core/tests/pc1600_host_drive_tests.cpp \
   Core/Basic/vendor/sharpdx/libsharpdx.a \
   -lz \
   -o /tmp/lh5801_tests

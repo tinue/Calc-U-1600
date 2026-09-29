@@ -199,7 +199,7 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   side. A `SoftwareDefinedCard` with a trigger-based latch samples the
   data bus on `OUT (28H)` and selects which 32 KB chip sits behind the
   8000-BFFF window, with PVOUT (Port 31H b4) as the nested 16 KB
-  half-select. `Calc-U-1600/Resources/ce1601m.card.yaml` ships two vertical
+  half-select. `Qt6/resources/cards/ce1601m.card.yaml` ships two vertical
   banks populated behind a 3-bit (D0-D2) latch; `superram.card.yaml` is the
   same card with a 4-bit (D0-D3) latch and all 16 x 32 KB banks fitted =
   512 KB. `PC1600Memory.cpp:307` (routes 28-2FH to the card as an
@@ -222,7 +222,7 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   `ce1601m.card.yaml` (each with its own `compatible-hosts`), plus the
   hardcoded prototype cards — and attach via a preset
   `memory-expansion-N:` block or the GUI control-bar module picker.
-  `Core/Connector/SoftwareDefinedCard.hpp`, `Calc-U-1600/Resources/*.card.yaml`
+  `Core/Connector/SoftwareDefinedCard.hpp`, `Qt6/resources/cards/*.card.yaml`
 - **Page D bank 1**: the weakest-evidenced cell in the whole
   bank-switching map (single-source, routing it to the external 60-pin
   system bus). Left open bus rather than built on that; revisit only if a

@@ -18,7 +18,7 @@
 //
 // --modules-dir <dir> is a directory a preset's `- modulespec:
 // <module-name>` memory-expansion reference is looked up in (default
-// `Calc-U-1600/Resources`, the repo's bundled-module directory -- same
+// `Qt6/resources/cards`, the repo's bundled-module directory -- same
 // cwd-relative convention as `roms/`). Repeat it to add fallback
 // directories, searched in the order given after the first. A
 // `- modulespec-file: <path>` reference ignores it.
@@ -56,7 +56,7 @@
 int main(int argc, char** argv) {
     // Pull an optional `--modules-dir <dir>` out of argv up front so the
     // rest of the parsing keeps its simple fixed positions.
-    std::string moduleDir = "Calc-U-1600/Resources";
+    std::string moduleDir = "Qt6/resources/cards";
     std::vector<std::string> extraModuleDirs;  // 2nd+ `--modules-dir`, searched after `moduleDir`
     bool moduleDirSet = false;
     bool dumpBasic = false;

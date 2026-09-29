@@ -48,7 +48,7 @@ class PC1500Machine;
 /// bundled/standard module named by its `module-name:`), via
 /// Core/Connector/MemoryCardCatalog.hpp. Same environment-specific split as
 /// the others: the CLI passes its `--modules-dir` (default
-/// `Calc-U-1600/Resources`), the GUI passes its bundled resource path.
+/// `Qt6/resources/cards`), the GUI passes its bundled resource path.
 /// `extraModuleDirs` are additional directories searched, in order, when
 /// `moduleDir` has no match -- the GUI passes its iCloud-Drive
 /// `BatteryCards/` folder here so a preset can name a user's saved

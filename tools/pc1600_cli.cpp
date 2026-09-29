@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
         std::string saveDir;
         Ce158CliPeer ce158Peer;
         uint64_t runAfter = 0;
-        std::string moduleDir = ".";
+        std::string moduleDir = "Qt6/resources/cards";
         std::vector<std::string> extraModuleDirs;  // 2nd+ `--modules-dir`, searched after `moduleDir`
         bool moduleDirSet = false;
         for (int i = 3; i < argc; ++i) {

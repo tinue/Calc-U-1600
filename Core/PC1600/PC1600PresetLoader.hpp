@@ -75,7 +75,7 @@ class PC1600Machine;
 /// `moduleDir` is the directory searched first for a
 /// `- modulespec: <module-name>` slot reference (a bundled/standard module
 /// named by its `module-name:`), via Core/Connector/MemoryCardCatalog.hpp
-/// -- the CLI passes its `--modules-dir` (default `Calc-U-1600/Resources`),
+/// -- the CLI passes its `--modules-dir` (default `Qt6/resources/cards`),
 /// the GUI its bundled resource path. `extraModuleDirs` are additional
 /// directories searched, in order, when `moduleDir` misses -- the GUI
 /// passes its iCloud-Drive `BatteryCards/` folder so a preset can name a
