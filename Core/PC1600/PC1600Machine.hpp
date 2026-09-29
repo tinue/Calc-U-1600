@@ -159,7 +159,7 @@ public:
     // `PC1600-P1-B4-CE1600P-{new,old}.bin`/`PC1600-P1-B5-CE1600P-OR-F-{new,old}.bin` are confirmed CE-1600P ROM (see
     // roms/README.md) -- `attachCE1600P` builds a card, loads both halves,
     // and attaches it to `m_z80Mem.ce1600pBus()`; PC1600Memory routes Page B
-    // banks 4/5 and I/O ports 0x70-0x8F to that bus once attached.
+    // banks 4-7 and I/O ports 0x70-0x9F to that bus once attached.
     //
     // The CE-1600F floppy docks onto the CE-1600P and cannot run
     // standalone (its driver lives in the CE-1600P's own bank-5 ROM), so

@@ -288,8 +288,8 @@ public:
     /// Page C bank 6 (PC1600-P2-B6-new.bin, display/timer/serial/char tables).
     bool loadBank6Rom(const uint8_t* data, size_t size);
 
-    /// The 60-pin system bus (Page B banks 4/5 ROM window + I/O ports
-    /// 0x80-0x8F) -- CE-1600P plugs in here, not the two memory slots. See
+    /// The 60-pin system bus (Page B banks 4-7 ROM window + I/O ports
+    /// 0x70-0x9F) -- CE-1600P and the host drive plug in here, not the memory slots. See
     /// PC1600SystemBus.hpp for why this bus has its own pin model rather
     /// than reusing ExpansionCard::PinState.
     PC1600SystemBus& ce1600pBus() { return m_ce1600pBus; }
@@ -457,7 +457,7 @@ private:
     MemorySlotConnector m_slot2Conn;
     std::unique_ptr<ExpansionCard> m_slot1Card; // null = slot empty
     std::unique_ptr<ExpansionCard> m_slot2Card;
-    PC1600SystemBus m_ce1600pBus; // Page B banks 4/5 + I/O 0x80-0x8F; see ce1600pBus()
+    PC1600SystemBus m_ce1600pBus; // Page B banks 4-7 + I/O 0x70-0x9F; see ce1600pBus()
     CardChain<ExpansionCard, PinState> m_lh5803PeripheralBus; // see lh5803PeripheralBus()
     PC1600BusArbiter* m_arbiter{nullptr};
     SC7852* m_cpu{nullptr};

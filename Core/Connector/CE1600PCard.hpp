@@ -11,7 +11,7 @@
 //
 // This card claims:
 //   - Page B banks 4/5 ROM read window (4000-7FFF, banked by PC1600BusPins
-//     ::bank5) -- both 16 KB halves of the new or old ROM version
+//     ::bank) -- both 16 KB halves of the new or old ROM version
 //     (PC1600-P1-B4-CE1600P-<ver>.bin + PC1600-P1-B5-CE1600P-OR-F-<ver>.bin),
 //     loaded contiguously.
 //   - I/O port 0x82 write: Z-motor phase (low nibble) -- pen lift +
@@ -76,8 +76,8 @@ public:
             }
             return false;
         }
-        if (!m_romLoaded) return false;
-        const size_t offset = (pins.bank5 ? kRomHalfSize : 0) + (pins.address & 0x3FFF);
+        if (!m_romLoaded || (pins.bank != 4 && pins.bank != 5)) return false;
+        const size_t offset = (pins.bank == 5 ? kRomHalfSize : 0) + (pins.address & 0x3FFF);
         outValue = m_rom[offset];
         return true;
     }

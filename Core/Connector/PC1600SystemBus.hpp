@@ -33,8 +33,8 @@ struct PC1600BusPins {
     uint16_t address = 0; // ROM offset (romRead) or I/O port number (io)
     bool forWrite = false;
     bool io = false;    // true = I/O port access (IN/OUT); false = ROM read
-    bool bank5 = false;  // Page B bank select for the ROM window: false =
-                          // bank 4, true = bank 5.
+    uint8_t bank = 0;   // Page B bank of the ROM window (4-7; 4/5 =
+                        // CE-1600P, 7 = PC1600HostDriveCard).
 };
 
 class PC1600ExpansionCard {
@@ -53,16 +53,15 @@ public:
     void detach(PC1600ExpansionCard* card) { m_chain.detach(card); }
     const std::vector<PC1600ExpansionCard*>& chain() const { return m_chain.cards(); }
 
-    /// Page B banks 4/5 ROM window (Z-80 4000-7FFF); `offset` is address
+    /// Page B banks 4-7 ROM window (Z-80 4000-7FFF); `offset` is address
     /// minus 0x4000. Consulted by PC1600Memory only when the page-B bank
-    /// register actually selects 4 or 5, i.e. exactly where PC1600Memory's
-    /// own resolveConst() already documents "deliberately left open bus
-    /// until CE-1600P itself is emulated."
-    bool readRom(uint16_t offset, bool bank5, uint8_t& outValue) const {
+    /// register selects one of the banks resolveConst() leaves to the
+    /// expansion connector (4/5 CE-1600P, 6, 7).
+    bool readRom(uint16_t offset, uint8_t bank, uint8_t& outValue) const {
         if (m_chain.empty()) return false;
         PC1600BusPins pins;
         pins.address = offset;
-        pins.bank5 = bank5;
+        pins.bank = bank;
         return m_chain.read(pins, outValue);
     }
 
