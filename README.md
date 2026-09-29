@@ -9,7 +9,7 @@ pocket computers, built as a Qt6 desktop app (macOS / Linux / Windows).
    download the package for your platform, along with
    `Calc-U-1600-examples.zip` — the sample presets and BASIC programs
    used below.
-2. Launch the app, open **Settings…** (Cmd-, / Ctrl-,), and point **Default samples
+2. Launch the app, open **Settings…** (Cmd-, / Ctrl-,), and point **Samples
    folder** at the unzipped `examples/` folder from step 1.
 3. Pick a model (PC-1500, PC-1500A, or PC-1600) from the control bar, and
    attach a memory module and/or a plotter if you'd like to try those.
@@ -22,7 +22,8 @@ pocket computers, built as a Qt6 desktop app (macOS / Linux / Windows).
 This is a **beta release**. The emulation itself is complete and
 working: all three models run their real firmware, not a simulated
 subset. Future releases will focus on the surroundings around that core
-— things like the debug panel — rather than the emulation itself. See
+— things like the debugger and the debug panel — rather than the emulation
+itself. See
 [TODO.md](TODO.md) for known issues and open work.
 
 ## Documentation
@@ -31,6 +32,13 @@ subset. Future releases will focus on the surroundings around that core
   basics (models, keyboard, plotters) to loading BASIC and machine-code
   programs, memory modules and floppy disks, COM ports and presets. With
   screenshots and diagrams.
+- [docs/Keyboard-Mapping.md](docs/Keyboard-Mapping.md) — every host key,
+  including the PC-1600's accented characters.
+- [docs/Debugger.md](docs/Debugger.md) — debugging machine code (and the
+  ROMs) from VS Code.
+- [docs/PC1600-Host-Drive.md](docs/PC1600-Host-Drive.md) — a folder on your
+  computer as PC-1600 drive `S3:`.
+- [examples/README.md](examples/README.md) — what each sample preset does.
 - [docs/Building.md](docs/Building.md) — building from source
   (prerequisites, ROMs, per-platform build steps).
 

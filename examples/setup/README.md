@@ -1,7 +1,7 @@
 # examples/setup
 
-See also `docs/User-Guide.md`'s "Preloaded-data cards & Dump Card YAML"
-section for a narrative walkthrough of the workflow below.
+See also `docs/User-Guide.md`'s "Custom memory cards" section (9.3) for
+the workflow below.
 
 These files are not demos to look at — they are **preparation scripts**. Each one
 drives the emulator through the steps needed to get a memory card (or expansion
@@ -21,10 +21,10 @@ of BASIC programs, write a config file, and so on.
      `examples/dwx/DiskWorks.pc1600`.
 
    - **Dump the card.** Use the debug **"Dump Card YAML"** action to emit a card
-     definition, and fold the pre-defined data it captures into one of the
-     `*.card.yaml` files in `Calc-U-1600/Resources/` (e.g. `ce1601m.card.yaml`).
-     That bakes the prepared contents into the shipped resource so a fresh card
-     comes up already populated.
+     definition, and paste the data it captures into a card definition's
+     `initial-content:` (your own copy of a bundled one from
+     `Qt6/resources/cards/`, e.g. `ce1601m.card.yaml`). A fresh card from
+     that definition then comes up already populated.
 
 ## Contents
 

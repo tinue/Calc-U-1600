@@ -70,5 +70,5 @@ applied whenever that model is selected.
 
 ## setup/ — preparation scripts
 
-Presets that bring a memory card, floppy or CE-163F firmware into a known
-state for other presets to use. See `setup/README.md`.
+Presets that bring a memory card or CE-163F firmware into a known state
+for other presets to use. See `setup/README.md`.

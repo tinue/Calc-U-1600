@@ -16,7 +16,8 @@ PR.
 ## Prerequisites
 
 - **CMake** 3.21 or newer.
-- **Qt 6.3 or newer** (the `Widgets` component only). Older Qt6 (e.g.
+- **Qt 6.3 or newer**, with the `Widgets`, `Multimedia` (the buzzer's
+  audio output) and `Network` (the debugger's server) components. Older Qt6 (e.g.
   Ubuntu 22.04's packaged 6.2.4) doesn't provide
   `qt_standard_project_setup()` and won't configure.
 - A **C++17** compiler (the project is plain portable C++, no
@@ -99,7 +100,7 @@ release-packaging concerns — see the `mac-aarch64` job in
 ```sh
 sudo apt-get install -y \
   build-essential cmake ninja-build patchelf \
-  qt6-base-dev qt6-base-dev-tools qt6-wayland libgl1-mesa-dev
+  qt6-base-dev qt6-base-dev-tools qt6-multimedia-dev qt6-wayland libgl1-mesa-dev
 cmake -S Qt6 -B Qt6/build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build Qt6/build
 ```
@@ -118,8 +119,9 @@ here; run the workflow or copy its steps directly). Linux arm64 CI is
 ### Windows (best-effort — CI-derived, not verified on a fresh machine)
 
 ```powershell
-# Install Qt 6.8.x (MSVC, win64_msvc2022_64) and Ninja by whatever means
-# you prefer (CI uses the aqtinstall-based jurplel/install-qt-action).
+# Install Qt 6.8.x (MSVC, win64_msvc2022_64, with the qtmultimedia module)
+# and Ninja by whatever means you prefer (CI uses the aqtinstall-based
+# jurplel/install-qt-action).
 cmake -S Qt6 -B Qt6/build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build Qt6/build
 ```
@@ -192,7 +194,8 @@ tools/run_tests.sh
 
 Builds and runs the headless `Core/` test suite (no Qt, no GUI) from a
 plain `clang++` invocation — must be run from the repo root, since the
-tests load `roms/PC-1500_A04.ROM` via a relative path.
+tests load `roms/PC-1500_A04.ROM` via a relative path. The tests also need
+zlib (`zlib1g-dev` on Ubuntu; macOS has it).
 
 The same suite is also a `CoreTests` target in the root `CMakeLists.txt`
 (see [CLion / IDE integration](#clion--ide-integration) above), which is

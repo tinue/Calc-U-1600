@@ -4,6 +4,16 @@
 
 ### New
 
+- **Debugger** VS Code debugs machine code in the emulator: breakpoints
+  (with conditions, hit counts, logpoints), data breakpoints, stepping in
+  the `.asm` source or the disassembly, registers and memory, on the
+  LH5801, the Z-80 and the LH5803, ROM code included. Build & Load
+  rebuilds, reloads and restarts a program without detaching. Turn it on
+  under **Settings ▸ Debugger** (or `--dap <port>`); the extension is in
+  `vscode/calcu1600-debug/`. See docs/Debugger.md.
+- **Keyboard** PC-1600: accented characters (`ä`, `é`, `ñ`, …) type
+  through `KB II`, from host keys, Paste Text and a preset's `type:`, in
+  the case typed. Dead keys compose (`¨` then `U` gives `Ü`).
 - **Mount Directory** (File menu, PC-1600): a folder on the computer
   becomes drive `S3:` (also `Y:` without a CE-1600F). LOAD/SAVE, OPEN,
   FILES, KILL, NAME, COPY, SET and DSKF work on it. Only 8.3 names are
@@ -13,6 +23,8 @@
   - `floppy-file: <file>` loads a `.floppy.yaml` next to the preset.
 - **Presets** `saveas:` can write a file next to the preset
   (`saveas: template s2:file:Card.card.yaml`) and can save a template.
+  Running the preset again replaces your own template of that name; a
+  bundled name is refused.
 - **`pc1600_cli --preset`** runs `saveas:` for cards too.
 - **examples/dwx/** holds DiskWorks v3, self-contained: its card, floppy and
   S3: folder live next to the preset, and `make_diskworks_media.pc1600`
@@ -20,9 +32,29 @@
 - **Load BASIC Program** and a preset's `format: basic-binary` also take a
   tokenized program (`.bbin`, CE-158 or PC-1600 header). A PC-1500 one
   loads on the PC-1600 in MODE 1 only.
+- **Debug panel** On the PC-1600, Pointers shows the program area `TITLE`
+  selects, `MEM`, and each slot's program module with its free space.
+- **Examples** Grouped by topic (`plotter/`, `basic/`, `interfaces/`,
+  `machine-code/`, `memory/`, `dwx/`), with an index in
+  `examples/README.md`.
 
 ### Changed
 
+- **Loaders** On the PC-1600, Load BASIC Program, Load Machine Code and
+  presets follow the calculator's MODE and `TITLE`, as `LOAD` does: in
+  MODE 1 a listing is PC-1500 BASIC and a headerless file LH5801 code at
+  an LH5803 address, and a program goes into the selected program area
+  (S0, or an S1/S2 program module). The Load Machine Code dialog says
+  which CPU and address space it assumes, and the advice after loading
+  follows (`NEW &addr`, `XCALL`). An address in the work area
+  (&F000-&FFFF) loads with a warning.
+- **Presets** `program:` has no `slot:` any more; MODE and `TITLE` decide.
+- **CE-1600P ROM** Switching it with the plotter attached swaps the box
+  with an OFF/ON cycle instead of an ALL RESET: RAM and the inserted disk
+  stay.
+- **PC-1600 power** OFF really switches the machine off. ON, the WAKE$
+  timer and an incoming call (CI) switch it on through the sub-CPU, as on
+  the real unit; after an auto power-off, ON resumes where it stopped.
 - **Presets** `saveas:` now needs `live` or `template` first:
   `saveas: live s2:My Card`.
 - **Presets** `- modulespecfile:` is now `- modulespec-file:`, like
@@ -54,6 +86,16 @@
 - **Loaders** On the PC-1600, a BASIC program made of several program
   segments (a `#SEGMENT` or `99999` line in the listing) loads instead of
   failing with "the tokenized program is malformed".
+- **Loaders** A fast-loaded BASIC program that crosses a memory module's
+  16 KB bank boundary no longer splits a line across the two banks; it is
+  laid out as the calculator's own `LOAD` does.
+- **PC-1600 serial port** The TC8576F follows its data sheet: a CTS check
+  (`RCVSTAT`/`SNDSTAT` 24) no longer blocks sending, the baud rate comes
+  from the chip's registers, and the peer's RI reaches the calculator as
+  CI.
+- **Debug panel** Dump Card YAML also dumps an unbanked card (CE-1600M).
+- **macOS** After the app had been killed, the "reopen windows?" prompt
+  could hang the next start.
 
 ## [0.5.0] - 2026-09-25
 

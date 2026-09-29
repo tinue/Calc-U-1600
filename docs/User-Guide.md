@@ -3,8 +3,9 @@
 Calc-U-1600 emulates three Sharp pocket computers in one desktop app: the
 **PC-1500**, the **PC-1500A** and the **PC-1600**. Around them it emulates
 the memory modules, the CE-150 and CE-1600P plotters, the CE-1600F floppy
-drive and the CE-158 interface, and it connects the calculators' serial
-ports to your computer.
+drive and the CE-158 interface. It connects the calculators' serial ports
+to your computer, and on the PC-1600 a folder on your computer can be a
+drive.
 
 This guide starts with the basics and gets more technical as it goes:
 
@@ -48,6 +49,7 @@ flowchart LR
     P16 --> C150
     P16 --> C158
     P16 --> COM["Built-in RS-232C port"]
+    P16 --> S3["Drive S3:<br/>(a folder on your computer)"]
     C158 --> Host["Your computer<br/>(serial port file)"]
     COM --> Host
 ```
@@ -243,8 +245,9 @@ Good to know:
   That's handy for a long command or one program line, but not for a whole
   program.
 - **No export.** The app doesn't export programs as files. Use the machine's
-  own `SAVE` to a memory module, a floppy, or over `COM1:` to your computer
-  (see [COM ports](#7-com-ports)).
+  own `SAVE` to a memory module or a floppy. To get a program onto your
+  computer, `SAVE` it to a [folder mounted as a drive](#a-folder-as-a-drive-pc-1600)
+  (PC-1600) or over `COM1:` (see [COM ports](#7-com-ports)).
 
 ---
 
@@ -598,9 +601,7 @@ program:
 - **Files with a header** (PC-1600, CE-158) bring their own address.
 - **PC-1600:** the loader places the code the way Load Machine Code does,
   by MODE, `TITLE` and the address: in MODE 1 `address:` is an LH5803
-  address. Switch MODE or `TITLE` in a `keys:` section first. (There is no
-  `slot:` any more; a preset that still has one is refused with an
-  explanation.)
+  address. Switch MODE or `TITLE` in a `keys:` section first.
 - **Auto-run:** if the header has an auto-run address, the preset types
   `CALL` for you and waits until the code returns.
 - **Examples:** `examples/machine-code/memtest_bank.pc1500a`, and
@@ -610,7 +611,8 @@ program:
 
 | Step | What it does |
 |---|---|
-| `- saveas: live s1:My card` | Name & Save the module in slot 1 into your save folder. `s2:` and `floppy:` are PC-1600 only. Overwrites a file of the same name. |
+| `- saveas: live s1:My card` | Name & Save the module in slot 1 into your save folder. `s2:` and `floppy:` are PC-1600 only. Overwrites a file of the same name, but never takes a template's name. |
+| `- saveas: template s1:My card` | The same, saved as a template. Running the preset again replaces your own template of that name; a bundled name is refused. |
 | `- saveas: template s2:file:Card.card.yaml` | Saves to that file, next to the preset (`.card.yaml` for a card, `.floppy.yaml` for `floppy:`). The name is the file name. |
 | `- screenshot: shot.png` | Saves the LCD image (as Copy Screen does) in the trace directory. |
 | `- syncclock:` | Sets the calculator's clock from your computer. Put it last, because a preset runs at full speed and the clock runs ahead. |
@@ -719,10 +721,12 @@ elsewhere. Changes apply immediately; there is only **Close**.
 ![The Debug panel after Pointers](images/guide/09-debug-panel.png)
 
 - **Pointers:** BASIC's pointer table (program start and end, RAM limits,
-  free memory …) for the current model.
+  free memory …) for the current model. On the PC-1600 it also shows the
+  program area `TITLE` selects, `MEM`, and each slot's program module with
+  its free space, computed the way the ROM computes them.
 - **Dump Mem:** the interesting memory areas, skipping runs of filler bytes.
-- **Dump Card YAML:** the module in the slot, as an `initial-content:` block
-  for a `.card.yaml` (see below).
+- **Dump Card YAML:** the module in each slot, as an `initial-content:`
+  block for a `.card.yaml` (see below).
 - **Clear** (bin icon): empties the log.
 - **TRACE:** starts / stops a CPU instruction trace into the trace directory.
 

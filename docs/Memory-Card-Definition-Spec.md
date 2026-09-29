@@ -2,7 +2,7 @@
 
 **Status: content model.** This document defines *what* a memory card
 definition file must express and *why*, in prose. The concrete
-serialization — YAML key names, grammar, byte-block encoding — now lives
+serialization — YAML key names, grammar, byte-block encoding — lives
 in `Memory-Card-Definition-Format.md`, with worked examples under
 `examples/memory/memory-cards/`; that spelling is revisable, this content
 model is the fixed part. For a gentler, example-first introduction (starting
@@ -319,17 +319,12 @@ This same sub-model is reused, unmodified, in two other places:
     PC-1500/1500A module — banks 0–7 Regular RAM, banks 8–F Flash
     (Microchip SST39SF010A: bank 8 reserved for the module's own
     management firmware, banks 9–F user-writable), all 16 banks selected
-    by the same trigger-based latch on pin 18 sampling `A0`–`A3` (§6). A
-    hardcoded connector-layer prototype (`CE163FCard`, since removed in
-    favour of `ce163f.card.yaml`) implemented this ahead of the
-    general-purpose software-defined module this spec describes — that
-    implementation (unlock addresses,
-    program/erase state machine, the bank-latch/command-decoder
-    independence above) was the concrete reference for every Flash field
-    named above, recovered from a real CE163F firmware disassembly, and
-    its engine has since been ported into `SoftwareDefinedCard` proper
-    (see `Calc-U-1600/Resources/ce163f.card.yaml`, §9). Deliberately not
-    modeled in either implementation, and so not required of a definition
+    by the same trigger-based latch on pin 18 sampling `A0`–`A3` (§6).
+    Its unlock addresses, program/erase state machine and the
+    bank-latch/command-decoder independence above were recovered from a
+    real CE163F firmware disassembly and are the concrete reference for
+    every Flash field named above (see `Qt6/resources/cards/ce163f.card.yaml`,
+    §9). Deliberately not modeled, and so not required of a definition
     file: status-polling toggle bits (DQ6/DQ7) and software-ID/autoselect,
     both unused by that firmware; program/erase complete instantaneously
     rather than taking simulated time.
@@ -567,8 +562,8 @@ through them:
 | CE-161 | Y0 alone, full 16KB | Regular | Unbanked | — | PC-1500, PC-1500A |
 | CE-163 | Y0, 16KB window | Regular, all banks | Banked | Trigger-based: pin 18 write pulse; source `A0` (address domain) | PC-1500, PC-1500A |
 | 16-bank CE-163-alike | Same as CE-163 | Regular, all banks | Banked | Trigger-based: pin 18; source `A0`–`A3` | PC-1500, PC-1500A |
-| CE-1638 | Y0, 16KB window | Regular, all banks | Banked, 8 banks | Trigger-based: pin 18 write pulse; source `A0`–`A2` (address domain) | PC-1500, PC-1500A, PC-1600 Slot 1, PC-1600 Slot 2 — expressed as `Calc-U-1600/Resources/ce1638.card.yaml`; `CE1638PlusCard.hpp` is a separate throwaway test card (invented extra unbanked regions), not this module |
-| CE-163F | Y0, 16KB window | Banks 0–7: Regular. Banks 8–F: Flash (bank 8 firmware-reserved, 9–F user-writable) — see §5 | Banked, 16 banks | Trigger-based: pin 18 write pulse; source `A0`–`A3` (address domain, same mechanism as the 16-bank CE-163-alike above) | PC-1500, PC-1500A, PC-1600 Slot 1, PC-1600 Slot 2 — expressed as `Calc-U-1600/Resources/ce163f.card.yaml` (Flash content + `by-bank` split, §5), alongside the still-live hand-written `CE163FCard.hpp` prototype its flash engine was ported from |
+| CE-1638 | Y0, 16KB window | Regular, all banks | Banked, 8 banks | Trigger-based: pin 18 write pulse; source `A0`–`A2` (address domain) | PC-1500, PC-1500A, PC-1600 Slot 1, PC-1600 Slot 2 — expressed as `Qt6/resources/cards/ce1638.card.yaml` |
+| CE-163F | Y0, 16KB window | Banks 0–7: Regular. Banks 8–F: Flash (bank 8 firmware-reserved, 9–F user-writable) — see §5 | Banked, 16 banks | Trigger-based: pin 18 write pulse; source `A0`–`A3` (address domain, same mechanism as the 16-bank CE-163-alike above) | PC-1500, PC-1500A, PC-1600 Slot 1, PC-1600 Slot 2 — expressed as `Qt6/resources/cards/ce163f.card.yaml` (Flash content + `by-bank` split, §5) |
 | "maxed out," PC-1500/1500A | Y0 full window OR S1 OR S2 OR S3 OR S4 (pin 5 included) — again bare per-strobe groups, OR'd | Regular | Unbanked | — | PC-1500 (full 24KB, all four S-pins live), PC-1500A (author's choice — the pin-5-driven 2KB slice stays dormant there since pin 5 is NC, leaving the same 22KB a PC-1500A-only variant would offer; declaring PC-1500A compatible is optional but not incorrect, §1) |
 | CE-1600M | RAM1/RAM2 | Regular | Unbanked (native host bank selection, invisible on the connector) | — | PC-1600 Slot 1, PC-1600 Slot 2 |
 | CE-1601M | RAM1 (Slot 2) | Regular, both banks | Banked | Trigger-based: `OUT (28H)` write; source `D0`–`D2` (data domain — the module decodes/latches Port 28H itself); bank window nests a `PVOUT` half-select (D1, one level deeper — see §4) | PC-1600 Slot 2 only (the Port 28H strobe doesn't reach Slot 1) |
@@ -608,17 +603,15 @@ Three structural points this table confirms rather than just illustrates:
 
 ## 10. Open questions carried forward, not resolved here
 
-- **File format/serialization** — a first concrete pass now exists in
+- **File format/serialization** — specified in
   `Memory-Card-Definition-Format.md` (YAML; key names, the §3 addressing
   grammar, and hex/base64/sidecar encoding of the §5a byte blocks), with
-  worked `Calc-U-1600/Resources/*.card.yaml` for CE-155, CE-1600M,
-  CE-1601M, CE-1638, and CE-163F (the last two added once Flash content +
-  `by-bank` split content moved from "parsed far enough to reject" to
-  implemented — Format.md §9). That format is still revisable — this
-  content model, not the YAML spelling, is the fixed part.
-- **Bundled "standard" resource files** — *implemented for five modules so
-  far.* The standard `.card.yaml` files ship under
-  `Calc-U-1600/Resources/`, are indexed by `module-name` via
+  worked `Qt6/resources/cards/*.card.yaml` for CE-155, CE-1600M,
+  CE-1601M, superRAM, CE-1638, CE-163F and CE-502B (Format.md §7). That
+  format is still revisable — this content model, not the YAML spelling,
+  is the fixed part.
+- **Bundled "standard" resource files** — the standard `.card.yaml` files
+  ship under `Qt6/resources/cards/`, are indexed by `module-name` via
   `Core/Connector/MemoryCardCatalog.hpp`, and are selectable from the
   GUI's control-bar module picker; a preset reaches them with
   `modulespec: <module-name>`. Which further modules ship (presumably at

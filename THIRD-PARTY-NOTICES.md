@@ -3,9 +3,9 @@
 ## Qt6
 
 Calc-U-1600's Qt6/ desktop app is built on [Qt6](https://www.qt.io/), (c)
-The Qt Company Ltd and other contributors. It uses the Qt Widgets module
-and its transitive dependencies (QtCore, QtGui, QtNetwork, QtDBus, and
-related platform-integration modules).
+The Qt Company Ltd and other contributors. It uses the Qt Widgets, Qt Multimedia
+and Qt Network modules and their transitive dependencies (QtCore, QtGui,
+QtDBus, and related platform-integration modules).
 
 Qt6 is used here under the **GNU Lesser General Public License, version 3**
 (LGPLv3) -- see [licenses/LGPL-3.0.txt](licenses/LGPL-3.0.txt), which
@@ -39,10 +39,10 @@ under `Qt6/resources/cards/` — currently `ce502b.card.yaml`, Sharp's
 CE-502B Statistics module, from Jeff Birt's dump
 (https://github.com/Jeff-Birt/PC-1500_ROM_Modules).
 
-`examples/machine-code/dwx.bin` is the PC-1600 DiskWorks v2 program by
-Christian Becker (KiKiSoft, 1993) -- see
+`examples/dwx/S3/dwx.bin` (also `examples/machine-code/dwx.bin`) is the
+PC-1600 DiskWorks v3 program by Christian Becker (KiKiSoft, 1993) -- see
 [github.com/hzprky/DiskWorks](https://github.com/hzprky/DiskWorks) and
-`examples/machine-code/DiskWorks.pc1600`. Bundled with the author's
+`examples/dwx/DiskWorks.pc1600`. Bundled with the author's
 permission; not covered by this project's GPLv3 license.
 
 `examples/setup/util_15.bas`, `utilrm_15.bas`, `utilrm_20.bas`, and the

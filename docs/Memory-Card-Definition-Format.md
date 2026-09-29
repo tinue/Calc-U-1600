@@ -19,9 +19,9 @@ the mapping is called out inline as (spec §N).
 - Unknown keys are an error, not ignored — a misspelled field must not
   load silently.
 
-The standard cards are bundled with the app under `Calc-U-1600/Resources/`
-(new definitions go straight there); the CLI points `--modules-dir` at the
-same directory.
+The standard cards are bundled with the app under `Qt6/resources/cards/`
+(new definitions go straight there); the CLIs take `--modules-dir` to point
+at a directory of definitions.
 
 ---
 
@@ -237,7 +237,7 @@ line-based = Horizontal, trigger-based = Vertical.
 
 Bytes fixed by the definition — all of ROM's content (required), or a
 Flash or Regular (RAM) range's *initial* array (optional; absent ⇒ the
-range powers up as its `power-up-fill` byte, same as today). There is no
+range powers up as its `power-up-fill` byte). There is no
 content-kind restriction: a Regular range takes `initial-content` exactly
 like a Flash range does — CE-163F's RAM banks and Flash banks are both
 populated this way when dumped and pasted back in (§9). Never an external
@@ -312,21 +312,21 @@ threaded through the loader, which nothing else currently needs.
 
 | File | Card | Shows |
 |---|---|---|
-| `Calc-U-1600/Resources/ce155.card.yaml` | CE-155, 8 KB | one `address-bits` group (the on-module `AD11–AD13` decoder) OR'd with three bare-strobe `span` groups; an author-declared host list (spec §1) covering PC-1500 and PC-1600 Slot 1. |
-| `Calc-U-1600/Resources/ce1600m.card.yaml` | CE-1600M, 32 KB | `PVOUT` folded into addressing as a half-select line — unbanked despite two physical halves (spec §6); one Slot-1-terminology file declared for both PC-1600 slots (`RAM2` resolves to the pin-4 enable on both — spec §1). |
-| `Calc-U-1600/Resources/ce1601m.card.yaml` | CE-1601M, 64 KB | Trigger-based vertical banking — `trigger: { io-port: 0x28 }`, `source-domain: data` (the byte written by `OUT (28H)`); `bank-window` nesting the `PVOUT` half-select (spec §4/§9). |
-| `Calc-U-1600/Resources/superram.card.yaml` | superRAM, 512 KB | The CE-1601M mechanism with a 4-bit (`D0`–`D3`) `OUT (28H)` latch and all 16 × 32 KB vertical banks fitted; PC-1600 Slot 2 only (spec §6/§9's "maxed-out Slot 2" row). |
-| `Calc-U-1600/Resources/ce1638.card.yaml` | CE-1638, 128 KB | A single-kind banked region — trigger-based, address-domain, 8 banks sampling `A0`-`A2`; the real module `CE1638PlusCard.hpp`'s throwaway "+" test card is loosely modeled on. |
+| `Qt6/resources/cards/ce155.card.yaml` | CE-155, 8 KB | one `address-bits` group (the on-module `AD11–AD13` decoder) OR'd with three bare-strobe `span` groups; an author-declared host list (spec §1) covering PC-1500 and PC-1600 Slot 1. |
+| `Qt6/resources/cards/ce1600m.card.yaml` | CE-1600M, 32 KB | `PVOUT` folded into addressing as a half-select line — unbanked despite two physical halves (spec §6); one Slot-1-terminology file declared for both PC-1600 slots (`RAM2` resolves to the pin-4 enable on both — spec §1). |
+| `Qt6/resources/cards/ce1601m.card.yaml` | CE-1601M, 64 KB | Trigger-based vertical banking — `trigger: { io-port: 0x28 }`, `source-domain: data` (the byte written by `OUT (28H)`); `bank-window` nesting the `PVOUT` half-select (spec §4/§9). |
+| `Qt6/resources/cards/superram.card.yaml` | superRAM, 512 KB | The CE-1601M mechanism with a 4-bit (`D0`–`D3`) `OUT (28H)` latch and all 16 × 32 KB vertical banks fitted; PC-1600 Slot 2 only (spec §6/§9's "maxed-out Slot 2" row). |
+| `Qt6/resources/cards/ce1638.card.yaml` | CE-1638, 128 KB | A single-kind banked region — trigger-based, address-domain, 8 banks sampling `A0`-`A2`. |
 | `Qt6/resources/cards/ce502b.card.yaml` | CE-502B, 16 KB ROM | `content: rom` with one `addressed-hex` block covering the whole region: a Sharp program module (ROM header at &0000, BASIC program from &00C5) on Y0. |
-| `Calc-U-1600/Resources/ce163f.card.yaml` | CE-163F, 256 KB | `content: by-bank:` (§4) splitting one 16-bank region into Regular (0-7) and Flash (8-15) content, and a `flash` `protocol:` block including `command-address-mask` for its real low-11-bit command decode quirk. |
+| `Qt6/resources/cards/ce163f.card.yaml` | CE-163F, 256 KB | `content: by-bank:` (§4) splitting one 16-bank region into Regular (0-7) and Flash (8-15) content, and a `flash` `protocol:` block including `command-address-mask` for its real low-11-bit command decode quirk. |
 
 ---
 
 ## 8. Loading a card — `modulespec:` and `modulespec-file:` preset keys
 
-A definition is plugged in from a preset scenario file, in the same
-`memory-expansion*` block that takes a built-in `- module:` name — one
-item, exactly one of the three keys, never combined:
+A definition is plugged in from a preset scenario file, in a
+`memory-expansion*` block — one item, exactly one of the two keys, never
+combined:
 
 ```yaml
 # By module-name, from the bundled/standard module directory (preferred).
@@ -352,13 +352,13 @@ memory-expansion:
   directories** (`Core/Connector/MemoryCardCatalog.hpp`), in order, for the
   `.card.yaml` whose `module-name:` matches. WHERE those directories are is
   environment-specific, like the ROM path:
-  - the **app** searches its bundled resources first, then its iCloud-Drive
-    `BatteryCards/` folder — so a preset can name a user's own saved
-    battery-card instance (matched by the `module-name:` written into it,
+  - the **app** searches its bundled resources first, then the
+    **Settings ▸ Storage ▸ Battery-card saves** folder — so a preset can
+    name a user's own saved battery-card instance (matched by the `module-name:` written into it,
     e.g. `- modulespec: CE-1601M - Programs`; the on-disk filename, blanks
     and all, is not consulted);
-  - the **CLI** uses `--modules-dir` (default `Calc-U-1600/Resources`),
-    which may be repeated to add fallback directories.
+  - the **CLIs** use `--modules-dir`, which may be repeated to add
+    fallback directories.
 
   The first directory with exactly one match wins (so a bundled card
   shadows an instance of the same name). No match in any directory is a
@@ -379,8 +379,9 @@ by the file itself, not by where it lives:
   folder, without the `template` key.
 - No `template` key — an **instance**. Any write to the card is autosaved back
   into that same file, wherever it was loaded from (never into the bundle).
-  A preset's `saveas:` can copy an instance under a new name; the copy keeps
-  the original template's name in its generated header comment.
+  A preset's `saveas: live` copies the card as an instance under a new name,
+  `saveas: template` as a template (`template: true`); either copy keeps the
+  original template's name in its generated header comment.
 
 Either way the loader picks the target host from the preset (`PC-1500` /
 `PC-1500A`, or the slot number for `PC-1600`), checks it is in
@@ -392,10 +393,10 @@ The GUI's control-bar module picker uses the same catalogue: it lists
 every bundled module whose `compatible-hosts` covers the open model /
 slot, by `module-name`, and attaches the chosen one the same way.
 
-## 9. Implemented subset (first iteration)
+## 9. Implemented subset
 
-The parser reads the whole format and validates it, but the runtime card
-currently supports:
+The parser reads the whole format and validates it; the runtime card
+supports:
 
 - **Content:** Regular, Flash and ROM, single-kind or `by-bank`-split
   across a banked region's banks (spec §5's split-content note). A `rom`

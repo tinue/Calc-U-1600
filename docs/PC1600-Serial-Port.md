@@ -1,18 +1,17 @@
 # PC-1600 virtual serial port
 
 The emulated PC-1600's RS-232C port (TC8576F) is backed by a host
-pseudo-terminal, so any Mac serial application can talk to it directly —
-in particular `SharpDataExchange`, which uses jSerialComm and opens a
-`/dev/cu.*`-style device.
+pseudo-terminal (macOS and Linux), so any serial application can talk to
+it directly — in particular SharpDataExchange's `sde`.
 
 ## How it works
 
 **Transport: host pseudo-terminal.** `posix_openpt`/`grantpt`/`unlockpt`/
-`ptsname` give a `/dev/ttysNNN` slave that any Mac serial tool can open
+`ptsname` give a `/dev/ttysNNN` slave that any serial tool can open
 like a real port. A stable `calcu1600.serial` symlink is the documented
 target, so the per-run `ttysNNN` name never leaks to the user. The
-symlink's folder is configurable in Settings ▸ Serial Port; the default
-is the app's own data directory.
+symlink's folder is **Settings ▸ Serial ports ▸ Symlink directory**
+(default `~/Calc-U-1600`).
 
 **Lifecycle: always active.** The port opens with the PC-1600 machine and
 closes with it — there is no enable switch, matching the real hardware's
@@ -72,19 +71,21 @@ lines, so `getStatus()` just hardcodes CTS/DSR asserted -- a "must be
 high" check (`24`, which enables the CTS check) passes without testing
 anything. On real PC-1600 hardware talking to a real UART, use `24` (or the
 matching `SNDSTAT` value) instead, since genuine RTS/CTS flow control is
-meaningful there. (Before dev-0.6.0 the emulator read CS with the wrong
-polarity, so a CTS check blocked sending.)
+meaningful there.
 
-On the Mac/Linux side, point `SharpDataExchange` at the stable symlink
-(SharpDataExchange's own auto-detect only scans `cu.usb*`/`ttyACM*`/
-`ttyUSB*`, so the explicit path is required) with its `--raw` option,
-which paces the transfer with a fixed delay instead of relying on
-XON/XOFF:
+On the computer, point `sde` at the stable symlink with its `pc1600emul`
+device, which paces the transfer instead of relying on XON/XOFF:
 
 ```
-java -jar SharpDataExchange.jar get --raw -p <path to calcu1600.serial> myprogram.bas
-java -jar SharpDataExchange.jar put --raw -p <path to calcu1600.serial> myprogram.bas
+# computer → PC-1600: start LOAD "COM1:" on the calculator, then
+sde put myprogram.bas --device pc1600emul --port ~/Calc-U-1600/calcu1600.serial
+
+# PC-1600 → computer: start this first, then SAVE "COM1:" on the calculator
+sde get myprogram.bas --device pc1600emul --port ~/Calc-U-1600/calcu1600.serial
 ```
+
+`sde config set pc1600emul.port ~/Calc-U-1600` stores the folder once;
+sde's own default is `/tmp`.
 
 ## Probe tooling
 
