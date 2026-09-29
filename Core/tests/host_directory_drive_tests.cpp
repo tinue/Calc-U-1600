@@ -392,45 +392,162 @@ void test_reset_ends_searches() {
     drive.setDirectory(dir.path);
     auto r = drive.execute(request(Drive::kSearchFirst, "???????????"));
     CHECK(r.status == 0);
-    drive.reset();
+    drive.reset(Drive::kResetNew);
     auto next = request(Drive::kSearchNext, "???????????");
     next.fcb = r.fcb;
     CHECK(drive.execute(next).erl == Drive::kErlEof);
 }
 
-void test_mep_change_directory_knows_only_the_root() {
+std::string promptOf(const Drive::Response& r) {
+    const std::string p(r.payload.begin(), r.payload.end());
+    return p.substr(0, p.find('\r'));
+}
+
+void test_change_directory_paths() {
     TempDir dir;
-    fs::create_directories(dir.path / "SUBDIR");
+    fs::create_directories(dir.path / "Dev" / "asm");
+    fs::create_directories(dir.path / "GAMES");
+    fs::create_directories(dir.path / "a-very-long-folder");
+    fs::create_directories(dir.path / ".hidden");
     Drive drive;
     CHECK(drive.changeDirectory("/").erl == Drive::kErlNoMedia);
     drive.setDirectory(dir.path);
-    auto r = drive.changeDirectory("/");
-    CHECK(r.status == 0 && r.erl == Drive::kErlOk);
-    CHECK(drive.changeDirectory("").status == 0);
-    r = drive.changeDirectory("/SUBDIR");  // host subdirectories stay hidden
-    CHECK(r.status == 0x01);
-    CHECK(r.erl == Drive::kErlNotFound);
+
+    auto r = drive.changeDirectory(".");
+    CHECK(r.status == 0 && promptOf(r) == "S3:/>");
+    CHECK(r.payload.size() == Drive::kPromptSize);
+    CHECK(r.payload[5] == 0x0D);
+    r = drive.changeDirectory("dev");  // relative, any case
+    CHECK(r.status == 0 && promptOf(r) == "S3:/DEV>");
+    r = drive.changeDirectory("../GAMES");
+    CHECK(r.status == 0 && promptOf(r) == "S3:/GAMES>");
+    r = drive.changeDirectory("/DEV/ASM/");  // absolute, trailing slash (FILEX)
+    CHECK(r.status == 0 && promptOf(r) == "S3:/DEV/ASM>");
+    CHECK(drive.currentDirectory() == (std::vector<std::string>{"Dev", "asm"}));
+    r = drive.changeDirectory("..");
+    CHECK(r.status == 0 && promptOf(r) == "S3:/DEV>");
+    r = drive.changeDirectory("../../..");  // stays at the root
+    CHECK(r.status == 0 && promptOf(r) == "S3:/>");
+    r = drive.changeDirectory("");
+    CHECK(r.status == 0 && promptOf(r) == "S3:/>");
+
+    // Only visible 8.3 folders: a failure leaves the directory unchanged.
+    CHECK(drive.changeDirectory("GAMES").status == 0);
+    for (const char* bad : {"NOPE", "/a-very-long-folder", "/.hidden", "/GAMES/X"}) {
+        r = drive.changeDirectory(bad);
+        CHECK(r.status == 0x01);
+        CHECK(r.erl == Drive::kErlNotFound);
+        CHECK(r.payload.empty());
+    }
+    CHECK(drive.currentDirectory() == std::vector<std::string>{"GAMES"});
 }
 
-void test_mep_directory_mode_lists_nothing() {
+void test_change_directory_skips_symlinks() {
+    TempDir dir, outside;
+    fs::create_directories(dir.path / "IN");
+    std::error_code ec;
+    fs::create_directory_symlink(outside.path, dir.path / "OUT", ec);
+    if (ec) return;  // no symlinks here
+    Drive drive;
+    drive.setDirectory(dir.path);
+    CHECK(drive.changeDirectory("OUT").erl == Drive::kErlNotFound);
+    CHECK(drive.changeDirectory("IN").status == 0);
+}
+
+void test_long_prompt_keeps_the_end() {
+    TempDir dir;
+    fs::create_directories(dir.path / "AAAAAAAA" / "BBBBBBBB" / "CCCCCCCC" / "DDDDDDDD");
+    Drive drive;
+    drive.setDirectory(dir.path);
+    const auto r = drive.changeDirectory("/AAAAAAAA/BBBBBBBB/CCCCCCCC/DDDDDDDD");
+    CHECK(r.status == 0);
+    const std::string p = promptOf(r);
+    CHECK(p.size() == 26);
+    CHECK(p.rfind("S3:..", 0) == 0);
+    CHECK(p.substr(p.size() - 10) == "/DDDDDDDD>");
+}
+
+void test_files_live_in_the_current_directory() {
+    TempDir dir;
+    writeFile(dir.path / "ROOT.TXT", "r");
+    fs::create_directories(dir.path / "SUB");
+    writeFile(dir.path / "SUB" / "IN.TXT", "abc");
+    Drive drive;
+    drive.setDirectory(dir.path);
+    CHECK(drive.changeDirectory("SUB").status == 0);
+    CHECK(listNames(drive, "???????????") == std::vector<std::string>{"IN      TXT"});
+    CHECK(drive.execute(request(Drive::kOpen, "IN      TXT")).status == 0);
+    CHECK(drive.execute(request(Drive::kOpen, "ROOT    TXT")).erl == Drive::kErlNotFound);
+    CHECK(drive.execute(request(Drive::kCreate, "NEW     TXT")).status == 0);
+    CHECK(fs::exists(dir.path / "SUB" / "NEW.TXT"));
+    auto ren = request(Drive::kRename, "NEW     TXT");
+    std::memcpy(&ren.fcb[Drive::kFcbNewName], "OLD     TXT", 11);
+    CHECK(drive.execute(ren).status == 0);
+    CHECK(fs::exists(dir.path / "SUB" / "OLD.TXT"));
+    CHECK(drive.execute(request(Drive::kDelete, "OLD     TXT")).status == 0);
+    CHECK(!fs::exists(dir.path / "SUB" / "OLD.TXT"));
+    CHECK(fs::exists(dir.path / "ROOT.TXT"));
+    // A file may not take a folder's name.
+    fs::create_directories(dir.path / "SUB" / "INNER");
+    CHECK(drive.execute(request(Drive::kCreate, "INNER      ")).erl == Drive::kErlExists);
+}
+
+void test_vanished_directory_fails_until_cdir() {
+    TempDir dir;
+    fs::create_directories(dir.path / "GONE");
+    Drive drive;
+    drive.setDirectory(dir.path);
+    CHECK(drive.changeDirectory("GONE").status == 0);
+    fs::remove_all(dir.path / "GONE");
+    auto r = drive.execute(request(Drive::kCreate, "X       TXT"));
+    CHECK(r.erl == Drive::kErlNotFound);
+    CHECK(!fs::exists(dir.path / "X.TXT"));  // nothing lands in the root
+    CHECK(drive.changeDirectory("/").status == 0);
+    CHECK(drive.execute(request(Drive::kCreate, "X       TXT")).status == 0);
+}
+
+void test_directory_mode_lists_subdirectories() {
     TempDir dir;
     writeFile(dir.path / "A.TXT", "a");
-    fs::create_directories(dir.path / "SUBDIR");
+    fs::create_directories(dir.path / "zeta");
+    fs::create_directories(dir.path / "ALPHA.V1");
+    fs::create_directories(dir.path / "a-very-long-folder");
     Drive drive;
     drive.setDirectory(dir.path);
     drive.setListDirectories(true);
-    CHECK(listNames(drive, "???????????").empty());
+    CHECK(listNames(drive, "???????????") == (std::vector<std::string>{"ALPHA   V1 ", "ZETA       "}));
+    auto r = drive.execute(request(Drive::kSearchFirst, "???????????"));
+    CHECK(r.payload.size() == Drive::kDirEntrySize);
+    CHECK(r.payload[0x0B] == Drive::kAttrDirectory);
+    CHECK(r.payload[0x1C] == 0 && r.payload[0x1D] == 0);
+    CHECK(listNames(drive, "Z??????????") == std::vector<std::string>{"ZETA       "});
     drive.setListDirectories(false);
-    CHECK(listNames(drive, "???????????").size() == 1);
-    drive.setListDirectories(true);
-    drive.reset();  // power / reset: back to listing files
-    CHECK(listNames(drive, "???????????").size() == 1);
+    CHECK(listNames(drive, "???????????") == std::vector<std::string>{"A       TXT"});
+}
+
+void test_reset_functions() {
+    TempDir dir;
+    fs::create_directories(dir.path / "SUB");
+    Drive drive;
+    drive.setDirectory(dir.path);
+    for (uint8_t fn = 0; fn < 8; ++fn) {
+        CHECK(drive.changeDirectory("/SUB").status == 0);
+        drive.setListDirectories(true);
+        drive.reset(fn);
+        const bool toRoot = fn == Drive::kResetPowerOn || fn == Drive::kResetResume || fn == Drive::kResetReset;
+        CHECK(drive.currentDirectory().empty() == toRoot);
+        CHECK(listNames(drive, "???????????").empty());  // back in file mode: SUB has no files
+    }
+    CHECK(drive.changeDirectory("/SUB").status == 0);
+    drive.setDirectory(dir.path);  // a new mount starts at the root
+    CHECK(drive.currentDirectory().empty());
 }
 
 // The MEP fixed entries' bus protocol, as the driver ROM speaks it.
 void test_card_mep_commands() {
     TempDir dir;
     writeFile(dir.path / "A.TXT", "a");
+    fs::create_directories(dir.path / "DOCS");
     PC1600HostDriveCard card;
     card.drive().setDirectory(dir.path);
     auto out = [&card](uint8_t port, uint8_t value) {
@@ -448,25 +565,41 @@ void test_card_mep_commands() {
         CHECK(card.respondsToRead(pins, v));
         return v;
     };
-    auto cdir = [&](const std::string& path, uint8_t& status, uint8_t& erl) {
+    auto cdir = [&](const std::string& path, uint8_t& status, uint8_t& erl, std::string& prompt) {
         out(PC1600HostDriveCard::kCommandPort, PC1600HostDriveCard::kChangeDirCommand);
         out(PC1600HostDriveCard::kDataPort, static_cast<uint8_t>(path.size()));
         for (char c : path) out(PC1600HostDriveCard::kDataPort, static_cast<uint8_t>(c));
         status = in();
         erl = in();
+        prompt.clear();
+        if (status == 0)
+            for (size_t i = 0; i < Drive::kPromptSize; ++i) prompt += static_cast<char>(in());
     };
     uint8_t status = 0xFF, erl = 0xFF;
-    cdir("/", status, erl);
+    std::string prompt;
+    cdir("/DOCS", status, erl, prompt);
     CHECK(status == 0 && erl == 0);
-    cdir("/DOCS", status, erl);
+    CHECK(prompt.substr(0, 11) == "S3:/DOCS>\r ");
+    cdir("NOPE", status, erl, prompt);
     CHECK(status == 0x01 && erl == Drive::kErlNotFound);
-    cdir("", status, erl);
-    CHECK(status == 0 && erl == 0);
+    CHECK(in() == 0xFF);  // no prompt after an error
+    cdir("..", status, erl, prompt);
+    CHECK(status == 0 && prompt.rfind("S3:/>\r", 0) == 0);
 
     out(PC1600HostDriveCard::kCommandPort, PC1600HostDriveCard::kDirModeCommand);
-    CHECK(listNames(card.drive(), "???????????").empty());
+    CHECK(listNames(card.drive(), "???????????") == std::vector<std::string>{"DOCS       "});
     out(PC1600HostDriveCard::kCommandPort, PC1600HostDriveCard::kFileModeCommand);
-    CHECK(listNames(card.drive(), "???????????").size() == 1);
+    CHECK(listNames(card.drive(), "???????????") == std::vector<std::string>{"A       TXT"});
+
+    // Module reset: the function code follows. NEW keeps the directory,
+    // power on goes back to the root.
+    cdir("DOCS", status, erl, prompt);
+    out(PC1600HostDriveCard::kCommandPort, PC1600HostDriveCard::kResetCommand);
+    out(PC1600HostDriveCard::kDataPort, Drive::kResetNew);
+    CHECK(card.drive().currentDirectory() == std::vector<std::string>{"DOCS"});
+    out(PC1600HostDriveCard::kCommandPort, PC1600HostDriveCard::kResetCommand);
+    out(PC1600HostDriveCard::kDataPort, Drive::kResetPowerOn);
+    CHECK(card.drive().currentDirectory().empty());
 }
 
 void test_unsupported_function() {
@@ -497,8 +630,13 @@ int run_host_directory_drive_tests() {
     test_get_alloc_fits_dskf();
     test_get_length_in_records();
     test_reset_ends_searches();
-    test_mep_change_directory_knows_only_the_root();
-    test_mep_directory_mode_lists_nothing();
+    test_change_directory_paths();
+    test_change_directory_skips_symlinks();
+    test_long_prompt_keeps_the_end();
+    test_files_live_in_the_current_directory();
+    test_vanished_directory_fails_until_cdir();
+    test_directory_mode_lists_subdirectories();
+    test_reset_functions();
     test_card_mep_commands();
     test_unsupported_function();
 

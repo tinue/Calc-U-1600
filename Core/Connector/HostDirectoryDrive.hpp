@@ -32,8 +32,10 @@
 //
 // Visible files: regular files whose name fits 8.3 using the characters the
 // ROM's file-name parser accepts (FNCHAROK 79E2H: letters, digits,
-// "`@#$%^&()-_{}'"), upper-cased. Long names, directories and dotfiles are
-// not shown. The year is not part of the PC-1600 clock: directory entries
+// "`@#$%^&()-_{}'"), upper-cased. Long names and dotfiles are not shown.
+// Subdirectories with such names are reachable the MEP rev3 way: a current
+// directory (CDIR) that every file call works in, and a directory mode in
+// which SEARCH FIRST/NEXT list subdirectories (docs/PC1600-Host-Drive.md). The year is not part of the PC-1600 clock: directory entries
 // carry year 1986 like the ROM's own FATTIME; the host file keeps its real
 // time stamp (the OS writes it on every change).
 //
@@ -64,6 +66,10 @@ public:
     // Directory-entry attribute bits (PC1600-P1-B3B K_SET 7645H).
     static constexpr uint8_t kAttrProtected = 0x01;
     static constexpr uint8_t kAttrInvisible = 0x02;
+    // DIRMODE entries: no attribute bits. FAT's 10H would hide them, as
+    // FILES skips every entry with a bit of DCH set (PC1600-P1-B3B K_FILES
+    // 6AD5H), and the MEP's LDIR is FILES in directory mode.
+    static constexpr uint8_t kAttrDirectory = 0x00;
     static constexpr uint8_t kAttrArchive = 0x20;
 
     // FCB offsets used here (PC1600-P1-B3B record layer, B5 FDOPEN 4B14H).
@@ -92,34 +98,74 @@ public:
         uint16_t bc = 0, de = 0, hl = 0;
     };
 
+    // Module reset / power functions (+02H, A): 0 NEW, 1 power on, 2 on
+    // after APO, 3 power off, 4 APO, 5 boot search, 6 boot, 7 reset.
+    enum ResetFunction : uint8_t {
+        kResetNew = 0, kResetPowerOn = 1, kResetResume = 2, kResetPowerOff = 3,
+        kResetApo = 4, kResetBootSearch = 5, kResetBoot = 6, kResetReset = 7,
+    };
+
+    static constexpr size_t kPromptSize = 27;  // MEPPROMPT FB10H: up to 26 characters + CR
+
     void setDirectory(const std::filesystem::path& dir) {
         m_dir = dir;
-        reset();
+        m_cwd.clear();
+        reset(kResetReset);
     }
     const std::filesystem::path& directory() const { return m_dir; }
     bool mounted() const { return !m_dir.empty(); }
 
-    /// Drop every search in progress and go back to listing files (module
-    /// reset / power functions).
-    void reset() {
+    /// Module reset / power function `function`: drops every search in
+    /// progress and goes back to listing files. Power on, the power-on after
+    /// an APO and reset also go back to the root: a MEP loses its current
+    /// directory with the calculator's power. NEW and boot keep it.
+    void reset(uint8_t function) {
         m_searches.clear();
         m_listDirectories = false;
+        if (function == kResetPowerOn || function == kResetResume || function == kResetReset) m_cwd.clear();
     }
 
     // ── MEP fixed entries (4020H CDIR, 4023H DIRMODE, 4026H FILEMODE) ──
-    // Software written for the MEP rev3 module calls them for "S3:". The
-    // host drive has no subdirectories: only the root exists, and a search
-    // in directory mode finds nothing.
+    // Software written for the MEP rev3 module (FILEX, and the MEP's own
+    // CDIR / LDIR statements, which our ROM also has) navigates with them.
 
     /// DIRMODE (true) / FILEMODE (false): what SEARCH FIRST/NEXT list.
     void setListDirectories(bool on) { m_listDirectories = on; }
 
-    /// CDIR: status and ERL for changing to `path` ("/" = the root).
-    Response changeDirectory(const std::string& path) const {
+    /// The current directory below the mounted folder, as host names.
+    const std::vector<std::string>& currentDirectory() const { return m_cwd; }
+
+    /// CDIR: UNIX-style `path` -- "/" starts at the root, "." stays, ".."
+    /// goes up (and stays at the root), components are visible 8.3
+    /// subdirectories matched without regard to case. On success the
+    /// payload is the kPromptSize-byte prompt ("S3:/DEV/ASM>", CR, spaces);
+    /// on failure the current directory is unchanged (01H, ERL 98H).
+    Response changeDirectory(const std::string& path) {
         Response r;
         std::error_code ec;
         if (!mounted() || !std::filesystem::is_directory(m_dir, ec)) return fail(r, kErlNoMedia);
-        if (path.find_first_not_of('/') != std::string::npos) return fail(r, kErlNotFound);
+        std::vector<std::string> cwd = path.empty() || path[0] != '/' ? m_cwd : std::vector<std::string>{};
+        size_t pos = 0;
+        while (pos <= path.size()) {
+            const size_t slash = std::min(path.find('/', pos), path.size());
+            const std::string part = path.substr(pos, slash - pos);
+            pos = slash + 1;
+            if (part.empty() || part == ".") continue;
+            if (part == "..") {
+                if (!cwd.empty()) cwd.pop_back();
+                continue;
+            }
+            const std::string name = toFcbName(part);
+            Entry dir;
+            if (name.empty() || !findIn(listing(pathOf(cwd), true), name, dir)) return fail(r, kErlNotFound);
+            cwd.push_back(dir.path.filename().string());
+        }
+        if (!std::filesystem::is_directory(pathOf(cwd), ec)) return fail(r, kErlNotFound);
+        m_cwd = std::move(cwd);
+        const std::string prompt = promptText();
+        r.payload.assign(kPromptSize, ' ');
+        std::memcpy(r.payload.data(), prompt.data(), prompt.size());
+        r.payload[prompt.size()] = 0x0D;
         return r;
     }
 
@@ -131,6 +177,9 @@ public:
         if (req.function >= 0x80) return r;  // disk IOCS: not a file call, ignored like FDBADFN
         std::error_code ec;
         if (!mounted() || !std::filesystem::is_directory(m_dir, ec)) return fail(r, kErlNoMedia);
+        // The current directory vanished on the host: nothing may land in
+        // another folder, so every call fails until the next CDIR.
+        if (!std::filesystem::is_directory(here(), ec)) return fail(r, kErlNotFound);
         switch (req.function) {
             case kOpen:        return doOpen(req, r);
             case kClose:       return doClose(req, r);
@@ -275,16 +324,41 @@ private:
         return ::stat(p.string().c_str(), &st) == 0 ? st.st_mtime : std::time(nullptr);
     }
 
-    /// Every file the PC-1600 can see, sorted by FCB name. A second host
-    /// file that folds to the same 8.3 name (case-sensitive file systems)
-    /// is hidden; the exact upper-case spelling wins.
-    std::vector<Entry> listing() const {
+    /// The host folder for a current directory `cwd`.
+    std::filesystem::path pathOf(const std::vector<std::string>& cwd) const {
+        std::filesystem::path p = m_dir;
+        for (const auto& part : cwd) p /= part;
+        return p;
+    }
+
+    /// The host folder file calls work in.
+    std::filesystem::path here() const { return pathOf(m_cwd); }
+
+    /// "S3:/DEV/ASM>" in the 8.3 spelling; one that does not fit keeps the
+    /// end of the path ("S3:../ASM>"). The MEP has the stick's volume name
+    /// in front, which the manual asks to be "S3".
+    std::string promptText() const {
+        std::string path = "/";
+        for (size_t i = 0; i < m_cwd.size(); ++i) path += (i ? "/" : "") + toHostName(toFcbName(m_cwd[i]));
+        const size_t room = kPromptSize - 1 - std::string("S3:>").size();
+        if (path.size() > room) path = ".." + path.substr(path.size() - (room - 2));
+        return "S3:" + path + ">";
+    }
+
+    /// Every file (or, with `directories`, every subdirectory) of `dir` the
+    /// PC-1600 can see, sorted by FCB name. A second host entry that folds
+    /// to the same 8.3 name (case-sensitive file systems) is hidden; the
+    /// exact upper-case spelling wins. Symlinked directories are left out,
+    /// so a current directory never leaves the mounted folder.
+    std::vector<Entry> listing(const std::filesystem::path& dir, bool directories = false) const {
         std::vector<std::filesystem::path> files;
         std::error_code ec;
-        for (auto it = std::filesystem::directory_iterator(m_dir, ec);
+        for (auto it = std::filesystem::directory_iterator(dir, ec);
              !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) {
             std::error_code fec;
-            if (it->is_regular_file(fec)) files.push_back(it->path());
+            const bool wanted = directories ? it->is_directory(fec) && !it->is_symlink(fec)
+                                            : it->is_regular_file(fec);
+            if (wanted) files.push_back(it->path());
         }
         // Exact upper-case spellings first, then by host name: the first
         // file claiming an 8.3 name keeps it.
@@ -301,11 +375,15 @@ private:
             Entry e;
             e.fcbName = name;
             e.path = path;
-            e.attr = hostAttributes(path);
-            std::error_code fec;
-            const auto size = std::filesystem::file_size(path, fec);
-            e.size = fec ? 0 : static_cast<uint32_t>(std::min<uintmax_t>(size, 0xFFFFFFFFu));
             e.mtime = hostMtime(path);
+            if (directories) {
+                e.attr = kAttrDirectory;
+            } else {
+                e.attr = hostAttributes(path);
+                std::error_code fec;
+                const auto size = std::filesystem::file_size(path, fec);
+                e.size = fec ? 0 : static_cast<uint32_t>(std::min<uintmax_t>(size, 0xFFFFFFFFu));
+            }
             byName.emplace(name, std::move(e));
         }
         std::vector<Entry> out;
@@ -314,11 +392,20 @@ private:
         return out;
     }
 
-    std::vector<Entry> find(const std::string& pattern) const {
+    std::vector<Entry> find(const std::string& pattern, bool directories = false) const {
         std::vector<Entry> out;
-        for (auto& e : listing())
+        for (auto& e : listing(here(), directories))
             if (matches(pattern, e.fcbName)) out.push_back(e);
         return out;
+    }
+
+    static bool findIn(const std::vector<Entry>& entries, const std::string& name, Entry& out) {
+        for (const auto& e : entries)
+            if (e.fcbName == name) {
+                out = e;
+                return true;
+            }
+        return false;
     }
 
     bool findOne(const std::string& name, Entry& out) const {
@@ -386,7 +473,7 @@ private:
     std::filesystem::path pathFor(const std::string& name) const {
         Entry e;
         if (findOne(name, e)) return e.path;
-        return m_dir / toHostName(name);
+        return here() / toHostName(name);
     }
 
     Response& doOpen(const Request& req, Response& r) {
@@ -404,8 +491,10 @@ private:
         if (findOne(name, e)) {
             if (e.attr & kAttrProtected) return fail(r, kErlProtected);
         } else {
+            Entry dir;
+            if (findIn(listing(here(), true), name, dir)) return fail(r, kErlExists);
             e.fcbName = name;
-            e.path = m_dir / toHostName(name);
+            e.path = here() / toHostName(name);
         }
         std::ofstream f(e.path, std::ios::binary | std::ios::trunc);
         if (!f) return fail(r, kErlIo);
@@ -486,7 +575,7 @@ private:
 
     Response& doSearchFirst(const Request& req, Response& r) {
         Search s;
-        if (!m_listDirectories) s.entries = find(fcbName(req.fcb, kFcbName));
+        s.entries = find(fcbName(req.fcb, kFcbName), m_listDirectories);
         m_searches[req.fcbAddress] = std::move(s);
         return nextEntry(req, r);
     }
@@ -541,7 +630,7 @@ private:
             Entry existing;
             if (name != e.fcbName && findOne(name, existing)) return fail(r, kErlExists);
             std::error_code ec;
-            std::filesystem::rename(e.path, m_dir / toHostName(name), ec);
+            std::filesystem::rename(e.path, here() / toHostName(name), ec);
             if (ec) return fail(r, kErlIo);
         }
         return erl == kErlOk ? r : fail(r, erl);
@@ -596,6 +685,7 @@ private:
     }
 
     std::filesystem::path m_dir;
+    std::vector<std::string> m_cwd;  // host names below m_dir (CDIR)
     std::map<uint16_t, Search> m_searches;
     bool m_listDirectories = false;
 };
