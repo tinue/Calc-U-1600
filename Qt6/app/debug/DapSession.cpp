@@ -9,6 +9,7 @@
 
 #include "DapServer.hpp"
 #include "DebugController.hpp"
+#include "Debug/AttachKeys.hpp"
 #include "Debug/Listing/Listing.hpp"
 #include "Preset/PresetFile.hpp"
 
@@ -249,7 +250,7 @@ bool numberOf(const QJsonValue& v, uint32_t max, uint32_t* out) {
         const double d = v.toDouble();
         if (d < 0 || d != double(uint32_t(d))) return false;
         n = uint32_t(d);
-    } else if (!v.isString() || !parseNumber(v.toString().trimmed().toStdString(), &n)) {
+    } else if (!v.isString() || !parseNumber(v.toString().toStdString(), &n)) {
         return false;
     }
     if (n > max) return false;
@@ -259,22 +260,74 @@ bool numberOf(const QJsonValue& v, uint32_t max, uint32_t* out) {
 
 bool parseAddress(const QJsonValue& v, uint32_t* out) { return numberOf(v, 0xFFFF, out); }
 
-// The bank qualifiers `bank`, `me`, `pu`, `pv`; a missing one is -1.
-bool bankKeyOf(const QJsonObject& o, debug::BankKey* k, QString* error) {
-    const struct {
-        const char* key;
-        uint32_t max;
-        int* field;
-    } qualifiers[] = {{"bank", 7, &k->bank}, {"me", 1, &k->me}, {"pu", 1, &k->pu}, {"pv", 1, &k->pv}};
-    for (const auto& q : qualifiers) {
-        const QJsonValue v = o.value(QLatin1String(q.key));
-        if (v.isUndefined() || v.isNull()) continue;
+// The bank qualifiers `bank`, `me`, `pu`, `pv` (checked by checkAttach); a
+// missing one is -1.
+debug::BankKey bankKeyOf(const QJsonObject& o) {
+    const auto qualifier = [&o](const char* key, uint32_t max) {
         uint32_t n = 0;
-        if (!numberOf(v, q.max, &n)) {
-            *error = QStringLiteral("Bad \"%1\": a number from 0 to %2 (&, 0x or $ for hex)").arg(q.key).arg(q.max);
+        return numberOf(o.value(QLatin1String(key)), max, &n) ? int(n) : -1;
+    };
+    debug::BankKey k;
+    k.bank = qualifier("bank", 7);
+    k.me = qualifier("me", 1);
+    k.pu = qualifier("pu", 1);
+    k.pv = qualifier("pv", 1);
+    return k;
+}
+
+// Checks the keys of `table` in a launch configuration, a `debug:` block
+// or a `calcu1600/load` (Core/Debug/AttachKeys.hpp). Keys the table doesn't
+// know pass: a launch configuration also carries the IDE's own.
+bool checkAttach(const QJsonObject& o, const debug::attach::Table& table, QString* error) {
+    using namespace debug::attach;
+    for (const Key& key : table) {
+        const QJsonValue v = o.value(QLatin1String(key.name));
+        if (v.isUndefined() || v.isNull()) continue;
+        std::string why;
+        const auto bad = [&](const std::string& what) {
+            *error = QStringLiteral("Bad \"%1\": %2").arg(QLatin1String(key.name), QString::fromStdString(what));
             return false;
+        };
+        switch (key.kind) {
+            case Kind::Map:
+                if (!v.isObject()) return bad("a block of settings");
+                if (!checkAttach(v.toObject(), kProgramKeys, error)) return false;
+                break;
+            case Kind::FileList:
+                if (!v.isArray()) return bad("a list of paths or {path, ...} objects");
+                for (const QJsonValue& item : v.toArray()) {
+                    if (item.isString()) continue;
+                    if (!item.isObject()) return bad("a list of paths or {path, ...} objects");
+                    if (!checkAttach(item.toObject(), itemKeys(key), error)) return false;
+                }
+                break;
+            case Kind::PathList:
+                if (!v.isArray()) return bad("a list of paths");
+                for (const QJsonValue& item : v.toArray())
+                    if (!item.isString()) return bad("a list of paths");
+                break;
+            case Kind::Bool:
+                if (!v.isBool()) return bad("true or false");
+                break;
+            case Kind::Number: {
+                uint32_t n = 0;
+                if (!numberOf(v, key.max, &n)) {
+                    checkScalar(key, std::string(), &why);
+                    return bad(why);
+                }
+                break;
+            }
+            case Kind::Choice:
+                if (!v.isString()) return bad("text");
+                if (!checkScalar(key, v.toString().toStdString(), &why)) return bad(why);
+                break;
+            case Kind::Text: // `entry` may be a number
+                if (!v.isString() && !v.isDouble()) return bad("text");
+                break;
+            case Kind::Path:
+                if (!v.isString()) return bad("a path");
+                break;
         }
-        *q.field = int(n);
     }
     return true;
 }
@@ -282,6 +335,7 @@ bool bankKeyOf(const QJsonObject& o, debug::BankKey* k, QString* error) {
 } // namespace
 
 bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* error) {
+    if (!checkAttach(d, debug::attach::kProgramKeys, error)) return false;
     debug::LoadRequest req;
     req.bin = debug::absolutePath(d.value(QStringLiteral("bin")).toString().toStdString());
     if (d.value(QStringLiteral("bin")).toString().isEmpty()) {
@@ -295,14 +349,8 @@ bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* e
     for (const QJsonValue& s : d.value(QStringLiteral("symbols")).toArray())
         req.symbols.push_back(debug::absolutePath(s.toString().toStdString()));
     req.thread = threadForCpu(d.value(QStringLiteral("cpu")).toString());
-    if (!bankKeyOf(d, &req.key, error)) return false;
-    if (d.contains(QStringLiteral("address"))) {
-        req.hasAddress = parseAddress(d.value(QStringLiteral("address")), &req.address);
-        if (!req.hasAddress) {
-            *error = QStringLiteral("Bad \"address\": a number up to &FFFF (&, 0x or $ for hex)");
-            return false;
-        }
-    }
+    req.key = bankKeyOf(d);
+    if (d.contains(QStringLiteral("address"))) req.hasAddress = parseAddress(d.value(QStringLiteral("address")), &req.address);
     if (d.contains(QStringLiteral("slot"))) {
         *error = QStringLiteral("\"slot\" was removed: the loader places code by the machine's MODE, the program "
                                 "area TITLE selects, and the address. Set MODE / TITLE on the calculator first.");
@@ -362,12 +410,8 @@ bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* e
 bool DapSession::prepare(const QJsonObject& args, QString* error) {
     // `boot: debug`: the preset only sets the machine up, and the debugger
     // runs the boot, with breakpoints armed (ROM code that runs at power-on).
-    const QString boot = args.value(QStringLiteral("boot")).toString();
-    if (!boot.isEmpty() && boot != QLatin1String("debug")) {
-        *error = QStringLiteral("\"boot\" is \"debug\" or absent, not \"%1\"").arg(boot);
-        return false;
-    }
-    const bool bootDebug = !boot.isEmpty();
+    if (!checkAttach(args, debug::attach::kBlockKeys, error)) return false;
+    const bool bootDebug = args.contains(QStringLiteral("boot"));
     // 1. A preset rebuilds the machine. With a program, the program's clean
     // start (step 4) applies it instead.
     const QString preset = args.value(QStringLiteral("preset")).toString();
@@ -397,13 +441,8 @@ bool DapSession::prepare(const QJsonObject& args, QString* error) {
     map.clear();
     // Each entry of `listings` and `symbols` is a path, or an object with
     // `path` and optionally `cpu` and bank qualifiers.
-    const auto bindStatic = [this, &map, error](const QJsonValue& v, bool isListing) {
+    const auto bindStatic = [this, &map](const QJsonValue& v, bool isListing) {
         const QJsonObject o = v.isString() ? QJsonObject{{QStringLiteral("path"), v.toString()}} : v.toObject();
-        debug::BankKey key;
-        if (!bankKeyOf(o, &key, error)) {
-            *error = QStringLiteral("%1: %2").arg(o.value(QStringLiteral("path")).toString(), *error);
-            return false;
-        }
         const std::string path = o.value(QStringLiteral("path")).toString().toStdString();
         debug::Listing listing;
         std::vector<std::string> warnings;
@@ -412,13 +451,10 @@ bool DapSession::prepare(const QJsonObject& args, QString* error) {
                                   : debug::loadListingWithSymbols({}, {}, {path}, &listing, &warnings);
         for (const std::string& w : warnings)
             output(QString::fromStdString(w), ok ? QStringLiteral("console") : QStringLiteral("important"));
-        if (ok) map.addStatic(threadForCpu(o.value(QStringLiteral("cpu")).toString()), std::move(listing), key, path);
-        return true;
+        if (ok) map.addStatic(threadForCpu(o.value(QStringLiteral("cpu")).toString()), std::move(listing), bankKeyOf(o), path);
     };
-    for (const QJsonValue& v : args.value(QStringLiteral("listings")).toArray())
-        if (!bindStatic(v, true)) return false;
-    for (const QJsonValue& v : args.value(QStringLiteral("symbols")).toArray())
-        if (!bindStatic(v, false)) return false;
+    for (const QJsonValue& v : args.value(QStringLiteral("listings")).toArray()) bindStatic(v, true);
+    for (const QJsonValue& v : args.value(QStringLiteral("symbols")).toArray()) bindStatic(v, false);
     sendBreakpointChanges(m_controller->rebindListings());
     for (const auto& b : map.bindings())
         if (b.stale)

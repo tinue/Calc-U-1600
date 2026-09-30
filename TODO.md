@@ -530,14 +530,6 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
      ROM (see the known issue); next is timing the FOR/NEXT routine from
      RAM.
   4. Then re-fit once, against A−C = 45 ms.
-- **The `debug:` key list is kept twice.** `PresetDebugBlock.hpp`'s
-  `requireOnlyKeys` lists and the keys `DapSession` reads must agree by
-  hand; a new attach key works in launch.json but is "unrecognized" in a
-  project preset. `boot` is accepted in Core but its value only checked in
-  `DapSession::prepare`. Fix: one table of attach keys (and which are
-  paths / numbers) that both read, or Core checks only structure + paths
-  and leaves key/value checks to the DAP, which already reports them for
-  launch.json. Goes with the entry above.
 - **The debugger parses the project preset twice per session action.**
   Attach, restart and Build & Load call `effectiveConfig` →
   `parsePresetFile`, then `loadPreset` / `cleanStart` parse the same file

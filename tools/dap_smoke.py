@@ -159,6 +159,13 @@ def program_run(port):
         check(False, "address \"40C5\" (bare hex) refused")
     except RuntimeError as e:
         check("address" in str(e), f"address \"40C5\" (bare hex) refused: {e}")
+    # Other values are checked against the attach-key table.
+    for bad in ({"after": "foo"}, {"cpu": "x86"}, {"cleanStart": "false"}):
+        try:
+            dap.request("calcu1600/load", bin=bin_, listing=rst, **bad)
+            check(False, f"{bad} refused")
+        except RuntimeError as e:
+            check(next(iter(bad)) in str(e), f"{bad} refused: {e}")
     # Restart (the toolbar's): the attach configuration again -- preset,
     # load, entry stop -- and a breakpoint set before it still hits.
     dap.request("setBreakpoints", source={"path": MEMTEST_ASM}, breakpoints=[{"line": 88}])

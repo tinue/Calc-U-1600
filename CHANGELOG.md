@@ -15,6 +15,10 @@
   `$` is hex, a bare number decimal. `"address": "1234"` in a launch
   configuration is now decimal (it was hex), hex without a prefix is
   refused, and `bank: &7` or `"bank": "7"` is no longer silently ignored.
+- **The debugger checks its settings** against one list of keys, in a
+  preset's `debug:` block (with the line number) and in a launch
+  configuration alike: `after: foo`, `cpu: x86`, `boot: foo` or a quoted
+  `"true"` are refused instead of silently falling back to a default.
 
 ## [0.6.0] - 2026-09-30
 

@@ -734,11 +734,36 @@ void test_debug_block_numbers_follow_the_preset_rule() {
     CHECK(err.find("line 5") != std::string::npos);
 }
 
+// The other values are checked against the attach-key table too, with the
+// line number, instead of reaching the debugger unchecked.
+void test_debug_block_checks_choices_and_booleans() {
+    PresetFile p;
+    std::string err;
+    const auto program = [](const std::string& line) {
+        return "model: PC-1600\ndebug:\n  program:\n    bin: a.bin\n    " + line + "\n";
+    };
+    CHECK(parse(program("after: call"), &p, &err));
+    CHECK(!parse(program("after: foo"), &p, &err));
+    CHECK(err.find("line 5") != std::string::npos && err.find("stopOnEntry, call, none") != std::string::npos);
+    CHECK(parse(program("cpu: lh5803"), &p, &err));
+    CHECK(!parse(program("cpu: x86"), &p, &err));
+    CHECK(!parse(program("cleanStart: maybe"), &p, &err));
+    CHECK(!parse(program("cleanStart: \"false\""), &p, &err)); // would reach the debugger as text
+    CHECK(parse("model: PC-1600\ndebug:\n  boot: debug\n", &p, &err));
+    CHECK(!parse("model: PC-1600\ndebug:\n  boot: foo\n", &p, &err));
+    CHECK(err.find("line 3") != std::string::npos);
+    CHECK(!parse("model: PC-1600\ndebug:\n  reset: yes\n", &p, &err));
+    CHECK(!parse("model: PC-1600\ndebug:\n  stopOnEntry: maybe\n", &p, &err));
+    CHECK(!parse("model: PC-1600\ndebug:\n  symbols:\n    - path: a.sym\n      source: a.asm\n", &p, &err));
+    CHECK(err.find("unknown key 'source'") != std::string::npos);
+}
+
 int run_preset_tests() {
     test_debug_block_parses_and_resolves_paths();
     test_debug_block_absent_is_null();
     test_debug_block_rejects_unknown_keys_and_shapes();
     test_debug_block_numbers_follow_the_preset_rule();
+    test_debug_block_checks_choices_and_booleans();
     test_preset_parser_model_rom_pc1600();
     test_preset_parser_plotter_ce1600p_rom();
     test_preset_parser_model_rom_pc1500a_is_a04_only();
