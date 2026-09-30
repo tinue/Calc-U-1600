@@ -11,6 +11,10 @@
   rebuilds, reloads and restarts a program without detaching. Turn it on
   under **Settings ▸ Debugger** (or `--dap <port>`); the extension is in
   `vscode/calcu1600-debug/`. See docs/Debugger.md.
+- **Drag and drop** Drop a preset, a BASIC program (`.bas` / `.bbin`) or
+  machine code onto the window to load it; the content picks the loader,
+  anything else is ignored. On macOS also onto the Dock icon, and presets
+  open from Finder. See the User Guide, "Dropping files".
 - **Keyboard** PC-1600: accented characters (`ä`, `é`, `ñ`, …) type
   through `KB II`, from host keys, Paste Text and a preset's `type:`, in
   the case typed. Dead keys compose (`¨` then `U` gives `Ü`).

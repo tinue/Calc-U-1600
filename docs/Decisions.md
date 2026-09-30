@@ -253,10 +253,18 @@ authentic speed for the span that matters.
   headerless file. Every other caller does.
 - **libsharpdx says what a file is** (`sde_file_info`, wrapped once in
   `Core/ProgramFile`). Don't bring back hand-written header parsing. Its
-  `raw-lh5801` / `raw-z80` guess for headerless code is ignored on purpose:
-  the MODE (or the debugger's `cpu`) decides, never the bytes. A header
+  `raw-lh5801` / `raw-z80` guess for headerless code never picks the CPU:
+  the MODE (or the debugger's `cpu`) decides, never the bytes. The guess
+  survives only as `looksLikeCode`, which admits a dropped file. A header
   auto-run of `0` or `FFFF` means no auto-run (the library only knows
   `FFFF`). The library is therefore a required build dependency.
+- **A dropped file's content picks the loader** (`Core/DropFile`,
+  docs/Drag-And-Drop-Plan.md). Presets are recognized by a top-level
+  `model:` line, not by extension and not by sde: a preset with a character
+  outside the Sharp set isn't `text` to sde. Headerless machine code needs
+  both the code heuristic *and* a `.bin` / `.rom` name, because the heuristic
+  alone takes JPEGs, PDFs, fonts and Mach-O binaries for code. Drops that
+  aren't recognized are ignored without a message, on purpose.
 - **Machine code may go into the work area F000-FFFF, with a warning.**
   Many PC-1600 programs live up there, above all in the area of the CE-1F01A
   bar-code reader pen, &FF40-&FFFF (e.g. CLOCK.BIN at &FF3A-&FFFB, which also

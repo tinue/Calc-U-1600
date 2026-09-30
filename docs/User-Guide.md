@@ -147,6 +147,28 @@ SHIFT symbol:
   nothing; type the plain letter instead. See `docs/Keyboard-Mapping.md` for
   the full list.
 
+### Dropping files
+
+Drag a file onto the window to load it, on macOS, Linux and Windows. What's
+inside the file decides what happens, not its name:
+
+| The file holds | Loaded as if by |
+|---|---|
+| a preset (a line starting with `model:`) | **File ▸ Load Preset…** |
+| a BASIC listing, or tokenized BASIC (`.bbin`) | **File ▸ Load BASIC Program…** ([chapter 4](#4-loading-a-basic-program)) |
+| machine code with a CE-158 or PC-1600 header | **File ▸ Load Machine Code…** ([chapter 6](#6-machine-code-programs)) |
+| machine code without a header, in a `.bin` or `.rom` file | **File ▸ Load Machine Code…** |
+
+Anything else is ignored, and so is a drag of several files at once: the
+pointer shows that the window won't take them. A drop loads into the running
+machine, exactly like the menu item, so prepare the machine the same way
+first (`NEW0` before a BASIC program, and so on).
+
+On macOS you can also drop a file onto the Dock icon, or open it from Finder
+with **Open With ▸ Calc-U-1600**. Double-clicking a preset (`.pc1500`,
+`.pc1500a`, `.pc1600`) opens it in Calc-U-1600. If the app isn't running
+yet, the file is loaded after the startup preset.
+
 ---
 
 ## 3. Plotters
@@ -238,6 +260,8 @@ Good to know:
   loads on a PC-1500/1500A, and on a PC-1600 in MODE 1 only.
 - **The right menu for the file.** Machine code is refused here with a
   pointer to Load Machine Code, and a BASIC program is refused there.
+  [Dropping the file](#dropping-files) onto the window picks the right one
+  for you.
 - **Nothing is switched for you.** The app never changes MODE or `TITLE`;
   set them first, as on the real calculator.
 - **Single lines.** **Edit ▸ Paste Text** types one line from the clipboard
