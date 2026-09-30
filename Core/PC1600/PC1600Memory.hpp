@@ -383,6 +383,11 @@ public:
         auto* c = m_slot2Conn.attachedCard();
         return c && c->debugImageWrite(off, data, n);
     }
+    // Whether slot{1,2}CardImageWrite() would accept [off, off + n).
+    bool slotCardImageWritable(int slot, size_t off, size_t n) const {
+        const auto* c = (slot == 1 ? m_slot1Conn : m_slot2Conn).attachedCard();
+        return c && c->debugImageWritable(off, n);
+    }
     bool debugWriteInternalRam(size_t off, const uint8_t* data, size_t n) {
         if (n == 0) return true;
         if (!data || off > m_internalRam.size() || n > m_internalRam.size() - off) return false;

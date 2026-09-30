@@ -564,6 +564,11 @@ bool PC1600Machine::debugWriteSlotImage(int slot, size_t off, const uint8_t* dat
                      : m_z80Mem.slot2CardImageWrite(off, data, n);
 }
 
+bool PC1600Machine::debugSlotImageWritable(int slot, size_t off, size_t n) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_z80Mem.slotCardImageWritable(slot, off, n);
+}
+
 std::vector<uint8_t> PC1600Machine::debugSlotImage(int slot) {
     std::lock_guard<std::mutex> lock(m_mutex);
     return slot == 1 ? m_z80Mem.slot1CardImage() : m_z80Mem.slot2CardImage();

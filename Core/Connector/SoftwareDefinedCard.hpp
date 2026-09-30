@@ -143,6 +143,13 @@ public:
         return out;
     }
 
+    bool debugImageWritable(size_t off, size_t n) const override {
+        size_t total = 0;
+        for (const RegionState& st : m_regions) total += st.backing.size();
+        if (off > total || n > total - off) return false;
+        return !touchesRom(off, n);  // ROM is read-only for this path too
+    }
+
     /// Write counterpart of debugImage(): overwrite `n` bytes at the
     /// concatenated backing offset `off`, walking regions in definition
     /// order. All-or-nothing -- returns false and writes nothing if the
@@ -151,11 +158,7 @@ public:
     /// contiguous in this address space by construction).
     bool debugImageWrite(size_t off, const uint8_t* data, size_t n) override {
         if (n == 0) return true;
-        if (!data) return false;
-        size_t total = 0;
-        for (const RegionState& st : m_regions) total += st.backing.size();
-        if (off > total || n > total - off) return false;
-        if (touchesRom(off, n)) return false;  // ROM is read-only for this path too
+        if (!data || !debugImageWritable(off, n)) return false;
         size_t base = 0;
         for (RegionState& st : m_regions) {
             const size_t regEnd = base + st.backing.size();

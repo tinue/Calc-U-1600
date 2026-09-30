@@ -65,6 +65,7 @@ public:
         std::vector<uint8_t> payload;
         uint32_t addr = 0;  // where the bytes go: the Z-80 / LH5801 bus address
         int slot = 0;       // PC-1600: machinecode::Slot from the plan / dialog
+        int bank = -1;      // PC-1600 slots: the global bank (plan.bank); -1 the slot's lower half
     };
     bool loadMachineCodeLive(const MachineCodeLoadRequest& request, QString* error);
 

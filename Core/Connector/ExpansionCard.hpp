@@ -151,6 +151,10 @@ public:
         return false;
     }
 
+    /// Whether debugImageWrite() would accept `n` bytes at `off`: the range
+    /// is inside the backing store and all of it is RAM. Writes nothing.
+    virtual bool debugImageWritable(size_t /*off*/, size_t /*n*/) const { return false; }
+
     /// The module's name (a definition's `module-name:`, e.g. "CE-1600M"),
     /// so the GUI can read what sits in a slot from the slot itself.
     /// Empty for a card without one (test stubs).

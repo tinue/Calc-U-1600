@@ -5,7 +5,7 @@
 #include "PC1600Machine.hpp"
 
 bool loadPC1600MachineCode(PC1600Machine& machine, int slot, uint32_t addr, const uint8_t* data, size_t len,
-                           std::string* error) {
+                           std::string* error, int bank) {
     if (slot == 0) {
         if (addr < 0xC000 || static_cast<uint64_t>(addr) + len > 0x10000) {
             char b[160];
@@ -30,9 +30,20 @@ bool loadPC1600MachineCode(PC1600Machine& machine, int slot, uint32_t addr, cons
         *error = b;
         return false;
     }
-    if (!machine.debugWriteSlotImage(slot, addr - 0x8000, data, len)) {
-        *error = std::string("backing-store write failed for slot ") + slotName +
-                 " (empty slot, or a module with no writable RAM)";
+    if (bank < 0) bank = slot == 1 ? 0 : 2;
+    if (bank / 2 + 1 != slot) {
+        char b[96];
+        std::snprintf(b, sizeof(b), "bank %d is not in the %s memory slot", bank, slotName);
+        *error = b;
+        return false;
+    }
+    if (!machine.debugWriteSlotImage(slot, machinecode::pc1600ImageOffset(bank, addr), data, len)) {
+        char b[160];
+        std::snprintf(b, sizeof(b),
+                      "backing-store write failed for slot %s, bank %d (empty slot, or a module with no writable "
+                      "RAM there)",
+                      slotName, bank);
+        *error = b;
         return false;
     }
     return true;
@@ -64,6 +75,13 @@ machinecode::PC1600State pc1600LoadState(PC1600Machine& machine) {
             pc1600::readSlotDescriptor([&machine](uint16_t a) { return machine.debugPeek(a); }, st.title);
         st.titleBase = static_cast<uint32_t>(d.basePage) << 8;
         st.titleStart = d.start;
+    }
+    for (int bank = 0; bank < 4; bank++) {
+        for (uint32_t page = 0; page < 64; page++) {
+            const uint32_t off = machinecode::pc1600ImageOffset(bank, 0x8000 + page * 0x100);
+            if (machine.debugSlotImageWritable(bank / 2 + 1, off, 0x100))
+                st.bankRamPages[static_cast<size_t>(bank)] |= uint64_t{1} << page;
+        }
     }
     return st;
 }

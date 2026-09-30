@@ -402,6 +402,9 @@ public:
     /// debugWriteInternalRam().
     bool debugWriteInternalRam(size_t off, const uint8_t* data, size_t n);
     bool debugWriteSlotImage(int slot, size_t off, const uint8_t* data, size_t n);
+    /// Whether debugWriteSlotImage() would accept [off, off + n): a card
+    /// in `slot` with RAM there. Writes nothing.
+    bool debugSlotImageWritable(int slot, size_t off, size_t n);
 
     /// The entire backing store of the card in Slot `slot` (1 or 2) --
     /// every bank / vertical bank concatenated ascending

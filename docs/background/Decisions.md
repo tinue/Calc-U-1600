@@ -297,6 +297,20 @@ authentic speed for the span that matters.
   both the code heuristic *and* a `.bin` / `.rom` name, because the heuristic
   alone takes JPEGs, PDFs, fonts and Mach-O binaries for code. Drops that
   aren't recognized are ignored without a message, on purpose.
+- **A PC-1600 header's bank 0 means "no bank given".** Banks 1-3 are
+  honoured exactly (1 = slot 1's upper 16 KB, 2/3 = slot 2), refused when
+  that bank has no RAM under the code, and started with `CALL #bank,`.
+  Bank 0 can't be told apart from a file that names none, and such files
+  are common (e.g. a C program linked at &80C5): they follow the program
+  area like `BLOAD` without `#bank`, so they land in bank 2 when slot 2
+  holds S0's first run (the ROM fills S0 slot 2 first). Don't make bank 0
+  force slot 1: with RAM in both slots (the usual emulator setup -- memory
+  costs nothing there) slot 1 is the *middle* of the BASIC area, where
+  `NEW "S0:"` can't protect the code; the start of S0 is where it can. On
+  real machines slot 1 alone is the common case (a slot 2 card was mostly
+  a RAM disk); there S0 starts in bank 0, so reading bank 0 literally and
+  auto-detecting give the same place. The two only differ when slot 2
+  holds RAM too -- exactly the case where slot 1 can't be protected.
 - **Machine code may go into the work area F000-FFFF, with a warning.**
   Many PC-1600 programs live up there, above all in the area of the CE-1F01A
   bar-code reader pen, &FF40-&FFFF (e.g. CLOCK.BIN at &FF3A-&FFFB, which also

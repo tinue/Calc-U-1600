@@ -2,6 +2,15 @@
 
 ## [0.7.0] - work in progress
 
+### Changed
+
+- **Machine code with a bank in its PC-1600 header** loads into that bank
+  (1-3) instead of being refused, and the proposed command is
+  `CALL #bank,&addr`. Load Machine Code… shows an error when that bank has
+  no RAM at the load address. Presets and the debugger follow the header's
+  bank too. A header auto-run address with a bank is typed as
+  `CALL #bank,…` instead of failing the preset.
+
 ## [0.6.0] - 2026-09-30
 
 ### New

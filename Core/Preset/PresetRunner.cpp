@@ -204,13 +204,14 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
     const uint32_t addr = plan.addr;
     const size_t len = plan.len;
     std::string loadError;
-    if (!machine.loadMachineCode(plan.slot, plan.busAddr, file.payload.data(), len, &loadError)) {
+    if (!machine.loadMachineCode(plan.slot, plan.bank, plan.busAddr, file.payload.data(), len, &loadError)) {
         *error = tag + "binary " + program.path + ": " + loadError;
         return false;
     }
     if (log) {
         const bool pc1600 = machine.codeTarget() == machinecode::Target::PC1600;
         const std::string slot = pc1600 ? std::string(", ") + machinecode::slotName(plan.slot) +
+                                              (plan.bank != 0 ? ", bank " + std::to_string(plan.bank) : "") +
                                               (plan.cpu == machinecode::Cpu::LH5803 ? ", LH5803 address" : "")
                                         : "";
         char range[40];
@@ -220,19 +221,10 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
     }
 
     if (file.autorunAddr != 0) {
-        if (file.autorunAddr > 0xFFFF) {
-            char b[208];
-            std::snprintf(b, sizeof(b),
-                          "header auto-run address $%X is outside bank 0 -- add an explicit "
-                          "'- type: CALL #<bank>,&<addr>' step instead",
-                          file.autorunAddr);
-            *error = tag + b;
-            return false;
-        }
-        // The same CALL Load Machine Code proposes: `CALL #2,&<addr>` for
-        // code in slot 2 (global bank 2), `XCALL` for LH5801 code, `CALL
-        // &<addr>` otherwise.
-        const std::string line = machinecode::advice(machine.codeTarget(), plan.slot, addr, len,
+        // The same CALL Load Machine Code proposes: `CALL #<bank>,&<addr>`
+        // for code in banks 1-3 (slot 2, or a header bank), `XCALL` for
+        // LH5801 code, `CALL &<addr>` otherwise.
+        const std::string line = machinecode::advice(machine.codeTarget(), plan.slot, plan.bank, addr, len,
                                                      file.autorunAddr, 0, 0, state, plan.cpu)
                                      .callCommand;
         std::string typeError;

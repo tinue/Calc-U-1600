@@ -174,13 +174,14 @@ public:
 
     machinecode::Target codeTarget() const override { return machinecode::Target::PC1600; }
     machinecode::PC1600State codeState() override { return pc1600LoadState(m_machine); }
-    // Linear, into the slot planLoad() derived from MODE, TITLE and the
-    // address: S0 = internal RAM ($C000-$FFFF), S1/S2 = the $8000-$BFFF
-    // memory-slot window. Straight into the backing store, so the current
-    // bank state doesn't matter.
-    bool loadMachineCode(machinecode::Slot slot, uint32_t busAddr, const uint8_t* data, size_t len,
+    // Linear, into the slot and bank planLoad() derived from the header's
+    // bank, MODE, TITLE and the address: S0 = internal RAM ($C000-$FFFF),
+    // S1/S2 = the $8000-$BFFF memory-slot window. Straight into the
+    // backing store, so the current bank state doesn't matter.
+    bool loadMachineCode(machinecode::Slot slot, int bank, uint32_t busAddr, const uint8_t* data, size_t len,
                          std::string* error) override {
-        return loadPC1600MachineCode(m_machine, static_cast<int>(slot), busAddr, data, len, error);
+        return loadPC1600MachineCode(m_machine, static_cast<int>(slot), busAddr, data, len, error,
+                                     slot == machinecode::Slot::S0 ? -1 : bank);
     }
 };
 
