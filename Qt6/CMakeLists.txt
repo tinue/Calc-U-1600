@@ -276,6 +276,8 @@ if(APPLE)
     MACOSX_BUNDLE_BUNDLE_VERSION ${APP_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${APP_VERSION}
     MACOSX_BUNDLE_BUNDLE_NAME "Calc-U-1600"
+    # Qt's template plus the document types the Dock and Finder open here.
+    MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/Info.plist.in
   )
 endif()
 
