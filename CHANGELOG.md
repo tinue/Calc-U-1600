@@ -11,6 +11,17 @@
   rebuilds, reloads and restarts a program without detaching. Turn it on
   under **Settings ▸ Debugger** (or `--dap <port>`); the extension is in
   `vscode/calcu1600-debug/`. See docs/Debugger.md.
+  - The VS Code extension works in any folder, without a `launch.json`:
+    **Debug current file** on a PC-1600 (zasm) or PC-1500A (sdas), built-in
+    build tasks, and settings for the port and assembler paths.
+  - **Create Debug Project…** writes a starting point for a program or a
+    ROM extension on either machine.
+  - A preset's `debug:` block holds a project's debugger settings, and the
+    launch configuration names it as `project`. `command` types a BASIC
+    line to start the code.
+  - **ROM extensions**: `bus-rom:` plugs ROM files into the expansion bus,
+    Build & Load restarts with the rebuilt ROM, and `boot: debug` stops in
+    the ROM's power-on code.
 - **Drag and drop** Drop a preset, a BASIC program (`.bas` / `.bbin`) or
   machine code onto the window to load it; the content picks the loader,
   anything else is ignored. On macOS also onto the Dock icon, and presets
@@ -43,6 +54,9 @@
   loads on the PC-1600 in MODE 1 only.
 - **Debug panel** On the PC-1600, Pointers shows the program area `TITLE`
   selects, `MEM`, and each slot's program module with its free space.
+- **Memory cards** A card definition's `encoding: file` block reads its
+  binary next to the definition at every clean start, so a ROM module in a
+  memory slot can be rebuilt.
 - **Examples** Grouped by topic (`plotter/`, `basic/`, `interfaces/`,
   `machine-code/`, `memory/`, `dwx/`), with an index in
   `examples/README.md`.
@@ -58,6 +72,8 @@
   follows (`NEW &addr`, `XCALL`). An address in the work area
   (&F000-&FFFF) loads with a warning.
 - **Presets** `program:` has no `slot:` any more; MODE and `TITLE` decide.
+- **Debugger** The default port is 32168 (was 4711 in 0.6.0-pre). A port
+  already saved in Settings is kept.
 - **CE-1600P ROM** Switching it with the plotter attached swaps the box
   with an OFF/ON cycle instead of an ALL RESET: RAM and the inserted disk
   stay.
@@ -103,6 +119,8 @@
   from the chip's registers, and the peer's RI reaches the calculator as
   CI.
 - **Debug panel** Dump Card YAML also dumps an unbanked card (CE-1600M).
+- **CLIs** `pc1500_cli` and `pc1600_cli` find the bundled memory cards
+  (`Qt6/resources/cards`) without `--modules-dir`.
 - **macOS** After the app had been killed, the "reopen windows?" prompt
   could hang the next start.
 
