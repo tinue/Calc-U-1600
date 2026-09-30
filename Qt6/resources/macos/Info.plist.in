@@ -28,6 +28,9 @@
 
 	<key>CFBundleIconFile</key>
 	<string>${MACOSX_BUNDLE_ICON_FILE}</string>
+	<!-- Assets.car icon (macOS 26+); CFBundleIconFile is the older-macOS fallback. -->
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>

@@ -61,7 +61,11 @@ int main(int argc, char** argv) {
     // whatever the platform defaults to (e.g. a generic AppImage icon on
     // Linux) -- the .desktop file's Icon= only covers desktop-environment
     // integration (launcher/file-manager icon), not the live window.
+    // Not on macOS: there it would replace the bundle's system-masked
+    // Dock icon (AppIcon.icon) with this full-bleed PNG.
+#ifndef __APPLE__
     app.setWindowIcon(QIcon(":/app/icon.png"));
+#endif
 
     // Scripted screenshots (docs/developer/screenshots/README.md): play a
     // scenario, write its images, quit with 0 (all written) or 1 (any failed).
