@@ -820,7 +820,7 @@ dropfile::Target dropTargetOf(const QString& path) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) return dropfile::Target::None;
     const QByteArray raw = file.readAll();
-    return dropfile::classify(std::vector<uint8_t>(raw.begin(), raw.end()));
+    return dropfile::classify(std::vector<uint8_t>(raw.begin(), raw.end()), info.fileName().toStdString());
 }
 
 }  // namespace

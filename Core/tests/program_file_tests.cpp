@@ -198,7 +198,9 @@ std::vector<uint8_t> readFixture(const char* path, bool* ok) {
 // Core/DropFile: which loader a dropped file goes to.
 void test_drop_targets() {
     using dropfile::Target;
-    const auto drop = [](const std::vector<uint8_t>& bytes) { return dropfile::classify(bytes); };
+    const auto drop = [](const std::vector<uint8_t>& bytes, const std::string& name = "dropped.bin") {
+        return dropfile::classify(bytes, name);
+    };
 
     // Presets, by their top-level `model:` key.
     CHECK(drop(text("# Hanoi\nmodel: PC-1600\nkeys:\n  - key: mode\n")) == Target::Preset);
@@ -226,6 +228,11 @@ void test_drop_targets() {
     CHECK(drop(ce158(kCode, 0x42, 0x40C5)) == Target::MachineCode);
     CHECK(drop(pc1600(kCode, 0x10, 0xC0C5)) == Target::MachineCode);
     CHECK(drop(z80Code()) == Target::MachineCode);
+    CHECK(drop(z80Code(), "CODE.ROM") == Target::MachineCode);
+    CHECK(drop(z80Code(), "code.jpg") == Target::None);           // headerless code needs .bin / .rom
+    CHECK(drop(z80Code(), "code") == Target::None);
+    CHECK(drop(pc1600(kCode, 0x10, 0xC0C5), "x.dat") == Target::MachineCode);  // a header needs no name
+    CHECK(drop(text("model: PC-1600\n"), "x.bin") == Target::Preset);
 
     // Everything else is ignored.
     CHECK(drop({}) == Target::None);
