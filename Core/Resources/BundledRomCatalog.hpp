@@ -1,11 +1,11 @@
 #pragma once
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <map>
 #include <string>
 #include <vector>
 
+#include "../FileIO.hpp"
 #include "../PC1500/PC1500Machine.hpp"
 #include "../PC1600/PC1600Machine.hpp"
 
@@ -23,13 +23,6 @@ namespace BundledRoms {
 
 namespace detail {
 
-inline bool readWholeFile(const std::string& path, std::vector<uint8_t>* out) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in) return false;
-    out->assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-    return true;
-}
-
 // Bundled ROM bytes never change during a run, but switching models or
 // re-arming a preset re-resolves and re-reads every ROM file involved.
 // Cache by resolved path so repeated switches don't keep hitting disk.
@@ -41,7 +34,7 @@ inline bool readWholeFileCached(const std::string& path, std::vector<uint8_t>* o
         return true;
     }
     std::vector<uint8_t> bytes;
-    if (!readWholeFile(path, &bytes)) return false;
+    if (!::readWholeFile(path, &bytes)) return false;
     *out = bytes;
     cache.emplace(path, std::move(bytes));
     return true;

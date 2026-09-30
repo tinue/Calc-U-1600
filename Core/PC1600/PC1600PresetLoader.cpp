@@ -114,31 +114,17 @@ bool attachPresetHostDrive(PC1600Machine& machine, const std::string& dir, const
     return true;
 }
 
-// `bus-rom:` -- last, but in front of each chain, so a bus ROM shadows the
-// ROM of a peripheral attached above at the same place (e.g. a rebuilt
-// host-drive ROM in bank 7).
+// `bus-rom:` -- a `bank` ROM on the system bus, an `address` ROM on the
+// LH5803 side.
 bool attachPresetBusRoms(PC1600Machine& machine, const std::vector<PresetBusRom>& roms, const PresetLogFn& log,
                          PresetLoadResult* result) {
-    for (const PresetBusRom& rom : roms) {
-        std::string err;
-        bool ok = false;
-        if (rom.bank >= 0) {
-            if (auto card = preset_bus_rom::makeSystemBusCard(rom, &err)) {
-                machine.attachBusRom(std::move(card));
-                ok = true;
-            }
-        } else if (auto card = preset_bus_rom::makeCard(rom, &err)) {
-            machine.attachBusRom(std::move(card));
-            ok = true;
-        }
-        if (!ok) {
-            result->error = "bus-rom: " + err;
-            if (log) log(result->error);
-            return false;
-        }
-        if (log) log(preset_bus_rom::describe(rom));
-    }
-    return true;
+    return preset_bus_rom::attachAll(
+        roms,
+        [&](const PresetBusRom& rom, std::string* err) {
+            return rom.bank >= 0 ? preset_bus_rom::attach(machine, preset_bus_rom::makeSystemBusCard(rom, err))
+                                 : preset_bus_rom::attach(machine, preset_bus_rom::makeCard(rom, err));
+        },
+        log, &result->error);
 }
 
 class PC1600PresetMachine final : public PresetMachineBase<PC1600Machine> {

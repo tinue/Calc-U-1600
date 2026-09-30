@@ -64,16 +64,15 @@ const Layout& layoutOf(const std::vector<std::string>& text) {
 // The same file mixes both widths, so this is decided per line.
 constexpr Layout k16Wide = {3, 8, 12, 17, 21, 8, 29, 36};
 
+// `len` hex digits at `pos`, then a blank.
 bool hexRun(const std::string& s, size_t pos, size_t len) {
-    if (s.size() < pos + len + 1 || s[pos + len] != ' ') return false;
-    for (size_t k = pos; k < pos + len; k++)
-        if (!std::isxdigit(static_cast<unsigned char>(s[k]))) return false;
-    return true;
+    uint32_t unused;
+    return s.size() > pos + len && s[pos + len] == ' ' && parseHexField(s, pos, len, &unused);
 }
 
 const Layout& lineLayout(const Layout& file, const std::string& line) {
     if (&file != &k16) return file;
-    if (hexRun(line, k16Wide.addr, 8) || (line.compare(0, 21, std::string(21, ' ')) == 0 && hexRun(line, 21, 8)))
+    if (hexRun(line, k16Wide.addr, 8) || (line.find_first_not_of(' ') >= 21 && hexRun(line, 21, 8)))
         return k16Wide;
     return k16;
 }

@@ -3,6 +3,7 @@
 #include <string>
 
 #include "../Yaml.hpp"
+#include "PresetFile.hpp"
 
 // ── A preset's `debug:` block ────────────────────────────────────────────
 //
@@ -33,8 +34,7 @@ namespace preset_debug {
 inline bool resolvePathScalar(YamlNode* node, const std::filesystem::path& dir, std::string* error) {
     std::string value;
     if (!node->asString(&value, error)) return false;
-    const std::filesystem::path p(value);
-    node->scalar = p.is_absolute() ? value : (dir / p).lexically_normal().string();
+    node->scalar = resolvePath(dir, value);
     return true;
 }
 

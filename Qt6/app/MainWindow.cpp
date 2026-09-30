@@ -825,14 +825,18 @@ dropfile::Target dropTargetOf(const QString& path) {
     return dropfile::classify(std::vector<uint8_t>(raw.begin(), raw.end()), info.fileName().toStdString());
 }
 
+// The one local file a drag carries, or "".
+QString draggedPath(const QMimeData* mime) {
+    const QList<QUrl> urls = mime->hasUrls() ? mime->urls() : QList<QUrl>();
+    return urls.size() == 1 && urls.first().isLocalFile() ? urls.first().toLocalFile() : QString();
+}
+
 }  // namespace
 
 QString MainWindow::droppableFile(const QMimeData* mime) const {
-    if (m_sync->busy() || !mime->hasUrls()) return {};
-    const QList<QUrl> urls = mime->urls();
-    if (urls.size() != 1 || !urls.first().isLocalFile()) return {};
-    const QString path = urls.first().toLocalFile();
-    return dropTargetOf(path) == dropfile::Target::None ? QString() : path;
+    if (m_sync->busy()) return {};
+    const QString path = draggedPath(mime);
+    return path.isEmpty() || dropTargetOf(path) == dropfile::Target::None ? QString() : path;
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* event) {
@@ -845,8 +849,9 @@ void MainWindow::dragMoveEvent(QDragMoveEvent* event) {
 }
 
 void MainWindow::dropEvent(QDropEvent* event) {
-    const QString path = droppableFile(event->mimeData());
-    if (path.isEmpty()) return;
+    // Vetted on enter; openDroppedFile() classifies it once more to load it.
+    const QString path = draggedPath(event->mimeData());
+    if (path.isEmpty() || m_sync->busy()) return;
     event->acceptProposedAction();
     // Out of the drop handler: a load and its dialogs would keep the drag
     // source (Finder, Explorer) waiting.
@@ -871,8 +876,8 @@ void MainWindow::openDroppedFile(const QString& path) {
 }
 
 void MainWindow::drainPendingDrop() {
-    if (m_pendingDrop.isEmpty() || !m_startupDone || m_sync->busy()) return;
-    openDroppedFile(std::exchange(m_pendingDrop, QString()));
+    // openDroppedFile() holds it back again if still not ready.
+    if (!m_pendingDrop.isEmpty()) openDroppedFile(std::exchange(m_pendingDrop, QString()));
 }
 
 void MainWindow::refreshViewsAfterAdvance() {

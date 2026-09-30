@@ -1064,8 +1064,8 @@ void test_parser_bus_rom_forms() {
     CHECK(err.empty());
     CHECK(p.busRoms.size() == 2);
     if (p.busRoms.size() == 2) {
-        CHECK(p.busRoms[0].path == "/tmp/a.bin" && p.busRoms[0].bank == 6 && !p.busRoms[0].hasAddress);
-        CHECK(p.busRoms[1].path == "/abs/b.bin" && p.busRoms[1].hasAddress && p.busRoms[1].address == 0x8000);
+        CHECK(p.busRoms[0].path == "/tmp/a.bin" && p.busRoms[0].bank == 6);
+        CHECK(p.busRoms[1].path == "/abs/b.bin" && p.busRoms[1].bank < 0 && p.busRoms[1].address == 0x8000);
         CHECK(p.busRoms[1].pv == 1 && p.busRoms[1].pu == 0 && !p.busRoms[1].me1 && p.busRoms[1].bank == -1);
     }
     const auto rejects = [&](const std::string& body, const char* what) {

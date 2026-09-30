@@ -37,8 +37,8 @@ class PC1500Machine;
 /// no reset, mode change, or NEW0 is performed.
 BasicLoadResult loadBasicProgram(PC1500Machine& machine, const std::vector<uint8_t>& file);
 
-/// Same, for the file at `path`: Load BASIC Program and a preset's
-/// a BASIC `program: file:`.
+/// Same, for the file at `path`: Load BASIC Program and a
+/// preset's BASIC `program: file:`.
 BasicLoadResult loadBasicProgramFile(PC1500Machine& machine, const std::string& path);
 
 /// The bare tokenized payload (no header) -- the run of in-RAM line records

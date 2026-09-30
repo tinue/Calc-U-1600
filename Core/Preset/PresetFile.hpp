@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <vector>
@@ -107,9 +108,9 @@ struct PresetStep {
     static constexpr double kWaitUntilIdle = -1.0;
 
     // (SaveAs) which slot/device `text` (the name) should be saved under --
-    // parsed from `- saveas: template|live s1:<name>` / `s2:` / `floppy:`.
-    // S2/Floppy are PC-1600 only; see parsePresetFile()'s per-model
-    // validation.
+    // parsed from `- saveas: template|live slot-1:<name>` / `slot-2:` /
+    // `floppy:`. Slot2/Floppy are PC-1600 only; see parsePresetFile()'s
+    // per-model validation.
     enum class SaveAsTarget { Slot1, Slot2, Floppy };
     SaveAsTarget saveAsTarget = SaveAsTarget::Slot1;
     // (SaveAs) `template` (true) or `live` (false).
@@ -213,8 +214,7 @@ struct PresetSection {
 /// connector, or the PC-1600's LH5803 side) with its `me` / `pv` / `pu` gates.
 struct PresetBusRom {
     std::string path;  // resolved against the preset's directory; read at load time
-    int bank = -1;     // 4-7, or -1
-    bool hasAddress = false;
+    int bank = -1;     // 4-7, or -1 = `address`
     uint16_t address = 0;
     bool me1 = false;  // `me: 1`
     int pv = -1, pu = -1;  // 0 / 1, or -1 = either
@@ -305,3 +305,7 @@ struct PresetFile {
 /// preset is parsed all-or-nothing, so a bad preset fails before the
 /// machine is even started.
 bool parsePresetFile(const std::string& path, PresetFile* out, std::string* error);
+
+/// A path in a preset: `~` / `~/...` is the home directory, anything else
+/// relative is relative to the preset's directory `dir`.
+std::string resolvePath(const std::filesystem::path& dir, const std::string& value);

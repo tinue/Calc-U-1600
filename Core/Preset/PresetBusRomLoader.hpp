@@ -1,12 +1,12 @@
 #pragma once
 #include <cstdio>
-#include <fstream>
-#include <iterator>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "../Connector/BusRomCard.hpp"
+#include "../FileIO.hpp"
 #include "PresetFile.hpp"
 
 // Builds the cards for a preset's `bus-rom:` items (PresetFile::busRoms).
@@ -15,12 +15,10 @@
 namespace preset_bus_rom {
 
 inline bool readRom(const PresetBusRom& rom, size_t maxSize, std::vector<uint8_t>* out, std::string* error) {
-    std::ifstream in(rom.path, std::ios::binary);
-    if (!in) {
+    if (!readWholeFile(rom.path, out)) {
         *error = "could not read " + rom.path;
         return false;
     }
-    out->assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     if (out->empty() || out->size() > maxSize) {
         *error = rom.path + ": " + std::to_string(out->size()) + " bytes, expected 1-" + std::to_string(maxSize);
         return false;
@@ -40,6 +38,36 @@ inline std::unique_ptr<PC1600BusRomCard> makeSystemBusCard(const PresetBusRom& r
     std::vector<uint8_t> bytes;
     if (!readRom(rom, PC1600BusRomCard::kBankSize, &bytes, error)) return nullptr;
     return std::make_unique<PC1600BusRomCard>(std::move(bytes), uint8_t(rom.bank));
+}
+
+/// Attaches `card` (null = its make*Card() failed) to `machine`.
+template <class Machine, class Card>
+bool attach(Machine& machine, std::unique_ptr<Card> card) {
+    if (!card) return false;
+    machine.attachBusRom(std::move(card));
+    return true;
+}
+
+inline std::string describe(const PresetBusRom& rom);
+
+/// Attaches every `bus-rom:` item through `attachOne(rom, &err)` (a make*Card()
+/// plus attach()), logging each; the first failure stops with `*error` set.
+/// Called last, but it puts each card in front of its chain, so a bus ROM
+/// shadows the ROM of a peripheral attached earlier at the same place (e.g.
+/// a rebuilt host-drive ROM in bank 7).
+template <class AttachOne>
+bool attachAll(const std::vector<PresetBusRom>& roms, AttachOne attachOne,
+               const std::function<void(const std::string&)>& log, std::string* error) {
+    for (const PresetBusRom& rom : roms) {
+        std::string err;
+        if (!attachOne(rom, &err)) {
+            *error = "bus-rom: " + err;
+            if (log) log(*error);
+            return false;
+        }
+        if (log) log(describe(rom));
+    }
+    return true;
 }
 
 /// A line for the preset log.

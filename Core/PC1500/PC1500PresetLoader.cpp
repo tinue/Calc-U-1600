@@ -128,19 +128,13 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
             if (log) log("plotter: CE-150 attached");
         }
         if (!attachPresetInterface(machine, preset.interfaceName, romDirs, log, &result)) return false;
-        // Last, but in front of the chain: a bus ROM shadows the ROM of a
-        // peripheral attached above at the same place.
-        for (const PresetBusRom& rom : preset.busRoms) {
-            auto card = preset_bus_rom::makeCard(rom, &result.error);
-            if (!card) {
-                result.error = "bus-rom: " + result.error;
-                if (log) log(result.error);
-                return false;
-            }
-            machine.attachBusRom(std::move(card));
-            if (log) log(preset_bus_rom::describe(rom));
-        }
-        return true;
+        // `bank` is PC-1600 only (the parser refuses it here).
+        return preset_bus_rom::attachAll(
+            preset.busRoms,
+            [&](const PresetBusRom& rom, std::string* err) {
+                return preset_bus_rom::attach(machine, preset_bus_rom::makeCard(rom, err));
+            },
+            log, &result.error);
     }();
 
     // Machine is now armed (ROM/module/plotter wired) but still powered

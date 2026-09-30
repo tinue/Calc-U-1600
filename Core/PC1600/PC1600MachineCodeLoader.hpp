@@ -14,8 +14,8 @@ class PC1600Machine;
 // $8000-$BFFF window. `addr` is the Z-80 (SC7852) address -- no +$8000
 // conversion. The bytes go straight into the backing store
 // (debugWriteInternalRam / debugWriteSlotImage), so the current bank
-// state doesn't matter. Shared by the preset loader's a machine-code `program: file:`
-// and the GUI's "Load Machine Code…". Returns false, writing nothing, with
+// state doesn't matter. Shared by the preset loader's machine-code
+// `program: file:` and the GUI's "Load Machine Code…". Returns false, writing nothing, with
 // `error` set (no "section N:" prefix -- the caller adds its own context).
 bool loadPC1600MachineCode(PC1600Machine& machine, int slot, uint32_t addr, const uint8_t* data, size_t len,
                            std::string* error);

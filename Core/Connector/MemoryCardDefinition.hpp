@@ -5,13 +5,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "../FileIO.hpp"
 #include "../Yaml.hpp"
 
 // ── Parsed + validated memory-card definition ─────────────────────────
@@ -1189,12 +1188,10 @@ inline bool parseInitialContent(const YamlNode& node, const Region& regionSoFar,
                 return false;
             }
             const std::filesystem::path file = std::filesystem::path(baseDir) / rel;  // absolute rel wins
-            std::ifstream in(file, std::ios::binary);
-            if (!in) {
+            if (!readWholeFile(file, &bytes)) {
                 *error = "line " + std::to_string(pN->line) + ": cannot read '" + file.string() + "'";
                 return false;
             }
-            bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
         } else {
             *error = "line " + std::to_string(encN->line) + ": unknown encoding '" + encoding + "'";
             return false;

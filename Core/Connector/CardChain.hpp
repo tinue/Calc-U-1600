@@ -27,18 +27,10 @@ public:
     using WriteReturn = decltype(std::declval<Card&>().respondsToWrite(std::declval<const Pins&>(), uint8_t{}));
 
     /// Appends (no-op if already attached, or null).
-    void attach(Card* card) {
-        if (!card || std::find(m_cards.begin(), m_cards.end(), card) != m_cards.end()) return;
-        m_cards.push_back(card);
-        if (auto* source = dynamic_cast<const InhibitSource*>(card)) m_inhibit.push_back(source);
-    }
+    void attach(Card* card) { insert(m_cards.end(), card); }
     /// Inserts at the front, so this card answers before the others: a
     /// bus ROM that shadows a bundled one (BusRomCard.hpp).
-    void attachFirst(Card* card) {
-        if (!card || std::find(m_cards.begin(), m_cards.end(), card) != m_cards.end()) return;
-        m_cards.insert(m_cards.begin(), card);
-        if (auto* source = dynamic_cast<const InhibitSource*>(card)) m_inhibit.push_back(source);
-    }
+    void attachFirst(Card* card) { insert(m_cards.begin(), card); }
     void detach(Card* card) {
         m_cards.erase(std::remove(m_cards.begin(), m_cards.end(), card), m_cards.end());
         if (auto* source = dynamic_cast<const InhibitSource*>(card))
@@ -90,6 +82,12 @@ public:
     }
 
 private:
+    void insert(typename std::vector<Card*>::iterator at, Card* card) {
+        if (!card || std::find(m_cards.begin(), m_cards.end(), card) != m_cards.end()) return;
+        m_cards.insert(at, card);
+        if (auto* source = dynamic_cast<const InhibitSource*>(card)) m_inhibit.push_back(source);
+    }
+
     std::vector<Card*> m_cards;
     std::vector<const InhibitSource*> m_inhibit; // the cards in m_cards that can assert INHIBIT
 };

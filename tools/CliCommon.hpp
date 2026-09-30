@@ -7,13 +7,14 @@
 #include <string>
 #include <vector>
 
+#include "../Core/FileIO.hpp"
 #include "../Core/Resources/BundledRomCatalog.hpp"
 
 namespace cli {
 
 /// Reads the whole file. False if it can't be opened.
 inline bool readFile(const std::string& path, std::vector<uint8_t>* out) {
-    return BundledRoms::detail::readWholeFile(path, out);
+    return readWholeFile(path, out);
 }
 
 /// Reads the whole file and requires exactly `size` bytes (ROM images).

@@ -85,13 +85,12 @@ inline QString lastOpenDir(OpenFolder folder) {
     return backingStore().value(openFolderKeyGroup(folder) + QStringLiteral("lastOpenDir"), QString()).toString();
 }
 
-inline void rememberOpenFile(OpenFolder folder, const QString& filePath) {
-    backingStore().setValue(openFolderKeyGroup(folder) + QStringLiteral("lastOpenDir"),
-                            QFileInfo(filePath).absolutePath());
-}
-
 inline void rememberOpenDir(OpenFolder folder, const QString& dir) {
     backingStore().setValue(openFolderKeyGroup(folder) + QStringLiteral("lastOpenDir"), QDir(dir).absolutePath());
+}
+
+inline void rememberOpenFile(OpenFolder folder, const QString& filePath) {
+    rememberOpenDir(folder, QFileInfo(filePath).absolutePath());
 }
 
 // The start directory for that dialog: the fixed openDir() if set, else

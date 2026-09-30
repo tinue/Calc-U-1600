@@ -49,8 +49,8 @@ public:
     // Loads a plain `.bas` listing directly into the *currently running*
     // machine -- no preset wrapper, no model/ROM/module rebuild (only a
     // reset). Runs the same "reset, reach PRO mode, NEW0, poke the
-    // tokenized payload in" choreography a preset's a BASIC `program: file:`
-    // program section relies on its own `keys:` block for (see
+    // tokenized payload in" choreography a preset's BASIC `program: file:`
+    // section relies on its own `keys:` block for (see
     // PC1500BasicLoader.hpp/PC1600BasicLoader.hpp's own doc comments), just
     // driven here instead of by preset steps. Synchronous on the calling
     // thread, same caller contract as loadPreset() (stop the frame timer

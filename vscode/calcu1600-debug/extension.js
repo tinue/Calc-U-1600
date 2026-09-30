@@ -27,8 +27,11 @@ function expandHome(p) {
     return p === '~' || p.startsWith('~/') ? path.join(os.homedir(), p.slice(1)) : p;
 }
 
-// The assemblers: the setting, else the environment variable, else found
-// on the PATH.
+// The assemblers assembleCommand() knows.
+const ASSEMBLERS = ['zasm', 'sdas'];
+
+// The assembler tools: the setting, else the environment variable, else
+// found on the PATH.
 function zasmPath() {
     return expandHome(setting('zasmPath') || process.env.CALCU_ZASM || 'zasm');
 }
@@ -100,7 +103,7 @@ async function runTask(task) {
 async function build(config) {
     if (config.build) {
         const { assembler, file } = config.build;
-        if (assembler !== 'zasm' && assembler !== 'sdas') throw new Error(`"build.assembler" is "zasm" or "sdas", not "${assembler}"`);
+        if (!ASSEMBLERS.includes(assembler)) throw new Error(`"build.assembler" is ${ASSEMBLERS.map(a => `"${a}"`).join(' or ')}, not "${assembler}"`);
         const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(file));
         return runTask(assembleTask(assembler, file, folder));
     }
@@ -246,10 +249,10 @@ function activate(context) {
         vscode.debug.registerDebugConfigurationProvider('calcu1600', { provideDebugConfigurations: dynamicConfigurations },
                                                         vscode.DebugConfigurationProviderTriggerKind.Dynamic),
         vscode.tasks.registerTaskProvider('calcu1600', {
-            provideTasks: () => ['zasm', 'sdas'].map(a => assembleTask(a)),
+            provideTasks: () => ASSEMBLERS.map(a => assembleTask(a)),
             resolveTask(task) {
                 const { assembler, file } = task.definition;
-                if (assembler !== 'zasm' && assembler !== 'sdas') return undefined;
+                if (!ASSEMBLERS.includes(assembler)) return undefined;
                 const t = assembleTask(assembler, file, task.scope);
                 return new vscode.Task(task.definition, task.scope, task.name, 'calcu1600', t.execution, t.problemMatchers);
             },

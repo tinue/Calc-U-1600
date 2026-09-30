@@ -23,8 +23,8 @@ enum class Target { PC1500, PC1600 };  // PC1500 also covers the PC-1500A
 
 // PC-1600 load targets: S0 = internal RAM ($C000-$FFFF), S1/S2 = the two
 // memory slots ($8000-$BFFF window) -- the same windows as the preset
-// loader's a machine-code `program: file:`. "Load Machine Code…" only ever loads into
-// BASIC's program area (the one `NEW "S0:"` reserves in), so S1/S2 are
+// loader's machine-code `program: file:`. "Load Machine Code…" only ever
+// loads into BASIC's program area (the one `NEW "S0:"` reserves in), so S1/S2 are
 // used only when a module is folded into that area as extension memory.
 enum class Slot { S0, S1, S2 };
 const char* slotName(Slot slot);
@@ -117,8 +117,8 @@ struct Plan {
 
 // ── One load pipeline ─────────────────────────────────────────────────────
 //
-// Every machine-code load -- Load Machine Code…, a preset's `format:
-// binary`, the debugger's Build & Load -- plans with planLoad(): the file
+// Every machine-code load -- Load Machine Code…, a preset's machine-code
+// `program: file:`, the debugger's Build & Load -- plans with planLoad(): the file
 // checks, the CPU, the address and length, the range and (PC-1600) the
 // target. On the PC-1600 the MODE and TITLE decide
 // (docs/background/plans/Loader-Mode-Plan.md): a PC-1600 header means Z-80
@@ -192,7 +192,6 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
 
 // Parses a user-typed hex address: `C000`, `&C000`, `$C000`, `0xC000`
 // (surrounding blanks ignored). False on anything else or > $FFFF.
-// Header-inline so PresetFile.cpp can share it without linking the rest.
 inline bool parseHexAddress(const std::string& text, uint32_t* out) {
     size_t i = 0, n = text.size();
     while (i < n && std::isspace(static_cast<unsigned char>(text[i]))) i++;

@@ -1,6 +1,6 @@
 #pragma once
 #include <cstddef>
-#include <string>
+#include <string_view>
 
 // ── Minimal UTF-8 decoding for host text typed into a machine ────────────
 //
@@ -10,9 +10,10 @@
 
 /// Decodes the character starting at `text[i]` into `cp` and advances `i`
 /// past it. Returns false (and advances by one byte) for a malformed or
-/// truncated sequence, so a caller can skip it and go on. Returns false
+/// truncated sequence -- an overlong form, a surrogate or a code point past
+/// U+10FFFF included -- so a caller can skip it and go on. Returns false
 /// without advancing once `i` reaches the end.
-inline bool decodeUtf8(const std::string& text, std::size_t& i, char32_t& cp) {
+inline bool decodeUtf8(std::string_view text, std::size_t& i, char32_t& cp) {
     if (i >= text.size()) return false;
     const auto lead = static_cast<unsigned char>(text[i]);
     int extra = 0;
@@ -42,6 +43,11 @@ inline bool decodeUtf8(const std::string& text, std::size_t& i, char32_t& cp) {
             return false;
         }
         cp = (cp << 6) | (b & 0x3F);
+    }
+    static constexpr char32_t kMin[] = {0, 0x80, 0x800, 0x10000};
+    if (cp < kMin[extra] || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) {
+        ++i;
+        return false;
     }
     i += static_cast<std::size_t>(extra) + 1;
     return true;

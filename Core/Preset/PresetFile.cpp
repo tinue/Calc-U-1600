@@ -16,6 +16,16 @@
 #include <fstream>
 #include <sstream>
 
+std::string resolvePath(const std::filesystem::path& dir, const std::string& value) {
+    std::string v = value;
+    if (v == "~" || v.rfind("~/", 0) == 0) {
+        if (const char* home = std::getenv("HOME")) v = std::string(home) + v.substr(1);
+    }
+    std::filesystem::path p(v);
+    if (p.is_absolute()) return p.lexically_normal().string();
+    return (dir / p).lexically_normal().string();
+}
+
 namespace {
 
 // ASCII-lowercases `s` in place (preset keywords/values are case-insensitive).
@@ -117,18 +127,6 @@ bool readLines(const std::string& path, std::vector<RawLine>* out, std::string* 
         out->push_back(RawLine{static_cast<int>(firstNonSpace), raw.substr(firstNonSpace), lineNo});
     }
     return true;
-}
-
-// A path in the preset: `~` / `~/...` is the home directory, anything else
-// relative is relative to the preset's own directory.
-std::string resolvePath(const std::filesystem::path& dir, const std::string& value) {
-    std::string v = value;
-    if (v == "~" || v.rfind("~/", 0) == 0) {
-        if (const char* home = std::getenv("HOME")) v = std::string(home) + v.substr(1);
-    }
-    std::filesystem::path p(v);
-    if (p.is_absolute()) return p.lexically_normal().string();
-    return (dir / p).lexically_normal().string();
 }
 
 // A number anywhere in a preset: `&`, `0x` or `$` makes it hex, otherwise
@@ -471,12 +469,13 @@ bool parseProgramBlock(const std::vector<RawLine>& lines, size_t& idx, const std
             if (typed) {
                 prog.format = PresetProgram::Format::BasicText;
                 prog.text.assign(bytes.begin(), bytes.end());
-                break;
+            } else {
+                prog.format = PresetProgram::Format::BasicBinary;
             }
-            [[fallthrough]];
+            break;
         case Kind::BasicPC1500:
         case Kind::BasicPC1600:
-            if (typed && file.kind != Kind::BasicListing) {
+            if (typed) {
                 *error = at + name + " is tokenized BASIC; only a listing can be typed in";
                 return false;
             }
@@ -506,11 +505,6 @@ bool parseProgramBlock(const std::vector<RawLine>& lines, size_t& idx, const std
     *out = prog;
     return true;
 }
-
-} // namespace
-
-
-namespace {
 
 // A block that is YAML proper (nested maps and lists: `debug:`,
 // `bus-rom:`): its lines go to the YAML reader, shifted to column 0 and
@@ -575,6 +569,7 @@ bool parseBusRoms(const YamlNode& block, const std::filesystem::path& presetDir,
         if (!item.find("file")->asString(&rom.path, error)) return false;
         rom.path = resolvePath(presetDir, rom.path);
         uint32_t v = 0;
+        const YamlNode* address = item.find("address");
         if (const YamlNode* n = item.find("bank")) {
             if (!number(*n, "bank", &v)) return false;
             if (v < 4 || v > 7) {
@@ -583,16 +578,15 @@ bool parseBusRoms(const YamlNode& block, const std::filesystem::path& presetDir,
             }
             rom.bank = int(v);
         }
-        if (const YamlNode* n = item.find("address")) {
-            if (!number(*n, "address", &v)) return false;
+        if (address) {
+            if (!number(*address, "address", &v)) return false;
             if (v > 0xFFFF) {
-                *error = "line " + std::to_string(n->line) + ": 'address' must be &0000-&FFFF";
+                *error = "line " + std::to_string(address->line) + ": 'address' must be &0000-&FFFF";
                 return false;
             }
             rom.address = uint16_t(v);
-            rom.hasAddress = true;
         }
-        if ((rom.bank >= 0) == rom.hasAddress) {
+        if ((rom.bank >= 0) == (address != nullptr)) {
             *error = "line " + std::to_string(item.line) + ": give either 'bank' (PC-1600 system bus) or 'address'";
             return false;
         }
@@ -600,17 +594,18 @@ bool parseBusRoms(const YamlNode& block, const std::filesystem::path& presetDir,
             *error = "line " + std::to_string(item.line) + ": 'me', 'pv' and 'pu' go with 'address', not 'bank'";
             return false;
         }
-        for (const char* flag : {"me", "pv", "pu"})
+        int me = 0;
+        const std::pair<const char*, int*> flags[] = {{"me", &me}, {"pv", &rom.pv}, {"pu", &rom.pu}};
+        for (const auto& [flag, dest] : flags)
             if (const YamlNode* n = item.find(flag)) {
                 if (!number(*n, flag, &v)) return false;
                 if (v != 0 && v != 1) {
                     *error = "line " + std::to_string(n->line) + ": '" + flag + "' must be 0 or 1";
                     return false;
                 }
-                const std::string f = flag;
-                if (f == "me") rom.me1 = v == 1;
-                else (f == "pv" ? rom.pv : rom.pu) = int(v);
+                *dest = int(v);
             }
+        rom.me1 = me == 1;
         out->push_back(rom);
     }
     return true;
