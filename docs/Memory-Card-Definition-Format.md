@@ -29,7 +29,7 @@ the same directory.
 
 | Key | Required | Value |
 |---|---|---|
-| `module-name` | yes | Short identifier for the module (e.g. `CE-155`, `CE-1600M`). Shown verbatim in the GUI's control-bar module picker, and the key a preset's `modulespec: <module-name>` resolves against (§8). Unique across the module directory. |
+| `module-name` | yes | Short identifier for the module (e.g. `CE-155`, `CE-1600M`). Shown verbatim in the GUI's control-bar module picker, and the key a preset's `slot-N: <module-name>` resolves against (§8). Unique across the module directory. |
 | `compatible-hosts` | yes | List, non-empty, drawn from `PC-1500`, `PC-1500A`, `PC-1600-Slot-1`, `PC-1600-Slot-2`. The loader's **only** compatibility check (spec §1): a host not on this list is declined; a host on it gets no further test. |
 | `definition-terminology` | yes | Exactly one of the same four identifiers. Names the pin-name vocabulary every `chip-select` / `signal` / `line` field in the file is resolved against, once, at parse time (spec §1). Must appear in `compatible-hosts`. |
 | `regions` | yes | List of one or more region maps (§2). |
@@ -322,40 +322,35 @@ threaded through the loader, which nothing else currently needs.
 
 ---
 
-## 8. Loading a card — `modulespec:` and `modulespec-file:` preset keys
+## 8. Loading a card — the `slot-N:` and `slot-N-file:` preset keys
 
-A definition is plugged in from a preset scenario file, in a
-`memory-expansion*` block — one item, exactly one of the two keys, never
-combined:
+A definition is plugged in from a preset, per slot, by name or by file —
+exactly one of the two per slot:
 
 ```yaml
 # By module-name, from the bundled/standard module directory (preferred).
-# PC-1500 / PC-1500A
-memory-expansion:
-  - modulespec: CE-155
+# PC-1500 / PC-1500A: one slot
+slot-1: CE-155
 
-# PC-1600 (per slot)
-memory-expansion-1:
-  - modulespec: CE-1600M
-memory-expansion-2:
-  - modulespec: CE-1601M
+# PC-1600: two slots
+slot-1: CE-1600M
+slot-2: CE-1601M
 ```
 
 ```yaml
 # By path to a definition file, relative to the preset's own directory
-# (same rule as `program.path`). For a one-off card not in the directory.
-memory-expansion:
-  - modulespec-file: ../cards/prototype.card.yaml
+# (like every path in a preset). For a one-off card not in the directory.
+slot-1-file: ../cards/prototype.card.yaml
 ```
 
-- `modulespec: <module-name>` is resolved by scanning one or more **module
+- `slot-N: <module-name>` is resolved by scanning one or more **module
   directories** (`Core/Connector/MemoryCardCatalog.hpp`), in order, for the
   `.card.yaml` whose `module-name:` matches. WHERE those directories are is
   environment-specific, like the ROM path:
   - the **app** searches its bundled resources first, then the
     **Settings ▸ Storage ▸ Battery-card saves** folder — so a preset can
     name a user's own saved battery-card instance (matched by the `module-name:` written into it,
-    e.g. `- modulespec: CE-1601M - Programs`; the on-disk filename, blanks
+    e.g. `slot-2: CE-1601M - Programs`; the on-disk filename, blanks
     and all, is not consulted);
   - the **CLIs** use `--modules-dir` (default `Qt6/resources/cards`,
     relative to the working directory like `roms/`), which may be repeated
@@ -366,7 +361,7 @@ memory-expansion:
   load error; two files claiming one name **within a single directory** is
   an ambiguity error. A missing/unreadable fallback directory is skipped
   silently.
-- `modulespec-file: <path>` names a file directly and never consults the
+- `slot-N-file: <path>` names a file directly and never consults the
   module directory.
 
 **Templates and instances.** What happens to a loaded card's file is decided

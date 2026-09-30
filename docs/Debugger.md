@@ -241,7 +241,7 @@ flowchart LR
           path: build/module.bin    # relative to the .card.yaml; read at every load
 ```
 
-Plug it in with `memory-expansion:` (PC-1500) or `memory-expansion-1:` / `-2:` (PC-1600) and `- modulespec-file: module.card.yaml` in the project preset. A ROM's content must cover the whole ROM, so pad the binary to its full size. There is no template for slot modules yet.
+Plug it in with `slot-1-file: module.card.yaml` (or `slot-2-file:` on the PC-1600) in the project preset. A ROM's content must cover the whole ROM, so pad the binary to its full size. There is no template for slot modules yet.
 
 ---
 

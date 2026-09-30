@@ -526,7 +526,7 @@ Known gap: on the PC-1600, `SETDEV KI` + `INPUT` doesn't work yet.
 
 A preset is a small script that builds a machine from a cold boot: which
 model, modules and peripherals, then what to type and which programs to
-load. The file extension names the model family: `.pc1500`, `.pc1500a` or
+load. The file extension matches the model: `.pc1500`, `.pc1500a` or
 `.pc1600`. Open one with **File ▸ Load Preset…**. The
 [examples/](../examples/) folder is full of them.
 
@@ -560,16 +560,20 @@ followed by ENTER.
 
 ```yaml
 model: PC-1600:new            # PC-1500[:A01|A03|A04] | PC-1500A | PC-1600[:new|old]
-plotter: ce1600p:new          # ce150 (all models) | ce1600p[:new|old] (PC-1600)
-floppy: Formatted,A           # PC-1600 with ce1600p only: a disk by name, side A or B
-memory-expansion-1:           # PC-1600 slot 1 (slot 2: memory-expansion-2:)
-  - modulespec: CE-1600M      # a bundled or saved module, by name
+plotter: CE-1600P:new         # CE-150 (all models) | CE-1600P[:new|old] (PC-1600)
+floppy: Formatted,A           # PC-1600 with the CE-1600P only: a disk by name, side A or B
+slot-1: CE-1600M              # a bundled or saved module, by name
+slot-2-file: my.card.yaml     # or a module definition file, next to the preset
 ```
 
-- **PC-1500/1500A:** the one slot is `memory-expansion:`.
-- **Your own module definition:** `- modulespec-file: my.card.yaml`, with the
-  path relative to the preset.
-- **CE-158:** `interface: ce158` attaches it (not yet together with the CE-1600P).
+- **Names** are Sharp's, with the hyphen, in any case: `CE-1600P`,
+  `ce-1600p`.
+- **By name or by file:** `slot-1:` names a module, `slot-1-file:` a
+  `.card.yaml` file. `floppy:` and `floppy-file:` work the same way. Paths
+  are relative to the preset; `~/` is your home folder.
+- **PC-1500/1500A:** there is only `slot-1:`.
+- **CE-158:** `interface: CE-158` attaches it (not yet together with the CE-1600P).
+- **Nothing attached:** leave the key out.
 
 ### 8.4 Loading a BASIC program
 
@@ -579,8 +583,7 @@ keys:
   - key: mode
   - type: NEW0
 program:
-  path: hanoi.bas
-  format: basic-binary        # converted and written straight into memory
+  file: hanoi.bas             # converted and written straight into memory
 keys:
   - key: mode
   - type: RUN
@@ -591,16 +594,16 @@ keys:
   PC-1600, type `MODE1` first; for a program module, `INIT"S1:","P"` and
   `TITLE"S1:"`. The loader follows MODE and `TITLE`, as Load BASIC Program
   does.
-- `format: basic-binary` works like **File ▸ Load BASIC Program…**
-  ([chapter 4](#4-loading-a-basic-program)) and is fast: `path:` is a
-  `.bas` listing or a tokenized `.bbin`.
-- `format: basic-text` types the program line by line, the way you would.
-  It's slow but works everywhere, and the program can sit in the preset
-  itself:
+- `file:` works like **File ▸ Load BASIC Program…**
+  ([chapter 4](#4-loading-a-basic-program)) and is fast: the file is a
+  `.bas` listing or a tokenized `.bbin`. What the file holds decides how it
+  is loaded, as when you drop it on the window.
+- `text: |` types the program line by line, the way you would. It's slow
+  but works everywhere, and the program sits in the preset itself.
+  `typed: true` next to a `file:` types a listing in the same way:
 
   ```yaml
   program:
-    format: basic-text
     text: |
       10 PRINT "HELLO"
       20 GOTO 10
@@ -622,11 +625,13 @@ keys:
 
 ```yaml
 program:
-  path: memtest_bank.bin
-  format: binary
-  address: 0x7C01             # needed if the file has no header
-# length: 0x200               # load only part of the file
+  file: memtest_bank.bin
+  address: &7C01              # needed if the file has no header
+# length: &200                # load only part of the file
 ```
+
+- **Numbers:** `&`, `0x` or `$` makes a number hex; without one it is
+  decimal. This holds for every number in a preset.
 
 - **Files with a header** (PC-1600, CE-158) bring their own address.
 - **PC-1600:** the loader places the code the way Load Machine Code does,
@@ -641,9 +646,9 @@ program:
 
 | Step | What it does |
 |---|---|
-| `- saveas: live s1:My card` | Name & Save the module in slot 1 into your save folder. `s2:` and `floppy:` are PC-1600 only. Overwrites a file of the same name, but never takes a template's name. |
-| `- saveas: template s1:My card` | The same, saved as a template. Running the preset again replaces your own template of that name; a bundled name is refused. |
-| `- saveas: template s2:file:Card.card.yaml` | Saves to that file, next to the preset (`.card.yaml` for a card, `.floppy.yaml` for `floppy:`). The name is the file name. |
+| `- saveas: live slot-1:My card` | Name & Save the module in slot 1 into your save folder. `slot-2:` and `floppy:` are PC-1600 only. Overwrites a file of the same name, but never takes a template's name. |
+| `- saveas: template slot-1:My card` | The same, saved as a template. Running the preset again replaces your own template of that name; a bundled name is refused. |
+| `- saveas: template slot-2:file:Card.card.yaml` | Saves to that file, next to the preset (`.card.yaml` for a card, `.floppy.yaml` for `floppy:`). The name is the file name. |
 | `- screenshot: shot.png` | Saves the LCD image (as Copy Screen does) in the trace directory. |
 | `- syncclock:` | Sets the calculator's clock from your computer. Put it last, because a preset runs at full speed and the clock runs ahead. |
 | `- trace: run.bin` / `- trace: off` | Starts / stops a CPU trace (see the [Debug panel](#92-debug-panel)). |
@@ -694,22 +699,23 @@ This is what it leaves on the LCD:
 | Key | Values |
 |---|---|
 | `model:` | `PC-1500[:A01\|A03\|A04]`, `PC-1500A`, `PC-1600[:new\|old]` (required) |
-| `plotter:` | `ce150`, `ce1600p[:new\|old]` (PC-1600) |
-| `interface:` | `ce158` |
-| `floppy:` | disk name, optionally `,A` / `,B` (PC-1600 with `ce1600p`) |
+| `plotter:` | `CE-150`, `CE-1600P[:new\|old]` (PC-1600) |
+| `interface:` | `CE-158` |
+| `floppy:` | disk name, optionally `,A` / `,B` (PC-1600 with the CE-1600P) |
 | `floppy-file:` | a `.floppy.yaml` file next to the preset instead, optionally `,A` / `,B` |
 | `host-drive:` | a folder mounted as drive `S3:` (PC-1600), relative to the preset or `~/…`; see [A folder as a drive](#a-folder-as-a-drive-pc-1600) |
-| `memory-expansion:` | PC-1500/1500A: one `- modulespec: <name>` or `- modulespec-file: <path>` |
-| `memory-expansion-1:`, `-2:` | PC-1600 slot 1 / slot 2, same form |
+| `slot-1:`, `slot-2:` | a module by name; `slot-2:` is PC-1600 only |
+| `slot-1-file:`, `slot-2-file:` | a `.card.yaml` file next to the preset instead |
 | `keys:` | a list of steps (below); may appear any number of times |
-| `program:` | `format:`, `path:` or `text: \|`, `address:`, `length:`; may appear any number of times |
-| `bus-rom:` | ROM files on the 60-pin bus, for developing a ROM extension: `- file:` with `bank: 4`–`7` (PC-1600 system bus) or `address:` with optional `me1:`, `pv:`, `pu:` (PC-1500, PC-1600 LH5803 side). A bus ROM shadows a bundled ROM at the same place; see the [Debugger](Debugger.md) |
+| `program:` | `file:` (with `address:`, `length:` for machine code, or `typed: true` for a listing) or `text: \|`; may appear any number of times |
+| `bus-rom:` | ROM files on the 60-pin bus, for developing a ROM extension: `- file:` with `bank: 4`–`7` (PC-1600 system bus) or `address:` with optional `me:`, `pv:`, `pu:` (each `0` or `1`) (PC-1500, PC-1600 LH5803 side). A bus ROM shadows a bundled ROM at the same place; see the [Debugger](Debugger.md) |
 | `debug:` | the debugger's settings for a project preset; ignored when the preset is loaded; see the [Debugger](Debugger.md) |
 
 **Steps:** `key:`, `type:`, `wait:`, `saveas:`, `screenshot:`, `syncclock:`, `trace:`.
 
-**`program:` formats:** `basic-binary` (alias `basic-tokenized`),
-`basic-text`, `binary`.
+**`program: file:`** is loaded by what it holds: a BASIC listing (`.bas`),
+tokenized BASIC, or machine code with or without a header. Headerless
+machine code needs `address:`.
 
 **Key names for `key:`**
 - A single letter, digit, or `+ - * / = ( ) .`.
@@ -719,8 +725,8 @@ This is what it leaves on the LCD:
   preset.
 
 **Comments:** a `#` line is a comment, and ` # …` after a value is too. The
-exception is `type:`, where everything is typed: a `#` in BASIC (`PRINT #1`)
-must stay.
+exception is `type:`, where everything after `type: ` is typed as written,
+quotes included: a `#` in BASIC (`PRINT #1`) must stay.
 
 ---
 
@@ -778,7 +784,7 @@ why) and [Memory-Card-Definition-Format.md](Memory-Card-Definition-Format.md)
   `ce1638.card.yaml` and `ce1601m.card.yaml` are banked. The fictional
   [examples/memory/memory-cards/pc1500-maxed-out.card.yaml](../examples/memory/memory-cards/pc1500-maxed-out.card.yaml)
   shows every PC-1500 expansion pin in use, and its preset loads it with
-  `modulespec-file:`.
+  `slot-1-file:`.
 - **Make it appear in the pickers:** put a file with `template: true` in
   the Battery-card saves folder. Like the bundled cards it is never written
   to, and Name & Save makes your own copy.

@@ -26,7 +26,7 @@ The PC-1600 has two calculator ROM versions, selectable in the app
 (Machine > ROM Version, or `model: PC-1600:new|old` in a PC-1600 preset).
 `PEEK #(0,&7FFF)` reads 4 or 5 on the **new** ROM and 130 on the **old**
 one. The CE-1600P ROM has its own new/old choice (Machine > CE-1600P ROM,
-or `plotter: ce1600p:new|old` in a preset) that is independent of the
+or `plotter: CE-1600P:new|old` in a preset) that is independent of the
 calculator ROM: any combination works. The CE-1600F lives in the same box, so
 it follows the CE-1600P choice.
 

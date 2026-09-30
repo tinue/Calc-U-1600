@@ -63,6 +63,25 @@
 
 ### Changed
 
+- **Presets** The format follows one naming rule; old presets need these
+  changes (the old forms are refused):
+  - `memory-expansion:` / `-1:` / `-2:` with `- modulespec:` becomes
+    `slot-1: CE-1600M`, and `- modulespec-file:` becomes `slot-1-file:`
+    (`slot-2` likewise). `saveas:` targets are `slot-1`, `slot-2`, `floppy`.
+  - Product names are Sharp's, with the hyphen: `plotter: CE-1600P`,
+    `CE-150`, `interface: CE-158`, in any case. `none` / `off` are gone;
+    leave the key out.
+  - `program:` takes `file:` (was `path:`) and has no `format:`: the file's
+    content picks the loader. `text: |` or `typed: true` types a listing
+    in.
+  - Numbers: `&`, `0x` or `$` is hex, a bare number decimal, also for
+    `address:` (it used to be hex without a prefix). `bus-rom:` takes
+    `me: 0|1` (was `me1:`).
+  - `type:` types quotes too; `wait:` takes a plain number (`1s` is
+    refused); `~/` works in every path.
+  - The bundled presets, examples and VS Code presets are converted; four
+    PC-1500A presets saved as `.pc1500` are now `.pc1500a`. See the User
+    Guide, chapter 8.
 - **Loaders** On the PC-1600, Load BASIC Program, Load Machine Code and
   presets follow the calculator's MODE and `TITLE`, as `LOAD` does: in
   MODE 1 a listing is PC-1500 BASIC and a headerless file LH5801 code at
@@ -104,6 +123,10 @@
 
 ### Fixed
 
+- **Examples** `lissajou-ce150.pc1600` plots again (its listing used the
+  PC-1600 keyword `LLINE` in MODE 1). The text-and-frame and CE-150
+  presets wait until the plot is done instead of a fixed time. The
+  chapter-5 screenshot preset parses again.
 - **Presets** On the PC-1500, a `program:` line that replaces a line of
   the same length (`10 A=1`, then `10 A=2`) is no longer reported as
   rejected.

@@ -119,10 +119,21 @@ The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, 
 - **Guide screenshots for chapter 6** (`docs/developer/screenshots/guide/06-*`): the
   Load Machine Code dialog now shows which CPU / address space is assumed,
   so `06-start-address.png` and `06-loaded.png` are out of date.
-- **Guide screenshots for chapter 5 fail:**
-  `docs/developer/screenshots/presets/pc1600-modules.pc1600` still uses the
-  old `saveas: s1:My programs`; `saveas:` now wants `template` or `live`
-  first, so `05-slot-picker` and `05-floppy-picker` aren't written.
+- **Guide screenshots for chapter 5 need a rerun:**
+  `docs/developer/screenshots/presets/pc1600-modules.pc1600` parses again
+  (`saveas: live slot-1:My programs`), so `tools/make_screenshots.sh
+  05-modules` can write `05-slot-picker` and `05-floppy-picker` again.
+  Note that its `saveas:` writes a live "My programs" card into the real
+  Battery-card saves folder.
+- **`examples/memory/flashtest_ce163f.pc1500a` stops with ERROR 1 IN 10.**
+  The lines are stored now (they used to be typed in RUN mode), but with
+  the CE-163F in the slot, BASIC's program area starts at &00C5 inside the
+  banked window, and line 10 (`POKE &6809,0`) switches that bank away
+  from under the running program. The startup presets move BASIC up with
+  `NEW&112`, which doesn't help here: the program pokes into the bank it
+  lives in. **Before fixing:** decide whether the demo becomes direct-mode
+  `type:` steps (as in its header comment) or a program placed outside
+  &0000-&3FFF.
 
 ## Expansion connectors: one model on both machines
 
@@ -465,13 +476,6 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
   `LoadOptions`, call `planLoad()` and add `pc1600WorkAreaWarning` on top.
   **Before fixing:** the dialog's own texts ("The LH5803's RAM is
   &0000-&7FFF.") differ from `planLoad()`'s; decide which wording stays.
-- **Preset paths: `~/` is expanded for `host-drive:` only**
-  (`PresetFile.cpp`), and `saveas: file:` paths are fixed up in a
-  post-pass (`resolveSaveAsPaths`) because `parseStepList` doesn't know
-  the preset directory. Fix: expand `~` inside `resolvePath()`, which
-  every path key goes through, and pass the preset directory to
-  `parseStepList`. *(behaviour)*: `floppy-file:`, `modulespec-file:`,
-  `path:` and `saveas file:` would then accept `~/` too.
 - **Host drive: small leftovers in `HostDirectoryDrive.hpp`.** A wildcard
   `doRename` calls `findOne()` (a folder listing) per matching file; check
   collisions against one name set instead. `doCreate` lists files, then

@@ -11,7 +11,7 @@ loaded on its own with **File ▸ Load BASIC Program…**. See
 
 | File | Machine | What it does |
 |---|---|---|
-| `lissajou-1500.pc1500` | PC-1500A + CE-150 | Lissajous figure |
+| `lissajou-1500.pc1500a` | PC-1500A + CE-150 | Lissajous figure |
 | `lissajou-1600.pc1600` | PC-1600 + CE-1600P | Lissajous figure |
 | `lissajou-ce150.pc1600` | PC-1600 + CE-150 | Lissajous figure, PC-1600 driving the CE-150 in MODE 1 |
 | `biorhythmus_1600.pc1600` | PC-1600 + CE-1600P | Biorhythm chart for a name and birth date |
@@ -59,7 +59,7 @@ loaded on its own with **File ▸ Load BASIC Program…**. See
 
 | File | Machine | What it does |
 |---|---|---|
-| `maxed-out-mem.pc1600` | PC-1600 + CE-1600M + CE-1601M | Formats the CE-1601M and splits it into RAM disk and program memory |
+| `maxed-out-mem.pc1600` | PC-1600 + CE-1600M + CE-1601M | Formats the CE-1601M and splits it into RAM disk and expansion memory |
 | `flashtest_ce163f.pc1500a` | PC-1500A + CE-163F | How flash writes work, from BASIC POKE/PEEK |
 | `memory-cards/` | PC-1500 | A self-made YAML memory card definition and a preset that uses it |
 

@@ -614,7 +614,7 @@ Three structural points this table confirms rather than just illustrates:
   ship under `Qt6/resources/cards/`, are indexed by `module-name` via
   `Core/Connector/MemoryCardCatalog.hpp`, and are selectable from the
   GUI's control-bar module picker; a preset reaches them with
-  `modulespec: <module-name>`. Which further modules ship (presumably at
+  `slot-N: <module-name>`. Which further modules ship (presumably at
   least the fully-confirmed rows in §9 — CE-155, CE-159, CE-161, CE-163,
   CE-163F, CE-1600M, CE-1601M) versus which stay example-only is a
   product decision for whoever authors the resource set, not a spec-level

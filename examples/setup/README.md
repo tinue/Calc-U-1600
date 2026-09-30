@@ -16,7 +16,7 @@ of BASIC programs, write a config file, and so on.
 
    - **Save the card.** End the preset with `- saveas: template|live ...`: by
      name into your save folder, or as a file next to the preset
-     (`file:`), which a "real" preset then loads with `- modulespec-file:` /
+     (`file:`), which a "real" preset then loads with `slot-N-file:` /
      `floppy-file:`. `examples/dwx/make_diskworks_media.pc1600` does this for
      `examples/dwx/DiskWorks.pc1600`.
 

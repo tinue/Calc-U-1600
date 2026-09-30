@@ -220,8 +220,8 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   slot is *empty*. Concrete modules now exist as software-defined cards
   — shipped card definitions `ce155.card.yaml`, `ce1600m.card.yaml`,
   `ce1601m.card.yaml` (each with its own `compatible-hosts`), plus the
-  hardcoded prototype cards — and attach via a preset
-  `memory-expansion-N:` block or the GUI control-bar module picker.
+  hardcoded prototype cards — and attach via a preset's
+  `slot-N:` key or the GUI control-bar module picker.
   `Core/Connector/SoftwareDefinedCard.hpp`, `Qt6/resources/cards/*.card.yaml`
 - **Page D bank 1**: the weakest-evidenced cell in the whole
   bank-switching map (single-source, routing it to the external 60-pin
@@ -426,14 +426,9 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
 
 `Core/Preset/PresetFile.cpp`, `Core/PC1600/PC1600PresetLoader.cpp`
 
-- **`check:` steps** not yet supported. `PresetFile.cpp:178`
-- **`format: basic-tokenized`** not yet supported. `PresetFile.cpp:363`
-- **`program: format: binary`** (machine-language loading) not supported
-  for a PC-1500 preset; **binary program sections** not supported for a
-  PC-1600 preset yet. `PresetFile.cpp:473`, `PC1600PresetLoader.cpp:167`
-- **`rom-modules:`** unsupported / rejected. `PresetFile.hpp:143`
-- **Tabs rejected** — 2-space indentation only. `PresetFile.cpp:95`
-- **`format: basic-binary` can't straddle a bank boundary**: loading into
+- **YAML-shaped, not YAML**: tabs, flow style and multiple documents are
+  rejected; 2-space indentation only (docs/background/Decisions.md).
+- **A BASIC `program: file:` can't straddle a bank boundary**: loading into
   an expansion-module program area that would cross a card's bank
   boundary (e.g. `NEW "S2:"` in a vertically-banked Slot-2 module) is out
   of scope; `PC1600ProgramPlacement`'s module-region placement is ready

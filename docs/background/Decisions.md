@@ -234,6 +234,38 @@ authentic speed for the span that matters.
   save may replace one of the user's templates, but a bundled name is always
   refused.
 
+### Preset format (docs/background/plans/Preset-Review-Plan.md)
+- **A preset is YAML-shaped, not YAML.** The hand-written parser takes flat
+  `key: value` fields, `- verb: value` steps and one `text: |` block. Don't
+  move the whole file to the YAML reader: a real YAML reader would strip
+  ` #1` from `CLOSE #1` and choke on `PRINT "A: B"`. Only `debug:` and
+  `bus-rom:` are YAML proper.
+- **`type:` is typed exactly as written**, to the end of the line, quotes
+  included (`- type: "SAVE LOAD"` types the quotes). No comment stripping,
+  no unquoting. A comment after a `type:` step is typed too.
+- **One naming rule.** Sharp's product names with the hyphen, in any case
+  (`CE-1600P`, `pc-1600`). A device by name or by file: `slot-1:` /
+  `slot-1-file:`, `floppy:` / `floppy-file:`; a path-valued key is `file`
+  or ends in `-file` (only `host-drive:`, a folder, doesn't). `saveas:`
+  uses the same device words (`slot-1`, `slot-2`, `floppy`). Numbers: `&`,
+  `0x` or `$` is hex, a bare number is decimal. Leaving a key out means
+  "none"; there is no `none` value.
+- **`debug:` keeps camelCase** (`stopOnEntry`, `cleanStart`) against the
+  rest's kebab-case. They are the launch-configuration keys (below), and
+  `stopOnEntry` is the DAP name.
+- **`program:` has no `format:`.** The file's content picks the loader
+  (`Core/ProgramFile`), as for a dropped file; `text: |` or `typed: true`
+  types a listing in. Unlike a drop, headerless code needs no `.bin` name:
+  the author named the file on purpose.
+- **Old forms just fail** as unrecognized (pre-1.0), without pointing at
+  the new form. `slot:` in a program block is the exception above.
+- **The extension matches the model** (`.pc1500`, `.pc1500a`, `.pc1600`).
+  The parser goes by `model:` alone; the extension is for people and the
+  file dialog.
+- **The parser reads each `program: file:`** to classify it, so a preset
+  with a missing file fails before the machine starts, like every other
+  parse error.
+
 ### Loading programs (docs/background/plans/Loader-Mode-Plan.md)
 - **The loaders follow MODE and `TITLE` and never change them.** Load
   BASIC, Load Machine Code, presets and the debugger read BMODE b6 and F1D5H
