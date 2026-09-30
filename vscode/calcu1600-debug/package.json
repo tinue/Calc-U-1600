@@ -18,7 +18,8 @@
     "onDebugResolve:calcu1600",
     "onCommand:calcu1600.buildAndLoad",
     "onCommand:workbench.action.tasks.runTask",
-    "onCommand:workbench.action.tasks.build"
+    "onCommand:workbench.action.tasks.build",
+    "onCommand:calcu1600.createProject"
   ],
   "contributes": {
     "breakpoints": [
@@ -55,6 +56,11 @@
       {
         "command": "calcu1600.allResetAndStop",
         "title": "All Reset & Stop",
+        "category": "Calc-U-1600"
+      },
+      {
+        "command": "calcu1600.createProject",
+        "title": "Create Debug Project…",
         "category": "Calc-U-1600"
       }
     ],

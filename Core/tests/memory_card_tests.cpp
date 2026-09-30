@@ -15,9 +15,12 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <memory>
 #include <string>
+
+#include <unistd.h> // mkdtemp
 
 #include "../Connector/MemoryCardCatalog.hpp"
 #include "../Connector/MemoryCardDefinition.hpp"
@@ -693,6 +696,47 @@ void test_rom_needs_every_byte_covered() {
     std::string err;
     CHECK(rejects(romYaml("55 00 00 C5 40 00 00 FF"), &err));  // 8 of 16 bytes
     CHECK(err.find("0x8") != std::string::npos);
+}
+
+// `encoding: file`: the bytes come from a sidecar next to the definition,
+// read when the definition is loaded -- a rebuilt ROM is picked up by the
+// next load.
+void test_rom_from_a_sidecar_file() {
+    char tmpl[] = "/tmp/card_file_XXXXXX";
+    const char* dir = mkdtemp(tmpl);
+    CHECK(dir != nullptr);
+    if (!dir) return;
+    const std::string d(dir);
+    const std::string yaml = std::string(kMinPrefix) +
+                             "  - name: r\n    capacity: 0x10\n    banking: none\n    content: rom\n"
+                             "    addressing: { chip-select: Y0, span: 0x10 }\n"
+                             "    initial-content:\n      blocks:\n        - offset: 0\n          encoding: file\n"
+                             "          path: build/rom.bin\n";
+    std::ofstream(d + "/rom.card.yaml") << yaml;
+    std::filesystem::create_directories(d + "/build");
+    const auto writeRom = [&](uint8_t first) {
+        std::string bytes(16, char(0xEE));
+        bytes[0] = char(first);
+        std::ofstream(d + "/build/rom.bin", std::ios::binary) << bytes;
+    };
+    PinState p;
+    p.pin[4] = true;
+    uint8_t v = 0;
+    writeRom(0x55);
+    std::string err;
+    auto card = makeSoftwareDefinedCard(d + "/rom.card.yaml", CardHost::PC1500, &err);
+    CHECK(card && card->respondsToRead(p, v) && v == 0x55);
+    writeRom(0x66);  // rebuilt: the next load has the new bytes
+    card = makeSoftwareDefinedCard(d + "/rom.card.yaml", CardHost::PC1500, &err);
+    CHECK(card && card->respondsToRead(p, v) && v == 0x66);
+
+    // Without the definition's own file there is nothing to be relative to.
+    MemoryCardDefinition def;
+    CHECK(!parseMemoryCardDefinition(yaml, &def, &err) && err.find("relative") != std::string::npos);
+    // A short file doesn't cover the ROM.
+    std::ofstream(d + "/build/rom.bin", std::ios::binary) << std::string(8, char(0xEE));
+    CHECK(!makeSoftwareDefinedCard(d + "/rom.card.yaml", CardHost::PC1500, &err));
+    std::filesystem::remove_all(d);
 }
 
 // ROM and RAM banks in one region: the ROM banks stay read-only, the RAM
@@ -1864,6 +1908,7 @@ void test_reject_unbanked_flash_sector_not_dividing_capacity() {
 }
 
 int run_memory_card_tests() {
+    test_rom_from_a_sidecar_file();
     test_card_content_revision();
     test_power_up_fill_defaults_per_kind();
     test_yaml_block_map_and_scalars();

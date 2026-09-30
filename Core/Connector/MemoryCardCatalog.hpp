@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -46,7 +47,7 @@ namespace memory_card_catalog_detail {
 inline bool parseEntry(const std::string& text, const std::string& path, MemoryCardCatalogEntry* out,
                        std::string* err) {
     MemoryCardDefinition def;
-    if (!parseMemoryCardDefinition(text, &def, err)) return false;
+    if (!parseMemoryCardDefinition(text, &def, err, std::filesystem::path(path).parent_path().string())) return false;
     *out = {def.moduleName, def.compatibleHosts, path, def.battery, def.isRom(), def.isTemplate};
     return true;
 }

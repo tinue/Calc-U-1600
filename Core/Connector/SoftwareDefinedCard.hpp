@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <filesystem>
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -396,7 +397,7 @@ inline std::unique_ptr<ExpansionCard> makeSoftwareDefinedCard(const std::string&
     ss << in.rdbuf();
 
     MemoryCardDefinition def;
-    if (!parseMemoryCardDefinition(ss.str(), &def, error)) {
+    if (!parseMemoryCardDefinition(ss.str(), &def, error, std::filesystem::path(specPath).parent_path().string())) {
         *error = "module spec '" + specPath + "': " + *error;
         return nullptr;
     }

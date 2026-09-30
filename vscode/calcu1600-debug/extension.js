@@ -3,11 +3,12 @@
 // to it and adds what makes it usable in any folder without copied files:
 // ready-made configurations (debug the current file, reset and stop), the
 // assembler builds, the Build & Load / reset commands, user settings for the
-// tool paths and ROM listings.
+// tool paths and ROM listings, and "Create Debug Project…" (scaffold.js).
 const vscode = require('vscode');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const scaffold = require('./scaffold');
 
 // What "Debug current file" needs per machine: its assembler, the listing
 // that assembler writes, the presets that fit, the bundled default preset.
@@ -252,7 +253,8 @@ function activate(context) {
         }),
         vscode.commands.registerCommand('calcu1600.buildAndLoad', buildAndLoad),
         vscode.commands.registerCommand('calcu1600.resetAndStop', () => reset('reset')),
-        vscode.commands.registerCommand('calcu1600.allResetAndStop', () => reset('allReset'))
+        vscode.commands.registerCommand('calcu1600.allResetAndStop', () => reset('allReset')),
+        vscode.commands.registerCommand('calcu1600.createProject', () => scaffold.createProject(extensionPath))
     );
 }
 

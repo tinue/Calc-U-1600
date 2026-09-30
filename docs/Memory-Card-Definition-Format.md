@@ -404,8 +404,10 @@ supports:
   range ignores every write — guest CPU, host poke and the debug/loader
   backing-store path alike — and its `initial-content` must cover every
   byte (`fill:` doesn't count). `initial-content` is supported via
-  `encoding: addressed-hex | hex | base64` (§6); `encoding: file` is
-  parsed but rejected ("not supported yet").
+  `encoding: addressed-hex | hex | base64 | file` (§6). A `file` block's
+  `path` is relative to the definition's own file and is read each time
+  the definition is loaded, so a preset's clean start picks up a rebuilt
+  ROM (docs/Debugger.md).
 - **Banking:** Unbanked, and **trigger-based** Banked (both a memory-write
   strobe `{ pin: N }` sampling the address bus and an `{ io-port: 0xNN }`
   write sampling the data bus). `line-based` is a hard load error.

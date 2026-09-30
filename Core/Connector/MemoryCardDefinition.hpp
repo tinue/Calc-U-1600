@@ -4,6 +4,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -179,8 +182,10 @@ struct MemoryCardDefinition {
     }
 };
 
+/// `baseDir`: the definition file's own directory, which `encoding: file`
+/// paths are relative to. Empty (text not read from a file) rejects them.
 bool parseMemoryCardDefinition(const std::string& yamlText, MemoryCardDefinition* out,
-                               std::string* error);
+                               std::string* error, const std::string& baseDir = {});
 
 // ── implementation ───────────────────────────────────────────────────────
 
@@ -1061,14 +1066,14 @@ inline bool parseAddressedHex(const std::string& text, uint32_t blockLength,
 // `initial-content` (spec §5a, Format.md §6): resolves each referenced
 // bank (unbanked regions use key 0) into a full bank-size/`capacity`-length
 // byte buffer, starting from that bank's power-up-fill and overlaying each
-// block's bytes at its offset. `encoding: file` is not implemented (it
-// would need the definition file's own directory threaded through, which
-// nothing needs yet) -- unlike `rom`/`by-bank` elsewhere in this parser,
-// unsupported here means "not yet", not "never".
+// block's bytes at its offset. `encoding: file` reads a sidecar binary,
+// `path` relative to the definition's directory (`baseDir`), at parse time
+// -- so a card reloaded after a rebuild carries the new bytes (a ROM
+// module under development, docs/Debugger.md).
 inline bool parseInitialContent(const YamlNode& node, const Region& regionSoFar,
                                 std::unordered_map<uint32_t, std::vector<uint8_t>>* out,
                                 std::unordered_map<uint32_t, std::vector<bool>>* coveredOut,
-                                std::string* error) {
+                                std::string* error, const std::string& baseDir) {
     if (!node.isMap() || !node.requireOnlyKeys({"fill", "blocks"}, error)) return false;
 
     bool hasFillOverride = false;
@@ -1173,8 +1178,23 @@ inline bool parseInitialContent(const YamlNode& node, const Region& regionSoFar,
                 return false;
             }
         } else if (encoding == "file") {
-            *error = "line " + std::to_string(entry.line) + ": encoding 'file' is not supported yet";
-            return false;
+            const YamlNode* pN = entry.find("path");
+            std::string rel;
+            if (!pN || !pN->asString(&rel, error)) {
+                *error = "line " + std::to_string(entry.line) + ": 'file' needs 'path'";
+                return false;
+            }
+            if (baseDir.empty() && !std::filesystem::path(rel).is_absolute()) {
+                *error = "line " + std::to_string(pN->line) + ": 'path' needs the definition's own file to be relative to";
+                return false;
+            }
+            const std::filesystem::path file = std::filesystem::path(baseDir) / rel;  // absolute rel wins
+            std::ifstream in(file, std::ios::binary);
+            if (!in) {
+                *error = "line " + std::to_string(pN->line) + ": cannot read '" + file.string() + "'";
+                return false;
+            }
+            bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
         } else {
             *error = "line " + std::to_string(encN->line) + ": unknown encoding '" + encoding + "'";
             return false;
@@ -1208,7 +1228,8 @@ inline bool parseInitialContent(const YamlNode& node, const Region& regionSoFar,
     return true;
 }
 
-inline bool parseRegion(const YamlNode& node, CardHost term, Region* out, std::string* error) {
+inline bool parseRegion(const YamlNode& node, CardHost term, Region* out, std::string* error,
+                        const std::string& baseDir) {
     if (!node.isMap() ||
         !node.requireOnlyKeys({"name", "addressing", "content", "banking", "capacity",
                                "initial-content", "pc1600-module-class"},
@@ -1318,7 +1339,7 @@ inline bool parseRegion(const YamlNode& node, CardHost term, Region* out, std::s
     // `content`/`contentByBank` already in place for contentForBank().
     std::unordered_map<uint32_t, std::vector<bool>> covered;
     if (initialContentN) {
-        if (!parseInitialContent(*initialContentN, *out, &out->initialContentByBank, &covered, error))
+        if (!parseInitialContent(*initialContentN, *out, &out->initialContentByBank, &covered, error, baseDir))
             return false;
     }
 
@@ -1344,7 +1365,7 @@ inline bool parseRegion(const YamlNode& node, CardHost term, Region* out, std::s
 }  // namespace mcd_detail
 
 inline bool parseMemoryCardDefinition(const std::string& yamlText, MemoryCardDefinition* out,
-                                      std::string* error) {
+                                      std::string* error, const std::string& baseDir) {
     YamlNode root;
     if (!parseYaml(yamlText, &root, error)) return false;
     if (!root.isMap()) {
@@ -1407,7 +1428,7 @@ inline bool parseMemoryCardDefinition(const std::string& yamlText, MemoryCardDef
     }
     for (const auto& rn : regionsN->seq) {
         Region region;
-        if (!mcd_detail::parseRegion(rn, out->terminology, &region, error)) return false;
+        if (!mcd_detail::parseRegion(rn, out->terminology, &region, error, baseDir)) return false;
         for (const auto& ex : out->regions) {
             if (ex.name == region.name) {
                 *error = "duplicate region name '" + region.name + "'";

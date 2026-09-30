@@ -1,0 +1,20 @@
+# The machine for {{name}}.asm: a PC-1500A with {{name}}.bin at &8000
+# on the 60-pin bus. Every clean start (F5, Build & Load) reads the file
+# again, so the machine always runs the latest build. A bus ROM also
+# shadows a bundled ROM at the same place (e.g. the CE-158's with
+# `interface: ce158`).
+model: PC-1500A
+
+bus-rom:
+  - file: {{name}}.bin
+    address: 0x8000
+
+keys:
+  - key: cl
+  - type: NEW0
+  - key: mode
+
+debug:
+  command: CALL &8000       # how the code is entered
+  listings:
+    - {{name}}.rst

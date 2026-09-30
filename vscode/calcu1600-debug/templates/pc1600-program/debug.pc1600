@@ -1,0 +1,15 @@
+# The machine for {{name}}: a plain PC-1600, NEW'd, in RUN mode. The
+# debug: block tells the debugger what to load; loading this preset in
+# the app ignores it.
+model: PC-1600
+
+keys:
+  - key: mode
+  - type: NEW0
+  - key: mode
+
+debug:
+  program:
+    bin: {{name}}.bin
+    listing: {{name}}.lst
+    after: stopOnEntry      # type its CALL and stop at the first line

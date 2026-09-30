@@ -1,0 +1,21 @@
+# The machine for {{name}}.asm: a PC-1600 with {{name}}.bin in page 1,
+# bank 6 of the 60-pin bus. Every clean start (F5, Build & Load) reads the
+# file again and powers on, so the ROM's module scan finds the new build.
+# A bus ROM also shadows a bundled ROM at the same place: bank 7 with
+# `host-drive:` replaces the host drive's ROM.
+model: PC-1600
+
+bus-rom:
+  - file: {{name}}.bin
+    bank: 6
+
+debug:
+  # Run the power-on boot under the debugger (breakpoints armed), so the
+  # module's reset entry can be debugged. Without it, the machine boots to
+  # the prompt first and `command` enters the code instead, e.g.
+  #   command: FILES "S3:"
+  boot: debug
+  listings:
+    - path: {{name}}.lst
+      cpu: z80
+      bank: 6
