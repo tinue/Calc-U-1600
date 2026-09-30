@@ -6,11 +6,11 @@ cmake_minimum_required(VERSION 3.21)
 # CTest target. Opening the repo root in CLion (or any CMake-aware IDE)
 # therefore gives run/debug configurations for all of them -- see the
 # shared ones in .run/ and the "CLion / IDE Integration" section of
-# docs/Building.md.
+# docs/developer/Building.md.
 #
 # This is NOT the release entry point. Qt6/CMakeLists.txt stays the
-# authoritative app build: build_and_run.sh, docs/Building.md's per-platform
-# recipes and every packaging job in .github/workflows/build.yml configure
+# authoritative app build: build_and_run.sh,
+# docs/developer/Building.md's per-platform recipes and every packaging job in .github/workflows/build.yml configure
 # `-S Qt6`, and this file only pulls that same directory in unchanged.
 #
 # The tool/probe/test source lists below duplicate the ones hand-maintained

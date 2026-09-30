@@ -380,7 +380,8 @@ void test_loader_machine_binary_autorun_slot2() {
     CHECK(m.debugPeek(0xD300) == 0x5A);
 }
 
-// ROM-gated: the target follows MODE and TITLE (docs/Loader-Mode-Plan.md).
+// ROM-gated: the target follows MODE and TITLE
+// (docs/background/plans/Loader-Mode-Plan.md).
 // MODE 1: a headerless file's `address:` is an LH5803 address (&5000 =
 // Z-80 &D000), and a CE-158 file loads at its header's LH5803 address.
 void test_loader_machine_binary_mode1() {

@@ -33,8 +33,8 @@
 # As on the CE-1601M, only vertical bank 0 is usable for program /
 # expansion memory (the PC-1600 maps its module header + BASIC/machine
 # area there); banks 1-15 are RAM-disk / S0: file storage, formatted by
-# the PC-1600's own INIT (INIT"S2:","F" then split with "M"/"P",n -- see
-# docs/PC1600-RAM-Disk-INIT-Handoff.md), not baked into the module.
+# the PC-1600's own INIT (INIT"S2:","F" then split with "M"/"P",n), not
+# baked into the module.
 #
 # Ships blank (plain-ram-no-header).
 

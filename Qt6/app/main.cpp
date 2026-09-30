@@ -63,8 +63,8 @@ int main(int argc, char** argv) {
     // integration (launcher/file-manager icon), not the live window.
     app.setWindowIcon(QIcon(":/app/icon.png"));
 
-    // Scripted screenshots (docs/screenshots/README.md): play a scenario,
-    // write its images, quit with 0 (all written) or 1 (any failed).
+    // Scripted screenshots (docs/developer/screenshots/README.md): play a
+    // scenario, write its images, quit with 0 (all written) or 1 (any failed).
     QCommandLineParser parser;
     const QCommandLineOption shotsOption(QStringLiteral("shots"),
                                          QStringLiteral("Run a screenshot scenario (*.shots.yaml), then quit."),

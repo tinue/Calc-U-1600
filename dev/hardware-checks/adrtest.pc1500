@@ -1,5 +1,4 @@
-# ADR flag-preservation test (docs/Up-Down-Key-Investigation.md, "The
-# ADR conflict" section) -- loads and CALLs adrtest_1500a.bin (see that
+# ADR flag-preservation test -- loads and CALLs adrtest_1500a.bin (see that
 # file's own header for the full background and its calling
 # convention), then PRINTs the result:
 #

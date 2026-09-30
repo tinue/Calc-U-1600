@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds the throw-away OFF-key ROM-path probe (see
-# tools/pc1600_power_probe.cpp and docs/PC1600-Power-Button-Plan.md).
+# tools/pc1600_power_probe.cpp).
 # -DPC1600_POWER_PROBE lights up the instrumentation hooks in
 # PC1600Memory::writeIO / PC1600SubCpu::command; no other build defines it.
 #

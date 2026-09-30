@@ -77,7 +77,7 @@ void test_missing_file_rejected() {
 // Two independently line-numbered programs concatenated with a `#SEGMENT`
 // marker line -- the real-hardware mechanism behind GOSUB "LABEL" jumping
 // into a second program saved right after the first (see
-// SharpDataExchange's scanner.rs and docs/PC1600-Serial-Port.md).
+// SharpDataExchange's scanner.rs and docs/developer/PC1600-Serial-Port.md).
 // readBasicProgramFile() asks the tokenizer for SDE_SEGMENT_MARKER_MEMORY,
 // which renders the marker as the bare 0xFF the ROM's serial receiver
 // actually stores in the program area -- not the 3-byte 0xFF 0x00 0x00 wire

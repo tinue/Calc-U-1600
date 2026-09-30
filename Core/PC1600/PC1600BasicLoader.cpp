@@ -64,7 +64,7 @@ BasicLoadResult loadSource(PC1600Machine& machine, const basic::BasicProgramSour
         return fail(error);
     }
     // The ROM's LOAD takes a PC-1600 program in both MODEs; a PC-1500 one
-    // only in MODE 1 (docs/Loader-Mode-Plan.md).
+    // only in MODE 1 (docs/background/plans/Loader-Mode-Plan.md).
     if (!src.listing && src.source == basic::TransferModel::PC1500 && !machine.mode1())
         return fail("this is a PC-1500 (CE-158) tokenized BASIC program -- the PC-1600 takes it in MODE 1 "
                     "only (type MODE1 first)");

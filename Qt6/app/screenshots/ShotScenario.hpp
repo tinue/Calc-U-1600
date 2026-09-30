@@ -6,9 +6,10 @@
 // ── Screenshot scenario (`*.shots.yaml`) ──────────────────────────────────
 //
 // A scripted walk through the GUI that ends in image captures -- for the
-// user guide (docs/screenshots/) and as a GUI smoke test. The format
-// reference is docs/screenshots/README.md. Parsed with Core's YAML subset
-// (Core/Yaml.hpp); all-or-nothing, line-numbered errors, like presets.
+// user guide (docs/developer/screenshots/) and as a GUI smoke test. The
+// format reference is docs/developer/screenshots/README.md. Parsed with
+// Core's YAML subset (Core/Yaml.hpp); all-or-nothing, line-numbered errors,
+// like presets.
 //
 // Presets stay in charge of emulator state (model, cards, typed input): a
 // shot starts from one (`preset:`), then its `steps:` drive the Qt UI --

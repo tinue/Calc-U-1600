@@ -213,8 +213,8 @@ struct PresetProgram {
     // `hasLength` record whether the field was present in the preset (0 is
     // a legal explicit value). There is no target slot: on the PC-1600 the
     // loader places code by MODE, TITLE and the address, as for Load Machine
-    // Code (docs/Loader-Mode-Plan.md); `address:` is an LH5803 address in
-    // MODE 1.
+    // Code (docs/background/plans/Loader-Mode-Plan.md); `address:` is an
+    // LH5803 address in MODE 1.
     uint32_t length = 0;
     bool hasAddress = false;
     bool hasLength = false;

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Regenerates the user-guide screenshots (docs/images/) by playing the
-# scenarios in docs/screenshots/ against the Qt app -- see
-# docs/screenshots/README.md. Builds the app first if needed.
+# scenarios in docs/developer/screenshots/ against the Qt app -- see
+# docs/developer/screenshots/README.md. Builds the app first if needed.
 #
-#   tools/make_screenshots.sh                  # every docs/screenshots/guide/*.shots.yaml
+#   tools/make_screenshots.sh                  # every docs/developer/screenshots/guide/*.shots.yaml
 #   tools/make_screenshots.sh 05-modules       # just these (names without .shots.yaml)
 #
 # Extra --shots-* options can follow the names after `--`, e.g.
@@ -30,9 +30,9 @@ done
 
 scenarios=()
 if [[ ${#names[@]} -eq 0 ]]; then
-  scenarios=("${ROOT}"/docs/screenshots/guide/*.shots.yaml)
+  scenarios=("${ROOT}"/docs/developer/screenshots/guide/*.shots.yaml)
 else
-  for n in "${names[@]}"; do scenarios+=("${ROOT}/docs/screenshots/guide/${n}.shots.yaml"); done
+  for n in "${names[@]}"; do scenarios+=("${ROOT}/docs/developer/screenshots/guide/${n}.shots.yaml"); done
 fi
 
 status=0

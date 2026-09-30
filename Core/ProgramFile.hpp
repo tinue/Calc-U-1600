@@ -12,9 +12,10 @@
 // machinecode::readFile() and basic::readBasicProgram(). Header layouts:
 // Sharp1500-1600-Ref Shared/Data-Formats/Binary-Exchange-Formats.md §2 / §3.
 //
-// No CPU guessing (docs/Loader-Mode-Plan.md, principle 3): the library's
-// raw-lh5801 / raw-z80 guess for headerless code never picks the CPU -- all
-// of them are Headerless, and the MODE (or the debugger's `cpu`) decides.
+// No CPU guessing (docs/background/plans/Loader-Mode-Plan.md, principle 3):
+// the library's raw-lh5801 / raw-z80 guess for headerless code never picks
+// the CPU -- all of them are Headerless, and the MODE (or the debugger's
+// `cpu`) decides.
 // The guess survives only as `looksLikeCode`, which decides whether a
 // dropped file is accepted at all (Core/DropFile).
 

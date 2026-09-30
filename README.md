@@ -39,7 +39,7 @@ itself. See
 - [docs/PC1600-Host-Drive.md](docs/PC1600-Host-Drive.md) — a folder on your
   computer as PC-1600 drive `S3:`.
 - [examples/README.md](examples/README.md) — what each sample preset does.
-- [docs/Building.md](docs/Building.md) — building from source
+- [docs/developer/Building.md](docs/developer/Building.md) — building from source
   (prerequisites, ROMs, per-platform build steps).
 
 ## Serial port
@@ -52,7 +52,7 @@ ports**. For the calculator-side settings and how to exchange programs
 with [SharpDataExchange](https://github.com/tinue/SharpDataExchange), see
 the User Guide's [COM ports](docs/User-Guide.md#7-com-ports) chapter;
 implementation details are in
-[docs/PC1600-Serial-Port.md](docs/PC1600-Serial-Port.md).
+[docs/developer/PC1600-Serial-Port.md](docs/developer/PC1600-Serial-Port.md).
 
 ## License
 

@@ -14,8 +14,7 @@
 ; pair was captured in the first place.
 ;
 ; Calc-U-1600's own ADR behaviour was already settled before this file
-; existed (see the ADR section below and docs/Up-Down-Key-Investigation.md,
-; "The ADR conflict"). This program exists so both findings can be
+; existed (see the ADR section below). This program exists so both findings can be
 ; reproduced independently on real hardware, by anyone, straight from
 ; PEEK.
 ;
@@ -54,9 +53,9 @@
 ; unaffected, but a naive implementation lets the internal 8-bit low-byte
 ; add clobber them anyway (this is what MAME still does today). Calc-
 ; U-1600's own LH5801 core was changed to preserve flags across ADR -- a
-; fix that resolved a real, reproducible Up/Down-key redraw bug -- see
-; docs/Up-Down-Key-Investigation.md, "The ADR conflict", before touching
-; either the emulator's ADR implementation or this file.
+; fix that resolved a real, reproducible Up/Down-key redraw bug -- keep
+; that in mind before touching either the emulator's ADR implementation
+; or this file.
 ;
 ; Test: set T = 0x1F (IE|H|V|Z|C all set), set U = 0 and A = 0, execute
 ; ADR U, then read T back via TTA.
@@ -219,6 +218,5 @@ START:
 ;
 ; Confirmed on real PC-1500A hardware: D+1..D+4 read 0x34,0x41,0x34,0x23
 ; -- reading (a). D+5 not yet independently reported back; ADR's flag-
-; preservation fix predates this file and was settled separately (see
-; docs/Up-Down-Key-Investigation.md).
+; preservation fix predates this file and was settled separately.
 ; ============================================================

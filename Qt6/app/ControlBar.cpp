@@ -51,7 +51,7 @@ QStringList namesOf(const QVector<Entry>& entries, NameOf nameOf) {
 
 ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     // objectNames ("controlbar.*") are the handles screenshot scenarios
-    // address widgets by -- see docs/screenshots/README.md.
+    // address widgets by -- see docs/developer/screenshots/README.md.
     setObjectName(QStringLiteral("controlbar"));
     auto* layout = new QHBoxLayout(this);
 

@@ -39,10 +39,10 @@
 
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
-	<!-- Drag and drop / Finder (docs/Drag-And-Drop-Plan.md): the Dock icon
-	     takes these files, and Finder offers "Open With". Presets are ours
-	     (double-click opens them here); for program files the app is only an
-	     alternative. Past the extension, the content decides (Core/DropFile). -->
+	<!-- Drag and drop / Finder (docs/background/plans/Drag-And-Drop-Plan.md):
+	     the Dock icon takes these files, and Finder offers "Open With".
+	     Presets are ours (double-click opens them here); for program files
+	     the app is only an alternative. Past the extension, the content decides (Core/DropFile). -->
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>

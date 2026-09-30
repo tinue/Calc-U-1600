@@ -1,5 +1,5 @@
 // Throw-away probe: trace the ROM path when BASIC runs an S2: RAM-disk
-// operation on a CE-1601M (see docs/PC1600-Core-Limitations.md's
+// operation on a CE-1601M (see docs/developer/PC1600-Core-Limitations.md's
 // bank-switching section for the required INIT order of operations).
 //
 // Boots the full dual-CPU PC1600Machine with a CE-1601M in Slot 2, runs to

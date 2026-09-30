@@ -8,8 +8,8 @@
 # CI checkout (see the core-tests job in .github/workflows/build.yml):
 # no ROMs (roms/README.md) and no Linux libsharpdx. This fills both in.
 # The Qt6/zlib apt packages are NOT installed here -- they belong in the
-# cloud environment's setup script (see docs/Cloud-Sessions.md), which is
-# cached across sessions instead of re-running every start.
+# cloud environment's setup script (see docs/developer/Cloud-Sessions.md),
+# which is cached across sessions instead of re-running every start.
 #
 # Everything here is idempotent and cheap on a resumed session:
 # fetch_roms.sh skips files whose md5 already matches, and the sharpdx

@@ -1,7 +1,6 @@
 ; ============================================================
 ; ADRTEST_1500A.ASM -- Real-hardware verification of ADR's flag
-; behavior, for Calc-U-1600's ADR investigation
-; (docs/Up-Down-Key-Investigation.md, "The ADR conflict" section).
+; behavior, for Calc-U-1600's ADR investigation.
 ; ============================================================
 ;
 ; The PC-1500 Technical Reference Manual says ADR (Rreg = Rreg + A,

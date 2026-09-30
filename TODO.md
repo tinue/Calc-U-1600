@@ -106,7 +106,7 @@ obligations.
 
 ## PC-1600 loading: still open
 
-The loaders follow MODE and `TITLE` (docs/Loader-Mode-Plan.md, done). Left:
+The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, done). Left:
 
 - **The open questions of the load/save matrix** (Sharp1500-1600-Ref
   `PC-1600/PC-1600-Load-Save-Matrix.md` §6), to be discussed: are all tokens
@@ -116,7 +116,7 @@ The loaders follow MODE and `TITLE` (docs/Loader-Mode-Plan.md, done). Left:
   the TRM doesn't); `SAVE`/`LOAD "CAS:"` in MODE 1; whether the CE-158's own
   `SETDEV` is reachable on the PC-1600; CE-150/CE-158 `PRINT#`/`INPUT#` in
   MODE 0.
-- **Guide screenshots for chapter 6** (`docs/screenshots/guide/06-*`): the
+- **Guide screenshots for chapter 6** (`docs/developer/screenshots/guide/06-*`): the
   Load Machine Code dialog now shows which CPU / address space is assumed,
   so `06-start-address.png` and `06-loaded.png` are out of date.
 
@@ -125,7 +125,7 @@ The loaders follow MODE and `TITLE` (docs/Loader-Mode-Plan.md, done). Left:
 **Goal:** the connectors are fundamentally the same on the PC-1500 and the
 PC-1600, so software models them the same way. Each physical connector is
 one connector object. The host drives the signals, and a card sees only
-those signals, never the host (docs/Decisions.md, "Cards know only the
+those signals, never the host (docs/background/Decisions.md, "Cards know only the
 bus"). The 60-pin connector extends the 40-pin one. They stay two plugs,
 but share one signal vocabulary and one connector/chain shell.
 
@@ -169,7 +169,7 @@ It is not a copy of the PC-1500's signals.
   MREQ, M1, ELH, IOE. That's what the host drives, not what the card
   sees.
 
-**Done 2026-09-26 (mechanical groundwork, docs/Expansion-Connectors-Plan.md;
+**Done 2026-09-26 (mechanical groundwork, docs/background/plans/Expansion-Connectors-Plan.md;
 the pins reaching the cards are unchanged):**
 - One card-chain shell, `CardChain` (attach/detach, InhibitSource cache,
   first-responder read/write), behind all four connector classes. The
@@ -343,7 +343,7 @@ What's wrong with that:
 - Watch an inserted floppy's `.floppy.yaml` for outside changes (e.g.
   `sde put` while the disk is in the drive) and reload or warn, instead
   of overwriting them at the next autosave. Until then the rule is
-  "eject first" (`docs/Floppy-Image-Format.md` §8).
+  "eject first" (`docs/developer/Floppy-Image-Format.md` §8).
 
 ## Code cleanup backlog
 
@@ -351,7 +351,7 @@ Refactors and internal costs, not user-facing bugs. Take them when the
 area is next touched; entries marked *(behaviour/timing)* change what the
 emulator does and need a deliberate check. Entries with a **Before
 fixing** step need that analysis first. A fix that only moves the cost
-somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
+somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
 
 - **Picker and serial-status plumbing is written twice.** Independent of
   the connector model; can be done any time.
@@ -410,7 +410,7 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   chapter. This is file-catalogue logic, `.card.yaml` keeps 40-pin contact
   numbers, and `compatible-hosts` is only a load-time gate (the built card
   keeps no host). The planned `{path, isTemplate, battery}` result matches
-  the reserved `batteryBacked` flag (docs/Decisions.md). **Do this before**
+  the reserved `batteryBacked` flag (docs/background/Decisions.md). **Do this before**
   the feature ideas that build on this layer: saving a diskette/module
   into a preset, viewing their contents, and watching `.floppy.yaml` for
   outside changes.
@@ -454,7 +454,7 @@ somewhere else doesn't count (see docs/Code-Cleanup-Plan.md).
   PC-1600-only `KbiiChar` action, `closesKbii` and `m_kbiiLatched`.
   **Before fixing:** the interrupt-a-paste-mid-KBII behaviour
   (`cancel(..., finishKbii)`) must survive the move; check it against the
-  KBII entry in docs/Decisions.md.
+  KBII entry in docs/background/Decisions.md.
 - **`MachineCodeLoadDialog::refresh()` repeats `planLoad()`'s PC-1600
   steps** (the LH5803 range check, `lh5803ToZ80`, `pc1600TargetFor`). The
   dialog gets only the length, not the `File`. Fix: hand it the `File` and

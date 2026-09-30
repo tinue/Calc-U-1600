@@ -1,10 +1,9 @@
 name: Build
 
-# Builds the Qt6/ prototype (see Qt6/README-worthy context in
-# docs/Qt6-Port-Analysis.md) on Linux x86_64, Linux arm64, macOS, and
-# Windows. Every job runs tools/fetch_roms.sh before configuring -- ROMs
-# aren't committed here (see roms/README.md), so without this step the
-# build "succeeds" (CMake globs an empty roms/ directory without erroring)
+# Builds the Qt6 app (see docs/developer/Building.md) on Linux x86_64,
+# Linux arm64, macOS, and Windows. Every job runs tools/fetch_roms.sh
+# before configuring -- ROMs aren't committed here (see roms/README.md),
+# so without this step the build "succeeds" (CMake globs an empty roms/ directory without erroring)
 # but produces a binary with no firmware bundled, silently non-functional.
 # The linux-x86_64/linux-aarch64 jobs build once, then package the
 # result as a genuinely standalone .AppImage (linuxdeploy + its Qt

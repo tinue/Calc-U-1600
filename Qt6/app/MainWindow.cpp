@@ -96,7 +96,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_plotterPaper->hide(); // added to m_debugRowLayout only once a plotter attaches
     m_ce158Printer = new Ce158PrinterWidget(m_controller.get(), central);
     m_ce158Printer->hide(); // added to m_debugRowLayout only once a CE-158 attaches
-    // Handles screenshot scenarios address these by (docs/screenshots/README.md).
+    // Handles screenshot scenarios address these by
+    // (docs/developer/screenshots/README.md).
     m_faceplate->setObjectName(QStringLiteral("faceplate"));
     m_faceplate->lcdWidget()->setObjectName(QStringLiteral("lcd"));
     m_debugPanel->setObjectName(QStringLiteral("debugpanel"));
@@ -420,7 +421,8 @@ void MainWindow::loadMachineCodeFile(const QString& path) {
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     const machinecode::Target target = isPC1600 ? machinecode::Target::PC1600 : machinecode::Target::PC1500;
     // On the PC-1600 the machine's MODE and TITLE decide the address space
-    // and the target (docs/Loader-Mode-Plan.md); the loader never changes them.
+    // and the target (docs/background/plans/Loader-Mode-Plan.md); the loader
+    // never changes them.
     machinecode::PC1600State state;
     if (isPC1600 && m_controller->pc1600()) state = pc1600LoadState(*m_controller->pc1600());
     const machinecode::Plan plan = machinecode::plan(target, code, state);

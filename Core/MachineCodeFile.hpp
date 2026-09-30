@@ -73,8 +73,8 @@ struct BasicArea {
 enum class Cpu { Z80, LH5803 };
 
 // What the PC-1600 placement rules read from the running machine
-// (docs/Loader-Mode-Plan.md) -- see pc1600LoadState(). The loaders never
-// change MODE or TITLE; they follow them.
+// (docs/background/plans/Loader-Mode-Plan.md) -- see pc1600LoadState().
+// The loaders never change MODE or TITLE; they follow them.
 struct PC1600State {
     bool mode1 = false;                 // BMODE b6: MODE 1 (PC-1500 compatible)
     int title = 0;                      // F1D5H: the selected program area, 0 S0, 1 S1, 2 S2
@@ -120,13 +120,13 @@ struct Plan {
 // Every machine-code load -- Load Machine Code…, a preset's `format:
 // binary`, the debugger's Build & Load -- plans with planLoad(): the file
 // checks, the CPU, the address and length, the range and (PC-1600) the
-// target. On the PC-1600 the MODE and TITLE decide (docs/Loader-Mode-
-// Plan.md): a PC-1600 header means Z-80 code, a CE-158 header LH5801 code
-// (MODE 1 only), a headerless file the MODE's CPU (MODE 0 Z-80, MODE 1
-// LH5801) -- unless the caller knows the CPU (the debugger's toolchain).
-// The target follows from the address and the selected program area. The
-// callers write plan.busAddr/len with their own writer and word the
-// LoadError their own way.
+// target. On the PC-1600 the MODE and TITLE decide
+// (docs/background/plans/Loader-Mode-Plan.md): a PC-1600 header means Z-80
+// code, a CE-158 header LH5801 code (MODE 1 only), a headerless file the
+// MODE's CPU (MODE 0 Z-80, MODE 1 LH5801) -- unless the caller knows the
+// CPU (the debugger's toolchain). The target follows from the address and
+// the selected program area. The callers write plan.busAddr/len with their
+// own writer and word the LoadError their own way.
 
 struct LoadOptions {
     Target target = Target::PC1500;

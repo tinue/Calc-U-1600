@@ -142,8 +142,8 @@
   `.floppy.yaml` disk format spec.
 - **Examples** `dampflok.bas`, a steam-locomotive sound demo.
 - **Build** One root CMake project for app, CLIs and tests (debuggable
-  in CLion, see `docs/Building.md`); scripted screenshots (`--shots`,
-  `docs/screenshots/README.md`); `pc1600_cli --save-dir` for
+  in CLion, see `docs/developer/Building.md`); scripted screenshots (`--shots`,
+  `docs/developer/screenshots/README.md`); `pc1600_cli --save-dir` for
   `saveas: floppy:`.
 
 ### Changed

@@ -270,7 +270,7 @@ bool PC1600SubCpu::execute(uint8_t op) {
         // 64 Hz PB5 transition. That costs up to 7.8 ms per byte, and inside
         // the 0.5 s ISR (two bytes, ~16 ms) it swallows the PB5 edges the
         // BEEP repeat loop counts. A real unit's BEEP repeats never slip a
-        // tick, so it takes the fast path (docs/Decisions.md).
+        // tick, so it takes the fast path (docs/background/Decisions.md).
         case 0xB0: setAnswer(0xAA); return true;
         case 0xB1: setAnswer(0x55); return true;
 

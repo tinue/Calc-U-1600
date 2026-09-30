@@ -38,8 +38,9 @@ class PC1600Machine;
 // (Core/tests/pc1600_basicloader_tests.cpp).
 
 /// The keyword table a BASIC listing is tokenized with on this machine right
-/// now: the PC-1600's in MODE 0, the PC-1500's in MODE 1 (docs/Loader-Mode-
-/// Plan.md). The loader never switches MODE itself.
+/// now: the PC-1600's in MODE 0, the PC-1500's in MODE 1
+/// (docs/background/plans/Loader-Mode-Plan.md). The loader never switches
+/// MODE itself.
 basic::TransferModel pc1600ListingModel(PC1600Machine& machine);
 
 /// Loads a BASIC program into `machine`: `file` is a `.bas` listing
