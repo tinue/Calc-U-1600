@@ -271,8 +271,8 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     // PtySerialLink is POSIX-only (macOS/Linux); on Windows it's an inert
     // stub, so this section is compiled out entirely rather than shown
     // disabled -- there is nothing for it to do there yet.
-    // One folder for every emulated port: the PC-1600's own
-    // (calcu1600.serial) and the CE-158's (calcu1600-ce158.serial).
+    // One folder for every emulated port: the PC-1600's RS-232C
+    // (calcu1600-rs232c.serial) and the CE-158's (calcu1600-ce158.serial).
     QGridLayout* serial = addSection(layout, this, sections, tr("Serial ports"), QStringLiteral("dialog.settings.serial"));
     auto* serialStatusLabel = new QLabel(this);
     serialStatusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -299,7 +299,7 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
         };
         addPathRow(serial, 0, this, sections, spec);
     }
-    addRowLabel(serial, 1, this, sections, tr("PC-1600 port:"));
+    addRowLabel(serial, 1, this, sections, tr("PC-1600 RS-232C:"));
     serial->addWidget(serialStatusLabel, 1, kValueColumn, 1, 3);
     addRowLabel(serial, 2, this, sections, tr("CE-158 port:"));
     serial->addWidget(ce158StatusLabel, 2, kValueColumn, 1, 3);

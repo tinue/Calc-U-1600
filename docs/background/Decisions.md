@@ -429,6 +429,13 @@ authentic speed for the span that matters.
 - **The slot-record layout stays additive** for the planned battery-backed
   module split. Reserve the `batteryBacked` flag and keep
   `ExpansionCard` serialize/deserialize as the single seam for it.
+- **Serial port files are named after their connector:**
+  `calcu1600-rs232c.serial`, `calcu1600-ce158.serial`, and later
+  `calcu1600-sio.serial`. One file per connector; a file carries data only
+  while its connector is selected (PRIME), like a cable in the other
+  socket. No bare `calcu1600.serial` and no alias for an old name.
+  SharpDataExchange's `pc1600emul` device appends the RS-232C name itself,
+  so a rename goes into both repositories.
 
 ### Repository layout
 - **`examples/` is user-facing only.** It ships as the release's examples

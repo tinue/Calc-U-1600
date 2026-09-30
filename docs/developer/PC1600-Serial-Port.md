@@ -10,7 +10,7 @@ about the implementation; for using the port, see the User Guide,
 
 **Transport: host pseudo-terminal.** `posix_openpt`/`grantpt`/`unlockpt`/
 `ptsname` give a `/dev/ttysNNN` slave that any serial tool can open
-like a real port. A stable `calcu1600.serial` symlink is the documented
+like a real port. A stable `calcu1600-rs232c.serial` symlink is the documented
 target, so the per-run `ttysNNN` name never leaks to the user. The
 symlink's folder is **Settings ▸ Serial ports ▸ Symlink directory**
 (default `~/Calc-U-1600`).

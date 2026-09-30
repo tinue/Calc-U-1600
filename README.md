@@ -57,9 +57,9 @@ itself. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Serial port
 
-The emulated PC-1600's RS-232C port (and the CE-158's) appears on your
-computer as a serial port file, `calcu1600.serial` — **macOS and Linux
-only** for now. Point any serial program at it, for example
+The emulated PC-1600's RS-232C port appears on your computer as a serial
+port file, `calcu1600-rs232c.serial` (the CE-158's as
+`calcu1600-ce158.serial`) — **macOS and Linux only** for now. Point any serial program at it, for example
 [SharpDataExchange](https://github.com/tinue/SharpDataExchange) to copy
 programs to and from the calculator. The User Guide's
 [COM ports](docs/User-Guide.md#7-com-ports) chapter has the settings.

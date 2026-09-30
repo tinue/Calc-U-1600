@@ -15,6 +15,10 @@
   `$` is hex, a bare number decimal. `"address": "1234"` in a launch
   configuration is now decimal (it was hex), hex without a prefix is
   refused, and `bank: &7` or `"bank": "7"` is no longer silently ignored.
+- **The PC-1600's serial port file is `calcu1600-rs232c.serial`** (was
+  `calcu1600.serial`): serial port files are named after their connector,
+  like `calcu1600-ce158.serial`. SharpDataExchange 0.3.2 looks for the new
+  name with `--device pc1600emul`.
 - **The debugger checks its settings** against one list of keys, in a
   preset's `debug:` block (with the line number) and in a launch
   configuration alike: `after: foo`, `cpu: x86`, `boot: foo` or a quoted

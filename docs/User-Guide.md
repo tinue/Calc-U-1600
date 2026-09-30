@@ -443,7 +443,7 @@ flowchart LR
       U16["PC-1600 RS-232C<br/>(COM1:)"]
       U158["CE-158 RS-232C"]
     end
-    U16 --> L1["calcu1600.serial"]
+    U16 --> L1["calcu1600-rs232c.serial"]
     U158 --> L2["calcu1600-ce158.serial"]
     L1 --> SDE["SharpDataExchange (sde)"]
     L1 --> T["any terminal program"]
@@ -481,10 +481,10 @@ part of the data, because no driver on the computer side reacts to them.
 
 ```sh
 # computer → PC-1600: start LOAD "COM1:" on the calculator, then
-sde put myprogram.bas --device pc1600emul --port ~/Calc-U-1600/calcu1600.serial
+sde put myprogram.bas --device pc1600emul --port ~/Calc-U-1600/calcu1600-rs232c.serial
 
 # PC-1600 → computer: start this first, then SAVE "COM1:" on the calculator
-sde get myprogram.bas --device pc1600emul --port ~/Calc-U-1600/calcu1600.serial
+sde get myprogram.bas --device pc1600emul --port ~/Calc-U-1600/calcu1600-rs232c.serial
 ```
 
 To avoid typing `--port` every time, store the folder once:

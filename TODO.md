@@ -96,7 +96,10 @@ obligations.
 
 - **RS-232C / SIO connector mux.** PRIME (the PRIM select) is tracked in
   `TC8576F::rs232Selected()`; both connectors still share the one
-  `SerialLink`.
+  `SerialLink`, whose file is `calcu1600-rs232c.serial`. The split gives
+  SIO its own `calcu1600-sio.serial` (Decisions.md, "Serial port files are
+  named after their connector"), carrying data only while PRIME selects
+  SIO; `calcu1600-rs232c.serial` then carries RS-232C only.
 - Capture the exact on-wire `SAVE"COM1:"`/`LOAD"COM1:"` framing from a
   real ROM trace, and do an end-to-end round-trip against real
   SharpDataExchange.
