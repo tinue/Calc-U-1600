@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "../Connector/BusRomCard.hpp"
 #include "../CPU/DebugStop.hpp"
 #include "../CPU/LH5801/LH5801.hpp"
 #include "../Connector/Ce150Card.hpp"
@@ -257,6 +258,13 @@ public:
     // stays put while the user toggles the interface.
     bool attachCE158(const uint8_t* rom, size_t romSize);
     void detachCE158();
+
+    // ── Bus ROMs (preset `bus-rom:`, Connector/BusRomCard.hpp) ────────────
+    //
+    // A plain ROM on the same SystemBus chain, in front of every other card
+    // there, so a rebuilt ROM shadows a bundled one at the same place. Kept
+    // for the machine's lifetime; a preset builds a fresh machine.
+    void attachBusRom(std::unique_ptr<BusRomCard> card);
     bool ce158Attached() const { return m_ce158.attached(); }
     /// Unlocked direct access -- headless/tests only (see ce150Card()).
     Ce158Card* ce158Card() { return m_ce158.card(); }
@@ -321,6 +329,7 @@ private:
     std::unique_ptr<ExpansionCard> m_attachedExpansionCard; // see attachExpansionCard()
     std::unique_ptr<Ce150Card> m_ce150Card;                 // see attachCE150()
     Ce158Port m_ce158;                                      // see attachCE158()
+    std::vector<std::unique_ptr<BusRomCard>> m_busRoms;     // see attachBusRom()
     mutable std::mutex m_mutex;
 
     // See setYieldHook(). m_yieldCountdown only runs down while a hook is set.

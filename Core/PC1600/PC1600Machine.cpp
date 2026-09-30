@@ -123,6 +123,18 @@ bool PC1600Machine::attachHostDrive(const uint8_t* rom, size_t romSize, const st
     return true;
 }
 
+void PC1600Machine::attachBusRom(std::unique_ptr<PC1600BusRomCard> card) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_z80Mem.ce1600pBus().attachFirst(card.get());
+    m_systemBusRoms.push_back(std::move(card));
+}
+
+void PC1600Machine::attachBusRom(std::unique_ptr<BusRomCard> card) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_z80Mem.lh5803PeripheralBus().attachFirst(card.get());
+    m_lh5803BusRoms.push_back(std::move(card));
+}
+
 void PC1600Machine::detachHostDrive() {
     std::lock_guard<std::mutex> lock(m_mutex);
     detachHostDriveLocked();

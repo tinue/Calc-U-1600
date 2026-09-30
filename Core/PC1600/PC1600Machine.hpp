@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "../Connector/BusRomCard.hpp"
 #include "../Connector/CE1600FCard.hpp"
 #include "../Connector/CE1600PCard.hpp"
 #include "../Connector/PC1600HostDriveCard.hpp"
@@ -221,6 +222,15 @@ public:
     // (take m_mutex: the card runs inside step()).
     bool attachHostDrive(const uint8_t* rom, size_t romSize, const std::filesystem::path& dir);
     void detachHostDrive();
+
+    // ── Bus ROMs (preset `bus-rom:`, Connector/BusRomCard.hpp) ───────────
+    //
+    // A plain ROM on the system bus (a page B bank) or on the LH5803 side,
+    // in front of every other card there, so a rebuilt ROM shadows a
+    // bundled one (e.g. the host drive's bank 7). Kept for the machine's
+    // lifetime; a preset builds a fresh machine.
+    void attachBusRom(std::unique_ptr<PC1600BusRomCard> card);
+    void attachBusRom(std::unique_ptr<BusRomCard> card);
     bool hostDriveAttached() const;
     void setHostDriveDirectory(const std::filesystem::path& dir);
     std::filesystem::path hostDriveDirectory() const;
@@ -494,6 +504,8 @@ private:
     std::unique_ptr<CE1600PCard> m_ce1600pCard; // see attachCE1600P()
     std::unique_ptr<CE1600FCard> m_ce1600fCard; // union-attached with m_ce1600pCard
     std::unique_ptr<PC1600HostDriveCard> m_hostDriveCard; // see attachHostDrive()
+    std::vector<std::unique_ptr<PC1600BusRomCard>> m_systemBusRoms; // see attachBusRom()
+    std::vector<std::unique_ptr<BusRomCard>> m_lh5803BusRoms;
     std::unique_ptr<Ce150Card> m_ce150Card;     // see attachCE150() -- LH5803-side plotter (MODE 1)
     Ce158Port m_ce158;                          // see attachCE158() -- LH5803-side interface (MODE 1)
 

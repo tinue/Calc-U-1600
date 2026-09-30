@@ -1013,7 +1013,137 @@ void test_loader_host_drive_floppy_file_and_template_saves() {
     std::filesystem::remove_all(d);
 }
 
+// `bus-rom:` end to end: a ROM in bank 7 shadows the host drive's bundled
+// ROM. The bundled ROM's own bytes as a bus ROM keep S3: working; a blank
+// bus ROM hides the drive from the module scan, so the SAVE lands nowhere.
+void test_loader_bus_rom_shadows_the_host_drive_rom() {
+    for (const bool blank : {false, true}) {
+        char tmpl[] = "/tmp/pc1600_bus_rom_XXXXXX";
+        const char* dir = mkdtemp(tmpl);
+        CHECK(dir != nullptr);
+        if (!dir) return;
+        const std::string d(dir);
+        std::filesystem::create_directories(d + "/S3");
+        std::vector<char> rom(0x4000, char(0xFF));
+        if (!blank) {
+            std::ifstream in("firmware/pc1600-hostdrive/PC1600-P1-B7-HOSTDRIVE.bin", std::ios::binary);
+            in.read(rom.data(), std::streamsize(rom.size()));
+            CHECK(in.gcount() == 0x4000);
+        }
+        std::ofstream(d + "/ext.bin", std::ios::binary).write(rom.data(), std::streamsize(rom.size()));
+        PresetFile p;
+        std::string err;
+        CHECK(parsePresetString("model: PC-1600\n"
+                                "host-drive: S3\n"
+                                "bus-rom:\n"
+                                "  - file: ext.bin\n"
+                                "    bank: 7\n"
+                                "keys:\n"
+                                "  - key: mode\n"
+                                "  - type: 10 END\n"
+                                "  - key: mode\n"
+                                "  - type: SAVE\"S3:T.BAS\"\n",
+                                d + "/p.pc1600", &p, &err));
+        CHECK(p.busRoms.size() == 1 && p.busRoms[0].bank == 7 && p.busRoms[0].path == d + "/ext.bin");
+        PC1600Machine m;
+        if (!loadPC1600Roms(m)) {
+            std::fprintf(stderr, "SKIP test_loader_bus_rom_shadows_the_host_drive_rom: ROM images not found\n");
+            return;
+        }
+        const PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "Qt6/resources/cards", {},
+                                                     {"roms", "firmware/pc1600-hostdrive"});
+        CHECK(r.ok);
+        if (!r.ok) std::fprintf(stderr, "  error: %s\n", r.error.c_str());
+        CHECK(std::filesystem::exists(d + "/S3/T.BAS") == !blank);
+        std::filesystem::remove_all(d);
+    }
+}
+
+void test_parser_bus_rom_forms() {
+    PresetFile p;
+    std::string err;
+    CHECK(parsePresetString("model: PC-1600\n"
+                            "bus-rom:\n"
+                            "  - file: a.bin\n"
+                            "    bank: 6\n"
+                            "  - file: /abs/b.bin\n"
+                            "    address: 0x8000\n"
+                            "    pv: 1\n"
+                            "    pu: 0\n"
+                            "    me1: false\n",
+                            "/tmp/pc1600_bus_rom_forms.pc1600", &p, &err));
+    CHECK(err.empty());
+    CHECK(p.busRoms.size() == 2);
+    if (p.busRoms.size() == 2) {
+        CHECK(p.busRoms[0].path == "/tmp/a.bin" && p.busRoms[0].bank == 6 && !p.busRoms[0].hasAddress);
+        CHECK(p.busRoms[1].path == "/abs/b.bin" && p.busRoms[1].hasAddress && p.busRoms[1].address == 0x8000);
+        CHECK(p.busRoms[1].pv == 1 && p.busRoms[1].pu == 0 && !p.busRoms[1].me1 && p.busRoms[1].bank == -1);
+    }
+    const auto rejects = [&](const std::string& body, const char* what) {
+        PresetFile q;
+        std::string e;
+        const bool ok = parsePresetString(body, "/tmp/pc1600_bus_rom_forms.pc1600", &q, &e);
+        CHECK(!ok);
+        if (!ok && e.find(what) == std::string::npos) {
+            g_fail++;
+            std::fprintf(stderr, "FAIL bus-rom error '%s' lacks '%s'\n", e.c_str(), what);
+        }
+    };
+    rejects("model: PC-1600\nbus-rom:\n  - file: a.bin\n    bank: 3\n", "'bank' must be 4-7");
+    rejects("model: PC-1600\nbus-rom:\n  - file: a.bin\n", "either 'bank'");
+    rejects("model: PC-1600\nbus-rom:\n  - file: a.bin\n    bank: 7\n    address: 0x4000\n", "either 'bank'");
+    rejects("model: PC-1600\nbus-rom:\n  - file: a.bin\n    bank: 7\n    pv: 1\n", "go with 'address'");
+    rejects("model: PC-1600\nbus-rom:\n  - bank: 7\n", "needs 'file'");
+    rejects("model: PC-1600\nbus-rom:\n  - file: a.bin\n    address: 0x8000\n    pv: 2\n", "0 or 1");
+    rejects("model: PC-1500\nbus-rom:\n  - file: a.bin\n    bank: 7\n", "a PC-1500 ROM takes 'address'");
+}
+
+// The cards on their buses: a bus ROM attached first answers before a card
+// at the same place, and only inside its window and gates.
+void test_bus_rom_cards_shadow_and_gate() {
+    PC1600SystemBus bus;
+    PC1600HostDriveCard drive;
+    std::vector<uint8_t> hostRom(0x4000, 0x11);
+    CHECK(drive.loadRom(hostRom.data(), hostRom.size()));
+    bus.attach(&drive);
+    PC1600BusRomCard ext(std::vector<uint8_t>(0x100, 0x22), 7);
+    bus.attachFirst(&ext);
+    uint8_t v = 0;
+    CHECK(bus.readRom(0x0000, 7, v) && v == 0x22);   // shadowed
+    CHECK(bus.readRom(0x0100, 7, v) && v == 0x11);   // past the bus ROM: the drive's
+    CHECK(!bus.readRom(0x0000, 6, v));               // other bank: nobody
+    CHECK(bus.readIO(0x91, v) && v == 0x00);         // the drive's I/O is untouched
+
+    std::vector<uint8_t> bytes(0x2000);
+    for (size_t i = 0; i < bytes.size(); i++) bytes[i] = uint8_t(i);
+    BusRomCard rom(bytes, 0x8000, /*me1=*/false, /*pv=*/1, /*pu=*/0);
+    PinState pins;
+    pins.address = 0x8010;
+    pins.pin[2] = true;  // PV
+    pins.pin[3] = false; // PU
+    CHECK(rom.respondsToRead(pins, v) && v == 0x10);
+    pins.pin[3] = true;
+    CHECK(!rom.respondsToRead(pins, v));             // PU gate
+    pins.pin[3] = false;
+    pins.pin[2] = false;
+    CHECK(!rom.respondsToRead(pins, v));             // PV gate
+    pins.pin[2] = true;
+    pins.me1 = true;
+    CHECK(!rom.respondsToRead(pins, v));             // ME1
+    pins.me1 = false;
+    pins.address = 0xA000;
+    CHECK(!rom.respondsToRead(pins, v));             // past the end
+    pins.address = 0x7FFF;
+    CHECK(!rom.respondsToRead(pins, v));             // below the base
+    pins.address = 0x8000;
+    pins.forWrite = true;
+    CHECK(!rom.respondsToRead(pins, v) && !rom.respondsToWrite(pins, 0).claimed);
+}
+
 int run_pc1600_preset_tests() {
+    test_parser_bus_rom_forms();
+    test_bus_rom_cards_shadow_and_gate();
+    test_loader_bus_rom_shadows_the_host_drive_rom();
     test_parser_floppy_file_and_host_drive();
     test_loader_host_drive_floppy_file_and_template_saves();
     test_parser_accepts_pc1600_with_slot_and_keys();

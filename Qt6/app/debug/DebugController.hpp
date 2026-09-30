@@ -72,8 +72,9 @@ public:
     /// debugger run through them like the menu's, and DAP messages wait
     /// while any of them runs (it pumps the event loop).
     void setSyncOperations(SyncOperations* sync);
-    /// Loads a preset the way File > Load Preset does.
-    bool loadPreset(const QString& path, QString* error);
+    /// Loads a preset the way File > Load Preset does; `armOnly` stops
+    /// before the boot (PresetFile::armOnly).
+    bool loadPreset(const QString& path, QString* error, bool armOnly = false);
     /// A clean machine for a program load: `preset` if given, else the
     /// model's default preset (Settings), else an All Reset and boot.
     /// `how` says which it was.

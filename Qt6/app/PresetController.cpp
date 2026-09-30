@@ -113,9 +113,11 @@ bool parsePreset(const QString& path, PresetFile* preset, QString* error) {
 
 }  // namespace
 
-bool PresetController::loadPreset(const QString& path, QString* error) {
+bool PresetController::loadPreset(const QString& path, QString* error, bool armOnly) {
     PresetFile preset;
-    return parsePreset(path, &preset, error) && runPreset(preset, error);
+    if (!parsePreset(path, &preset, error)) return false;
+    preset.armOnly = armOnly;
+    return runPreset(preset, error);
 }
 
 bool PresetController::loadDefaultPreset(const QString& path, Model model, QString* error) {

@@ -679,6 +679,8 @@ This is what it leaves on the LCD:
 | `memory-expansion-1:`, `-2:` | PC-1600 slot 1 / slot 2, same form |
 | `keys:` | a list of steps (below); may appear any number of times |
 | `program:` | `format:`, `path:` or `text: \|`, `address:`, `length:`; may appear any number of times |
+| `bus-rom:` | ROM files on the 60-pin bus, for developing a ROM extension: `- file:` with `bank: 4`–`7` (PC-1600 system bus) or `address:` with optional `me1:`, `pv:`, `pu:` (PC-1500, PC-1600 LH5803 side). A bus ROM shadows a bundled ROM at the same place; see the [Debugger](Debugger.md) |
+| `debug:` | the debugger's settings for a project preset; ignored when the preset is loaded; see the [Debugger](Debugger.md) |
 
 **Steps:** `key:`, `type:`, `wait:`, `saveas:`, `screenshot:`, `syncclock:`, `trace:`.
 

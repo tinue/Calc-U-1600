@@ -90,9 +90,9 @@ bool SyncOperations::run(const QString& title, const std::function<bool(QString*
     return report(ok, opError);
 }
 
-bool SyncOperations::loadPreset(const QString& path, QString* error) {
+bool SyncOperations::loadPreset(const QString& path, QString* error, bool armOnly) {
     return run(
-        tr("Load Preset"), [this, path](QString* e) { return m_presets->loadPreset(path, e); }, m_presetResync, error);
+        tr("Load Preset"), [this, path, armOnly](QString* e) { return m_presets->loadPreset(path, e, armOnly); }, m_presetResync, error);
 }
 
 bool SyncOperations::loadDefaultPreset(const QString& path, Model model, QString* error) {

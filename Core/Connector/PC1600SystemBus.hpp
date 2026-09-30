@@ -34,7 +34,8 @@ struct PC1600BusPins {
     bool forWrite = false;
     bool io = false;    // true = I/O port access (IN/OUT); false = ROM read
     uint8_t bank = 0;   // Page B bank of the ROM window (4-7; 4/5 =
-                        // CE-1600P, 7 = PC1600HostDriveCard).
+                        // CE-1600P, 7 = PC1600HostDriveCard, any = a
+                        // preset's PC1600BusRomCard).
 };
 
 class PC1600ExpansionCard {
@@ -50,6 +51,7 @@ public:
 class PC1600SystemBus {
 public:
     void attach(PC1600ExpansionCard* card) { m_chain.attach(card); }
+    void attachFirst(PC1600ExpansionCard* card) { m_chain.attachFirst(card); }
     void detach(PC1600ExpansionCard* card) { m_chain.detach(card); }
     const std::vector<PC1600ExpansionCard*>& chain() const { return m_chain.cards(); }
 

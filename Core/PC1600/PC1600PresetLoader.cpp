@@ -1,3 +1,4 @@
+#include "../Preset/PresetBusRomLoader.hpp"
 #include "PC1600PresetLoader.hpp"
 
 #include <cstdint>
@@ -113,6 +114,33 @@ bool attachPresetHostDrive(PC1600Machine& machine, const std::string& dir, const
     return true;
 }
 
+// `bus-rom:` -- last, but in front of each chain, so a bus ROM shadows the
+// ROM of a peripheral attached above at the same place (e.g. a rebuilt
+// host-drive ROM in bank 7).
+bool attachPresetBusRoms(PC1600Machine& machine, const std::vector<PresetBusRom>& roms, const PresetLogFn& log,
+                         PresetLoadResult* result) {
+    for (const PresetBusRom& rom : roms) {
+        std::string err;
+        bool ok = false;
+        if (rom.bank >= 0) {
+            if (auto card = preset_bus_rom::makeSystemBusCard(rom, &err)) {
+                machine.attachBusRom(std::move(card));
+                ok = true;
+            }
+        } else if (auto card = preset_bus_rom::makeCard(rom, &err)) {
+            machine.attachBusRom(std::move(card));
+            ok = true;
+        }
+        if (!ok) {
+            result->error = "bus-rom: " + err;
+            if (log) log(result->error);
+            return false;
+        }
+        if (log) log(preset_bus_rom::describe(rom));
+    }
+    return true;
+}
+
 class PC1600PresetMachine final : public PresetMachineBase<PC1600Machine> {
 public:
     using PresetMachineBase::PresetMachineBase;
@@ -216,7 +244,8 @@ PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& pre
                        attachPresetPlotter(machine, preset.plotter, preset.ce1600pRomVariant, preset.floppy,
                                            preset.floppyFile, preset.floppySide, romDirs, moduleDirs, log, &result) &&
                        attachPresetInterface(machine, preset.interfaceName, romDirs, log, &result) &&
-                       attachPresetHostDrive(machine, preset.hostDrive, romDirs, log, &result);
+                       attachPresetHostDrive(machine, preset.hostDrive, romDirs, log, &result) &&
+                       attachPresetBusRoms(machine, preset.busRoms, log, &result);
 
     // Machine is now armed (model/cards/plotter wired) but still powered
     // off -- give the caller a chance to repaint that state before the
@@ -224,6 +253,10 @@ PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& pre
     // the caller always sees what did get attached.
     if (onArmed) onArmed(result);
     if (!armed) return result;
+    if (preset.armOnly) {
+        result.ok = true;
+        return result;
+    }
 
     // Full cold boot: the slot config just changed, so the IOCS work area
     // must be rebuilt from scratch (simple reset() would keep stale RAM).

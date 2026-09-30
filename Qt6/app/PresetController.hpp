@@ -38,7 +38,7 @@ public:
     // regardless of the return value. Returns false with *error set to a
     // user-facing message on failure (parse error, unsupported ROM
     // revision, a missing/rejected sibling file, etc).
-    bool loadPreset(const QString& path, QString* error);
+    bool loadPreset(const QString& path, QString* error, bool armOnly = false);
 
     // A model's default preset (AppSettings::defaultPresetPath()): same as
     // loadPreset(), but refuses -- touching nothing -- a preset that targets

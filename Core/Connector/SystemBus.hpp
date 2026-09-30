@@ -49,6 +49,7 @@ public:
     /// responding to the same access is a real hardware bus conflict, not
     /// something this phase resolves.
     void attach(ExpansionCard* card) { m_chain.attach(card); }
+    void attachFirst(ExpansionCard* card) { m_chain.attachFirst(card); }
     void detach(ExpansionCard* card) { m_chain.detach(card); }
     const std::vector<ExpansionCard*>& chain() const { return m_chain.cards(); }
 

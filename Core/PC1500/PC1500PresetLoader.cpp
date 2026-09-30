@@ -1,3 +1,4 @@
+#include "../Preset/PresetBusRomLoader.hpp"
 #include "PC1500PresetLoader.hpp"
 
 #include <cstdio>
@@ -126,7 +127,20 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
             result.ce150Attached = true;
             if (log) log("plotter: CE-150 attached");
         }
-        return attachPresetInterface(machine, preset.interfaceName, romDirs, log, &result);
+        if (!attachPresetInterface(machine, preset.interfaceName, romDirs, log, &result)) return false;
+        // Last, but in front of the chain: a bus ROM shadows the ROM of a
+        // peripheral attached above at the same place.
+        for (const PresetBusRom& rom : preset.busRoms) {
+            auto card = preset_bus_rom::makeCard(rom, &result.error);
+            if (!card) {
+                result.error = "bus-rom: " + result.error;
+                if (log) log(result.error);
+                return false;
+            }
+            machine.attachBusRom(std::move(card));
+            if (log) log(preset_bus_rom::describe(rom));
+        }
+        return true;
     }();
 
     // Machine is now armed (ROM/module/plotter wired) but still powered
@@ -135,6 +149,10 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
     // the caller always sees what did get attached.
     if (onArmed) onArmed(result);
     if (!armed) return result;
+    if (preset.armOnly) {
+        result.ok = true;
+        return result;
+    }
 
     machine.reset();
     runBootToPrompt(machine);

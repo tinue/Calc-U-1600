@@ -345,20 +345,35 @@ bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* e
 }
 
 bool DapSession::prepare(const QJsonObject& args, QString* error) {
+    // `boot: debug`: the preset only sets the machine up, and the debugger
+    // runs the boot, with breakpoints armed (ROM code that runs at power-on).
+    const QString boot = args.value(QStringLiteral("boot")).toString();
+    if (!boot.isEmpty() && boot != QLatin1String("debug")) {
+        *error = QStringLiteral("\"boot\" is \"debug\" or absent, not \"%1\"").arg(boot);
+        return false;
+    }
+    const bool bootDebug = !boot.isEmpty();
     // 1. A preset rebuilds the machine. With a program, the program's clean
     // start (step 4) applies it instead.
     const QString preset = args.value(QStringLiteral("preset")).toString();
     const QJsonObject program = args.value(QStringLiteral("program")).toObject();
+    if (bootDebug && (!program.isEmpty() || !args.value(QStringLiteral("command")).toString().isEmpty())) {
+        *error = QStringLiteral("\"boot\": \"debug\" runs the boot under the debugger; it takes no \"program\" or "
+                                "\"command\"");
+        return false;
+    }
     if (!preset.isEmpty() && program.isEmpty()) {
         QString err;
-        if (!m_controller->loadPreset(preset, &err)) {
+        if (!m_controller->loadPreset(preset, &err, /*armOnly=*/bootDebug)) {
             *error = QStringLiteral("Preset failed: %1").arg(err);
             return false;
         }
     }
     if (!ready(error)) return false;
     // 2. Reset (without the boot run: ROM research starts at the vector).
-    const QString reset = args.value(QStringLiteral("reset")).toString(QStringLiteral("none"));
+    // `boot: debug` is an All Reset: a power-on of the armed machine.
+    const QString reset =
+        bootDebug ? QStringLiteral("allReset") : args.value(QStringLiteral("reset")).toString(QStringLiteral("none"));
     if (reset == QLatin1String("reset") || reset == QLatin1String("allReset")) {
         if (!m_controller->resetMachine(reset == QLatin1String("allReset"), /*stop=*/true, error)) return false;
     }
@@ -420,11 +435,17 @@ void DapSession::customLoad(const QJsonObject& args, QJsonObject* body, QString*
     // A program given with the request, else the configuration's.
     const QJsonObject program =
         args.contains(QStringLiteral("bin")) ? args : m_attachConfig.value(QStringLiteral("program")).toObject();
-    if (program.isEmpty()) {
-        *error = QStringLiteral("The configuration has no \"program\" to load");
+    if (!program.isEmpty()) {
+        loadProgram(program, body, error);
         return;
     }
-    loadProgram(program, body, error);
+    // No program (a ROM extension): the attach set-up again -- the preset
+    // plugs the rebuilt ROM in at power-on, the listings are read again,
+    // `command` enters the code.
+    m_stopOnEntry = m_attachConfig.value(QStringLiteral("stopOnEntry")).toBool(false);
+    if (!prepare(m_attachConfig, error)) return;
+    if (m_stopOnEntry) m_controller->runControl()->pause(debug::DebugEvent::Entry);
+    else m_controller->runControl()->resume();
 }
 
 void DapSession::customReset(const QJsonObject& args, QJsonObject*, QString* error) {

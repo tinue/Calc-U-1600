@@ -72,6 +72,12 @@ bool PC1500Machine::attachCE158(const uint8_t* rom, size_t romSize) {
     return true;
 }
 
+void PC1500Machine::attachBusRom(std::unique_ptr<BusRomCard> card) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_memory.systemBus().attachFirst(card.get());
+    m_busRoms.push_back(std::move(card));
+}
+
 void PC1500Machine::detachCE158() {
     std::lock_guard<std::mutex> lock(m_mutex);
     detachCE158Locked();

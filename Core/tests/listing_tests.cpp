@@ -89,6 +89,34 @@ void test_sdas_lh5801_memtest() {
     CHECK(same);
 }
 
+// sdaslh5801 prints addresses and equates of 8000H and up with eight digits
+// (FFFF8000) and shifts the rest of the line: a ROM extension's listing.
+void test_sdas_lh5801_high_addresses() {
+    debug::Listing l;
+    std::string error;
+    CHECK(debug::loadListing(kDir + "sdas-lh5801/busrom.rst", &l, &error));
+    CHECK(l.warnings.empty());
+    const debug::ListingLine* first = lineAt(l, 0x8000);
+    CHECK(first && first->line == 15 && first->bytes == std::vector<uint8_t>({0x38}));
+    const debug::ListingLine* lda = lineAt(l, 0x8002);
+    CHECK(lda && lda->line == 17 && lda->bytes == std::vector<uint8_t>({0xA5, 0x90, 0x00}));
+    const debug::ListingLine* table = lineAt(l, 0x8006);
+    CHECK(table && table->bytes.size() == 8); // the wrapped data line
+    CHECK(l.symbols.count("BUSHIT") && l.symbols.at("BUSHIT") == 0x8002);
+    CHECK(l.symbols.count("SCRATCH") && l.symbols.at("SCRATCH") == 0x9000);   // .equ
+
+    std::ifstream bin("Core/tests/fixtures/listings/sdas-lh5801/busrom.bin", std::ios::binary);
+    std::vector<uint8_t> image((std::istreambuf_iterator<char>(bin)), std::istreambuf_iterator<char>());
+    CHECK(totalBytes(l) == image.size());
+    bool same = !image.empty();
+    for (const auto& line : l.lines)
+        for (size_t k = 0; k < line.bytes.size(); k++) {
+            const size_t off = size_t(line.addr - 0x8000) + k;
+            same = same && off < image.size() && image[off] == line.bytes[k];
+        }
+    CHECK(same);
+}
+
 void test_sdas_include_and_wrapped_data() {
     debug::Listing l;
     std::string error;
@@ -302,6 +330,7 @@ void test_symbols_per_binding() {
 } // namespace
 
 int run_listing_tests() {
+    test_sdas_lh5801_high_addresses();
     test_sdas_lh5801_memtest();
     test_sdas_include_and_wrapped_data();
     test_sdas_z80_relocated();

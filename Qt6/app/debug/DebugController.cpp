@@ -192,12 +192,12 @@ void DebugController::setSyncOperations(SyncOperations* sync) {
     connect(sync, &SyncOperations::busyChanged, this, &DebugController::setAppBusy);
 }
 
-bool DebugController::loadPreset(const QString& path, QString* error) {
+bool DebugController::loadPreset(const QString& path, QString* error, bool armOnly) {
     if (!m_sync) {
         *error = tr("Presets can't be loaded from the debugger here");
         return false;
     }
-    const bool ok = m_sync->loadPreset(path, error);
+    const bool ok = m_sync->loadPreset(path, error, armOnly);
     // The preset rebuilt the machine and the target rebound to it; it stays
     // paused, as a fresh session is -- the caller re-binds the listings.
     m_replacedPending = false;

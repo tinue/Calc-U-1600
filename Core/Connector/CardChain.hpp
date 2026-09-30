@@ -32,6 +32,13 @@ public:
         m_cards.push_back(card);
         if (auto* source = dynamic_cast<const InhibitSource*>(card)) m_inhibit.push_back(source);
     }
+    /// Inserts at the front, so this card answers before the others: a
+    /// bus ROM that shadows a bundled one (BusRomCard.hpp).
+    void attachFirst(Card* card) {
+        if (!card || std::find(m_cards.begin(), m_cards.end(), card) != m_cards.end()) return;
+        m_cards.insert(m_cards.begin(), card);
+        if (auto* source = dynamic_cast<const InhibitSource*>(card)) m_inhibit.push_back(source);
+    }
     void detach(Card* card) {
         m_cards.erase(std::remove(m_cards.begin(), m_cards.end(), card), m_cards.end());
         if (auto* source = dynamic_cast<const InhibitSource*>(card))

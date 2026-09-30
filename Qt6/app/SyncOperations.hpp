@@ -42,7 +42,8 @@ public:
     void setPresetResync(std::function<void()> resync) { m_presetResync = std::move(resync); }
 
     // The common operations.
-    bool loadPreset(const QString& path, QString* error = nullptr);
+    /// `armOnly`: the machine set up but not booted (PresetFile::armOnly).
+    bool loadPreset(const QString& path, QString* error = nullptr, bool armOnly = false);
     /// Refuses a preset for another model (see PresetController::loadDefaultPreset()).
     bool loadDefaultPreset(const QString& path, Model model, QString* error = nullptr);
     bool resetToPrompt(bool allReset, QString* error = nullptr);

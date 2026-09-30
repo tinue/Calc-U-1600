@@ -541,6 +541,103 @@ void resolveSaveAsPaths(PresetFile* out, const std::filesystem::path& presetDir)
 
 }  // namespace
 
+namespace {
+
+// A block that is YAML proper (nested maps and lists: `debug:`,
+// `bus-rom:`): its lines go to the YAML reader, shifted to column 0 and
+// padded so that the reader's line numbers are the file's.
+bool parseYamlBlock(const std::vector<RawLine>& lines, size_t& idx, const RawLine& keyLine, const std::string& key,
+                    YamlNode* out, std::string* error) {
+    if (idx >= lines.size() || lines[idx].indent == 0) {
+        *error = "line " + std::to_string(keyLine.lineNo) + ": '" + key + ":' is empty";
+        return false;
+    }
+    const int indent = lines[idx].indent;
+    std::string doc;
+    int at = 1;
+    for (; idx < lines.size() && lines[idx].indent > 0; idx++) {
+        if (lines[idx].indent < indent) {
+            *error = "line " + std::to_string(lines[idx].lineNo) + ": '" + key +
+                     ":' block is indented less than its first line";
+            return false;
+        }
+        for (; at < lines[idx].lineNo; at++) doc += '\n';
+        doc += std::string(static_cast<size_t>(lines[idx].indent - indent), ' ') + lines[idx].content + '\n';
+        at++;
+    }
+    if (!parseYaml(doc, out, error)) {
+        *error = key + ": " + *error;
+        return false;
+    }
+    return true;
+}
+
+// `bus-rom:` -- a list of ROM files on the 60-pin bus (Connector/BusRomCard.hpp):
+//   - file: build/ext.bin
+//     bank: 7                 # PC-1600 system bus, page B bank 4-7
+//   - file: ext1500.bin
+//     address: 0x8000         # PC-1500 connector / PC-1600 LH5803 side
+//     me1: false              # optional, default ME0
+//     pv: 1                   # optional: only while PV (PU) is 0 / 1
+//     pu: 0
+bool parseBusRoms(const YamlNode& block, const std::filesystem::path& presetDir, std::vector<PresetBusRom>* out,
+                  std::string* error) {
+    if (!block.isSeq()) {
+        *error = "line " + std::to_string(block.line) + ": expected a list of ROMs ('- file: ...')";
+        return false;
+    }
+    for (const YamlNode& item : block.seq) {
+        if (!item.isMap() || !item.has("file")) {
+            *error = "line " + std::to_string(item.line) + ": each ROM needs 'file'";
+            return false;
+        }
+        if (!item.requireOnlyKeys({"file", "bank", "address", "me1", "pv", "pu"}, error)) return false;
+        PresetBusRom rom;
+        if (!item.find("file")->asString(&rom.path, error)) return false;
+        rom.path = resolvePath(presetDir, rom.path);
+        long v = 0;
+        if (const YamlNode* n = item.find("bank")) {
+            if (!n->asInt(&v, error)) return false;
+            if (v < 4 || v > 7) {
+                *error = "line " + std::to_string(n->line) + ": 'bank' must be 4-7 (page B banks on the system bus)";
+                return false;
+            }
+            rom.bank = int(v);
+        }
+        if (const YamlNode* n = item.find("address")) {
+            if (!n->asInt(&v, error)) return false;
+            if (v < 0 || v > 0xFFFF) {
+                *error = "line " + std::to_string(n->line) + ": 'address' must be 0x0000-0xFFFF";
+                return false;
+            }
+            rom.address = uint16_t(v);
+            rom.hasAddress = true;
+        }
+        if ((rom.bank >= 0) == rom.hasAddress) {
+            *error = "line " + std::to_string(item.line) + ": give either 'bank' (PC-1600 system bus) or 'address'";
+            return false;
+        }
+        if (rom.bank >= 0 && (item.has("me1") || item.has("pv") || item.has("pu"))) {
+            *error = "line " + std::to_string(item.line) + ": 'me1', 'pv' and 'pu' go with 'address', not 'bank'";
+            return false;
+        }
+        if (const YamlNode* n = item.find("me1"); n && !n->asBool(&rom.me1, error)) return false;
+        for (const char* flag : {"pv", "pu"})
+            if (const YamlNode* n = item.find(flag)) {
+                if (!n->asInt(&v, error)) return false;
+                if (v != 0 && v != 1) {
+                    *error = "line " + std::to_string(n->line) + ": '" + flag + "' must be 0 or 1";
+                    return false;
+                }
+                (std::string(flag) == "pv" ? rom.pv : rom.pu) = int(v);
+            }
+        out->push_back(rom);
+    }
+    return true;
+}
+
+}  // namespace
+
 bool parsePresetFile(const std::string& path, PresetFile* out, std::string* error) {
     std::vector<RawLine> lines;
     if (!readLines(path, &lines, error)) return false;
@@ -704,43 +801,20 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
                 }
             }
             if (floppyIsFile) floppy = resolvePath(presetDir, floppy);
-        } else if (key == "debug") {
-            if (hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'debug:' takes a block, not an inline value"; return false; }
-            // The block is YAML proper (nested maps and lists); hand its
-            // lines to the YAML reader, padded so its line numbers are the file's.
-            std::string text;
-            int at = 1;
-            while (idx < lines.size() && lines[idx].indent > 0) {
-                for (; at < lines[idx].lineNo; at++) text += '\n';
-                text += std::string(static_cast<size_t>(lines[idx].indent), ' ') + lines[idx].content + '\n';
-                at++;
-                idx++;
-            }
-            const size_t first = text.find_first_not_of('\n');
-            if (first == std::string::npos) {
-                *error = "line " + std::to_string(line.lineNo) + ": 'debug:' is empty";
-                return false;
-            }
-            // Shift the block to column 0: the YAML reader wants a document.
-            const size_t indent = text.find_first_not_of(' ', first) - first;
-            std::string doc;
-            std::istringstream block(text);
-            int docLine = 0;
-            for (std::string l; std::getline(block, l);) {
-                docLine++;
-                if (l.empty()) { doc += '\n'; continue; }
-                if (l.find_first_not_of(' ') < indent) {
-                    *error = "line " + std::to_string(docLine) + ": 'debug:' block is indented less than its first line";
+        } else if (key == "debug" || key == "bus-rom") {
+            if (hasInline) { *error = "line " + std::to_string(line.lineNo) + ": '" + key + ":' takes a block, not an inline value"; return false; }
+            YamlNode block;
+            if (!parseYamlBlock(lines, idx, line, key, &block, error)) return false;
+            if (key == "debug") {
+                if (!parsePresetDebugBlock(&block, presetDir, error)) {
+                    *error = "debug: " + *error;
                     return false;
                 }
-                doc += l.substr(indent) + '\n';
-            }
-            YamlNode debugBlock;
-            if (!parseYaml(doc, &debugBlock, error) || !parsePresetDebugBlock(&debugBlock, presetDir, error)) {
-                *error = "debug: " + *error;
+                out->debug = std::move(block);
+            } else if (!parseBusRoms(block, presetDir, &out->busRoms, error)) {
+                *error = "bus-rom: " + *error;
                 return false;
             }
-            out->debug = std::move(debugBlock);
         } else if (key == "rom-modules") {
             *error = "'" + key + "' is not yet supported by this loader";
             return false;
@@ -820,6 +894,11 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         *error = "'host-drive:' is only valid for a PC-1600 preset (the host drive is a PC-1600 device)";
         return false;
     }
+    for (const PresetBusRom& rom : out->busRoms)
+        if (rom.bank >= 0) {
+            *error = "bus-rom: 'bank' is the PC-1600 system bus -- a PC-1500 ROM takes 'address'";
+            return false;
+        }
     resolveSaveAsPaths(out, presetDir);
     if (hasPlotter) {
         // The PC-1500 family takes the CE-150 (via the 60-pin bus); the

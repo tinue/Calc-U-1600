@@ -228,6 +228,18 @@ struct PresetSection {
     PresetProgram program;          // Kind::Program
 };
 
+/// One `bus-rom:` item: a ROM file on the 60-pin bus (Connector/BusRomCard.hpp).
+/// Either `bank` (PC-1600 system bus, page B bank 4-7) or `address` (PC-1500
+/// connector, or the PC-1600's LH5803 side) with its ME1 / PV / PU gates.
+struct PresetBusRom {
+    std::string path;  // resolved against the preset's directory; read at load time
+    int bank = -1;     // 4-7, or -1
+    bool hasAddress = false;
+    uint16_t address = 0;
+    bool me1 = false;
+    int pv = -1, pu = -1;  // 0 / 1, or -1 = either
+};
+
 struct PresetFile {
     std::string model;
     /// True for `model: PC-1600` -- derived from `model` rather than stored
@@ -346,6 +358,17 @@ struct PresetFile {
     std::string memoryExpansionModuleSpecName;
     std::string slot1ModuleSpecName;
     std::string slot2ModuleSpecName;
+
+    // `bus-rom:` -- ROM files plugged into the 60-pin bus before power-on,
+    // in front of every other card there, so they shadow a bundled ROM at
+    // the same place (developing a ROM extension, docs/Debugger.md).
+    std::vector<PresetBusRom> busRoms;
+
+    /// Not parsed: set by the caller. The loaders then stop once the machine
+    /// is armed (model, modules, peripherals, bus ROMs) -- no reset, no boot
+    /// run, no `keys:` / `program:` -- for a debugger that runs the boot
+    /// itself (`debug: boot: debug`).
+    bool armOnly = false;
 
     // `debug:` -- the debugger's attach settings for a project preset
     // (Core/Preset/PresetDebugBlock.hpp), paths already resolved. Null when

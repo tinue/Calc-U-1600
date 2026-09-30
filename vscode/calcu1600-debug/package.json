@@ -60,6 +60,7 @@
             "properties": {
               "port": { "type": "number", "default": 32168, "description": "The app's debug server port (Settings > Debugger)." },
               "project": { "type": "string", "description": "A project preset (.pc1500/.pc1500a/.pc1600): it sets the machine up, and its debug: block gives the settings this configuration doesn't." },
+              "boot": { "enum": ["debug"], "description": "Run the power-on boot under the debugger, breakpoints armed: the preset only sets the machine up (no keys, program or command)." },
               "command": { "type": "string", "description": "A BASIC line typed to start the code, in place of the program's CALL (or after the set-up, without a program)." },
               "preset": { "type": "string", "description": "A .pc1500/.pc1500a/.pc1600 preset loaded first (it rebuilds the machine)." },
               "reset": { "enum": ["none", "reset", "allReset"], "default": "none", "description": "Reset the machine on attach, without the boot run." },

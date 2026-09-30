@@ -77,7 +77,7 @@ inline bool parsePresetDebugBlock(YamlNode* block, const std::filesystem::path& 
         *error = yaml_detail::errAt(block->line, "'debug:' takes a block of settings");
         return false;
     }
-    if (!block->requireOnlyKeys({"reset", "stopOnEntry", "command", "program", "listings", "symbols"}, error))
+    if (!block->requireOnlyKeys({"reset", "stopOnEntry", "command", "program", "listings", "symbols", "boot"}, error))
         return false;
     for (auto& kv : block->map) {
         YamlNode& v = kv.second;

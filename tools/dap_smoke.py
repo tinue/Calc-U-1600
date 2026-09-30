@@ -12,6 +12,7 @@ through the calcu1600/quit request.
 """
 
 import argparse
+import shutil
 import base64
 import json
 import os
@@ -242,6 +243,100 @@ def project_run(port):
         dap.sock.close()
 
 
+HOSTDRIVE = os.path.join(REPO, "firmware/pc1600-hostdrive")
+
+
+def rom_project(tmp, extra):
+    """A PC-1600 project preset: the host drive, its ROM rebuilt as a bus ROM in bank 7, its listing."""
+    os.makedirs(os.path.join(tmp, "S3"), exist_ok=True)
+    shutil.copy(os.path.join(HOSTDRIVE, "PC1600-P1-B7-HOSTDRIVE.bin"), os.path.join(tmp, "hostdrive.bin"))
+    project = os.path.join(tmp, "debug.pc1600")
+    with open(project, "w") as f:
+        f.write("model: PC-1600\n"
+                "host-drive: S3\n"
+                "bus-rom:\n"
+                "  - file: hostdrive.bin\n"
+                "    bank: 7\n"
+                "debug:\n"
+                "  listings:\n"
+                f"    - path: {HOSTDRIVE}/PC1600-P1-B7-HOSTDRIVE.lst\n"
+                "      cpu: z80\n"
+                "      bank: 7\n" + extra)
+    return project
+
+
+def bus_rom_run(port):
+    """ROM extensions: a PC-1500 bus ROM entered by `command`, the host-drive ROM rebuilt, the boot under the debugger."""
+    print("bus ROM runs:")
+    source = os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/busrom.asm")
+    with tempfile.TemporaryDirectory() as tmp:
+        project = os.path.join(tmp, "debug.pc1500a")
+        with open(project, "w") as f:
+            f.write("model: PC-1500A\n"
+                    "bus-rom:\n"
+                    f"  - file: {source[:-4]}.bin\n"
+                    "    address: 0x8000\n"
+                    "debug:\n"
+                    "  command: CALL &8000\n"
+                    "  listings:\n"
+                    f"    - {source[:-4]}.rst\n")
+        dap = Dap(port)
+        dap.request("initialize", adapterID="calcu1600")
+        dap.wait_event("initialized")
+        dap.request("attach", project=project)
+        bps = dap.request("setFunctionBreakpoints", breakpoints=[{"name": "BUSHIT"}])["breakpoints"]
+        check(bps and bps[0]["verified"], "PC-1500 bus ROM: function breakpoint BUSHIT verified")
+        dap.request("configurationDone")
+        stop = dap.wait_event("stopped", timeout=30)
+        top = top_frame(dap, 1)
+        check(stop.get("reason") == "breakpoint" and top.get("source", {}).get("path") == source,
+              f"PC-1500 bus ROM: CALL &8000 stops at {top.get('source', {}).get('name')}:{top.get('line')} ({stop.get('reason')})")
+        dap.request("setFunctionBreakpoints", breakpoints=[])
+        dap.request("continue", threadId=1)
+        dap.request("disconnect")
+        dap.sock.close()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        project = rom_project(tmp, '  command: FILES "S3:"\n')
+        dap = Dap(port)
+        dap.request("initialize", adapterID="calcu1600")
+        dap.wait_event("initialized")
+        dap.request("attach", project=project)
+        dap.request("setFunctionBreakpoints", breakpoints=[{"name": "HDFILE"}])
+        dap.request("configurationDone")
+        stop = dap.wait_event("stopped", timeout=60)
+        top = top_frame(dap, 1)
+        check(stop.get("reason") == "breakpoint" and top.get("source", {}).get("name") == "hostdrive.asm",
+              f"host-drive bus ROM: FILES stops at {top.get('source', {}).get('name')}:{top.get('line')}")
+        # Build & Load without a program: the set-up again, the command again.
+        dap.request("continue", threadId=1)
+        dap.request("calcu1600/load")
+        stop = dap.wait_event("stopped", timeout=60)
+        check(stop.get("reason") == "breakpoint" and top_frame(dap, 1).get("line") == top.get("line"),
+              "host-drive bus ROM: Build & Load stops there again")
+        dap.request("setFunctionBreakpoints", breakpoints=[])
+        dap.request("continue", threadId=1)
+        dap.request("disconnect")
+        dap.sock.close()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        project = rom_project(tmp, "  boot: debug\n")
+        dap = Dap(port)
+        dap.request("initialize", adapterID="calcu1600")
+        dap.wait_event("initialized")
+        dap.request("attach", project=project)
+        dap.request("setFunctionBreakpoints", breakpoints=[{"name": "HDRESET"}])
+        dap.request("configurationDone")
+        stop = dap.wait_event("stopped", timeout=60)
+        top = top_frame(dap, 1)
+        check(stop.get("reason") == "breakpoint" and top.get("source", {}).get("name") == "hostdrive.asm",
+              f"boot: debug: the power-on module reset stops at {top.get('source', {}).get('name')}:{top.get('line')}")
+        dap.request("setFunctionBreakpoints", breakpoints=[])
+        dap.request("continue", threadId=1)
+        dap.request("disconnect")
+        dap.sock.close()
+
+
 def rom_run(port):
     """ROM research: reset and stop before the first instruction, then single-step."""
     print("ROM run:")
@@ -380,6 +475,7 @@ def main():
         program_run(args.port)
         pc1600_run(args.port)
         project_run(args.port)
+        bus_rom_run(args.port)
         rom_run(args.port)
         reset_run(args.port)
         print("done:", "all passed" if check.failures == 0 else f"{check.failures} failed")

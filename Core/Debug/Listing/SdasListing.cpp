@@ -54,6 +54,30 @@ const Layout& layoutOf(const std::vector<std::string>& text) {
     return k16;
 }
 
+// sdaslh5801 widens a line's address or equate value to eight digits when
+// it comes from a constant of 8000H and up (`.org 0x8000` gives FFFF8000,
+// `.equ 0x9000` FFFF9000), and everything to the right moves four columns:
+//
+//      FFFF8000 38                   11 BUSROM:     nop
+//                        FFFF9000     2 HIGH        .equ    0x9000
+//
+// The same file mixes both widths, so this is decided per line.
+constexpr Layout k16Wide = {3, 8, 12, 17, 21, 8, 29, 36};
+
+bool hexRun(const std::string& s, size_t pos, size_t len) {
+    if (s.size() < pos + len + 1 || s[pos + len] != ' ') return false;
+    for (size_t k = pos; k < pos + len; k++)
+        if (!std::isxdigit(static_cast<unsigned char>(s[k]))) return false;
+    return true;
+}
+
+const Layout& lineLayout(const Layout& file, const std::string& line) {
+    if (&file != &k16) return file;
+    if (hexRun(line, k16Wide.addr, 8) || (line.compare(0, 21, std::string(21, ' ')) == 0 && hexRun(line, 21, 8)))
+        return k16Wide;
+    return k16;
+}
+
 // The low 16 bits of a 4- or 8-digit hex field.
 bool parseHex16(const std::string& s, uint16_t* v) {
     uint32_t r = 0;
@@ -115,7 +139,7 @@ bool parseSdas(const ListingInput& in, Listing* out, std::string* error) {
     }
     SourceWalker walker(*out, in.reader);
     walker.begin(main);
-    const Layout& lay = layoutOf(in.text);
+    const Layout& fileLayout = layoutOf(in.text);
 
     static const std::regex kLabel(R"(^([A-Za-z_.][A-Za-z0-9_.]*)::?)");
     static const std::regex kEquate(R"(^\s*([A-Za-z_.][A-Za-z0-9_.]*)\s*(==?|\.equ|\.gblequ|\.lclequ)(\s|$))",
@@ -125,6 +149,7 @@ bool parseSdas(const ListingInput& in, Listing* out, std::string* error) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.rfind("Symbol Table", 0) == 0 || line.rfind("Area Table", 0) == 0) break;
         if (pageHeader(line) || line.size() < 8) { lastWasCode = false; continue; }
+        const Layout& lay = lineLayout(fileLayout, line);
 
         uint16_t addr = 0;
         const bool hasAddr = parseHex16(field(line, lay.addr, lay.addrLen), &addr);
