@@ -14,6 +14,10 @@ class QTimer;
 class QKeyEvent;
 namespace PC1500KeyboardMap { struct ResolvedKey; }
 class QCloseEvent;
+class QDragEnterEvent;
+class QDragMoveEvent;
+class QDropEvent;
+class QMimeData;
 class QHBoxLayout;
 class QAction;
 class QActionGroup;
@@ -78,6 +82,13 @@ public:
     FaceplateWidget* faceplate() const { return m_faceplate; }
     PlotterPaperWidget* plotterPaper() const { return m_plotterPaper; }
 
+    // A file dropped onto the window, or (macOS) onto the Dock icon / opened
+    // from Finder: its content picks the loader (Core/DropFile) -- Load
+    // Preset, Load BASIC Program or Load Machine Code, as from the menu.
+    // Anything else is ignored silently. Held back until the startup preset
+    // is done and while a synchronous operation runs (the last one wins).
+    void openDroppedFile(const QString& path);
+
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
@@ -88,6 +99,9 @@ protected:
     void changeEvent(QEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     void typeResolved(const PC1500KeyboardMap::ResolvedKey& resolved, QKeyEvent* event);
@@ -189,10 +203,22 @@ private:
     void onPresetArmed();
 
     // File > Load Machine Code…: pick a .bin (Settings' Assembly folder),
-    // recognise its header, ask for a start address / PC-1600 slot only when
-    // needed (MachineCodeLoadDialog), write it, then show the NEW that
-    // protects it and the CALL that starts it. Never runs the code.
+    // then loadMachineCodeFile(): recognise its header, ask for a start
+    // address / PC-1600 slot only when needed (MachineCodeLoadDialog), write
+    // it, then show the NEW that protects it and the CALL that starts it.
+    // Never runs the code.
     void loadMachineCode();
+    // The three loaders behind the File menu's dialogs and a drop. Each
+    // remembers the file's folder for its dialog.
+    void loadPresetFile(const QString& path);
+    void loadBasicProgramFile(const QString& path);
+    void loadMachineCodeFile(const QString& path);
+    // The one local file a drag carries, if its content is something to
+    // load (openDroppedFile()); empty otherwise.
+    QString droppableFile(const QMimeData* mime) const;
+    void drainPendingDrop();
+    QString m_pendingDrop;       // a drop that arrived while loading / before startup finished
+    bool m_startupDone = false;  // the startup preset (if any) has run
     void mountHostDirectory();
     void unmountHostDirectory();
     void syncHostDriveActions();

@@ -24,6 +24,7 @@
 #include "PC1500/PC1500MachineCodeLoader.hpp"
 #include "PC1600/PC1600Machine.hpp"
 #include "PC1600/PC1600MachineCodeLoader.hpp"
+#include "DropFile.hpp"
 
 #include <QHBoxLayout>
 #include <QInputMethodEvent>
@@ -49,9 +50,15 @@
 #include <QGuiApplication>
 #include <QImage>
 #include <QMimeData>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QFileInfo>
+#include <QUrl>
 #include <chrono>
 #include <cstring>
 #include <functional>
+#include <utility>
 
 namespace {
 // Longest host-Shift press still counted as a tap (see m_shiftTapArmed).
@@ -148,10 +155,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         const QString path = QFileDialog::getOpenFileName(this, tr("Load Preset"),
                                                             AppSettings::openStartDir(AppSettings::OpenFolder::Samples),
                                                             tr("Presets (*.pc1500 *.pc1500a *.pc1600);;All Files (*)"));
-        if (path.isEmpty()) return;
-        AppSettings::rememberOpenFile(AppSettings::OpenFolder::Samples, path);
-
-        m_sync->loadPreset(path);
+        if (!path.isEmpty()) loadPresetFile(path);
     };
     // Menu actions built in buildMenuBar() -- see its own doc comment.
     connect(m_openPresetAction, &QAction::triggered, this, openPresetDialog);
@@ -165,12 +169,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         const QString path = QFileDialog::getOpenFileName(this, tr("Load BASIC Program"),
                                                             AppSettings::openStartDir(AppSettings::OpenFolder::Basic),
                                                             tr("BASIC Programs (*.bas *.bbin);;All Files (*)"));
-        if (path.isEmpty()) return;
-        AppSettings::rememberOpenFile(AppSettings::OpenFolder::Basic, path);
-
-        m_sync->run(tr("Load BASIC Program"), [this, path](QString* error) {
-            return m_presetController->loadBasicProgramLive(path, error);
-        });
+        if (!path.isEmpty()) loadBasicProgramFile(path);
     });
     connect(m_loadMachineCodeAction, &QAction::triggered, this, &MainWindow::loadMachineCode);
     connect(m_mountDirectoryAction, &QAction::triggered, this, &MainWindow::mountHostDirectory);
@@ -281,7 +280,16 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // Starting up selects the startup model too -- apply its default preset
     // once the event loop runs, so the window is already up while a preset
     // with long `wait:` steps plays out.
-    QTimer::singleShot(0, this, [this] { applyDefaultPreset(m_controller->currentModel()); });
+    QTimer::singleShot(0, this, [this] {
+        applyDefaultPreset(m_controller->currentModel());
+        m_startupDone = true;
+        drainPendingDrop();
+    });
+    // A drop that came in while the machine was being driven.
+    connect(m_sync, &SyncOperations::busyChanged, this, [this](bool busy) {
+        if (!busy) QTimer::singleShot(0, this, &MainWindow::drainPendingDrop);
+    });
+    setAcceptDrops(true);
 }
 
 MainWindow::~MainWindow() {
@@ -381,7 +389,23 @@ void MainWindow::loadMachineCode() {
     const QString path = QFileDialog::getOpenFileName(this, title,
                                                       AppSettings::openStartDir(AppSettings::OpenFolder::Assembly),
                                                       tr("Machine Code (*.bin);;All Files (*)"));
-    if (path.isEmpty()) return;
+    if (!path.isEmpty()) loadMachineCodeFile(path);
+}
+
+void MainWindow::loadPresetFile(const QString& path) {
+    AppSettings::rememberOpenFile(AppSettings::OpenFolder::Samples, path);
+    m_sync->loadPreset(path);
+}
+
+void MainWindow::loadBasicProgramFile(const QString& path) {
+    AppSettings::rememberOpenFile(AppSettings::OpenFolder::Basic, path);
+    m_sync->run(tr("Load BASIC Program"), [this, path](QString* error) {
+        return m_presetController->loadBasicProgramLive(path, error);
+    });
+}
+
+void MainWindow::loadMachineCodeFile(const QString& path) {
+    const QString title = tr("Load Machine Code");
     AppSettings::rememberOpenFile(AppSettings::OpenFolder::Assembly, path);
 
     QFile file(path);
@@ -780,6 +804,73 @@ void MainWindow::disarmShiftTap() {
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::MouseButtonPress) disarmShiftTap(); // a Shift-click
     return QMainWindow::eventFilter(watched, event);
+}
+
+// ── Drag and drop ──────────────────────────────────────────────────────
+
+namespace {
+
+// No Sharp program comes near this; it keeps a hover over a large file from
+// reading all of it.
+constexpr qint64 kMaxDropBytes = 1 << 20;
+
+dropfile::Target dropTargetOf(const QString& path) {
+    const QFileInfo info(path);
+    if (!info.isFile() || info.size() > kMaxDropBytes) return dropfile::Target::None;
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return dropfile::Target::None;
+    const QByteArray raw = file.readAll();
+    return dropfile::classify(std::vector<uint8_t>(raw.begin(), raw.end()));
+}
+
+}  // namespace
+
+QString MainWindow::droppableFile(const QMimeData* mime) const {
+    if (m_sync->busy() || !mime->hasUrls()) return {};
+    const QList<QUrl> urls = mime->urls();
+    if (urls.size() != 1 || !urls.first().isLocalFile()) return {};
+    const QString path = urls.first().toLocalFile();
+    return dropTargetOf(path) == dropfile::Target::None ? QString() : path;
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent* event) {
+    if (!droppableFile(event->mimeData()).isEmpty()) event->acceptProposedAction();
+}
+
+void MainWindow::dragMoveEvent(QDragMoveEvent* event) {
+    // The file was checked on enter; only a load that started since matters.
+    if (!m_sync->busy()) event->acceptProposedAction();
+}
+
+void MainWindow::dropEvent(QDropEvent* event) {
+    const QString path = droppableFile(event->mimeData());
+    if (path.isEmpty()) return;
+    event->acceptProposedAction();
+    // Out of the drop handler: a load and its dialogs would keep the drag
+    // source (Finder, Explorer) waiting.
+    QTimer::singleShot(0, this, [this, path] { openDroppedFile(path); });
+}
+
+void MainWindow::openDroppedFile(const QString& path) {
+    if (!m_startupDone || m_sync->busy()) {
+        m_pendingDrop = path;
+        return;
+    }
+    const dropfile::Target target = dropTargetOf(path);
+    if (target == dropfile::Target::None) return;
+    raise();
+    activateWindow();
+    switch (target) {
+        case dropfile::Target::Preset: loadPresetFile(path); break;
+        case dropfile::Target::BasicProgram: loadBasicProgramFile(path); break;
+        case dropfile::Target::MachineCode: loadMachineCodeFile(path); break;
+        case dropfile::Target::None: break;
+    }
+}
+
+void MainWindow::drainPendingDrop() {
+    if (m_pendingDrop.isEmpty() || !m_startupDone || m_sync->busy()) return;
+    openDroppedFile(std::exchange(m_pendingDrop, QString()));
 }
 
 void MainWindow::refreshViewsAfterAdvance() {
