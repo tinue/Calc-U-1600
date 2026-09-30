@@ -4,7 +4,7 @@
 # committed; rerun this after editing hostdrive.asm.
 #
 # zasm: $CALCU_ZASM, default ~/Development/sharp/zasm/zasm (as in
-# vscode/workspace/tasks.json).
+# the VS Code extension, calcu1600.zasmPath).
 set -eu
 
 ZASM="${CALCU_ZASM:-$HOME/Development/sharp/zasm/zasm}"

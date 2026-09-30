@@ -2,51 +2,109 @@
   "name": "calcu1600-debug",
   "displayName": "Calc-U-1600 Debugger",
   "description": "Debug LH5801 / LH5803 / Z80 programs on the Calc-U-1600 PC-1500 / PC-1600 emulator over DAP.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "calcu1600",
   "license": "GPL-3.0-only",
-  "engines": { "vscode": "^1.80.0" },
-  "categories": ["Debuggers"],
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Debuggers"
+  ],
   "main": "./extension.js",
-  "activationEvents": ["onDebug", "onCommand:calcu1600.buildAndLoad"],
+  "activationEvents": [
+    "onDebug",
+    "onDebugDynamicConfigurations:calcu1600",
+    "onDebugResolve:calcu1600",
+    "onCommand:calcu1600.buildAndLoad",
+    "onCommand:workbench.action.tasks.runTask",
+    "onCommand:workbench.action.tasks.build"
+  ],
   "contributes": {
     "breakpoints": [
-      { "language": "lh5801-asm" },
-      { "language": "asm" },
-      { "language": "z80-asm" },
-      { "language": "z80-macroasm" },
-      { "language": "asm-collection" },
-      { "language": "plaintext" }
+      {
+        "language": "lh5801-asm"
+      },
+      {
+        "language": "asm"
+      },
+      {
+        "language": "z80-asm"
+      },
+      {
+        "language": "z80-macroasm"
+      },
+      {
+        "language": "asm-collection"
+      },
+      {
+        "language": "plaintext"
+      }
     ],
     "commands": [
-      { "command": "calcu1600.buildAndLoad", "title": "Build & Load", "category": "Calc-U-1600" },
-      { "command": "calcu1600.resetAndStop", "title": "Reset & Stop", "category": "Calc-U-1600" },
-      { "command": "calcu1600.allResetAndStop", "title": "All Reset & Stop", "category": "Calc-U-1600" }
+      {
+        "command": "calcu1600.buildAndLoad",
+        "title": "Build & Load",
+        "category": "Calc-U-1600"
+      },
+      {
+        "command": "calcu1600.resetAndStop",
+        "title": "Reset & Stop",
+        "category": "Calc-U-1600"
+      },
+      {
+        "command": "calcu1600.allResetAndStop",
+        "title": "All Reset & Stop",
+        "category": "Calc-U-1600"
+      }
     ],
     "keybindings": [
-      { "command": "calcu1600.buildAndLoad", "key": "ctrl+alt+l", "mac": "cmd+alt+l", "when": "debugType == 'calcu1600'" }
+      {
+        "command": "calcu1600.buildAndLoad",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+alt+l",
+        "when": "debugType == 'calcu1600'"
+      }
     ],
     "problemMatchers": [
       {
         "name": "calcu1600-sdas",
         "owner": "calcu1600",
         "source": "sdas",
-        "fileLocation": ["relative", "${fileDirname}"],
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
         "pattern": {
           "regexp": "^(.*?):(\\d+): (Error|Warning): (.*)$",
-          "file": 1, "line": 2, "severity": 3, "message": 4
+          "file": 1,
+          "line": 2,
+          "severity": 3,
+          "message": 4
         }
       },
       {
         "name": "calcu1600-zasm",
         "owner": "calcu1600",
         "source": "zasm",
-        "fileLocation": ["relative", "${fileDirname}"],
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
         "severity": "error",
         "pattern": [
-          { "regexp": "^in file (.*):$", "file": 1 },
-          { "regexp": "^(\\d+): .*$", "line": 1 },
-          { "regexp": "^\\s*\\^ (.*)$", "message": 1 }
+          {
+            "regexp": "^in file (.*):$",
+            "file": 1
+          },
+          {
+            "regexp": "^(\\d+): .*$",
+            "line": 1
+          },
+          {
+            "regexp": "^\\s*\\^ (.*)$",
+            "message": 1
+          }
         ]
       }
     ],
@@ -54,44 +112,158 @@
       {
         "type": "calcu1600",
         "label": "Calc-U-1600",
-        "languages": ["lh5801-asm", "asm", "z80-asm", "z80-macroasm"],
+        "languages": [
+          "lh5801-asm",
+          "asm",
+          "z80-asm",
+          "z80-macroasm"
+        ],
         "configurationAttributes": {
           "attach": {
             "properties": {
-              "port": { "type": "number", "default": 32168, "description": "The app's debug server port (Settings > Debugger)." },
-              "project": { "type": "string", "description": "A project preset (.pc1500/.pc1500a/.pc1600): it sets the machine up, and its debug: block gives the settings this configuration doesn't." },
-              "boot": { "enum": ["debug"], "description": "Run the power-on boot under the debugger, breakpoints armed: the preset only sets the machine up (no keys, program or command)." },
-              "command": { "type": "string", "description": "A BASIC line typed to start the code, in place of the program's CALL (or after the set-up, without a program)." },
-              "preset": { "type": "string", "description": "A .pc1500/.pc1500a/.pc1600 preset loaded first (it rebuilds the machine)." },
-              "reset": { "enum": ["none", "reset", "allReset"], "default": "none", "description": "Reset the machine on attach, without the boot run." },
-              "stopOnEntry": { "type": "boolean", "default": false, "description": "Stop right after attaching (after a reset: before the first instruction)." },
+              "port": {
+                "type": "number",
+                "description": "The app's debug server port. Default: the calcu1600.port setting (32168)."
+              },
+              "project": {
+                "type": "string",
+                "description": "A project preset (.pc1500/.pc1500a/.pc1600): it sets the machine up, and its debug: block gives the settings this configuration doesn't."
+              },
+              "boot": {
+                "enum": [
+                  "debug"
+                ],
+                "description": "Run the power-on boot under the debugger, breakpoints armed: the preset only sets the machine up (no keys, program or command)."
+              },
+              "command": {
+                "type": "string",
+                "description": "A BASIC line typed to start the code, in place of the program's CALL (or after the set-up, without a program)."
+              },
+              "preset": {
+                "type": "string",
+                "description": "A .pc1500/.pc1500a/.pc1600 preset loaded first (it rebuilds the machine)."
+              },
+              "reset": {
+                "enum": [
+                  "none",
+                  "reset",
+                  "allReset"
+                ],
+                "default": "none",
+                "description": "Reset the machine on attach, without the boot run."
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "default": false,
+                "description": "Stop right after attaching (after a reset: before the first instruction)."
+              },
               "program": {
                 "type": "object",
                 "description": "A program to load, with its listing (Build & Load).",
                 "properties": {
-                  "bin": { "type": "string" },
-                  "listing": { "type": "string", "description": ".rst / .lst (sdas) or .lst (zasm)" },
-                  "source": { "type": "string", "description": "The listing's main source if it isn't <listing>.asm" },
-                  "symbols": { "type": "array", "items": { "type": "string" } },
-                  "cpu": { "enum": ["lh5801", "z80", "lh5803"] },
-                  "address": { "type": ["string", "number"], "description": "Load address (headerless files), e.g. \"0x40C5\"; default: the listing's lowest address" },
-                  "entry": { "type": ["string", "number"], "description": "Where it starts: an address, or a symbol of the listing. Default: the header's auto-run address, else the listing's ENTRY (if in the program), else the load address" },
-                  "after": { "enum": ["none", "call", "stopOnEntry"], "default": "stopOnEntry" },
-                  "cleanStart": { "type": "boolean", "default": true, "description": "Before each load: apply 'preset' (else the model's default preset, else All Reset)." },
-                  "bank": { "type": "number", "description": "PC-1600 Z80 page bank 0-7" },
-                  "me": { "type": "number" }, "pu": { "type": "number" }, "pv": { "type": "number" }
+                  "bin": {
+                    "type": "string"
+                  },
+                  "listing": {
+                    "type": "string",
+                    "description": ".rst / .lst (sdas) or .lst (zasm)"
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "The listing's main source if it isn't <listing>.asm"
+                  },
+                  "symbols": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "cpu": {
+                    "enum": [
+                      "lh5801",
+                      "z80",
+                      "lh5803"
+                    ]
+                  },
+                  "address": {
+                    "type": [
+                      "string",
+                      "number"
+                    ],
+                    "description": "Load address (headerless files), e.g. \"0x40C5\"; default: the listing's lowest address"
+                  },
+                  "entry": {
+                    "type": [
+                      "string",
+                      "number"
+                    ],
+                    "description": "Where it starts: an address, or a symbol of the listing. Default: the header's auto-run address, else the listing's ENTRY (if in the program), else the load address"
+                  },
+                  "after": {
+                    "enum": [
+                      "none",
+                      "call",
+                      "stopOnEntry"
+                    ],
+                    "default": "stopOnEntry"
+                  },
+                  "cleanStart": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Before each load: apply 'preset' (else the model's default preset, else All Reset)."
+                  },
+                  "bank": {
+                    "type": "number",
+                    "description": "PC-1600 Z80 page bank 0-7"
+                  },
+                  "me": {
+                    "type": "number"
+                  },
+                  "pu": {
+                    "type": "number"
+                  },
+                  "pv": {
+                    "type": "number"
+                  }
                 },
-                "required": ["bin"]
+                "required": [
+                  "bin"
+                ]
               },
               "listings": {
                 "type": "array",
                 "description": "Static listings (e.g. of ROM code), with optional bank qualifiers.",
                 "items": {
-                  "type": ["string", "object"],
+                  "type": [
+                    "string",
+                    "object"
+                  ],
                   "properties": {
-                    "path": { "type": "string" }, "source": { "type": "string" },
-                    "cpu": { "enum": ["lh5801", "z80", "lh5803"] },
-                    "bank": { "type": "number" }, "me": { "type": "number" }, "pu": { "type": "number" }, "pv": { "type": "number" }
+                    "path": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "cpu": {
+                      "enum": [
+                        "lh5801",
+                        "z80",
+                        "lh5803"
+                      ]
+                    },
+                    "bank": {
+                      "type": "number"
+                    },
+                    "me": {
+                      "type": "number"
+                    },
+                    "pu": {
+                      "type": "number"
+                    },
+                    "pv": {
+                      "type": "number"
+                    }
                   }
                 }
               },
@@ -99,51 +271,246 @@
                 "type": "array",
                 "description": ".SYMBOLS: tables: a path (main CPU), or an object with the CPU and bank qualifiers.",
                 "items": {
-                  "type": ["string", "object"],
+                  "type": [
+                    "string",
+                    "object"
+                  ],
                   "properties": {
-                    "path": { "type": "string" },
-                    "cpu": { "enum": ["lh5801", "z80", "lh5803"] },
-                    "bank": { "type": "number" }, "me": { "type": "number" }, "pu": { "type": "number" }, "pv": { "type": "number" }
+                    "path": {
+                      "type": "string"
+                    },
+                    "cpu": {
+                      "enum": [
+                        "lh5801",
+                        "z80",
+                        "lh5803"
+                      ]
+                    },
+                    "bank": {
+                      "type": "number"
+                    },
+                    "me": {
+                      "type": "number"
+                    },
+                    "pu": {
+                      "type": "number"
+                    },
+                    "pv": {
+                      "type": "number"
+                    }
                   }
                 }
               },
-              "buildTask": { "type": "string", "description": "The task 'Build & Load' runs before reloading the program." }
+              "buildTask": {
+                "type": "string",
+                "description": "A task run before the session and on Build & Load, when \"build\" isn't enough (e.g. a Makefile)."
+              },
+              "currentFile": {
+                "enum": [
+                  "pc1600",
+                  "pc1500a"
+                ],
+                "description": "Debug the .asm in the editor: assemble it, set the machine up (a <name>.pc1600 / .pc1500a next to it, else debug.* in the folder, else a plain machine) and stop at its entry."
+              },
+              "build": {
+                "type": "object",
+                "description": "Assemble this file before the session and on Build & Load.",
+                "required": [
+                  "assembler",
+                  "file"
+                ],
+                "properties": {
+                  "assembler": {
+                    "enum": [
+                      "zasm",
+                      "sdas"
+                    ]
+                  },
+                  "file": {
+                    "type": "string"
+                  }
+                }
+              }
             }
           }
         },
         "initialConfigurations": [
-          { "type": "calcu1600", "request": "attach", "name": "Calc-U-1600: attach", "port": 32168 }
+          {
+            "type": "calcu1600",
+            "request": "attach",
+            "name": "Calc-U-1600: project",
+            "project": "${workspaceFolder}/debug.pc1600",
+            "build": {
+              "assembler": "zasm",
+              "file": "${workspaceFolder}/main.asm"
+            }
+          }
         ],
         "configurationSnippets": [
           {
-            "label": "Calc-U-1600: PC-1500 program (sdaslh5801)",
+            "label": "Calc-U-1600: project (PC-1600, zasm)",
+            "description": "A project preset with a debug: block; builds one source file.",
             "body": {
-              "type": "calcu1600", "request": "attach", "name": "PC-1500: ${1:program}", "port": 32168,
-              "preLaunchTask": "sdas: build current file", "buildTask": "sdas: build current file",
-              "program": {
-                "bin": "^\"\\${fileDirname}/\\${fileBasenameNoExtension}.bin\"",
-                "listing": "^\"\\${fileDirname}/\\${fileBasenameNoExtension}.rst\"",
-                "address": "0x40C5", "after": "stopOnEntry"
+              "type": "calcu1600",
+              "request": "attach",
+              "name": "${1:Debug the project}",
+              "project": "^\"\\${workspaceFolder}/debug.pc1600\"",
+              "build": {
+                "assembler": "zasm",
+                "file": "^\"\\${workspaceFolder}/${2:main}.asm\""
               }
             }
           },
           {
-            "label": "Calc-U-1600: PC-1600 program (zasm)",
+            "label": "Calc-U-1600: project (PC-1500, sdas)",
+            "description": "A project preset with a debug: block; builds one source file.",
             "body": {
-              "type": "calcu1600", "request": "attach", "name": "PC-1600: ${1:program}", "port": 32168,
-              "preLaunchTask": "zasm: build current file", "buildTask": "zasm: build current file",
-              "program": {
-                "bin": "^\"\\${fileDirname}/\\${fileBasenameNoExtension}.bin\"",
-                "listing": "^\"\\${fileDirname}/\\${fileBasenameNoExtension}.lst\"",
-                "after": "stopOnEntry"
+              "type": "calcu1600",
+              "request": "attach",
+              "name": "${1:Debug the project}",
+              "project": "^\"\\${workspaceFolder}/debug.pc1500a\"",
+              "build": {
+                "assembler": "sdas",
+                "file": "^\"\\${workspaceFolder}/${2:main}.asm\""
               }
             }
           },
           {
-            "label": "Calc-U-1600: ROM research (reset and stop)",
-            "body": { "type": "calcu1600", "request": "attach", "name": "ROM: reset and stop", "port": 32168, "reset": "reset", "stopOnEntry": true }
+            "label": "Calc-U-1600: debug the current file",
+            "description": "Assemble the .asm in the editor and stop at its entry.",
+            "body": {
+              "type": "calcu1600",
+              "request": "attach",
+              "name": "Debug current file on ${1|PC-1600,PC-1500A|}",
+              "currentFile": "${2|pc1600,pc1500a|}"
+            }
+          },
+          {
+            "label": "Calc-U-1600: reset and stop (firmware)",
+            "description": "Stop on the reset vector's first instruction.",
+            "body": {
+              "type": "calcu1600",
+              "request": "attach",
+              "name": "Reset and stop",
+              "reset": "reset",
+              "stopOnEntry": true
+            }
           }
         ]
+      }
+    ],
+    "configuration": {
+      "title": "Calc-U-1600 Debugger",
+      "properties": {
+        "calcu1600.port": {
+          "type": "number",
+          "default": 32168,
+          "description": "The emulator's debug server port (Settings ▸ Debugger in the app). A configuration's own \"port\" wins."
+        },
+        "calcu1600.zasmPath": {
+          "type": "string",
+          "default": "",
+          "description": "The zasm executable (PC-1600 builds). Empty: $CALCU_ZASM, else ~/Development/sharp/zasm/zasm."
+        },
+        "calcu1600.sdccBinPath": {
+          "type": "string",
+          "default": "",
+          "description": "The folder with sdaslh5801, sdld and makebin (PC-1500 builds). Empty: $CALCU_SDCC_BIN, else ~/Development/sharp/sdcc-pc1500/sdcc/bin."
+        },
+        "calcu1600.romListings": {
+          "type": "array",
+          "default": [],
+          "description": "Listings added to every session, e.g. of ROM code: a path, or {path, source, cpu, bank, me, pu, pv}.",
+          "items": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "cpu": {
+                "enum": [
+                  "lh5801",
+                  "z80",
+                  "lh5803"
+                ]
+              },
+              "bank": {
+                "type": "number"
+              },
+              "me": {
+                "type": "number"
+              },
+              "pu": {
+                "type": "number"
+              },
+              "pv": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "calcu1600.romSymbols": {
+          "type": "array",
+          "default": [],
+          "description": ".SYMBOLS: tables added to every session: a path, or {path, cpu, bank, me, pu, pv}.",
+          "items": {
+            "type": [
+              "string",
+              "object"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "cpu": {
+                "enum": [
+                  "lh5801",
+                  "z80",
+                  "lh5803"
+                ]
+              },
+              "bank": {
+                "type": "number"
+              },
+              "me": {
+                "type": "number"
+              },
+              "pu": {
+                "type": "number"
+              },
+              "pv": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "taskDefinitions": [
+      {
+        "type": "calcu1600",
+        "required": [
+          "assembler"
+        ],
+        "properties": {
+          "assembler": {
+            "enum": [
+              "zasm",
+              "sdas"
+            ],
+            "description": "zasm (PC-1600, Z80) or sdas (PC-1500, sdaslh5801 → sdld → makebin)."
+          },
+          "file": {
+            "type": "string",
+            "description": "The source to assemble; default: the file in the editor."
+          }
+        }
       }
     ]
   }
