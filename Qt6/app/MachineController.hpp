@@ -287,7 +287,7 @@ public:
     // as in switchModel()) (same bytes/order as
     // switchModel()'s PC-1600 branch) but no module attach or reset --
     // PC1600PresetLoader.cpp does both itself, driven by the preset's own
-    // memory-expansion-1:/-2: blocks.
+    // slot-1:/slot-2: keys.
     PC1600Machine& resetBareForPresetPC1600(PC1600RomVersion version, CE1600PRomVersion ce1600pVersion);
     // Call once the preset loader returns, success or failure alike: the
     // machine object was already swapped in by resetBareForPreset*()

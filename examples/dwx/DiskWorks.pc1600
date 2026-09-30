@@ -11,14 +11,12 @@
 # BLOAD starts DiskWorks by itself: DWX.BIN's header runs it at $D000.
 
 model: PC-1600
-plotter: ce1600p
+plotter: CE-1600P
 floppy-file: Progs.floppy.yaml
 host-drive: S3
 
-memory-expansion-1:
-  - modulespec: CE-1600M
-memory-expansion-2:
-  - modulespec-file: CE-1601M - Progs.card.yaml
+slot-1: CE-1600M
+slot-2-file: CE-1601M - Progs.card.yaml
 
 # The card is pre-populated, only reserve the machine-code area in S0:
 keys:

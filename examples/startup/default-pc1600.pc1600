@@ -1,17 +1,16 @@
 # Default startup setup for the PC-1600 -- set it under Settings >
 # "PC-1600 default preset" to have it applied whenever the PC-1600 is
-# selected: CE-1600P plotter (with its CE-1600F floppy) + a CE-1600M in
-# Slot 1.
+# selected: CE-1600P plotter (with its CE-1600F floppy and the bundled
+# "Formatted" disk), a CE-1600M in slot 1 and a CE-1601M in slot 2, set up
+# as a RAM disk.
 
 model: PC-1600
 
-plotter: ce1600p
+plotter: CE-1600P
 floppy: Formatted
 
-memory-expansion-1:
-  - modulespec: CE-1600M
-memory-expansion-2:
-  - modulespec: CE-1601M
+slot-1: CE-1600M
+slot-2: CE-1601M
 
 # NEW after reset
 keys:
@@ -32,7 +31,7 @@ keys:
   - key: mode
   - type: NEW
   - key: rsv
-  - type: '"SAVE LOAD"'
+  - type: "SAVE LOAD"
   - key: f1
   - type: SAVE"COM1:"@
   - key: f2

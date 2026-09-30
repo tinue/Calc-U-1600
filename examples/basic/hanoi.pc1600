@@ -10,11 +10,10 @@ keys:
   - key: mode
   - type: NEW0
 
-# `format: basic-binary` with a `.bas` path tokenizes the program while
-# loading, which is much faster than simulated typing the ascii version.
+# A `.bas` listing is tokenized while it loads -- much faster than typing
+# it in.
 program:
-  path: hanoi.bas
-  format: basic-binary
+  file: hanoi.bas
 
 keys:
   - key: mode

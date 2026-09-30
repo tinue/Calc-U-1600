@@ -209,7 +209,7 @@ void test_drop_targets() {
     CHECK(drop(text("# \xE2\x80\x93" "empty\xE2\x80\x93\r\nmodel: PC-1600\r\n")) == Target::Preset);  // '–', CRLF
     CHECK(drop(text("keys:\n  model: PC-1600\n")) == Target::None);                   // indented
     CHECK(drop(text("# model: PC-1600\nkeys:\n")) == Target::None);                    // commented
-    CHECK(drop(text("plotter: ce150\n")) == Target::None);                             // no model
+    CHECK(drop(text("plotter: CE-150\n")) == Target::None);                             // no model
     std::vector<uint8_t> withNul = text("model: PC-1600\n");
     withNul.push_back(0x00);
     CHECK(drop(withNul) != Target::Preset);

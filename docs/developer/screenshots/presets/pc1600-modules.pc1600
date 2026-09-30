@@ -2,12 +2,11 @@
 # a named instance (so the slot picker lists a saved card), and the
 # CE-1600P + CE-1600F with the bundled "Formatted" disk.
 model: PC-1600
-plotter: ce1600p
+plotter: CE-1600P
 floppy: Formatted
-memory-expansion-1:
-  - modulespec: CE-1600M
+slot-1: CE-1600M
 keys:
   - key: mode
   - type: NEW0
   - key: mode
-  - saveas: s1:My programs
+  - saveas: live slot-1:My programs

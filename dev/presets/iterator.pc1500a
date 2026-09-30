@@ -1,12 +1,11 @@
 # Debug the Up/Down key issue
-model: PC-1500A:A04
+model: PC-1500A
 
 keys:
   - key: cl
   - type: NEW0
 
 program:
-  format: basic-text
   text: |
     10 WAIT 10
     20 FOR I = 1 TO 100

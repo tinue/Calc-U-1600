@@ -133,7 +133,7 @@ bool PresetController::loadDefaultPreset(const QString& path, Model model, QStri
 namespace {
 
 // Preset `saveas:` dispatch -- shared by the PC-1600 and PC-1500 branches
-// below (the PC-1500 side only ever sees SaveAsTarget::S1, per
+// below (the PC-1500 side only ever sees SaveAsTarget::Slot1, per
 // PresetFile.cpp's per-model validation).
 bool saveAsFromPreset(MemoryModuleManager* moduleManager, FloppyDiskManager* floppyManager,
                       const PresetSaveAsRequest& request, std::string* error) {
@@ -142,10 +142,10 @@ bool saveAsFromPreset(MemoryModuleManager* moduleManager, FloppyDiskManager* flo
     const QString qpath = QString::fromStdString(request.path);
     bool ok = false;
     switch (request.target) {
-        case PresetStep::SaveAsTarget::S1:
+        case PresetStep::SaveAsTarget::Slot1:
             ok = moduleManager->saveAsFromPreset(1, qname, qpath, request.isTemplate, &qerror);
             break;
-        case PresetStep::SaveAsTarget::S2:
+        case PresetStep::SaveAsTarget::Slot2:
             ok = moduleManager->saveAsFromPreset(2, qname, qpath, request.isTemplate, &qerror);
             break;
         case PresetStep::SaveAsTarget::Floppy:
@@ -170,7 +170,7 @@ struct PresetController::PresetEnv {
 bool PresetController::runPreset(const PresetFile& preset, QString* error) {
     // Bundled catalog first, then the user's writable instance directory --
     // the same order MemoryModuleManager's own attachOneSlot() uses, so a
-    // preset's `- modulespec: <name>` resolves identically to the live
+    // preset's `slot-N: <name>` resolves identically to the live
     // module picker. The same bundled directory also holds the ROM images
     // Core/Resources/BundledRomCatalog.hpp resolves by name.
     PresetEnv env;

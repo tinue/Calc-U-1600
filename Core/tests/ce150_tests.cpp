@@ -264,7 +264,7 @@ void test_ce150_and_internal_lh5811_coexist() {
     CHECK((bare.memory().readME1(0xB00B) & 0x02) == 0x02);
 }
 
-// ── preset loader: plotter: ce150 ────────────────────────────────────
+// ── preset loader: plotter: CE-150 ────────────────────────────────────
 
 const char* kSysRom = "roms/PC-1500_A04.ROM";
 const char* kCe150Rom = "roms/CE-150.ROM";
@@ -285,7 +285,7 @@ void test_preset_plotter_ce150_attaches_before_reset() {
     }
     const std::string presetPath = "/tmp/calcu1600_ce150_scratch.pc1500a";
     CHECK(writeScratchPreset(presetPath,
-        "model: PC-1500A\nplotter: ce150\n"));
+        "model: PC-1500A\nplotter: CE-150\n"));
 
     PresetFile preset;
     std::string err;

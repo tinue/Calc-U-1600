@@ -1,4 +1,4 @@
-// Headless PC-1600 + CE-1600P plotter probe. Boots a `plotter: ce1600p`
+// Headless PC-1600 + CE-1600P plotter probe. Boots a `plotter: CE-1600P`
 // preset, runs its script, and dumps every pen/motor/colour event the
 // AlpsPlotterMechanism logged plus the final turret colour -- so the
 // colour-turret behaviour (a `COLOR n` command, the power-on home spin)

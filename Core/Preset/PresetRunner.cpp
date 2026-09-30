@@ -139,7 +139,7 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
     return true;
 }
 
-// `format: binary`: a machine-code block. The file may carry a CE-158
+// A machine-code `program:` block. The file may carry a CE-158
 // (PC-1500) or PC-1600 header (machinecode::readFile()) giving the load
 // address, length and an auto-run address; the preset's `address:` /
 // `length:` override the header's fields, and a headerless file needs
@@ -250,7 +250,7 @@ bool runProgram(PresetMachine& machine, const PresetProgram& program, const std:
                 PresetLoadResult* result, const PresetLogFn& log) {
     switch (program.format) {
         case PresetProgram::Format::BasicText: {
-            if (log) log(tag + "program (basic-text, " + std::to_string(countLines(program.text)) + " lines)");
+            if (log) log(tag + "program (typed, " + std::to_string(countLines(program.text)) + " lines)");
             BasicTypeResult typed = machine.typeBasicProgram(program.text);
             for (const std::string& rejected : typed.rejectedLines) {
                 result->rejectedBasicLines.push_back(rejected);
@@ -265,10 +265,10 @@ bool runProgram(PresetMachine& machine, const PresetProgram& program, const std:
             return true;
         }
         case PresetProgram::Format::BasicBinary: {
-            if (log) log(tag + "program (basic-binary, " + program.path + ")");
+            if (log) log(tag + "program (BASIC, " + program.path + ")");
             BasicLoadResult loaded = machine.loadBasicFile(program.path);
             if (!loaded.ok) {
-                result->error = tag + "basic-binary load failed: " + loaded.error;
+                result->error = tag + "BASIC load failed: " + loaded.error;
                 if (log) log("  " + result->error);
                 return false;
             }

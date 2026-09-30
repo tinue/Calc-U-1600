@@ -2,10 +2,9 @@
 #
 # Runs a memtest over all banks, 2 passes.
 
-model: PC-1500A:A04
+model: PC-1500A
 
-memory-expansion:
-  - modulespec: CE-1638
+slot-1: CE-1638
 
 keys:
   - key: cl
@@ -13,8 +12,7 @@ keys:
   - key: mode
 
 program:
-  path: memtest_bank.bin
-  format: binary
+  file: memtest_bank.bin
   address: 0x7C01
 
 keys:

@@ -3,10 +3,9 @@
 #  CALL &C5,X
 # When finished, check X for the test result.
 
-model: PC-1500:A04
+model: PC-1500
 
-memory-expansion:
-  - modulespec: CE-1638
+slot-1: CE-1638
 
 keys:
   - key: cl
@@ -14,8 +13,7 @@ keys:
   - key: mode
 
 program:
-  path: memtest_CE1638.bin
-  format: binary
+  file: memtest_CE1638.bin
   address: 0x00C5
 
 keys:

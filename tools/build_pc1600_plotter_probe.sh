@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds the headless PC-1600 + CE-1600P plotter probe. Boots a
-# `plotter: ce1600p` preset, runs its script, and dumps the plotter
+# `plotter: CE-1600P` preset, runs its script, and dumps the plotter
 # mechanism's pen/motor/colour events per preset step. Investigation aid
 # for the "pen colour drifts out of sync on OFF/ON" issue -- see
 # MinorIssues.md.

@@ -4,15 +4,14 @@
 # LPRINT. The CE-150 paper pane opens automatically (right of the debug
 # log) once the plotter is attached.
 
-model: PC-1500A:A04
-plotter: ce150
+model: PC-1500A
+plotter: CE-150
 
 keys:
   - key: cl
   - type: NEW0
 
 program:
-  format: basic-text
   text: |
     10 GRAPH
     20 FOR K=0 TO 3

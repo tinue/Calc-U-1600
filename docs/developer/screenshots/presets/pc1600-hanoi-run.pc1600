@@ -4,8 +4,7 @@ keys:
   - key: mode
   - type: NEW0
 program:
-  path: ../../../../examples/basic/hanoi.bas
-  format: basic-binary
+  file: ../../../../examples/basic/hanoi.bas
 keys:
   - key: mode
   - type: RUN

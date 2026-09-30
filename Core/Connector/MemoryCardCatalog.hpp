@@ -15,8 +15,8 @@ constexpr const char* kCardFileSuffix = ".card.yaml";
 // files and indexes them by `module-name`. Two consumers:
 //   * the GUI lists every module whose `compatible-hosts` covers the open
 //     model / slot (see the control-bar module picker);
-//   * a preset's `modulespec: <module-name>` (as opposed to the by-path
-//     `modulespec-file: <path>`) resolves the name to a file here, then
+//   * a preset's `slot-N: <module-name>` (as opposed to the by-path
+//     `slot-N-file: <path>`) resolves the name to a file here, then
 //     hands the path to makeSoftwareDefinedCard() unchanged.
 //
 // No notion of "app resource" reaches the core: the caller supplies the
@@ -62,13 +62,13 @@ inline std::vector<MemoryCardCatalogEntry> scanMemoryCardDirectory(const std::st
 }
 
 // The catalogue entry for one `.card.yaml` file -- e.g. to classify the
-// file a preset's `modulespec:`/`modulespec-file:` resolved to (template or
+// file a preset's `slot-N:`/`slot-N-file:` resolved to (template or
 // instance) without scanning its whole directory.
 inline bool readMemoryCardCatalogEntry(const std::string& path, MemoryCardCatalogEntry* out, std::string* error) {
     return readNamedFile(path, memory_card_catalog_detail::parseEntry, out, error);
 }
 
-// Ordered-search resolve of a `modulespec: <module-name>` reference to the
+// Ordered-search resolve of a `slot-N: <module-name>` reference to the
 // `.card.yaml` path that declares it: the FIRST directory in `dirs` holding
 // exactly one file declaring it wins. The GUI passes [bundled resources,
 // save folder], so a preset can name a bundled card or a user's saved

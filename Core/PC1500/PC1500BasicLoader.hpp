@@ -22,7 +22,7 @@ class PC1500Machine;
 // them, pokes the new payload in from BASPRG_ST, and fixes up BASPRG_END. The
 // caller is responsible for having prepared the machine first (memory cards,
 // `NEW`, mode) exactly as on real hardware; a preset's own `- type: NEW0`
-// step (the same contract `format: basic-text` has) works fine too, since a
+// step (the same contract a typed `program:` has) works fine too, since a
 // freshly-NEW0'd program is zero-length and the erase step is then a no-op.
 //
 // Layout facts (cross-checked with tools/pc1500_cli --dump-basic against the
@@ -38,7 +38,7 @@ class PC1500Machine;
 BasicLoadResult loadBasicProgram(PC1500Machine& machine, const std::vector<uint8_t>& file);
 
 /// Same, for the file at `path`: Load BASIC Program and a preset's
-/// `format: basic-binary`.
+/// a BASIC `program: file:`.
 BasicLoadResult loadBasicProgramFile(PC1500Machine& machine, const std::string& path);
 
 /// The bare tokenized payload (no header) -- the run of in-RAM line records

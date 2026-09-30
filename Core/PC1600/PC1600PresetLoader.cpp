@@ -48,7 +48,7 @@ std::string stepTag(PC1600Machine& machine) {
 // CE-1600F disk, resolve it by disk-name and load it into the union-attached
 // CE1600FCard (read and validated before attaching, so a bad file leaves no
 // plotter behind). `moduleDirs` is the same bundled-then-save-folder list
-// `- modulespec:` resolution searches. Returns false with result->error
+// `slot-N:` resolution searches. Returns false with result->error
 // set on any problem.
 bool attachPresetPlotter(PC1600Machine& machine, const std::string& plotter,
                          const std::string& ce1600pRom, const std::string& floppy, const std::string& floppyFile,
@@ -219,7 +219,7 @@ PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& pre
         std::unique_ptr<ExpansionCard> card =
             makePresetModuleCard(specFile, specName, moduleDirs, host, &specPath, &err);
         if (!card) {
-            result.error = "slot " + std::to_string(slot) + " modulespec: " + err;
+            result.error = "slot-" + std::to_string(slot) + ": " + err;
             return false;
         }
         const std::string label = card->moduleName() + " (" + specPath + ")";

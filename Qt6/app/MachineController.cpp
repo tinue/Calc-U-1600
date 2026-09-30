@@ -173,7 +173,7 @@ void MachineController::makePC1600WithRomFallback() {
 PC1500Machine& MachineController::resetBareForPresetPC1500(PC1500Variant variant) {
     discardMachine();
     m_pc1500 = std::make_unique<PC1500Machine>(variant);
-    wireNewMachine(); // a preset's `interface: ce158` picks up the link from here
+    wireNewMachine(); // a preset's `interface: CE-158` picks up the link from here
     return *m_pc1500;
 }
 

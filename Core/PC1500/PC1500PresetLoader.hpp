@@ -20,7 +20,7 @@ class PC1500Machine;
 ///
 /// `preset.romVariant` (e.g. "A04") says *which* ROM to run, not *where*
 /// its file lives -- `romDirs` is where to look for it (and for the CE-150
-/// ROM, if `plotter: ce150`), resolved by name via
+/// ROM, if `plotter: CE-150`), resolved by name via
 /// Core/Resources/BundledRomCatalog.hpp: the CLI passes its `roms/`
 /// directory, the GUI its bundled resources folder. A preset that needs a
 /// ROM `romDirs` doesn't contain fails with a clear message.
@@ -40,11 +40,11 @@ class PC1500Machine;
 /// that point (Core/HostClock.hpp). The load itself runs flat out, which
 /// leaves the clock ahead of real time -- make it the last step.
 ///
-/// A `- saveas: s1:<name>` step saves the live expansion-slot card under
+/// A `- saveas: live|template slot-1:<name>` step saves the live slot card under
 /// `<name>` via `onSaveAs`; a no-op (logged) if `onSaveAs` is unset.
 ///
 /// `moduleDir` is the directory searched first for a
-/// `- modulespec: <module-name>` memory-expansion reference (a
+/// `slot-1: <module-name>` reference (a
 /// bundled/standard module named by its `module-name:`), via
 /// Core/Connector/MemoryCardCatalog.hpp. Same environment-specific split as
 /// the others: the CLI passes its `--modules-dir` (default
@@ -54,7 +54,7 @@ class PC1500Machine;
 /// `BatteryCards/` folder here so a preset can name a user's saved
 /// battery-card instance; the CLI passes any repeated `--modules-dir`. A
 /// missing/unreadable extra directory is skipped silently. Only consulted
-/// when a preset actually uses the name form; a `- modulespec-file: <path>`
+/// when a preset actually uses the name form; a `slot-N-file: <path>`
 /// reference is resolved by the parser and never looks here.
 /// `onArmed` fires right before reset(), once the module/plotter are
 /// attached but the machine is still powered off -- see PresetArmedFn.

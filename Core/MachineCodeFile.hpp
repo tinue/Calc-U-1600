@@ -23,7 +23,7 @@ enum class Target { PC1500, PC1600 };  // PC1500 also covers the PC-1500A
 
 // PC-1600 load targets: S0 = internal RAM ($C000-$FFFF), S1/S2 = the two
 // memory slots ($8000-$BFFF window) -- the same windows as the preset
-// loader's `format: binary`. "Load Machine Code…" only ever loads into
+// loader's a machine-code `program: file:`. "Load Machine Code…" only ever loads into
 // BASIC's program area (the one `NEW "S0:"` reserves in), so S1/S2 are
 // used only when a module is folded into that area as extension memory.
 enum class Slot { S0, S1, S2 };
@@ -48,7 +48,7 @@ struct File {
 // (listing or tokenized), a Reserve Area, variables or plain text is an
 // error, and so is a header whose length doesn't match the file; any other
 // binary is a headerless payload -- its CPU is never guessed. Shared by
-// every machine-code load (Load Machine Code…, `format: binary`, the
+// every machine-code load (Load Machine Code…, a machine-code `program: file:`, the
 // debugger).
 File readFile(const std::vector<uint8_t>& bytes);
 

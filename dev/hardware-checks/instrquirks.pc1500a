@@ -8,8 +8,7 @@
 # of whether any memory module is installed -- no `memory-expansion:`
 # needed.
 #
-# `check: 0` isn't used -- this project's preset loader doesn't support
-# it yet. Verify by hand instead: after CALL&7C07 runs,
+# Verify by hand: after CALL&7C07 runs,
 #   PRINT PEEK(&7C02);PEEK(&7C03);PEEK(&7C04);PEEK(&7C05);PEEK(&7C06)
 # and compare against the table in instrquirks_1500a.asm.
 model: PC-1500A
@@ -20,8 +19,7 @@ keys:
   - key: mode
 
 program:
-  path: instrquirks_1500a.bin
-  format: binary
+  file: instrquirks_1500a.bin
   address: 0x7C01
 
 keys:

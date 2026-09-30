@@ -262,7 +262,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // PresetController::armed (connected to onPresetArmed()) resyncs the
     // control bar/plotter/module combos once, mid-load, while the machine
     // is still armed-but-off. Again after the load, so a preset that failed
-    // before ever arming (bad modulespec, missing ROM, ...) still gets the
+    // before ever arming (bad slot module, missing ROM, ...) still gets the
     // UI resynced to whatever's actually attached.
     m_sync->setPresetResync([this] { onPresetArmed(); });
     // The debugger's clean starts and loads go through the same service.

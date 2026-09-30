@@ -10,7 +10,7 @@ class PC1600Machine;
 // ── Keystroke-injection primitives for scripted PC-1600 input ───────────
 //
 // The PC-1600 analog of Core/PC1500/PC1500BasicTyper. Shared by the
-// preset loader's `type:` steps and its `program:` (basic-text) sections
+// preset loader's `type:` steps and its typed `program:` sections
 // (PC1600PresetLoader.cpp) -- both drive the ROM's own line editor via
 // simulated keystrokes and let the ROM store the line.
 //

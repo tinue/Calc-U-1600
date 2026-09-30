@@ -1,14 +1,17 @@
-// Headless tests for the .pc1500 preset parser (PresetFile.cpp) -- step
-// parsing (key:/type:/wait:/trace:), inline-comment handling, and plotter
-// field. Note the `type:` payload is deliberately NOT comment-stripped: a
-// mid-line `#` is valid BASIC (`OPEN ... AS #1`), so a `# note` after a
-// `type:` step is typed literally -- comments belong on their own line.
+// Headless tests for the preset parser (PresetFile.cpp) -- step parsing
+// (key:/type:/wait:/trace:), inline-comment handling, the naming rules
+// (product names, slots, numbers, files) and the refusal of old forms. Note
+// the `type:` payload is typed exactly as written: a mid-line `#` is valid
+// BASIC (`OPEN ... AS #1`) and quotes are typed, so a `# note` after a
+// `type:` step is typed too -- comments belong on their own line.
 // Same no-framework, assert-and-tally style as the other Core test files.
 //
 // Build & run: see tools/run_tests.sh
 
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 #include "../Preset/PresetFile.hpp"
@@ -66,8 +69,7 @@ void test_comment_after_block_key() {
     std::string err;
     CHECK(parse(
         "model: PC-1600   # the PC-1600\n"
-        "memory-expansion-1:   # slot 1\n"
-        "  - modulespec: CE-1600M   # 32 KB\n"
+        "slot-1: CE-1600M   # 32 KB\n"
         "keys:   # after the boot\n"
         "  - key: mode\n",
         &p, &err));
@@ -102,18 +104,21 @@ void test_type_step_keeps_space_hash() {
     CHECK(nthType(p, 1) == "CLOSE #1");
 }
 
-// A `type:` value wrapped entirely in matching quotes is still unwrapped
-// (the older pc1500preset files quote colon-bearing type steps); a `#` inside
-// survives, and with nothing after the closing quote it round-trips clean.
-void test_type_step_fully_quoted_is_unwrapped() {
+// A `type:` value is typed as written: quotes around the whole value are
+// typed too (`"SAVE LOAD"` is a BASIC string), and a `#` inside survives.
+void test_type_step_is_literal() {
     PresetFile p;
     std::string err;
     CHECK(parse(
         "model: PC-1500A\n"
         "keys:\n"
-        "  - type: '10 A$=\"x #1\"'\n",
+        "  - type: \"SAVE LOAD\"\n"
+        "  - type: '10 A$=\"x #1\"'\n"
+        "  - type: 10 PRINT \"Bank: 7\"\n",
         &p, &err));
-    CHECK(nthType(p, 0) == "10 A$=\"x #1\"");
+    CHECK(nthType(p, 0) == "\"SAVE LOAD\"");
+    CHECK(nthType(p, 1) == "'10 A$=\"x #1\"'");
+    CHECK(nthType(p, 2) == "10 PRINT \"Bank: 7\"");
 }
 
 // A `key:` step whose value is not a single known key name is almost always
@@ -267,6 +272,16 @@ void test_syncclock_step() {
     CHECK(err.find("syncclock") != std::string::npos);
 }
 
+// A wait value is a number and nothing else (`1s` used to pass as 1).
+void test_wait_step_rejects_trailing_text() {
+    PresetFile p;
+    std::string err;
+    CHECK(!parse("model: PC-1500A\nkeys:\n  - wait: 1s\n", &p, &err));
+    CHECK(err.find("invalid 'wait' value '1s'") != std::string::npos);
+    CHECK(!parse("model: PC-1500A\nkeys:\n  - wait: soon\n", &p, &err));
+    CHECK(parse("model: PC-1500A\nkeys:\n  - wait: 0.5\n", &p, &err));
+}
+
 // A negative explicit wait value is rejected (points at the parameterless form).
 void test_wait_step_rejects_negative_value() {
     PresetFile p;
@@ -275,7 +290,7 @@ void test_wait_step_rejects_negative_value() {
     CHECK(err.find("negative") != std::string::npos);
 }
 
-// `- saveas: template|live s1:<name>` / `s2:` / `floppy:` -- all three
+// `- saveas: template|live slot-1:<name>` / `slot-2:` / `floppy:` -- all three
 // targets parse on a PC-1600 preset, with the kind, target and name split
 // correctly.
 void test_saveas_step_parses_all_targets_pc1600() {
@@ -284,19 +299,19 @@ void test_saveas_step_parses_all_targets_pc1600() {
     CHECK(parse(
         "model: PC-1600\n"
         "keys:\n"
-        "  - saveas: live s1:First Card\n"
-        "  - saveas: template s2:CE-1601M - Progs\n"
+        "  - saveas: live slot-1:First Card\n"
+        "  - saveas: template slot-2:CE-1601M - Progs\n"
         "  - saveas: LIVE floppy:Progs\n",
         &p, &err));
     CHECK(!p.sections.empty());
     const auto& steps = p.sections[0].keys;
     CHECK(steps.size() == 3);
     CHECK(steps[0].kind == PresetStep::Kind::SaveAs);
-    CHECK(steps[0].saveAsTarget == PresetStep::SaveAsTarget::S1);
+    CHECK(steps[0].saveAsTarget == PresetStep::SaveAsTarget::Slot1);
     CHECK(steps[0].text == "First Card");
     CHECK(!steps[0].saveAsTemplate);
     CHECK(steps[0].saveAsPath.empty());
-    CHECK(steps[1].saveAsTarget == PresetStep::SaveAsTarget::S2);
+    CHECK(steps[1].saveAsTarget == PresetStep::SaveAsTarget::Slot2);
     CHECK(steps[1].text == "CE-1601M - Progs");
     CHECK(steps[1].saveAsTemplate);
     CHECK(steps[2].saveAsTarget == PresetStep::SaveAsTarget::Floppy);
@@ -312,7 +327,7 @@ void test_saveas_file_form_resolves_against_the_preset() {
     std::string err;
     CHECK(parsePresetString("model: PC-1600\n"
                             "keys:\n"
-                            "  - saveas: template s2:file:CE-1601M - Progs.card.yaml\n"
+                            "  - saveas: template slot-2:file:CE-1601M - Progs.card.yaml\n"
                             "  - saveas: live floppy:file:disks/Progs.floppy.yaml\n",
                             "/tmp/calcu_preset_dir/make.pc1600", &p, &err));
     CHECK(p.sections.size() == 1 && p.sections[0].keys.size() == 2);
@@ -337,59 +352,50 @@ void test_saveas_step_rejects_malformed_forms() {
     CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: s1:Name\n", &p, &err));
     CHECK(err.find("'template' or 'live'") != std::string::npos);
     CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: live NoColonHere\n", &p, &err));
-    CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: live s3:Name\n", &p, &err));
-    CHECK(err.find("target") != std::string::npos);
-    CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: live s1:\n", &p, &err));
+    CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: live s1:Name\n", &p, &err));
+    CHECK(err.find("target must be 'slot-1'") != std::string::npos);
+    CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: live slot-1:\n", &p, &err));
     CHECK(err.find("needs a name") != std::string::npos);
-    CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: 'live s1:bad \"name\"'\n", &p, &err));
-    CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: template s2:file:Card.floppy.yaml\n", &p, &err));
+    CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: 'live slot-1:bad \"name\"'\n", &p, &err));
+    CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: template slot-2:file:Card.floppy.yaml\n", &p, &err));
     CHECK(err.find(".card.yaml") != std::string::npos);
     CHECK(!parse("model: PC-1600\nkeys:\n  - saveas: template floppy:file:.floppy.yaml\n", &p, &err));
 }
 
-// `s1:` is valid on a PC-1500/1500A preset (its one expansion slot); `s2:`
-// and `floppy:` are PC-1600 only.
-// The pre-rename key is just an unknown item.
-void test_old_modulespecfile_key_is_invalid() {
-    PresetFile p;
-    std::string err;
-    CHECK(!parse("model: PC-1600\nmemory-expansion-1:\n  - modulespecfile: x.card.yaml\n", &p, &err));
-    CHECK(err.find("modulespec-file") != std::string::npos);
-}
-
+// `slot-1` is valid on a PC-1500/1500A preset (its one slot); `slot-2`
+// and `floppy` are PC-1600 only.
 void test_saveas_step_pc1500_scope() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1500A\nkeys:\n  - saveas: live s1:My Card\n", &p, &err));
-    CHECK(!parse("model: PC-1500A\nkeys:\n  - saveas: live s2:My Card\n", &p, &err));
+    CHECK(parse("model: PC-1500A\nkeys:\n  - saveas: live slot-1:My Card\n", &p, &err));
+    CHECK(!parse("model: PC-1500A\nkeys:\n  - saveas: live slot-2:My Card\n", &p, &err));
     CHECK(err.find("PC-1600") != std::string::npos);
     CHECK(!parse("model: PC-1500A\nkeys:\n  - saveas: live floppy:My Disk\n", &p, &err));
     CHECK(err.find("PC-1600") != std::string::npos);
 }
 
-void test_plotter_ce1600p_parses_and_normalizes() {
+// Sharp's spelling, in any case; the hyphen is part of the name.
+void test_product_names_any_case_hyphen_required() {
     PresetFile p;
     std::string err;
     CHECK(parse("model: PC-1600\nplotter: CE-1600P\n", &p, &err));
     CHECK(p.plotter == "ce1600p");
-
-    PresetFile p2;
-    CHECK(parse("model: PC-1600\nplotter: ce1600p\n", &p2, &err));
-    CHECK(p2.plotter == "ce1600p");
+    CHECK(parse("model: pc-1600\nplotter: ce-1600p\n", &p, &err));
+    CHECK(p.model == "PC-1600" && p.isPC1600() && p.plotter == "ce1600p");
+    CHECK(parse("model: pc-1500a\ninterface: ce-158\n", &p, &err));
+    CHECK(p.model == "PC-1500A" && p.interfaceName == "ce158");
+    CHECK(!parse("model: PC-1600\nplotter: ce1600p\n", &p, &err));
+    CHECK(err.find("expected CE-1600P or CE-150") != std::string::npos);
+    CHECK(!parse("model: PC-1500A\ninterface: ce158\n", &p, &err));
+    CHECK(!parse("model: PC1600\n", &p, &err));
+    CHECK(err.find("unsupported model") != std::string::npos);
 }
 
-void test_plotter_none_clears() {
+void test_plotter_ce150_on_pc1600_parses() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nplotter: none\n", &p, &err));
-    CHECK(p.plotter.empty());
-}
-
-void test_plotter_ce150_parses_but_is_left_for_the_loader() {
-    PresetFile p;
-    std::string err;
-    CHECK(parse("model: PC-1600\nplotter: ce150\n", &p, &err));
-    CHECK(p.plotter == "ce150");  // applyPC1600Preset rejects it as not-yet-emulated
+    CHECK(parse("model: PC-1600\nplotter: CE-150\n", &p, &err));
+    CHECK(p.plotter == "ce150");  // on the LH5803 side, MODE 1
 }
 
 void test_plotter_unknown_value_is_rejected() {
@@ -402,18 +408,18 @@ void test_plotter_unknown_value_is_rejected() {
 void test_plotter_ce1600p_on_pc1500_is_rejected() {
     PresetFile p;
     std::string err;
-    CHECK(!parse("model: PC-1500A\nplotter: ce1600p\n", &p, &err));
+    CHECK(!parse("model: PC-1500A\nplotter: CE-1600P\n", &p, &err));
     CHECK(err.find("PC-1600 device") != std::string::npos);
 }
 
 void test_plotter_ce150_on_pc1500_parses() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1500A\nplotter: ce150\n", &p, &err));
+    CHECK(parse("model: PC-1500A\nplotter: CE-150\n", &p, &err));
     CHECK(p.plotter == "ce150");  // applyPC1500Preset attaches it before reset()
     PresetFile p2;
     CHECK(parse("model: PC-1500\nplotter: CE-150\n", &p2, &err));
-    CHECK(p2.plotter == "ce150"); // spelling normalised
+    CHECK(p2.plotter == "ce150");
 }
 
 void test_plotter_absent_leaves_field_empty() {
@@ -423,78 +429,58 @@ void test_plotter_absent_leaves_field_empty() {
     CHECK(p.plotter.empty());
 }
 
-// ── memory-expansion / general parser rules (moved from ce155_tests.cpp) ──
+// ── slots / general parser rules ──
 
-// The built-in `- module: <name>` form is gone -- modules come from
-// definition files (`modulespec:` / `modulespec-file:`).
-void test_preset_parser_rejects_module_form() {
-    PresetFile preset;
-    std::string error;
-    CHECK(!parse(
-        "model: PC-1500\n"
-        "memory-expansion:\n"
-        "  - module: ce155\n",
-        &preset, &error));
-    CHECK(error.find("modulespec") != std::string::npos);
+// `slot-N: <name>` / `slot-N-file: <path>`, like `floppy:` / `floppy-file:`.
+void test_slot_keys() {
+    PresetFile p;
+    std::string err;
+    CHECK(parse("model: PC-1600\nslot-1: CE-1600M\nslot-2-file: cards/my.card.yaml\n", &p, &err));
+    CHECK(p.slot1ModuleSpecName == "CE-1600M" && p.slot1ModuleSpecFile.empty());
+    CHECK(p.slot2ModuleSpecFile == "/tmp/cards/my.card.yaml" && p.slot2ModuleSpecName.empty());
+    CHECK(parse("model: PC-1500\nslot-1-file: ~/x.card.yaml\n", &p, &err));
+    CHECK(p.slot1ModuleSpecFile == std::string(std::getenv("HOME")) + "/x.card.yaml");
+    CHECK(!parse("model: PC-1600\nslot-1: CE-1600M\nslot-1-file: x.card.yaml\n", &p, &err));
+    CHECK(err.find("only one of 'slot-1:'") != std::string::npos);
+    CHECK(!parse("model: PC-1500A\nslot-2: CE-155\n", &p, &err));
+    CHECK(err.find("PC-1600 only") != std::string::npos);
+    CHECK(!parse("model: PC-1500\nslot-1:\n  - modulespec: CE-155\n", &p, &err));
 }
 
-void test_preset_parser_rejects_extra_field() {
-    PresetFile preset;
-    std::string error;
-    CHECK(!parse(
-        "model: PC-1500\n"
-        "memory-expansion:\n"
-        "  - modulespec: CE-155\n"
-        "    address: 0x0000\n",
-        &preset, &error));
+// Old forms fail as invalid, without a hint at the new one (pre-1.0) --
+// except `slot:` in a program block (docs/background/Decisions.md).
+void test_old_forms_are_unrecognized() {
+    PresetFile p;
+    std::string err;
+    CHECK(!parse("model: PC-1500\nmemory-expansion:\n  - modulespec: CE-155\n", &p, &err));
+    CHECK(err.find("unrecognized field 'memory-expansion'") != std::string::npos);
+    CHECK(!parse("model: PC-1600\nmemory-expansion-1:\n  - modulespec: CE-1600M\n", &p, &err));
+    CHECK(!parse("model: PC-1500\nfirmware: A03\n", &p, &err));
+    CHECK(err.find("unrecognized field 'firmware'") != std::string::npos);
+    CHECK(!parse("model: PC-1500A\npre-load-keys:\n  - key: cl\n", &p, &err));
+    CHECK(!parse("model: PC-1500A\npost-load-keys:\n  - key: cl\n", &p, &err));
+    CHECK(!parse("model: PC-1500A\nrom-modules: x\n", &p, &err));
+    CHECK(!parse("model: PC-1600\nplotter: none\n", &p, &err));
+    CHECK(!parse("model: PC-1500\ninterface: off\n", &p, &err));
+    CHECK(!parse("model: PC-1500A\nkeys:\n  - check: 0\n", &p, &err));
+    CHECK(err.find("unrecognized step verb 'check'") != std::string::npos);
+    CHECK(!parse("model: PC-1500A\nprogram:\n  format: binary\n  file: x.bin\n  address: 0x7C01\n", &p, &err));
+    CHECK(err.find("unrecognized 'program' field 'format'") != std::string::npos);
+    CHECK(!parse("model: PC-1500A\nprogram:\n  path: x.bin\n  address: 0x7C01\n", &p, &err));
+    CHECK(!parse("model: PC-1500A\nbus-rom:\n  - file: x.bin\n    address: 0x8000\n    me1: true\n", &p, &err));
+    CHECK(!parse("model: PC-1500A\nprogram:\n  slot: S0\n  file: x.bin\n", &p, &err));
+    CHECK(err.find("'slot:' was removed") != std::string::npos);
 }
 
-void test_preset_parser_rejects_second_item() {
-    PresetFile preset;
-    std::string error;
-    CHECK(!parse(
-        "model: PC-1500\n"
-        "memory-expansion:\n"
-        "  - modulespec: CE-155\n"
-        "  - modulespec: CE-155\n",
-        &preset, &error));
-}
-
-void test_preset_parser_no_memory_expansion_key_is_unaffected() {
-    // Regression: a preset that never mentions memory-expansion at all
-    // still parses fine and names no module.
+void test_preset_parser_no_slot_key_is_unaffected() {
+    // A preset that names no module leaves both slots empty.
     PresetFile preset;
     std::string error;
     CHECK(parse("model: PC-1500A\n", &preset, &error));
-    CHECK(preset.memoryExpansionModuleSpecName.empty());
-    CHECK(preset.memoryExpansionModuleSpecFile.empty());
+    CHECK(preset.slot1ModuleSpecName.empty());
+    CHECK(preset.slot1ModuleSpecFile.empty());
 }
 
-void test_preset_parser_unquotes_single_and_double_quoted_values() {
-    // A `type:` step whose own text contains ": " (e.g. typing a BASIC
-    // PRINT of a string literal) needs quoting under pc1500preset's own
-    // full YAML parser, or its embedded colon would be misread as a second
-    // key/value split there -- this loader's first-colon-only split never
-    // needed that, but preset files are shared with that older loader,
-    // so it still has to strip whichever quote style shows up rather than
-    // typing the literal quote characters into the emulator (see
-    // ce163_bankswrm.pc1500a for a real preset that hit this).
-    PresetFile preset;
-    std::string error;
-    CHECK(parse(
-        "model: PC-1500A\n"
-        "keys:\n"
-        "  - type: '10 PRINT \"Bank: 7\"'\n"
-        "  - type: \"20 PRINT 'Bank: 0'\"\n"
-        "  - type: X=0\n",
-        &preset, &error));
-    CHECK(preset.sections.size() == 1);
-    CHECK(preset.sections[0].kind == PresetSection::Kind::Keys);
-    CHECK(preset.sections[0].keys.size() == 3);
-    CHECK(preset.sections[0].keys[0].text == "10 PRINT \"Bank: 7\"");
-    CHECK(preset.sections[0].keys[1].text == "20 PRINT 'Bank: 0'");
-    CHECK(preset.sections[0].keys[2].text == "X=0"); // unquoted values still pass through unchanged
-}
 
 void test_preset_parser_sequential_keys_and_program_blocks() {
     // The sequential-blocks rule (PresetFile.hpp's top-of-file comment):
@@ -509,8 +495,7 @@ void test_preset_parser_sequential_keys_and_program_blocks() {
         "keys:\n"
         "  - type: CALL&4100\n"
         "program:\n"
-        "  format: binary\n"
-        "  path: memtest_bank.bin\n"
+        "  file: x.bin\n"
         "  address: 0x7C01\n"
         "keys:\n"
         "  - type: X$=\"3.8\"\n"
@@ -532,7 +517,7 @@ void test_preset_parser_program_address_forms() {
     auto address = [](const std::string& value, uint16_t* out) {
         PresetFile preset;
         std::string error;
-        if (!parse("model: PC-1500A\nprogram:\n  format: binary\n  path: x.bin\n  address: " + value + "\n",
+        if (!parse("model: PC-1500A\nprogram:\n  file: x.bin\n  address: " + value + "\n",
                    &preset, &error))
             return false;
         *out = preset.sections[0].program.address;
@@ -540,21 +525,51 @@ void test_preset_parser_program_address_forms() {
     };
     uint16_t a = 0;
     CHECK(address("0x7C01", &a) && a == 0x7C01);
-    CHECK(address("7c01", &a) && a == 0x7C01);
     CHECK(address("&4100", &a) && a == 0x4100);
     CHECK(address("$4100", &a) && a == 0x4100);
-    CHECK(!address("14100", &a)); // > &FFFF, used to wrap to &4100
-    CHECK(!address("41zz", &a));  // trailing junk, used to parse as &41
+    CHECK(address("4100", &a) && a == 4100);  // bare = decimal, as everywhere
+    CHECK(!address("7c01", &a));              // hex needs its prefix
+    CHECK(!address("&14100", &a));            // > &FFFF
+    CHECK(!address("&41zz", &a));             // trailing junk
+    CHECK(!address("65536", &a));
 }
 
-void test_preset_parser_rejects_old_pre_post_load_keys() {
-    // pre-load-keys/post-load-keys are no longer recognized at all -- both
-    // are now a single, repeatable 'keys:' block name.
-    PresetFile preset;
-    std::string error;
-    CHECK(!parse("model: PC-1500A\npre-load-keys:\n  - key: cl\n", &preset, &error));
-    CHECK(!parse("model: PC-1500A\npost-load-keys:\n  - key: cl\n", &preset, &error));
+// `program: file:` is loaded by what the file holds; `text: |` and
+// `typed: true` type a listing in.
+void test_program_kind_follows_the_file() {
+    std::ofstream("/tmp/preset_tests_data.txt") << "just some words\n";
+    PresetFile p;
+    std::string err;
+    p = PresetFile{};
+    CHECK(parse("model: PC-1600\nprogram:\n  file: x.bas\n", &p, &err));
+    CHECK(p.sections.size() == 1 && p.sections[0].program.format == PresetProgram::Format::BasicBinary);
+    p = PresetFile{};
+    CHECK(parse("model: PC-1600\nprogram:\n  file: x.bas\n  typed: true\n", &p, &err));
+    CHECK(p.sections.size() == 1 && p.sections[0].program.format == PresetProgram::Format::BasicText &&
+          p.sections[0].program.text == "10 PRINT 1\n");
+    p = PresetFile{};
+    CHECK(parse("model: PC-1600\nprogram:\n  file: x.bin\n  address: &C0C5\n", &p, &err));
+    CHECK(p.sections.size() == 1 && p.sections[0].program.format == PresetProgram::Format::Binary);
+    p = PresetFile{};
+    CHECK(parse("model: PC-1600\nprogram:\n  text: |\n    10 END\n", &p, &err));
+    CHECK(p.sections.size() == 1 && p.sections[0].program.format == PresetProgram::Format::BasicText);
+    // Mismatched fields.
+    CHECK(!parse("model: PC-1600\nprogram:\n  file: x.bin\n  typed: true\n", &p, &err));
+    CHECK(err.find("machine code") != std::string::npos);
+    CHECK(!parse("model: PC-1600\nprogram:\n  file: x.bas\n  address: &C0C5\n", &p, &err));
+    CHECK(err.find("is BASIC") != std::string::npos);
+    CHECK(!parse("model: PC-1600\nprogram:\n  file: x.bas\n  length: 8\n", &p, &err));
+    CHECK(!parse("model: PC-1600\nprogram:\n  text: |\n    10 END\n  address: 0\n", &p, &err));
+    CHECK(!parse("model: PC-1600\nprogram:\n  file: x.bas\n  text: |\n    10 END\n", &p, &err));
+    CHECK(!parse("model: PC-1600\nprogram:\n  typed: true\n", &p, &err));
+    CHECK(err.find("either 'file:' or 'text: |'") != std::string::npos);
+    CHECK(!parse("model: PC-1600\nprogram:\n  file: x.bas\n  typed: yes\n", &p, &err));
+    CHECK(!parse("model: PC-1600\nprogram:\n  file: preset_tests_data.txt\n", &p, &err));
+    CHECK(err.find("not a program") != std::string::npos);
+    CHECK(!parse("model: PC-1600\nprogram:\n  file: missing.bin\n", &p, &err));
+    CHECK(err.find("could not open") != std::string::npos);
 }
+
 
 void test_preset_parser_model_rom_pc1500() {
     // `model: PC-1500:A03` -- the ROM rides on the model. `model` itself
@@ -602,37 +617,29 @@ void test_preset_parser_model_rom_pc1600() {
     CHECK(error.find("new") != std::string::npos);
 }
 
-void test_preset_parser_firmware_key_is_gone() {
-    // The old `firmware:` key is a parse error that points at the new syntax.
-    PresetFile preset;
-    std::string error;
-    CHECK(!parse("model: PC-1500\nfirmware: A03\n", &preset, &error));
-    CHECK(error.find("model: PC-1500:A01") != std::string::npos);
-    CHECK(!parse("model: PC-1600\nfirmware: old\n", &preset, &error));
-}
 
 void test_preset_parser_plotter_ce1600p_rom() {
-    // `plotter: ce1600p:old` -- independent of the PC-1600's own ROM.
+    // `plotter: CE-1600P:old` -- independent of the PC-1600's own ROM.
     PresetFile preset;
     std::string error;
-    CHECK(parse("model: PC-1600\nplotter: ce1600p\n", &preset, &error));
+    CHECK(parse("model: PC-1600\nplotter: CE-1600P\n", &preset, &error));
     CHECK(preset.plotter == "ce1600p");
     CHECK(preset.ce1600pRomVariant == "new");
-    CHECK(parse("model: PC-1600\nplotter: ce1600p:old\n", &preset, &error));
+    CHECK(parse("model: PC-1600\nplotter: CE-1600P:old\n", &preset, &error));
     CHECK(preset.plotter == "ce1600p");
     CHECK(preset.ce1600pRomVariant == "old");
     CHECK(preset.romVariant == "new");
     CHECK(parse("model: PC-1600:old\nplotter: CE-1600P:New\n", &preset, &error));
     CHECK(preset.ce1600pRomVariant == "new");
     CHECK(preset.romVariant == "old");
-    CHECK(!parse("model: PC-1600\nplotter: ce1600p:A04\n", &preset, &error));
-    CHECK(!parse("model: PC-1600\nplotter: ce1600p:\n", &preset, &error));
+    CHECK(!parse("model: PC-1600\nplotter: CE-1600P:A04\n", &preset, &error));
+    CHECK(!parse("model: PC-1600\nplotter: CE-1600P:\n", &preset, &error));
     // Only the CE-1600P has a ROM choice.
-    CHECK(!parse("model: PC-1600\nplotter: ce150:old\n", &preset, &error));
+    CHECK(!parse("model: PC-1600\nplotter: CE-150:old\n", &preset, &error));
     CHECK(error.find("CE-1600P") != std::string::npos);
-    CHECK(!parse("model: PC-1500A\nplotter: ce150:new\n", &preset, &error));
+    CHECK(!parse("model: PC-1500A\nplotter: CE-150:new\n", &preset, &error));
     // Still a PC-1600 device.
-    CHECK(!parse("model: PC-1500A\nplotter: ce1600p:old\n", &preset, &error));
+    CHECK(!parse("model: PC-1500A\nplotter: CE-1600P:old\n", &preset, &error));
 }
 
 } // namespace
@@ -708,23 +715,17 @@ int run_preset_tests() {
     test_debug_block_absent_is_null();
     test_debug_block_rejects_unknown_keys_and_shapes();
     test_preset_parser_model_rom_pc1600();
-    test_preset_parser_firmware_key_is_gone();
     test_preset_parser_plotter_ce1600p_rom();
     test_preset_parser_model_rom_pc1500a_is_a04_only();
-    test_preset_parser_rejects_module_form();
-    test_preset_parser_rejects_extra_field();
-    test_preset_parser_rejects_second_item();
-    test_preset_parser_no_memory_expansion_key_is_unaffected();
-    test_preset_parser_unquotes_single_and_double_quoted_values();
+    test_preset_parser_no_slot_key_is_unaffected();
     test_preset_parser_sequential_keys_and_program_blocks();
-    test_preset_parser_rejects_old_pre_post_load_keys();
     test_preset_parser_program_address_forms();
     test_preset_parser_model_rom_pc1500();
     test_inline_comment_stripped_from_key_step_only();
     test_comment_after_block_key();
     test_hash_without_leading_space_is_kept();
     test_type_step_keeps_space_hash();
-    test_type_step_fully_quoted_is_unwrapped();
+    test_type_step_is_literal();
     test_key_step_with_non_key_value_is_rejected();
     test_key_step_with_real_key_names_ok();
     test_trace_step_start_and_stop();
@@ -735,13 +736,15 @@ int run_preset_tests() {
     test_syncclock_step();
     test_saveas_step_parses_all_targets_pc1600();
     test_saveas_file_form_resolves_against_the_preset();
-    test_old_modulespecfile_key_is_invalid();
     test_saveas_step_rejects_malformed_forms();
     test_saveas_step_pc1500_scope();
     test_wait_step_rejects_negative_value();
-    test_plotter_ce1600p_parses_and_normalizes();
-    test_plotter_none_clears();
-    test_plotter_ce150_parses_but_is_left_for_the_loader();
+    test_wait_step_rejects_trailing_text();
+    test_slot_keys();
+    test_old_forms_are_unrecognized();
+    test_program_kind_follows_the_file();
+    test_product_names_any_case_hyphen_required();
+    test_plotter_ce150_on_pc1600_parses();
     test_plotter_unknown_value_is_rejected();
     test_plotter_ce1600p_on_pc1500_is_rejected();
     test_plotter_ce150_on_pc1500_parses();

@@ -21,8 +21,7 @@ keys:
   - key: mode
 
 program:
-  path: adrtest_1500a.bin
-  format: binary
+  file: adrtest_1500a.bin
   address: 0x7C01
 
 keys:

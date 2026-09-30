@@ -4,10 +4,9 @@
 #  X=2 (2 passes)
 #  CALL &38C5,X   -> X holds the test result when finished
 
-model: PC-1500:A04
+model: PC-1500
 
-memory-expansion:
-  - modulespec: CE-155
+slot-1: CE-155
 
 keys:
   - key: cl
@@ -15,8 +14,7 @@ keys:
   - key: mode
 
 program:
-  path: memtest_CE155.bin
-  format: binary
+  file: memtest_CE155.bin
   address: 0x38C5
 
 keys:

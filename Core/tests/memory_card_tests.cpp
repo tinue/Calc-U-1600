@@ -2,7 +2,7 @@
 //   * Core/Yaml.hpp                  -- the YAML-subset reader
 //   * Core/Connector/MemoryCardDefinition.hpp -- parse + validate + resolve
 //   * Core/Connector/SoftwareDefinedCard.hpp  -- the ExpansionCard itself
-//   * the `- modulespec:` preset hook and the OUT (28H) -> Slot 2 route
+//   * the `slot-N:` preset keys and the OUT (28H) -> Slot 2 route
 //
 // Same no-framework, assert-and-tally style as lh5801_tests.cpp.
 // Build & run: see tools/run_tests.sh
@@ -1342,28 +1342,25 @@ void test_reject_initial_content_missing_bank_on_banked_region() {
 std::string makeScratchCardDir();  // defined below, in the catalogue section
 
 void test_preset_parses_modulespec() {
-    // `modulespec-file:` -- a path, resolved relative to the preset dir.
+    // `slot-N-file:` -- a path, resolved relative to the preset dir.
     PresetFile preset;
     std::string err;
     CHECK(parsePresetString("model: PC-1500\n"
-                            "memory-expansion:\n"
-                            "  - modulespec-file: /abs/path/foo.card.yaml\n",
+                            "slot-1-file: /abs/path/foo.card.yaml\n",
                             "/tmp/memory_card_tests_scratch.pc1500", &preset, &err));
-    CHECK(preset.memoryExpansionModuleSpecFile == "/abs/path/foo.card.yaml");
-    CHECK(preset.memoryExpansionModuleSpecName.empty());
+    CHECK(preset.slot1ModuleSpecFile == "/abs/path/foo.card.yaml");
+    CHECK(preset.slot1ModuleSpecName.empty());
 
     PresetFile p2;
     CHECK(parsePresetString("model: PC-1600\n"
-                            "memory-expansion-2:\n"
-                            "  - modulespec-file: cards/x.card.yaml\n",
+                            "slot-2-file: cards/x.card.yaml\n",
                             "/tmp/memory_card_tests_scratch.pc1600", &p2, &err));
     CHECK(p2.slot2ModuleSpecFile == "/tmp/cards/x.card.yaml");  // relative to the scratch dir
 
-    // `modulespec:` -- a bundled module-name, stored verbatim (unresolved).
+    // `slot-N:` -- a bundled module-name, stored verbatim (unresolved).
     PresetFile p3;
     CHECK(parsePresetString("model: PC-1600\n"
-                            "memory-expansion-1:\n"
-                            "  - modulespec: CE-155\n",
+                            "slot-1: CE-155\n",
                             "/tmp/memory_card_tests_scratch3.pc1600", &p3, &err));
     CHECK(p3.slot1ModuleSpecName == "CE-155");
     CHECK(p3.slot1ModuleSpecFile.empty());
@@ -1373,15 +1370,14 @@ void test_preset_rejects_second_modulespec_item() {
     PresetFile preset;
     std::string err;
     CHECK(!parsePresetString("model: PC-1600\n"
-                             "memory-expansion-1:\n"
-                             "  - modulespec: CE-155\n"
+                             "slot-1: CE-155\n"
                              "  - modulespec: CE-155\n",
                              "/tmp/memory_card_tests_scratch2.pc1600", &preset, &err));
 }
 
 void test_ce1601m_end_to_end_through_pc1600() {
     // Drive a CE-1601M through a full preset load two ways -- a
-    // `modulespec-file:` path and a `modulespec:` module-name resolved from
+    // `slot-2-file:` path and a `slot-N:` module-name resolved from
     // a scratch module directory -- both exercising the OUT (28H) -> Slot 2
     // route. `run` asserts the vertical-bank behaviour for a loaded preset.
     auto run = [&](const PresetFile& preset, const std::string& moduleDir) {
@@ -1410,8 +1406,7 @@ void test_ce1601m_end_to_end_through_pc1600() {
     PresetFile byFile;
     std::string err;
     CHECK(parsePresetString(std::string("model: PC-1600\n"
-                                        "memory-expansion-2:\n"
-                                        "  - modulespec-file: ") +
+                                        "slot-2-file: ") +
                                 cardPath + "\n",
                             "/tmp/memory_card_tests_e2e.pc1600", &byFile, &err));
     CHECK(byFile.slot2ModuleSpecFile == cardPath);
@@ -1420,8 +1415,7 @@ void test_ce1601m_end_to_end_through_pc1600() {
     const std::string moduleDir = makeScratchCardDir();  // writes ce1601m.card.yaml (module-name CE-1601M)
     PresetFile byName;
     CHECK(parsePresetString("model: PC-1600\n"
-                            "memory-expansion-2:\n"
-                            "  - modulespec: CE-1601M\n",
+                            "slot-2: CE-1601M\n",
                             "/tmp/memory_card_tests_e2e_name.pc1600", &byName, &err));
     CHECK(byName.slot2ModuleSpecName == "CE-1601M");
     run(byName, moduleDir);
@@ -1701,7 +1695,7 @@ void test_resolve_modulespec_ambiguous() {
 // The ordered multi-directory overload: bundled catalogue first, then a
 // fallback directory (the GUI's iCloud `BatteryCards/` folder) that holds a
 // user's saved battery-card instance named `CE-1601M - Programs.card.yaml`
-// (module-name with spaces, the exact string `- modulespec:` would carry).
+// (module-name with spaces, the exact string `slot-N:` would carry).
 void test_resolve_modulespec_multi_dir() {
     const std::string bundled = makeScratchCardDir();  // ce155 / ce1600m / ce1601m
     const std::string instances = "/tmp/memory_card_catalog_tests_instances";

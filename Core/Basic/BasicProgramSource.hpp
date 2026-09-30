@@ -5,7 +5,7 @@
 
 // ── A BASIC program file, as the fast loaders take it ──────────────────
 //
-// Load BASIC Program… and a preset's `format: basic-binary` read either
+// Load BASIC Program… and a preset's a BASIC `program: file:` read either
 // file kind programfile::classify() (libsharpdx) recognises as BASIC:
 //
 //   * a plain-text listing (.bas) -- tokenized in-process via

@@ -4,10 +4,9 @@
 
 model: PC-1500A
 
-plotter: ce150
+plotter: CE-150
 
-memory-expansion:
-  - modulespec: CE-163F
+slot-1: CE-163F
 
 # Clear memory and go to RUN mode
 keys:

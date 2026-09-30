@@ -8,29 +8,26 @@
 
 model: PC-1500A
 
-memory-expansion:
-  - modulespec: CE-163F
+slot-1: CE-163F
 
 keys:
   - key: cl
   - type: NEW0
 
 program:
-  path: updaterm.bas
-  format: basic-binary
+  file: updaterm.bas
 
 keys:
   - key: mode
   - type: RUN
-  - wait: 1s
+  - wait: 1
   - type: X=9
   - type: CALL &4100,X
   - type: PRINT"Checksum: (-30440?)";X
   - key: mode
 
 program:
-  path: utilrm_15.bas
-  format: basic-binary
+  file: utilrm_15.bas
 
 keys:
   - key: mode

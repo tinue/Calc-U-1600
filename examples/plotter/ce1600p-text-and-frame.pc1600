@@ -3,9 +3,10 @@
 model: PC-1600
 
 # CE-1600P pen-plotter attached.
-plotter: ce1600p
+plotter: CE-1600P
 
-# Print a few things
+# Print a few things, then draw the frame; the preset waits until the
+# plotter is done.
 keys:
   - type: CSIZE1
   - type: LPRINT"According to the manual, size 2 allows up to 160 characters!"
@@ -28,6 +29,5 @@ keys:
   - type: SORGN
   - type: X=960
   - type: LLINE -(X,0)-(X,-X)-(0,-X)-(0,0)
-  - wait: 10
-# The wait: 10 keeps the high speed loop running and finishes the rectangle quickly.
+  - wait:
 

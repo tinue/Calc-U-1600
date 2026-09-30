@@ -29,22 +29,20 @@
 # strobe latch, so the real firmware's interleaved &6808/&6809 writes are
 # not reproduced here -- issue the sequences as pure &1555/&2AAA writes.
 
-model: PC-1500A:A04
+model: PC-1500A
 
-memory-expansion:
-  - modulespec: CE-163F
+slot-1: CE-163F
 
 keys:
   - key: cl
   - type: NEW0
-  - key: mode
-  - type: '10 POKE &6809,0'
-  - type: '20 PRINT "init    ->";PEEK &100'
-  - type: '30 POKE &101,&33'
-  - type: '40 POKE &1555,&AA : POKE &2AAA,&55 : POKE &1555,&80 : POKE &1555,&AA : POKE &2AAA,&55 : POKE &100,&30'
-  - type: '50 POKE &1555,&AA : POKE &2AAA,&55 : POKE &1555,&A0 : POKE &100,&5A'
-  - type: '60 PRINT "locked  ->";PEEK &101'
-  - type: '70 PRINT "flashed ->";PEEK &100'
+  - type: 10 POKE &6809,0
+  - type: 20 PRINT "init    ->";PEEK &100
+  - type: 30 POKE &101,&33
+  - type: 40 POKE &1555,&AA : POKE &2AAA,&55 : POKE &1555,&80 : POKE &1555,&AA : POKE &2AAA,&55 : POKE &100,&30
+  - type: 50 POKE &1555,&AA : POKE &2AAA,&55 : POKE &1555,&A0 : POKE &100,&5A
+  - type: 60 PRINT "locked  ->";PEEK &101
+  - type: 70 PRINT "flashed ->";PEEK &100
   - key: mode
   - type: RUN
   - wait: 5

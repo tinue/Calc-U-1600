@@ -7,15 +7,14 @@
 # (Settings), e.g. `screen <folder>/calcu1600-ce158.serial 300`.
 
 model: PC-1600
-interface: ce158
+interface: CE-158
 
 keys:
   - key: mode
-  - type: NEW
+  - type: NEW0
   - type: MODE1
 
 program:
-  format: basic-text
   text: |
     10 OPN "LPRT"
     20 LPRINT "HELLO FROM THE CE-158"

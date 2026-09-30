@@ -245,7 +245,7 @@ void test_ce155_contributes_full_8k_to_mem() {
 }
 
 // The CE-1638 plugged into a PC-1600 Slot 1: the same definition the
-// PC-1500 `memory-expansion:` path builds, wired in pin-for-pin. Its pin-4 chip select covers &8000-&BFFF here (not a
+// PC-1500 `slot-1:` path builds, wired in pin-for-pin. Its pin-4 chip select covers &8000-&BFFF here (not a
 // PC-1500's &0000-&3FFF Y0), so the card's banked-window index is masked to
 // the 16KB bank size -- &8000 and &BFFF must land at opposite ends of one
 // bank, not alias. Bank switching is the pin-18 write strobe (PC-1600 Slot

@@ -66,7 +66,7 @@ inline bool savePC1600PresetMedia(PC1600Machine& machine, const PresetSaveAsRequ
                                error);
     }
 
-    const bool slot1 = request.target == PresetStep::SaveAsTarget::S1;
+    const bool slot1 = request.target == PresetStep::SaveAsTarget::Slot1;
     const std::string& source = slot1 ? slot1SourcePath : slot2SourcePath;
     if (source.empty()) {
         *error = std::string("slot ") + (slot1 ? "1" : "2") + " has no card file to save from";

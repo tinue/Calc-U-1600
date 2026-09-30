@@ -99,16 +99,16 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
         // Attach before reset/boot-settle, not after -- a real module is
         // physically present before power-on, so the ROM's own boot-time
         // memory sizing sees it too.
-        if (!preset.memoryExpansionModuleSpecFile.empty() || !preset.memoryExpansionModuleSpecName.empty()) {
+        if (!preset.slot1ModuleSpecFile.empty() || !preset.slot1ModuleSpecName.empty()) {
             CardHost host = (preset.variant == PC1500Variant::PC1500A) ? CardHost::PC1500A
                                                                        : CardHost::PC1500;
             std::string err, specPath;
-            auto card = makePresetModuleCard(preset.memoryExpansionModuleSpecFile,
-                                             preset.memoryExpansionModuleSpecName,
+            auto card = makePresetModuleCard(preset.slot1ModuleSpecFile,
+                                             preset.slot1ModuleSpecName,
                                              presetModuleDirs(moduleDir, extraModuleDirs), host, &specPath, &err);
             if (!card) {
-                result.error = "memory-expansion modulespec: " + err;
-                if (log) log("modulespec load FAILED: " + err);
+                result.error = "slot-1: " + err;
+                if (log) log("slot-1 FAILED: " + err);
                 return false;
             }
             machine.attachExpansionCard(std::move(card));

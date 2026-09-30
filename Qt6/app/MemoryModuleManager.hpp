@@ -72,7 +72,7 @@ public:
     // have. The module's name is read from the machine's slot itself
     // (ExpansionCard::moduleName()) -- an empty slot clears the selection.
     // `resolvedPathOrEmpty` is
-    // the on-disk file a `modulespec:`/`modulespec-file:` reference resolved
+    // the on-disk file a `slot-N:`/`slot-N-file:` reference resolved
     // to (PresetLoadResult::slot1ResolvedPath / slot2ResolvedPath), empty
     // for an empty slot. The file itself says what it is (classifySlot()):
     // an instance becomes autosave-eligible exactly as if it had been

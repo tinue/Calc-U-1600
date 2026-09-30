@@ -9,7 +9,7 @@
 90 X = A * SIN (F * T + D)
 100 Y = B * SIN (G * T)
 110 IF I = 0 THEN GLCURSOR (X, Y) : GOTO "SKIP"
-120 LLINE -(X, Y)
+120 LINE -(X, Y)
 130 "SKIP" P = I
 140 IF P >= L + 5 THEN PRINT "Progress:"; P; "%" : L = P
 150 NEXT I

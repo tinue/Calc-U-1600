@@ -3,9 +3,10 @@
 model: PC-1600
 
 # CE-150 pen-plotter attached.
-plotter: ce150
+plotter: CE-150
 
-# Print a few things
+# Print a few things, then draw the frame; the preset waits until the
+# plotter is done.
 keys:
   - type: CSIZE1
   - type: LPRINT"Size 1, really small"
@@ -28,6 +29,5 @@ keys:
   - type: SORGN
   - type: X=216
   - type: LLINE -(X,0)-(X,-X)-(0,-X)-(0,0)
-  - wait: 10
-# The wait: 10 keeps the high speed loop running and finishes the rectangle quickly.
+  - wait:
 

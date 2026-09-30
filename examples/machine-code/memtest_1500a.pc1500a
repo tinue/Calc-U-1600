@@ -5,7 +5,7 @@
 #  CALL &7C01,X
 # When finished, check X for the test result.
 
-model: PC-1500A:A04
+model: PC-1500A
 
 keys:
   - key: cl
@@ -13,8 +13,7 @@ keys:
   - key: mode
 
 program:
-  path: memtest_1500a.bin
-  format: binary
+  file: memtest_1500a.bin
   address: 0x7C01
 
 keys:

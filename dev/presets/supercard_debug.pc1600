@@ -1,10 +1,8 @@
-# PC-1600 Debug set for Super RAM card
-
-# This version is for the PC-1600 with PC-1600P
+# PC-1600 debug set for the superRAM card in slot 2: formats and splits it,
+# then shows the free memory and the RAM disk's size.
 model: PC-1600
 
-memory-expansion-2:
-  - modulespec: superRAM
+slot-2: superRAM
 
 # init the card
 keys:

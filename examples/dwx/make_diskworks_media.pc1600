@@ -4,13 +4,11 @@
 # and "Progs.floppy.yaml" -- so DiskWorks.pc1600 always starts from them.
 
 model: PC-1600
-plotter: ce1600p
+plotter: CE-1600P
 floppy: Formatted
 
-memory-expansion-1:
-  - modulespec: CE-1600M
-memory-expansion-2:
-  - modulespec: CE-1601M
+slot-1: CE-1600M
+slot-2: CE-1601M
 
 # Set the power-on title, format + split the CE-1601M as a RAM disk,
 # then initialize the floppy
@@ -26,36 +24,31 @@ keys:
 
 # Load the programs, and save each one to S2: and X:
 program:
-  path: ../plotter/globus.bas
-  format: basic-binary
+  file: ../plotter/globus.bas
 keys:
   - type: SAVE"S2:GLOBUS.BAS"
   - type: SAVE"X:GLOBUS.BAS"
 
 program:
-  path: ../plotter/biorhythmus_1600.bas
-  format: basic-binary
+  file: ../plotter/biorhythmus_1600.bas
 keys:
   - type: SAVE"S2:BIO.BAS"
   - type: SAVE"X:BIO.BAS"
 
 program:
-  path: ../plotter/lissajou-1600.bas
-  format: basic-binary
+  file: ../plotter/lissajou-1600.bas
 keys:
   - type: SAVE"S2:LISSAJOU.BAS"
   - type: SAVE"X:LISSAJOU.BAS"
 
 program:
-  path: ../plotter/ascii.bas
-  format: basic-binary
+  file: ../plotter/ascii.bas
 keys:
   - type: SAVE"S2:ASCII.BAS"
   - type: SAVE"X:ASCII.BAS"
 
 program:
-  path: ../interfaces/setcom1600.bas
-  format: basic-binary
+  file: ../interfaces/setcom1600.bas
 keys:
   - type: SAVE"S2:COMM.BAS"
   - type: SAVE"X:COMM.BAS"
@@ -81,5 +74,5 @@ keys:
 
 # Save both as templates next to this preset, for DiskWorks.pc1600
 keys:
-  - saveas: template s2:file:CE-1601M - Progs.card.yaml
+  - saveas: template slot-2:file:CE-1601M - Progs.card.yaml
   - saveas: template floppy:file:Progs.floppy.yaml

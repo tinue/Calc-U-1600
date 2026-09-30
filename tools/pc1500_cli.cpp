@@ -9,24 +9,27 @@
 //   - a demonstration of the trace ring buffer.
 //
 // Usage: pc1500_cli <rom-file> [maxCycles]
-//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--wav <out.wav>]
+//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--wav <out.wav>] [--lcd-png <out.png>]
 //
 // The --preset form parses and applies a `.pc1500` scenario file
 // (PresetFile.hpp/PC1500PresetLoader.hpp) instead of a bare ROM --
-// firmware, pre-load-keys, program load, and post-load-keys are all
-// driven from the preset before falling into the same run loop below.
+// the model, modules, `keys:` and `program:` blocks are all driven
+// from the preset before falling into the same run loop below.
 //
-// --modules-dir <dir> is a directory a preset's `- modulespec:
-// <module-name>` memory-expansion reference is looked up in (default
+// --modules-dir <dir> is a directory a preset's `slot-1: <module-name>`
+// reference is looked up in (default
 // `Qt6/resources/cards`, the repo's bundled-module directory -- same
 // cwd-relative convention as `roms/`). Repeat it to add fallback
 // directories, searched in the order given after the first. A
-// `- modulespec-file: <path>` reference ignores it.
+// `slot-1-file: <path>` reference ignores it.
+//
+// --lcd-png <out.png> writes the LCD, as Copy Screen does, at the end of
+// the run.
 //
 // --wav <out.wav> records the buzzer (PC6, see PiezoSampler.hpp) for the
 // whole run -- preset script included -- as 48 kHz mono 16-bit PCM.
 //
-// CE-158 (a preset with `interface: ce158`):
+// CE-158 (a preset with `interface: CE-158`):
 //   --ce158-pty       attach a host PTY as the RS-232C peer; its stable
 //                     symlink is ~/Library/Application Support/Calc-U-1600/
 //                     calcu1600-ce158.serial (path printed on stderr).
@@ -50,6 +53,7 @@
 #include "../Core/PC1500/PC1500Machine.hpp"
 #include "../Core/Preset/PresetFile.hpp"
 #include "../Core/PC1500/PC1500PresetLoader.hpp"
+#include "../Core/PC1500/PC1500Screenshot.hpp"
 #include "Ce158CliPeer.hpp"
 #include "CliCommon.hpp"
 
@@ -61,12 +65,17 @@ int main(int argc, char** argv) {
     bool moduleDirSet = false;
     bool dumpBasic = false;
     std::string wavPath;
+    std::string lcdPng;
     Ce158CliPeer ce158Peer;
     {
         std::vector<char*> kept;
         for (int i = 0; i < argc; ++i) {
             if (std::strcmp(argv[i], "--wav") == 0 && i + 1 < argc) {
                 wavPath = argv[++i];
+                continue;
+            }
+            if (std::strcmp(argv[i], "--lcd-png") == 0 && i + 1 < argc) {
+                lcdPng = argv[++i];
                 continue;
             }
             if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
@@ -87,7 +96,7 @@ int main(int argc, char** argv) {
     if (argc < 2) {
         std::fprintf(stderr, "usage: %s <rom-file> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       %s --preset <preset-file.pc1500> [maxCycles]\n", argv[0]);
-        std::fprintf(stderr, "       options: --modules-dir <dir>  --dump-basic  --wav <out.wav>\n");
+        std::fprintf(stderr, "       options: --modules-dir <dir>  --dump-basic  --wav <out.wav>  --lcd-png <out.png>\n");
         std::fprintf(stderr, "                %s\n", Ce158CliPeer::kUsage);
         return 1;
     }
@@ -200,6 +209,13 @@ int main(int argc, char** argv) {
     }
 
     std::printf("Ran %llu instructions, %llu cycles\n", (unsigned long long)steps, (unsigned long long)consumed);
+    if (!lcdPng.empty()) {
+        std::string pngError;
+        if (!writeLcdScreenshotPng(pc1500LcdBitmap(machine), kPC1500ScreenMm, lcdPng, &pngError)) {
+            std::fprintf(stderr, "failed to write '%s': %s\n", lcdPng.c_str(), pngError.c_str());
+            return 1;
+        }
+    }
 
     // Convergence signal: an idle loop revisits a small set of addresses a
     // large number of times. Report the most-visited PC and how many

@@ -45,11 +45,11 @@ using PresetBootedFn = std::function<void()>;
 struct PresetLoadResult {
     bool ok = false;
     std::string error;
-    /// From a `program:` (basic-text) block: source lines the machine's line
+    /// From a typed `program:` block: source lines the machine's line
     /// editor didn't store (see BasicTypeResult::rejectedLines). Non-empty
     /// implies `ok == false`.
     std::vector<std::string> rejectedBasicLines;
-    /// The on-disk file a `modulespec:`/`modulespec-file:` reference resolved
+    /// The on-disk file a `slot-N:`/`slot-N-file:` reference resolved
     /// to, per slot -- empty for an empty slot. The PC-1500/1500A has one
     /// expansion slot and reports it as slot 1. (Which module it is, the GUI
     /// reads from the slot itself.) Lets the GUI tell a bundled read-only
@@ -58,11 +58,11 @@ struct PresetLoadResult {
     /// attached module should autosave.
     std::string slot1ResolvedPath;
     std::string slot2ResolvedPath;  // PC-1600 only
-    /// True when the preset had `plotter: ce150` and the CE-150 was attached
+    /// True when the preset had `plotter: CE-150` and the CE-150 was attached
     /// before reset, so the boot ROM's peripheral scan saw it. (PC-1600
-    /// `plotter: ce1600p` is reported via `machine.ce1600pAttached()`.)
+    /// `plotter: CE-1600P` is reported via `machine.ce1600pAttached()`.)
     bool ce150Attached = false;
-    /// True when the preset had `interface: ce158` and the CE-158 was
+    /// True when the preset had `interface: CE-158` and the CE-158 was
     /// attached before reset, like the CE-150.
     bool ce158Attached = false;
     /// PC-1600 only: the preset's `floppy:` name, verbatim -- empty if the key
@@ -113,13 +113,13 @@ public:
     /// A `syncclock:` step: re-seed the RTC from the host; returns the time set.
     virtual std::tm syncClock() = 0;
 
-    /// `format: basic-text`: type the program in through the ROM's editor.
+    /// A typed program (`text: |`, `typed: true`): type it in through the ROM's editor.
     virtual BasicTypeResult typeBasicProgram(const std::string& text) = 0;
-    /// `format: basic-binary`: load the listing or tokenized file at `path`
+    /// A BASIC `file:`: load the listing or tokenized file at `path`
     /// (loadBasicProgramFile(): on the PC-1600 the MODE picks the keyword
     /// table and the TITLE area is the target).
     virtual BasicLoadResult loadBasicFile(const std::string& path) = 0;
-    /// `format: binary`: which machine-code header family this machine
+    /// A machine-code `file:`: which machine-code header family this machine
     /// takes (machinecode::headerMismatch()), the PC-1600's MODE / TITLE /
     /// program areas the placement follows (PC-1500: none), and the write
     /// of `len` bytes at the Z-80 / LH5801 bus address `busAddr` -- on the
@@ -171,14 +171,14 @@ protected:
     Machine& m_machine;
 };
 
-/// The `- modulespec: <name>` search path: `moduleDir` (the bundled
+/// The `slot-N: <name>` search path: `moduleDir` (the bundled
 /// catalogue) first, then `extraModuleDirs` (the GUI's saved-cards folder,
 /// the CLIs' repeated `--modules-dir`).
 std::vector<std::string> presetModuleDirs(const std::string& moduleDir,
                                           const std::vector<std::string>& extraModuleDirs);
 
-/// Builds the software-defined card a `modulespec-file:` path (`specFile`) or
-/// `modulespec:` name (`specName`, looked up in `moduleDirs`) names, for
+/// Builds the software-defined card a `slot-N-file:` path (`specFile`) or
+/// `slot-N:` name (`specName`, looked up in `moduleDirs`) names, for
 /// `host`. Returns null with `error` set on failure; `resolvedPath` receives
 /// the spec file used.
 std::unique_ptr<ExpansionCard> makePresetModuleCard(const std::string& specFile, const std::string& specName,

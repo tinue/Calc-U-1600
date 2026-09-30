@@ -51,7 +51,7 @@ basic::TransferModel pc1600ListingModel(PC1600Machine& machine);
 BasicLoadResult loadBasicProgram(PC1600Machine& machine, const std::vector<uint8_t>& file);
 
 /// Same, for the file at `path`: Load BASIC Program and a preset's
-/// `format: basic-binary`.
+/// a BASIC `program: file:`.
 BasicLoadResult loadBasicProgramFile(PC1600Machine& machine, const std::string& path);
 
 /// The bare tokenized payload (no header) -- the run of in-RAM line records

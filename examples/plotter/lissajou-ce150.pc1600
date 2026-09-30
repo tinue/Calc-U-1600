@@ -3,22 +3,21 @@
 model: PC-1600
 
 # CE-150 pen-plotter attached.
-plotter: ce150
+plotter: CE-150
 
-# Bring the machine into PRO mode to accept a typed-in program.
+# PRO mode, then MODE 1: the CE-150 is driven from the PC-1500 side.
 keys:
   - key: mode
-  - type: NEW
+  - type: NEW0
   - type: MODE1
 
-# `format: basic-binary` with a `.bas` path tokenizes the program while
-# loading, which is much faster than simulated typing the ascii version.
+# A `.bas` listing is tokenized while it loads -- much faster than typing
+# it in.
 program:
-  path: lissajou-ce150-1600.bas
-  format: basic-binary
+  file: lissajou-ce150-1600.bas
 
 # Back to RUN mode, then run it -- the figure plots on the virtual paper.
 keys:
   - key: mode
   - type: RUN
-  - wait: 600
+  - wait:

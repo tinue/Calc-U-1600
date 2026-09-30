@@ -4,9 +4,9 @@
 #include <vector>
 
 // Result types shared by the per-machine BASIC loaders: the keystroke typers
-// (PC1500BasicTyper / PC1600BasicTyper, `format: basic-text`) and the fast
+// (PC1500BasicTyper / PC1600BasicTyper, a typed `program:`) and the fast
 // tokenized loaders (PC1500BasicLoader / PC1600BasicLoader,
-// `format: basic-binary` and the GUI's Load BASIC Program).
+// a BASIC `program: file:` and the GUI's Load BASIC Program).
 
 /// typeBasicProgramText()'s outcome.
 struct BasicTypeResult {

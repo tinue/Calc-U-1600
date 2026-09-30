@@ -3,7 +3,7 @@
 #  CALL &40C5,X
 # When finished, check X for the test result.
 
-model: PC-1500:A04
+model: PC-1500
 
 keys:
   - key: cl
@@ -11,8 +11,7 @@ keys:
   - key: mode
 
 program:
-  path: memtest_stock.bin
-  format: binary
+  file: memtest_stock.bin
   address: 0x40C5
 
 keys:

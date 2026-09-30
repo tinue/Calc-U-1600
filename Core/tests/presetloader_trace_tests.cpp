@@ -323,7 +323,7 @@ void test_pc1600_trace_left_open_is_auto_closed() {
 }
 
 // Not a trace test, but the same ROM-driven applyPC1500Preset() setup: a
-// `format: binary` block that isn't all RAM, or runs past &FFFF, fails the
+// machine-code `program:` block that isn't all RAM, or runs past &FFFF, fails the
 // preset instead of dropping or wrapping bytes and reporting success.
 void test_binary_program_outside_ram_fails() {
     if (!romPresent()) {
@@ -340,7 +340,7 @@ void test_binary_program_outside_ram_fails() {
     auto run = [&](const char* address) {
         PresetFile preset;
         std::string err;
-        CHECK(parsePresetString(std::string("model: PC-1500A\nprogram:\n  format: binary\n  path: code.bin\n"
+        CHECK(parsePresetString(std::string("model: PC-1500A\nprogram:\n  file: code.bin\n"
                                             "  address: ") + address + "\n",
                                 dir + "/scratch.pc1500a", &preset, &err));
         PC1500Machine machine(preset.variant);
@@ -356,7 +356,7 @@ void test_binary_program_outside_ram_fails() {
     std::remove(dir.c_str());
 }
 
-// `format: binary` with a CE-158 header on a PC-1500: the payload (not the
+// A machine-code `file:` with a CE-158 header on a PC-1500: the payload (not the
 // 27 header bytes) lands at the header's load address, with no `address:`.
 // A headerless file without `address:` is refused at load time.
 void test_binary_program_ce158_header() {
@@ -385,7 +385,7 @@ void test_binary_program_ce158_header() {
     auto run = [&](const char* file) {
         PresetFile preset;
         std::string err;
-        CHECK(parsePresetString(std::string("model: PC-1500A\nprogram:\n  format: binary\n  path: ") + file + "\n",
+        CHECK(parsePresetString(std::string("model: PC-1500A\nprogram:\n  file: ") + file + "\n",
                                 dir + "/scratch.pc1500a", &preset, &err));
         PC1500Machine machine(preset.variant);
         PresetLoadResult res = applyPC1500Preset(machine, preset, {}, dir, ".", {}, {"roms"});

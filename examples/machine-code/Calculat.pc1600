@@ -86,10 +86,8 @@
 
 model: PC-1600
 
-memory-expansion-1:
-  - modulespec: CE-1600M
-memory-expansion-2:
-  - modulespec: CE-1601M
+slot-1: CE-1600M
+slot-2: CE-1601M
 
 # Set the power-on title and format + split the CE-1601M as a RAM disk
 keys:
@@ -108,5 +106,4 @@ keys:
 
 # Load the program
 program:
-  path: CALCULAT.BIN
-  format: binary
+  file: CALCULAT.BIN
