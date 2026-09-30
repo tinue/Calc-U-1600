@@ -1,6 +1,12 @@
 # Debugger IDE integration by use case
 
-**Status (2026-09-30):** planned; P0 (default port 32168) done.
+**Status (2026-09-30):** implemented, P0–P6 on `dev-0.6.0`. Deviations:
+- **No `host-drive-rom:` key.** A `bus-rom:` in bank 7 shadows the bundled host-drive ROM, so the generic key covers it.
+- **No `rom:` key in `debug:`.** A `debug:` block without `program` but with `listings` is a ROM project.
+- **Card ROMs from files had to be implemented.** Card definitions parsed `encoding: file` but rejected it; now they read the file at each load.
+- **No slot-module templates.** *Create Debug Project…* has no template for PC-1500 or PC-1600 slot modules: a correct module header for them needs research.
+- **The sdas listing parser needed a fix for code at 8000H and up.** sdaslh5801 prints such addresses with eight digits, and those lines were skipped, so no LH5801 code at 8000H or above had source.
+- **CLion is not verified.** P5 was documented but not tried: the manual has a recipe and a checklist.
 
 ## Context
 

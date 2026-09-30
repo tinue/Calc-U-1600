@@ -379,7 +379,8 @@ authentic speed for the span that matters.
   zip, so it holds material for learning or using the emulator, grouped by
   topic and listed in `examples/README.md`. Hardware-verification programs
   go to `dev/hardware-checks/`, debug and regression presets to
-  `dev/presets/`, the VS Code "Debug on ..." presets to `vscode/presets/`.
+  `dev/presets/`, the VS Code "Debug current file" presets to
+  `vscode/calcu1600-debug/presets/` (they ship with the extension).
 - **Tests don't read from `examples/`.** They use copies under
   `Core/tests/fixtures/` (e.g. `memtest_stock.bin` next to its `.rst`), so
   renaming or editing an example can't break a test. The duplicate binary is
@@ -388,6 +389,32 @@ authentic speed for the span that matters.
   interpreted debugger expression evaluator, hit conditions and log
   interpolation, and the tests check the compiled forms against it. The
   duplication is deliberate.
+
+### Debugger IDE integration (docs/Debugger-Use-Cases-Plan.md)
+- **Nothing is copied into a project for the generic cases.** The VS Code
+  extension carries the "Debug current file" / "Reset and stop"
+  configurations, the builds and the default presets, installed per user.
+  Don't bring back workspace templates to copy (the old `vscode/workspace/`).
+- **Per-project settings live in the project preset's `debug:` block, not
+  in `launch.json`.** CLion's DAP settings are per IDE, and a preset is
+  something the app can load by hand too; `launch.json` only points at it
+  (`project`) and says what to build. The app ignores `debug:` when loading
+  the preset.
+- **ROM extensions go in through preset keys (`bus-rom:`, `encoding: file`
+  in a card), not app command-line options.** Every clean start re-reads
+  the preset and the files, so Build & Load needs no app restart and the
+  debug session stays attached.
+- **A bus ROM shadows a bundled ROM at the same place** (it is attached in
+  front of the chain). On real hardware that would be a bus conflict; here
+  it is how a rebuilt ROM replaces a bundled one (the host drive's bank 7,
+  the CE-158's ROM) while the device's own I/O stays.
+- **`boot: debug` skips the preset's `keys:` and refuses `program` /
+  `command`.** Breakpoints must never be armed while a preset or loader
+  drives the machine (those loops would hang); so the preset only arms the
+  machine, and the debugger runs the whole boot itself.
+- **The extension runs `build` itself before the session, instead of
+  `preLaunchTask`.** Build & Load needs the same build, and a
+  configuration generated for "the current file" can't name a task label.
 
 ### Wording and sources
 - **Comments and docs cite original sources only**: TRM, Service Manual,

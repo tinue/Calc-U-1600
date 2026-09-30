@@ -1,8 +1,44 @@
-# Debugger — handoff (2026-09-25)
+# Debugger — handoff (2026-09-25, updated 2026-09-30)
 
-Where the DAP debugger stands at the end of the first working session, what was verified, what the user reported from VS Code, and what to pick up next. Read this together with:
-- `docs/Debugger.md`: user documentation, including how it works;
-- `docs/DAP-Debugger-Plan.md`: the plan, with a status note on how the implementation differs.
+Where the DAP debugger stands, what was verified, what the user reported from VS Code, and what to pick up next. Read this together with:
+- `docs/Debugger.md`: the user manual (installation, setup, the four use cases, reference);
+- `docs/DAP-Debugger-Plan.md`: the plan, with a status note on how the implementation differs;
+- `docs/Debugger-Use-Cases-Plan.md`: the IDE-integration rework by use case (2026-09-30).
+
+## IDE integration by use case (2026-09-30)
+
+| Commit | What |
+|---|---|
+| eaa1222 | Default port 4711 → 32168; the plan |
+| f6ace84 | Project presets: `debug:` block, attach `project`, `command` |
+| ba77b43 | `bus-rom:`, ROM-mode Build & Load, `boot: debug` (`PresetFile::armOnly`); sdas parser fix for 8000H+ |
+| 3eb64a6 | Extension: dynamic configurations, task provider / `build`, settings, bundled presets; `vscode/workspace/` removed |
+| 64dbe4b | *Create Debug Project…* templates; card `encoding: file` |
+
+**Verified:**
+- **Tests:** CoreTests and `tools/run_tests.sh` are green.
+- **`tools/dap_smoke.py`** passes the new scenarios:
+  - a project preset;
+  - a PC-1500 bus ROM entered by `command`;
+  - the host-drive ROM rebuilt as a bank-7 bus ROM, stopping in HDFILE on `FILES "S3:"`, and again after Build & Load;
+  - `boot: debug` stopping in HDRESET during power-on.
+- **Templates:** all four were built with the extension's own build command and run over DAP. Each stops where expected, and both machines boot on to their idle loops.
+- **ROM listing:** a zasm listing of `pc1600/disasm/new/PC1600-P0-B0.asm` gives source at 0000, and a function breakpoint `SCANMODS` stops there.
+- **Extension:** configuration resolution and the scaffold were checked with a mocked `vscode` module, and the `.vsix` packages.
+
+**Not verified: needs the user in VS Code.**
+- The dynamic configurations in the Run and Debug list, and F5 without a `launch.json`.
+- The build tasks' problem matchers, with absolute paths.
+- *Create Debug Project…* in a real folder, including the `launch.json` merge.
+- Build & Load after an edit.
+- The repository's own `.vscode/launch.json` / `tasks.json` (git-ignored copies of the old templates, port 4711) are obsolete: delete them; the dynamic configurations replace them.
+
+**CLion:** only documented (manual ▸ CLion). CLion 2026.2.3 is installed here. The spike checklist is in the manual.
+
+**Internals that left the manual:**
+- **Transport:** the server listens on 127.0.0.1 only and takes one client at a time; a second one is told the debugger is busy. `--dap <port>` overrides Settings for one run.
+- **Run control:** while attached, every emulation frame goes through `DebugController::runSlice()`: paused, running with breakpoints and watches armed, or stepping in frame-sized pieces.
+- **`launch` is `attach`:** `DapSession` treats a `launch` request as `attach`, which the CLion recipe relies on.
 
 ## State
 

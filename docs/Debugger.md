@@ -1,152 +1,367 @@
-# Debugger (VS Code, Debug Adapter Protocol)
+# Debugger
 
-Calc-U-1600 contains a debug server. VS Code attaches to it and can debug machine code running in the emulator:
-- LH5801 on the PC-1500 / 1500A
-- Z80 (SC7852) and LH5803 on the PC-1600
+Calc-U-1600 can debug machine code while it runs in the emulator, from VS Code (and, not yet tested, CLion):
+- LH5801 code on the PC-1500 / 1500A;
+- Z80 (SC7852) and LH5803 code on the PC-1600.
 
-It supports:
-- breakpoints, including conditions, hit counts and logpoints
-- data breakpoints on memory
-- stepping by instruction or by source line, including step over and step out
-- registers, memory and disassembly
-- the original `.asm` source, when a listing from the assembly run is at hand
+You get breakpoints (with conditions, hit counts and log messages), data breakpoints on memory, stepping by line or by instruction, registers, memory, disassembly, and your `.asm` source.
 
-There are two ways to use it:
-- **Debug your own programs:** build in VS Code, then load the program into the emulator (Build & Load).
-- **ROM research:** attach with no program of your own. For example, reset and step through the reset routine from its first instruction.
+This manual first covers the one-time installation and setup, then four ways of working:
+1. [Developing your own program](#1-developing-your-own-program)
+2. [A program found online](#2-a-program-found-online)
+3. [Developing a ROM extension](#3-developing-a-rom-extension)
+4. [Firmware analysis](#4-firmware-analysis)
 
-## How it works
+The [Reference](#reference) at the end lists the views, breakpoints, expressions and every setting.
 
-**Transport.** The server lives in the app and listens on 127.0.0.1 only. It accepts one client at a time; a second client is told the debugger is busy. To turn it on:
-- tick **Settings ▸ Debugger ▸ Accept a debugger** (port 32168 by default); the dialog shows its live status;
-- or start the app with `--dap <port>`, which enables it for that run only and leaves Settings unchanged.
+```mermaid
+flowchart LR
+    subgraph IDE["VS Code (or CLion)"]
+        ext["Calc-U-1600 extension<br/>configurations, builds, commands"]
+    end
+    subgraph Project["your folder"]
+        asm[".asm source"]
+        preset["project preset<br/>debug.pc1600 / .pc1500a"]
+    end
+    subgraph App["Calc-U-1600 app"]
+        dap["debug server<br/>127.0.0.1:32168"]
+        machine["emulated machine"]
+    end
+    asm -- "zasm / sdaslh5801" --> bin[".bin + listing"]
+    ext -- "Debug Adapter Protocol" --> dap
+    preset -. "machine set-up + debug: block" .-> dap
+    bin -.-> dap
+    dap --> machine
+```
 
-To detach, stop the session in VS Code (Shift+F5), or press **Disconnect** in Settings ▸ Debugger. A second debug session started while one is attached is refused with a message saying this.
+---
 
-The VS Code side is a small extension, `vscode/calcu1600-debug/`. It connects to the server and adds the Build & Load and reset commands.
+## One-time installation
 
-**Threads.** Each CPU is a thread: `LH5801` on the PC-1500, `Z80 (SC7852)` and `LH5803` on the PC-1600. On the PC-1600, the thread that currently owns the bus is marked `[bus]`. A stop always stops both CPUs, and names the CPU that caused it.
+**1. Turn the debug server on in the app.** Tick **Settings ▸ Debugger ▸ Accept a debugger**. The default port is 32168, and the dialog shows whether the server is listening. Alternatively, start the app with `--dap 32168`: that turns the server on for that run only.
 
-**Call stack = instruction history.** The call stack shows:
-- **Frame 0:** the live state, at the next instruction.
-- **Frames 1–20:** the last 20 instructions the CPU executed, newest first, e.g. `after C0EE  call KEYGET`. Each shows its registers *after* it ran, and its source line if it has one.
+**2. Install the assemblers.** Both are local checkouts:
+- **zasm** for the PC-1600 (Z80), expected at `~/Development/sharp/zasm/zasm`;
+- **sdcc-pc1500** for the PC-1500 (sdaslh5801, sdld, makebin), expected in `~/Development/sharp/sdcc-pc1500/sdcc/bin`.
 
-Every CPU records this history all the time, so it is there even when you attach after something went wrong. An interrupt shows up as `interrupt at …`. The history does not use the TRACE file; the two work independently.
+If they are somewhere else, set their paths in VS Code (see [Setup](#setup)).
 
-**Pausing.** While a debugger is attached, every emulation frame goes through its run control:
-- **Paused:** the machine doesn't move, and the title bar shows *Paused (debugger)*.
-- **Running:** the machine runs at normal speed, with breakpoints and watches armed.
-- **Stepping:** a long step (step over a slow ROM call) runs in frame-sized pieces, so the window stays responsive.
+**3. Install the VS Code extension.** From the Calc-U-1600 repository root:
 
-Breakpoints are only armed while the debugger itself runs the machine. A preset load, a program load or a reset's boot run never stops on one.
+```sh
+tools/install_vscode_extension.sh
+```
 
-**Stepping.**
-- *Instruction* granularity (the disassembly view) executes one instruction of the chosen CPU.
-- *Line* granularity (in source) runs until that CPU reaches another source line, or code that has no source.
-- **Step over** a call (`SJP`, `VEJ`, `VMJ`, `CALL`, `RST`, and the conditional forms) runs until the stack is back at its depth before the call. This also works for a `VMJ` whose inline parameters move the return address.
-- **Step out** runs until a return (`RTN`, `RTI`, `RET` …) pops the current frame.
+Then reload the VS Code window. Run the script again after updating Calc-U-1600. The extension is installed for your user, so it works in every folder. You don't copy anything into your projects.
 
-**Breakpoints.**
-- **Source, function and instruction breakpoints** accept a condition such as `a == 0x10 && [0x7A00] != 0`, a hit condition (`5`, `>= 5`, `% 3`) and a log message (`x={x}`).
-- **Function breakpoints** name a symbol. They stop on the CPU whose listing or symbol table defines it, and only while that listing's bank qualifier holds. A program's `symbols` load with the program even without a `listing`.
-- **Data breakpoints** watch memory reads and/or writes. Opcode and operand fetches never trigger them. The machine stops right after the instruction that made the access. Registers can't be watched; use a conditional breakpoint instead.
-- **Expressions** (conditions, the watch window, hovers, the debug console, register edits) accept:
-  - registers and flags (`cf`, `zf` …) and symbols from the listings
-  - `[addr]` (byte), `w[addr]` (word, in the CPU's byte order) and `#[addr]` (a byte from the LH580x's ME1)
-  - C operators
+**4. Optionally, install a language extension** for LH5801 or Z80 assembly. It adds syntax colouring and lets you set breakpoints by clicking next to a line. Without one, set `"debug.allowBreakpointsEverywhere": true` in your VS Code settings.
 
-**Memory.** The memory view reads without side effects. Device registers that can't be read without disturbing them are shown as unreadable, for example the UART on the PC-1600's LH5803 side and a card's I/O window. Memory references are plain numbers, because VS Code's disassembly view reads them as numbers. The main CPU's addresses appear as they are (`0x40C5`). The PC-1600's LH5803 carries its thread number above the 16-bit address (`0x24200`), and an LH580x's ME1 adds `0x100000` (`0x12F00B`).
+---
 
-**Where to look in VS Code.**
-- **Call Stack:** each CPU with its live frame and history. Click a frame to select it.
-- **Variables ▸ Registers:** the selected frame's registers, plus two expandable entries: *Flags* and, for the live frame, *Banks* (PC-1600 page banks, or PU/PV).
-- **Disassembly:** right-click a frame and choose **Open Disassembly View**. It opens by itself where there's no source.
-- **Memory:** VS Code has no memory panel. It opens memory in Microsoft's Hex Editor extension (`ms-vscode.hexeditor`), which it offers to install the first time.
-  - **Opening it:** while paused, hover over a 16-bit register under *Registers*, or a Watch entry, and click the binary-data icon (**View Binary Data**). A Watch entry can be any address or expression, e.g. `0x7600` or `x+0x10`.
-  - **Offsets are relative.** The offset column counts from the address you opened, which only the breadcrumb shows. The row labelled `00000000` is that address, and you can't scroll above it.
-  - **Real addresses:** open the view from a Watch entry `0`. Offsets then equal addresses, and **Cmd+G** (Go to offset) jumps anywhere.
-  - **Editing:** switch the hex editor to *Replace* mode first (the status-bar toggle, or **Hex Editor: Switch Edit Mode**). The edits reach the machine when you save (**Cmd+S**). An insert or a delete can't be saved: the hex editor then tries to rewrite the whole range and reports *Not supported*. Undo it with **File: Revert File**.
-  - **Which CPU:** a Watch entry opens memory as the selected frame's CPU sees it. Select an LH5803 frame first to see the PC-1600's LH5803 side. ME1 can't be opened from a Watch entry.
+## Setup
 
-## Using VS Code
+The extension's settings are in VS Code's user settings (**Settings ▸ Extensions ▸ Calc-U-1600 Debugger**, or `settings.json`):
 
-1. **Install the extension:** run `tools/install_vscode_extension.sh`, then reload the VS Code window. The script packages a `.vsix` and installs it; a symlink into `~/.vscode/extensions` doesn't work with current VS Code.
-2. **Copy the workspace configuration:** `vscode/workspace/tasks.json` and `launch.json` go into the repository's `.vscode/`, which git ignores. If you already have your own files there, merge them in.
-   - **tasks.json** has the build tasks. `sdas: build current file` runs sdaslh5801 → sdld → makebin; `zasm: build current file` runs zasm. Their problem matchers put assembler errors in the Problems view. Set `CALCU_SDCC_BIN` / `CALCU_ZASM` if the assemblers aren't in the default checkouts.
-   - **launch.json** has three configurations: *Debug on PC-1600*, *Debug on PC-1500A* and *ROM: reset and stop*.
-3. **Debug the `.asm` in focus:** *Debug on PC-1600* and *Debug on PC-1500A* work for any program. With the `.asm` in focus, press F5. The session then:
-   - assembles it with the machine's assembler (zasm for the PC-1600, sdaslh5801 for the PC-1500A);
-   - does a clean start:
-     - *Debug on PC-1600:* a plain PC-1600, without the CE-1600P and without memory modules (`vscode/presets/debug-pc1600.pc1600`);
-     - *Debug on PC-1500A:* a PC-1500A with a CE-163F (`vscode/presets/debug-pc1500a.pc1500a`);
-   - loads the program at its `.org`;
-   - stops on its first instruction, or on `ENTRY` if the source defines that label (or equate) inside the program.
+| Setting | What it is | Default |
+|---|---|---|
+| `calcu1600.port` | the app's debug server port | `32168` |
+| `calcu1600.zasmPath` | the zasm executable | `$CALCU_ZASM`, else `~/Development/sharp/zasm/zasm` |
+| `calcu1600.sdccBinPath` | the folder with sdaslh5801, sdld and makebin | `$CALCU_SDCC_BIN`, else `~/Development/sharp/sdcc-pc1500/sdcc/bin` |
+| `calcu1600.romListings` | ROM listings that every session loads | none |
+| `calcu1600.romSymbols` | ROM symbol tables that every session loads | none |
 
-   The configurations set no `address`. A headerless `.bin` without an `address` loads at the lowest address in its listing, which is the source's `.org`. Neither preset reserves memory for the program, so pick an `.org` that BASIC won't overwrite while you debug (the PC-1500A's &7C01 area, or above a `NEW` of your own). Build & Load assembles the file in focus but reloads the one the session started with, so keep that file in focus.
-4. **Add a launch configuration for your own program** (*Add Configuration… ▸ Calc-U-1600: …*) when it needs its own machine set-up: copy a *Debug on …* configuration and point its `preset` at a preset of your own, e.g. one that reserves the program's bytes with `NEW`.
-5. **Start debugging** (F5). The session runs through these steps:
-   1. The task builds the program.
-   2. **Clean start:** the preset sets the machine up. Without a `preset` in the configuration, the model's default preset from Settings is used, and refused if it's for another model, as when the app applies it; without one, All Reset and a boot to the prompt. Like the menu's loads and resets, it runs with the frame timer stopped and sets the clock from the host afterwards.
-   3. The program is loaded directly, without the Load Machine Code dialog or its advice popup.
-   4. Its `CALL` is typed and entered through the app's inbound typing API. The GUI's Paste Text never presses ENTER; this API does.
-   5. VS Code stops at the program's first line.
-6. **After an edit, press Build & Load** (`⌘⌥L` / `Ctrl+Alt+L`). It rebuilds, does the same clean start, then loads the new binary and listing and starts it, without detaching. Breakpoints move with the code. Set `"cleanStart": false` in `program` to reload in place instead.
+**ROM listings** give the firmware source lines and names in every session: you step through the ROM in its disassembly instead of bare instructions, and you can set a breakpoint on a routine by name. The PC-1600 ROM disassemblies (`pc1600/disasm/new/*.asm` in the reference corpus) reassemble byte for byte with zasm, which writes the listing:
 
-The attach settings:
+```sh
+zasm -uwy PC1600-P0-B0.asm PC1600-P0-B0.lst PC1600-P0-B0.bin
+```
 
-| Setting | Meaning |
+Then list it in your settings with the CPU and the bank it lives in:
+
+```jsonc
+"calcu1600.romListings": [
+  { "path": "~/Development/sharp/pc1600/disasm/new/PC1600-P0-B0.lst", "cpu": "z80", "bank": 0 }
+]
+```
+
+A listing that doesn't match the machine's memory (another ROM version, for example) is reported and not used, so a listing for the other model does no harm. The PC-1500 ROM disassemblies are TASM listings, which the debugger can't read yet.
+
+---
+
+## 1. Developing your own program
+
+You work in the program's own folder. *Create Debug Project…* sets it up once, and from then on F5 builds, loads and starts it.
+
+**Create the project.** Open an empty folder in VS Code, then run **Calc-U-1600: Create Debug Project…** from the Command Palette. Choose *PC-1600 program* or *PC-1500A program* and a name. You get:
+
+| File | What it is |
 |---|---|
-| `port` | the server's port |
-| `preset` | a preset applied first; it rebuilds the machine |
-| `reset` | `none`, `reset` or `allReset`: reset without the boot run |
-| `stopOnEntry` | stop right after attaching; after a reset, that is before the first instruction |
-| `program` | Build & Load: `bin`, `listing`, `source`, `symbols`, `cpu` (`lh5801` / `z80` / `lh5803`), `address` (for a headerless file, in `cpu`'s address space; default: the listing's lowest address; on the PC-1600 the target follows the calculator's MODE and the program area `TITLE` selects), `entry` (an address or a symbol of the listing; default: the header's auto-run address, else the listing's `ENTRY` if it lies in the program, else the load address), `after` (`none` / `call` / `stopOnEntry`), `cleanStart` (default `true`), and the bank qualifiers below |
-| `listings` | static listings, e.g. of ROM code: `{path, source, cpu, bank, me, pu, pv}` |
-| `symbols` | `.SYMBOLS:` tables: a path (main CPU), or `{path, cpu, bank, me, pu, pv}` like `listings` |
-| `buildTask` | the task Build & Load runs |
+| `main.asm` | a small program that runs: it prints a greeting on the PC-1600, or counts on the PC-1500A |
+| `debug.pc1600` or `debug.pc1500a` | the **project preset**: the machine to run on, and a `debug:` block that tells the debugger what to load |
+| `.vscode/launch.json` | one configuration, *Debug main*, that points at the project preset and says which file to build |
+| `.gitignore` | the build outputs |
 
-**ROM research.** Attach with `"reset": "reset", "stopOnEntry": true` to stop on the first instruction after reset:
-- PC-1500: E000, the reset vector's target;
-- PC-1600: 0000 on the Z80. The LH5803 thread shows its own state.
+The project preset is an ordinary preset, so you can also open it in the app (**File ▸ Load Preset**). The app ignores the `debug:` block when loading it. The PC-1600 one looks like this:
 
-**Reset & Stop** and **All Reset & Stop** (command palette) and the debug toolbar's *Restart* do the same during a session.
+```yaml
+model: PC-1600
 
-## Listings
+keys:
+  - key: mode
+  - type: NEW0
+  - key: mode
 
-**Supported formats.** The debugger reads the listings of the two supported assemblers:
-- **sdas:** sdaslh5801 / sdasz80 `.lst`, and the `.rst` that sdld writes with the linked addresses. Prefer the `.rst` for relocatable code.
-- **zasm:** `.lst` from `zasm -uwy`.
-- **Symbols:** `.SYMBOLS:` tables (`HHHH name` per line).
+debug:
+  program:
+    bin: main.bin
+    listing: main.lst
+    after: stopOnEntry      # type its CALL and stop at the first line
+```
 
-Neither assembler names the file an included line comes from. The parser therefore walks the listing against the source files themselves and places every line by its text; keep the sources next to the listing. Labels are taken from the source column, because the sdas `.sym` table cuts names to eight characters.
+Add memory modules, a plotter or anything else a preset can hold, and every debug session starts on that machine.
 
-**Loaded and static listings.**
-- **Loaded:** a listing that comes with a `program` belongs to exactly the loaded address range. A newer load replaces it. That is how the debugger knows which listing matches which bytes.
-- **Static:** listings under `listings` apply in attach order, below any loaded ones.
+**Debug.** Press **F5**. VS Code assembles `main.asm`; problems show in the Problems view. Then the app does a clean start: it applies the project preset, loads the program, types its `CALL` and stops at its first line.
 
-**Checked against memory.** Every listing is compared with memory when it is bound. One whose bytes don't match is marked stale: it's reported, and it isn't used for source. That covers the wrong build, and the wrong ROM version (an A03 listing on an A04 ROM). A frame whose bytes no longer match its line (self-modifying or overwritten code) is shown as disassembly instead.
+**Change and reload.** After an edit, press **Build & Load** (`Cmd+Alt+L` / `Ctrl+Alt+L`). It rebuilds, does the same clean start and reloads the program without ending the session. Breakpoints move with the code. *Restart* in the debug toolbar sets the machine up again from the configuration.
 
-**Bank qualifiers** bind a listing, and the breakpoints in it, to a memory state:
+```mermaid
+sequenceDiagram
+    participant You
+    participant VS as VS Code
+    participant App as Calc-U-1600
+    You->>VS: F5 / Build & Load
+    VS->>VS: assemble (zasm / sdaslh5801)
+    VS->>App: attach / load
+    App->>App: clean start: project preset
+    App->>App: load .bin, bind listing
+    App->>App: type CALL (or command)
+    App-->>VS: stopped at the entry
+```
+
+**Where the program goes.** A headerless `.bin` loads at its listing's lowest address, the source's `.org`. On the PC-1600, where it ends up also follows the calculator's MODE and the program area its `TITLE` selects. The PC-1500A template uses &7C01, the machine-language area BASIC never uses. The PC-1600 template uses C0C5H, where a BASIC program would start: fine while the preset leaves BASIC empty (`NEW0`). If your program has to live next to BASIC, reserve its memory in the preset, for example with a `NEW` of your own, and move its `.org` there.
+
+**Starting it differently.** In the `debug:` block:
+- `entry: START` starts at a symbol (or an address) instead of the default;
+- `command: CALL &C0C5,1` types that line instead of the plain `CALL`, e.g. to pass an argument;
+- `after: call` starts the program without stopping; `after: none` only loads it.
+
+---
+
+## 2. A program found online
+
+You collect programs (typically `.bin` files) in one folder, have an AI agent disassemble each into an `.asm` file, and then want to step through them. You don't want a configuration per program.
+
+**Debug the file in the editor.** Open the folder, open one `.asm` file, and pick *Debug current file on PC-1600 (zasm)* or *… on PC-1500A (sdas)* from the Run and Debug view's list (under *Calc-U-1600*); they are there in every folder. Pressing **F5** in a folder without a `launch.json` offers the same choices (if VS Code first asks which debugger, choose *Calc-U-1600*). The session assembles the file, loads it at its `.org` into a plain machine, and stops at its first instruction, or at `ENTRY` if the source defines that label.
+
+**Give one program its own machine.** Some programs need more than a plain machine: a memory module, a plotter, their data, or a `NEW` that reserves their memory. Put a preset with the program's name next to it: `DATABROS.pc1600` next to `DATABROS.asm`. *Debug current file* uses the first preset it finds:
+
+```mermaid
+flowchart TD
+    start["Debug current file:<br/>FOO.asm"] --> a{"FOO.pc1600 / FOO.pc1500a<br/>next to it?"}
+    a -- yes --> useA["use it"]
+    a -- no --> b{"debug.pc1600 / .pc1500a<br/>in the folder?"}
+    b -- yes --> useB["use it"]
+    b -- no --> useC["a plain machine<br/>(bundled with the extension)"]
+```
+
+**Tips for disassembled code.**
+- Ask the agent to keep the original load address as `.org` and to label the entry point `ENTRY`.
+- **Don't overwrite the original.** The build writes `<name>.bin` next to the source. On a Mac disk, `DATABROS.bin` and `DATABROS.BIN` are the same file, so building `DATABROS.asm` next to the original `DATABROS.BIN` replaces it. Give the disassembly its own name (`DATABROS-dis.asm`) or keep it in a subfolder, then compare the rebuilt `.bin` with the original to check that the disassembly is complete.
+- Build & Load assembles the file the session started with, even if another file is in focus.
+
+---
+
+## 3. Developing a ROM extension
+
+A ROM extension (like Calc-U-1600's own host-drive ROM) isn't loaded into RAM and called. It is plugged into the machine before power-on, and its code runs from the ROM's own module handling or from BASIC commands. The debugger supports that too.
+
+**Create the project.** **Calc-U-1600: Create Debug Project…** offers two ROM targets:
+
+| Target | What you get |
+|---|---|
+| *PC-1600 ROM extension* | a minimal ROM module (ID, jump table, reset entry) in page 1, bank 6 of the 60-pin bus, built with zasm |
+| *PC-1500 ROM extension* | a ROM at &8000 on the 60-pin bus, built with sdaslh5801, entered with `CALL &8000` |
+
+**Plugging the ROM in.** The project preset's `bus-rom:` puts your `.bin` on the bus:
+
+```yaml
+model: PC-1600
+
+bus-rom:
+  - file: rom.bin
+    bank: 6                 # PC-1600 system bus: page 1 (4000H-7FFFH), bank 4-7
+
+debug:
+  boot: debug
+  listings:
+    - path: rom.lst
+      cpu: z80
+      bank: 6
+```
+
+On the PC-1500 (or the PC-1600's LH5803 side), a bus ROM has an `address:` instead of a `bank:`, and it can be limited to one PV / PU state with `pv:` / `pu:`, like the CE-158's ROM. Each clean start reads the file again, so F5 and Build & Load always run your latest build. The app doesn't need restarting.
+
+**Replacing a bundled ROM.** A bus ROM takes precedence over a built-in device's ROM at the same place. To work on a new version of the host-drive ROM, for example:
+
+```yaml
+model: PC-1600
+host-drive: files           # the drive itself: its I/O stays the app's
+bus-rom:
+  - file: build/hostdrive.bin
+    bank: 7                 # your build replaces the bundled bank-7 ROM
+```
+
+**Getting into the code.** ROM code runs when something calls it. The `debug:` block has two ways to make that happen:
+- **`command:`** types a BASIC line once the machine is up, e.g. `command: FILES "S3:"` for a file device, or `command: CALL &8000`. Set a breakpoint in the handler, press F5, and it stops there.
+- **`boot: debug`** runs the power-on under the debugger. The preset only sets the machine up; then the debugger switches it on, with your breakpoints armed. That's how you debug a module's reset or initialisation, which runs before BASIC's prompt appears. The preset's `keys:` are skipped in this mode, and a `program` or `command` is refused.
+
+```mermaid
+flowchart LR
+    subgraph normal["normal clean start"]
+        p1["preset: machine + bus ROMs"] --> b1["boot to the prompt<br/>(no breakpoints)"] --> k1["keys:"] --> c1["command: typed<br/>breakpoints armed"]
+    end
+    subgraph boot["boot: debug"]
+        p2["preset: machine + bus ROMs"] --> r2["power on"] --> b2["boot runs under the debugger<br/>breakpoints armed"]
+    end
+```
+
+**Build & Load** in a ROM project rebuilds the ROM and does the whole set-up again: power-on with the new ROM, listings read again, `command` typed (or the boot run under the debugger).
+
+**ROM modules in a memory slot.** A ROM in a memory module (a PC-1500 module slot, or PC-1600 slot S1/S2) is a card definition (`.card.yaml`, see [Memory-Card-Definition-Format.md](Memory-Card-Definition-Format.md)) whose ROM content comes from your `.bin`:
+
+```yaml
+    initial-content:
+      blocks:
+        - offset: 0x0000
+          encoding: file
+          path: build/module.bin    # relative to the .card.yaml; read at every load
+```
+
+Plug it in with `memory-expansion:` (PC-1500) or `memory-expansion-1:` / `-2:` (PC-1600) and `- modulespec-file: module.card.yaml` in the project preset. A ROM's content must cover the whole ROM, so pad the binary to its full size. There is no template for slot modules yet.
+
+---
+
+## 4. Firmware analysis
+
+You study the calculator's own ROM, in any folder.
+
+**Reset and stop.** Run the ready-made configuration *Calc-U-1600: Reset and stop*. It uses whatever machine the app has open, resets it and stops before the first instruction: E000 on the PC-1500, 0000 on the PC-1600's Z80. Step from there, or set breakpoints and continue. **Reset & Stop** and **All Reset & Stop** in the Command Palette, and *Restart* in the debug toolbar, do the same during a session.
+
+**With source.** With the [ROM listings](#setup) in your settings, you step through the disassembly's source, and you can set a function breakpoint on a routine by name (`SCANMODS`, say). Listings of banked ROM need their bank qualifier (`bank:` on the PC-1600, `pv:` / `pu:` on an LH580x), so a breakpoint in them stops only while that bank is selected.
+
+**A particular machine.** To study the firmware with a plotter, a module or a floppy attached, give the configuration a preset. Add a configuration to the folder's `launch.json`:
+
+```jsonc
+{
+  "type": "calcu1600", "request": "attach", "name": "Firmware with CE-1600P",
+  "preset": "${workspaceFolder}/with-plotter.pc1600",
+  "reset": "reset", "stopOnEntry": true
+}
+```
+
+---
+
+## CLion
+
+> Not tried yet. CLion 2026.1 and later can use DAP debuggers, including over TCP. The recipe below follows JetBrains' documentation; please report what works.
+
+CLion sets DAP debuggers up per IDE, not per project. Use a project preset (as in use cases 1 and 3), so that everything project-specific lives in the project:
+
+1. **Settings ▸ Build, Execution, Deployment ▸ Debugger ▸ DAP Debuggers:** add *Calc-U-1600*.
+   - Connection: TCP, port 32168.
+   - Executable: the Calc-U-1600 app with the arguments `--dap $DebuggerPort$`, so that CLion starts the emulator for the session. Alternatively, use a placeholder executable, if CLion accepts one, to connect to an app that is already running.
+   - Launch parameters: `{"project": "$WorkingDir$/debug.pc1600"}`. Attach parameters: the same.
+2. **Settings ▸ Build, Execution, Deployment ▸ Toolchains:** a toolchain whose debugger is *Calc-U-1600*.
+3. **A run configuration** (*Custom Build Application*) with the project folder as working directory and the build as a *Before launch* external tool: `zasm -uwy main.asm main.lst main.bin`, or the sdas commands.
+
+CLion has none of the extension's commands. Restarting the session does what Build & Load does: build, clean start, load.
+
+What to check:
+- does CLion connect to a server it didn't start;
+- does it allow breakpoints in `.asm` files;
+- does `$WorkingDir$` expand in the launch parameters;
+- does the build run before each session.
+
+---
+
+## Reference
+
+### What you see in VS Code
+
+- **Call Stack:** one thread per CPU: `LH5801` on the PC-1500; `Z80 (SC7852)` and `LH5803` on the PC-1600, where the CPU that owns the bus is marked `[bus]`. A stop always stops both CPUs and names the one that caused it.
+  - **Frame 0** is the live state.
+  - **Frames 1–20** are the last 20 instructions that CPU executed, newest first, e.g. `after C0EE  call KEYGET`. Each shows its registers *after* it ran, and its source line if it has one. An interrupt shows as `interrupt at …`. The history is always recorded, so it is there even when you attach after something went wrong.
+- **Variables ▸ Registers:** the selected frame's registers, plus *Flags* and, for the live frame, *Banks* (PC-1600 page banks, or PU/PV).
+- **Disassembly:** right-click a frame ▸ **Open Disassembly View**. It opens by itself where there's no source.
+- **Memory:** VS Code shows memory in Microsoft's Hex Editor extension (`ms-vscode.hexeditor`), which it offers to install the first time.
+  - **Open it:** while paused, hover over a 16-bit register or a Watch entry and click **View Binary Data**. A Watch entry can be any address or expression, e.g. `0x7600` or `x+0x10`.
+  - **Offsets** count from the address you opened. To see real addresses, open it from a Watch entry `0`; then **Cmd+G** (Go to offset) jumps anywhere.
+  - **Edit** in *Replace* mode (status bar, or **Hex Editor: Switch Edit Mode**), then save (**Cmd+S**). An insert or a delete can't be saved; undo it with **File: Revert File**.
+  - **Which CPU:** memory opens as the selected frame's CPU sees it. Select an LH5803 frame to see the PC-1600's LH5803 side.
+  - Device registers that a read would disturb (the UART, a card's I/O window) show as unreadable.
+- **Title bar:** the app shows *Paused (debugger)* while the machine is stopped.
+
+### Stepping
+
+- **Step into / over / out** work by source line. In the Disassembly view they work by instruction.
+- **Step over** a call (`SJP`, `VEJ`, `VMJ`, `CALL`, `RST` and the conditional forms) runs until the stack is back where it was, even when a `VMJ`'s inline parameters move the return address.
+- **Step out** runs until a return (`RTN`, `RTI`, `RET` …) leaves the current routine.
+- A long step (over a slow ROM call) keeps the app responsive.
+
+### Breakpoints and expressions
+
+- **Source, function and instruction breakpoints** take a condition (`a == 0x10 && [0x7A00] != 0`), a hit count (`5`, `>= 5`, `% 3`) and a log message (`x={x}`).
+- **Function breakpoints** name a symbol from a listing or symbol table, and stop on the CPU that listing belongs to, only while its bank qualifier holds.
+- **Data breakpoints** watch memory reads and/or writes. Instruction fetches don't trigger them. The machine stops right after the instruction that made the access. Registers can't be watched; use a conditional breakpoint.
+- **Breakpoints stop only while the debugger runs the machine.** A preset, a load or a normal boot never stops on one. Use `boot: debug` for code that runs at power-on.
+- **Expressions** (conditions, Watch, hovers, the Debug Console, register edits) accept registers and flags (`cf`, `zf` …), listing symbols, `[addr]` (byte), `w[addr]` (word, in the CPU's byte order), `#[addr]` (a byte of an LH580x's ME1), and C operators.
+
+### Listings
+
+- **Formats:** sdaslh5801 / sdasz80 `.lst` and the `.rst` sdld writes (prefer the `.rst` for relocatable code), zasm `.lst` (`zasm -uwy`), and `.SYMBOLS:` tables (`HHHH name` per line).
+- **Keep the sources next to the listing.** Neither assembler names the file an included line comes from; the debugger finds each line in the source files by its text.
+- **Checked against memory.** A listing whose bytes don't match memory is reported and not used for source: the wrong build, or another ROM version. A frame whose bytes no longer match its line (self-modifying code) shows as disassembly.
+- **Bank qualifiers** tie a listing, and its breakpoints, to a memory state:
 
 | Qualifier | Meaning |
 |---|---|
 | `bank` | PC-1600 Z80: the page bank 0–7 selected for the address |
-| `me` | LH580x: ME0 or ME1. Code always runs from ME0, so `me: 1` is for data. |
+| `me` | LH580x: ME0 or ME1 (code always runs from ME0, so `me: 1` is for data) |
 | `pu`, `pv` | LH580x: the PU / PV flip-flops, for code in banked ROMs |
 
-A qualified breakpoint only stops while its qualifier holds.
+### The `debug:` block and launch configurations
 
-**Later.** Other listing formats (for example the TASM-format PC-1500 ROM disassembly, or library files) can be added as further parsers in `Core/Debug/Listing/`. Nothing else has to change.
+A launch configuration and a project preset's `debug:` block take the same keys. With `project`, the block supplies whatever the launch configuration leaves out, and the configuration's own keys win (`program` merges key by key). The project is read again at every restart and Build & Load.
 
-## Testing
+| Key | Meaning |
+|---|---|
+| `project` | (launch configuration only) a project preset: it sets the machine up, and its `debug:` block gives the rest |
+| `preset` | a preset for the clean start; default: the model's default preset from Settings, else All Reset |
+| `program` | the program to load: `bin`, `listing`, `source` (if the main source isn't `<listing>.asm`), `symbols`, `cpu` (`lh5801` / `z80` / `lh5803`), `address`, `entry`, `after` (`stopOnEntry` / `call` / `none`), `cleanStart` (default `true`), bank qualifiers |
+| `listings` | listings of code that isn't loaded (ROM): a path, or `{path, source, cpu, bank, me, pu, pv}` |
+| `symbols` | `.SYMBOLS:` tables: a path, or `{path, cpu, bank, me, pu, pv}` |
+| `command` | a BASIC line typed to start the code: in place of the program's `CALL`, or, without a program, once the machine is set up |
+| `boot` | `debug`: run the power-on under the debugger (the preset's hardware only; no `program` or `command`) |
+| `reset` | `reset` / `allReset`: reset without the boot, and start at the reset vector |
+| `stopOnEntry` | stop right after attaching (after a reset: before the first instruction) |
 
-- **Unit tests:** CoreTests covers the disassemblers (against the assembler's own opcode table and the CPU cores), the listing parsers (real assembler output under `Core/tests/fixtures/listings/`), the source map, breakpoints, expressions and run control.
-- **End to end:** `uv run tools/dap_smoke.py --app build/Qt6/Calc-U-1600.app/Contents/MacOS/Calc-U-1600` starts the app with `--dap`, runs a plain session, Build & Load sessions on a PC-1500 (memtest) and a PC-1600 (the ROM dumper), and a ROM reset-and-step session over DAP, then quits the app.
+The VS Code extension adds these keys:
 
-## Known limitations
+| Key | Meaning |
+|---|---|
+| `build` | `{assembler: zasm \| sdas, file}`: assemble this file before the session and on Build & Load |
+| `buildTask` | a task to run instead, e.g. a Makefile target from `tasks.json` |
+| `currentFile` | `pc1600` / `pc1500a`: debug the `.asm` in the editor (use case 2) |
+| `port` | the server port, if not `calcu1600.port` |
 
-- The PC-1600's vertical banks (Port 28H, module banks 1+) are not a bank qualifier.
+The preset keys for ROM development, `bus-rom:` and `debug:`, are listed with the other preset keys in the [User Guide](User-Guide.md).
+
+### Limitations
+
+- The PC-1600's vertical banks (port 28H, module banks 1 and up) can't be used as a bank qualifier.
 - ME1 can't be written from the debugger; on both machines it is I/O.
-- The LH5803 has no BASIC `CALL`. LH5803 code is loaded with `after: none` and entered from your own Z80 code.
-- Step back (reverse debugging) is not supported.
-- CLion: not set up yet. Whether current CLion attaches to a TCP DAP server natively, or needs a plugin, is still to be checked.
+- LH5803 code can't be started with a BASIC `CALL`: load it with `after: none` and enter it from your own Z80 code.
+- No stepping backwards.
+- The zasm problem matcher shows the first error of each file in the Problems view; the terminal shows all of them.
+- TASM listings (such as the PC-1500 ROM disassembly) can't be read yet.
+- One debugger at a time: a second session is refused while one is attached. **Settings ▸ Debugger ▸ Disconnect** drops the attached one.

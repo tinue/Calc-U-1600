@@ -175,7 +175,7 @@ def pc1600_run(port):
     dap.request("initialize", adapterID="calcu1600")
     dap.wait_event("initialized")
     # No "address": the headerless .bin loads at the listing's lowest
-    # address (C0C5), as "Debug on PC-1600" relies on.
+    # address (C0C5), as "Debug current file on PC-1600" relies on.
     dap.request("attach", preset=os.path.join(REPO, "vscode/calcu1600-debug/presets/debug-pc1600.pc1600"),
                 program={"bin": dumper + ".bin", "listing": dumper + ".lst", "after": "stopOnEntry"})
     dap.request("configurationDone")
