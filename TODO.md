@@ -116,8 +116,10 @@ The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, 
   the TRM doesn't); `SAVE`/`LOAD "CAS:"` in MODE 1; whether the CE-158's own
   `SETDEV` is reachable on the PC-1600; CE-150/CE-158 `PRINT#`/`INPUT#` in
   MODE 0.
-  Note that its `saveas:` writes a live "My programs" card into the real
-  Battery-card saves folder.
+- **Guide screenshots write into the real saves folder:** the chapter-5
+  preset (`docs/developer/screenshots/presets/pc1600-modules.pc1600`) uses
+  `saveas: live slot-1:My programs`, so every `tools/make_screenshots.sh`
+  run writes a live "My programs" card into the Battery-card saves folder.
 - **`examples/memory/flashtest_ce163f.pc1500a` stops with ERROR 1 IN 10.**
   The lines are stored now (they used to be typed in RUN mode), but with
   the CE-163F in the slot, BASIC's program area starts at &00C5 inside the
