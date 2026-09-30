@@ -116,13 +116,6 @@ The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, 
   the TRM doesn't); `SAVE`/`LOAD "CAS:"` in MODE 1; whether the CE-158's own
   `SETDEV` is reachable on the PC-1600; CE-150/CE-158 `PRINT#`/`INPUT#` in
   MODE 0.
-- **Guide screenshots for chapter 6** (`docs/developer/screenshots/guide/06-*`): the
-  Load Machine Code dialog now shows which CPU / address space is assumed,
-  so `06-start-address.png` and `06-loaded.png` are out of date.
-- **Guide screenshots for chapter 5 need a rerun:**
-  `docs/developer/screenshots/presets/pc1600-modules.pc1600` parses again
-  (`saveas: live slot-1:My programs`), so `tools/make_screenshots.sh
-  05-modules` can write `05-slot-picker` and `05-floppy-picker` again.
   Note that its `saveas:` writes a live "My programs" card into the real
   Battery-card saves folder.
 - **`examples/memory/flashtest_ce163f.pc1500a` stops with ERROR 1 IN 10.**
