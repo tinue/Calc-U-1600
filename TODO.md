@@ -530,3 +530,62 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
      ROM (see the known issue); next is timing the FOR/NEXT routine from
      RAM.
   4. Then re-fit once, against A−C = 45 ms.
+- **`debug:` numbers don't follow the preset's number rule**
+  *(behaviour)*. `DapSession::toJson(YamlNode)` guesses a JSON type from
+  the scalar: digits only become an int (decimal), anything else a string
+  that `parseAddress` reads as hex. So in `debug:`, `address: 1234` is
+  decimal but `address: C0C5` is hex, and `bank: &7` / `bank: 0x7` stays a
+  string that `toInt(-1)` silently drops. Everywhere else in a preset
+  (`parseNumber`, Decisions.md) `&`, `0x` or `$` is hex and a bare number
+  decimal. Fix: `parsePresetDebugBlock` parses the numeric keys
+  (`address`, a numeric `entry`, `bank`, `me`, `pu`, `pv`) with
+  `parseNumber` and writes them back canonically; `toJson` then needs no
+  guessing. **Before fixing:** decide whether launch.json strings
+  (`"address": "1234"` = &1234 today) move to the same rule, and check the
+  templates and manuals for bare hex in `debug:`.
+- **The `debug:` key list is kept twice.** `PresetDebugBlock.hpp`'s
+  `requireOnlyKeys` lists and the keys `DapSession` reads must agree by
+  hand; a new attach key works in launch.json but is "unrecognized" in a
+  project preset. `boot` is accepted in Core but its value only checked in
+  `DapSession::prepare`. Fix: one table of attach keys (and which are
+  paths / numbers) that both read, or Core checks only structure + paths
+  and leaves key/value checks to the DAP, which already reports them for
+  launch.json. Goes with the entry above.
+- **The debugger parses the project preset twice per session action.**
+  Attach, restart and Build & Load call `effectiveConfig` →
+  `parsePresetFile`, then `loadPreset` / `cleanStart` parse the same file
+  again by path (`PresetController::parsePreset`), each time re-reading
+  every `program: file:`. One parse per clean start is deliberate
+  (Decisions.md), two isn't. Fix: pass the `PresetFile` from
+  `effectiveConfig` down (`DebugController` → `SyncOperations` →
+  `PresetController::runPreset(preset)`).
+- **Catalogue scans read `encoding: file` sidecar ROMs.**
+  `MemoryCardCatalog.hpp` `parseEntry` passes `baseDir`, so every scan
+  (`scanMemoryCardDirectory`, `readMemoryCardCatalogEntry`,
+  `resolveModuleSpecByName`, every picker refresh) opens each sidecar just
+  to fill the catalogue entry. No bundled card uses `encoding: file` yet.
+  Fix: part of the catalogue parse mode in the template-vs-instance entry
+  above (skip content). **Before fixing:** today a missing sidecar drops
+  the card from the list; with a metadata-only parse it would be listed
+  and fail on attach -- decide which is wanted.
+- **Small leftovers from the 2026-09-30 simplify pass.** Take them when
+  the file is next touched:
+  - `--lcd-png` write-and-error block is the same in `pc1500_cli.cpp` and
+    `pc1600_cli.cpp`: a `cli::writeLcdPng(bitmap, mm, path)` in
+    `tools/CliCommon.hpp`.
+  - `DropFile.cpp` `classify` and `PresetFile.cpp`'s `program:` switch
+    both sort `programfile::Kind` into BASIC / code: `isBasic(Kind)` /
+    `isCode(Kind)` next to `headerName()` in `ProgramFile.hpp` (the
+    headerless rules stay with the callers).
+  - `parsePresetFile` spells the top-level keys three times (`kKeys`, the
+    `block` test, the dispatch chain): one `{name, isBlock}` table.
+  - `parsePresetFile`'s `plotter` / `interfaceName` locals only copy into
+    `out->` at the end; assign directly.
+  - `SettingsDialog.cpp` `addOpenFolderRow` special-cases
+    `OpenFolder::HostDrive` for the reset tooltip; pass the tooltip in
+    like the label.
+  - `extension.js`: `createDebugAdapterDescriptor` falls back to
+    `setting('port') || 32168` although the resolver already filled
+    `config.port`.
+  - `tools/dap_smoke.py`: each run repeats Dap/initialize/attach/
+    disconnect; a `session(port, **attach)` context manager.
