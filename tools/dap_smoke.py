@@ -337,6 +337,25 @@ def bus_rom_run(port):
         dap.sock.close()
 
 
+def lh5803_run(port):
+    """PC-1600 LH5803: LH5801 code loaded for the LH5803, started with the XCALL the debugger types."""
+    print("LH5803 run:")
+    dap = Dap(port)
+    dap.request("initialize", adapterID="calcu1600")
+    dap.wait_event("initialized")
+    dap.request("attach", preset=os.path.join(REPO, "vscode/calcu1600-debug/presets/debug-pc1600.pc1600"),
+                program={"bin": os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest_stock.bin"),
+                         "listing": os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest.rst"),
+                         "cpu": "lh5803", "address": "0x40C5", "after": "stopOnEntry"})
+    dap.request("configurationDone")
+    stop = dap.wait_event("stopped", timeout=60)
+    top = top_frame(dap, stop["threadId"])
+    check(stop.get("reason") == "entry" and stop["threadId"] == 2 and top.get("line") == 74,
+          f"XCALL &40C5 stops the LH5803 at {top.get('source', {}).get('name')}:{top.get('line')} (thread {stop['threadId']})")
+    dap.request("disconnect")
+    dap.sock.close()
+
+
 def rom_run(port):
     """ROM research: reset and stop before the first instruction, then single-step."""
     print("ROM run:")
@@ -478,6 +497,7 @@ def main():
         bus_rom_run(args.port)
         rom_run(args.port)
         reset_run(args.port)
+        lh5803_run(args.port)
         print("done:", "all passed" if check.failures == 0 else f"{check.failures} failed")
     finally:
         if proc:

@@ -40,11 +40,11 @@ flowchart LR
 
 **1. Turn the debug server on in the app.** Tick **Settings ▸ Debugger ▸ Accept a debugger**. The default port is 32168, and the dialog shows whether the server is listening. Alternatively, start the app with `--dap 32168`: that turns the server on for that run only.
 
-**2. Install the assemblers.** Both are local checkouts:
-- **zasm** for the PC-1600 (Z80), expected at `~/Development/sharp/zasm/zasm`;
-- **sdcc-pc1500** for the PC-1500 (sdaslh5801, sdld, makebin), expected in `~/Development/sharp/sdcc-pc1500/sdcc/bin`.
+**2. Install the assemblers.**
+- **zasm** ([github.com/Megatokio/zasm](https://github.com/Megatokio/zasm)) for PC-1600 (Z80) code.
+- **An SDCC build with the LH5801 assembler** for PC-1500 code: `sdaslh5801`, `sdld` and `makebin`.
 
-If they are somewhere else, set their paths in VS Code (see [Setup](#setup)).
+The extension finds them on your `PATH`, or where the [settings](#setup) say.
 
 **3. Install the VS Code extension.** From the Calc-U-1600 repository root:
 
@@ -65,12 +65,12 @@ The extension's settings are in VS Code's user settings (**Settings ▸ Extensio
 | Setting | What it is | Default |
 |---|---|---|
 | `calcu1600.port` | the app's debug server port | `32168` |
-| `calcu1600.zasmPath` | the zasm executable | `$CALCU_ZASM`, else `~/Development/sharp/zasm/zasm` |
-| `calcu1600.sdccBinPath` | the folder with sdaslh5801, sdld and makebin | `$CALCU_SDCC_BIN`, else `~/Development/sharp/sdcc-pc1500/sdcc/bin` |
+| `calcu1600.zasmPath` | the zasm executable | `$CALCU_ZASM`, else `zasm` on the `PATH` |
+| `calcu1600.sdccBinPath` | the folder with sdaslh5801, sdld and makebin | `$CALCU_SDCC_BIN`, else the `PATH` |
 | `calcu1600.romListings` | ROM listings that every session loads | none |
 | `calcu1600.romSymbols` | ROM symbol tables that every session loads | none |
 
-**ROM listings** give the firmware source lines and names in every session: you step through the ROM in its disassembly instead of bare instructions, and you can set a breakpoint on a routine by name. The PC-1600 ROM disassemblies (`pc1600/disasm/new/*.asm` in the reference corpus) reassemble byte for byte with zasm, which writes the listing:
+**ROM listings** give the firmware source lines and names in every session: you step through the ROM in its disassembly instead of bare instructions, and you can set a breakpoint on a routine by name. The PC-1600 ROM disassemblies in [github.com/tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM/tree/main/disasm) reassemble byte for byte with zasm, which writes the listing:
 
 ```sh
 zasm -uwy PC1600-P0-B0.asm PC1600-P0-B0.lst PC1600-P0-B0.bin
@@ -80,11 +80,13 @@ Then list it in your settings with the CPU and the bank it lives in:
 
 ```jsonc
 "calcu1600.romListings": [
-  { "path": "~/Development/sharp/pc1600/disasm/new/PC1600-P0-B0.lst", "cpu": "z80", "bank": 0 }
+  { "path": "~/PC-1600-ROM/disasm/new/PC1600-P0-B0.lst", "cpu": "z80", "bank": 0 }
 ]
 ```
 
-A listing that doesn't match the machine's memory (another ROM version, for example) is reported and not used, so a listing for the other model does no harm. The PC-1500 ROM disassemblies are TASM listings, which the debugger can't read yet.
+A listing that doesn't match the machine's memory (another ROM version, for example) is reported and not used, so a listing for the other model does no harm.
+
+The PC-1500 ROM disassembly is Jeff Birt's [Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly). It is written for TASM, whose listings the debugger can't read yet.
 
 ---
 
@@ -138,11 +140,13 @@ sequenceDiagram
     App-->>VS: stopped at the entry
 ```
 
-**Where the program goes.** A headerless `.bin` loads at its listing's lowest address, the source's `.org`. On the PC-1600, where it ends up also follows the calculator's MODE and the program area its `TITLE` selects. The PC-1500A template uses &7C01, the machine-language area BASIC never uses. The PC-1600 template uses C0C5H, where a BASIC program would start: fine while the preset leaves BASIC empty (`NEW0`). If your program has to live next to BASIC, reserve its memory in the preset, for example with a `NEW` of your own, and move its `.org` there.
+**Where the program goes.** A headerless `.bin` loads at its listing's lowest address, the source's `.org`. On the PC-1600, where it ends up also follows the calculator's MODE and the program area its `TITLE` selects. The PC-1500A template uses &7C01, the machine-language area BASIC never uses. The PC-1600 template uses C0C5H, the start of the BASIC program area: fine while there is no BASIC program. To keep BASIC off your code, put a `NEW` that reserves it into the preset's `keys:`: on the PC-1500 `NEW &addr` (the first address after your program), on the PC-1600 `NEW "S0:",n` (n bytes from the start of the area). It moves the start of BASIC's program area above your program, so BASIC lines can't overwrite it. The `.org` stays where it is. When you load a program by hand, the app's Load Machine Code shows the exact `NEW` for it.
+
+**LH5803 code on the PC-1600.** LH5801 code can also run on the PC-1600's LH5803. Build it with sdas and give the program `cpu: lh5803` and its LH5803 address. The debugger starts it with `XCALL`, the PC-1600's BASIC command for LH5803 code, and stops on the LH5803 thread.
 
 **Starting it differently.** In the `debug:` block:
 - `entry: START` starts at a symbol (or an address) instead of the default;
-- `command: CALL &C0C5,1` types that line instead of the plain `CALL`, e.g. to pass an argument;
+- `command: CALL &C0C5,X` types that line instead of the plain `CALL`, e.g. to pass a variable to the program;
 - `after: call` starts the program without stopping; `after: none` only loads it.
 
 ---
@@ -180,7 +184,7 @@ A ROM extension (like Calc-U-1600's own host-drive ROM) isn't loaded into RAM an
 | Target | What you get |
 |---|---|
 | *PC-1600 ROM extension* | a minimal ROM module (ID, jump table, reset entry) in page 1, bank 6 of the 60-pin bus, built with zasm |
-| *PC-1500 ROM extension* | a ROM at &8000 on the 60-pin bus, built with sdaslh5801, entered with `CALL &8000` |
+| *PC-1500 ROM extension* | a minimal ROM at &8000 on the 60-pin bus, built with sdaslh5801. It is entered with `CALL &8000`, just to show the mechanics |
 
 **Plugging the ROM in.** The project preset's `bus-rom:` puts your `.bin` on the bus:
 
@@ -211,8 +215,8 @@ bus-rom:
     bank: 7                 # your build replaces the bundled bank-7 ROM
 ```
 
-**Getting into the code.** ROM code runs when something calls it. The `debug:` block has two ways to make that happen:
-- **`command:`** types a BASIC line once the machine is up, e.g. `command: FILES "S3:"` for a file device, or `command: CALL &8000`. Set a breakpoint in the handler, press F5, and it stops there.
+**Getting into the code.** A real ROM extension is rarely called directly. It usually adds BASIC commands: the firmware finds the extension at power-on, activates its commands, and the commands run the extension's machine code. The `debug:` block has two ways to reach that code:
+- **`command:`** types a BASIC line once the machine is up: one of your new commands, `FILES "S3:"` for a file device, or `CALL &8000` for the minimal template. Set a breakpoint in the code behind it, press F5, and it stops there.
 - **`boot: debug`** runs the power-on under the debugger. The preset only sets the machine up; then the debugger switches it on, with your breakpoints armed. That's how you debug a module's reset or initialisation, which runs before BASIC's prompt appears. The preset's `keys:` are skipped in this mode, and a `program` or `command` is refused.
 
 ```mermaid
@@ -360,7 +364,6 @@ The preset keys for ROM development, `bus-rom:` and `debug:`, are listed with th
 
 - The PC-1600's vertical banks (port 28H, module banks 1 and up) can't be used as a bank qualifier.
 - ME1 can't be written from the debugger; on both machines it is I/O.
-- LH5803 code can't be started with a BASIC `CALL`: load it with `after: none` and enter it from your own Z80 code.
 - No stepping backwards.
 - The zasm problem matcher shows the first error of each file in the Problems view; the terminal shows all of them.
 - TASM listings (such as the PC-1500 ROM disassembly) can't be read yet.

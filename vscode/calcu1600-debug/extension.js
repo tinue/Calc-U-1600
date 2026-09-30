@@ -27,12 +27,16 @@ function expandHome(p) {
     return p === '~' || p.startsWith('~/') ? path.join(os.homedir(), p.slice(1)) : p;
 }
 
+// The assemblers: the setting, else the environment variable, else found
+// on the PATH.
 function zasmPath() {
-    return expandHome(setting('zasmPath') || process.env.CALCU_ZASM || '~/Development/sharp/zasm/zasm');
+    return expandHome(setting('zasmPath') || process.env.CALCU_ZASM || 'zasm');
 }
 
-function sdccBin() {
-    return expandHome(setting('sdccBinPath') || process.env.CALCU_SDCC_BIN || '~/Development/sharp/sdcc-pc1500/sdcc/bin');
+// sdaslh5801, sdld and makebin, in the configured folder or on the PATH.
+function sdccTool(name) {
+    const dir = setting('sdccBinPath') || process.env.CALCU_SDCC_BIN;
+    return dir ? path.join(expandHome(dir), name) : name;
 }
 
 // ── Building ────────────────────────────────────────────────────────────
@@ -55,11 +59,10 @@ function assembleCommand(assembler, file, name) {
     }
     // sdaslh5801 -> sdld (writes the .rst with linked addresses) -> makebin;
     // the .org of the source sets the address, -s covers code up to FFFFH.
-    const b = sdccBin();
-    return `${q(b + '/sdaslh5801')} -plosgff ${q(file)}` +
+    return `${q(sdccTool('sdaslh5801'))} -plosgff ${q(file)}` +
         ` && printf -- '-muwx\\n-i %s\\n%s.rel\\n\\n-e\\n' ${q(name)} ${q(name)} > ${q(name + '.lnk')}` +
-        ` && ${q(b + '/sdld')} -nf ${q(name)}` +
-        ` && ${q(b + '/makebin')} -p -s 65536 -o 0x$(head -1 ${q(name + '.ihx')} | cut -c4-7) ${q(name + '.ihx')} ${q(name + '.bin')}`;
+        ` && ${q(sdccTool('sdld'))} -nf ${q(name)}` +
+        ` && ${q(sdccTool('makebin'))} -p -s 65536 -o 0x$(head -1 ${q(name + '.ihx')} | cut -c4-7) ${q(name + '.ihx')} ${q(name + '.bin')}`;
 }
 
 // A build task for one source file, or (file undefined) for the file in

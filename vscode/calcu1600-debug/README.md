@@ -27,8 +27,8 @@ The script packages `headless/calcu1600-debug.vsix` and installs it with `code -
 | Setting | Default |
 |---|---|
 | `calcu1600.port` | `32168`, as in the app's Settings ▸ Debugger |
-| `calcu1600.zasmPath` | `$CALCU_ZASM`, else `~/Development/sharp/zasm/zasm` |
-| `calcu1600.sdccBinPath` | `$CALCU_SDCC_BIN`, else `~/Development/sharp/sdcc-pc1500/sdcc/bin` |
+| `calcu1600.zasmPath` | `$CALCU_ZASM`, else `zasm` on the PATH |
+| `calcu1600.sdccBinPath` | `$CALCU_SDCC_BIN`, else the PATH |
 | `calcu1600.romListings` | listings added to every session: a path, or `{path, source, cpu, bank, me, pu, pv}` |
 | `calcu1600.romSymbols` | `.SYMBOLS:` tables added to every session: a path, or `{path, cpu, bank, me, pu, pv}` |
 

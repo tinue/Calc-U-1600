@@ -15,6 +15,6 @@ keys:
   - key: mode
 
 debug:
-  command: CALL &8000       # how the code is entered
+  command: CALL &8000       # how the code is entered: your new BASIC command, once there is one
   listings:
     - {{name}}.rst

@@ -106,15 +106,17 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
     // How BASIC starts it.
     uint32_t ramStart = 0, ramEnd = 0;
     if (pc1500) pc1500UserRam(*pc1500, &ramStart, &ramEnd);
-    if (req.thread == 2) {
-        r.callCommand = ""; // LH5803 code is entered from Z-80 code (CALLH), not from BASIC
-    } else {
-        // advice() starts at r.entry (the `entry` override, the header's
-        // auto-run address, or the load address) and adds slot 2's bank.
+    // advice() starts at r.entry (the `entry` override, the header's
+    // auto-run address, or the load address): CALL, with slot 2's bank, for
+    // main-CPU code; XCALL (an LH5803 address) for the PC-1600's LH5803.
+    if (req.thread == 2)
+        r.callCommand = machinecode::advice(options.target, plan.slot, plan.addr, plan.len, r.entry, ramStart, ramEnd,
+                                            state, machinecode::Cpu::LH5803)
+                            .callCommand;
+    else
         r.callCommand = machinecode::advice(options.target, plan.slot, plan.busAddr, plan.len, r.entry, ramStart, ramEnd,
                                             state, machinecode::Cpu::Z80)
                             .callCommand;
-    }
 
     // The listing and symbols bind to the loaded range; symbols alone too.
     if (haveListing) {

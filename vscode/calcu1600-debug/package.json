@@ -416,12 +416,12 @@
         "calcu1600.zasmPath": {
           "type": "string",
           "default": "",
-          "description": "The zasm executable (PC-1600 builds). Empty: $CALCU_ZASM, else ~/Development/sharp/zasm/zasm."
+          "description": "The zasm executable (PC-1600 builds). Empty: $CALCU_ZASM, else zasm on the PATH."
         },
         "calcu1600.sdccBinPath": {
           "type": "string",
           "default": "",
-          "description": "The folder with sdaslh5801, sdld and makebin (PC-1500 builds). Empty: $CALCU_SDCC_BIN, else ~/Development/sharp/sdcc-pc1500/sdcc/bin."
+          "description": "The folder with sdaslh5801, sdld and makebin (PC-1500 builds). Empty: $CALCU_SDCC_BIN, else the PATH."
         },
         "calcu1600.romListings": {
           "type": "array",

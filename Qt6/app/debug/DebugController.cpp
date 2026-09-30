@@ -246,7 +246,7 @@ debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request
     if (after == After::None) return r;
     if (!command.empty()) r.callCommand = command;
     if (r.callCommand.empty()) {
-        r.warnings.push_back("no BASIC CALL starts this CPU's code; load it, then call it from your own code");
+        r.warnings.push_back("no BASIC command starts this code; load it, then call it from your own code");
         return r;
     }
     if (after == After::StopOnEntry) m_breakpoints.setEntry(request.thread, r.entry);
