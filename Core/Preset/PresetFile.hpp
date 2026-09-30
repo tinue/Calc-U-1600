@@ -6,6 +6,7 @@
 
 #include "../MachineCodeFile.hpp"
 #include "../PC1500/PC1500Variant.hpp"
+#include "../Yaml.hpp"
 
 // ── Preset file model + parser (the "common loader": file open, parse, ──
 //     model resolution -- see the 3-part structure note below) ───────────
@@ -345,6 +346,11 @@ struct PresetFile {
     std::string memoryExpansionModuleSpecName;
     std::string slot1ModuleSpecName;
     std::string slot2ModuleSpecName;
+
+    // `debug:` -- the debugger's attach settings for a project preset
+    // (Core/Preset/PresetDebugBlock.hpp), paths already resolved. Null when
+    // the preset has none. Loading the preset ignores it.
+    YamlNode debug;
 };
 
 /// Parses the `.pc1500` preset file at `path` into `out`. File paths

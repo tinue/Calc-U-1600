@@ -18,6 +18,7 @@ import os
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 
 
@@ -197,6 +198,50 @@ def pc1600_run(port):
     dap.sock.close()
 
 
+def project_run(port):
+    """A project preset: the machine and its `debug:` block; the attach names only the project."""
+    print("project run:")
+    dumper = os.path.join(REPO, "Core/tests/fixtures/listings/zasm/pc1600-rom-dumper")
+    with tempfile.TemporaryDirectory() as tmp:
+        project = os.path.join(tmp, "debug.pc1600")
+        with open(project, "w") as f:
+            f.write("model: PC-1600\n"
+                    "keys:\n"
+                    "  - key: mode\n"
+                    "  - type: NEW0\n"
+                    "  - key: mode\n"
+                    "debug:\n"
+                    "  program:\n"
+                    f"    bin: {os.path.relpath(dumper + '.bin', tmp)}\n"
+                    f"    listing: {dumper}.lst\n"
+                    "    after: stopOnEntry\n")
+        dap = Dap(port)
+        dap.request("initialize", adapterID="calcu1600")
+        dap.wait_event("initialized")
+        dap.request("attach", project=project)
+        dap.request("configurationDone")
+        stop = dap.wait_event("stopped", timeout=60)
+        top = top_frame(dap, stop["threadId"])
+        check(stop.get("reason") == "entry" and top.get("source", {}).get("name") == "pc1600-rom-dumper.asm",
+              f"project: stopped at the entry {top.get('source', {}).get('name')}:{top.get('line')}")
+        entry_line = top.get("line")
+        # Build & Load without arguments reloads the project's program.
+        body = dap.request("calcu1600/load")
+        check(body.get("start") == "0xC0C5", f"calcu1600/load from the project -> {body}")
+        stop = dap.wait_event("stopped", timeout=60)
+        check(stop.get("reason") == "entry" and top_frame(dap, 1).get("line") == entry_line,
+              "project: reloaded and stopped at the entry again")
+        # A launch configuration key overrides the block: no entry stop.
+        dap.request("restart", arguments={"project": project, "program": {"after": "none"}})
+        time.sleep(3)
+        dap.request("pause", threadId=1)
+        stop = dap.wait_event("stopped", timeout=10)
+        check(stop.get("reason") == "pause", f"project + override after:none: runs until paused ({stop.get('reason')})")
+        dap.request("continue", threadId=1)
+        dap.request("disconnect")
+        dap.sock.close()
+
+
 def rom_run(port):
     """ROM research: reset and stop before the first instruction, then single-step."""
     print("ROM run:")
@@ -334,6 +379,7 @@ def main():
 
         program_run(args.port)
         pc1600_run(args.port)
+        project_run(args.port)
         rom_run(args.port)
         reset_run(args.port)
         print("done:", "all passed" if check.failures == 0 else f"{check.failures} failed")

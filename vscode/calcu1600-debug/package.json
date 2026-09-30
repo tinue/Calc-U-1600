@@ -59,6 +59,8 @@
           "attach": {
             "properties": {
               "port": { "type": "number", "default": 32168, "description": "The app's debug server port (Settings > Debugger)." },
+              "project": { "type": "string", "description": "A project preset (.pc1500/.pc1500a/.pc1600): it sets the machine up, and its debug: block gives the settings this configuration doesn't." },
+              "command": { "type": "string", "description": "A BASIC line typed to start the code, in place of the program's CALL (or after the set-up, without a program)." },
               "preset": { "type": "string", "description": "A .pc1500/.pc1500a/.pc1600 preset loaded first (it rebuilds the machine)." },
               "reset": { "enum": ["none", "reset", "allReset"], "default": "none", "description": "Reset the machine on attach, without the boot run." },
               "stopOnEntry": { "type": "boolean", "default": false, "description": "Stop right after attaching (after a reset: before the first instruction)." },

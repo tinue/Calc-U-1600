@@ -229,7 +229,8 @@ bool DebugController::cleanStart(const QString& preset, QString* how, QString* e
     return ok;
 }
 
-debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request, After after) {
+debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request, After after,
+                                               const std::string& command) {
     debug::LoadResult r;
     if (!m_target || !m_run || !m_sync) {
         r.error = "no machine";
@@ -243,6 +244,7 @@ debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request
     }, {}, &error);
     if (!r.ok) return r;
     if (after == After::None) return r;
+    if (!command.empty()) r.callCommand = command;
     if (r.callCommand.empty()) {
         r.warnings.push_back("no BASIC CALL starts this CPU's code; load it, then call it from your own code");
         return r;
@@ -253,6 +255,8 @@ debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request
     m_run->resume();
     return r;
 }
+
+void DebugController::typeCommand(const std::string& line) { m_machines->typeCommand(line); }
 
 bool DebugController::resetMachine(bool allReset, bool stop, QString* error) {
     if (!m_target || !m_run || !m_sync) {

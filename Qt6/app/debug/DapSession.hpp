@@ -65,6 +65,10 @@ private:
     void customLoad(const QJsonObject& args, QJsonObject* body, QString* error);
     void customReset(const QJsonObject& args, QJsonObject* body, QString* error);
 
+    /// The attach configuration in force: the client's arguments on top of
+    /// the `debug:` block of the preset `project` names (re-read each call,
+    /// so an edited project applies at the next restart or Build & Load).
+    bool effectiveConfig(const QJsonObject& args, QJsonObject* out, QString* error);
     /// preset, reset, program and listings of an attach configuration.
     bool prepare(const QJsonObject& config, QString* error);
     bool loadProgram(const QJsonObject& descriptor, QJsonObject* body, QString* error);
@@ -92,5 +96,6 @@ private:
     DebugController* m_controller;
     int m_seq = 1;
     bool m_stopOnEntry = false;
-    QJsonObject m_attachConfig; // for restart
+    QJsonObject m_launchArgs;   // the client's attach arguments, for restart
+    QJsonObject m_attachConfig; // effectiveConfig() of them
 };

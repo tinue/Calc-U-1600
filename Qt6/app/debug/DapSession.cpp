@@ -11,6 +11,7 @@
 #include "DebugController.hpp"
 #include "Debug/Listing/Listing.hpp"
 #include "MachineCodeFile.hpp"
+#include "Preset/PresetFile.hpp"
 
 namespace {
 
@@ -167,9 +168,79 @@ void DapSession::initialize(const QJsonObject&, QJsonObject* body, QString* erro
 
 void DapSession::attach(const QJsonObject& args, QJsonObject*, QString* error) {
     if (!ready(error)) return;
-    m_attachConfig = args;
-    m_stopOnEntry = args.value(QStringLiteral("stopOnEntry")).toBool(false);
-    prepare(args, error);
+    m_launchArgs = args;
+    if (!effectiveConfig(args, &m_attachConfig, error)) return;
+    m_stopOnEntry = m_attachConfig.value(QStringLiteral("stopOnEntry")).toBool(false);
+    prepare(m_attachConfig, error);
+}
+
+namespace {
+
+// A `debug:` block value as the attach configuration's JSON. Quoted scalars
+// stay text; bare `true`/`false` and decimal integers (bank qualifiers)
+// become JSON values; everything else (`0x40C5`, symbols) stays text, which
+// the address parsers accept.
+QJsonValue toJson(const YamlNode& n) {
+    switch (n.type) {
+        case YamlNode::Type::Map: {
+            QJsonObject o;
+            for (const auto& kv : n.map) o.insert(QString::fromStdString(kv.first), toJson(kv.second));
+            return o;
+        }
+        case YamlNode::Type::Sequence: {
+            QJsonArray a;
+            for (const YamlNode& item : n.seq) a.append(toJson(item));
+            return a;
+        }
+        case YamlNode::Type::Scalar: {
+            const QString raw = QString::fromStdString(n.scalar);
+            std::string text, ignored;
+            n.asString(&text, &ignored);
+            const QString value = QString::fromStdString(text);
+            if (raw != value) return value; // quoted
+            if (value == QLatin1String("true")) return true;
+            if (value == QLatin1String("false")) return false;
+            bool isInt = false;
+            const int i = value.toInt(&isInt, 10);
+            if (isInt) return i;
+            return value;
+        }
+        case YamlNode::Type::Null: break;
+    }
+    return QJsonValue();
+}
+
+} // namespace
+
+bool DapSession::effectiveConfig(const QJsonObject& args, QJsonObject* out, QString* error) {
+    const QString project = args.value(QStringLiteral("project")).toString();
+    if (project.isEmpty()) {
+        *out = args;
+        return true;
+    }
+    PresetFile preset;
+    std::string parseError;
+    const std::string path = debug::absolutePath(project.toStdString());
+    if (!parsePresetFile(path, &preset, &parseError)) {
+        *error = QStringLiteral("Project %1: %2").arg(project, QString::fromStdString(parseError));
+        return false;
+    }
+    // The project preset sets the machine up; its `debug:` block gives the
+    // rest. Keys of the launch configuration win; `program` merges key by key.
+    QJsonObject merged = preset.debug.isMap() ? toJson(preset.debug).toObject() : QJsonObject();
+    merged.insert(QStringLiteral("preset"), QString::fromStdString(path));
+    for (auto it = args.begin(); it != args.end(); ++it) {
+        if (it.key() == QLatin1String("program") && merged.value(it.key()).isObject()) {
+            QJsonObject program = merged.value(it.key()).toObject();
+            const QJsonObject over = it.value().toObject();
+            for (auto p = over.begin(); p != over.end(); ++p) program.insert(p.key(), p.value());
+            merged.insert(it.key(), program);
+        } else {
+            merged.insert(it.key(), it.value());
+        }
+    }
+    *out = merged;
+    return true;
 }
 
 namespace {
@@ -251,7 +322,8 @@ bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* e
         output(QStringLiteral("Clean start: %1").arg(how));
         if (!ready(error)) return false;
     }
-    const debug::LoadResult r = m_controller->loadProgram(req, after);
+    const debug::LoadResult r =
+        m_controller->loadProgram(req, after, m_attachConfig.value(QStringLiteral("command")).toString().toStdString());
     if (!r.ok) {
         *error = QStringLiteral("Load failed: %1").arg(QString::fromStdString(r.error));
         return false;
@@ -317,16 +389,21 @@ bool DapSession::prepare(const QJsonObject& args, QString* error) {
                        .arg(b.mismatched)
                        .arg(b.checked),
                    QStringLiteral("important"));
-    // 4. The program, bound to its own listing.
-    if (!program.isEmpty() && !loadProgram(program, nullptr, error)) return false;
+    // 4. The program, bound to its own listing; its start types `command`
+    // in place of the CALL. Without a program, `command` is typed here.
+    if (!program.isEmpty()) return loadProgram(program, nullptr, error);
+    const QString command = args.value(QStringLiteral("command")).toString();
+    if (!command.isEmpty()) m_controller->typeCommand(command.toStdString());
     return true;
 }
 
 void DapSession::restart(const QJsonObject& args, QJsonObject*, QString* error) {
     if (!ready(error)) return;
-    // A restart carries the (possibly edited) attach configuration.
+    // A restart carries the (possibly edited) attach configuration, and
+    // re-reads the project.
     const QJsonObject config = args.value(QStringLiteral("arguments")).toObject();
-    if (!config.isEmpty()) m_attachConfig = config;
+    if (!config.isEmpty()) m_launchArgs = config;
+    if (!effectiveConfig(m_launchArgs, &m_attachConfig, error)) return;
     QJsonObject again = m_attachConfig;
     if (again.value(QStringLiteral("reset")).toString(QStringLiteral("none")) == QLatin1String("none"))
         again.insert(QStringLiteral("reset"), QStringLiteral("reset"));
@@ -338,7 +415,16 @@ void DapSession::restart(const QJsonObject& args, QJsonObject*, QString* error) 
 
 void DapSession::customLoad(const QJsonObject& args, QJsonObject* body, QString* error) {
     if (!ready(error)) return;
-    loadProgram(args, body, error);
+    // The project may have changed since the attach.
+    if (!effectiveConfig(m_launchArgs, &m_attachConfig, error)) return;
+    // A program given with the request, else the configuration's.
+    const QJsonObject program =
+        args.contains(QStringLiteral("bin")) ? args : m_attachConfig.value(QStringLiteral("program")).toObject();
+    if (program.isEmpty()) {
+        *error = QStringLiteral("The configuration has no \"program\" to load");
+        return;
+    }
+    loadProgram(program, body, error);
 }
 
 void DapSession::customReset(const QJsonObject& args, QJsonObject*, QString* error) {

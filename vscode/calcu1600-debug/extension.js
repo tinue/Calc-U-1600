@@ -32,13 +32,11 @@ async function buildAndLoad() {
         return;
     }
     const config = session.configuration;
-    if (!config.program) {
-        vscode.window.showWarningMessage('The launch configuration has no "program" to load.');
-        return;
-    }
     try {
         if (config.buildTask) await runTask(config.buildTask);
-        const result = await session.customRequest('calcu1600/load', config.program);
+        // Without arguments the app loads the configuration's program, which
+        // may come from the project preset's `debug:` block.
+        const result = await session.customRequest('calcu1600/load', {});
         vscode.window.setStatusBarMessage(`Loaded ${result.start}-${result.end}`, 4000);
     } catch (err) {
         vscode.window.showErrorMessage(`Build & Load: ${err.message || err}`);

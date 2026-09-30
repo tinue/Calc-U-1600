@@ -83,8 +83,11 @@ public:
     /// its CALL and stop at its entry.
     enum class After { None, Call, StopOnEntry };
     /// Build & Load: loads the program, binds its listing, re-resolves the
-    /// breakpoints, then does `after`.
-    debug::LoadResult loadProgram(const debug::LoadRequest& request, After after);
+    /// breakpoints, then does `after`. A non-empty `command` is typed in
+    /// place of the program's CALL (e.g. a CALL with arguments).
+    debug::LoadResult loadProgram(const debug::LoadRequest& request, After after, const std::string& command = {});
+    /// Types a BASIC line and ENTER into the machine as it runs.
+    void typeCommand(const std::string& line);
     /// Machine reset (all = RAM cleared first) without the boot run: with
     /// `stop` the machine halts before its first instruction (reason
     /// "entry"), else it runs on.

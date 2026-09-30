@@ -1,4 +1,5 @@
 #include "PresetFile.hpp"
+#include "PresetDebugBlock.hpp"
 
 #include "../PC1500/PC1500Keyboard.hpp"
 #include "../MachineCodeFile.hpp"
@@ -703,6 +704,43 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
                 }
             }
             if (floppyIsFile) floppy = resolvePath(presetDir, floppy);
+        } else if (key == "debug") {
+            if (hasInline) { *error = "line " + std::to_string(line.lineNo) + ": 'debug:' takes a block, not an inline value"; return false; }
+            // The block is YAML proper (nested maps and lists); hand its
+            // lines to the YAML reader, padded so its line numbers are the file's.
+            std::string text;
+            int at = 1;
+            while (idx < lines.size() && lines[idx].indent > 0) {
+                for (; at < lines[idx].lineNo; at++) text += '\n';
+                text += std::string(static_cast<size_t>(lines[idx].indent), ' ') + lines[idx].content + '\n';
+                at++;
+                idx++;
+            }
+            const size_t first = text.find_first_not_of('\n');
+            if (first == std::string::npos) {
+                *error = "line " + std::to_string(line.lineNo) + ": 'debug:' is empty";
+                return false;
+            }
+            // Shift the block to column 0: the YAML reader wants a document.
+            const size_t indent = text.find_first_not_of(' ', first) - first;
+            std::string doc;
+            std::istringstream block(text);
+            int docLine = 0;
+            for (std::string l; std::getline(block, l);) {
+                docLine++;
+                if (l.empty()) { doc += '\n'; continue; }
+                if (l.find_first_not_of(' ') < indent) {
+                    *error = "line " + std::to_string(docLine) + ": 'debug:' block is indented less than its first line";
+                    return false;
+                }
+                doc += l.substr(indent) + '\n';
+            }
+            YamlNode debugBlock;
+            if (!parseYaml(doc, &debugBlock, error) || !parsePresetDebugBlock(&debugBlock, presetDir, error)) {
+                *error = "debug: " + *error;
+                return false;
+            }
+            out->debug = std::move(debugBlock);
         } else if (key == "rom-modules") {
             *error = "'" + key + "' is not yet supported by this loader";
             return false;

@@ -637,7 +637,76 @@ void test_preset_parser_plotter_ce1600p_rom() {
 
 } // namespace
 
+// `debug:` -- the debugger's attach settings in a project preset: nested
+// YAML, paths resolved against the preset's directory, the rest kept as is.
+void test_debug_block_parses_and_resolves_paths() {
+    PresetFile p;
+    std::string err;
+    const bool ok = parse("model: PC-1600\n"
+                          "debug:\n"
+                          "  stopOnEntry: true\n"
+                          "  command: CALL &C0C5,1   # with an argument\n"
+                          "\n"
+                          "  program:\n"
+                          "    bin: build/hello.bin\n"
+                          "    listing: /abs/hello.lst\n"
+                          "    entry: START\n"
+                          "    symbols:\n"
+                          "      - hello.sym\n"
+                          "  listings:\n"
+                          "    - rom/b7.lst\n"
+                          "    - path: rom/b3.lst\n"
+                          "      cpu: z80\n"
+                          "      bank: 3\n"
+                          "keys:\n"
+                          "  - key: mode\n",
+                          &p, &err);
+    CHECK(ok);
+    if (!ok) { std::fprintf(stderr, "  %s\n", err.c_str()); return; }
+    CHECK(p.debug.isMap());
+    CHECK(p.sections.size() == 1); // `keys:` after the block still parses
+    std::string s;
+    const YamlNode* program = p.debug.find("program");
+    CHECK(program && program->find("bin")->asString(&s, &err) && s == "/tmp/build/hello.bin");
+    CHECK(program && program->find("listing")->asString(&s, &err) && s == "/abs/hello.lst");
+    CHECK(program && program->find("entry")->asString(&s, &err) && s == "START");
+    CHECK(program && program->find("symbols")->seq.at(0).asString(&s, &err) && s == "/tmp/hello.sym");
+    const YamlNode* listings = p.debug.find("listings");
+    CHECK(listings && listings->seq.size() == 2);
+    CHECK(listings && listings->seq[0].asString(&s, &err) && s == "/tmp/rom/b7.lst");
+    CHECK(listings && listings->seq[1].find("path")->asString(&s, &err) && s == "/tmp/rom/b3.lst");
+    long bank = 0;
+    CHECK(listings && listings->seq[1].find("bank")->asInt(&bank, &err) && bank == 3);
+    CHECK(p.debug.find("command")->asString(&s, &err) && s == "CALL &C0C5,1");
+    bool stop = false;
+    CHECK(p.debug.find("stopOnEntry")->asBool(&stop, &err) && stop);
+}
+
+void test_debug_block_absent_is_null() {
+    PresetFile p;
+    std::string err;
+    CHECK(parse("model: PC-1600\n", &p, &err));
+    CHECK(p.debug.isNull());
+}
+
+void test_debug_block_rejects_unknown_keys_and_shapes() {
+    PresetFile p;
+    std::string err;
+    CHECK(!parse("model: PC-1600\ndebug:\n  bogus: 1\n", &p, &err));
+    CHECK(err.find("unknown key 'bogus'") != std::string::npos);
+    CHECK(!parse("model: PC-1600\ndebug:\n  program:\n    listing: a.lst\n", &p, &err));
+    CHECK(err.find("'bin'") != std::string::npos);
+    CHECK(!parse("model: PC-1600\ndebug: yes\n", &p, &err));
+    CHECK(!parse("model: PC-1600\ndebug:\n  program:\n    bin: a.bin\n    slot: S1\n", &p, &err));
+    // Errors carry the file's line number.
+    CHECK(!parse("model: PC-1600\ndebug:\n  listings:\n    - cpu: z80\n", &p, &err));
+    CHECK(err.find("line 4") != std::string::npos);
+}
+
 int run_preset_tests() {
+    test_debug_block_parses_and_resolves_paths();
+    test_debug_block_absent_is_null();
+    test_debug_block_rejects_unknown_keys_and_shapes();
     test_preset_parser_model_rom_pc1600();
     test_preset_parser_firmware_key_is_gone();
     test_preset_parser_plotter_ce1600p_rom();
