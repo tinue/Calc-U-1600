@@ -18,7 +18,7 @@ This packages the extension as `headless/calcu1600-debug.vsix` and installs it w
 
 Don't copy or symlink this folder into `~/.vscode/extensions`: current VS Code marks such extensions as removed and never loads them.
 
-In the emulator, turn on **Settings > Debugger > Accept a debugger** (port 4711 by default). Alternatively, start the app with `--dap 4711`.
+In the emulator, turn on **Settings > Debugger > Accept a debugger** (port 32168 by default). Alternatively, start the app with `--dap 32168`.
 
 ## Build tasks
 
@@ -73,7 +73,7 @@ A typical program configuration (the workspace's *Debug on PC-1500A*):
   "type": "calcu1600",
   "request": "attach",
   "name": "Debug on PC-1500A",
-  "port": 4711,
+  "port": 32168,
   "preLaunchTask": "sdas: build current file",
   "buildTask": "sdas: build current file",
   "preset": "${workspaceFolder}/vscode/presets/debug-pc1500a.pc1500a",

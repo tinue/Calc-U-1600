@@ -10,7 +10,7 @@
             "type": "calcu1600",
             "request": "attach",
             "name": "Debug on PC-1600",
-            "port": 4711,
+            "port": 32168,
             "preLaunchTask": "zasm: build current file",
             "buildTask": "zasm: build current file",
             "preset": "${workspaceFolder}/vscode/presets/debug-pc1600.pc1600",
@@ -27,7 +27,7 @@
             "type": "calcu1600",
             "request": "attach",
             "name": "Debug on PC-1500A",
-            "port": 4711,
+            "port": 32168,
             "preLaunchTask": "sdas: build current file",
             "buildTask": "sdas: build current file",
             "preset": "${workspaceFolder}/vscode/presets/debug-pc1500a.pc1500a",
@@ -42,7 +42,7 @@
             "type": "calcu1600",
             "request": "attach",
             "name": "ROM: reset and stop",
-            "port": 4711,
+            "port": 32168,
             "reset": "reset",
             "stopOnEntry": true
         }

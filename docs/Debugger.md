@@ -18,7 +18,7 @@ There are two ways to use it:
 ## How it works
 
 **Transport.** The server lives in the app and listens on 127.0.0.1 only. It accepts one client at a time; a second client is told the debugger is busy. To turn it on:
-- tick **Settings ▸ Debugger ▸ Accept a debugger** (port 4711 by default); the dialog shows its live status;
+- tick **Settings ▸ Debugger ▸ Accept a debugger** (port 32168 by default); the dialog shows its live status;
 - or start the app with `--dap <port>`, which enables it for that run only and leaves Settings unchanged.
 
 To detach, stop the session in VS Code (Shift+F5), or press **Disconnect** in Settings ▸ Debugger. A second debug session started while one is attached is refused with a message saying this.

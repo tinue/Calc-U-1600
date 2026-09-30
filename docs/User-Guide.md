@@ -719,7 +719,7 @@ elsewhere. Changes apply immediately; there is only **Close**.
 - **Tracing:** where CPU traces go, and the size at which a trace stops.
 - **Serial ports:** where the serial port files go, and their current paths
   (see [COM ports](#7-com-ports)).
-- **Debugger:** lets VS Code attach on 127.0.0.1 at the given port (4711
+- **Debugger:** lets VS Code attach on 127.0.0.1 at the given port (32168
   by default), with the server's current status (see
   [Debugger.md](Debugger.md)).
 

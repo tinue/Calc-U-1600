@@ -56,7 +56,7 @@ function activate(context) {
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory('calcu1600', {
             createDebugAdapterDescriptor(session) {
-                return new vscode.DebugAdapterServer(session.configuration.port || 4711, '127.0.0.1');
+                return new vscode.DebugAdapterServer(session.configuration.port || 32168, '127.0.0.1');
             }
         }),
         vscode.commands.registerCommand('calcu1600.buildAndLoad', buildAndLoad),

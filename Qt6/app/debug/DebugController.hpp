@@ -40,7 +40,7 @@ public:
     /// Drops the attached client (Settings > Debugger > Disconnect); the
     /// machine runs on as without a debugger.
     void disconnectClient();
-    /// "Listening on 127.0.0.1:4711", "Client connected", "Port in use: …",
+    /// "Listening on 127.0.0.1:32168", "Client connected", "Port in use: …",
     /// "Off".
     QString serverStatus() const;
 

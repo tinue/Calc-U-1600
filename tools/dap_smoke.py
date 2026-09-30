@@ -6,7 +6,7 @@ server enabled in Settings), attaches, and drives the requests VS Code
 uses: threads, pause, stackTrace/scopes/variables, disassemble, readMemory,
 evaluate, instruction and data breakpoints, stepping, continue, disconnect.
 
-Stdlib only:  uv run tools/dap_smoke.py [--port 4711] [--app PATH]
+Stdlib only:  uv run tools/dap_smoke.py [--port 32168] [--app PATH]
 With --app the script starts the app itself (with --dap) and quits it
 through the calcu1600/quit request.
 """
@@ -256,7 +256,7 @@ def reset_run(port):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--port", type=int, default=4711)
+    ap.add_argument("--port", type=int, default=32168)
     ap.add_argument("--app", help="start this app binary with --dap <port> and quit it afterwards")
     args = ap.parse_args()
 

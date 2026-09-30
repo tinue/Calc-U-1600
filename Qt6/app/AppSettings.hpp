@@ -143,10 +143,10 @@ inline void setTraceMaxFileSizeMB(int mb) {
     backingStore().setValue(QStringLiteral("trace/maxFileSizeMB"), mb);
 }
 
-// Keys: "debug/dapEnabled" (default off) and "debug/dapPort" (default 4711)
+// Keys: "debug/dapEnabled" (default off) and "debug/dapPort" (default 32168)
 // -- the Debug Adapter Protocol server VS Code attaches to (see
 // debug/DebugController). It listens on 127.0.0.1 only.
-constexpr int kDefaultDapPort = 4711;
+constexpr int kDefaultDapPort = 32168;
 inline bool dapEnabled() { return backingStore().value(QStringLiteral("debug/dapEnabled"), false).toBool(); }
 inline void setDapEnabled(bool on) { backingStore().setValue(QStringLiteral("debug/dapEnabled"), on); }
 inline int dapPort() {

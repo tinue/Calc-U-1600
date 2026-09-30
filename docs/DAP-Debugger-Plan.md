@@ -159,8 +159,8 @@ VS Code ──DAP/TCP 127.0.0.1:port──► Qt6/app/debug/DapServer (QTcpServe
     - **Pause indicator:** the window title and a DebugPanel status line show "Paused (debugger)".
     - **Rebuild handling:** `discardMachine()` and rebuild notify the session.
 11. **Settings** (`AppSettings.hpp`):
-    - Keys: `debug/dapEnabled` (default false) and `debug/dapPort` (default 4711).
-    - `SettingsDialog.cpp` gets a new "Debugger" section with a QCheckBox, a QSpinBox (1024–65535) and a live status label: "Listening on 127.0.0.1:4711", "Client connected" or "Port in use". Its objectName is set so screenshot scenarios can crop it.
+    - Keys: `debug/dapEnabled` (default false) and `debug/dapPort` (default 32168).
+    - `SettingsDialog.cpp` gets a new "Debugger" section with a QCheckBox, a QSpinBox (1024–65535) and a live status label: "Listening on 127.0.0.1:32168", "Client connected" or "Port in use". Its objectName is set so screenshot scenarios can crop it.
     - Changes go through `MachineController::refreshDebugServer()`, which starts, stops or rebinds the server. This follows the `refreshSerialLinkDirectory()` pattern.
 12. **Attach arguments** (all optional; with none, the session is plain ROM research on the running machine):
     - `listings: [{path, cpu?, bank?, me?, pu?, pv?}]`: static listings, e.g. for ROM code.

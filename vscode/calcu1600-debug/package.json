@@ -58,7 +58,7 @@
         "configurationAttributes": {
           "attach": {
             "properties": {
-              "port": { "type": "number", "default": 4711, "description": "The app's debug server port (Settings > Debugger)." },
+              "port": { "type": "number", "default": 32168, "description": "The app's debug server port (Settings > Debugger)." },
               "preset": { "type": "string", "description": "A .pc1500/.pc1500a/.pc1600 preset loaded first (it rebuilds the machine)." },
               "reset": { "enum": ["none", "reset", "allReset"], "default": "none", "description": "Reset the machine on attach, without the boot run." },
               "stopOnEntry": { "type": "boolean", "default": false, "description": "Stop right after attaching (after a reset: before the first instruction)." },
@@ -109,13 +109,13 @@
           }
         },
         "initialConfigurations": [
-          { "type": "calcu1600", "request": "attach", "name": "Calc-U-1600: attach", "port": 4711 }
+          { "type": "calcu1600", "request": "attach", "name": "Calc-U-1600: attach", "port": 32168 }
         ],
         "configurationSnippets": [
           {
             "label": "Calc-U-1600: PC-1500 program (sdaslh5801)",
             "body": {
-              "type": "calcu1600", "request": "attach", "name": "PC-1500: ${1:program}", "port": 4711,
+              "type": "calcu1600", "request": "attach", "name": "PC-1500: ${1:program}", "port": 32168,
               "preLaunchTask": "sdas: build current file", "buildTask": "sdas: build current file",
               "program": {
                 "bin": "^\"\\${fileDirname}/\\${fileBasenameNoExtension}.bin\"",
@@ -127,7 +127,7 @@
           {
             "label": "Calc-U-1600: PC-1600 program (zasm)",
             "body": {
-              "type": "calcu1600", "request": "attach", "name": "PC-1600: ${1:program}", "port": 4711,
+              "type": "calcu1600", "request": "attach", "name": "PC-1600: ${1:program}", "port": 32168,
               "preLaunchTask": "zasm: build current file", "buildTask": "zasm: build current file",
               "program": {
                 "bin": "^\"\\${fileDirname}/\\${fileBasenameNoExtension}.bin\"",
@@ -138,7 +138,7 @@
           },
           {
             "label": "Calc-U-1600: ROM research (reset and stop)",
-            "body": { "type": "calcu1600", "request": "attach", "name": "ROM: reset and stop", "port": 4711, "reset": "reset", "stopOnEntry": true }
+            "body": { "type": "calcu1600", "request": "attach", "name": "ROM: reset and stop", "port": 32168, "reset": "reset", "stopOnEntry": true }
           }
         ]
       }
