@@ -23,36 +23,46 @@ This is a **beta release**. The emulation itself is complete and
 working: all three models run their real firmware, not a simulated
 subset. Future releases will focus on the surroundings around that core
 — things like the debugger and the debug panel — rather than the emulation
-itself. See
-[TODO.md](TODO.md) for known issues and open work.
+itself. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Documentation
 
-- [docs/User-Guide.md](docs/User-Guide.md) — using the emulator, from the
-  basics (models, keyboard, plotters) to loading BASIC and machine-code
-  programs, memory modules and floppy disks, COM ports and presets. With
-  screenshots and diagrams.
-- [docs/Keyboard-Mapping.md](docs/Keyboard-Mapping.md) — every host key,
+**Using the emulator**
+
+- [User Guide](docs/User-Guide.md) — start here: models, keyboard,
+  plotters, loading BASIC and machine-code programs, memory modules and
+  floppy disks, COM ports and presets. With screenshots and diagrams.
+- [Keyboard Mapping](docs/Keyboard-Mapping.md) — every host key,
   including the PC-1600's accented characters.
-- [docs/Debugger.md](docs/Debugger.md) — debugging machine code (and the
-  ROMs) from VS Code.
-- [docs/PC1600-Host-Drive.md](docs/PC1600-Host-Drive.md) — a folder on your
-  computer as PC-1600 drive `S3:`.
-- [examples/README.md](examples/README.md) — what each sample preset does.
-- [docs/developer/Building.md](docs/developer/Building.md) — building from source
-  (prerequisites, ROMs, per-platform build steps).
+- [Host drive](docs/PC1600-Host-Drive.md) — a folder on your computer as
+  PC-1600 drive `S3:`.
+- [FILEX on the PC-1600](docs/PC1600-FILEX.md) — a guide to FILEX, a
+  third-party drive and file browser, running in the emulator.
+- [Examples](examples/README.md) — what each sample preset and program does.
+
+**Writing programs for the PC-1500 / PC-1600**
+
+- [Debugger](docs/Debugger.md) — debugging machine code (and the ROMs)
+  from VS Code: your own programs, programs found online, ROM extensions,
+  firmware analysis.
+- [VS Code extension](vscode/calcu1600-debug/README.md) — what the
+  Calc-U-1600 Debugger extension provides.
+
+**Custom memory modules**
+
+- [Memory Card Definition — Specification](docs/Memory-Card-Definition-Spec.md)
+  — what a `.card.yaml` describes, and why.
+- [Memory Card Definition — Format](docs/Memory-Card-Definition-Format.md)
+  — every key of a `.card.yaml` file.
 
 ## Serial port
 
-The emulated PC-1600's RS-232C port (and the CE-158's) is always live and
-backed by a host pseudo-terminal — **macOS and Linux only** (there's no
-Windows equivalent yet). Point any serial application at the stable
-`calcu1600.serial` symlink in the folder set under **Settings ▸ Serial
-ports**. For the calculator-side settings and how to exchange programs
-with [SharpDataExchange](https://github.com/tinue/SharpDataExchange), see
-the User Guide's [COM ports](docs/User-Guide.md#7-com-ports) chapter;
-implementation details are in
-[docs/developer/PC1600-Serial-Port.md](docs/developer/PC1600-Serial-Port.md).
+The emulated PC-1600's RS-232C port (and the CE-158's) appears on your
+computer as a serial port file, `calcu1600.serial` — **macOS and Linux
+only** for now. Point any serial program at it, for example
+[SharpDataExchange](https://github.com/tinue/SharpDataExchange) to copy
+programs to and from the calculator. The User Guide's
+[COM ports](docs/User-Guide.md#7-com-ports) chapter has the settings.
 
 ## License
 
@@ -64,3 +74,8 @@ It's built on [Qt6](https://www.qt.io/), used under the LGPLv3 -- see
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) for Qt and other
 third-party components (including the `roms/` ROM images, which are
 third-party copyrighted material not covered by this project's license).
+
+---
+
+Building Calc-U-1600 from source, or working on the emulator itself? Start
+at [docs/developer/README.md](docs/developer/README.md).

@@ -119,6 +119,10 @@ The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, 
 - **Guide screenshots for chapter 6** (`docs/developer/screenshots/guide/06-*`): the
   Load Machine Code dialog now shows which CPU / address space is assumed,
   so `06-start-address.png` and `06-loaded.png` are out of date.
+- **Guide screenshots for chapter 5 fail:**
+  `docs/developer/screenshots/presets/pc1600-modules.pc1600` still uses the
+  old `saveas: s1:My programs`; `saveas:` now wants `template` or `live`
+  first, so `05-slot-picker` and `05-floppy-picker` aren't written.
 
 ## Expansion connectors: one model on both machines
 
