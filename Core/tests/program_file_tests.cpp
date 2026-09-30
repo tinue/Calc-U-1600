@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "../DropFile.hpp"
 #include "../ProgramFile.hpp"
 
 namespace {
@@ -158,6 +159,81 @@ void test_pc1600_end_marker_ignored() {
     CHECK(classify(f).kind == Kind::CodeZ80);
 }
 
+// SharpDataExchange's own Z80 sample (src/cpu_guess.rs Z80_BLOCK): a loop
+// with JR/DJNZ targets inside it, a CALL and a RET.
+std::vector<uint8_t> z80Code() {
+    static const uint8_t kBlock[] = {0x21, 0x00, 0x80, 0x06, 0x10, 0x7E, 0xFE, 0x20, 0x28,
+                                     0x01, 0x23, 0x10, 0xF8, 0xCD, 0x00, 0x10, 0xC9};
+    std::vector<uint8_t> out;
+    for (int i = 0; i < 8; i++) out.insert(out.end(), std::begin(kBlock), std::end(kBlock));
+    return out;
+}
+
+std::vector<uint8_t> pseudoRandom(size_t len, uint32_t seed) {
+    std::vector<uint8_t> out(len);
+    for (uint8_t& b : out) {
+        seed = seed * 1664525u + 1013904223u;
+        b = static_cast<uint8_t>(seed >> 24);
+    }
+    return out;
+}
+
+// The CPU guess survives only as "looks like code", and never as a Kind.
+void test_looks_like_code() {
+    const auto code = classify(z80Code());
+    CHECK(code.kind == Kind::Headerless);
+    CHECK(code.looksLikeCode);
+    CHECK(!classify(kCode).looksLikeCode);  // under 16 bytes: never guessed
+    CHECK(!classify(pseudoRandom(4096, 7)).looksLikeCode);
+    CHECK(!classify(pc1600(z80Code(), 0x10, 0xC0C5)).looksLikeCode);  // headered: no guess
+}
+
+std::vector<uint8_t> readFixture(const char* path, bool* ok) {
+    std::ifstream in(path, std::ios::binary);
+    *ok = static_cast<bool>(in);
+    if (!in) std::fprintf(stderr, "  (skipped %s -- not present)\n", path);
+    return std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
+// Core/DropFile: which loader a dropped file goes to.
+void test_drop_targets() {
+    using dropfile::Target;
+    const auto drop = [](const std::vector<uint8_t>& bytes) { return dropfile::classify(bytes); };
+
+    // Presets, by their top-level `model:` key.
+    CHECK(drop(text("# Hanoi\nmodel: PC-1600\nkeys:\n  - key: mode\n")) == Target::Preset);
+    CHECK(drop(text("model: PC-1500:A04\n")) == Target::Preset);
+    CHECK(drop(text("\xEF\xBB\xBFmodel: PC-1500\n")) == Target::Preset);             // BOM
+    CHECK(drop(text("# \xE2\x80\x93" "empty\xE2\x80\x93\r\nmodel: PC-1600\r\n")) == Target::Preset);  // '–', CRLF
+    CHECK(drop(text("keys:\n  model: PC-1600\n")) == Target::None);                   // indented
+    CHECK(drop(text("# model: PC-1600\nkeys:\n")) == Target::None);                    // commented
+    CHECK(drop(text("plotter: ce150\n")) == Target::None);                             // no model
+    std::vector<uint8_t> withNul = text("model: PC-1600\n");
+    withNul.push_back(0x00);
+    CHECK(drop(withNul) != Target::Preset);
+
+    // BASIC: listings and tokenized files.
+    CHECK(drop(text("10 PRINT \"HI\"\n20 END\n")) == Target::BasicProgram);
+    CHECK(drop(ce158(basicPayload(), 0x40)) == Target::BasicProgram);
+    CHECK(drop(pc1600(basicPayload(), 0x21)) == Target::BasicProgram);
+    for (const char* path : {"Core/tests/fixtures/basic/lissajou-1500.bas", "Core/tests/fixtures/basic/lissajou-1600.bbin"}) {
+        bool ok = false;
+        const auto bytes = readFixture(path, &ok);
+        if (ok) CHECK(drop(bytes) == Target::BasicProgram);
+    }
+
+    // Machine code: headered, or headerless that looks like code.
+    CHECK(drop(ce158(kCode, 0x42, 0x40C5)) == Target::MachineCode);
+    CHECK(drop(pc1600(kCode, 0x10, 0xC0C5)) == Target::MachineCode);
+    CHECK(drop(z80Code()) == Target::MachineCode);
+
+    // Everything else is ignored.
+    CHECK(drop({}) == Target::None);
+    CHECK(drop(kCode) == Target::None);                  // too short to look like code
+    CHECK(drop(pseudoRandom(4096, 7)) == Target::None);  // data
+    CHECK(drop(text("Just some notes,\nnot a program.\n")) == Target::None);
+}
+
 // Real SharpDataExchange output. Skipped (not failed) when absent.
 void test_real_sample_files() {
     struct Case { const char* path; Kind kind; };
@@ -194,6 +270,8 @@ int run_program_file_tests() {
     test_header_cut();
     test_pc1600_end_marker_ignored();
     test_real_sample_files();
+    test_looks_like_code();
+    test_drop_targets();
 
     std::printf("program_file_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

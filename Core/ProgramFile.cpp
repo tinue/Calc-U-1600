@@ -20,7 +20,8 @@ Kind kindOf(const char* token) {
         {"basic-pc1600", Kind::BasicPC1600},
         {"ml-lh5801", Kind::CodeLH5801},
         {"ml-z80", Kind::CodeZ80},
-        // The CPU guesses: a headerless file is headerless, whatever it looks like.
+        // The CPU guesses: a headerless file is headerless, whatever it looks
+        // like (`looksLikeCode` keeps only that it looks like code at all).
         {"raw", Kind::Headerless},
         {"raw-lh5801", Kind::Headerless},
         {"raw-z80", Kind::Headerless},
@@ -44,6 +45,7 @@ ProgramFile classify(const std::vector<uint8_t>& bytes) {
     }
     f.kind = kindOf(fi.kind);
     f.token = fi.kind;
+    f.looksLikeCode = std::strcmp(fi.kind, "raw-lh5801") == 0 || std::strcmp(fi.kind, "raw-z80") == 0;
     f.damaged = (fi.problems & (SDE_PROBLEM_HEADER_CUT | SDE_PROBLEM_BAD_PAYLOAD)) != 0;
     f.truncated = (fi.problems & SDE_PROBLEM_TRUNCATED) != 0;
     f.lengthMismatch = (fi.problems & (SDE_PROBLEM_TRUNCATED | SDE_PROBLEM_TRAILING)) != 0;

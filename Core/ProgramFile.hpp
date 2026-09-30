@@ -13,8 +13,10 @@
 // Sharp1500-1600-Ref Shared/Data-Formats/Binary-Exchange-Formats.md §2 / §3.
 //
 // No CPU guessing (docs/Loader-Mode-Plan.md, principle 3): the library's
-// raw-lh5801 / raw-z80 guess for headerless code is ignored -- all of them
-// are Headerless, and the MODE (or the debugger's `cpu`) decides.
+// raw-lh5801 / raw-z80 guess for headerless code never picks the CPU -- all
+// of them are Headerless, and the MODE (or the debugger's `cpu`) decides.
+// The guess survives only as `looksLikeCode`, which decides whether a
+// dropped file is accepted at all (Core/DropFile).
 
 namespace programfile {
 
@@ -39,6 +41,9 @@ struct ProgramFile {
     /// `truncated` (fewer) or trailing bytes (more).
     bool lengthMismatch = false;
     bool truncated = false;
+    /// Headerless bytes that the library's heuristic takes for LH5801 or Z80
+    /// code (raw-lh5801 / raw-z80). Never used to pick the CPU.
+    bool looksLikeCode = false;
     /// Everything after the header, to the end of the file -- not cut to the
     /// header's length, so a preset's `length:` can override a mismatch.
     /// Headerless: the whole file.

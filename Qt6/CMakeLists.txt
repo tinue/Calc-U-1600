@@ -114,6 +114,7 @@ set(CORE_SOURCES
   # "Load Machine Code…"
   ${CORE_ROOT}/MachineCodeFile.cpp
   ${CORE_ROOT}/ProgramFile.cpp
+  ${CORE_ROOT}/DropFile.cpp
   ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp

@@ -51,6 +51,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/KeyPaste.cpp \
   Core/MachineCodeFile.cpp \
   Core/ProgramFile.cpp \
+  Core/DropFile.cpp \
   Core/Basic/BasicProgramSource.cpp \
   Core/tests/lh5801_tests.cpp \
   Core/tests/connector_tests.cpp \
