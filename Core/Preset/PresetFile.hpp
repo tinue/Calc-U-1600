@@ -309,3 +309,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
 /// A path in a preset: `~` / `~/...` is the home directory, anything else
 /// relative is relative to the preset's directory `dir`.
 std::string resolvePath(const std::filesystem::path& dir, const std::string& value);
+
+/// A number anywhere in a preset: `&`, `0x` or `$` makes it hex, otherwise
+/// decimal. The whole value must be the number.
+bool parseNumber(const std::string& value, uint32_t* out);

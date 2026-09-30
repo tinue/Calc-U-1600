@@ -10,7 +10,6 @@
 #include "DapServer.hpp"
 #include "DebugController.hpp"
 #include "Debug/Listing/Listing.hpp"
-#include "MachineCodeFile.hpp"
 #include "Preset/PresetFile.hpp"
 
 namespace {
@@ -176,10 +175,9 @@ void DapSession::attach(const QJsonObject& args, QJsonObject*, QString* error) {
 
 namespace {
 
-// A `debug:` block value as the attach configuration's JSON. Quoted scalars
-// stay text; bare `true`/`false` and decimal integers (bank qualifiers)
-// become JSON values; everything else (`0x40C5`, symbols) stays text, which
-// the address parsers accept.
+// A `debug:` block value as the attach configuration's JSON. Bare
+// `true`/`false` become JSON booleans; every other scalar stays text.
+// Numbers are read later by numberOf(), with the preset's rule.
 QJsonValue toJson(const YamlNode& n) {
     switch (n.type) {
         case YamlNode::Type::Map: {
@@ -200,9 +198,6 @@ QJsonValue toJson(const YamlNode& n) {
             if (raw != value) return value; // quoted
             if (value == QLatin1String("true")) return true;
             if (value == QLatin1String("false")) return false;
-            bool isInt = false;
-            const int i = value.toInt(&isInt, 10);
-            if (isInt) return i;
             return value;
         }
         case YamlNode::Type::Null: break;
@@ -245,23 +240,43 @@ bool DapSession::effectiveConfig(const QJsonObject& args, QJsonObject* out, QStr
 
 namespace {
 
-bool parseAddress(const QJsonValue& v, uint32_t* out) {
+// A number of the attach configuration, from a `debug:` block or a launch
+// configuration alike: a JSON number, or text with the preset's rule (`&`,
+// `0x` or `$` is hex, a bare number decimal).
+bool numberOf(const QJsonValue& v, uint32_t max, uint32_t* out) {
+    uint32_t n = 0;
     if (v.isDouble()) {
         const double d = v.toDouble();
-        if (d < 0 || d > 0xFFFF) return false;
-        *out = uint32_t(d);
-        return true;
+        if (d < 0 || d != double(uint32_t(d))) return false;
+        n = uint32_t(d);
+    } else if (!v.isString() || !parseNumber(v.toString().trimmed().toStdString(), &n)) {
+        return false;
     }
-    return machinecode::parseHexAddress(v.toString().toStdString(), out);
+    if (n > max) return false;
+    *out = n;
+    return true;
 }
 
-debug::BankKey bankKeyOf(const QJsonObject& o) {
-    debug::BankKey k;
-    k.bank = o.value(QStringLiteral("bank")).toInt(-1);
-    k.me = o.value(QStringLiteral("me")).toInt(-1);
-    k.pu = o.value(QStringLiteral("pu")).toInt(-1);
-    k.pv = o.value(QStringLiteral("pv")).toInt(-1);
-    return k;
+bool parseAddress(const QJsonValue& v, uint32_t* out) { return numberOf(v, 0xFFFF, out); }
+
+// The bank qualifiers `bank`, `me`, `pu`, `pv`; a missing one is -1.
+bool bankKeyOf(const QJsonObject& o, debug::BankKey* k, QString* error) {
+    const struct {
+        const char* key;
+        uint32_t max;
+        int* field;
+    } qualifiers[] = {{"bank", 7, &k->bank}, {"me", 1, &k->me}, {"pu", 1, &k->pu}, {"pv", 1, &k->pv}};
+    for (const auto& q : qualifiers) {
+        const QJsonValue v = o.value(QLatin1String(q.key));
+        if (v.isUndefined() || v.isNull()) continue;
+        uint32_t n = 0;
+        if (!numberOf(v, q.max, &n)) {
+            *error = QStringLiteral("Bad \"%1\": a number from 0 to %2 (&, 0x or $ for hex)").arg(q.key).arg(q.max);
+            return false;
+        }
+        *q.field = int(n);
+    }
+    return true;
 }
 
 } // namespace
@@ -280,11 +295,11 @@ bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* e
     for (const QJsonValue& s : d.value(QStringLiteral("symbols")).toArray())
         req.symbols.push_back(debug::absolutePath(s.toString().toStdString()));
     req.thread = threadForCpu(d.value(QStringLiteral("cpu")).toString());
-    req.key = bankKeyOf(d);
+    if (!bankKeyOf(d, &req.key, error)) return false;
     if (d.contains(QStringLiteral("address"))) {
         req.hasAddress = parseAddress(d.value(QStringLiteral("address")), &req.address);
         if (!req.hasAddress) {
-            *error = QStringLiteral("Bad \"address\"");
+            *error = QStringLiteral("Bad \"address\": a number up to &FFFF (&, 0x or $ for hex)");
             return false;
         }
     }
@@ -382,8 +397,13 @@ bool DapSession::prepare(const QJsonObject& args, QString* error) {
     map.clear();
     // Each entry of `listings` and `symbols` is a path, or an object with
     // `path` and optionally `cpu` and bank qualifiers.
-    const auto bindStatic = [this, &map](const QJsonValue& v, bool isListing) {
+    const auto bindStatic = [this, &map, error](const QJsonValue& v, bool isListing) {
         const QJsonObject o = v.isString() ? QJsonObject{{QStringLiteral("path"), v.toString()}} : v.toObject();
+        debug::BankKey key;
+        if (!bankKeyOf(o, &key, error)) {
+            *error = QStringLiteral("%1: %2").arg(o.value(QStringLiteral("path")).toString(), *error);
+            return false;
+        }
         const std::string path = o.value(QStringLiteral("path")).toString().toStdString();
         debug::Listing listing;
         std::vector<std::string> warnings;
@@ -392,10 +412,13 @@ bool DapSession::prepare(const QJsonObject& args, QString* error) {
                                   : debug::loadListingWithSymbols({}, {}, {path}, &listing, &warnings);
         for (const std::string& w : warnings)
             output(QString::fromStdString(w), ok ? QStringLiteral("console") : QStringLiteral("important"));
-        if (ok) map.addStatic(threadForCpu(o.value(QStringLiteral("cpu")).toString()), std::move(listing), bankKeyOf(o), path);
+        if (ok) map.addStatic(threadForCpu(o.value(QStringLiteral("cpu")).toString()), std::move(listing), key, path);
+        return true;
     };
-    for (const QJsonValue& v : args.value(QStringLiteral("listings")).toArray()) bindStatic(v, true);
-    for (const QJsonValue& v : args.value(QStringLiteral("symbols")).toArray()) bindStatic(v, false);
+    for (const QJsonValue& v : args.value(QStringLiteral("listings")).toArray())
+        if (!bindStatic(v, true)) return false;
+    for (const QJsonValue& v : args.value(QStringLiteral("symbols")).toArray())
+        if (!bindStatic(v, false)) return false;
     sendBreakpointChanges(m_controller->rebindListings());
     for (const auto& b : map.bindings())
         if (b.stale)

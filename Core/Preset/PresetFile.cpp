@@ -26,6 +26,27 @@ std::string resolvePath(const std::filesystem::path& dir, const std::string& val
     return (dir / p).lexically_normal().string();
 }
 
+bool parseNumber(const std::string& value, uint32_t* out) {
+    std::string digits = value;
+    int base = 10;
+    if (digits.rfind("0x", 0) == 0 || digits.rfind("0X", 0) == 0) {
+        digits = digits.substr(2);
+        base = 16;
+    } else if (!digits.empty() && (digits[0] == '&' || digits[0] == '$')) {
+        digits = digits.substr(1);
+        base = 16;
+    }
+    if (digits.empty()) return false;
+    for (char ch : digits)
+        if (base == 16 ? !std::isxdigit(static_cast<unsigned char>(ch)) : !std::isdigit(static_cast<unsigned char>(ch)))
+            return false;
+    errno = 0;
+    const unsigned long long v = std::strtoull(digits.c_str(), nullptr, base);
+    if (errno != 0 || v > 0xFFFFFFFFull) return false;
+    *out = static_cast<uint32_t>(v);
+    return true;
+}
+
 namespace {
 
 // ASCII-lowercases `s` in place (preset keywords/values are case-insensitive).
@@ -126,29 +147,6 @@ bool readLines(const std::string& path, std::vector<RawLine>* out, std::string* 
         if (raw[firstNonSpace] == '#') continue; // full-line comment
         out->push_back(RawLine{static_cast<int>(firstNonSpace), raw.substr(firstNonSpace), lineNo});
     }
-    return true;
-}
-
-// A number anywhere in a preset: `&`, `0x` or `$` makes it hex, otherwise
-// it is decimal. The whole value must be the number.
-bool parseNumber(const std::string& value, uint32_t* out) {
-    std::string digits = value;
-    int base = 10;
-    if (digits.rfind("0x", 0) == 0 || digits.rfind("0X", 0) == 0) {
-        digits = digits.substr(2);
-        base = 16;
-    } else if (!digits.empty() && (digits[0] == '&' || digits[0] == '$')) {
-        digits = digits.substr(1);
-        base = 16;
-    }
-    if (digits.empty()) return false;
-    for (char ch : digits)
-        if (base == 16 ? !std::isxdigit(static_cast<unsigned char>(ch)) : !std::isdigit(static_cast<unsigned char>(ch)))
-            return false;
-    errno = 0;
-    const unsigned long long v = std::strtoull(digits.c_str(), nullptr, base);
-    if (errno != 0 || v > 0xFFFFFFFFull) return false;
-    *out = static_cast<uint32_t>(v);
     return true;
 }
 

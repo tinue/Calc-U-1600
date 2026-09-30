@@ -530,19 +530,6 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
      ROM (see the known issue); next is timing the FOR/NEXT routine from
      RAM.
   4. Then re-fit once, against A−C = 45 ms.
-- **`debug:` numbers don't follow the preset's number rule**
-  *(behaviour)*. `DapSession::toJson(YamlNode)` guesses a JSON type from
-  the scalar: digits only become an int (decimal), anything else a string
-  that `parseAddress` reads as hex. So in `debug:`, `address: 1234` is
-  decimal but `address: C0C5` is hex, and `bank: &7` / `bank: 0x7` stays a
-  string that `toInt(-1)` silently drops. Everywhere else in a preset
-  (`parseNumber`, Decisions.md) `&`, `0x` or `$` is hex and a bare number
-  decimal. Fix: `parsePresetDebugBlock` parses the numeric keys
-  (`address`, a numeric `entry`, `bank`, `me`, `pu`, `pv`) with
-  `parseNumber` and writes them back canonically; `toJson` then needs no
-  guessing. **Before fixing:** decide whether launch.json strings
-  (`"address": "1234"` = &1234 today) move to the same rule, and check the
-  templates and manuals for bare hex in `debug:`.
 - **The `debug:` key list is kept twice.** `PresetDebugBlock.hpp`'s
   `requireOnlyKeys` lists and the keys `DapSession` reads must agree by
   hand; a new attach key works in launch.json but is "unrecognized" in a

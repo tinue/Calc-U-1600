@@ -44,6 +44,30 @@ inline bool resolvePathKey(YamlNode* map, const char* key, const std::filesystem
     return true;
 }
 
+// The numeric keys follow the preset's number rule (parseNumber): `&`,
+// `0x` or `$` is hex, a bare number decimal. The value stays as written;
+// the debugger reads it with the same rule.
+inline bool checkNumberKeys(const YamlNode& map, std::string* error) {
+    static const struct {
+        const char* key;
+        uint32_t max;
+    } kNumbers[] = {{"address", 0xFFFF}, {"bank", 7}, {"me", 1}, {"pu", 1}, {"pv", 1}};
+    for (const auto& kv : map.map)
+        for (const auto& n : kNumbers) {
+            if (kv.first != n.key) continue;
+            std::string text;
+            uint32_t v = 0;
+            if (!kv.second.asString(&text, error)) return false;
+            if (!parseNumber(text, &v) || v > n.max) {
+                *error = yaml_detail::errAt(kv.second.line, "'" + kv.first + "' must be a number from 0 to " +
+                                                                std::to_string(n.max) +
+                                                                " (&, 0x or $ for hex), not '" + text + "'");
+                return false;
+            }
+        }
+    return true;
+}
+
 // `listings:` / `symbols:` items are a path, or a map with `path`, `cpu`
 // and bank qualifiers (`source` too, for a listing).
 inline bool resolveFileList(YamlNode* list, bool listings, const std::filesystem::path& dir, std::string* error) {
@@ -63,6 +87,7 @@ inline bool resolveFileList(YamlNode* list, bool listings, const std::filesystem
         if (listings ? !item.requireOnlyKeys({"path", "source", "cpu", "bank", "me", "pu", "pv"}, error)
                      : !item.requireOnlyKeys({"path", "cpu", "bank", "me", "pu", "pv"}, error))
             return false;
+        if (!checkNumberKeys(item, error)) return false;
         if (!resolvePathKey(&item, "path", dir, error) || !resolvePathKey(&item, "source", dir, error)) return false;
     }
     return true;
@@ -90,6 +115,7 @@ inline bool parsePresetDebugBlock(YamlNode* block, const std::filesystem::path& 
                                     "cleanStart", "bank", "me", "pu", "pv"},
                                    error))
                 return false;
+            if (!checkNumberKeys(v, error)) return false;
             if (!resolvePathKey(&v, "bin", presetDir, error) || !resolvePathKey(&v, "listing", presetDir, error) ||
                 !resolvePathKey(&v, "source", presetDir, error))
                 return false;

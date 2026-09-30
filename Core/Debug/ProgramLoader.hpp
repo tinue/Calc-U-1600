@@ -32,7 +32,7 @@ struct LoadRequest {
     uint32_t address = 0;             ///< in `thread`'s address space
     bool hasEntry = false;            ///< else entrySymbol, else the header's autorun address, else the
     uint16_t entry = 0;               ///< listing's ENTRY (if in the loaded range), else the load address
-    std::string entrySymbol;          ///< a symbol of the listing, or an address as text
+    std::string entrySymbol;          ///< a symbol of the listing, or an address as text (&, 0x or $ hex, else decimal)
 };
 
 struct LoadResult {

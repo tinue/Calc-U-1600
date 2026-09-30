@@ -710,10 +710,35 @@ void test_debug_block_rejects_unknown_keys_and_shapes() {
     CHECK(err.find("line 4") != std::string::npos);
 }
 
+// Numbers in `debug:` follow the preset's rule: `&`, `0x` or `$` is hex, a
+// bare number decimal. Bare hex, and values out of range, are refused.
+void test_debug_block_numbers_follow_the_preset_rule() {
+    PresetFile p;
+    std::string err;
+    const auto program = [](const std::string& line) {
+        return "model: PC-1600\ndebug:\n  program:\n    bin: a.bin\n    " + line + "\n";
+    };
+    CHECK(parse(program("address: 1234"), &p, &err));
+    CHECK(parse(program("address: &C0C5"), &p, &err));
+    CHECK(parse(program("address: 0x40C5"), &p, &err));
+    CHECK(parse(program("address: $7C01"), &p, &err));
+    CHECK(!parse(program("address: C0C5"), &p, &err));
+    CHECK(err.find("line 5") != std::string::npos && err.find("'address'") != std::string::npos);
+    CHECK(!parse(program("address: &10000"), &p, &err));
+    CHECK(parse(program("bank: &7"), &p, &err));
+    CHECK(parse(program("bank: 0x6"), &p, &err));
+    CHECK(!parse(program("bank: 8"), &p, &err));
+    CHECK(!parse(program("me: 2"), &p, &err));
+    CHECK(parse(program("entry: START"), &p, &err)); // a symbol stays text
+    CHECK(!parse("model: PC-1600\ndebug:\n  listings:\n    - path: a.lst\n      pv: x\n", &p, &err));
+    CHECK(err.find("line 5") != std::string::npos);
+}
+
 int run_preset_tests() {
     test_debug_block_parses_and_resolves_paths();
     test_debug_block_absent_is_null();
     test_debug_block_rejects_unknown_keys_and_shapes();
+    test_debug_block_numbers_follow_the_preset_rule();
     test_preset_parser_model_rom_pc1600();
     test_preset_parser_plotter_ce1600p_rom();
     test_preset_parser_model_rom_pc1500a_is_a04_only();

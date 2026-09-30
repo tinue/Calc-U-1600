@@ -248,7 +248,9 @@ authentic speed for the span that matters.
   `slot-1-file:`, `floppy:` / `floppy-file:`; a path-valued key is `file`
   or ends in `-file` (only `host-drive:`, a folder, doesn't). `saveas:`
   uses the same device words (`slot-1`, `slot-2`, `floppy`). Numbers: `&`,
-  `0x` or `$` is hex, a bare number is decimal. Leaving a key out means
+  `0x` or `$` is hex, a bare number is decimal, also in `debug:` and in
+  launch configurations' strings (they merge key by key, so one key can't
+  have two rules); bare hex is refused, not guessed. Leaving a key out means
   "none"; there is no `none` value.
 - **`debug:` keeps camelCase** (`stopOnEntry`, `cleanStart`) against the
   rest's kebab-case. They are the launch-configuration keys (below), and

@@ -149,6 +149,16 @@ def program_run(port):
     body = dap.request("calcu1600/load", bin=os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest_stock.bin"), listing=rst,
                        entry="MEMTEST", after="none")
     check(body.get("entry") == "0x40CC" and body.get("call") == "CALL &40CC", f"entry MEMTEST -> {body}")
+    # Numbers follow the preset's rule: `&`, `0x` or `$` is hex, a bare
+    # number decimal; bare hex is refused.
+    bin_ = os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest_stock.bin")
+    body = dap.request("calcu1600/load", bin=bin_, listing=rst, address="16581", entry="&40CC", after="none")
+    check(body.get("start") == "0x40C5" and body.get("entry") == "0x40CC", f"address \"16581\", entry \"&40CC\" -> {body}")
+    try:
+        dap.request("calcu1600/load", bin=bin_, listing=rst, address="40C5", after="none")
+        check(False, "address \"40C5\" (bare hex) refused")
+    except RuntimeError as e:
+        check("address" in str(e), f"address \"40C5\" (bare hex) refused: {e}")
     # Restart (the toolbar's): the attach configuration again -- preset,
     # load, entry stop -- and a breakpoint set before it still hits.
     dap.request("setBreakpoints", source={"path": MEMTEST_ASM}, breakpoints=[{"line": 88}])
@@ -215,6 +225,7 @@ def project_run(port):
                     "  program:\n"
                     f"    bin: {os.path.relpath(dumper + '.bin', tmp)}\n"
                     f"    listing: {dumper}.lst\n"
+                    "    address: &C0C5\n"
                     "    after: stopOnEntry\n")
         dap = Dap(port)
         dap.request("initialize", adapterID="calcu1600")

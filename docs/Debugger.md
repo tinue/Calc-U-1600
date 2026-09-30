@@ -337,6 +337,8 @@ What to check:
 
 A launch configuration and a project preset's `debug:` block take the same keys. With `project`, the block supplies whatever the launch configuration leaves out, and the configuration's own keys win (`program` merges key by key). The project is read again at every restart and Build & Load.
 
+Numbers (`address`, `entry`, `bank`, `me`, `pu`, `pv`) follow the preset rule in both places: `&`, `0x` or `$` makes a number hex, a bare number is decimal. So `address: &C0C5` and `"address": "0xC0C5"` are the same address; `C0C5` without a prefix is refused (for `entry` it can still be a symbol). A launch configuration may also give a plain JSON number, which is decimal.
+
 | Key | Meaning |
 |---|---|
 | `project` | (launch configuration only) a project preset: it sets the machine up, and its `debug:` block gives the rest |

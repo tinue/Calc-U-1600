@@ -10,6 +10,11 @@
   no RAM at the load address. Presets and the debugger follow the header's
   bank too. A header auto-run address with a bank is typed as
   `CALL #bank,…` instead of failing the preset.
+- **Numbers in the debugger's settings** follow the preset rule, in a
+  preset's `debug:` block and in a launch configuration alike: `&`, `0x` or
+  `$` is hex, a bare number decimal. `"address": "1234"` in a launch
+  configuration is now decimal (it was hex), hex without a prefix is
+  refused, and `bank: &7` or `"bank": "7"` is no longer silently ignored.
 
 ## [0.6.0] - 2026-09-30
 

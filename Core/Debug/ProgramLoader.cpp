@@ -9,6 +9,7 @@
 #include "../PC1500/PC1500MachineCodeLoader.hpp"
 #include "../PC1600/PC1600Machine.hpp"
 #include "../PC1600/PC1600MachineCodeLoader.hpp"
+#include "../Preset/PresetFile.hpp"
 #include "Listing/Listing.hpp"
 
 namespace debug {
@@ -89,7 +90,7 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
         r.entry = req.entry;
     } else if (!req.entrySymbol.empty()) {
         if (symbol(req.entrySymbol, &entry)) r.entry = entry;
-        else if (machinecode::parseHexAddress(req.entrySymbol, &parsed)) r.entry = uint16_t(parsed);
+        else if (parseNumber(req.entrySymbol, &parsed) && parsed <= 0xFFFF) r.entry = uint16_t(parsed);
         else {
             r.error = "\"entry\": " + req.entrySymbol + " is neither a symbol of the listing nor an address";
             return r;
