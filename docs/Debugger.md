@@ -46,7 +46,7 @@ flowchart LR
 
 The extension finds them on your `PATH`, or where the [settings](#setup) say.
 
-**3. Install the VS Code extension.** From the Calc-U-1600 repository root:
+**3. Install the VS Code extension.** You need `python3` and VS Code's `code` command on the `PATH`. From the Calc-U-1600 repository root:
 
 ```sh
 tools/install_vscode_extension.sh
