@@ -222,11 +222,18 @@ bool DapSession::effectiveConfig(const QJsonObject& args, QJsonObject* out, QStr
         return false;
     }
     // The project preset sets the machine up; its `debug:` block gives the
-    // rest. Keys of the launch configuration win; `program` merges key by key.
+    // rest. Keys of the launch configuration win; `program` merges key by
+    // key, and `listings` / `symbols` add to the block's (the VS Code
+    // extension always sends both, with the user's ROM listings).
     QJsonObject merged = preset.debug.isMap() ? toJson(preset.debug).toObject() : QJsonObject();
     merged.insert(QStringLiteral("preset"), QString::fromStdString(path));
     for (auto it = args.begin(); it != args.end(); ++it) {
-        if (it.key() == QLatin1String("program") && merged.value(it.key()).isObject()) {
+        if ((it.key() == QLatin1String("listings") || it.key() == QLatin1String("symbols")) &&
+            merged.value(it.key()).isArray() && it.value().isArray()) {
+            QJsonArray both = merged.value(it.key()).toArray();
+            for (const QJsonValue& v : it.value().toArray()) both.append(v);
+            merged.insert(it.key(), both);
+        } else if (it.key() == QLatin1String("program") && merged.value(it.key()).isObject()) {
             QJsonObject program = merged.value(it.key()).toObject();
             const QJsonObject over = it.value().toObject();
             for (auto p = over.begin(); p != over.end(); ++p) program.insert(p.key(), p.value());

@@ -380,15 +380,20 @@ def renum_template_run(port):
         dap = Dap(port)
         dap.request("initialize", adapterID="calcu1600")
         dap.wait_event("initialized")
-        dap.request("attach", project=os.path.join(tmp, "debug.pc1500a"))
-        bps = dap.request("setFunctionBreakpoints", breakpoints=[{"name": "RENFIX"}])["breakpoints"]
-        check(bps and bps[0]["verified"], "RENUM template: function breakpoint RENFIX verified")
+        # As VS Code sends it: the extension adds `listings` / `symbols` (the
+        # user's ROM listings, here none), which must add to the project's.
+        dap.request("attach", project=os.path.join(tmp, "debug.pc1500a"), listings=[], symbols=[])
+        asm = os.path.join(tmp, "rom.asm")
+        with open(asm) as f:
+            line = next(i for i, l in enumerate(f, 1) if l.startswith("RENFIX:"))
+        bps = dap.request("setBreakpoints", source={"path": asm}, breakpoints=[{"line": line}])["breakpoints"]
+        check(bps and bps[0]["verified"], f"RENUM template: line breakpoint on RENFIX (line {line}) verified")
         dap.request("configurationDone")
         stop = dap.wait_event("stopped", timeout=60)
         top = top_frame(dap, 1)
         check(stop.get("reason") == "breakpoint" and top.get("source", {}).get("name") == "rom.asm",
               f"RENUM template: RENUM 100,,10 stops at {top.get('source', {}).get('name')}:{top.get('line')}")
-        dap.request("setFunctionBreakpoints", breakpoints=[])
+        dap.request("setBreakpoints", source={"path": asm}, breakpoints=[])
         dap.request("continue", threadId=1)
         time.sleep(1.0)
         dap.request("pause", threadId=1)
