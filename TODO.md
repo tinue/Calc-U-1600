@@ -91,6 +91,17 @@ obligations.
   for the length of each call. Check which program showed the 2.3x, and
   what the emulator does differently on the headless and `- wait: <n>`
   paths.
+- **Open bus reads as a constant FFH; real hardware returns the last byte
+  on the data bus. To decide.** PC-1600 MODE 0, CE-163F in Slot 2:
+  `XPEEK&C5` returns 37 on a real unit and 255 in the emulator. In MODE 0
+  the Z-80 hands over with Port 31H = 06H (page C = bank 0, the empty
+  Slot 1) and `P_MAPPRG` leaves it there, so the mapping is right. The
+  LH5803's PEEK reads with `lda (u)` (rom1500 D997), opcode 25H = 37: the
+  floating bus still holds the opcode just fetched. Decide whether to
+  model this (last data-bus byte per CPU/bus, on both machines?) or keep
+  FFH and record the choice in Decisions.md. A change would reach every
+  open-bus read, e.g. the RAM-sizing probes and the empty-slot checks in
+  the tests.
 
 ## PC-1600 serial port
 

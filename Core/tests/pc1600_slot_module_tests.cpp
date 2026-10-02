@@ -357,9 +357,49 @@ void test_trigger_latch_modules_in_slot2_contribute_full_16k() {
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m2, 0xF89D)) == 16384);
 }
 
+// MODE 1 XPEEK reads the BASIC program bank: the Z-80 hands over with page C
+// on bank 0 (Port 31H = 06H), and the LH5803's P_MAPPRG (rom1500 E63C) maps
+// the first non-zero ADTBL entry -- here Slot 2's 22H -- with
+// `STA #(P_BANK)` (ME1 A031H). Real hardware with a CE-163F in Slot 2 reads
+// back the XPOKEd 85; with that store dropped it read open bus. XPEEK has to
+// be a statement of its own: nested in an XPOKE it runs inside that
+// statement's handover, with the Z-80's 31H = 26H already in place. XPOKE
+// lands in Slot 2 either way, so it carries the result back to the test.
+void test_mode1_xpeek_maps_program_bank_via_lh5803_p_bank() {
+    auto ce163f = card("ce163f.card.yaml", CardHost::PC1600Slot2);
+    if (!ce163f) return;
+    PC1600Machine m;
+    if (!loadPC1600Roms(m)) {
+        std::fprintf(stderr, "SKIP test_mode1_xpeek_maps_program_bank_via_lh5803_p_bank: PC-1600 ROM images not found\n");
+        return;
+    }
+    m.attachSlot2Card(std::move(ce163f));
+    m.allReset();
+    runBootToPrompt(m);
+    for (const char* line : {"MODE 1", "XPOKE&C5,&55", "A=XPEEK&C5", "XPOKE&C6,A"}) {
+        std::string err;
+        CHECK(typeLine(m, line, /*pressEnter=*/true, &err));
+        waitUntilBasicIdle(m, 60ull * PC1600Machine::kTStateHz);
+    }
+    selectPageCBank(m, 2);
+    CHECK(m.memory().read(0x80C5) == 0x55);
+    CHECK(m.memory().read(0x80C6) == 0x55);
+}
+
+// The LH5803 reaches the SC7852's 30H-3FH control ports at ME1 A030-A03F.
+void test_lh5803_me1_a03x_is_the_control_port_block() {
+    PC1600Machine m;
+    m.lh5803Memory().writeME1(0xA031, 0x26);
+    CHECK(m.memory().readIO(0x31) == 0x26);
+    m.memory().writeIO(0x31, 0x60);
+    CHECK(m.lh5803Memory().readME1(0xA031) == 0x60);
+}
+
 } // namespace
 
 int run_pc1600_slot_module_tests() {
+    test_mode1_xpeek_maps_program_bank_via_lh5803_p_bank();
+    test_lh5803_me1_a03x_is_the_control_port_block();
     test_ce155_in_slot1_both_cpu_views();
     test_plain_ram_card_via_attach_slot_card();
     test_poke_memory_uses_the_host_path_and_verifies();

@@ -48,6 +48,12 @@ class PC1600BusArbiter;
 //     LH5803-side alias of the SC7852's Port 38H, since the LH5803 has no
 //     I/O space of its own) -- forwarded to a PC1600BusArbiter via
 //     setBusArbiter() if one is attached.
+//   * the rest of ME1 0xA030-0xA03F: the SC7852's 30H-3FH control ports,
+//     straight to PC1600Memory::readIO/writeIO -- P_MOD (30H), P_BANK
+//     (31H), P_INT (32H), P_LHMSK2 (34H), P_CL1 (36H) in rom1500. P_BANK
+//     is what MODE 1 PEEK/XPEEK depend on (P_MAPPRG, rom1500 E63C). The
+//     32H read clears the cause as on the Z-80 side; only the LH5803 ISR
+//     (E6B9) reads it, and no LH5803 interrupt is raised yet.
 //   * ME1 0xF000-0xF00F: the LH5803's own on-chip LH5811-compat PIO port
 //     controller -- the analogue of the chip PC1500Memory models for the
 //     PC-1500's LH5801 (see that file's top comment / its `case 0xB`).
@@ -124,6 +130,11 @@ private:
     /// when `addr` is an ME1 access into the UART / sub-CPU block (offsets
     /// 20H-27H or 33H, in either the bare or the 0xA0xx-shadowed form).
     static bool isUartShadow(uint16_t addr, uint8_t* reg, bool* isSubCpuAnswer);
+
+    /// ME1 A030-A03F: the SC7852's 30H-3FH control ports as the LH5803 sees
+    /// them (rom1500's P_MOD..P_CPUSW). A033 is caught by isUartShadow()
+    /// first and A038 by the handoff check; the rest go to readIO/writeIO.
+    static bool isControlPort(uint16_t addr) { return (addr & 0xFFF0) == 0xA030; }
 
     /// Build the PinState the 60-pin peripheral cards decode on (address,
     /// forWrite, me1, PV, PU) -- no S-block/Y strobe, so no
