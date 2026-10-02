@@ -94,7 +94,7 @@ The PC-1500 ROM disassembly is Jeff Birt's [Sharp_PC-1500_ROM_Disassembly](https
 
 You work in the program's own folder. *Create Debug Project…* sets it up once, and from then on F5 builds, loads and starts it.
 
-**Create the project.** Open an empty folder in VS Code, then run **Calc-U-1600: Create Debug Project…** from the Command Palette. Choose *PC-1600 program* or *PC-1500A program* and a name. You get:
+**Create the project.** Open an empty folder in VS Code, then run **Calc-U-1600: Create Debug Project…** from the Command Palette. Choose *PC-1600 program* or *PC-1500A program* and a name. To put the project into a subfolder of the workspace instead, right-click that folder in the Explorer and choose **Calc-U-1600: Create Debug Project Here…**; the launch configuration then names the folder (`Debug tmp/main`) and points into it. You get:
 
 | File | What it is |
 |---|---|

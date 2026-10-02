@@ -11,6 +11,9 @@
   docs/Debugger.md walks through debugging it, and
   docs/PC1500-Keyword-Modules.md describes how the PC-1500 ROM finds such
   modules.
+- **Create Debug Project Here…** in VS Code's Explorer context menu creates
+  the project in the folder you right-clicked; its launch configuration
+  points into that folder.
 
 ### Changed
 
@@ -33,6 +36,20 @@
   preset's `debug:` block (with the line number) and in a launch
   configuration alike: `after: foo`, `cpu: x86`, `boot: foo` or a quoted
   `"true"` are refused instead of silently falling back to a default.
+
+### Fixed
+
+- **Debugging a project from VS Code** (a launch configuration with
+  `project`) stopped at no breakpoint, for two reasons:
+  - The app waited for VS Code's next request before it armed the
+    breakpoints. VS Code sends them while the project's preset is still
+    loading, and the app only read them when something else arrived, so
+    the machine sat paused after the reset and `command` never ran.
+  - The extension always sends `listings` and `symbols` (from the
+    `calcu1600.romListings` / `romSymbols` settings, usually empty), and
+    these replaced the project's listings: every line breakpoint said "No
+    code at or after this line in a loaded listing". They now add to the
+    project's.
 
 ## [0.6.0] - 2026-09-30
 

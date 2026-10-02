@@ -3,6 +3,9 @@
 // project preset (machine + debug: block) and a .gitignore from
 // templates/<target>/, and one launch configuration. Never overwrites a
 // file; the launch configuration is added to any that exist.
+// "Create Debug Project Here…" (the Explorer's context menu on a folder)
+// writes into that folder instead; the launch configuration stays in the
+// workspace folder's launch.json, with paths into the subfolder.
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
@@ -24,9 +27,16 @@ async function pickFolder() {
     return vscode.window.showWorkspaceFolderPick({ placeHolder: 'The folder for the project' });
 }
 
-async function createProject(extensionPath) {
-    const folder = await pickFolder();
-    if (!folder) return;
+async function createProject(extensionPath, uri) {
+    // `uri`: the folder clicked in the Explorer; else the workspace folder.
+    const folder = uri ? vscode.workspace.getWorkspaceFolder(uri) : await pickFolder();
+    if (!folder) {
+        if (uri) vscode.window.showWarningMessage('The folder must be inside the workspace.');
+        return;
+    }
+    const dir = uri ? uri.fsPath : folder.uri.fsPath;
+    const sub = path.relative(folder.uri.fsPath, dir).split(path.sep).join('/');
+    const inWorkspace = '${workspaceFolder}/' + (sub ? sub + '/' : '');
     const target = await vscode.window.showQuickPick(TARGETS, { placeHolder: 'What are you going to write?' });
     if (!target) return;
     const name = await vscode.window.showInputBox({
@@ -40,7 +50,7 @@ async function createProject(extensionPath) {
     const written = [], kept = [];
     for (const file of fs.readdirSync(templateDir)) {
         const outName = file === 'gitignore' ? '.gitignore' : file.replace('NAME', name);
-        const out = path.join(folder.uri.fsPath, outName);
+        const out = path.join(dir, outName);
         if (fs.existsSync(out)) {
             kept.push(outName);
             continue;
@@ -53,21 +63,21 @@ async function createProject(extensionPath) {
     // one source. Added next to any that exist (VS Code edits launch.json).
     const launch = vscode.workspace.getConfiguration('launch', folder.uri);
     const configurations = launch.get('configurations') || [];
-    const configName = `Debug ${name}`;
+    const configName = sub ? `Debug ${sub}/${name}` : `Debug ${name}`;
     if (!configurations.some(c => c.name === configName)) {
         configurations.push({
             type: 'calcu1600',
             request: 'attach',
             name: configName,
-            project: '${workspaceFolder}/' + target.preset,
-            build: { assembler: target.assembler, file: '${workspaceFolder}/' + name + '.asm' },
+            project: inWorkspace + target.preset,
+            build: { assembler: target.assembler, file: inWorkspace + name + '.asm' },
         });
         await launch.update('configurations', configurations, vscode.ConfigurationTarget.WorkspaceFolder);
         if (!launch.get('version')) await launch.update('version', '0.2.0', vscode.ConfigurationTarget.WorkspaceFolder);
         written.push(`.vscode/launch.json ("${configName}")`);
     }
 
-    const source = path.join(folder.uri.fsPath, name + '.asm');
+    const source = path.join(dir, name + '.asm');
     if (fs.existsSync(source)) await vscode.window.showTextDocument(vscode.Uri.file(source));
     vscode.window.showInformationMessage(
         `Created ${written.join(', ') || 'nothing new'}` + (kept.length ? `; kept the existing ${kept.join(', ')}` : '') +

@@ -19,7 +19,8 @@
     "onCommand:calcu1600.buildAndLoad",
     "onCommand:workbench.action.tasks.runTask",
     "onCommand:workbench.action.tasks.build",
-    "onCommand:calcu1600.createProject"
+    "onCommand:calcu1600.createProject",
+    "onCommand:calcu1600.createProjectHere"
   ],
   "contributes": {
     "breakpoints": [
@@ -62,8 +63,27 @@
         "command": "calcu1600.createProject",
         "title": "Create Debug Project…",
         "category": "Calc-U-1600"
+      },
+      {
+        "command": "calcu1600.createProjectHere",
+        "title": "Calc-U-1600: Create Debug Project Here…"
       }
     ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "calcu1600.createProjectHere",
+          "when": "explorerResourceIsFolder",
+          "group": "navigation@99"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "calcu1600.createProjectHere",
+          "when": "false"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "calcu1600.buildAndLoad",
