@@ -407,6 +407,19 @@ void test_lh5801_symbols_and_illegal() {
     CHECK_TEXT(f.text, ".db 0xFD,0x00");
 }
 
+void test_lh5801_undocumented_v_opcodes() {
+    std::vector<uint8_t> sbc{0x30}, ldi{0x7A, 0x40}, fd{0xFD, 0x35};
+    disasm::Decoded a = disasm::decodeLH5801(0, fetchFrom(sbc, 0));
+    CHECK(a.undocumented && !a.illegal && a.len == 1);
+    CHECK_TEXT(a.text, ".db 0x30 ; sbc vl (undocumented)");
+    disasm::Decoded b = disasm::decodeLH5801(0, fetchFrom(ldi, 0));
+    CHECK(b.undocumented && b.len == 2);
+    CHECK_TEXT(b.text, ".db 0x7A,0x40 ; ldi vl,0x40 (undocumented)");
+    disasm::Decoded c = disasm::decodeLH5801(0, fetchFrom(fd, 0));
+    CHECK(c.undocumented && c.len == 2);
+    CHECK_TEXT(c.text, ".db 0xFD,0x35 ; lda #(v) (undocumented)");
+}
+
 // Runs one instruction of `code` at 0x4000 on the real core and returns how
 // far P moved and whether the core flagged it undocumented.
 struct LhRun { int advance; bool illegal; };
@@ -715,6 +728,7 @@ int run_disasm_tests() {
     test_lh5801_branches_and_flow();
     test_lh5801_vectors_resolve_through_the_table();
     test_lh5801_symbols_and_illegal();
+    test_lh5801_undocumented_v_opcodes();
     test_lh5801_sweep_matches_cpu();
     test_lh5801_reset_code_from_rom();
     test_z80_vectors();

@@ -40,6 +40,18 @@
   CE-150, CE-158) from [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM)
   instead of Jeff Birt's repositories. The files and checksums are unchanged;
   `PC1500_ROM_BASE` points the script at another copy, like `PC1600_ROM_BASE`.
+- **The LH5801/LH5803's undocumented "V register" opcodes** now behave the
+  way tests on a real PC-1500A and PC-1600 showed:
+  - VH reads the high byte of the CPU's internal operand register. Every
+    16-bit operand sets this register: absolute addresses, `JMP`/`SJP`,
+    `LDI S,nn`, and the FFxx table address of a vector call.
+  - VL reads 00, and writes to V are ignored. `INC`/`DEC` on V only set
+    flags.
+  - `LDI VL,n` and `LDI VH,n` are two bytes long.
+  - `(V)` and `#(V)` address VH:00.
+
+  The debugger's disassembly shows these opcodes as `.db` with the mnemonic
+  and "(undocumented)" in a comment.
 
 ### Fixed
 

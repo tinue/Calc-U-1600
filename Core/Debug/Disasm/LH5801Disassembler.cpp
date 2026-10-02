@@ -1,5 +1,8 @@
 #include "LH5801Disassembler.hpp"
 
+#include <initializer_list>
+#include <utility>
+
 #include <array>
 #include <string>
 
@@ -16,6 +19,7 @@ namespace {
 struct Op {
     const char* fmt = nullptr;
     Flow flow = Flow::None;
+    bool undoc = false; // an undocumented "V" opcode the core executes (see LH5801::execute())
 };
 
 struct Tables {
@@ -153,6 +157,28 @@ Tables buildTables() {
     f[0x8E] = {"cdv"};
     f[0xB1] = {"hlt", Flow::Halt};
     f[0x4C] = {"off", Flow::Halt};
+
+    // Undocumented "V" opcodes: the fourth register position of the XL/YL/UL
+    // rows. Measured on real hardware (pc1500/Assembler/vregtest): LDI VL/VH,n
+    // are two bytes; V reads as (WH, 00). sdaslh5801 does not know them.
+    for (const auto& [op, fmt] : std::initializer_list<std::pair<int, const char*>>{
+             {0x30, "sbc vl"}, {0x31, "sbc (v)"}, {0x32, "adc vl"}, {0x33, "adc (v)"},
+             {0x34, "lda vl"}, {0x35, "lda (v)"}, {0x36, "cpa vl"}, {0x37, "cpa (v)"},
+             {0x39, "and (v)"}, {0x3A, "sta vl"}, {0x3B, "ora (v)"}, {0x3C, "dcs (v)"},
+             {0x3D, "eor (v)"}, {0x3E, "sta (v)"}, {0x3F, "bit (v)"},
+             {0x70, "inc vl"}, {0x71, "sin v"}, {0x72, "dec vl"}, {0x73, "sde v"},
+             {0x75, "lin v"}, {0x77, "lde v"},
+             {0x78, "ldi vh,{n}"}, {0x79, "ani (v),{n}"}, {0x7A, "ldi vl,{n}"}, {0x7B, "ori (v),{n}"},
+             {0x7C, "cpi vh,{n}"}, {0x7D, "bii (v),{n}"}, {0x7E, "cpi vl,{n}"}, {0x7F, "adi (v),{n}"},
+             {0xB0, "sbc vh"}, {0xB2, "adc vh"}, {0xB4, "lda vh"}, {0xB6, "cpa vh"}, {0xBC, "dca (v)"}})
+        m[op] = {fmt, Flow::None, true};
+    for (const auto& [op, fmt] : std::initializer_list<std::pair<int, const char*>>{
+             {0x31, "sbc #(v)"}, {0x33, "adc #(v)"}, {0x35, "lda #(v)"}, {0x37, "cpa #(v)"},
+             {0x39, "and #(v)"}, {0x3B, "ora #(v)"}, {0x3C, "dcs #(v)"}, {0x3D, "eor #(v)"},
+             {0x3E, "sta #(v)"}, {0x3F, "bit #(v)"}, {0xBC, "dca #(v)"},
+             {0x70, "inc vh"}, {0x72, "dec vh"},
+             {0x79, "ani #(v),{n}"}, {0x7B, "ori #(v),{n}"}, {0x7D, "bii #(v),{n}"}, {0x7F, "adi #(v),{n}"}})
+        f[op] = {fmt, Flow::None, true};
     return t;
 }
 
@@ -236,8 +262,15 @@ Decoded decodeLH5801(uint16_t addr, const FetchFn& fetch, const SymbolFn& symbol
             default: break;
         }
     }
-    d.text = std::move(out);
     d.len = uint8_t(pc - addr);
+    if (entry->undoc) {
+        std::string bytes;
+        for (uint16_t a = addr; a != pc; a++) bytes += (bytes.empty() ? "" : ",") + hex8(fetch(a));
+        d.text = ".db " + bytes + " ; " + out + " (undocumented)";
+        d.undocumented = true;
+    } else {
+        d.text = std::move(out);
+    }
     return d;
 }
 

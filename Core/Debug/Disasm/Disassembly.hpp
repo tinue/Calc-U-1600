@@ -40,6 +40,8 @@ struct Decoded {
     bool        hasTarget = false; ///< `target` is a known static address
     uint16_t    target = 0;        ///< branch/jump/call target (Vector: the resolved handler)
     bool        illegal = false;   ///< not a documented opcode; `text` is a data byte
+    bool        undocumented = false; ///< executes (LH5801 "V" opcodes) but the toolchain cannot
+                                      ///< assemble it: `text` is ".db ..." with the mnemonic as comment
 };
 
 /// "0x1F" / "0x7A00" -- the operand style both assemblers accept.

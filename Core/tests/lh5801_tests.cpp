@@ -452,21 +452,81 @@ void test_breakpoint_halts_step() {
 }
 
 void test_illegal_opcode_is_distinguishable_from_nop() {
-    // 0x30 has no case in execute()'s switch and isn't in the vej range
-    // (0xC0-0xFE even) -- an undocumented opcode. Execution still proceeds
-    // (so a malformed stream doesn't wedge step()), but the event must be
-    // reported distinctly from a real NOP.
-    Rig r({0x30, 0x38}); // illegal ; nop
+    // 0x74 has no case in execute()'s switch, isn't one of the measured "V"
+    // opcodes and isn't in the vej range (0xC0-0xFE even) -- an undocumented
+    // opcode. Execution still proceeds (so a malformed stream doesn't wedge
+    // step()), but the event must be reported distinctly from a real NOP.
+    Rig r({0x74, 0x38}); // illegal ; nop
     CHECK(!r.cpu.consumeIllegalOpcodeHit()); // nothing hit yet
     int c = r.cpu.step(); // the illegal opcode
     CHECK(c != 0); // execution still advances
     CHECK(r.cpu.consumeIllegalOpcodeHit());
     CHECK(r.cpu.lastIllegalOpcodePC() == 0x8000);
-    CHECK(r.cpu.lastIllegalOpcode() == 0x0030);
+    CHECK(r.cpu.lastIllegalOpcode() == 0x0074);
     CHECK(!r.cpu.consumeIllegalOpcodeHit()); // consumed: false on the next check
 
     r.cpu.step(); // nop -- a genuinely documented instruction
     CHECK(!r.cpu.consumeIllegalOpcodeHit()); // must not be reported as illegal
+}
+
+void test_v_register_reads_operand_high_byte() {
+    // The undocumented "V" opcodes, as measured on a real PC-1500A and PC-1600
+    // (pc1500/Assembler/vregtest): V reads as (WH, 00), W = the last 16-bit
+    // operand; writes are ignored; LDI VL,n is two bytes.
+    Rig r({0xA5, 0x7A, 0x55,   // lda (0x7A55)       -> W = 7A55
+           0xB4,               // lda vh             -> A = 7A
+           0x34,               // lda vl             -> A = 00
+           0xB5, 0x5A, 0x3A,   // ldi a,0x5A ; sta vl (ignored)
+           0x34,               // lda vl             -> still 00
+           0x4A, 0x22,         // ldi xl,0x22
+           0x7A, 0x40,         // ldi vl,0x40        -> two bytes: INC XL is not executed
+           0x04,               // lda xl             -> 22
+           0x48, 0x23, 0x05,   // ldi xh,0x23 ; lda (x): indexed, W unchanged
+           0xB4});             // lda vh             -> still 7A
+    r.bus.mem[0x7A55] = 0x99;
+    r.cpu.step();
+    CHECK(r.cpu.w() == 0x7A55);
+    r.cpu.step();
+    CHECK(r.cpu.a() == 0x7A);
+    r.cpu.step();
+    CHECK(r.cpu.a() == 0x00 && r.cpu.flagZ());
+    r.cpu.step(); r.cpu.step(); r.cpu.step();
+    CHECK(r.cpu.a() == 0x00);
+    r.cpu.step(); r.cpu.step();
+    CHECK(r.cpu.pc() == 0x800D); // LDI VL,n consumed its operand
+    r.cpu.step();
+    CHECK(r.cpu.a() == 0x22);
+    r.cpu.step(); r.cpu.step();
+    CHECK(r.cpu.w() == 0x7A55); // LDA (X) does not load W
+    r.cpu.step();
+    CHECK(r.cpu.a() == 0x7A);
+    CHECK(!r.cpu.consumeIllegalOpcodeHit());
+}
+
+void test_v_register_arithmetic_and_pointer() {
+    // SBC VL computes with VL = 00 (hardware: 10 with C -> 10, flags C H;
+    // 10 without C -> 0F, flags C). LDA (V) reads WH:00. A vector call loads
+    // W with the vector's table address (FFxx).
+    Rig r({0xA5, 0x01, 0x23,   // lda (0x0123)  -> W = 0123
+           0xFB, 0xB5, 0x10, 0x30,   // sec ; ldi a,0x10 ; sbc vl
+           0xF9, 0xB5, 0x10, 0x30,   // rec ; ldi a,0x10 ; sbc vl
+           0x35,               // lda (v)       -> mem[0x0100]
+           0xCD, 0x54,         // vmj (0x54)    -> W = FF54
+           0x00});
+    r.bus.mem[0x0100] = 0xCA;
+    r.bus.mem[0xFF54] = 0x90; r.bus.mem[0xFF55] = 0x00; // vector -> 9000
+    r.bus.mem[0x9000] = 0x9A;                         // rtn
+    r.cpu.setSP(0x7000);
+    r.cpu.step();
+    r.cpu.step(); r.cpu.step(); r.cpu.step();
+    CHECK(r.cpu.a() == 0x10 && (r.cpu.statusReg() & 0x11) == 0x11);
+    r.cpu.step(); r.cpu.step(); r.cpu.step();
+    CHECK(r.cpu.a() == 0x0F && (r.cpu.statusReg() & 0x11) == 0x01);
+    r.cpu.step();
+    CHECK(r.cpu.a() == 0xCA);
+    r.cpu.step();
+    CHECK(r.cpu.w() == 0xFF54);
+    CHECK(r.cpu.pc() == 0x9000);
 }
 
 void test_flag_cost_gating_no_trace_by_default() {
@@ -1444,6 +1504,8 @@ int main() {
     test_trace_ring_peek_does_not_consume();
     test_breakpoint_halts_step();
     test_illegal_opcode_is_distinguishable_from_nop();
+    test_v_register_reads_operand_high_byte();
+    test_v_register_arithmetic_and_pointer();
     test_flag_cost_gating_no_trace_by_default();
     test_memory_open_bus_and_ram_regions();
     test_memory_display_ram_mirroring();

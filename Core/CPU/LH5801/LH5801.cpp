@@ -94,7 +94,12 @@ uint8_t LH5801::fetch8() {
 uint16_t LH5801::fetch16() {
     uint8_t hi = fetch8();
     uint8_t lo = fetch8();
-    return (uint16_t(hi) << 8) | lo;
+    // Every 16-bit operand passes through the MPU's internal operand
+    // register W (absolute ME0/ME1 operands, JMP/SJP targets, LDI S,nn) --
+    // measured on a real PC-1500A and PC-1600 with the undocumented V opcodes
+    // (pc1500/Assembler/vregtest, pc1500/notes/PC-1500-A0x-Disassembly.md).
+    W = (uint16_t(hi) << 8) | lo;
+    return W;
 }
 
 // ── ALU helpers ───────────────────────────────────────────────────────────
@@ -169,6 +174,7 @@ uint16_t LH5801::pop16() { uint8_t hi = popByte(); uint8_t lo = popByte(); retur
 void LH5801::vectorCall(uint8_t index) {
     push16(P);
     uint16_t base = uint16_t(0xFF00 + index);
+    W = base; // the vector's table address, not the target (measured: VH reads FF after VEJ/VMJ)
     uint8_t hi = dataME0(base);
     uint8_t lo = dataME0(uint16_t(base + 1));
     P = (uint16_t(hi) << 8) | lo;
@@ -658,6 +664,51 @@ int LH5801::execute(uint8_t op) {
         case 0x9A: P = pop16(); return 11;
         case 0x8A: { P = pop16(); T = popByte() & 0x1F; return 14; }
 
+        // ── Undocumented "V" opcodes ─────────────────────────────────────
+        // The fourth register position of the XL/YL/UL encoding. Measured on a
+        // real PC-1500A (LH5801) and PC-1600 (LH5803), pc1500/Assembler/vregtest:
+        // V reads as (WH, 00) -- VH is the high byte of the internal operand
+        // register W (see fetch16() / vectorCall()), VL always reads 00; writes
+        // to V (STA VL, LDI VL/VH) are ignored; LDI VL,n / LDI VH,n are two
+        // bytes; INC/DEC/SBC VL compute normally with 00; (V) addresses WH:00.
+        // Measured: LDA VL/VH, STA VL, LDI VL/VH, INC/DEC VL, SBC VL, LDA (V).
+        // The other forms follow the same model (not measured individually).
+        // Cycle counts: Jeff Birt's "Sharp lh5801 Opcode Tables".
+        case 0x30: A = aluSub(A, 0x00, T & 1); return 6;                  // sbc vl
+        case 0x32: A = aluAdd(A, 0x00, T & 1); return 6;                  // adc vl
+        case 0x34: A = 0x00; setZFlagFrom(A); return 5;                   // lda vl
+        case 0x36: aluSub(A, 0x00, 1); return 6;                          // cpa vl
+        case 0x3A: return 5;                                              // sta vl: ignored
+        case 0xB0: A = aluSub(A, uint8_t(W >> 8), T & 1); return 6;      // sbc vh
+        case 0xB2: A = aluAdd(A, uint8_t(W >> 8), T & 1); return 6;      // adc vh
+        case 0xB4: A = uint8_t(W >> 8); setZFlagFrom(A); return 5;        // lda vh
+        case 0xB6: aluSub(A, uint8_t(W >> 8), 1); return 6;              // cpa vh
+        case 0x70: aluAdd(0x00, 1, 0); return 5;                          // inc vl: flags only
+        case 0x72: aluSub(0x00, 1, 1); return 5;                          // dec vl: flags only
+        case 0x78: fetch8(); return 6;                                    // ldi vh,n: ignored
+        case 0x7A: fetch8(); return 6;                                    // ldi vl,n: ignored
+        case 0x7C: aluSub(uint8_t(W >> 8), fetch8(), 1); return 7;       // cpi vh,n
+        case 0x7E: aluSub(0x00, fetch8(), 1); return 7;                   // cpi vl,n
+        case 0x31: A = aluSub(A, dataME0(vPtr()), T & 1); return 7;       // sbc (v)
+        case 0x33: A = aluAdd(A, dataME0(vPtr()), T & 1); return 7;       // adc (v)
+        case 0x35: A = dataME0(vPtr()); setZFlagFrom(A); return 6;        // lda (v)
+        case 0x37: aluSub(A, dataME0(vPtr()), 1); return 7;               // cpa (v)
+        case 0x39: A &= dataME0(vPtr()); setZFlagFrom(A); return 7;       // and (v)
+        case 0x3B: A |= dataME0(vPtr()); setZFlagFrom(A); return 7;       // ora (v)
+        case 0x3C: A = bcdSub(A, dataME0(vPtr()), T & 1); return 13;      // dcs (v)
+        case 0x3D: A ^= dataME0(vPtr()); setZFlagFrom(A); return 7;       // eor (v)
+        case 0x3E: storeME0(vPtr(), A); return 6;                         // sta (v)
+        case 0x3F: setZFlagFrom(uint8_t(A & dataME0(vPtr()))); return 7;  // bit (v)
+        case 0xBC: A = bcdAdd(A, dataME0(vPtr()), T & 1); return 15;      // dca (v)
+        case 0x71: storeME0(vPtr(), A); return 6;                         // sin v (V itself unchanged)
+        case 0x73: storeME0(vPtr(), A); return 6;                         // sde v
+        case 0x75: A = dataME0(vPtr()); setZFlagFrom(A); return 6;        // lin v
+        case 0x77: A = dataME0(vPtr()); setZFlagFrom(A); return 6;        // lde v
+        case 0x79: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME0(vPtr()) & n); storeME0(vPtr(), r); setZFlagFrom(r); return 13; } // ani (v),n
+        case 0x7B: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME0(vPtr()) | n); storeME0(vPtr(), r); setZFlagFrom(r); return 13; } // ori (v),n
+        case 0x7D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(dataME0(vPtr()) & n)); return 10; } // bii (v),n
+        case 0x7F: { uint8_t n = fetch8(); storeME0(vPtr(), aluAdd(dataME0(vPtr()), n, 0)); return 13; } // adi (v),n
+
         default:
             if (op >= 0xC0 && (op & 0x01) == 0) {
                 // vej (nn): 1-byte vector call, opcode IS the vector index
@@ -836,6 +887,25 @@ int LH5801::executeFD(uint8_t op) {
         case 0x8E: return 8; // cdv — clock divider not modeled
         case 0xB1: m_halted = true; return 9;
         case 0x4C: m_poweredOff = true; return 8; // off -- BF flip-flop reset, real power-down (see poweredOff())
+
+        // ── Undocumented "V" opcodes, ME1 forms (see the V block in execute()) ──
+        case 0x31: { uint16_t p = vPtr(); A = aluSub(A, dataME1(p), T & 1); return 11; }  // sbc #(v)
+        case 0x33: { uint16_t p = vPtr(); A = aluAdd(A, dataME1(p), T & 1); return 11; }  // adc #(v)
+        case 0x35: A = dataME1(vPtr()); setZFlagFrom(A); return 10;                       // lda #(v)
+        case 0x37: aluSub(A, dataME1(vPtr()), 1); return 11;                              // cpa #(v)
+        case 0x39: A &= dataME1(vPtr()); setZFlagFrom(A); return 11;                      // and #(v)
+        case 0x3B: A |= dataME1(vPtr()); setZFlagFrom(A); return 11;                      // ora #(v)
+        case 0x3C: A = bcdSub(A, dataME1(vPtr()), T & 1); return 17;                      // dcs #(v)
+        case 0x3D: A ^= dataME1(vPtr()); setZFlagFrom(A); return 11;                      // eor #(v)
+        case 0x3E: storeME1(vPtr(), A); return 10;                                        // sta #(v)
+        case 0x3F: setZFlagFrom(uint8_t(A & dataME1(vPtr()))); return 11;                 // bit #(v)
+        case 0xBC: A = bcdAdd(A, dataME1(vPtr()), T & 1); return 19;                      // dca #(v)
+        case 0x70: aluAdd(uint8_t(W >> 8), 1, 0); return 9;                               // inc vh: flags only
+        case 0x72: aluSub(uint8_t(W >> 8), 1, 1); return 9;                               // dec vh: flags only
+        case 0x79: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME1(vPtr()) & n); storeME1(vPtr(), r); setZFlagFrom(r); return 17; } // ani #(v),n
+        case 0x7B: { uint8_t n = fetch8(); uint8_t r = uint8_t(dataME1(vPtr()) | n); storeME1(vPtr(), r); setZFlagFrom(r); return 17; } // ori #(v),n
+        case 0x7D: { uint8_t n = fetch8(); setZFlagFrom(uint8_t(dataME1(vPtr()) & n)); return 14; } // bii #(v),n
+        case 0x7F: { uint8_t n = fetch8(); storeME1(vPtr(), aluAdd(dataME1(vPtr()), n, 0)); return 17; } // adi #(v),n
 
         default:
             return kIllegalOpcode; // undocumented FD-prefixed opcode — see execute()'s default case

@@ -87,6 +87,11 @@ public:
     uint16_t pc() const { return P; }
     void     setPC(uint16_t v) { P = v; }
     uint16_t sp() const { return S; }
+    /// The internal 16-bit operand register (the "W register" of the PC-1500
+    /// Service Manual's MPU block diagram, which nothing else documents).
+    /// No documented instruction names it; the undocumented "V" opcodes
+    /// expose it as (WH, 00) -- see the V block in execute().
+    uint16_t w() const { return W; }
     void     setSP(uint16_t v) { S = v; }
 
     uint8_t  statusReg() const { return T; }
@@ -229,6 +234,7 @@ private:
     uint16_t S{0};
     uint16_t P{0};
     uint8_t  T{0};             // bit0=C,1=IE,2=Z,3=V,4=H; bits 7:5 always 0
+    uint16_t W{0};             // internal operand register: last 16-bit operand / vector address
     bool     PU{false}, PV{false};
     bool     DISP{false};
     uint16_t TM{0};            // 9-bit timer counter (bit 8 in bit position 8)
@@ -252,7 +258,8 @@ private:
 
     // ── Fetch helpers ────────────────────────────────────────────────────
     uint8_t  fetch8();
-    uint16_t fetch16(); // big-endian: high byte first, then low
+    uint16_t fetch16(); // big-endian: high byte first, then low; loads W
+    uint16_t vPtr() const { return uint16_t(W & 0xFF00); } // the address (V) / #(V) use: WH:00
 
     // ── ALU / flag helpers ───────────────────────────────────────────────
     void setZFlagFrom(uint8_t result) { setFlagBit(0x04, result == 0); }
