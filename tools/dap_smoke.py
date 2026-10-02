@@ -52,11 +52,16 @@ class Dap:
         self.buf = rest[length:]
         return json.loads(rest[:length])
 
-    def request(self, command, **arguments):
+    def send(self, command, **arguments):
+        """Sends a request without waiting for its response; returns its seq."""
         seq = self.seq
         self.seq += 1
         body = json.dumps({"seq": seq, "type": "request", "command": command, "arguments": arguments}).encode()
         self.sock.sendall(b"Content-Length: %d\r\n\r\n" % len(body) + body)
+        return seq
+
+    def request(self, command, **arguments):
+        seq = self.send(command, **arguments)
         while True:
             msg = self._read_message()
             if msg["type"] == "event":
@@ -381,15 +386,21 @@ def renum_template_run(port):
         dap.request("initialize", adapterID="calcu1600")
         dap.wait_event("initialized")
         # As VS Code sends it: the extension adds `listings` / `symbols` (the
-        # user's ROM listings, here none), which must add to the project's.
-        dap.request("attach", project=os.path.join(tmp, "debug.pc1500a"), listings=[], symbols=[])
+        # user's ROM listings, here none), which must add to the project's;
+        # and the breakpoints follow the attach while it is still loading
+        # the preset -- they must not wait for a later request.
+        dap.send("attach", project=os.path.join(tmp, "debug.pc1500a"), listings=[], symbols=[])
+        time.sleep(0.05)
         asm = os.path.join(tmp, "rom.asm")
         with open(asm) as f:
             line = next(i for i, l in enumerate(f, 1) if l.startswith("RENFIX:"))
         bps = dap.request("setBreakpoints", source={"path": asm}, breakpoints=[{"line": line}])["breakpoints"]
         check(bps and bps[0]["verified"], f"RENUM template: line breakpoint on RENFIX (line {line}) verified")
         dap.request("configurationDone")
-        stop = dap.wait_event("stopped", timeout=60)
+        try:
+            stop = dap.wait_event("stopped", timeout=60)
+        except TimeoutError:
+            stop = {}
         top = top_frame(dap, 1)
         check(stop.get("reason") == "breakpoint" and top.get("source", {}).get("name") == "rom.asm",
               f"RENUM template: RENUM 100,,10 stops at {top.get('source', {}).get('name')}:{top.get('line')}")
