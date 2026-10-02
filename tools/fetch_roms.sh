@@ -12,7 +12,8 @@
 #
 # Writes (21 files):
 #   roms/PC-1500_A01.ROM, PC-1500_A03.ROM, PC-1500_A04.ROM
-#     -- from Jeff-Birt/Sharp_PC-1500_ROM_Disassembly (Original_ROMs/)
+#     -- from tinue/PC-1500-ROM (dumps/a01/PC-1500-A01.BIN, ...; originally
+#        Jeff-Birt/Sharp_PC-1500_ROM_Disassembly, Original_ROMs/)
 #   roms/PC1600-*-new.bin, PC1600-*-old.bin (6 + 6 files), plus the two
 #   CE-1600P pages per version roms/PC1600-P1-B4-CE1600P-{new,old}.bin and
 #   roms/PC1600-P1-B5-CE1600P-OR-F-{new,old}.bin
@@ -22,9 +23,12 @@
 #   PC1600_ROM_BASE=<url> overrides that repo's dumps/ base URL (e.g. a
 #   file:// URL to a local checkout).
 #   roms/CE-158.ROM
-#     -- from Jeff-Birt/Sharp_CE-158 (CE-158_ROM_ORIG.bin)
+#     -- from tinue/PC-1500-ROM (dumps/ce158/CE-158-LOW.BIN + CE-158-HIGH.BIN,
+#        joined; originally Jeff-Birt/Sharp_CE-158)
 #   roms/CE-150.ROM
-#     -- from tinue/PC-1500-ROM (dumps/CE-150.BIN)
+#     -- from tinue/PC-1500-ROM (dumps/ce150/CE-150.BIN)
+#   PC1500_ROM_BASE=<url> overrides that repo's dumps/ base URL (e.g. a
+#   file:// URL to a local checkout).
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -75,13 +79,49 @@ fetch_if_needed() {
   mv "$tmp" "$dest"
 }
 
+# fetch_concat_if_needed DEST_PATH EXPECTED_MD5 URL... -- downloads the URLs
+# in order and stores their concatenation (a ROM kept upstream as one file
+# per bank).
+fetch_concat_if_needed() {
+  dest=$1
+  expected_md5=$2
+  shift 2
+
+  if [ -f "$dest" ] && [ "$(md5_of "$dest")" = "$expected_md5" ]; then
+    log "up to date: $dest"
+    return 0
+  fi
+
+  tmp="$dest.tmp$$"
+  : > "$tmp"
+  for url in "$@"; do
+    log "fetching $dest <- $url"
+    if ! curl -fsSL "$url" >> "$tmp"; then
+      rm -f "$tmp"
+      die "download failed: $url"
+    fi
+  done
+
+  actual_md5=$(md5_of "$tmp")
+  if [ "$actual_md5" != "$expected_md5" ]; then
+    rm -f "$tmp"
+    die "checksum mismatch for $dest (got $actual_md5, expected $expected_md5) -- upstream file may have changed, update this script"
+  fi
+  mv "$tmp" "$dest"
+}
+
 mkdir -p "$ROMS_DIR"
 
-# ---- PC-1500 (Jeff-Birt/Sharp_PC-1500_ROM_Disassembly, Original_ROMs/) --
-PC1500_BASE="https://raw.githubusercontent.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly/main/Original_ROMs"
-fetch_if_needed "$PC1500_BASE/PC-1500_A01.ROM" "$ROMS_DIR/PC-1500_A01.ROM" fbc55a9a8743e619b7709721ff5bcbff
-fetch_if_needed "$PC1500_BASE/PC-1500_A03.ROM" "$ROMS_DIR/PC-1500_A03.ROM" 4bcf78a6d3d32e2a0349eb2d28987b8d
-fetch_if_needed "$PC1500_BASE/PC-1500_A04.ROM" "$ROMS_DIR/PC-1500_A04.ROM" 8ebec8b0ef358645df14807c31df7d06
+# ---- PC-1500 and its peripherals (tinue/PC-1500-ROM) -- one directory per
+# unit under dumps/: a01/, a03/, a04/ (system ROM revisions), ce150/, ce158/
+# (the CE-158's two 8 KB banks as separate files, joined here). ----
+PC1500_BASE="${PC1500_ROM_BASE:-https://raw.githubusercontent.com/tinue/PC-1500-ROM/main/dumps}"
+fetch_if_needed "$PC1500_BASE/a01/PC-1500-A01.BIN" "$ROMS_DIR/PC-1500_A01.ROM" fbc55a9a8743e619b7709721ff5bcbff
+fetch_if_needed "$PC1500_BASE/a03/PC-1500-A03.BIN" "$ROMS_DIR/PC-1500_A03.ROM" 4bcf78a6d3d32e2a0349eb2d28987b8d
+fetch_if_needed "$PC1500_BASE/a04/PC-1500-A04.BIN" "$ROMS_DIR/PC-1500_A04.ROM" 8ebec8b0ef358645df14807c31df7d06
+fetch_if_needed "$PC1500_BASE/ce150/CE-150.BIN" "$ROMS_DIR/CE-150.ROM" eb9aa5156c6849890b137799efc50a4b
+fetch_concat_if_needed "$ROMS_DIR/CE-158.ROM" aa952878fb29da4844791d95185649ca \
+  "$PC1500_BASE/ce158/CE-158-LOW.BIN" "$PC1500_BASE/ce158/CE-158-HIGH.BIN"
 
 # ---- PC-1600 (tinue/PC-1600-ROM) -- upstream files are uppercase .BIN in
 # dumps/new/ (current ROM), dumps/old/ (older ROM) and dumps/ce1600p/{new,old}/
@@ -127,11 +167,5 @@ fetch_ce1600p old PC1600-P1-B5-CE1600P-OR-F  33f3ef7207eac06587cc4c6d70c6cbd0
 for f in LH5803-C000-FFFF P0-B0 P1-B0 P1-B3 P1-B3B P2-B6 P1-B4-CE1600P P1-B5-CE1600P-OR-F; do
   rm -f "$ROMS_DIR/PC1600-$f.bin"
 done
-
-# ---- CE-158 (Jeff-Birt/Sharp_CE-158) ----
-fetch_if_needed "https://raw.githubusercontent.com/Jeff-Birt/Sharp_CE-158/main/CE-158_ROM_ORIG.bin" "$ROMS_DIR/CE-158.ROM" aa952878fb29da4844791d95185649ca
-
-# ---- CE-150 (tinue/PC-1500-ROM, dumps/) ----
-fetch_if_needed "https://raw.githubusercontent.com/tinue/PC-1500-ROM/main/dumps/CE-150.BIN" "$ROMS_DIR/CE-150.ROM" eb9aa5156c6849890b137799efc50a4b
 
 log "done"

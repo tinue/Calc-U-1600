@@ -36,6 +36,10 @@
   preset's `debug:` block (with the line number) and in a launch
   configuration alike: `after: foo`, `cpu: x86`, `boot: foo` or a quoted
   `"true"` are refused instead of silently falling back to a default.
+- **Build** `tools/fetch_roms.sh` fetches all PC-1500 ROMs (A01/A03/A04,
+  CE-150, CE-158) from [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM)
+  instead of Jeff Birt's repositories. The files and checksums are unchanged;
+  `PC1500_ROM_BASE` points the script at another copy, like `PC1600_ROM_BASE`.
 
 ### Fixed
 
