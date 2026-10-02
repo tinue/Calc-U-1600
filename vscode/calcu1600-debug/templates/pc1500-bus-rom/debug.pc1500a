@@ -1,20 +1,39 @@
-# The machine for {{name}}.asm: a PC-1500A with {{name}}.bin at &8000
-# on the 60-pin bus. Every clean start (F5, Build & Load) reads the file
+# The machine for {{name}}.asm: a PC-1500A with {{name}}.bin at &8800 on
+# the 60-pin bus, answering while PV is low (the code E1xxH in its keyword
+# table says so). Every clean start (F5, Build & Load) reads the file
 # again, so the machine always runs the latest build. A bus ROM also
-# shadows a bundled ROM at the same place (e.g. the CE-158's with
-# `interface: ce158`).
+# shadows a bundled ROM at the same place.
 model: PC-1500A
 
 bus-rom:
   - file: {{name}}.bin
-    address: 0x8000
+    address: 0x8800
+    pv: 0
 
 keys:
   - key: cl
   - type: NEW0
-  - key: mode
+
+# A program for RENUM to work on: GOTO, GOSUB, ON...GOTO, THEN, RESTORE.
+# RUN it before and after: it shows 3, 2, 1 (press ENTER after each), then
+# DONE.
+program:
+  text: |
+    10 REM RENUM DEMO
+    20 RESTORE 80
+    30 READ N
+    40 ON N+1 GOTO 70,50,50,50
+    50 GOSUB 90
+    60 IF N THEN 30
+    70 PRINT "DONE":END
+    80 DATA 3,2,1,0
+    90 PRINT N:RETURN
+
+keys:
+  - key: cl
+  - key: mode               # back to RUN mode (RENUM works in PRO mode too)
 
 debug:
-  command: CALL &8000       # how the code is entered: your new BASIC command, once there is one
+  command: RENUM 100,,10    # typed once the machine is up; MODE, then LIST shows the result
   listings:
     - {{name}}.rst

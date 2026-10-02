@@ -47,6 +47,8 @@ itself. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
   firmware analysis.
 - [VS Code extension](vscode/calcu1600-debug/README.md) — what the
   Calc-U-1600 Debugger extension provides.
+- [PC-1500 keyword modules](docs/PC1500-Keyword-Modules.md) — how a ROM
+  extension adds BASIC commands to the PC-1500.
 
 **Custom memory modules**
 

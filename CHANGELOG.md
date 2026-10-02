@@ -2,6 +2,16 @@
 
 ## [0.7.0] - work in progress
 
+### New
+
+- **RENUM for the PC-1500**, as a worked ROM extension: the debugger's
+  *PC-1500 ROM extension* template (Create Debug Project…) is now a keyword
+  module at &8800 that adds `RENUM [new][,[old][,step]]` to PC-1500 BASIC,
+  following the PC-1600's own RENUM. It replaces the `CALL &8000` stub.
+  docs/Debugger.md walks through debugging it, and
+  docs/PC1500-Keyword-Modules.md describes how the PC-1500 ROM finds such
+  modules.
+
 ### Changed
 
 - **Machine code with a bank in its PC-1600 header** loads into that bank

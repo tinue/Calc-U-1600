@@ -36,6 +36,7 @@ with a status note on how the implementation differed. New plans go into
 | [Loaders: one file classifier from libsharpdx](plans/Loader-File-Kind-Plan.md) | 2026-09-27 | Implemented |
 | [PC-1600 host-directory drive](plans/PC1600-Host-Drive-Plan.md) | 2026-09-29 | Implemented |
 | [Drag-and-drop loading](plans/Drag-And-Drop-Plan.md) | 2026-09-30 | Implemented |
+| [PC-1500 ROM extension demo: RENUM](plans/PC1500-RENUM-ROM-Plan.md) | 2026-10-02 | Implemented |
 
 ## Handoffs
 

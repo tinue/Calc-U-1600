@@ -11,7 +11,7 @@ const TARGETS = [
     { id: 'pc1600-program', label: 'PC-1600 program', detail: 'Z80 code loaded at C0C5H (zasm)', assembler: 'zasm', preset: 'debug.pc1600', name: 'main' },
     { id: 'pc1500a-program', label: 'PC-1500A program', detail: 'LH5801 code loaded at &7C01 (sdaslh5801)', assembler: 'sdas', preset: 'debug.pc1500a', name: 'main' },
     { id: 'pc1600-bus-rom', label: 'PC-1600 ROM extension', detail: 'A ROM module in page 1, bank 6 of the 60-pin bus (zasm)', assembler: 'zasm', preset: 'debug.pc1600', name: 'rom' },
-    { id: 'pc1500-bus-rom', label: 'PC-1500 ROM extension', detail: 'A minimal ROM at &8000 on the 60-pin bus, entered with CALL (sdaslh5801)', assembler: 'sdas', preset: 'debug.pc1500a', name: 'rom' },
+    { id: 'pc1500-bus-rom', label: 'PC-1500 ROM extension', detail: 'RENUM, a BASIC command in a ROM at &8800 on the 60-pin bus (sdaslh5801)', assembler: 'sdas', preset: 'debug.pc1500a', name: 'rom' },
 ];
 
 async function pickFolder() {

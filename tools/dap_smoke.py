@@ -355,6 +355,60 @@ def bus_rom_run(port):
         dap.sock.close()
 
 
+def renum_template_run(port):
+    """The PC-1500 ROM extension template: RENUM built as the extension builds it, stopped in, and run."""
+    print("RENUM template run:")
+    sdcc = os.environ.get("CALCU_SDCC_BIN") or os.path.dirname(shutil.which("sdaslh5801") or "")
+    if not sdcc or not os.path.exists(os.path.join(sdcc, "sdaslh5801")):
+        print("  skip: no sdaslh5801 (set CALCU_SDCC_BIN)")
+        return
+    template = os.path.join(REPO, "vscode/calcu1600-debug/templates/pc1500-bus-rom")
+    with tempfile.TemporaryDirectory() as tmp:
+        for name in ("NAME.asm", "debug.pc1500a"):
+            with open(os.path.join(template, name)) as f:
+                text = f.read().replace("{{name}}", "rom")
+            with open(os.path.join(tmp, name.replace("NAME", "rom")), "w") as f:
+                f.write(text)
+        # The VS Code extension's recipe (extension.js, assembleCommand).
+        build = subprocess.run(
+            f"'{sdcc}/sdaslh5801' -plosgff rom.asm"
+            " && printf -- '-muwx\\n-i rom\\nrom.rel\\n\\n-e\\n' > rom.lnk"
+            f" && '{sdcc}/sdld' -nf rom"
+            f" && '{sdcc}/makebin' -p -s 65536 -o 0x$(head -1 rom.ihx | cut -c4-7) rom.ihx rom.bin",
+            shell=True, cwd=tmp, capture_output=True, text=True)
+        check(build.returncode == 0 and not build.stdout.strip(), f"RENUM template builds {build.stdout.strip()}")
+        dap = Dap(port)
+        dap.request("initialize", adapterID="calcu1600")
+        dap.wait_event("initialized")
+        dap.request("attach", project=os.path.join(tmp, "debug.pc1500a"))
+        bps = dap.request("setFunctionBreakpoints", breakpoints=[{"name": "RENFIX"}])["breakpoints"]
+        check(bps and bps[0]["verified"], "RENUM template: function breakpoint RENFIX verified")
+        dap.request("configurationDone")
+        stop = dap.wait_event("stopped", timeout=60)
+        top = top_frame(dap, 1)
+        check(stop.get("reason") == "breakpoint" and top.get("source", {}).get("name") == "rom.asm",
+              f"RENUM template: RENUM 100,,10 stops at {top.get('source', {}).get('name')}:{top.get('line')}")
+        dap.request("setFunctionBreakpoints", breakpoints=[])
+        dap.request("continue", threadId=1)
+        time.sleep(1.0)
+        dap.request("pause", threadId=1)
+        dap.wait_event("stopped")
+        start = base64.b64decode(dap.request("readMemory", memoryReference="0x7865", count=2)["data"])
+        prog = base64.b64decode(dap.request("readMemory", memoryReference=f"0x{start[0]:02X}{start[1]:02X}", count=160)["data"])
+        lines, i = [], 0
+        while i < len(prog) and prog[i] != 0xFF:
+            lines.append((prog[i] << 8 | prog[i + 1], prog[i + 3:i + 3 + prog[i + 2] - 1]))
+            i += 3 + prog[i + 2]
+        check([n for n, _ in lines] == list(range(100, 190, 10)), f"RENUM template: lines {[n for n, _ in lines]}")
+        refs = {n: t for n, t in lines}
+        check(refs.get(110, b"").endswith(b"170") and b"\xf1\x92160,140,140,140" in refs.get(130, b"")
+              and refs.get(140, b"").endswith(b"180") and refs.get(150, b"").endswith(b"120"),
+              "RENUM template: RESTORE 170, ON ... GOTO 160,140,140,140, GOSUB 180, THEN 120")
+        dap.request("continue", threadId=1)
+        dap.request("disconnect")
+        dap.sock.close()
+
+
 def lh5803_run(port):
     """PC-1600 LH5803: LH5801 code loaded for the LH5803, started with the XCALL the debugger types."""
     print("LH5803 run:")
@@ -513,6 +567,7 @@ def main():
         pc1600_run(args.port)
         project_run(args.port)
         bus_rom_run(args.port)
+        renum_template_run(args.port)
         rom_run(args.port)
         reset_run(args.port)
         lh5803_run(args.port)
