@@ -369,13 +369,11 @@ void test_mode1_xpeek_maps_program_bank_via_lh5803_p_bank() {
     auto ce163f = card("ce163f.card.yaml", CardHost::PC1600Slot2);
     if (!ce163f) return;
     PC1600Machine m;
-    if (!loadPC1600Roms(m)) {
+    m.attachSlot2Card(std::move(ce163f));
+    if (!bootPC1600(m)) {
         std::fprintf(stderr, "SKIP test_mode1_xpeek_maps_program_bank_via_lh5803_p_bank: PC-1600 ROM images not found\n");
         return;
     }
-    m.attachSlot2Card(std::move(ce163f));
-    m.allReset();
-    runBootToPrompt(m);
     for (const char* line : {"MODE 1", "XPOKE&C5,&55", "A=XPEEK&C5", "XPOKE&C6,A"}) {
         std::string err;
         CHECK(typeLine(m, line, /*pressEnter=*/true, &err));

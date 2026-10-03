@@ -1,5 +1,6 @@
 #include "LcdText.hpp"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -81,9 +82,7 @@ LcdText parseLcdText(const LcdBitmap& bitmap, const LcdFont& font, const std::op
             // The ROMs draw the cursor over the cell: decode what they saved.
             const bool cursorCell = cursor && (cursor->row < 0 ? result.cursorRow < 0
                                                                : tr == cursor->row && tc == cursor->col);
-            bool cursorShape = false;
-            for (const LcdCell& c : cursors) cursorShape = cursorShape || c == cell;
-            if (cursorCell && cursorShape) {
+            if (cursorCell && std::find(cursors.begin(), cursors.end(), cell) != cursors.end()) {
                 result.cursorRow = tr;
                 result.cursorCol = tc;
                 cell = masked(cursor->under, font);

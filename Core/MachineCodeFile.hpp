@@ -35,6 +35,9 @@ const char* slotName(Slot slot);
 // slot 2 (PC-1600-Memory-Architecture.md §4). `CALL #bank,&addr` for bank != 0.
 int pc1600DefaultBank(Slot slot);
 
+// The memory slot behind global `bank` 0-3: banks 0/1 slot 1, 2/3 slot 2.
+Slot pc1600BankSlot(int bank);
+
 // Offset into a slot card's image (debugSlotImage()) of the Z-80 address
 // `addr` ($8000-$BFFF) in global `bank`: odd banks are the module's upper
 // 16 KB (bank 1 in slot 1, bank 3 in slot 2 -- a vertically banked slot 2

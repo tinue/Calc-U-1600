@@ -82,7 +82,7 @@ bool PresetController::loadMachineCodeLive(const MachineCodeLoadRequest& request
             return false;
         }
         ok = loadPC1600MachineCode(*machine, request.slot, request.addr, request.payload.data(),
-                                   request.payload.size(), &err, request.slot == 0 ? -1 : request.bank);
+                                   request.payload.size(), &err, request.bank);
     } else {
         PC1500Machine* machine = m_controller->pc1500();
         if (!machine) {

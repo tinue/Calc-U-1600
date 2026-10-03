@@ -708,7 +708,6 @@ PC1600DisplaySnapshot PC1600Machine::displaySnapshot() const {
             snap.pixels[y][x] = disp.pixel(x, y);
         }
     }
-    const auto& symbols = disp.statusLine().all();
-    for (size_t i = 0; i < symbols.size(); i++) snap.statusSymbols[i] = symbols[i];
+    snap.statusLine = disp.statusLine();
     return snap;
 }

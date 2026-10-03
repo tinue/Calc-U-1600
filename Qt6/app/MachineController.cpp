@@ -409,36 +409,20 @@ double MachineController::clockHz() const {
 
 DisplayFrame MachineController::currentDisplay() const {
     DisplayFrame frame;
-    if (m_pc1600) {
-        const PC1600DisplaySnapshot snap = m_pc1600->displaySnapshot();
-        frame.cols = PC1600Display::kWidth;
-        frame.rows = PC1600Display::kHeight;
-        frame.pixels.resize(static_cast<std::size_t>(frame.cols) * frame.rows);
-        for (int row = 0; row < frame.rows; ++row) {
-            for (int col = 0; col < frame.cols; ++col) {
-                frame.pixels[static_cast<std::size_t>(row) * frame.cols + col] = snap.pixels[row][col];
-            }
-        }
-        frame.poweredOn = snap.clockEnabled;
-
-        for (std::size_t i = 0; i < StatusLine::kCount; ++i) {
-            frame.statusSymbols.emplace_back(kStatusSymbolNames[i], snap.statusSymbols[i]);
-        }
-    } else if (m_pc1500) {
-        const PC1500Display disp = m_pc1500->display();
-        frame.cols = PC1500Display::kCols;
-        frame.rows = PC1500Display::kRows;
-        frame.pixels.resize(static_cast<std::size_t>(frame.cols) * frame.rows);
-        for (int row = 0; row < frame.rows; ++row) {
-            for (int col = 0; col < frame.cols; ++col) {
-                frame.pixels[static_cast<std::size_t>(row) * frame.cols + col] = disp.pixel(col, row);
-            }
-        }
-        frame.poweredOn = m_pc1500->isDisplayOn();
-
-        const StatusLine line = disp.statusLine();
+    auto fill = [&frame](LcdBitmap bitmap, const StatusLine& line) {
+        frame.cols = bitmap.cols;
+        frame.rows = bitmap.rows;
+        frame.pixels = std::move(bitmap.pixels);
+        frame.poweredOn = bitmap.poweredOn;
         for (std::size_t i = 0; i < StatusLine::kCount; ++i)
             frame.statusSymbols.emplace_back(kStatusSymbolNames[i], line.all()[i]);
+    };
+    if (m_pc1600) {
+        const PC1600DisplaySnapshot snap = m_pc1600->displaySnapshot();
+        fill(pc1600LcdBitmap(snap), snap.statusLine);
+    } else if (m_pc1500) {
+        const PC1500Display disp = m_pc1500->display();
+        fill(pc1500LcdBitmap(disp, m_pc1500->isDisplayOn()), disp.statusLine());
     }
     return frame;
 }

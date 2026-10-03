@@ -46,11 +46,13 @@ md5_of() {
   fi
 }
 
-# fetch_if_needed URL DEST_PATH EXPECTED_MD5
+# fetch_if_needed DEST_PATH EXPECTED_MD5 URL... -- downloads the URLs in
+# order and stores their concatenation (more than one for a ROM kept
+# upstream as one file per bank).
 fetch_if_needed() {
-  url=$1
-  dest=$2
-  expected_md5=$3
+  dest=$1
+  expected_md5=$2
+  shift 2
 
   # A file left over with different letter case (e.g. a stale ...-old.BIN)
   # would match `-f "$dest"` on a case-insensitive filesystem and never get
@@ -58,34 +60,6 @@ fetch_if_needed() {
   for existing in "$(dirname "$dest")"/*; do
     [ "$existing" != "$dest" ] && [ "$(printf %s "$existing" | tr 'A-Z' 'a-z')" = "$(printf %s "$dest" | tr 'A-Z' 'a-z')" ] && rm -f "$existing"
   done
-
-  if [ -f "$dest" ] && [ "$(md5_of "$dest")" = "$expected_md5" ]; then
-    log "up to date: $dest"
-    return 0
-  fi
-
-  log "fetching $dest <- $url"
-  tmp="$dest.tmp$$"
-  if ! curl -fsSL "$url" -o "$tmp"; then
-    rm -f "$tmp"
-    die "download failed: $url"
-  fi
-
-  actual_md5=$(md5_of "$tmp")
-  if [ "$actual_md5" != "$expected_md5" ]; then
-    rm -f "$tmp"
-    die "checksum mismatch for $dest (got $actual_md5, expected $expected_md5) -- upstream file may have changed, update this script"
-  fi
-  mv "$tmp" "$dest"
-}
-
-# fetch_concat_if_needed DEST_PATH EXPECTED_MD5 URL... -- downloads the URLs
-# in order and stores their concatenation (a ROM kept upstream as one file
-# per bank).
-fetch_concat_if_needed() {
-  dest=$1
-  expected_md5=$2
-  shift 2
 
   if [ -f "$dest" ] && [ "$(md5_of "$dest")" = "$expected_md5" ]; then
     log "up to date: $dest"
@@ -116,11 +90,11 @@ mkdir -p "$ROMS_DIR"
 # unit under dumps/: a01/, a03/, a04/ (system ROM revisions), ce150/, ce158/
 # (the CE-158's two 8 KB banks as separate files, joined here). ----
 PC1500_BASE="${PC1500_ROM_BASE:-https://raw.githubusercontent.com/tinue/PC-1500-ROM/main/dumps}"
-fetch_if_needed "$PC1500_BASE/a01/PC-1500-A01.BIN" "$ROMS_DIR/PC-1500_A01.ROM" fbc55a9a8743e619b7709721ff5bcbff
-fetch_if_needed "$PC1500_BASE/a03/PC-1500-A03.BIN" "$ROMS_DIR/PC-1500_A03.ROM" 4bcf78a6d3d32e2a0349eb2d28987b8d
-fetch_if_needed "$PC1500_BASE/a04/PC-1500-A04.BIN" "$ROMS_DIR/PC-1500_A04.ROM" 8ebec8b0ef358645df14807c31df7d06
-fetch_if_needed "$PC1500_BASE/ce150/CE-150.BIN" "$ROMS_DIR/CE-150.ROM" eb9aa5156c6849890b137799efc50a4b
-fetch_concat_if_needed "$ROMS_DIR/CE-158.ROM" aa952878fb29da4844791d95185649ca \
+fetch_if_needed "$ROMS_DIR/PC-1500_A01.ROM" fbc55a9a8743e619b7709721ff5bcbff "$PC1500_BASE/a01/PC-1500-A01.BIN"
+fetch_if_needed "$ROMS_DIR/PC-1500_A03.ROM" 4bcf78a6d3d32e2a0349eb2d28987b8d "$PC1500_BASE/a03/PC-1500-A03.BIN"
+fetch_if_needed "$ROMS_DIR/PC-1500_A04.ROM" 8ebec8b0ef358645df14807c31df7d06 "$PC1500_BASE/a04/PC-1500-A04.BIN"
+fetch_if_needed "$ROMS_DIR/CE-150.ROM" eb9aa5156c6849890b137799efc50a4b "$PC1500_BASE/ce150/CE-150.BIN"
+fetch_if_needed "$ROMS_DIR/CE-158.ROM" aa952878fb29da4844791d95185649ca \
   "$PC1500_BASE/ce158/CE-158-LOW.BIN" "$PC1500_BASE/ce158/CE-158-HIGH.BIN"
 
 # ---- PC-1600 (tinue/PC-1600-ROM) -- upstream files are uppercase .BIN in
@@ -132,7 +106,7 @@ PC1600_BASE="${PC1600_ROM_BASE:-https://raw.githubusercontent.com/tinue/PC-1600-
 
 # fetch_pc1600_calc VERSION BASENAME MD5
 fetch_pc1600_calc() {
-  fetch_if_needed "$PC1600_BASE/$1/$2.BIN" "$ROMS_DIR/$2-$1.bin" "$3"
+  fetch_if_needed "$ROMS_DIR/$2-$1.bin" "$3" "$PC1600_BASE/$1/$2.BIN"
 }
 
 # New ROM (PEEK #(0,&7FFF) = 4 or 5)
@@ -155,7 +129,7 @@ fetch_pc1600_calc old PC1600-P2-B6             2c977fdd8c924c1492a2c23f67a20f23
 # the calculator ROM's). New = PEEK #(5,&7FFE) 5 / 18, old = 4 / 16.
 # fetch_ce1600p VERSION BASENAME MD5
 fetch_ce1600p() {
-  fetch_if_needed "$PC1600_BASE/ce1600p/$1/$2.BIN" "$ROMS_DIR/$2-$1.bin" "$3"
+  fetch_if_needed "$ROMS_DIR/$2-$1.bin" "$3" "$PC1600_BASE/ce1600p/$1/$2.BIN"
 }
 fetch_ce1600p new PC1600-P1-B4-CE1600P       05548a8dda3e572d50d4bd281a650ea8
 fetch_ce1600p new PC1600-P1-B5-CE1600P-OR-F  a675c6dbdf7dc4c10e8d96891e196f8f

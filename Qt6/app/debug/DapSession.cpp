@@ -271,15 +271,16 @@ bool parseAddress(const QJsonValue& v, uint32_t* out) { return numberOf(v, 0xFFF
 // The bank qualifiers `bank`, `me`, `pu`, `pv` (checked by checkAttach); a
 // missing one is -1.
 debug::BankKey bankKeyOf(const QJsonObject& o) {
-    const auto qualifier = [&o](const char* key, uint32_t max) {
+    const auto qualifier = [&o](const char* name) {
         uint32_t n = 0;
-        return numberOf(o.value(QLatin1String(key)), max, &n) ? int(n) : -1;
+        const uint32_t max = debug::attach::find(debug::attach::kListingKeys, name)->max;
+        return numberOf(o.value(QLatin1String(name)), max, &n) ? int(n) : -1;
     };
     debug::BankKey k;
-    k.bank = qualifier("bank", 7);
-    k.me = qualifier("me", 1);
-    k.pu = qualifier("pu", 1);
-    k.pv = qualifier("pv", 1);
+    k.bank = qualifier("bank");
+    k.me = qualifier("me");
+    k.pu = qualifier("pu");
+    k.pv = qualifier("pv");
     return k;
 }
 
@@ -319,10 +320,7 @@ bool checkAttach(const QJsonObject& o, const debug::attach::Table& table, QStrin
                 break;
             case Kind::Number: {
                 uint32_t n = 0;
-                if (!numberOf(v, key.max, &n)) {
-                    checkScalar(key, std::string(), &why);
-                    return bad(why);
-                }
+                if (!numberOf(v, key.max, &n)) return bad(describe(key));
                 break;
             }
             case Kind::Choice:

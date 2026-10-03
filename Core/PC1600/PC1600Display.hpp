@@ -46,7 +46,7 @@ public:
     static constexpr int kRightBlockColumnStart = 128; // see class comment
     // Raw-row offset the right block reads at relative to the left/centre
     // blocks, before the shared `displaySL` rotation is applied (see
-    // `readPixel()`) -- 32, i.e. "the other half of the chip's 64 raw
+    // `dotAddress()`) -- 32, i.e. "the other half of the chip's 64 raw
     // rows." Not a page number by itself once `displaySL` is nonzero;
     // kept as a named constant for what it means at `displaySL == 0`
     // (pages 4-7), the default/reset state.
@@ -92,7 +92,7 @@ public:
     /// reads IC2's own column `x - kRightBlockColumnStart` (0-27), offset
     /// by `kRightBlockRowShift` raw rows and the controller's own
     /// `displaySL` scroll register -- see the class comment and
-    /// `readPixel()`'s own. A controller whose display is currently off
+    /// `dotAddress()`'s own. A controller whose display is currently off
     /// also reads false.
     bool pixel(int x, int y) const;
 
@@ -114,7 +114,7 @@ public:
     /// cheap enough to just always recompute rather than track precisely
     /// which write mattered. While IC3's display is off (a 0x3E command --
     /// e.g. the ROM's power-down path), every symbol reads back off, the
-    /// same way `readPixel()` gates the graphics area on `displayOn`.
+    /// same way `pixel()` gates the graphics area on `displayOn`.
     void refreshStatusSymbols();
 
     /// The gate array's mirror of the PC-1500 display RAM, measured on a real
@@ -152,13 +152,20 @@ private:
     };
 
     void writeCommand(Controller& c, uint8_t value);
-    /// True if the pixel at raw-row-space `y + rowShift`, rotated by the
-    /// controller's own `addressStartLine`, is set -- `rowShift` is 0 for
-    /// the left/centre blocks, `kRightBlockRowShift` (32) for the right
-    /// block (see class comment). Goes from a wanted visible `y` back to
-    /// which raw (page, bit) to read, since that's the direction this
-    /// class's callers need.
-    bool readPixel(const Controller& c, int col, int y, int rowShift) const;
+    /// Where visible pixel (x, y) is stored: the controller (IC3 or IC2),
+    /// its column, and the raw (page, bit) after `kRightBlockRowShift` for
+    /// the right block (see class comment) and the controller's own
+    /// `addressStartLine` rotation. `x`, `y` must be on the panel.
+    struct DotAddress {
+        bool ic3 = false;
+        int col = 0;
+        int page = 0;
+        uint8_t mask = 0;
+    };
+    DotAddress dotAddress(int x, int y) const;
+    /// IC3 page holding status-symbol set `basePage` (column 63), after
+    /// the start-line rotation.
+    int symbolPage(int basePage) const;
 
     Controller m_ic2; // panel columns 0-63
     // LCD clock: phi-OS (1.3 MHz) / 6, counted in edges. Scaled by 6 so the

@@ -182,8 +182,7 @@ public:
     // backing store, so the current bank state doesn't matter.
     bool loadMachineCode(machinecode::Slot slot, int bank, uint32_t busAddr, const uint8_t* data, size_t len,
                          std::string* error) override {
-        return loadPC1600MachineCode(m_machine, static_cast<int>(slot), busAddr, data, len, error,
-                                     slot == machinecode::Slot::S0 ? -1 : bank);
+        return loadPC1600MachineCode(m_machine, static_cast<int>(slot), busAddr, data, len, error, bank);
     }
 };
 

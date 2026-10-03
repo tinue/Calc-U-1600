@@ -495,15 +495,15 @@ void test_parse_hex_address() {
 void test_pc1600_writer() {
     PC1600Machine m;
     std::string err;
-    CHECK(loadPC1600MachineCode(m, 0, 0xC0C5, kCode.data(), kCode.size(), &err));
+    CHECK(loadPC1600MachineCode(m, 0, 0xC0C5, kCode.data(), kCode.size(), &err, 0));
     std::vector<uint8_t> ram(PC1600Machine::kInternalRamSize);
     m.debugCopyInternalRam(ram.data());
     CHECK(std::vector<uint8_t>(ram.begin() + 0xC5, ram.begin() + 0xC5 + 5) == kCode);
 
     // Slot 1: nothing attached -> refused; with 32 KB RAM -> lands at image offset $00C5.
-    CHECK(!loadPC1600MachineCode(m, 1, 0x80C5, kCode.data(), kCode.size(), &err));
+    CHECK(!loadPC1600MachineCode(m, 1, 0x80C5, kCode.data(), kCode.size(), &err, 0));
     m.memory().attachSlot1Card(plainRamCard(0x8000));
-    CHECK(loadPC1600MachineCode(m, 1, 0x80C5, kCode.data(), kCode.size(), &err));
+    CHECK(loadPC1600MachineCode(m, 1, 0x80C5, kCode.data(), kCode.size(), &err, 0));
     std::vector<uint8_t> image = m.debugSlotImage(1);
     CHECK(image.size() >= 0xC5 + 5);
     if (image.size() >= 0xC5 + 5) CHECK(std::vector<uint8_t>(image.begin() + 0xC5, image.begin() + 0xC5 + 5) == kCode);
@@ -520,8 +520,8 @@ void test_pc1600_writer() {
     CHECK(st.bankRamPages[2] == 0 && st.bankRamPages[3] == 0);
 
     // Window checks.
-    CHECK(!loadPC1600MachineCode(m, 0, 0xBFFF, kCode.data(), kCode.size(), &err));
-    CHECK(!loadPC1600MachineCode(m, 1, 0xBFFE, kCode.data(), kCode.size(), &err));
+    CHECK(!loadPC1600MachineCode(m, 0, 0xBFFF, kCode.data(), kCode.size(), &err, 0));
+    CHECK(!loadPC1600MachineCode(m, 1, 0xBFFE, kCode.data(), kCode.size(), &err, 0));
 }
 
 void test_pc1500_writer() {

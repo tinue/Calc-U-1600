@@ -1,6 +1,5 @@
 #pragma once
 #include <cstdint>
-#include <string>
 
 // Character sets of the LCD fonts, as Unicode -- the plain-text side of
 // LcdText (Copy Screen). The font builders pick per glyph; this file only
@@ -35,22 +34,3 @@ inline constexpr char32_t jisX0201Kana(uint8_t code) {
     return code >= 0xA1 && code <= 0xDF ? char32_t(0xFF61 + (code - 0xA1)) : 0;
 }
 
-inline std::string utf8(char32_t c) {
-    std::string out;
-    if (c < 0x80) {
-        out += char(c);
-    } else if (c < 0x800) {
-        out += char(0xC0 | (c >> 6));
-        out += char(0x80 | (c & 0x3F));
-    } else if (c < 0x10000) {
-        out += char(0xE0 | (c >> 12));
-        out += char(0x80 | ((c >> 6) & 0x3F));
-        out += char(0x80 | (c & 0x3F));
-    } else {
-        out += char(0xF0 | (c >> 18));
-        out += char(0x80 | ((c >> 12) & 0x3F));
-        out += char(0x80 | ((c >> 6) & 0x3F));
-        out += char(0x80 | (c & 0x3F));
-    }
-    return out;
-}

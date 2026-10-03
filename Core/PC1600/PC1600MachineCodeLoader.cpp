@@ -30,8 +30,7 @@ bool loadPC1600MachineCode(PC1600Machine& machine, int slot, uint32_t addr, cons
         *error = b;
         return false;
     }
-    if (bank < 0) bank = slot == 1 ? 0 : 2;
-    if (bank / 2 + 1 != slot) {
+    if (static_cast<int>(machinecode::pc1600BankSlot(bank)) != slot) {
         char b[96];
         std::snprintf(b, sizeof(b), "bank %d is not in the %s memory slot", bank, slotName);
         *error = b;
@@ -79,7 +78,7 @@ machinecode::PC1600State pc1600LoadState(PC1600Machine& machine) {
     for (int bank = 0; bank < 4; bank++) {
         for (uint32_t page = 0; page < 64; page++) {
             const uint32_t off = machinecode::pc1600ImageOffset(bank, 0x8000 + page * 0x100);
-            if (machine.debugSlotImageWritable(bank / 2 + 1, off, 0x100))
+            if (machine.debugSlotImageWritable(static_cast<int>(machinecode::pc1600BankSlot(bank)), off, 0x100))
                 st.bankRamPages[static_cast<size_t>(bank)] |= uint64_t{1} << page;
         }
     }

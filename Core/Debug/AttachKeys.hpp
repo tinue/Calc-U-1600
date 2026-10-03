@@ -98,36 +98,45 @@ inline const Table& itemKeys(const Key& key) {
     return std::string(key.name) == "listings" ? kListingKeys : kSymbolKeys;
 }
 
+/// What a Number, Choice or Bool key takes, e.g. "one of stopOnEntry,
+/// call, none" (empty for any other kind).
+inline std::string describe(const Key& key) {
+    switch (key.kind) {
+        case Kind::Number: {
+            if (key.max <= 0xFF) return "a number from 0 to " + std::to_string(key.max) + " (&, 0x or $ for hex)";
+            char hex[8];
+            std::snprintf(hex, sizeof hex, "&%X", key.max);
+            return std::string("a number up to ") + hex + " (&, 0x or $ for hex)";
+        }
+        case Kind::Choice: {
+            std::string s = "one of ";
+            for (size_t i = 0; i < key.choices.size(); i++) s += (i ? ", " : "") + std::string(key.choices[i]);
+            return s;
+        }
+        case Kind::Bool: return "true or false";
+        default: return {};
+    }
+}
+
 /// Checks the text of a Number, Choice or Bool value (any other kind
-/// passes). On failure `why` says what the key takes, e.g. "one of
-/// stopOnEntry, call, none".
+/// passes). On failure `why` is describe(key).
 inline bool checkScalar(const Key& key, const std::string& text, std::string* why) {
+    bool ok = true;
     switch (key.kind) {
         case Kind::Number: {
             uint32_t v = 0;
-            if (parseNumber(text, &v) && v <= key.max) return true;
-            if (key.max > 0xFF) {
-                char hex[8];
-                std::snprintf(hex, sizeof hex, "&%X", key.max);
-                *why = std::string("a number up to ") + hex + " (&, 0x or $ for hex)";
-            } else {
-                *why = "a number from 0 to " + std::to_string(key.max) + " (&, 0x or $ for hex)";
-            }
-            return false;
+            ok = parseNumber(text, &v) && v <= key.max;
+            break;
         }
-        case Kind::Choice: {
-            for (const char* c : key.choices)
-                if (text == c) return true;
-            *why = "one of ";
-            for (size_t i = 0; i < key.choices.size(); i++) *why += (i ? ", " : "") + std::string(key.choices[i]);
-            return false;
-        }
-        case Kind::Bool:
-            if (text == "true" || text == "false") return true;
-            *why = "true or false";
-            return false;
-        default: return true;
+        case Kind::Choice:
+            ok = false;
+            for (const char* c : key.choices) ok = ok || text == c;
+            break;
+        case Kind::Bool: ok = text == "true" || text == "false"; break;
+        default: break;
     }
+    if (!ok) *why = describe(key);
+    return ok;
 }
 
 } // namespace debug::attach

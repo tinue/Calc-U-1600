@@ -51,6 +51,8 @@ const char* slotName(Slot slot) {
 
 int pc1600DefaultBank(Slot slot) { return slot == Slot::S2 ? 2 : 0; }
 
+Slot pc1600BankSlot(int bank) { return bank < 2 ? Slot::S1 : Slot::S2; }
+
 uint32_t pc1600ImageOffset(int bank, uint32_t addr) {
     return static_cast<uint32_t>(bank & 1) * 0x4000 + (addr - kPc1600SlotBase);
 }
@@ -230,7 +232,7 @@ bool pc1600BankTarget(uint32_t addr, size_t len, int bank, const PC1600State& st
             return false;
         }
     }
-    *slot = bank < 2 ? Slot::S1 : Slot::S2;
+    *slot = pc1600BankSlot(bank);
     return true;
 }
 

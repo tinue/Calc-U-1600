@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "../Display/LcdCharsets.hpp"
+#include "../Utf8.hpp"
 #include "../Display/LcdText.hpp"
 #include "PC1500Machine.hpp"
 #include "PC1500Screenshot.hpp"
@@ -35,7 +36,7 @@ inline LcdFont pc1500LcdFont(const PC1500Machine& machine) {
     }
     const std::pair<uint8_t, char32_t> drawn[] = {
         {0x27, U'\u25A1'}, {0x5B, U'\u221A'}, {0x5C, U'\u00A5'}, {0x5D, U'\u03C0'}, {0x7F, U'\u2588'}};
-    for (const auto& [code, ch] : drawn) font.glyphs[code - 0x20].text = utf8(ch);
+    for (const auto& [code, ch] : drawn) font.glyphs[code - 0x20].text = encodeUtf8(ch);
     font.cursorShapes = {font.glyphs.back().cell}; // 7FH
     return font;
 }
@@ -51,10 +52,10 @@ inline LcdText pc1500LcdText(const PC1500Machine& machine) {
     if ((machine.debugPeek(0x787C) & 0x81) == 0x81) {
         const uint8_t code = machine.debugPeek(0x787D);
         cursor = LcdCursor{};
-        for (const LcdGlyph& g : font.glyphs)
-            if (g.code == code) cursor->under = g.cell;
+        if (code >= 0x20 && code < 0x80) cursor->under = font.glyphs[code - 0x20].cell;  // built in code order
     }
-    LcdText text = parseLcdText(pc1500LcdBitmap(machine), font, cursor);
-    text.status = statusWords(machine.display().statusLine());
+    const PC1500Display disp = machine.display();  // pixels and status from one moment
+    LcdText text = parseLcdText(pc1500LcdBitmap(disp, machine.isDisplayOn()), font, cursor);
+    text.status = statusWords(disp.statusLine());
     return text;
 }

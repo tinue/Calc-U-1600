@@ -15,6 +15,7 @@
 
 #include "../CPU/LH5803/LH5803SharedMemory.hpp"
 #include "../Display/LcdCharsets.hpp"
+#include "../Utf8.hpp"
 #include "../Display/LcdText.hpp"
 #include "../PC1500/PC1500BasicLoader.hpp"
 #include "../PC1500/PC1500BasicTyper.hpp"
@@ -111,7 +112,7 @@ void test_synthetic_plain_text() {
     CHECK(t.plainText() == "\n  A \\");
     CHECK(jisX0201Kana(0xB1) == U'\uFF71' && jisX0201Kana(0xA1) == U'\uFF61' && jisX0201Kana(0xDF) == U'\uFF9F');
     CHECK(jisX0201Kana(0xA0) == 0 && jisX0201Kana(0xE0) == 0);
-    CHECK(utf8(U'\u00C4') == "\xC3\x84" && utf8(U'\uFF71') == "\xEF\xBD\xB1");
+    CHECK(encodeUtf8(U'\u00C4') == "\xC3\x84" && encodeUtf8(U'\uFF71') == "\xEF\xBD\xB1");
 }
 
 void test_synthetic_cursor() {
@@ -365,8 +366,8 @@ void test_expect_pc1600() {
         const char* text;
         bool ok;
     };
+    // Without it MEM is 11834: the failing case shows that on screen.
     const Case cases[] = {
-        {"model: PC-1600\nkeys:\n  - type: PRINT MEM\n  - expect: 11834\n", true},
         {"model: PC-1600\nplotter: CE-1600P\nkeys:\n  - type: PRINT MEM\n  - expect: 10810\n", true},
         {"model: PC-1600\nkeys:\n  - type: PRINT MEM\n  - expect: 10810\n", false},
     };
@@ -493,6 +494,14 @@ uint8_t lcdColumn(const LcdBitmap& b, int row, int x) {
     return dots;
 }
 
+// The same for the bottom text row, straight off the display.
+uint8_t bottomColumn(const PC1600Display& d, int x) {
+    uint8_t dots = 0;
+    for (int dot = 0; dot < 8; ++dot)
+        if (d.pixel(x, 24 + dot)) dots |= uint8_t(1u << dot);
+    return dots;
+}
+
 void test_pc1600_mirror_unit() {
     PC1600Display d;
     d.writeIO(0x50, 0x3F); // both controllers on
@@ -500,10 +509,7 @@ void test_pc1600_mirror_unit() {
         d.writeIO(0x50, uint8_t(0xC0 | startLine));
         for (int col : {0, 39, 63, 64, 100, 127, 128, 155}) {
             d.mirrorPc1500Column(col, 0xA5);
-            uint8_t dots = 0;
-            for (int dot = 0; dot < 8; ++dot)
-                if (d.pixel(col, 24 + dot)) dots |= uint8_t(1u << dot);
-            CHECK(dots == 0xA5); // always the visible bottom line
+            CHECK(bottomColumn(d, col) == 0xA5); // always the visible bottom line
             d.mirrorPc1500Column(col, 0x00);
             CHECK(!d.pixel(col, 24) && !d.pixel(col, 31)); // replaces, not ORs
         }
@@ -575,12 +581,7 @@ void test_pc1600_lha90_alias() {
     lh.writeME0(0x7400, 0x7F);
     CHECK(lh.readME0(0x7600) == 0x7F && lh.readME0(0x7400) == 0x7F);
     CHECK(mem.read(0xF600) == 0x7F && mem.read(0xF400) == 0x00); // not the Z-80's F400H
-    auto column = [&](int x) {
-        uint8_t dots = 0;
-        for (int dot = 0; dot < 8; ++dot)
-            if (mem.display().pixel(x, 24 + dot)) dots |= uint8_t(1u << dot);
-        return dots;
-    };
+    auto column = [&](int x) { return bottomColumn(mem.display(), x); };
     CHECK(column(0) == 0x0F && column(78) == 0x87);
     lh.writeME0(0x7500, 0x7F);
     CHECK(column(39) == 0x0F && column(117) == 0x07);

@@ -66,7 +66,7 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
     std::string err;
     const bool written = pc1500 ? loadPC1500MachineCode(*pc1500, plan.busAddr, file.payload.data(), plan.len, &err)
                                 : loadPC1600MachineCode(*pc1600, int(plan.slot), plan.busAddr, file.payload.data(), plan.len, &err,
-                                                        plan.slot == machinecode::Slot::S0 ? -1 : plan.bank);
+                                                        plan.bank);
     if (!written) {
         r.error = err;
         return r;
