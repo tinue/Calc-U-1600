@@ -315,5 +315,14 @@ target_include_directories(CoreTests PRIVATE ${CORE_ROOT})
 target_link_libraries(CoreTests PRIVATE ZLIB::ZLIB)
 target_link_libraries(CoreTests PRIVATE ${SHARPDX_LIB})
 
+# The suite runs ~3x faster at -O1 than at -O0, so a Debug build compiles
+# CoreTests at -O1 (as tools/run_tests.sh does); CI builds RelWithDebInfo.
+# To step through a failing test, configure a separate full-debug tree:
+#   cmake -S . -B build-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCALCU_TESTS_DEBUG=ON
+option(CALCU_TESTS_DEBUG "Build CoreTests at -O0 for debugging" OFF)
+if(NOT CALCU_TESTS_DEBUG AND NOT MSVC)
+  target_compile_options(CoreTests PRIVATE $<$<CONFIG:Debug>:-O1>)
+endif()
+
 enable_testing()
 add_test(NAME CoreTests COMMAND CoreTests WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
