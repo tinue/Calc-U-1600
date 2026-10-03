@@ -36,8 +36,6 @@ itself. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
   including the PC-1600's accented characters.
 - [Host drive](docs/PC1600-Host-Drive.md) — a folder on your computer as
   PC-1600 drive `S3:`.
-- [FILEX on the PC-1600](docs/PC1600-FILEX.md) — a guide to FILEX, a
-  third-party drive and file browser, running in the emulator.
 - [Examples](examples/README.md) — what each sample preset and program does.
 
 **Writing programs for the PC-1500 / PC-1600**

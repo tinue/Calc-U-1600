@@ -8,7 +8,7 @@ This is a Calc-U-1600 peripheral with no Sharp original. It is modelled on
 the MEP rev3 module, a USB drive for the PC-1600's expansion bus. To
 software it looks like a MEP rev3 USB drive: the same
 device names, subdirectories through `CDIR` / `LDIR`, and the MEP's fixed
-entries, so MEP programs such as FILEX ([PC1600-FILEX.md](PC1600-FILEX.md))
+entries, so MEP programs such as FILEX
 work on it. The MEP is credited in
 [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md#acknowledgments).
 

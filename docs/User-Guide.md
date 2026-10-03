@@ -339,8 +339,8 @@ are ordinary files in the folder, stored byte for byte.
   folder (`CDIR ".."` goes up, `CDIR "/"` to the top) and `LDIR` lists the
   subfolders. All file commands work in the current folder. Switching the
   calculator off returns to the top.
-- **MEP programs:** tools written for the MEP module, such as FILEX
-  ([PC1600-FILEX.md](PC1600-FILEX.md)), work on `S3:`.
+- **MEP programs:** tools written for the MEP module, such as FILEX,
+  work on `S3:`.
 - **Dates:** the PC-1600 shows each file's month, day and time. Your
   computer keeps the full date.
 - **Refused:** `INIT "S3:"`, so a format can never wipe the folder.
