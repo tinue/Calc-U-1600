@@ -147,6 +147,19 @@ status byte reports display-off in bit 5, and busy doesn't clear while CK0
 - The controllers aren't reset on power-on or reset: VGG keeps their RAM and
   registers. Only CK0 stops.
 
+### PC-1600 Slot 1 S1-S3 follow Port 3CH b6, in reverse order
+`MemorySlotConnector::decode()` drives Slot 1 pins 16/17/18 from the
+SC7852's LHS3/LHS2/LHS1, not LHS1/LHS2/LHS3 as the names suggest. Port 3CH
+b6 remaps them (TRM SC7852 pins 46-48), and they select bank 0 only:
+b6 = 0 gives B800/B000/A800, b6 = 1 gives A000/A800/B000. The boot probe
+(P0-B0 03CF) sets 1BH with an empty slot, 1AH for a CE-151 and 5BH for a
+CE-155 or a full 16/32 KB module. This order is the only one that fits the
+measurements on a real PC-1600: a CE-155 (MEM +8192, 3CH = 5BH, four
+separate 2 KB blocks at A000-BFFF) and a CE-155 with pins 4 and 18 taped
+off, which is electrically a CE-151 (MEM +4096, 3CH = 1AH, RAM at B000 and
+B800 only, BASIC start B0C5H). Don't straighten it to pin 16 = LHS1: the
+CE-151 then lands at A800-B7FF.
+
 ## Authentic ROM behaviour: not bugs
 
 - **CE-1600P Y clip at about 1000 units.** This is the `PAPER` default (999

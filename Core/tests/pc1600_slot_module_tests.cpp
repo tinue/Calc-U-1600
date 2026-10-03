@@ -51,13 +51,13 @@ void test_ce155_in_slot1_both_cpu_views() {
     CHECK(m.slot1Attached());
 
     selectPageCBank(m, 0); // Slot 1, bank 0 -> RAM2# asserted at 8000-BFFF
+    m.memory().writeIO(0x3C, 0x5B); // what the boot probe sets for a CE-155
 
     // A bare CE-155 in a PC-1600 Slot 1 tiles a contiguous 8KB at A000-BFFF:
-    // its chips 1/2/3 wire to pins 16/17/18 (the mainboard's S1/S2/S3
-    // sub-selects for A000-A7FF / A800-AFFF / B000-B7FF), and its onboard-
+    // its chips 1/2/3 wire to pins 16/17/18 (S1/S2/S3, which Port 3CH b6=1
+    // routes to A000-A7FF / A800-AFFF / B000-B7FF), and its onboard-
     // decoded chip 0 (pin 4 + AD11-AD13 = 111) covers the top block
-    // B800-BFFF. This matches stock real hardware (MEM +8192, RAM base
-    // A0C5H -- the documented CE-159 figure).
+    // B800-BFFF. This matches real hardware (MEM +8192, RAM base A0C5H).
     m.memory().write(0xA000, 0x10); // chip 1, low edge
     m.memory().write(0xA800, 0x11); // chip 2
     m.memory().write(0xB000, 0x22); // chip 3
@@ -244,6 +244,47 @@ void test_ce155_contributes_full_8k_to_mem() {
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m1, 0xF89D)) == 8192);
 }
 
+// A CE-151 (S1/S2 only, Service Manual schematic 5-3) in Slot 1. The boot
+// probe finds RAM at B000 but not at A800 and sets Port 3CH = 1AH, which
+// routes S1/S2 to B800/B000: MEM +4096, BASIC RAM base B0C5H, nothing at
+// A000-AFFF. Measured on a real PC-1600 with a CE-155 whose pins 4 and 18
+// were taped off (electrically a CE-151). The probe picks 1BH with an empty
+// slot and 5BH for a CE-155.
+void test_ce151_fills_b000_bfff_in_slot1() {
+    auto boot = [](const char* file) -> std::unique_ptr<PC1600Machine> {
+        auto m = std::make_unique<PC1600Machine>();
+        if (!loadPC1600Roms(*m)) return nullptr;
+        if (file) m->attachSlot1Card(card(file, CardHost::PC1600Slot1));
+        m->allReset();
+        m->runCycles(PC1600Machine::kTStateHz * 4);
+        return m;
+    };
+    auto m0 = boot(nullptr), m1 = boot("ce151.card.yaml"), m5 = boot("ce155.card.yaml");
+    if (!m0 || !m1 || !m5) {
+        std::fprintf(stderr, "SKIP test_ce151_fills_b000_bfff_in_slot1: PC-1600 ROM images not found\n");
+        return;
+    }
+    auto rd16 = [](PC1600Machine& m, uint16_t a) {
+        return uint16_t(m.memory().read(a) | (m.memory().read(uint16_t(a + 1)) << 8));
+    };
+    CHECK(m0->memory().read(0xF08D) == 0x1B);
+    CHECK(m1->memory().read(0xF08D) == 0x1A);
+    CHECK(m5->memory().read(0xF08D) == 0x5B);
+    CHECK(rd16(*m1, 0xF5CF) == 0xB0C5);
+    CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m1, 0xF89D)) == 4096);
+
+    PC1600Machine& m = *m1;
+    selectPageCBank(m, 0);
+    m.memory().write(0xB010, 0x44);
+    m.memory().write(0xB810, 0x88);
+    CHECK(m.memory().read(0xB010) == 0x44);
+    CHECK(m.memory().read(0xB810) == 0x88);
+    m.memory().write(0xA010, 0x11);
+    m.memory().write(0xA810, 0x22);
+    CHECK(m.memory().read(0xA010) == 0xFF);
+    CHECK(m.memory().read(0xA810) == 0xFF);
+}
+
 // A CE-161 fills the whole 8000-BFFF page in either slot: the boot ROM
 // credits +16384 (MEM 11834 + 16384, Ref/PC-1600/PC-1600-Memory-Architecture.md),
 // BASIC RAM base C0C5H -> 80C5H.
@@ -276,7 +317,8 @@ void test_ce161_contributes_full_16k_in_both_slots() {
 // PC-1500's &0000-&3FFF Y0), so the card's banked-window index is masked to
 // the 16KB bank size -- &8000 and &BFFF must land at opposite ends of one
 // bank, not alias. Bank switching is the pin-18 write strobe (PC-1600 Slot
-// 1 S3), bank number from address bits A0-A2 of the strobing write.
+// 1 S3, at B000-B7FF once the boot probe has set Port 3CH = 5BH for a full
+// 16KB module), bank number from address bits A0-A2 of the strobing write.
 void test_ce1638_in_slot1_banked_window() {
     auto ce1638 = card("ce1638.card.yaml", CardHost::PC1600Slot1);
     if (!ce1638) return;
@@ -285,6 +327,7 @@ void test_ce1638_in_slot1_banked_window() {
     CHECK(m.slot1Attached());
 
     selectPageCBank(m, 0); // Slot 1, bank 0 -> RAM2# asserted at 8000-BFFF
+    m.memory().writeIO(0x3C, 0x5B); // boot probe value: S3 = B000-B7FF
 
     // Bank 0: the window's two ends are distinct 16KB offsets, not aliases
     // -- this is what the address mask buys on a PC-1600 slot.
@@ -322,6 +365,7 @@ void test_ce163f_in_slot1_ram_and_flash_protocol() {
     m.attachSlot1Card(std::move(ce163f));
     CHECK(m.slot1Attached());
     selectPageCBank(m, 0);
+    m.memory().writeIO(0x3C, 0x5B); // boot probe value: S3 = B000-B7FF
 
     // Bank 3 (RAM): plain read/write.
     m.memory().write(0xB003, 0x00); // pin-18 strobe -> bank 3
@@ -434,6 +478,7 @@ int run_pc1600_slot_module_tests() {
     test_trigger_latch_modules_in_slot2_contribute_full_16k();
     test_boot_with_ce155_in_slot1_is_stable();
     test_ce155_contributes_full_8k_to_mem();
+    test_ce151_fills_b000_bfff_in_slot1();
     test_ce161_contributes_full_16k_in_both_slots();
 
     std::printf("pc1600_slot_module_tests: %d passed, %d failed\n", g_pass, g_fail);

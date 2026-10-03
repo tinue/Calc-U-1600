@@ -16,12 +16,6 @@
 //     b0        (PVOUT)  1-bit bank select, page A only (0000-3FFF)
 //     b3:b2:b1  (3-bit)  bank select 0-7,   page B only (4000-7FFF)
 //     b6:b5:b4  (3-bit)  bank select 0-7,   page C only (8000-BFFF)
-//                        — b6 is ALSO, independently, the LHS1/LHS2/LHS3
-//                          remap-table selector (Bank 0 windows, from
-//                          Ref/PC-1600/PC-1600-Memory-Bank-Switching.md Part 4; not
-//                          modelled, nothing in the ROM paths we run needs it):
-//                            b6=0: LHS1 A800, LHS2 B000, LHS3 B800
-//                            b6=1: LHS1 B000, LHS2 A800, LHS3 A000
 //     b7        1-bit    bank select, page D only (C000-FFFF)
 //
 //   Port 28H (write-only) — Slot 2 "vertical bank" select, 0-7 (superRAM
@@ -60,6 +54,13 @@
 //             10 = Slot 2's first 16KB also answers at page-C bank 1;
 //             01 = Slot 2's first 16KB at page-B bank 1 (4000-7FFF) and
 //                  its last 16KB at page-A bank 1 (0000-3FFF).
+//     b6      LHS remap (TRM SC7852 pins 46-48): which bank-0 2KB blocks
+//             the SC7852's LHS1-3 select, buffered by the gate array onto
+//             Slot 1's S1-S3 pins:
+//               b6=0: LHS1 A800, LHS2 B000, LHS3 B800
+//               b6=1: LHS1 B000, LHS2 A800, LHS3 A000
+//             The boot probe (P0-B0 03CF) sets 1AH for a CE-151 and 5BH
+//             for a CE-155/159; see MemorySlotConnector::decode().
 //   PC1600Memory turns b2/b5:b4 into effective-address rewrites feeding the
 //   ordinary Slot 1/Slot 2 decode (its class comment's "never as a
 //   connector pin" note; kSlot1Map/kSlot2Map). b5:b4 = 11 never occurs.
@@ -107,6 +108,10 @@ public:
     /// banks 0/1 only) or true (Slot 1's high half also answers at page-B
     /// bank 1). See PC1600Memory::slot1MapTarget().
     bool slot1MapActive() const { return (m_port3c & 0x04) != 0; }
+
+    /// LHS1-3 remap from Port 3CH b6 -- see the class comment and
+    /// MemorySlotConnector::decode().
+    bool lhsRemapped() const { return (m_port3c & 0x40) != 0; }
 
     /// SLOT2MAP mode from Port 3CH b5:b4 — 0 (default: Slot 2 at page-C
     /// banks 2/3), 1 (also at page-C bank 1), or 2 (at page-B bank 1 /

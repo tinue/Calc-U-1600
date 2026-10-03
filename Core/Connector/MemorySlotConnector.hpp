@@ -149,17 +149,26 @@ private:
         // slot's chip select is asserted by definition.
         p.pin[4] = true; // RAM2# (Slot 1) / RAM1# (Slot 2) chip select
 
-        if (m_slot == Slot::Slot1) {
-            // Pins 16/17/18 carry S1/S2/S3 -- the mainboard's sub-selects
-            // for the LOWER three 2KB blocks of the RAM2 window
-            // (A000-A7FF / A800-AFFF / B000-B7FF). The top block, B800-BFFF,
-            // is left for a PC-1500-style module's own onboard decoder
-            // (CE-155 chip 0, its local Y7 off AD11-AD13 + RAM2). A CE-155
-            // wired pin-for-pin thus tiles a contiguous 8KB A000-BFFF --
-            // matching stock real hardware (MEM +8192, program area A0C5H).
-            p.pin[16] = (addr >= 0xA000 && addr < 0xA800);
-            p.pin[17] = (addr >= 0xA800 && addr < 0xB000);
-            p.pin[18] = (addr >= 0xB000 && addr < 0xB800);
+        if (m_slot == Slot::Slot1 && m_bank.pageCBank() == 0) {
+            // Pins 16/17/18 carry S1/S2/S3, the gate array's buffered copies
+            // of the SC7852's LHS strobes. They select 2KB blocks of bank 0
+            // only, remapped by Port 3CH b6 (TRM SC7852 pins 46-48), and
+            // reach the connector in reverse order: pin 16 = LHS3, pin 18 =
+            // LHS1 (measured, docs/background/Decisions.md).
+            //   b6=0 (boot probe 1AH, CE-151): 16 B800, 17 B000, 18 A800
+            //   b6=1 (boot probe 5BH, CE-155): 16 A000, 17 A800, 18 B000
+            // A CE-151 (S1+S2) thus tiles B000-BFFF; a CE-155 tiles
+            // A000-B7FF and its own Y7 decoder adds B800-BFFF.
+            const uint16_t block = addr & 0xF800;
+            if (m_bank.lhsRemapped()) {
+                p.pin[16] = block == 0xA000;
+                p.pin[17] = block == 0xA800;
+                p.pin[18] = block == 0xB000;
+            } else {
+                p.pin[16] = block == 0xB800;
+                p.pin[17] = block == 0xB000;
+                p.pin[18] = block == 0xA800;
+            }
         }
         // Slot 2's pins 16-18 are K0-K2 (I/O-select for Port 28H vertical
         // banking) -- left deasserted, and a CE-1601M-class module does not

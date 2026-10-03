@@ -305,7 +305,7 @@ machine, like a model switch does.
 
 | Module | Models | What it is | Battery-backed |
 |---|---|---|---|
-| CE-151 | PC-1500/1500A | 4 KB RAM | no |
+| CE-151 | PC-1500/1500A, PC-1600 Slot 1 | 4 KB RAM | no |
 | CE-155 | PC-1500/1500A, PC-1600 Slot 1 | 8 KB RAM | no |
 | CE-161 | PC-1500/1500A, PC-1600 Slot 1 or 2 | 16 KB RAM | no |
 | CE-1638 | PC-1500/1500A, PC-1600 | 128 KB banked RAM (hobbyist module) | yes |

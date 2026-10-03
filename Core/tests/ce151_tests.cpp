@@ -97,11 +97,12 @@ void test_ce151_end_to_end_via_machine() {
     CHECK(pc1500a.memory().readME0(0x6800) != 0x44);
 }
 
-// The definition is declared for the PC-1500 family only.
+// The definition is declared for the PC-1500 family and PC-1600 Slot 1
+// (TRM 3.12.1: "only in slot 1").
 void test_ce151_hosts() {
     CHECK(bundledCard("ce151.card.yaml", CardHost::PC1500) != nullptr);
     CHECK(bundledCard("ce151.card.yaml", CardHost::PC1500A) != nullptr);
-    CHECK(bundledCard("ce151.card.yaml", CardHost::PC1600Slot1) == nullptr);
+    CHECK(bundledCard("ce151.card.yaml", CardHost::PC1600Slot1) != nullptr);
     CHECK(bundledCard("ce151.card.yaml", CardHost::PC1600Slot2) == nullptr);
 }
 
