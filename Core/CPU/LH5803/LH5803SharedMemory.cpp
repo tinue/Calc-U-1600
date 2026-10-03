@@ -5,7 +5,7 @@
 #include "../../PC1600/PC1600Memory.hpp"
 
 uint8_t LH5803SharedMemory::readME0(uint16_t addr) {
-    if (addr < 0x8000) return m_shared.read(uint16_t(addr + 0x8000));
+    if (addr < 0x8000) return m_shared.read(uint16_t(lha90(addr) + 0x8000));
     if (addr < kRomBase) {
         // 8000-BFFF peripheral-ROM window, selected by the LH5803's own PV
         // (the ROM sets it from CALLH's PARBAN): CE-150 ROM at PVOUT=0
@@ -19,6 +19,7 @@ uint8_t LH5803SharedMemory::readME0(uint16_t addr) {
 
 void LH5803SharedMemory::writeME0(uint16_t addr, uint8_t value) {
     if (addr < 0x8000) {
+        addr = lha90(addr);
         m_shared.write(uint16_t(addr + 0x8000), value);
         mirrorPc1500Display(addr);
         return;
@@ -159,5 +160,5 @@ void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
     // Default aliasing for every other ME1 address -- the RAM only: the
     // gate array's LCD mirror (mirrorPc1500Display()) is taken to watch
     // ME0 writes, the ones PC-1500 display code makes.
-    if (addr < 0x8000) m_shared.write(uint16_t(addr + 0x8000), value);
+    if (addr < 0x8000) m_shared.write(uint16_t(lha90(addr) + 0x8000), value);
 }

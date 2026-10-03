@@ -301,11 +301,13 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
     / `SYMRESTORE`, bank 6 82E4H / 82FAH).
 
   `PC1600Display::mirrorPc1500Column()`, `LH5803SharedMemory::mirrorPc1500Display()`.
-  ME1 writes there reach only the RAM. They are unlikely to drive the
-  mirror on the hardware, and the ROM uses ME1 only for I/O. Not measured,
-  and therefore not mirrored:
-  - the 7400H–754FH aliases;
-  - 774EH / 774FH.
+  - **Aliases:** the LH5803's 7400H–744FH / 7500H–754FH land on
+    7600H–764FH / 7700H–774FH, because the SC7852's LHA90 pin is forced
+    high for them. They hit the same RAM and are mirrored the same way.
+    Both points are measured. `LH5803SharedMemory::lha90()`.
+  - **774EH / 774FH:** measured; they draw nothing.
+  - **ME1:** an ME1 write there reaches only the RAM. ME1 is unlikely to
+    drive the mirror, and the ROM uses it only for I/O.
 
 ---
 

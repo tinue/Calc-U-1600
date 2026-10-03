@@ -492,6 +492,39 @@ void test_pc1600_mirror_me0_only() {
     CHECK(statusWords(mem.display().statusLine()) == (std::vector<std::string>{"GRAD", "RUN"}));
 }
 
+// LHA90: 7400H-744FH / 7500H-754FH land on 7600H-764FH / 7700H-774FH,
+// RAM and mirror alike (hardware: XPOKE &7400 reads back at &7600 and
+// draws; &744F changes the legend). 774EH/774FH are not mirrored.
+void test_pc1600_lha90_alias() {
+    PC1600Bank bank;
+    PC1600Memory mem(bank);
+    LH5803SharedMemory lh(mem);
+    mem.display().writeIO(0x50, 0x3F);
+    mem.write(0xF400, 0x00);
+    lh.writeME0(0x7601, 0x80);
+    lh.writeME0(0x7400, 0x7F);
+    CHECK(lh.readME0(0x7600) == 0x7F && lh.readME0(0x7400) == 0x7F);
+    CHECK(mem.read(0xF600) == 0x7F && mem.read(0xF400) == 0x00); // not the Z-80's F400H
+    auto column = [&](int x) {
+        uint8_t dots = 0;
+        for (int dot = 0; dot < 8; ++dot)
+            if (mem.display().pixel(x, 24 + dot)) dots |= uint8_t(1u << dot);
+        return dots;
+    };
+    CHECK(column(0) == 0x0F && column(78) == 0x87);
+    lh.writeME0(0x7500, 0x7F);
+    CHECK(column(39) == 0x0F && column(117) == 0x07);
+    lh.writeME0(0x744F, 0x44);
+    CHECK(lh.readME0(0x764F) == 0x44);
+    CHECK(statusWords(mem.display().statusLine()) == (std::vector<std::string>{"RAD", "RUN"}));
+    lh.writeME0(0x774F, 0x46);
+    lh.writeME0(0x774E, 0xFF);
+    CHECK(statusWords(mem.display().statusLine()) == (std::vector<std::string>{"RAD", "RUN"}));
+    // Outside the forced ranges: plain RAM.
+    lh.writeME0(0x7450, 0x5A);
+    CHECK(mem.read(0xF450) == 0x5A && mem.read(0xF650) != 0x5A);
+}
+
 } // namespace
 
 int run_lcd_text_tests() {
@@ -512,6 +545,7 @@ int run_lcd_text_tests() {
     test_pc1600_mirror_unit();
     test_pc1600_mirror_real_rom();
     test_pc1600_mirror_me0_only();
+    test_pc1600_lha90_alias();
 
     std::printf("lcd_text_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

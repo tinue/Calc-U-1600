@@ -26,9 +26,11 @@ class PC1600BusArbiter;
 // decode already resolves whichever Z-80 bank is currently switched into
 // Slot 1/2.
 //
-//   0000-7FFF  forwarded to sharedMem.read/write(addr + 0x8000); a write to
-//              the PC-1500 display RAM 7600-764F is also drawn on the LCD
-//              (the gate array's mirror, see mirrorPc1500Display())
+//   0000-7FFF  forwarded to sharedMem.read/write(addr + 0x8000), except that
+//              7400-744F / 7500-754F land on 7600-764F / 7700-774F (lha90());
+//              an ME0 write to the PC-1500 display RAM 7600-764F is also
+//              drawn on the LCD (the gate array's mirror, see
+//              mirrorPc1500Display())
 //   8000-BFFF  peripheral ROM window, offered to the cards on
 //              PC1600Memory::lh5803PeripheralBus(): CE-150 ROM (PV=0,
 //              A000-BFFF) or CE-158 ROM (PV=1, 8000-9FFF, PU picks its
@@ -156,6 +158,14 @@ private:
         return p;
     }
 
+    /// The SC7852's LHA90 pin (Sharp1500-1600-Ref PC-1600-CPU-SC7852-Z80.md,
+    /// pin 38) is forced high while the LH5803 accesses 7400H-744FH or
+    /// 7500H-754FH, so those land on 7600H-764FH / 7700H-774FH -- the
+    /// PC-1500's display-RAM aliases. Confirmed on a real PC-1600: an XPOKE
+    /// there reads back at 76xxH and draws on the LCD like one to 76xxH.
+    static constexpr uint16_t lha90(uint16_t addr) {
+        return ((addr & 0xFE00) == 0x7400 && (addr & 0xFF) < 0x50) ? uint16_t(addr | 0x0200) : addr;
+    }
     /// An ME0 write to the PC-1500 display RAM (7600H-764FH) also goes to
     /// the LCD, as the gate array does: see PC1600Display::mirrorPc1500Column().
     /// ME1 writes there only reach the RAM.
