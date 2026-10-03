@@ -27,7 +27,7 @@ public:
 
     /// `port` is the low 8 bits of the I/O address (the only part any
     /// PC-1600 port decode documented so far depends on -- see
-    /// PC-1600-IO-Ports.md). The high 8 bits (A register for `OUT (n),A`/
+    /// Ref/PC-1600/PC-1600-IO-Ports.md). The high 8 bits (A register for `OUT (n),A`/
     /// `IN A,(n)`, or the B register for `OUT (C),r`/`IN r,(C)`) aren't
     /// forwarded since nothing in this project's scope needs them yet.
     virtual uint8_t readIO(uint8_t port) { (void)port; return 0xFF; }

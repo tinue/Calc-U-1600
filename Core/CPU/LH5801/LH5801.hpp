@@ -206,7 +206,7 @@ public:
     bool consumeBreakpointHit() { return m_breakpoints.consumeHit(); }
 
     /// True if the most recently executed opcode had no case in execute()/
-    /// executeFD() (i.e. isn't in the LH5801_Guide.md instruction set this
+    /// executeFD() (i.e. isn't in the Ref/PC-1500/Assembly-Programming/LH5801_Guide.md instruction set this
     /// core was built from). Execution still proceeds as a no-op rather than
     /// halting — real hardware behavior for undocumented opcodes isn't
     /// sourced — but this makes that distinguishable from a genuinely

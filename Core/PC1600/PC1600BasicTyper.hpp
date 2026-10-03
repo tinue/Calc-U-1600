@@ -19,7 +19,7 @@ class PC1600Machine;
 //
 //   * The PC-1600's BASIC keyword-tokenizes on ENTER, like the PC-1500's,
 //     and the program-end pointer BASPRG_END lives at the same place --
-//     SC-7852-view F867H, big-endian (PC-1600-Work-Area-Map.md: "Block C
+//     SC-7852-view F867H, big-endian (Ref/PC-1600/PC-1600-Work-Area-Map.md: "Block C
 //     is used exactly as on the PC-1500/1500A"). It advances by each
 //     stored line's size. typeBasicProgramText() waits for it to settle
 //     after each line and uses "did the program change?" (BASPRG_END or

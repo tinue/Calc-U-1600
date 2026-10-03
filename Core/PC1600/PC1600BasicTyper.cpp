@@ -50,7 +50,7 @@ constexpr int kPostEnterFloorFrames = 12;                // ~0.2 s
 
 // BASIC program-end pointer -- 2 bytes, BIG-ENDIAN, at the PC-1600's
 // SC-7852-view work-area address F867H (the PC-1500's $7867 BASPRG_END,
-// carried over per PC-1600-Work-Area-Map.md's "Block C is used exactly as
+// carried over per Ref/PC-1600/PC-1600-Work-Area-Map.md's "Block C is used exactly as
 // on the PC-1500/1500A"). CONFIRMED against the real ROM set: in PRO mode
 // it advances by each stored line's tokenised size; in RUN mode it stays
 // put (a typed line is a direct command, not stored). C000H-FFFFH is the

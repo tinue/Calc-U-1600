@@ -13,8 +13,8 @@
 // (battery levels, analog jack) and the INT6 interrupt line. It runs on
 // the always-on VGG rail. No datasheet exists and its ROM is undumped, so
 // this is a high-level model of what the Z-80 ROM asks of it. The command
-// set and every fact below are in Sharp1500-1600-Ref
-// `PC-1600/PC-1600-SubCpu-LU57813P.md` (cited as "SubCpu §n"), rebuilt from
+// set and every fact below are in
+// Ref/PC-1600/PC-1600-SubCPU-LU57813P.md (cited as "SubCpu §n"), rebuilt from
 // the PC-1600 Service Manual §4-3/§9-3 and the ROM's timer IOCS module
 // (P2-B6 A74AH-AA40H).
 //
@@ -22,7 +22,7 @@
 // TC8576F's parallel-data register (port 21H). The CPC drives it inverted
 // onto /DATA1-8, so the sub-CPU's R13-R00 inputs see the true byte, the
 // *operand*, and the CPC's DSTB pulse reaches KI (SubCpu §6,
-// PC-1600-CPC-TC8576.md §9.4). Answers are read at I/O 33H, a buffer in the
+// Ref/PC-1600/PC-1600-CPC-TC8576.md §9.4). Answers are read at I/O 33H, a buffer in the
 // LR38041 gate array that the sub-CPU drives from R33-R20. TC8576F
 // complements the register value and calls strobe(). Every operand in this
 // class is in the chip's own terms, as the ROM passes it to its send
@@ -72,7 +72,7 @@ public:
     // emulator made that difference only 9.6 ms at a 64 T window, so each
     // of the 0.5 s ISR's command bytes (A2H, A3H) costs ~1.66 ms on
     // hardware. That total includes the CPC's own DSTB delay, 17 tSYS =
-    // 27.7 us at the ROM's PR2 = 0FH / PR7 = 02H (PC-1600-CPC-TC8576.md
+    // 27.7 us at the ROM's PR2 = 0FH / PR7 = 02H (Ref/PC-1600/PC-1600-CPC-TC8576.md
     // §9.1), which TC8576F now passes in as kiDelayTStates, so the sub-CPU's
     // share is the rest.
     static constexpr int kResponseMicros = 1632;
@@ -158,7 +158,7 @@ public:
     enum Timer { WakeUp = 0, Alarm1 = 1, Alarm2 = 2 };
     Alarm timer(Timer t) const { return m_timers[t]; }
 
-    // SRIRQ / SWMSK bits (PC-1600-IO-Ports.md §7.1).
+    // SRIRQ / SWMSK bits (Ref/PC-1600/PC-1600-IO-Ports.md §7.1).
     static constexpr uint8_t kIrqWakeUp     = 0x80;
     static constexpr uint8_t kIrqAlarm1     = 0x40; // ON TIME$
     static constexpr uint8_t kIrqAlarm2     = 0x20; // ALARM$

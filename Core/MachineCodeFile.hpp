@@ -32,7 +32,7 @@ const char* slotName(Slot slot);
 
 // The global bank the $8000-$BFFF window shows for code in `slot` when the
 // file names none: bank 0 (slot 1's lower half; S0 needs none), bank 2 for
-// slot 2 (PC-1600-Memory-Architecture.md §4). `CALL #bank,&addr` for bank != 0.
+// slot 2 (Ref/PC-1600/PC-1600-Memory-Architecture.md §4). `CALL #bank,&addr` for bank != 0.
 int pc1600DefaultBank(Slot slot);
 
 // The memory slot behind global `bank` 0-3: banks 0/1 slot 1, 2/3 slot 2.

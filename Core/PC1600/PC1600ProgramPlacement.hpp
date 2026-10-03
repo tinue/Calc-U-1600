@@ -20,7 +20,7 @@
 // backing-store writes that place a `payloadLen`-byte tokenised image plus
 // its single terminating $FF marker.
 //
-// Reference: Sharp1500-1600-Ref/PC-1600/PC-1600-BASIC-Program-Placement.md
+// Reference: Ref/PC-1600/PC-1600-BASIC-Program-Placement.md
 // (memory model §1, work-area bytes §3, segment list §4, placement §5).
 // The address-space geometry and the reserve conventions are from the
 // PC-1600 Technical Reference Manual; the ADTBL byte bit-layout is

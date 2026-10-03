@@ -887,7 +887,7 @@ void test_rom_auto_power_off_resumes() {
 // Real ROM: a COM1: transfer through the TC8576F to an attached peer --
 // SETCOM, OPEN, PRINT#, CLOSE. Exercises the CPC as the ROM programs it:
 // PR7/PR1:PR0 baud, the serial command shadow (TxEN), and the CS/CD/DR
-// status polarity the ROM checks before it sends (PC-1600-CPC-TC8576.md §9).
+// status polarity the ROM checks before it sends (Ref/PC-1600/PC-1600-CPC-TC8576.md §9).
 struct RecordingLink : SerialLink {
     std::vector<uint8_t> tx;
     std::deque<uint8_t> rx;

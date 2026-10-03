@@ -87,8 +87,8 @@ still worth understanding. They say what the code actually does now.
 
 `Core/PC1600/TC8576F.*`, `Core/Serial/SerialLink.hpp`, `Core/Serial/PtySerialLink.*`
 
-The register model follows Toshiba's TC8576AF data sheet (Sharp1500-1600-Ref
-`PC-1600/PC-1600-CPC-TC8576.md`). Remaining gaps:
+The register model follows Toshiba's TC8576AF data sheet
+([Ref/PC-1600/PC-1600-CPC-TC8576.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-CPC-TC8576.md)). Remaining gaps:
 
 - **RS-232C / SIO connector mux not modelled** — the chip's PRIME output
   (the gate array's PRIM select) is tracked (`TC8576F::rs232Selected()`),
@@ -123,7 +123,7 @@ The register model follows Toshiba's TC8576AF data sheet (Sharp1500-1600-Ref
 `Core/PC1600/PC1600SubCpu.*`
 
 No datasheet and no ROM dump exist; the command set comes from the Z-80 ROM
-(Sharp1500-1600-Ref `PC-1600/PC-1600-SubCpu-LU57813P.md`). Modelled: the
+([Ref/PC-1600/PC-1600-SubCPU-LU57813P.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-SubCPU-LU57813P.md)). Modelled: the
 clock, the wake-up and two alarm timers with minute-carry compare and `?`
 wildcards, the interrupt mask/pending bits and INT6, the password, the reset
 / power-on cause, system off/on, and the handshake timing. Remaining gaps:

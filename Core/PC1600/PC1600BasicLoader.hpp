@@ -22,8 +22,8 @@ class PC1600Machine;
 // caller prepares the machine first (memory cards, `INIT`, `NEW`, `TITLE`,
 // mode) exactly as on real hardware.
 //
-// What it does, mirroring the ROM's own LOAD (Sharp1500-1600-Ref
-// PC-1600-Work-Area-Map.md §3.5 / §4.5):
+// What it does, mirroring the ROM's own LOAD
+// (Ref/PC-1600/PC-1600-Work-Area-Map.md §3.5 / §4.5):
 //   * Lays the line records down as LOADSTORE (rom3b 7074H) does: no line
 //     straddles two module banks -- the ROM leaves a 00 00 bank-end mark and
 //     continues in the next bank -- except across ADTBL entry 5 -> internal

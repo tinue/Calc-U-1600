@@ -5,7 +5,7 @@
 // Tracks which of the two PC-1600 CPUs currently owns the shared bus
 // (`ELH#` high = SC7852 running, the reset default; low =
 // LH5803 running; never both), per
-// Sharp1500-1600-Ref/PC-1600/PC-1600-Machine-Overview.md §3.
+// Ref/PC-1600/PC-1600-Machine-Overview.md §3.
 //
 // This class only tracks state and pending-switch requests -- it does not
 // itself drive either CPU. PC1600Machine::step() is what actually
@@ -54,7 +54,7 @@ public:
     void switchToSC7852() { m_sc7852Owns = true; m_switchRequestedByLH5803 = false; }
 
     /// SC7852 always starts first after reset (architecturally guaranteed
-    /// per PC-1600-Machine-Overview.md §6, not configurable).
+    /// per Ref/PC-1600/PC-1600-Machine-Overview.md §6, not configurable).
     void reset() {
         m_sc7852Owns = true;
         m_switchRequestedBySC7852 = false;

@@ -517,7 +517,7 @@ void test_type_step_rejects_untypeable_char() {
 
 // Functional: with the real ROM booting, a `type:` line with shifted
 // punctuation lands the right ASCII in the console input buffer
-// (FBB0H-FBFFH, PC-1600-Work-Area-Map.md) -- i.e. SHIFT + base key really
+// (FBB0H-FBFFH, Ref/PC-1600/PC-1600-Work-Area-Map.md) -- i.e. SHIFT + base key really
 // produces the character, not a shift that leaks onto the next key
 // (which would turn `INIT"S2:","M"` into `INITs2M`).
 void test_type_step_shifted_punctuation_reaches_input_buffer() {

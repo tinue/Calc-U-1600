@@ -7,7 +7,7 @@
 namespace {
 // Sentinel returned by execute()/executeFD() for an opcode with no case —
 // never a real cycle count (those are all small positive values per the
-// LH5801_Guide.md tables). step() catches this, records it as an illegal-
+// Ref/PC-1500/Assembly-Programming/LH5801_Guide.md tables). step() catches this, records it as an illegal-
 // opcode event, and substitutes a plain pacing value so execution continues.
 constexpr int kIllegalOpcode = -1;
 
@@ -19,7 +19,7 @@ constexpr int kInterruptAckCycles = 14;
 } // namespace
 
 // Opcode/cycle/flag data below is transcribed directly from
-// Sharp1500-1600-Ref/PC-1500/Assembly-Programming/LH5801_Guide.md's "Instruction
+// Ref/PC-1500/Assembly-Programming/LH5801_Guide.md's "Instruction
 // Set Reference" section. Two points where the guide's prose was
 // internally ambiguous are flagged at their point of use below: DRL/DRR
 // nibble rotation, and CPA/CPI/CIN's carry-in (see the CPA case below).
@@ -344,7 +344,7 @@ int LH5801::step() {
 // 0x1FF, then keeps free-running through the same 511-state cycle
 // indefinitely (firing again every ~511 ticks) until software reloads TM
 // (including to 0, which parks/stops it) via AM0/AM1. TM==0 means
-// "stopped," matching LH5801_Guide.md's own wording for that one case.
+// "stopped," matching Ref/PC-1500/Assembly-Programming/LH5801_Guide.md's own wording for that one case.
 void LH5801::tickTimer(int cycles) {
     if (TM == 0 || cycles <= 0) return;
     m_timerCycleAccumulator += uint32_t(cycles);

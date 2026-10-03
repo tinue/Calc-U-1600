@@ -83,7 +83,7 @@ const uint8_t* PC1500Memory::resolve(uint16_t addr, bool forWrite) const {
     if (addr >= kSystemRamBase && addr < kSystemRamBase + kSystemRamWindowSize) {
         // Plain PC-1500: the TC5514 pair only decodes A0-A9 (10 lines)
         // across this 11-line, 2KB window, so &7C00-&7FFF aliases
-        // &7800-&7BFF at a fixed &400 offset (PC-1500-Address-Decoding.md
+        // &7800-&7BFF at a fixed &400 offset (Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md
         // §2.3) -- masking off bit 10 of the window-relative offset
         // reproduces exactly that. The PC-1500A doesn't alias (mask covers
         // the full window), so one masked expression serves both models.

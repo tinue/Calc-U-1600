@@ -1,7 +1,7 @@
 #include "PC1600Display.hpp"
 
 // HD61102 command byte encoding (not detailed in
-// PC-1600-Display-HD61202.md, which only describes command functionality,
+// Ref/PC-1600/PC-1600-Display-HD61202.md, which only describes command functionality,
 // not exact bit patterns -- see that doc's §3):
 //   0x3E           display off (bit0 = 0)
 //   0x3F           display on  (bit0 = 1)
@@ -154,7 +154,7 @@ void PC1600Display::refreshStatusSymbols() {
     using Symbol = StatusLine::Symbol;
 
     // The status-symbol segments hang off IC3 (its Y6f pin, per
-    // PC-1600-Display-HD61202.md §2), so a "display off" command (0x3E) to
+    // Ref/PC-1600/PC-1600-Display-HD61202.md §2), so a "display off" command (0x3E) to
     // IC3 stops them being driven -- exactly as it stops the graphics area
     // (see pixel()'s own `displayOn` guard). Without this, the ROM's
     // auto-power-off / OFF-key power-down would blank the 156x32 dot-matrix

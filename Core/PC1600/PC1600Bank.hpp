@@ -18,7 +18,7 @@
 //     b6:b5:b4  (3-bit)  bank select 0-7,   page C only (8000-BFFF)
 //                        — b6 is ALSO, independently, the LHS1/LHS2/LHS3
 //                          remap-table selector (Bank 0 windows, from
-//                          PC-1600-Memory-Bank-Switching.md Part 4; not
+//                          Ref/PC-1600/PC-1600-Memory-Bank-Switching.md Part 4; not
 //                          modelled, nothing in the ROM paths we run needs it):
 //                            b6=0: LHS1 A800, LHS2 B000, LHS3 B800
 //                            b6=1: LHS1 B000, LHS2 A800, LHS3 A000
@@ -150,7 +150,7 @@ public:
 
     /// Resets all four registers to 0 — the documented reset-state bank
     /// configuration (A13A high/A15A low/A14A high per
-    /// PC-1600-Machine-Overview.md §6) corresponds to an all-zero register
+    /// Ref/PC-1600/PC-1600-Machine-Overview.md §6) corresponds to an all-zero register
     /// bank: page A/B/C/D all select bank 0, hidden ROM not selected.
     void reset() {
         m_port31 = 0;

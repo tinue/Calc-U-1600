@@ -337,7 +337,7 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
         case 0x1C: return m_dda;
         case 0x1D: return m_ddb;
         case 0x1E: return m_opa;
-        // Per PC-1600-IO-Ports.md §2.4: a PB bit configured as an output
+        // Per Ref/PC-1600/PC-1600-IO-Ports.md §2.4: a PB bit configured as an output
         // (DDB.i = 1) reads back the OPB latch; one configured as an input
         // reads the live pin level. Merging the two is what keeps PB5's
         // 64Hz square wave alive across the ROM's own read-modify-write of

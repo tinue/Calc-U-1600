@@ -8,7 +8,7 @@
 // 9 strobes (KS0-KS7 = OPA port 1EH's 8 bits, plus one extra strobe on OPB
 // port 1FH bit 6 for CTRL/KBII/BS only) x 8 sense bits (a read of I/O port
 // 37H). Both directions active-low, per
-// Sharp1500-1600-Ref/PC-1600/PC-1600-Keyboard.md §2/§5 (this class only
+// Ref/PC-1600/PC-1600-Keyboard.md §2/§5 (this class only
 // needs matrix positions, not what character code the ROM assigns each
 // key via its own key-code translation table, §10.2).
 //

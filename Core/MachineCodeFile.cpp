@@ -379,7 +379,7 @@ Advice advice(Target target, Slot slot, int bank, uint32_t addr, size_t len, uin
 
     // PC-1600. LH5801 code is started from BASIC with XCALL (an LH5803
     // address); Z-80 code with CALL. The window shows the plan's bank:
-    // slot 2 is global bank 2/3, slot 1 bank 0/1 (PC-1600-Memory-Architecture.md
+    // slot 2 is global bank 2/3, slot 1 bank 0/1 (Ref/PC-1600/PC-1600-Memory-Architecture.md
     // §4); S0 and slot 1's lower half are reached from bank 0. Checked in
     // the emulator: `CALL #2,&80C5` runs code loaded at $80C5 in a slot 2
     // CE-1600M. A header auto-run address with a bank of its own names it.

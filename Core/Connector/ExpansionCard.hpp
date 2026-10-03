@@ -84,7 +84,7 @@ struct WriteResult {
     constexpr operator bool() const { return claimed; }
 };
 
-// A card that can drive INHIBIT (Expansion-Connectors.md's INHIBIT/INH
+// A card that can drive INHIBIT (Ref/Shared/Expansion-Connectors.md's INHIBIT/INH
 // pin, pin 15) to suppress the host's internal ROM and substitute its own
 // content derives from this too. Connectors look for it once, when the
 // card is attached, so the (usual) cards without it cost nothing on each

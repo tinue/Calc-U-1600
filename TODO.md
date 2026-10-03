@@ -122,8 +122,8 @@ obligations.
 
 The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, done). Left:
 
-- **The open questions of the load/save matrix** (Sharp1500-1600-Ref
-  `PC-1600/PC-1600-Load-Save-Matrix.md` §6), to be discussed: are all tokens
+- **The open questions of the load/save matrix**
+  ([Ref/PC-1600/PC-1600-Load-Save-Matrix.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-Load-Save-Matrix.md) §6), to be discussed: are all tokens
   the PC-1500 and PC-1600 share identical (the MODE 1 listing rule assumes
   so; a table comparison of libsharpdx's two tables against the ROM's would
   settle it); `INPUT#-1` in MODE 1 through the CE-1600P (the ROM allows it,
@@ -194,7 +194,7 @@ It is not a copy of the PC-1500's signals.
   60-pin paths on the PC-1600. (Typed `Ce150Card*`/`Ce158Card*`,
   `isCe158Io` and the PC-1500's `kCe150IoBase` are gone, see below.)
 
-**Hardware facts** (Expansion-Connectors.md §2, §4):
+**Hardware facts** ([Ref/Shared/Expansion-Connectors.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/Shared/Expansion-Connectors.md) §2, §4):
 - Both connectors carry the address bus, data bus, PU/PV, INHIBIT, DME0,
   R/W and OD.
 - The 60-pin one adds ME1/DME1, INT, WAIT (WEX/W1), CMTIN/CMTOUT, VBAT, BFO
@@ -293,7 +293,7 @@ What's wrong with that:
     PV). On the PC-1500, LH5801 pin 60 (PV) beeps to contact 16 and pin 61
     (PU) to 15, and the **40-pin connector has pin 2 = PU, pin 3 = PV**.
     Both PC-1500 TRM tables have PU/PV swapped. Contact 44 is F-GND, not
-    VBAT. Details in Sharp1500-1600-Ref `Expansion-Connectors.md` §2.2b.
+    VBAT. Details in [Ref/Shared/Expansion-Connectors.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/Shared/Expansion-Connectors.md) §2.2b.
   - PC-1600 nets (SM schematic): LH5803 PU shares one line with the
     SC7852's PU output (slot pin 3, 60-pin 15); LH5803 PV goes SC7852
     PVIN → PVOUT (slot pin 5, 60-pin 16). Slot pin 2 ("PVIN" in the TRM)
@@ -347,7 +347,7 @@ What's wrong with that:
   BASIC. Then drive `PiezoSampler` from a modelled F output
   (`PC1600SubCpu`, `PC1600Memory::updateBuzzerLine()`).
 - **Sub-CPU commands still unnamed** (IOCS 0CH–0FH, 1BH, 1FH, 26H, what
-  1CH/1DH mean, the LH-5803's DCH): see `PC-1600-SubCpu-LU57813P.md` §8.
+  1CH/1DH mean, the LH-5803's DCH): see [Ref/PC-1600/PC-1600-SubCPU-LU57813P.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-SubCPU-LU57813P.md) §8.
   The ROM trace is done (2026-09-27): 1EH is the port-mode select
   (F12CH b0 analog input, b1 external keyboard; `ON ADIN`, `KEYSTAT`),
   16H/17H are the external keyboard, 1CH/1DH come from `SINIT`. The rest have
@@ -550,7 +550,7 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
   1. ~~The TC8576F datasheet check~~ — done (dev-0.6.0): PSR BUSY and
      XBUSY are separate, the DSTB delay is modelled (27.7 us of the fit).
   2. ~~The sub-CPU protocol spec~~ — done in the corpus
-     (`PC-1600-SubCpu-LU57813P.md`): the 0.5 s ISR sends A2H, A8H, A3H.
+     ([Ref/PC-1600/PC-1600-SubCPU-LU57813P.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-SubCPU-LU57813P.md)): the 0.5 s ISR sends A2H, A8H, A3H.
   3. The residual itself. The `ON TIME$` hypothesis is ruled out by the
      ROM (see the known issue); next is timing the FOR/NEXT routine from
      RAM.

@@ -16,7 +16,7 @@
 //
 // **Source.** Toshiba's TC8576AF data sheet (1987 data book pp.159-196),
 // summarised with the PC-1600 wiring and the ROM's use of the chip in
-// Sharp1500-1600-Ref `PC-1600/PC-1600-CPC-TC8576.md` (cited as "CPC §n").
+// Ref/PC-1600/PC-1600-CPC-TC8576.md (cited as "CPC §n").
 //
 // **Register select** (CPC §3). A1:A0 (= port & 3) pick a register; the
 // access direction picks its meaning:

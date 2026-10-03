@@ -219,7 +219,7 @@ void test_boot_with_ce155_in_slot1_is_stable() {
 
 // The boot ROM's own memory sizing must credit the CE-155 its full 8KB:
 // with the module the BASIC RAM base drops from C0C5H to A0C5H (the
-// documented CE-159 figure -- PC-1600-Memory-Architecture.md), i.e. every
+// documented CE-159 figure -- Ref/PC-1600/PC-1600-Memory-Architecture.md), i.e. every
 // RAM-base/size work-area pointer moves by exactly 8192.
 void test_ce155_contributes_full_8k_to_mem() {
     auto boot = [](bool withCard) -> std::unique_ptr<PC1600Machine> {

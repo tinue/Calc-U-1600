@@ -28,7 +28,7 @@ constexpr uint64_t kFrameTStates = kTStateHz / 60;
 constexpr uint64_t kHoldTStates = kFrameTStates * 4;
 
 // The console input line, as ASCII, at the PC-1600 work-area buffer
-// FBB0H-FBFFH (PC-1600-Work-Area-Map.md; the same window
+// FBB0H-FBFFH (Ref/PC-1600/PC-1600-Work-Area-Map.md; the same window
 // pc1600_preset_tests.cpp reads). Logged after each step, next to the LCD
 // as text, so a stuck load can be lined up against the screen.
 std::string inputText(PC1600Machine& machine) { return presetInputLine(machine, 0xFBB0); }

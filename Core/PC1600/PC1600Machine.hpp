@@ -50,7 +50,7 @@ struct PC1600DisplaySnapshot {
 // the bus; only one CPU ever executes per step() call, matching the real
 // hardware's ELH#-gated single-owner bus. reset() always starts on SC7852
 // (architecturally guaranteed, not configurable -- see
-// PC-1600-Machine-Overview.md §6).
+// Ref/PC-1600/PC-1600-Machine-Overview.md §6).
 class PC1600Machine {
 public:
     PC1600Machine();
@@ -90,7 +90,7 @@ public:
     // The two CPUs run off different crystals and their step() costs are
     // NOT interchangeable. `kTStateHz` is this machine's canonical unit of
     // emulated time: SC-7852 T-states at 3.58 MHz
-    // (PC-1600-CPU-SC7852-Z80.md §2.1). `kLH5803Hz` is the LH-5803's basic
+    // (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md §2.1). `kLH5803Hz` is the LH-5803's basic
     // clock phi-OS on pin 4 -- a real PC-1600 number, but explicitly *not*
     // the Z-80 core clock; §2.1 warns about exactly this confusion, and
     // conflating the two runs the machine 2.75x too slow.
@@ -551,7 +551,7 @@ private:
     // 64 Hz square wave confirmed by Systemhandbuch §7.3/§7.4 (see
     // PC1600Memory::setTimer64Bit()'s own comment), modeled here as a
     // T-state accumulator against the SC-7852's own 3.58 MHz crystal
-    // (PC-1600-CPU-SC7852-Z80.md §2.1) since that's the domain the ROM's
+    // (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md §2.1) since that's the domain the ROM's
     // polling loop actually observes it in -- accumulates only SC7852
     // T-states (not LH5803 cycles, a different clock domain entirely), so
     // the pulse effectively pauses while the SC7852 is parked, a real but
@@ -578,7 +578,7 @@ private:
     // The sub-CPU's 0.5 s tick. Its interrupt line (Z7 -> INT6, port 32H
     // bit 6) and the other events that drive it -- the 1 s tick and the
     // wake-up / alarm timers, compared at each minute carry -- live in
-    // PC1600SubCpu (Sharp1500-1600-Ref PC-1600-SubCpu-LU57813P.md §5).
+    // PC1600SubCpu (Ref/PC-1600/PC-1600-SubCPU-LU57813P.md §5).
     //
     // Both signals come out of the sub-CPU's one divider chain, so 0.5 s is
     // exactly 64 edges (32 periods) of the 64 Hz signal, at a fixed phase

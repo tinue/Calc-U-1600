@@ -51,7 +51,7 @@ numbered terminology instead, at the cost of being harder for a person
 to write and review.
 
 **Every host's expansion connector is physically the same 40-pin port**
-(`Software-Defined-Memory-Extension.md` §4) — a card built for one model
+([Ref/Shared/Software-Defined-Memory-Extension.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/Shared/Software-Defined-Memory-Extension.md) §4) — a card built for one model
 physically fits the slot of every other model listed here. Nothing about
 the file format needs to model a plug that won't fit; the load-time gate
 is not a connector/electrical simulation, it's a much simpler thing.
@@ -459,7 +459,7 @@ the sampled lines, and the domain says everything the file needs to.
 The PC-1600 firmware identifies a ROM/RAM-disk module by an **8-byte
 header physically present at the start of the module's own address space**
 (`8000H`, `A000H`, or `B000H` depending on which page the module occupies)
-— `PC-1600-Memory-Bank-Switching.md`'s "ROM Module Detection and Headers":
+— [Ref/PC-1600/PC-1600-Memory-Bank-Switching.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-Memory-Bank-Switching.md)'s "ROM Module Detection and Headers":
 ID bytes `43H 16H`, reset-jump/checksum, start/boot fields, module
 length/boot address, BASIC address, end address, and a type byte
 (`80H`/`FFH` = RAM-Disk, `F0H` = Program, `F2H` = System, `01H` =
@@ -548,7 +548,7 @@ region or bank-range at load time:
 
 ## 9. Coverage check against the source module table
 
-Every row of `Software-Defined-Memory-Extension.md` §2–3 must be
+Every row of [Ref/Shared/Software-Defined-Memory-Extension.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/Shared/Software-Defined-Memory-Extension.md) §2–3 must be
 expressible as one or more regions, each fully placed on D1–D4. Working
 through them:
 

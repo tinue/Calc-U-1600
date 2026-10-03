@@ -555,7 +555,7 @@ void test_memory_open_bus_and_ram_regions() {
 }
 
 void test_memory_display_ram_mirroring() {
-    // Per PC-1500-Address-Decoding.md: the V2/V3 sub-decode only examines
+    // Per Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md: the V2/V3 sub-decode only examines
     // AD8/DME0, so the 2KB S6 window (0x7000-0x77FF) collapses onto the
     // same 512 physical bytes 4 times.
     PC1500Memory mem;
@@ -568,7 +568,7 @@ void test_memory_display_ram_mirroring() {
     CHECK(mem.readME0(0x77FF) == 0x66);
 }
 
-// Per PC-1500-Address-Decoding.md §2.3/§4.2: the *plain* PC-1500's S7 block
+// Per Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md §2.3/§4.2: the *plain* PC-1500's S7 block
 // is backed by a TC5514 pair that only decodes A0-A9 (10 lines) across a
 // 2KB (11-line) window, so &7800-&7BFF and &7C00-&7FFF alias the same 1024
 // physical bytes, offset by &400 -- e.g. a write to &7C00 is electrically
@@ -1309,7 +1309,7 @@ void test_boot_smoke_real_rom() {
     CHECK(machine.cpu().pc() == 0xE000); // confirmed reset vector target, see LH5801.cpp comment
 
     // The ROM's documented input-buffer-clear fill loop (DEL_DIM_VAR_4,
-    // $D0B0 per PC-1500-Address-Decoding.md §4.2) must be reached during a
+    // $D0B0 per Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md §4.2) must be reached during a
     // real cold boot -- a source-independent correctness signal that
     // doesn't depend on decoding the LCD's pixel format.
     machine.setTraceFlags(TRACE_PC);

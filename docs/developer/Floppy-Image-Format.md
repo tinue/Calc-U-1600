@@ -9,8 +9,8 @@ implement this document, not the C++ source.
 
 The container holds the raw bytes of both sides of one 2.5″ diskette — nothing else.
 It knows nothing about files: the PC-1600's FAT-style filesystem inside a side is Sharp's
-format, documented in `Sharp1500-1600-Ref/PC-1600/PC-1600-Filesystem.md` §5 and
-`PC-1600-Peripherals-Hardware.md` §2. The emulator itself never interprets it either; the
+format, documented in [Ref/PC-1600/PC-1600-Filesystem.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-Filesystem.md) §5 and
+[Ref/PC-1600/PC-1600-Peripherals-Hardware.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-Peripherals-Hardware.md) §2. The emulator itself never interprets it either; the
 CE-1600P ROM does, as on real hardware.
 
 ## 2. File naming and lookup

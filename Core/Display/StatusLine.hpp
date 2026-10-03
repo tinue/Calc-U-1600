@@ -6,9 +6,8 @@
 // ── LCD status-symbol line, PC-1500 and PC-1600 ──────────────────────────
 //
 // **One device on both machines.** The PC-1500's two annunciator bytes
-// after the dot matrix (Sharp1500-1600-Ref/PC-1500/Assembly-Programming/
-// LH5801_Guide.md) carry the same symbols on the same bits as the
-// PC-1600's SMBLSET sets 00H/01H below:
+// after the dot matrix (Ref/PC-1500/Assembly-Programming/LH5801_Guide.md)
+// carry the same symbols on the same bits as the PC-1600's SMBLSET sets 00H/01H below:
 //
 //   764EH = set 00H: DEF   I     II    III   SMALL  kana   SHIFT  BUSY
 //   764FH = set 01H: --    RUN   PRO   RESERVE --   RAD    G      DE
@@ -24,7 +23,7 @@
 // store 03H/04H/06H in the low bits of set 01H).
 //
 // **PC-1600 storage.** The 16-symbol strip above the 156x32 graphics area (TRM §7.3;
-// Sharp1500-1600-Ref/PC-1600/PC-1600-Display-HD61202.md §1). These are
+// Ref/PC-1600/PC-1600-Display-HD61202.md §1). These are
 // printed fixed-legend text permanently etched on the LCD glass, each
 // with its own small individually-drivable segment -- the same style as a
 // scientific calculator's fixed DEG/RAD/GRAD strip. This class is
