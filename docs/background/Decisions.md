@@ -502,5 +502,19 @@ authentic speed for the span that matters.
 ### Wording and sources
 - **Comments and docs cite original sources only**: TRM, Service Manual,
   ROM dumps and disassembly. Other emulators aren't cited as an authority.
+  Other people's non-primary material (disassemblies, analyses, dumps) is
+  credited in THIRD-PARTY-NOTICES.md's acknowledgments, not inline.
+- **The research repository is cited as `Ref/<path>`**, a path inside
+  [Sharp1500-1600-Ref](https://github.com/tinue/Sharp1500-1600-Ref). The
+  full link is in docs/developer/README.md; Markdown files link each
+  citation.
+- **Docs and comments describe what is, not how it got there.** Fix
+  stories, "used to", plan phases and commit hashes go in commit messages
+  and CHANGELOG.md. This file is the exception: it may name the commit
+  where something was tried and reverted. A handoff is deleted once its
+  work is resolved, after its lasting facts move to the code, Decisions or
+  the developer docs.
+- **No FILEX guide or binary in this repository.** There is no agreement
+  with its author. FILEX is named only as MEP software that runs on `S3:`.
 - **Calc-U-1600 is original work.** Don't call it a "fork", and don't call
   other projects "upstream".
