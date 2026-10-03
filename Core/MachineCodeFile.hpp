@@ -38,12 +38,6 @@ int pc1600DefaultBank(Slot slot);
 // The memory slot behind global `bank` 0-3: banks 0/1 slot 1, 2/3 slot 2.
 Slot pc1600BankSlot(int bank);
 
-// Offset into a slot card's image (debugSlotImage()) of the Z-80 address
-// `addr` ($8000-$BFFF) in global `bank`: odd banks are the module's upper
-// 16 KB (bank 1 in slot 1, bank 3 in slot 2 -- a vertically banked slot 2
-// card's vertical bank 0).
-uint32_t pc1600ImageOffset(int bank, uint32_t addr);
-
 struct File {
     enum class Header { None, CE158, PC1600 };
     Header header = Header::None;
@@ -80,7 +74,7 @@ struct BasicArea {
     int slot = 0;              // 0 = internal RAM, 1 / 2 = that slot's module
     uint32_t windowBase = 0;   // $C000, or the module window base (usually $8000)
     uint32_t top = 0;          // last usable address (inclusive)
-    uint32_t imageOffset = 0;  // module only: card-image offset of windowBase
+    int bank = 0;              // module only: the global bank 0-3 behind $8000-$BFFF
 };
 
 // The CPU whose address space a load address is given in. On the PC-1600

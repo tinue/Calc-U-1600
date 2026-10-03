@@ -1,5 +1,6 @@
 #include "MachineCodeFile.hpp"
 
+#include <algorithm>
 #include <cstdio>
 
 #include "PC1600/PC1600ProgramPlacement.hpp"
@@ -52,10 +53,6 @@ const char* slotName(Slot slot) {
 int pc1600DefaultBank(Slot slot) { return slot == Slot::S2 ? 2 : 0; }
 
 Slot pc1600BankSlot(int bank) { return bank < 2 ? Slot::S1 : Slot::S2; }
-
-uint32_t pc1600ImageOffset(int bank, uint32_t addr) {
-    return static_cast<uint32_t>(bank & 1) * 0x4000 + (addr - kPc1600SlotBase);
-}
 
 File readFile(const std::vector<uint8_t>& bytes) {
     using programfile::Kind;
@@ -122,13 +119,13 @@ bool pc1600TargetFor(uint32_t busAddr, size_t len, const PC1600State& state, Slo
         if (why) *why = at + " is ROM -- machine code goes into RAM, from " + hexIn(pc1600DefaultAddress(state), cpu) + ".";
         return false;
     }
-    if (end > kPc1600S0Base) {
-        if (why)
-            *why = at + " + " + std::to_string(len) + " bytes crosses " + hexIn(kPc1600S0Base, cpu) +
-                   " -- a memory module's window is " + hexIn(kPc1600SlotBase, cpu) + "-" + hexIn(kPc1600S0Base - 1, cpu) + ".";
+    if (end > 0x10000) {
+        if (why) *why = at + " + " + std::to_string(len) + " bytes runs past " + hexIn(0xFFFF, cpu) + ".";
         return false;
     }
-    // $8000-$BFFF: the module behind the selected program area.
+    // $8000-$BFFF: the module behind the selected program area. Code that
+    // runs on past $BFFF continues in internal RAM, as BLOAD / CLOAD M write
+    // it (in MODE 1 the module and internal RAM are one LH5803 range).
     if (state.title == 1 || state.title == 2) {
         if (busAddr < state.titleBase) {
             if (why) *why = at + " is below the slot " + std::to_string(state.title) + " module, which starts at " +
@@ -209,7 +206,8 @@ const char* bankWhere(int bank) {
 
 // A PC-1600 header that names a bank (1-3): the code goes exactly there,
 // whatever MODE / TITLE / the program area say -- if that bank has RAM
-// under all of [addr, addr + len).
+// under all of [addr, addr + len) that lies in its window. Code that runs
+// on past $BFFF continues in internal RAM, as BLOAD writes it.
 bool pc1600BankTarget(uint32_t addr, size_t len, int bank, const PC1600State& state, Slot* slot, std::string* why) {
     const uint64_t end = static_cast<uint64_t>(addr) + len;  // one past the last byte
     if (bank > 3) {
@@ -217,17 +215,18 @@ bool pc1600BankTarget(uint32_t addr, size_t len, int bank, const PC1600State& st
                ", but only banks 0-3 (the two memory slots) can hold machine code.";
         return false;
     }
-    if (addr < kPc1600SlotBase || end > kPc1600S0Base) {
+    if (addr < kPc1600SlotBase || addr >= kPc1600S0Base || end > 0x10000) {
         *why = "the header asks for bank " + std::to_string(bank) + ", which is only reachable at " +
                hex(kPc1600SlotBase) + "-" + hex(kPc1600S0Base - 1) + ", but the code occupies " + hex(addr) + "-" +
                hex(static_cast<uint32_t>(end - 1)) + ".";
         return false;
     }
     const uint64_t pages = state.bankRamPages[static_cast<size_t>(bank)];
-    for (uint32_t page = (addr - kPc1600SlotBase) >> 8; page <= ((end - 1 - kPc1600SlotBase) >> 8); page++) {
+    const uint64_t windowEnd = std::min<uint64_t>(end, kPc1600S0Base);
+    for (uint32_t page = (addr - kPc1600SlotBase) >> 8; page <= ((windowEnd - 1 - kPc1600SlotBase) >> 8); page++) {
         if (!(pages >> page & 1)) {
             *why = "the header asks for bank " + std::to_string(bank) + " (" + bankWhere(bank) +
-                   "), but there is no RAM at " + hex(addr) + "-" + hex(static_cast<uint32_t>(end - 1)) +
+                   "), but there is no RAM at " + hex(addr) + "-" + hex(static_cast<uint32_t>(windowEnd - 1)) +
                    " in that bank.";
             return false;
         }
@@ -338,13 +337,12 @@ const char* areaWhere(int slot) {
 }
 
 // Whether `slot`'s load window maps [addr, end) onto the memory of `area`:
-// same physical target, and (for a module) the same card-image bytes --
-// Slot loads write card-image offset pc1600ImageOffset(bank, addr).
+// same physical target, and (for a module) the same bank.
 bool sameMemory(const BasicArea& area, Slot slot, int bank, uint32_t addr) {
     const int wanted = slot == Slot::S0 ? 0 : slot == Slot::S1 ? 1 : 2;
     if (area.slot != wanted) return false;
     if (wanted == 0) return true;
-    return addr >= area.windowBase && area.imageOffset + (addr - area.windowBase) == pc1600ImageOffset(bank, addr);
+    return addr >= area.windowBase && area.bank == bank;
 }
 
 }  // namespace

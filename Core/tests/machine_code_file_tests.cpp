@@ -171,7 +171,7 @@ using machinecode::PC1600State;
 
 const std::vector<BasicArea> kStockAreas = {{0, 0xC000, 0xEFFF, 0}};
 const std::vector<BasicArea> kSlot1FirstAreas = {{1, 0x8000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
-const std::vector<BasicArea> kSlot2FirstAreas = {{2, 0x8000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
+const std::vector<BasicArea> kSlot2FirstAreas = {{2, 0x8000, 0xBFFF, 2}, {0, 0xC000, 0xEFFF, 0}};
 
 PC1600State state(const std::vector<BasicArea>& areas, bool mode1 = false, int title = 0) {
     PC1600State st;
@@ -248,9 +248,10 @@ void test_plan_pc1600_target() {
     auto rom = machinecode::readFile(pc1600File(kCode, 0x7000, 0));
     CHECK(!machinecode::plan(Target::PC1600, rom, kSlot1First).error.empty());
 
-    // $BFFE + 5 bytes crosses into $C000.
+    // $BFFE + 5 bytes runs on into internal RAM, as BLOAD writes it.
     auto crossing = machinecode::readFile(pc1600File(kCode, 0xBFFE, 0));
-    CHECK(!machinecode::plan(Target::PC1600, crossing, kSlot1First).error.empty());
+    p = machinecode::plan(Target::PC1600, crossing, kSlot1First);
+    CHECK(p.error.empty() && p.slot == Slot::S1);
 
     // The work area is allowed, with a warning -- many programs live up
     // there, e.g. CLOCK.BIN at &FF3A-&FFFB (WAKE$ + the CE-1F01A pen area).
@@ -521,7 +522,11 @@ void test_pc1600_writer() {
 
     // Window checks.
     CHECK(!loadPC1600MachineCode(m, 0, 0xBFFF, kCode.data(), kCode.size(), &err, 0));
-    CHECK(!loadPC1600MachineCode(m, 1, 0xBFFE, kCode.data(), kCode.size(), &err, 0));
+    // Past $BFFF the code continues in internal RAM.
+    CHECK(loadPC1600MachineCode(m, 1, 0xBFFE, kCode.data(), kCode.size(), &err, 0));
+    image = m.debugSlotImage(1);
+    if (image.size() >= 0x4000) CHECK(image[0x3FFE] == kCode[0] && image[0x3FFF] == kCode[1]);
+    CHECK(m.debugPeek(0xC000) == kCode[2] && m.debugPeek(0xC002) == kCode[4]);
 }
 
 void test_pc1500_writer() {
@@ -554,7 +559,7 @@ void test_pc1600_basic_areas() {
         CHECK(areas.size() >= 2);
         if (areas.size() >= 2) {
             CHECK(areas.front().slot == 1 && areas.front().windowBase == 0x8000);
-            CHECK(areas.front().imageOffset == 0);
+            CHECK(areas.front().bank == 0);
             CHECK(areas.back().slot == 0);
         }
     }

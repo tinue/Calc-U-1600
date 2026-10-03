@@ -233,6 +233,15 @@ authentic speed for the span that matters.
   header), the VARIABLE POINTER check, PRGADR (FE3C-FE41), F89E and F1C1
   (LOADEND, rom3b 70E1H). LIST reads PRGADR, so without it a loaded program
   lists as empty (7b327cd). Checked byte for byte against the typer.
+- **The PC-1600 loaders write a module through the slot's pins**
+  (`PC1600Memory::slotBusWrite`, a global bank + Z-80 address), not into
+  the card image at "address minus window base". A card's image isn't in
+  address order: a CE-155 keeps A000H (S1) at 0800H and B800H (its own
+  decoder) at 0000H. Found by the loader matrix (dev/loader-matrix/).
+  Don't bring back image-offset writes.
+- **Machine code may run from a module window on past &BFFF** into
+  internal RAM, as `BLOAD` and `CLOAD M` write it. In MODE 1 that is one
+  LH5803 range, where PC-1500 machine code naturally lives.
 - **No line straddles two module banks** (`PC1600ProgramPlacement`). The ROM
   leaves a `00 00` bank-end mark and starts the next bank (LOADSTORE 7074H);
   only ADTBL entry 5 -> internal RAM is contiguous and may be straddled.

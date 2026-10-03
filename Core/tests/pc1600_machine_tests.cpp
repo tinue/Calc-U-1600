@@ -320,16 +320,34 @@ void test_debug_write_internal_ram_and_slot_image_land_directly() {
     CHECK(!m.debugWriteInternalRam(0x3FFF, block, 3));   // runs past the 16 KB end
     CHECK(m.debugPeek(0xFFFF) == 0x00);                  // nothing written
 
-    // Slot image: an empty slot rejects; an attached plain-RAM card takes
-    // the write into its backing (visible via debugSlotImage()).
-    CHECK(!m.debugWriteSlotImage(1, 0, block, 3));
+    // Slot bus: an empty slot rejects; an attached plain-RAM card takes the
+    // write in the named bank, whatever bank is mapped.
+    CHECK(!m.debugWriteSlotBus(1, 0x8000, block, 3));
     m.memory().attachSlot1Card(plainRamCard(2 * PC1600Memory::kBankSize));
-    CHECK(m.debugWriteSlotImage(1, 0x4000, block, 3));   // start of the high 16 KB half
+    CHECK(m.debugWriteSlotBus(1, 0x8000, block, 3));     // bank 1: the high 16 KB half
     auto img = m.debugSlotImage(1);
     CHECK(img.size() == 2u * 0x4000);
     CHECK(img[0x4000] == 0x11 && img[0x4002] == 0x33);
-    CHECK(!m.debugWriteSlotImage(1, 0x7FFF, block, 3));  // past the 32 KB end -> nothing
+    CHECK(!m.debugWriteSlotBus(1, 0xBFFF, block, 3));    // past the window -> nothing
     CHECK(m.debugSlotImage(1)[0x7FFF] == 0x00);
+    CHECK(!m.debugWriteSlotBus(2, 0x8000, block, 3));    // bank 2 is slot 2: empty
+}
+
+// A loader's bus write lands where a CPU write to that bank lands, through
+// the card's own wiring: a CE-155 keeps A000H (its S1 chip) at image
+// offset 0800H, not 2000H.
+void test_debug_write_slot_bus_follows_card_wiring() {
+    PC1600Machine m;
+    m.memory().attachSlot1Card(bundledCard("ce155.card.yaml", CardHost::PC1600Slot1));
+    m.memory().writeIO(0x3C, 0x5B);                      // what the boot probe sets for a CE-155
+    m.memory().writeIO(0x31, 0x20);                      // page-C bank 2 mapped: the loader doesn't care
+    const uint8_t v = 0x5A;
+    CHECK(m.debugWriteSlotBus(0, 0xA0C5, &v, 1));
+    CHECK(m.debugSlotImage(1)[0x08C5] == 0x5A);
+    m.memory().writeIO(0x31, 0x00);                      // page-C bank 0: the CPU's view
+    CHECK(m.memory().read(0xA0C5) == 0x5A);
+    CHECK(m.debugSlotBusWritable(0, 0xA000, 0x2000));    // A000-BFFF: the module's 8 KB
+    CHECK(!m.debugSlotBusWritable(0, 0x9F00, 0x100));    // below it: open bus
 }
 
 void test_debug_bank_state_reports_registers_and_card_bank() {
@@ -950,6 +968,7 @@ int run_pc1600_machine_tests() {
     test_debug_copy_internal_ram_is_the_live_state();
     test_debug_slot_image_returns_the_whole_card_backing_store();
     test_debug_write_internal_ram_and_slot_image_land_directly();
+    test_debug_write_slot_bus_follows_card_wiring();
     test_debug_bank_state_reports_registers_and_card_bank();
     test_debug_bank_state_resolves_the_live_address_map();
     test_reset_starts_on_sc7852();

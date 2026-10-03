@@ -316,25 +316,30 @@ public:
         std::copy(m_internalRam.begin(), m_internalRam.end(), out);
     }
 
-    /// Write counterparts of slot{1,2}CardImage() / debugCopyInternalRam():
-    /// overwrite backing storage directly, bypassing the emulated bus and
-    /// its bank-register / pin gating. For the fast BASIC loader, which
-    /// scatters a tokenised program across module banks + internal RAM that
-    /// the post-NEW0 bank state may not currently map for CPU writes. Each
-    /// returns false, writing nothing, on an empty slot / out-of-range /
-    /// non-writable-backing.
-    bool slot1CardImageWrite(size_t off, const uint8_t* data, size_t n) {
-        auto* c = m_slot1Conn.attachedCard();
-        return c && c->debugImageWrite(off, data, n);
+    /// Host writes into the slot card behind global page-C `bank` (0/1 =
+    /// Slot 1, 2/3 = Slot 2) at `addr` ($8000-$BFFF), whichever bank is
+    /// mapped right now. The card gets the pins a CPU access to that bank
+    /// drives (MemorySlotConnector::writeInBank), so its own wiring places
+    /// each byte. For the fast loaders, which scatter a program across
+    /// banks the post-NEW0 state doesn't map. Writes nothing and returns
+    /// false unless every byte lands in RAM.
+    bool slotBusWrite(int bank, uint16_t addr, const uint8_t* data, size_t n) {
+        if (!slotBusWritable(bank, addr, n)) return false;
+        MemorySlotConnector& c = bank < 2 ? m_slot1Conn : m_slot2Conn;
+        for (size_t i = 0; i < n; ++i) c.writeInBank(bank, static_cast<uint16_t>(addr + i), data[i]);
+        return true;
     }
-    bool slot2CardImageWrite(size_t off, const uint8_t* data, size_t n) {
-        auto* c = m_slot2Conn.attachedCard();
-        return c && c->debugImageWrite(off, data, n);
-    }
-    // Whether slot{1,2}CardImageWrite() would accept [off, off + n).
-    bool slotCardImageWritable(int slot, size_t off, size_t n) const {
-        const auto* c = (slot == 1 ? m_slot1Conn : m_slot2Conn).attachedCard();
-        return c && c->debugImageWritable(off, n);
+    /// Whether slotBusWrite() would store [addr, addr + n): each byte is
+    /// read and written back unchanged.
+    bool slotBusWritable(int bank, uint16_t addr, size_t n) {
+        if (bank < 0 || bank > 3 || addr < 0x8000 || addr + n > 0xC000) return false;
+        MemorySlotConnector& c = bank < 2 ? m_slot1Conn : m_slot2Conn;
+        for (size_t i = 0; i < n; ++i) {
+            const uint16_t a = static_cast<uint16_t>(addr + i);
+            uint8_t v;
+            if (!c.readInBank(bank, a, v) || !c.writeInBank(bank, a, v).stored) return false;
+        }
+        return true;
     }
     bool debugWriteInternalRam(size_t off, const uint8_t* data, size_t n) {
         if (n == 0) return true;

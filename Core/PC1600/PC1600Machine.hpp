@@ -391,20 +391,18 @@ public:
     static constexpr size_t kInternalRamSize = 0x4000;
     void debugCopyInternalRam(uint8_t* out);
 
-    /// Direct backing-store writes, bypassing the emulated bus / bank
-    /// gating -- the write side of debugCopyInternalRam() / debugSlotImage().
-    /// Used by the fast BASIC loader to scatter a tokenised program across
-    /// module banks + internal RAM regardless of the current page-C bank
-    /// state. GUI-safe (take m_mutex, like pokeMemory()). Return false,
-    /// writing nothing, on an out-of-range offset or an empty/read-only
-    /// slot. `off` is into the concatenated card image (debugSlotImage()'s
-    /// address space) for debugWriteSlotImage(), or 0..kInternalRamSize for
-    /// debugWriteInternalRam().
+    /// Loader writes regardless of the current page-C bank state, for the
+    /// fast loaders that scatter a program across module banks + internal
+    /// RAM. GUI-safe (take m_mutex, like pokeMemory()). Return false,
+    /// writing nothing, unless every byte lands in RAM.
+    /// debugWriteInternalRam(): `off` 0..kInternalRamSize into the internal
+    /// RAM's backing store. debugWriteSlotBus(): Z-80 `addr` ($8000-$BFFF)
+    /// in global `bank` 0-3, through the slot's pins
+    /// (PC1600Memory::slotBusWrite), so the card's own wiring applies.
     bool debugWriteInternalRam(size_t off, const uint8_t* data, size_t n);
-    bool debugWriteSlotImage(int slot, size_t off, const uint8_t* data, size_t n);
-    /// Whether debugWriteSlotImage() would accept [off, off + n): a card
-    /// in `slot` with RAM there. Writes nothing.
-    bool debugSlotImageWritable(int slot, size_t off, size_t n);
+    bool debugWriteSlotBus(int bank, uint16_t addr, const uint8_t* data, size_t n);
+    /// Whether debugWriteSlotBus() would store [addr, addr + n).
+    bool debugSlotBusWritable(int bank, uint16_t addr, size_t n);
 
     /// The entire backing store of the card in Slot `slot` (1 or 2) --
     /// every bank / vertical bank concatenated ascending

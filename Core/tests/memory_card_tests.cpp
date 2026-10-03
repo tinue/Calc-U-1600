@@ -1204,7 +1204,7 @@ void test_ce1601m_slot2map_remap() {
 }
 
 // contentRevision() moves only when the stored content changes: a guest
-// write of a new value, a debugImageWrite(); not a write of the value
+// write of a new value, a loader's slotBusWrite(); not a write of the value
 // already there (what the GUI's card autosave relies on to skip a copy).
 void test_card_content_revision() {
     PC1600Bank bank;
@@ -1221,7 +1221,7 @@ void test_card_content_revision() {
     const uint64_t r2 = mem.slot1CardRevision();
     CHECK(r2 != r1);
     const uint8_t b = 0x44;
-    CHECK(mem.slot1CardImageWrite(0x10, &b, 1));
+    CHECK(mem.slotBusWrite(0, 0x8010, &b, 1));
     CHECK(mem.slot1CardRevision() != r2);
 }
 

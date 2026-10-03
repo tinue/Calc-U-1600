@@ -66,6 +66,17 @@
 
 ### Fixed
 
+- **PC-1600: loading into a CE-155 put the program in the wrong place.**
+  Load BASIC Program, Load Machine Code… and presets wrote a module's
+  bytes as if the card stored its window in address order. A CE-155
+  doesn't: its chips sit behind S1-S3 and its own decoder. The loaders now
+  write through the slot's pins, so every card stores the bytes where a
+  CPU write would. A BASIC program loaded into a CE-155 used to come out
+  garbled, and machine code was refused.
+- **PC-1600: machine code that runs from a module on past &BFFF loads.**
+  It continues into internal RAM, as `BLOAD "COM1:"` and `CLOAD M` write
+  it. In MODE 1 the module and internal RAM are one LH5803 range, so
+  PC-1500 machine code bigger than the module part was refused before.
 - **PC-1600: DEGREE, RADIAN and GRAD now change the status line at once**,
   not at the next scroll. They run on the LH5803, and a real PC-1600
   draws the LH5803's writes to the PC-1500 display memory (&7600–&764F) on

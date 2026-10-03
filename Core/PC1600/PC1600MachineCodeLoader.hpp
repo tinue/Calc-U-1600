@@ -12,10 +12,11 @@ class PC1600Machine;
 // Writes a machine-language block linearly into one PC-1600 load target:
 // `slot` 0 = S0, the internal RAM ($C000-$FFFF); 1 / 2 = the memory slots'
 // $8000-$BFFF window, in global `bank` (machinecode::LoadPlan::bank; ignored
-// for S0). `addr` is the Z-80 (SC7852) address --
-// no +$8000 conversion. The bytes go straight into the backing store
-// (debugWriteInternalRam / debugWriteSlotImage), so the current bank
-// state doesn't matter. Shared by the preset loader's machine-code
+// for S0) -- a block that runs on past $BFFF continues in internal RAM, as
+// BLOAD / CLOAD M write it. `addr` is the Z-80 (SC7852) address --
+// no +$8000 conversion. Internal RAM is written directly, a module through
+// its slot's pins in `bank` (debugWriteInternalRam / debugWriteSlotBus), so
+// the current bank state doesn't matter. Shared by the preset loader's machine-code
 // `program: file:` and the GUI's "Load Machine Code…". Returns false, writing nothing, with
 // `error` set (no "section N:" prefix -- the caller adds its own context).
 bool loadPC1600MachineCode(PC1600Machine& machine, int slot, uint32_t addr, const uint8_t* data, size_t len,
