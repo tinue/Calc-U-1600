@@ -168,8 +168,8 @@ It is not a copy of the PC-1500's signals.
 **Shortcuts in place today** (each one must go):
 - 60-pin PU/PV sit on `pin[3]`/`pin[2]`, their **40-pin** contact
   numbers (`PC1500SignalDecode::basePinState`). The CE-150 and CE-158
-  read them from there. Which 60-pin contacts really carry PU and PV is
-  disputed (see "Still open" below).
+  read them from there. On the 60-pin plug PU is contact 15 and PV is
+  contact 16 on both machines (settled 2026-10-03, see below).
 - On the PC-1600, `LH5803SharedMemory::peripheralPins` hands the
   LH5803's own PU and PV flip-flops straight to the cards. On real
   hardware PV goes out through the SC7852 as PVOUT. The LH5803's PU has
@@ -273,25 +273,15 @@ What's wrong with that:
   - ELH (58) low = LH5803 running: the ownership signal.
   - PV: "the PV signal of the LH-5803 is directly sent by PVOUT"; ME1
     `8000–BFFF` is the CE-150 at PVOUT = 0, the CE-158 at PVOUT = 1.
-  - **Still open:** the PC-1500 TRM gives 60-pin contact 15 = PV,
-    16 = PU; the PC-1600 TRM *and* Service Manual give 15 = PU,
-    16 = PVOUT. Taken literally, a CE-150 would see PU on its PV contact,
-    which contradicts the SM's PVOUT split above. Needs the CE-150's own
-    connector wiring (its Service Manual schematic) or a continuity check.
-    Not blocking: the model can route PVOUT to the cards' PV input on the
-    SM's word.
-    Checked 2026-09-26 (details in Sharp1500-1600-Ref
-    `Expansion-Connectors.md` §2.2b):
-    - The PC-1500 TRM scan really prints 15 = PV; it isn't an OCR slip.
-    - No online erratum turned up.
-    - Neither the CE-150 schematic nor the PC-2 Service Manual gives
-      contact numbers. The PC-2 PCB pad labels at 15/16 are illegible.
-    - The CE-158 decodes **both** PV (ROM enable) and PU (8 KB half
-      select), per TRM Memory Map I (PDF p.174) and the
-      `CE-158_ROM_SPV_RPU_LOW`/`_SPV_SPU_HIGH` dump names. So a swap
-      breaks it rather than just disabling it.
-
-    Likely verdict: the PC-1500 TRM table is the wrong one.
+  - **Settled 2026-10-03: contact 15 = PU, contact 16 = PV on both
+    machines.** The PC-1500 TRM table has 15/16 swapped (and prints 44
+    as VBAT, which is F-GND). Source: the PC-1500 main-PCB artwork names
+    the lines PU0/PU1 on both the LH5801 footprint and the connector
+    (15 = PU0, 16 = PU1). LH5801 pin 60 = PV, pin 61 = PU; the
+    footprint's ME1/ME0 order fixes the numbering direction, so
+    PU1 = pin 60 = PV and PU0 = pin 61 = PU. Details in Sharp1500-1600-Ref
+    `Expansion-Connectors.md` §2.2b. This agrees with the PC-1600 TRM and
+    Service Manual (15 = PU, 16 = PVOUT).
   - **Also open:** what reaches the CE-158's PU contact on the PC-1600
     while the LH5803 runs. The SC7852 has PVIN but no PU input, and its
     PU output is a Port 31H bit. The SM's LHNMIO note (SC7852 pin 92,
