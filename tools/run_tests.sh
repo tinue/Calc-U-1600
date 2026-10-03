@@ -48,6 +48,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/PC1600/PC1600MachineCodeLoader.cpp \
   Core/PC1600/PC1600PresetLoader.cpp \
   Core/Display/LcdScreenshot.cpp \
+  Core/Display/LcdText.cpp \
   Core/KeyPaste.cpp \
   Core/MachineCodeFile.cpp \
   Core/ProgramFile.cpp \
@@ -87,6 +88,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/piezo_sampler_tests.cpp \
   Core/tests/key_paste_tests.cpp \
   Core/tests/lcd_screenshot_tests.cpp \
+  Core/tests/lcd_text_tests.cpp \
   Core/tests/machine_code_file_tests.cpp \
   Core/tests/program_file_tests.cpp \
   Core/tests/disasm_tests.cpp \

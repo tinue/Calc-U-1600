@@ -86,3 +86,11 @@ public:
 private:
     std::array<bool, kCount> m_state{};
 };
+
+/// Display names in `PC1600StatusLine::Symbol` order (GUI flags, LCD text).
+inline constexpr const char* kPC1600StatusSymbolNames[] = {
+    "BUSY", "SHIFT", "S", "ROMAJI", "KANA", "SMALL", "DEG", "RAD", "GRAD",
+    "RUN", "PRO", "RESERVE", "DEF", "I", "II", "III", "CTRL", "BATT",
+};
+static_assert(sizeof(kPC1600StatusSymbolNames) / sizeof(kPC1600StatusSymbolNames[0]) == PC1600StatusLine::kCount,
+              "one name per PC1600StatusLine::Symbol");

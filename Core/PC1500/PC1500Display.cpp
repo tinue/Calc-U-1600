@@ -56,3 +56,12 @@ bool PC1500Display::rad() const { return bit(symb2(), 0x04); }
 bool PC1500Display::reserve() const { return bit(symb2(), 0x10); }
 bool PC1500Display::pro() const { return bit(symb2(), 0x20); }
 bool PC1500Display::run() const { return bit(symb2(), 0x40); }
+
+std::vector<std::pair<const char*, bool>> PC1500Display::statusSymbols() const {
+    return {
+        {"BUSY", busy()},     {"SHIFT", shift()},       {"JAPANESE", japanese()},   {"SMALL", small()},
+        {"ROMAN_I", romanI()}, {"ROMAN_II", romanII()}, {"ROMAN_III", romanIII()}, {"DEF", def()},
+        {"DE", de()},         {"G", g()},               {"RAD", rad()},             {"RESERVE", reserve()},
+        {"PRO", pro()},       {"RUN", run()},
+    };
+}

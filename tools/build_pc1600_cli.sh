@@ -30,6 +30,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/PC1600/PC1600MachineCodeLoader.cpp \
   Core/PC1600/PC1600PresetLoader.cpp \
   Core/Display/LcdScreenshot.cpp \
+  Core/Display/LcdText.cpp \
   Core/Basic/BasicProgramSource.cpp \
   tools/pc1600_cli.cpp \
   Core/Basic/vendor/sharpdx/libsharpdx.a \

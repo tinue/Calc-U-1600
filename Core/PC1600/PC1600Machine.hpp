@@ -278,6 +278,7 @@ public:
     const LH5803& lh5803() const { return m_lh5803; }
     PC1600Bank&   bank() { return m_bank; }
     PC1600Memory& memory() { return m_z80Mem; }
+    const PC1600Memory& memory() const { return m_z80Mem; }
     /// The LH5803's memory view -- its 0000-3FFF window aliases the Z-80's
     /// 8000-BFFF (Slot 1/2), so a slot card is visible through both.
     LH5803SharedMemory& lh5803Memory() { return m_lh5803Mem; }

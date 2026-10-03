@@ -7,7 +7,7 @@
 //
 // Usage: pc1600_cli <romI-0-file> <romII-0-file> [maxCycles]
 //        pc1600_cli --check-preset <preset-file>...
-//        pc1600_cli --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--modules-dir <dir>] [--save-dir <dir>] [--wav <out.wav>] [--rom new|old] [--ce1600p-rom new|old] [--lcd-png <out.png>]
+//        pc1600_cli --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--modules-dir <dir>] [--save-dir <dir>] [--wav <out.wav>] [--rom new|old] [--ce1600p-rom new|old] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
 //
 // --check-preset parses each preset (any model) and reports ok / the error,
 // without booting anything; tools/check_presets.sh runs it over the repo.
@@ -37,7 +37,10 @@
 // exchange with a --ce158-rx peer).
 //
 // --lcd-png <out.png> (--preset only) writes the LCD, as Copy Screen does,
-// once the preset (and any --run-after) has finished.
+// once the preset (and any --run-after) has finished. --lcd-text <out.txt>
+// (or - for stdout) writes it as text at the same point (Core/Display/
+// LcdText.hpp): the rows, the lit status symbols, and the number of cells
+// that are not text.
 //
 // --wav <out.wav> (--preset only) records the buzzer (OPC 18H, see
 // PiezoSampler.hpp) while the preset script runs, as 48 kHz mono 16-bit
@@ -58,6 +61,7 @@
 #include "../Core/PC1600/PC1600Memory.hpp"
 #include "../Core/PC1600/PC1600PresetLoader.hpp"
 #include "../Core/PC1600/PC1600PresetMedia.hpp"
+#include "../Core/PC1600/PC1600LcdText.hpp"
 #include "../Core/PC1600/PC1600Screenshot.hpp"
 #include "../Core/Preset/PresetFile.hpp"
 #include "../Core/Resources/BundledRomCatalog.hpp"
@@ -69,7 +73,8 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
               const std::string& moduleDir, const std::vector<std::string>& extraModuleDirs,
               const std::string& wavPath, const std::string& romOverride,
               const std::string& ce1600pRomOverride, const std::string& saveDir,
-              Ce158CliPeer& ce158Peer, uint64_t runAfter, const std::string& lcdPng) {
+              Ce158CliPeer& ce158Peer, uint64_t runAfter, const std::string& lcdPng,
+              const std::string& lcdTextPath) {
     (void)maxCycles;
     PresetFile preset;
     std::string error;
@@ -152,6 +157,13 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
         std::string pngError;
         if (!writeLcdScreenshotPng(pc1600LcdBitmap(machine), kPC1600ScreenMm, lcdPng, &pngError)) {
             std::fprintf(stderr, "failed to write '%s': %s\n", lcdPng.c_str(), pngError.c_str());
+            return 1;
+        }
+    }
+    if (!lcdTextPath.empty()) {
+        std::string textError;
+        if (!writeLcdTextReport(pc1600LcdText(machine), lcdTextPath, &textError)) {
+            std::fprintf(stderr, "failed to write '%s': %s\n", lcdTextPath.c_str(), textError.c_str());
             return 1;
         }
     }
@@ -238,6 +250,7 @@ int main(int argc, char** argv) {
         Ce158CliPeer ce158Peer;
         uint64_t runAfter = 0;
         std::string lcdPng;
+        std::string lcdTextPath;
         std::string moduleDir = "Qt6/resources/cards";
         std::vector<std::string> extraModuleDirs;  // 2nd+ `--modules-dir`, searched after `moduleDir`
         bool moduleDirSet = false;
@@ -249,6 +262,7 @@ int main(int argc, char** argv) {
             else if (std::strcmp(argv[i], "--save-dir") == 0 && i + 1 < argc) saveDir = argv[++i];
             else if (std::strcmp(argv[i], "--run-after") == 0 && i + 1 < argc) runAfter = std::strtoull(argv[++i], nullptr, 10);
             else if (std::strcmp(argv[i], "--lcd-png") == 0 && i + 1 < argc) lcdPng = argv[++i];
+            else if (std::strcmp(argv[i], "--lcd-text") == 0 && i + 1 < argc) lcdTextPath = argv[++i];
             else if (ce158Peer.parseArg(argc, argv, i)) {}
             else if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
                 if (!moduleDirSet) { moduleDir = argv[++i]; moduleDirSet = true; }
@@ -257,12 +271,12 @@ int main(int argc, char** argv) {
             else maxCycles = std::strtoull(argv[i], nullptr, 10);
         }
         return runPreset(argv[2], maxCycles, dumpBasic, moduleDir, extraModuleDirs, wavPath, romOverride,
-                         ce1600pRomOverride, saveDir, ce158Peer, runAfter, lcdPng);
+                         ce1600pRomOverride, saveDir, ce158Peer, runAfter, lcdPng, lcdTextPath);
     }
     if (argc < 3) {
         std::fprintf(stderr, "usage: %s <romI-0-file> <romII-0-file> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       %s --check-preset <preset-file>...\n", argv[0]);
-        std::fprintf(stderr, "       %s --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--wav <out.wav>] [--rom new|old] [--ce1600p-rom new|old] [--lcd-png <out.png>]\n", argv[0]);
+        std::fprintf(stderr, "       %s --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--wav <out.wav>] [--rom new|old] [--ce1600p-rom new|old] [--lcd-png <out.png>] [--lcd-text <out.txt|->]\n", argv[0]);
         return 1;
     }
     uint64_t maxCycles = 2'000'000ull;

@@ -287,6 +287,9 @@ public:
     bool loadBank3bRom(const uint8_t* data, size_t size);
     /// Page C bank 6 (PC1600-P2-B6-new.bin, display/timer/serial/char tables).
     bool loadBank6Rom(const uint8_t* data, size_t size);
+    /// Bank 6's kBankSize bytes as mapped at 8000H, or nullptr before
+    /// loadBank6Rom() -- read-only, so safe from any thread.
+    const uint8_t* bank6Rom() const { return m_bank6Loaded ? m_bank6Rom.data() : nullptr; }
 
     /// The 60-pin system bus (Page B banks 4-7 ROM window + I/O ports
     /// 0x70-0x9F) -- CE-1600P and the host drive plug in here, not the memory slots. See

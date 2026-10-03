@@ -419,13 +419,8 @@ DisplayFrame MachineController::currentDisplay() const {
         }
         frame.poweredOn = snap.clockEnabled;
 
-        static const char* kSymbolNames[] = {
-            "BUSY", "SHIFT", "S", "ROMAJI", "KANA", "SMALL", "DEG", "RAD", "GRAD",
-            "RUN", "PRO", "RESERVE", "DEF", "I", "II", "III", "CTRL", "BATT",
-        };
-        static_assert(std::size(kSymbolNames) == PC1600StatusLine::kCount, "one name per PC1600StatusLine::Symbol");
         for (std::size_t i = 0; i < PC1600StatusLine::kCount; ++i) {
-            frame.statusSymbols.emplace_back(kSymbolNames[i], snap.statusSymbols[i]);
+            frame.statusSymbols.emplace_back(kPC1600StatusSymbolNames[i], snap.statusSymbols[i]);
         }
     } else if (m_pc1500) {
         const PC1500Display disp = m_pc1500->display();
@@ -439,15 +434,7 @@ DisplayFrame MachineController::currentDisplay() const {
         }
         frame.poweredOn = m_pc1500->isDisplayOn();
 
-        frame.statusSymbols = {
-            {"BUSY", disp.busy()},       {"SHIFT", disp.shift()},
-            {"JAPANESE", disp.japanese()}, {"SMALL", disp.small()},
-            {"ROMAN_I", disp.romanI()},  {"ROMAN_II", disp.romanII()},
-            {"ROMAN_III", disp.romanIII()}, {"DEF", disp.def()},
-            {"DE", disp.de()},           {"G", disp.g()},
-            {"RAD", disp.rad()},         {"RESERVE", disp.reserve()},
-            {"PRO", disp.pro()},         {"RUN", disp.run()},
-        };
+        for (const auto& [name, on] : disp.statusSymbols()) frame.statusSymbols.emplace_back(name, on);
     }
     return frame;
 }

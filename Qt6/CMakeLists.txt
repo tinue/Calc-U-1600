@@ -110,6 +110,7 @@ set(CORE_SOURCES
   ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
+  ${CORE_ROOT}/Display/LcdText.cpp
   ${CORE_ROOT}/KeyPaste.cpp
   # "Load Machine Code…"
   ${CORE_ROOT}/MachineCodeFile.cpp

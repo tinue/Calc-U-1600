@@ -1,6 +1,8 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <utility>
+#include <vector>
 
 class PC1500Memory;
 
@@ -48,6 +50,9 @@ public:
     bool reserve() const;     ///< RESERVE area in use
     bool pro() const;         ///< PRO (program) mode
     bool run() const;         ///< RUN mode
+
+    /// Every symbol as (name, lit), in the order above (GUI flags, LCD text).
+    std::vector<std::pair<const char*, bool>> statusSymbols() const;
 
 private:
     // 512-byte copy of PC1500Memory's display-RAM backing store
