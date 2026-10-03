@@ -5,6 +5,7 @@
 - The sde PTY capture (step 3) is impossible for a PC-1500 device. The check was done in sde's source and dry run instead.
 - The ML OVER tier showed that `CLOAD M` has no bounds check.
 - An extra capacity-edge scan (`edge_pc1500.py`) was added.
+- A PC-1600 round followed without a separate plan: four sets (COM1: / CE-158 × PC-1600 / PC-1500 software), checked against the ROM first. It is in the same README, and it led to loader fix 50dc20c.
 
 
 ## Context

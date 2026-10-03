@@ -13,6 +13,7 @@ only `examples/`). User-facing demos and learning material belong in
   emulator itself: preset-loader / memory-card tests, the superRAM card
   setup, the Up/Down-key iterator, and the `- trace:` step demo.
 - `loader-matrix/` — a one-time verification of the fast BASIC and
-  machine-code loaders against a ROM `CLOAD` over the CE-158 (PC-1500/1500A,
-  all memory cards, sizes up to full memory), with its harness, generator
-  and results. It is not part of the test suite.
+  machine-code loaders against the ROM's own serial loads: `CLOAD` over the
+  CE-158 on the PC-1500/1500A, `LOAD`/`BLOAD "COM1:"` and `CLOAD` over the
+  CE-158 on the PC-1600, all memory cards, sizes up to full memory. With
+  its harnesses, generators and results. It is not part of the test suite.
