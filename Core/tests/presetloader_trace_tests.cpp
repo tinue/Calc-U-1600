@@ -1,6 +1,5 @@
 // Headless end-to-end test for the preset loader's `- trace:` step
-// (PC1500PresetLoader.cpp) -- a port of Calc-U-59's `KEYSTROKES:` `Trace:`
-// directive. Drives applyPC1500Preset() against a real ROM
+// (PC1500PresetLoader.cpp). Drives applyPC1500Preset() against a real ROM
 // (roms/PC-1500_A04.ROM, relative to the repo root) with a preset that
 // starts a CPU instruction trace, runs a bit, and stops it, then parses
 // the produced file back with a minimal inline reader and checks it is a
@@ -145,8 +144,7 @@ void test_trace_step_produces_wellformed_file() {
 }
 
 // A trace left running at the end of the preset is still finalised
-// (SESSION_END written, file closed) by runPresetSections()' TraceCloser guard
-// -- mirrors Calc-U-59's auto-close of a scripted trace.
+// (SESSION_END written, file closed) by runPresetSections()' TraceCloser guard.
 void test_trace_left_open_is_auto_closed() {
     if (!romPresent()) {
         std::fprintf(stderr, "SKIP test_trace_left_open_is_auto_closed: %s not found\n", kRomPath);

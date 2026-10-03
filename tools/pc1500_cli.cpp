@@ -296,8 +296,7 @@ int main(int argc, char** argv) {
     std::printf("Display input-line text: \"%s\"\n", displayText.c_str());
 
     if (dumpBasic) {
-        // Read-only oracle for the fast BASIC loader work (see
-        // ~/.claude/plans/goal-faster-basic-program-woolly-wall.md): dump the
+        // Read-only oracle for the fast BASIC loader: dump the
         // BASIC program pointers and the raw bytes the ROM's line editor
         // actually laid down, so a direct-poke loader can reproduce them.
         auto be16 = [&](uint16_t a) {

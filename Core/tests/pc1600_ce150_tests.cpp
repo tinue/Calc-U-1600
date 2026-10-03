@@ -1,4 +1,4 @@
-// Phase 2: the PC-1500's CE-150 plotter attached to the PC-1600's LH5803
+// The PC-1500's CE-150 plotter attached to the PC-1600's LH5803
 // (compatibility) side. Verifies the wiring in LH5803SharedMemory +
 // PC1600Machine -- the CE-150 mechanism itself is already covered
 // end-to-end on the PC-1500 in ce150_tests.cpp, so this focuses on the

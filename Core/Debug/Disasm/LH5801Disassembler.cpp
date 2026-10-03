@@ -159,7 +159,7 @@ Tables buildTables() {
     f[0x4C] = {"off", Flow::Halt};
 
     // Undocumented "V" opcodes: the fourth register position of the XL/YL/UL
-    // rows. Measured on real hardware (pc1500/Assembler/vregtest): LDI VL/VH,n
+    // rows. Measured on real hardware: LDI VL/VH,n
     // are two bytes; V reads as (WH, 00). sdaslh5801 does not know them.
     for (const auto& [op, fmt] : std::initializer_list<std::pair<int, const char*>>{
              {0x30, "sbc vl"}, {0x31, "sbc (v)"}, {0x32, "adc vl"}, {0x33, "adc (v)"},

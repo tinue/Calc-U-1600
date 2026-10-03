@@ -262,8 +262,7 @@ endif()
 # ---- App icon (macOS bundle icon; Windows' equivalent is the WIN32
 # block's calc-u-1600.rc above, Linux's is the AppImage's --icon-file in
 # build.yml). The source is the Icon Composer bundle
-# resources/macos/AppIcon.icon (macOS 26+ masks, sizes and shades it, like
-# Calc-U-59's). The CI runner's Xcode can't compile .icon, so its actool
+# resources/macos/AppIcon.icon (macOS 26+ masks, sizes and shades it). The CI runner's Xcode can't compile .icon, so its actool
 # output is committed, same as the vendored libsharpdx.a above: Assets.car
 # (macOS 26+) and AppIcon.icns (fallback for older macOS). Regenerate both
 # if the icon changes:

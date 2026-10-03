@@ -25,7 +25,7 @@ class PC1500Machine;
 /// directory, the GUI its bundled resources folder. A preset that needs a
 /// ROM `romDirs` doesn't contain fails with a clear message.
 /// `traceDir` is the directory a `- trace: name.bin` step (see
-/// PresetFile.hpp -- a port of Calc-U-59's `Trace:` directive) writes
+/// PresetFile.hpp) writes
 /// its output file into. Like `romDirs`, WHERE trace files live
 /// is environment-specific and not the preset's concern: the CLI passes
 /// "." (cwd, same convention as its `roms/`), the GUI passes

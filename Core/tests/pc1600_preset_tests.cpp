@@ -87,9 +87,9 @@ void test_parser_rejects_cross_model_fields() {
     // PC-1600 preset with a firmware: field (gone -- the ROM rides on the model).
     CHECK(!parse("model: PC-1600\nfirmware: A04\n", &p, &err));
     CHECK(!err.empty());
-    // The old memory-expansion: block is gone.
+    // A memory-expansion: block is refused.
     CHECK(!parse("model: PC-1600\nmemory-expansion:\n  - modulespec: CE-155\n", &p, &err));
-    // PC-1600 machine code needs no target slot any more: the loader
+    // PC-1600 machine code needs no target slot: the loader
     // follows MODE / TITLE (see test_parser_pc1600_machine_binary).
     p = PresetFile{};
     CHECK(parse("model: PC-1600\nprogram:\n  file: x.bin\n  address: 0x8000\n", &p, &err));
@@ -128,7 +128,7 @@ void test_parser_pc1600_machine_binary() {
         CHECK(p.sections[0].program.length == 256);
     }
 
-    // `slot:` was removed (the loader follows MODE / TITLE) -- on every
+    // `slot:` is refused (the loader follows MODE / TITLE) -- on every
     // model and format; bad length; length on the wrong format.
     for (const char* preset : {"model: PC-1600\nprogram:\n  slot: S0\n  file: x.bin\n",
                                "model: PC-1600\nprogram:\n  slot: S0\n  file: x.bas\n",

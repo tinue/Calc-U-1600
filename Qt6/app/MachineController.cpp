@@ -51,11 +51,9 @@ Model initialModel() {
 // A missing/unreadable bundled ROM means the install is broken -- there's
 // no usable machine to fall back to (this is called both at startup and
 // from a later model switch, and either way the app can't proceed without
-// its firmware). Previously this was qFatal(), which aborts (SIGABRT) --
-// on a packaged macOS/Windows build launched normally (not from a
-// terminal) that's just a silent crash/bounce with no visible message at
-// all. Show the user what's actually wrong and where Calc-U-1600 looked,
-// then exit cleanly instead. std::exit() (not returning to unwind the
+// its firmware). Show the user what's wrong and where Calc-U-1600 looked,
+// then exit: an abort (qFatal) would be a silent crash for an app not
+// launched from a terminal. std::exit() (not returning to unwind the
 // call stack) is deliberate: this can be reached mid-construction of
 // MainWindow/MachineController, which aren't set up to unwind safely from
 // here, and terminating the process reclaims everything the OS owns

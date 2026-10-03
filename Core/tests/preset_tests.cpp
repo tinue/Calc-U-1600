@@ -188,7 +188,7 @@ void test_trace_step_start_and_stop() {
 }
 
 // A trace filename with a path separator is rejected up front -- WHERE the
-// file lands is the trace directory's concern, mirroring Calc-U-59.
+// file lands is the trace directory's concern.
 void test_trace_step_rejects_path_separator() {
     PresetFile p;
     std::string err;
@@ -272,7 +272,7 @@ void test_syncclock_step() {
     CHECK(err.find("syncclock") != std::string::npos);
 }
 
-// A wait value is a number and nothing else (`1s` used to pass as 1).
+// A wait value is a number and nothing else (`1s` is refused, not read as 1).
 void test_wait_step_rejects_trailing_text() {
     PresetFile p;
     std::string err;
@@ -590,7 +590,7 @@ void test_preset_parser_model_rom_pc1500() {
 
 void test_preset_parser_model_rom_pc1500a_is_a04_only() {
     // PC-1500A can only run A04: no suffix or A04 are fine, anything else
-    // is now an error (it used to be silently ignored).
+    // is an error.
     PresetFile preset;
     std::string error;
     CHECK(parse("model: PC-1500A\n", &preset, &error));

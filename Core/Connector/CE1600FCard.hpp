@@ -14,10 +14,8 @@
 // pokes, not any IOCS/FAT logic -- exactly the way CE1600PCard emulates
 // the plotter's motor-phase ports rather than reimplementing PLOT/LPRINT.
 //
-// Register map confirmed by direct disassembly of the real, already-dumped
-// roms/PC1600-P1-B5-CE1600P-OR-F-new.bin (see
-// ~/Development/sharp/pc1600/disasm/z80/romce1600-2.asm -- not from any
-// other emulator). The ROM addresses four registers off a per-drive base
+// Register map from the disassembly of the CE-1600P bank-5 ROM
+// (roms/PC1600-P1-B5-CE1600P-OR-F-new.bin). The ROM addresses four registers off a per-drive base
 // port (0x78 for drive X:, 0x70 for drive Y: -- this emulation has one
 // physical drive, so both ranges alias the same state):
 //   base+0 (0x78/0x70) -- command/status. Commands (bank-5 Z80 addresses):

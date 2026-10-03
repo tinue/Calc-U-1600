@@ -47,7 +47,7 @@ PC1500TraceFile::PC1500TraceFile(std::FILE* handle) : m_fh(handle) {
     ByteSink h{header};
     h.u32(kMagic);
     h.u16(kVersion);
-    h.u16(0);   // reserved (was "model" in Calc-U-59's v2 -- single model here)
+    h.u16(0);   // reserved
     h.u64(0);   // reserved for future use
     m_bytesWritten += std::fwrite(header, 1, sizeof(header), m_fh);
 

@@ -470,8 +470,8 @@ void test_illegal_opcode_is_distinguishable_from_nop() {
 }
 
 void test_v_register_reads_operand_high_byte() {
-    // The undocumented "V" opcodes, as measured on a real PC-1500A and PC-1600
-    // (pc1500/Assembler/vregtest): V reads as (WH, 00), W = the last 16-bit
+    // The undocumented "V" opcodes, as measured on a real PC-1500A and PC-1600:
+    // V reads as (WH, 00), W = the last 16-bit
     // operand; writes are ignored; LDI VL,n is two bytes.
     Rig r({0xA5, 0x7A, 0x55,   // lda (0x7A55)       -> W = 7A55
            0xB4,               // lda vh             -> A = 7A
@@ -690,7 +690,7 @@ void test_io_chip_keyboard_wiring_through_memory() {
     CHECK(mem.readInputPort() == 0xFF);
 
     // An ME1 address outside the I/O-chip's decode window (bits 12-13 not
-    // both set) still falls back to mirroring ME0 -- the Phase 1 default.
+    // both set) mirrors ME0.
     mem.writeME1(0x4100, 0x77);
     CHECK(mem.readME0(0x4100) == 0x77);
 }
@@ -787,16 +787,12 @@ void test_rtc_if_does_not_clear_on_read() {
 }
 
 void test_rtc_opb_and_if_never_disagree_within_one_poll() {
-    // A real regression, reproduced live: pressing WAIT-driven PRINT
-    // reported "BREAK AT <line>" within the first tick or two, every
-    // time. Root cause -- IF's read (via the ROM's own E451 helper) was
-    // firing independently of OPB's immediately-preceding read within the
-    // *same* WAIT poll iteration (E89C: check OPB, ~15 cycles later check
-    // IF), so it could see a "new" edge OPB's own check a few cycles
-    // earlier hadn't -- and since IF is deliberately sticky (see
-    // test_rtc_if_does_not_clear_on_read), any such disagreement, even
-    // once, got misread as BREAK on every later iteration of the *same*
-    // poll loop, not just the one where it happened. Simulates WAIT's own
+    // The ROM's WAIT poll checks OPB (E89C) and, ~15 cycles later, IF (via
+    // E451) within the *same* iteration. If IF could see a TP edge that
+    // OPB's check a few cycles earlier hadn't, the disagreement -- sticky,
+    // since IF doesn't clear on read (test_rtc_if_does_not_clear_on_read)
+    // -- is read as BREAK on every later iteration, and a WAIT-driven PRINT
+    // stops with "BREAK AT <line>" within a tick or two. Simulates WAIT's own
     // poll cadence (OPB, then ~15 cycles later IF) across many simulated
     // ticks and confirms they always agree -- the exact invariant
     // Upd1990ac's debounce (see its own class doc comment) exists to
@@ -1460,7 +1456,7 @@ int run_pc1600_host_drive_tests();
 // its PC1500Machine / 60-pin SystemBus integration.
 int run_ce150_tests();
 // Defined in pc1600_ce150_tests.cpp -- the CE-150 attached to the PC-1600's
-// LH5803 side (Phase 2).
+// LH5803 side.
 int run_pc1600_ce150_tests();
 // Defined in ce158_tests.cpp -- Ce158Card (ROM window, LH5811, CDP1854 UART,
 // Centronics) and the CE-158 driven by BASIC on a PC1500Machine.

@@ -89,10 +89,9 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
                 break;
             }
             case PresetStep::Kind::Trace: {
-                // Port of Calc-U-59's `KEYSTROKES:` `Trace:` directive.
                 // Empty text -> stop; otherwise (re)start a capture to
                 // <traceDir>/<text>. Starting a new one first closes any
-                // open one (matching Calc-U-59); one left running is closed
+                // open one; one left running is closed
                 // by runPresetSections()'s TraceCloser guard.
                 if (machine.cpuTraceActive()) machine.endCpuTrace();
                 if (step.text.empty()) {
@@ -297,8 +296,7 @@ void runPresetSections(PresetMachine& machine, const PresetFile& preset, PresetL
                        const PresetLogFn& log, const std::string& traceDir, const PresetSaveAsFn& onSaveAs) {
     // A trace started by a `- trace:` step and never explicitly stopped is
     // closed (SESSION_END written, file closed) when the sections are done,
-    // by ANY path -- mirrors Calc-U-59's own auto-close of a scripted trace
-    // left open past the end of a KEYSTROKES sequence.
+    // by ANY path.
     struct TraceCloser {
         PresetMachine& m;
         ~TraceCloser() {

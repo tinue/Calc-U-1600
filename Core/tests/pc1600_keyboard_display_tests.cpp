@@ -881,8 +881,8 @@ void test_memory_clock_enable_via_port37_write() {
 
 // The GUI/typer's PC-1600 digit-row SHIFT table must agree with the ROM's
 // own SHIFT-code table (SFTCDT, bank 6 @ 953FH, indexed by key code - 08H;
-// Ref/PC-1600/PC-1600-Keyboard.md §7). Regression: '_' used to map to SHIFT + 9, but
-// SFTCDT puts it on "." and leaves 9 unshifted.
+// Ref/PC-1600/PC-1600-Keyboard.md §7): '_' is SHIFT + ".", and 9 has no
+// SHIFT character.
 void test_digit_row_shift_table_matches_rom_sftcdt() {
     std::ifstream in("roms/PC1600-P2-B6-new.bin", std::ios::binary);
     if (!in) {

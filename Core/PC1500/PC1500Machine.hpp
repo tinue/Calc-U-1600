@@ -22,31 +22,18 @@
 
 // ── PC-1500A machine facade ──────────────────────────────────────────────
 //
-// Standalone PC-1500A core -- not a subset of the PC-1600 dual-CPU core.
-// Owns a value-type CPU + memory pair, mirroring Calc-U-59's TI59Machine
-// role: step()/reset()/pressKey()/getDisplay() plus the trace/breakpoint
-// passthrough the debugger builds on.
+// Standalone PC-1500/1500A core -- not a subset of the PC-1600 dual-CPU
+// core. Owns a value-type CPU + memory pair: step()/reset()/pressKey()/
+// display() plus the trace/breakpoint passthrough the debugger builds on.
+// The ON key isn't in the named-key vocabulary: it is wired to the CPU's
+// BFI power-on latch, not the matrix (setOnKeyPressed()).
 //
-// Keyboard matrix scanning (pressKey/releaseKey) and LCD readout
-// (display()) are now real, not stubs — see PC1500Keyboard.hpp and
-// PC1500Display.hpp for the confirmed hardware behavior they're built
-// from (Phase 1's original gap here is closed). The ON key is
-// deliberately excluded from the named-key vocabulary: real hardware
-// wires it straight to the CPU's BFI power-on latch, not the matrix —
-// see setOnKeyPressed() and PC1500Keyboard.hpp's doc comment.
-//
-// Thread safety: Phase 2's app steps the CPU continuously on a background
-// queue while the UI thread reads display/key state at 60Hz — the same
-// two-thread split Calc-U-59's TI59Machine uses, and (per its own
-// AppArchitecture.md) with the same shape: one facade-level mutex here,
-// separate from LH5801's own trace-ring mutex (which guards a different,
-// narrower concern and is fine to keep independent). Every method that
-// touches CPU/memory state (step, runCycles, pressKey, releaseKey, reset,
-// display) takes m_mutex internally. cpu()/memory() return unlocked direct
-// references — safe for single-threaded contexts (headless tests, the CLI
-// tool) but callers sharing a PC1500Machine across threads (the Bridge
-// wrapper) must go through the locked methods, not these, for anything
-// that isn't a one-off debug peek.
+// Thread safety: every method that touches CPU/memory state (step,
+// runCycles, pressKey, releaseKey, reset, display) takes m_mutex, so the
+// machine can be stepped on one thread and read from another. LH5801's
+// own trace-ring mutex is separate. cpu()/memory() return unlocked
+// references, for single-threaded use (tests, the CLIs) and one-off debug
+// peeks.
 class PC1500Machine {
 public:
     /// LH5801 cycles per second -- the unit runCycles() counts (PC1500Clocks.hpp).
@@ -71,7 +58,7 @@ public:
     /// PC-1500's RTC is battery-backed and the boot ROM never re-inits it,
     /// so this one seed rides through boot -- but it is deliberately kept
     /// out of reset() so headless tests / the CLI stay deterministic; the
-    /// Bridge wrapper calls this after reset() with the real host time.
+    /// app calls this after reset() with the host time.
     void seedClock(int year, int month, int day, int hour, int minute, int second, int millisecond = 0);
 
     /// Execute one instruction. Returns the cycle count consumed (0 if
@@ -238,7 +225,7 @@ public:
     void detachCE150();
     bool ce150Attached() const { return m_ce150Card != nullptr; }
     /// Unlocked direct access -- headless/tests only, same convention as
-    /// cpu()/memory(). The GUI Bridge must use the locked accessors below.
+    /// cpu()/memory(). The app uses the locked accessors below.
     Ce150Card* ce150Card() { return m_ce150Card.get(); }
 
     /// GUI-safe (take m_mutex, like the CE-1600P plot accessors on
@@ -275,11 +262,8 @@ public:
     /// call. Empty when no CE-158 is attached.
     std::vector<uint8_t> drainCE158ParallelOutput();
 
-    // Trace/breakpoint passthrough (Phase 2a's debugger consumes this via
-    // the Bridge layer; exercised directly by headless tests since Phase
-    // 1). Unlocked, like cpu()/memory() above -- LH5801 already guards its
-    // own trace ring/breakpoint state internally (see LH5801.hpp), so no
-    // additional locking is needed here.
+    // Trace/breakpoint passthrough. Unlocked, like cpu()/memory() above --
+    // LH5801 guards its own trace ring/breakpoint state (see LH5801.hpp).
     void     setTraceFlags(uint32_t flags) { m_cpu.setTraceFlags(flags); }
     uint32_t traceFlags() const { return m_cpu.traceFlags(); }
     uint32_t drainTraceEvents(CpuFrame* out, uint32_t max, uint32_t* outLost) { return m_cpu.drainTraceEvents(out, max, outLost); }

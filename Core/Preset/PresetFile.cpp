@@ -235,7 +235,6 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, const std::fi
                 }
             }
         } else if (verb == "trace") {
-            // Port of Calc-U-59's `KEYSTROKES:` `Trace:` directive.
             // `- trace: off` (case-insensitive) stops the current capture;
             // any other value is the output filename. The filename must
             // not contain a path separator -- WHERE it lands is the trace

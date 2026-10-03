@@ -96,8 +96,7 @@ uint16_t LH5801::fetch16() {
     uint8_t lo = fetch8();
     // Every 16-bit operand passes through the MPU's internal operand
     // register W (absolute ME0/ME1 operands, JMP/SJP targets, LDI S,nn) --
-    // measured on a real PC-1500A and PC-1600 with the undocumented V opcodes
-    // (pc1500/Assembler/vregtest, pc1500/notes/PC-1500-A0x-Disassembly.md).
+    // measured on a real PC-1500A and PC-1600 with the undocumented V opcodes.
     W = (uint16_t(hi) << 8) | lo;
     return W;
 }
@@ -666,7 +665,7 @@ int LH5801::execute(uint8_t op) {
 
         // ── Undocumented "V" opcodes ─────────────────────────────────────
         // The fourth register position of the XL/YL/UL encoding. Measured on a
-        // real PC-1500A (LH5801) and PC-1600 (LH5803), pc1500/Assembler/vregtest:
+        // real PC-1500A (LH5801) and PC-1600 (LH5803):
         // V reads as (WH, 00) -- VH is the high byte of the internal operand
         // register W (see fetch16() / vectorCall()), VL always reads 00; writes
         // to V (STA VL, LDI VL/VH) are ignored; LDI VL,n / LDI VH,n are two
@@ -718,9 +717,8 @@ int LH5801::execute(uint8_t op) {
             // Undocumented/unimplemented opcode: signal it to step() (see
             // kIllegalOpcode) rather than silently behaving like a real
             // instruction — step() still lets execution continue (a
-            // malformed stream shouldn't wedge forever), but the event is
-            // now distinguishable via consumeIllegalOpcodeHit() instead of
-            // being indistinguishable from a genuinely emulated NOP.
+            // malformed stream shouldn't wedge forever), and
+            // consumeIllegalOpcodeHit() tells it apart from a real NOP.
             return kIllegalOpcode;
     }
 }

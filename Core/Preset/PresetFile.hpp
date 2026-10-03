@@ -99,7 +99,7 @@ struct PresetStep {
     // key name (Key), program text (Type), or -- for Trace -- the trace
     // output filename to start capturing to, or "" to stop the current
     // capture (`- trace: off`). See PC1500PresetLoader.cpp's `trace:`
-    // handling; a port of Calc-U-59's `KEYSTROKES:` `Trace:` directive.
+    // handling.
     // For Screenshot, the PNG filename. For Expect, the text an LCD row
     // must contain. For SaveAs, the name to save
     // under (see saveAsTarget below).

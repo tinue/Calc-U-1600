@@ -120,9 +120,9 @@ uint8_t LH5803SharedMemory::readME1(uint16_t addr) {
         if (cardRead(addr, /*me1=*/true, &v)) return v;
     }
     // 8000-BFFF unclaimed: ME1 reaches the bus as an I/O cycle (IORQ), so
-    // it never selects a peripheral ROM -- open bus. Aliasing this to
-    // readME0() served CE-150/CE-158 ROM bytes as I/O (the CE-150 LPRINT
-    // one-character bug came from exactly that at B000-B007).
+    // it never selects a peripheral ROM -- open bus. Aliasing it to
+    // readME0() would serve CE-150/CE-158 ROM bytes as I/O (the CE-150
+    // ROM reads ME1 B000-B007 as I/O).
     if (addr >= 0x8000 && addr < kRomBase) return 0xFF;
     return readME0(addr); // default aliasing -- no other read-side trigger
 }

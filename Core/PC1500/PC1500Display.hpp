@@ -10,9 +10,8 @@ class PC1500Memory;
 //
 // 156 x 7 pixel dot-matrix display plus a row of fixed status icons.
 // Decodes from a snapshot of PC1500Memory's display-RAM region
-// (0x7000-0x77FF's 512-byte backing store, already backed since Phase 1)
-// — no new memory-map work, just a read-only interpretation layer on top
-// of it.
+// (0x7000-0x77FF's 512-byte backing store) -- a read-only interpretation
+// layer on top of it.
 //
 // This is a genuine value-type snapshot, copied once at construction, not
 // a live view: PC1500Machine::display() is meant to be safely readable

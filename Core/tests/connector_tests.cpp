@@ -3,8 +3,7 @@
 // Same no-framework, assert-and-tally style as lh5801_tests.cpp -- see that
 // file's header comment. Exercises PC1500Memory's dispatch into both
 // connectors via PC1500Machine, using a small lambda-backed test-only
-// ExpansionCard (StubCard) standing in for the "real" software-defined
-// card Phase 7 will eventually build.
+// ExpansionCard (StubCard) instead of a software-defined card.
 //
 // Build & run: see tools/run_tests.sh
 

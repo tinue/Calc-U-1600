@@ -133,8 +133,7 @@ private:
 
     // Shared by both ControlBar's combo-box signal and the Machine menu's
     // QActions, so either source of a model/ROM-revision change drives the
-    // exact same rebuild + resync path (previously these were ControlBar-
-    // only lambdas in the constructor).
+    // exact same rebuild + resync path.
     void applyModelSelection(Model model);
     void applyRomRevisionSelection(PC1500RomRevision revision);
     void applyPC1600RomVersionSelection(PC1600RomVersion version);

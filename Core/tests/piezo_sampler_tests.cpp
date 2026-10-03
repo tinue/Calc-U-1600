@@ -370,11 +370,10 @@ void test_pc1600_beep() {
 
 // BEEP n,A,d repeats are paced by the ROM counting 64 Hz PB5 rising edges
 // (P1-B3 5F12): period = (PB5 ticks the tone spans + 5) / 64 s. A real unit
-// plays BEEP 20,200,20 at a steady 156.25 ms (10 ticks). Two things used to
-// break that: nominal timing (tone too short -> 9 ticks) and the slow
-// PB5-synced sub-CPU path in the 0.5 s ISR, which swallowed edges (+1 tick
-// about every other beep). The boot's IOCS 25H probe must leave F0B8H
-// bit 0 set (fast path).
+// plays BEEP 20,200,20 at a steady 156.25 ms (10 ticks). Nominal timing
+// gives a tone too short (9 ticks), and the slow PB5-synced sub-CPU path in
+// the 0.5 s ISR swallows edges (+1 tick about every other beep), so the
+// boot's IOCS 25H probe must leave F0B8H bit 0 set (fast path).
 void test_pc1600_beep_repeat_spacing() {
     PC1600Machine m;
     if (!bootPC1600(m)) {

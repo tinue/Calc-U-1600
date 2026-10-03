@@ -3,8 +3,8 @@
 #
 # The real module, expressed through the general software-defined system
 # (Flash content + `by-bank` split content, Memory-Card-Definition-Spec.md
-# §5). Every Flash field was recovered from a real CE163F firmware
-# disassembly: ~/Development/sharp/pc1500/CE-163X/CE-163F/update-selfpatch.asm.
+# §5). Every Flash field was recovered from the disassembly of the real
+# CE-163F's self-update firmware.
 #
 # One banked 16 KB window at Y0 (&0000-&3FFF), 16 banks, 256 KB total, same
 # trigger-based mechanism as CE-163/CE-1638: a write strobe on physical

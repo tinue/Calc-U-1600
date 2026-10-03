@@ -10,9 +10,8 @@
 
 // The PC-1600 screen as text -- see Core/Display/LcdText.hpp.
 //
-// Font: bank 6's 6x8 ROM font, 6 bytes per character, column-wise
-// (notes/PC1600-P2-B6-Disassembly.md). Its address differs between the
-// ROM versions (CGLOW: new ADA4H, old ADE3H), so it is read from the ROM:
+// Font: bank 6's 6x8 ROM font, 6 bytes per character, column-wise. Its
+// address differs between the ROM versions (CGLOW: new ADA4H, old ADE3H), so it is read from the ROM:
 // the jump-table entry at 8030H leads to CGSET80, whose `ld de,CGHIGH`
 // (+4) restores the 80H-FFH font; CGLOW (20H-7FH) is the 60H x 6 bytes
 // before it and CGSPEC (the PC-1500-style 1EH/27H/5BH/5DH) the 4 x 6

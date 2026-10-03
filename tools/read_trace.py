@@ -9,11 +9,7 @@ both via the Core writer `Core/PC1500/PC1500TraceFile.cpp`) and either:
   • Prints a human-readable text trace to stdout (default)
   • Emits a JSON array (--json)
 
-Structurally mirrors Calc-U-59's own tools/read_trace.py (see plan.md §0),
-scaled down to this project's much smaller per-CPU frame structs — the
-LH5801/SC7852's registers are plain single-byte/short values, not
-TI-59-style packed BCD digit arrays, so there is no nibble-unpacking step
-here. Two frame shapes share one file: `PCCpuFrame` (LH5801-shaped -- the
+Two frame shapes share one file: `PCCpuFrame` (LH5801-shaped -- the
 PC-1500/1500A's own CPU, or the PC-1600's LH5803 co-processor) and
 `PCZ80CpuFrame` (the PC-1600's SC7852) -- both carry a `cpuId` byte
 (0=unspecified/PC-1500, 1=SC7852, 2=LH5803, see Core/TraceTypes.hpp's

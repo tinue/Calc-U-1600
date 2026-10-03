@@ -50,11 +50,9 @@
 // into IF bit 1 (0xB). The buzzer is PC6 (OPC bit 6): the ROM's BEEP loop
 // (A04 E655ff) toggles it directly, and every write is forwarded to
 // m_piezo (see PiezoSampler.hpp) so the sound comes from that square wave
-// itself. Serial transfer remains out of scope. Any ME1
-// address outside the I/O-chip's decode window still mirrors ME0, the
-// same conservative Phase 1 placeholder as before (nothing else is
-// documented as living there) — flagged for revisit once Phase 4's
-// ExpansionConnector work clarifies ME1's remaining role.
+// itself. Serial transfer is out of scope. Any ME1 address outside the
+// I/O-chip's decode window mirrors ME0: nothing else is documented as
+// living there.
 class PC1500Memory : public LH5801Bus {
 public:
     explicit PC1500Memory(PC1500Variant variant = PC1500Variant::PC1500A);

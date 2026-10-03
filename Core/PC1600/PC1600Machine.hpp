@@ -30,8 +30,7 @@
 /// a snapshot type constructed fresh from RAM bytes), PC1600Display is a
 /// live, continuously-written HD61102 controller pair, so handing out a
 /// reference to it would not be safe to read from a different thread while
-/// the emulation loop is mid-step(). Row-major ([row][col]) to match
-/// PCDisplaySnapshot's Bridge convention.
+/// the emulation loop is mid-step(). Row-major ([row][col]).
 struct PC1600DisplaySnapshot {
     bool pixels[PC1600Display::kHeight][PC1600Display::kWidth]{};
     bool clockEnabled{false};
@@ -97,7 +96,7 @@ public:
     //
     // Everything that measures emulated time derives from kTStateHz rather
     // than restating it: the timer periods below, runCycles()'s budget, and
-    // (via `paceHz` on the Bridge wrapper) the GUI's batch pacing.
+    // the app's frame pacing (MachineController::clockHz()).
     static constexpr uint32_t kTStateHz = kPC1600TStateHz;
     static_assert(CE1600FCard::kTStateHz == kTStateHz, "CE1600FCard times seeks in SC7852 T-states");
     static constexpr uint32_t kLH5803Hz = kPC1600PhiOsHz;
@@ -175,7 +174,7 @@ public:
     void detachCE1600P();
     bool ce1600pAttached() const { return m_ce1600pCard != nullptr; }
     /// Unlocked direct access -- headless/tests only, same convention as
-    /// `keyboard()`/`memory()`. The GUI Bridge must use the three locked
+    /// `keyboard()`/`memory()`. The app uses the three locked
     /// accessors below instead: the mechanism's stroke/event containers are
     /// mutated from inside `step()` (motor writes), so a GUI-thread reader
     /// touching them directly races the emulation loop.
@@ -186,7 +185,7 @@ public:
     std::vector<AlpsPlotterMechanism::FlatPoint> ce1600pPlotPoints() const;
     /// O(1) change token for the plot geometry (0 when no plotter attached).
     /// A GUI poll loop reads this every frame and only calls the copying
-    /// `ce1600pPlotPoints()` when it has moved -- see `EmulatorViewModel.tick()`.
+    /// `ce1600pPlotPoints()` when it has moved (PlotterPaperWidget).
     uint64_t ce1600pPlotRevision() const;
     std::vector<std::string> drainCE1600PEvents();
     void clearCE1600PPaper();
@@ -301,7 +300,7 @@ public:
     // keyboard()/display() are unlocked direct access, for tests/headless
     // tools only (same convention PC1500Machine's cpu()/memory() already
     // use) -- pressKey/releaseKey/setOnKeyPressed/displaySnapshot below are
-    // the locked, cross-thread-safe surface the GUI Bridge layer uses.
+    // the locked, cross-thread-safe surface the app uses.
     PC1600Keyboard&       keyboard() { return m_z80Mem.keyboard(); }
     const PC1600Keyboard& keyboard() const { return m_z80Mem.keyboard(); }
     PC1600Display&        display() { return m_z80Mem.display(); }
@@ -365,7 +364,7 @@ public:
     // ── Debug reads (GUI-safe: take m_mutex, like pokeMemory()) ───────────
     //
     // The unlocked memory()/bank() accessors above are "tests/headless tools
-    // only"; these are the cross-thread-safe surface the GUI Bridge uses for
+    // only"; these are the cross-thread-safe surface the app uses for
     // the debug panel's "Pointers" / "Dump Mem" buttons.
 
     /// One byte, read through the currently-selected banks (Port 31H/28H/3DH

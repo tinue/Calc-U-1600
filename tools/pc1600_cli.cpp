@@ -1,9 +1,8 @@
-// Headless CLI harness for the PC-1600's SC7852 (Z-80) core, single-CPU,
-// no LH5803/no dual-CPU arbitration. Boots romI-0+romII-0 (given on the command line), runs for a fixed cycle budget,
-// and reports a PC-visit histogram used to detect convergence onto a
-// small repeating loop -- mirrors pc1500_cli.cpp's own convergence-signal
-// approach (see that file's comment), minus the preset/trace-ring support
-// it has, since neither exists for SC7852 yet (trace lands in Phase 5.3).
+// Headless CLI for the PC-1600. The --preset form runs a full
+// PC1600Machine through a `.pc1600` preset (below). The plain form boots
+// only the SC7852 from romI-0 + romII-0 (no LH5803), runs a fixed cycle
+// budget and reports a PC-visit histogram that shows convergence onto a
+// small repeating loop, like pc1500_cli.
 //
 // Usage: pc1600_cli <romI-0-file> <romII-0-file> [maxCycles]
 //        pc1600_cli --check-preset <preset-file>...
@@ -17,8 +16,7 @@
 // applies a `.pc1600` scenario via applyPC1600Preset() -- the SC7852-only
 // histogram mode below is skipped. --dump-basic then prints the BASIC
 // program pointers and the raw program-area bytes (read-only), the oracle
-// for the fast BASIC loader work (see
-// ~/.claude/plans/goal-faster-basic-program-woolly-wall.md).
+// the fast BASIC loader is checked against.
 //
 // --rom new|old (--preset only) overrides the preset's PC-1600 ROM version
 // (`model: PC-1600:new|old`, default new).

@@ -83,9 +83,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_presetController = std::make_unique<PresetController>(m_controller.get(), m_moduleManager.get(),
                                                              m_floppyManager.get(), this);
 
-    // QMainWindow requires exactly one central widget -- everything that
-    // used to be added straight into `this`'s own QVBoxLayout now lives in
-    // this wrapper instead, freeing `this` up for setMenuBar() below.
+    // QMainWindow takes exactly one central widget; the faceplate, control
+    // bar and debug panel live in this wrapper.
     auto* central = new QWidget(this);
     m_faceplate = new FaceplateWidget(central);
     m_controlBar = new ControlBar(central);
