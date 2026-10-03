@@ -390,8 +390,9 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
 - **Slot 2 K0-K2 connector pins (16-18) not asserted** — harmless: the
   modelled CE-1601M reaches its vertical-bank latch off the Port 28H
   *data-bus write* instead (see the bank-switching section above), so
-  nothing needs those pins driven. **Pin 2 (PVIN, the LH5803 PV line)** is
-  likewise deasserted — PC-1500-compatibility CPU mode only.
+  nothing needs those pins driven. **Pin 2** (the TRM calls it PVIN, the
+  LH5803 PV line) is likewise deasserted, but a real PC-1600 ties it to
+  VCC on both slots (measured 2026-10-03), so it should read high.
   `MemorySlotConnector.hpp:159`
 
 ---

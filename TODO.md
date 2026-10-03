@@ -168,9 +168,9 @@ It is not a copy of the PC-1500's signals.
 **Shortcuts in place today** (each one must go):
 - 60-pin PU/PV sit on `pin[3]`/`pin[2]`, their **40-pin** contact
   numbers (`PC1500SignalDecode::basePinState`). The CE-150 and CE-158
-  read them from there. On the PC-1500's 60-pin plug PV is contact 15
-  and PU is contact 16 (measured 2026-10-03); the PC-1600 side is open,
-  see below.
+  read them from there. Measured 2026-10-03: the PC-1500's 60-pin plug
+  has PV on 15 and PU on 16, the PC-1600's has PU on 15 and PVOUT on 16
+  (see below).
 - On the PC-1600, `LH5803SharedMemory::peripheralPins` hands the
   LH5803's own PU and PV flip-flops straight to the cards. On real
   hardware PV goes out through the SC7852 as PVOUT. The LH5803's PU has
@@ -278,11 +278,14 @@ What's wrong with that:
     as the PC-1500 TRM prints (continuity from 40-pin pins 2/3 on a real
     PC-1500; contact 44 is F-GND, not VBAT). Details in Sharp1500-1600-Ref
     `Expansion-Connectors.md` §2.2b.
-  - **Still open, PC-1600 side:** its TRM and Service Manual give
-    15 = PU, 16 = PVOUT (= LH5803 PV). Taken literally, a CE-150/CE-158
-    would see PU on its PV contact. Either the PC-1600 tables are swapped
-    or the board crosses the lines. Needs a continuity check on a PC-1600
-    or a CE-150. Not blocking: the cards read PV/PU by name today.
+  - **PC-1600 measured 2026-10-03:** 60-pin 14/15/16 = PT/PU/PVOUT, as
+    its TRM says (same nets as slot pins 19/3/5, on both slots). So the
+    machines really differ: a CE-150/CE-158 on a PC-1600 reads the
+    SC7852's PU as PV and PVOUT as PU. Slot pin 2 ("PVIN" in the TRM) is
+    tied to VCC on both slots; the model leaves `pin[2]` low there.
+  - **Open:** what the SC7852 drives on PU/PVOUT (60-pin 15/16) while the
+    LH5803 runs, so that a PC-1500 card's ROM switching works. Needs a
+    logic probe or the ROM's bank-switching code, not continuity.
   - **Also open:** what reaches the CE-158's PU contact on the PC-1600
     while the LH5803 runs. The SC7852 has PVIN but no PU input, and its
     PU output is a Port 31H bit. The SM's LHNMIO note (SC7852 pin 92,

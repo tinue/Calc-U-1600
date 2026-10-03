@@ -165,8 +165,9 @@ private:
         // banking) -- left deasserted, and a CE-1601M-class module does not
         // need them modelled: its vertical-bank latch samples the Port 28H
         // *data-bus write* instead, forwarded here by PC1600Memory::writeIO
-        // -> ioWrite() as an I/O-space PinState. Pin 2 (PVIN, the LH5803 PV
-        // line) is likewise deasserted: PC-1500-compatibility CPU mode only.
+        // -> ioWrite() as an I/O-space PinState. Pin 2 (TRM: PVIN) is left
+        // deasserted too, although a real PC-1600 ties it to VCC on both
+        // slots (measured). TODO.md, "Expansion connectors".
         return p;
     }
 };
