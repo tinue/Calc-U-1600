@@ -42,10 +42,10 @@ with a status note on how the implementation differed. New plans go into
 
 ## Handoffs
 
-Notes left at the end of a working session: where things stand, what was
-verified, what to pick up next.
+Notes left at the end of a working session on work that is still open:
+where things stand and what to pick up next. A handoff is removed once
+its work is resolved.
 
 | Handoff | Status |
 |---|---|
-| [Debugger](handoffs/Debugger-Handoff.md) | Current (updated 2026-09-30) |
-| [CE-1600F floppy FORMAT self-test](handoffs/PC1600-CE1600F-Format-Handoff.md) | Resolved 2026-09-18, kept for history |
+| [Debugger](handoffs/Debugger-Handoff.md) | Open: checks in VS Code, CLion |

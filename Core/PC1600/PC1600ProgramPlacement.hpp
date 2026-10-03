@@ -10,8 +10,9 @@
 // On a stock PC-1600 the BASIC program area ("S0") is a single contiguous
 // window at Z-80 $C0C5 (internal RAM). With a RAM / program module fitted,
 // the ROM builds S0 by SCATTERING it across the module's 16 KB banks and
-// then internal RAM -- an image larger than one bank straddles a bank
-// boundary mid-line. The fast loader has to reproduce that placement to
+// then internal RAM -- an image larger than one bank continues in the next
+// one, after a 00 00 bank-end mark (no line straddles a module bank). The
+// fast loader has to reproduce that placement to
 // inject the program without driving the firmware LOAD path.
 //
 // This module is the pure-logic half: given a way to read the work-area

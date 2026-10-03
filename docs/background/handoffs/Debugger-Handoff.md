@@ -1,104 +1,62 @@
-# Debugger — handoff (2026-09-25, updated 2026-09-30)
+# Debugger — handoff
 
-Where the DAP debugger stands, what was verified, what the user reported from VS Code, and what to pick up next. Read this together with:
+What is still open on the DAP debugger, and the internals that aren't in
+the user manual. Read it together with:
 - `docs/Debugger.md`: the user manual (installation, setup, the four use cases, reference);
 - `docs/background/plans/DAP-Debugger-Plan.md`: the plan, with a status note on how the implementation differs;
-- `docs/background/plans/Debugger-Use-Cases-Plan.md`: the IDE-integration rework by use case (2026-09-30).
+- `docs/background/plans/Debugger-Use-Cases-Plan.md`: the IDE integration by use case.
 
-## IDE integration by use case (2026-09-30)
+## Open: checks in VS Code
 
-| Commit | What |
-|---|---|
-| eaa1222 | Default port 4711 → 32168; the plan |
-| f6ace84 | Project presets: `debug:` block, attach `project`, `command` |
-| ba77b43 | `bus-rom:`, ROM-mode Build & Load, `boot: debug` (`PresetFile::armOnly`); sdas parser fix for 8000H+ |
-| 3eb64a6 | Extension: dynamic configurations, task provider / `build`, settings, bundled presets; `vscode/workspace/` removed |
-| 64dbe4b | *Create Debug Project…* templates; card `encoding: file` |
+The automated side passes: CoreTests, `tools/run_tests.sh` and
+`tools/dap_smoke.py` (plain session, Build & Load on both machines, ROM
+reset-and-step, restart, All Reset & Stop, project preset, PC-1500 bus ROM
+by `command`, host-drive ROM as a bank-7 bus ROM, `boot: debug`). These
+need a person in VS Code with a current app build:
 
-**Verified:**
-- **Tests:** CoreTests and `tools/run_tests.sh` are green.
-- **`tools/dap_smoke.py`** passes the new scenarios:
-  - a project preset;
-  - a PC-1500 bus ROM entered by `command`;
-  - the host-drive ROM rebuilt as a bank-7 bus ROM, stopping in HDFILE on `FILES "S3:"`, and again after Build & Load;
-  - `boot: debug` stopping in HDRESET during power-on.
-- **Templates:** all four were built with the extension's own build command and run over DAP. Each stops where expected, and both machines boot on to their idle loops.
-- **ROM listing:** a zasm listing of `pc1600/disasm/new/PC1600-P0-B0.asm` gives source at 0000, and a function breakpoint `SCANMODS` stops there.
-- **Extension:** configuration resolution and the scaffold were checked with a mocked `vscode` module, and the `.vsix` packages.
+1. **Disassembly view:** shows code, marks the current instruction, and
+   instruction breakpoints set in it work.
+2. **Banks scope:** an expandable *Banks* entry under *Registers* (live
+   frame only).
+3. **ROM configuration stops with reason `entry`**, not `pause`. A scripted
+   replay of the same requests gives `entry`.
+4. **Dynamic configurations:** they appear in the Run and Debug list, and
+   F5 works without a `launch.json`.
+5. **Build tasks:** the problem matchers resolve absolute paths.
+6. ***Create Debug Project…*** in a real folder, including the
+   `launch.json` merge.
+7. **Build & Load after an edit.**
+8. **The manual checklist** in `DAP-Debugger-Plan.md` ▸ Verification:
+   conditional breakpoint, step over a `SJP`, edit a register, data
+   breakpoint, memory view, PC-1600 LH5803 handoff.
 
-**Not verified: needs the user in VS Code.**
-- The dynamic configurations in the Run and Debug list, and F5 without a `launch.json`.
-- The build tasks' problem matchers, with absolute paths.
-- *Create Debug Project…* in a real folder, including the `launch.json` merge.
-- Build & Load after an edit.
-- The repository's own `.vscode/launch.json` / `tasks.json` (git-ignored copies of the old templates, port 4711) are obsolete: delete them; the dynamic configurations replace them.
+Local leftovers to delete: the repository's own `.vscode/launch.json` /
+`tasks.json` (git-ignored, port 4711). The dynamic configurations replace
+them.
 
-**CLion:** only documented (manual ▸ CLion). CLion 2026.2.3 is installed here. The spike checklist is in the manual.
+**Open question:** opening the repository root in VS Code activates the
+CMake Tools extension, whose status-bar Build/Debug buttons ask for a kit.
+That isn't the debugger. Either pick `[Unspecified]` once, or commit a
+`.vscode/settings.json` that turns the prompt off.
 
-**Internals that left the manual:**
-- **Transport:** the server listens on 127.0.0.1 only and takes one client at a time; a second one is told the debugger is busy. `--dap <port>` overrides Settings for one run.
-- **Run control:** while attached, every emulation frame goes through `DebugController::runSlice()`: paused, running with breakpoints and watches armed, or stepping in frame-sized pieces.
-- **`launch` is `attach`:** `DapSession` treats a `launch` request as `attach`, which the CLion recipe relies on.
+**CLion:** documented in the manual (▸ CLion) but not tried. The spike
+checklist is there.
 
-## State
+## Internals not in the manual
 
-All work is committed on `dev-0.6.0`:
-
-| Commit | What |
-|---|---|
-| a7b062b | Phase 1: always-on history rings, LH5801/Z80 disassemblers |
-| 7d26a2a | Phase 2: CPU/machine hooks (SC7852 breakpoints, skip-once, per-CPU memory watches, ME1 peeks), `DebugTarget`, expressions |
-| c12904d | Phase 3: listing parsers (sdas 16/32-bit layouts, zasm), `SourceMap` |
-| 3a784e4 | Phase 4a: `BreakpointTable`, `RunControl` (Core) |
-| 1cb5afc | Phase 4b: `DapServer`/`DapSession`/`DebugController`, Settings ▸ Debugger, `--dap` |
-| c43036a | Phase 5: Build & Load, reset/restart, attach `preset` |
-| 56f4489 | Clean start + inbound typing (`MachineController::typeCommand`) |
-| d340fc4 | Phase 6: VS Code extension, docs, smoke test |
-| b01b4c6 | macOS: window restoration off (startup deadlock) |
-| 92e927a | Extension installed as a `.vsix` (`tools/install_vscode_extension.sh`) |
-| a930b14 | Settings ▸ Debugger ▸ Disconnect; clearer "already attached" message |
-| ddef5ea | Numeric memory references (disassembly view), Banks under Registers |
-| d240b90 | Cleanup pass: shared helpers, dead code, cheaper lookups |
-| 7dcfd61 … 263baec | The restructuring in `docs/background/plans/Debugger-Restructuring-Plan.md`, phases R1–R12 (see below) |
-
-**Verified:**
-- **CoreTests:** fully green, including the new suites:
-  - `disasm_tests`: opcode sweeps against both CPU cores and the sdaslh5801 table;
-  - `debug_target_tests`;
-  - `listing_tests`: real assembler fixtures in `Core/tests/fixtures/listings/`;
-  - `run_control_tests`: memtest with its listing.
-- **End to end:** `uv run tools/dap_smoke.py --app build/Qt6/Calc-U-1600.app/Contents/MacOS/Calc-U-1600` passes all four scenarios over real DAP:
-  - a plain session;
-  - Build & Load on a PC-1500 (memtest);
-  - Build & Load on a PC-1600 (the zasm ROM dumper);
-  - ROM reset-and-step.
-
-  It launches with `-ApplePersistenceIgnoreState YES` and quits via `calcu1600/quit`.
-- **Regressions:**
-  - Plotter output is identical before and after (PC-1500 CE-150 demo, lissajou, PC-1600 lissajou).
-  - The always-on history costs about 10% in raw headless speed (3.9 s → 4.27 s for 3 billion PC-1600 cycles). That's negligible at 1× real time.
-
-## Reported by the user in VS Code, not yet confirmed as fixed
-
-The fixes are in ddef5ea, and the smoke test passes. The user still needs to rebuild their app (their build lives in `Qt6/build/`) and try again in VS Code:
-1. **The Disassembly view was empty.** Cause: memory references like `1:0000`, which VS Code can't parse as a number. They are now numeric. Check that the view shows code and marks the current instruction, and that instruction breakpoints set in the view work.
-2. **The Banks scope wasn't visible.** It is now an expandable *Banks* entry under *Registers* (live frame only). Check that it shows.
-3. **"Paused on pause" instead of "entry"** for the ROM configuration. A scripted replay of the same requests gives `entry`. Probably the Pause button, or the older app build. Check again with the rebuilt app.
-
-Other user-facing notes from the session:
-- **CMake Tools kit prompt:** opening the repo root in VS Code activates the CMake Tools extension, and its status-bar Build/Debug buttons ask for a kit. That isn't the debugger. Suggested: pick `[Unspecified]` once, or keep assembly projects in their own folder. The user was offered a `.vscode/settings.json` that turns the prompt off; they haven't answered.
-- **Installing the extension:** current VS Code ignores extensions symlinked into `~/.vscode/extensions`. Install with `tools/install_vscode_extension.sh`, which packages the `.vsix` into `headless/`, then reload the window.
-- **"LH5801/PC-1500"** in VS Code's debugger list comes from the separate `pchambre.lh5801-asm` extension, not from ours.
-
-## Restructuring (2026-09-25)
-
-Done as planned in `docs/background/plans/Debugger-Restructuring-Plan.md`, one commit per phase:
-- **R1–R4:** `runMachine`/`stepMachine` are the execution API; the breakpoint enable is CPU state (`TRACE_BREAKPOINTS` is gone) with a lock-free 64K-bit `BreakpointSet`; one `DebugStop` latch for both machines; per-CPU `CpuView`s under a shared `MachineDebugTarget<Machine>`.
-- **R5–R8:** status register and bank state reported by the target; table-driven register reads, bitmap `WatchSet`; conditions / hit conditions / log messages compiled once (`CompiledExpression`, checked against a test-only copy of the old evaluator); symbols and function breakpoints per CPU (`findSymbol`, `loadListingWithSymbols`).
-- **R9:** one machine-code load pipeline, `machinecode::planLoad()` with per-caller `LoadOptions`.
-- **R10–R12:** `SyncOperations` (Qt6/app) runs every synchronous load/reset for the GUI and the debugger and owns the busy state; the debug target rebinds once from `MachineController::wireNewMachine()`; the debugger's clean start (default preset with the model check), Build & Load and resets go through the service.
-
-Checked: CoreTests and `tools/run_tests.sh` green; `tools/dap_smoke.py` (now also restart and All Reset & Stop) passes; plotter output identical before/after (CE-150 demo, lissajou on both machines, CE-1600P); memtest presets identical. Headless speed: a bare-ROM PC-1600 run measured up to ~5 % slower after R9, but R9 touched no hot code, and with forced 64-byte function alignment both builds time the same -- a code-layout effect, not added work.
+- **Transport:** the server listens on 127.0.0.1 only and takes one client
+  at a time; a second one is told the debugger is busy. `--dap <port>`
+  overrides Settings for one run.
+- **Run control:** while attached, every emulation frame goes through
+  `DebugController::runSlice()`: paused, running with breakpoints and
+  watches armed, or stepping in frame-sized pieces.
+- **`launch` is `attach`:** `DapSession` treats a `launch` request as
+  `attach`, which the CLion recipe relies on.
+- **Installing the extension:** VS Code ignores extensions symlinked into
+  `~/.vscode/extensions`. `tools/install_vscode_extension.sh` packages the
+  `.vsix` into `headless/` and installs it.
+- **"LH5801/PC-1500"** in VS Code's debugger list comes from the separate
+  `pchambre.lh5801-asm` extension, not from ours.
 
 ## Where the code is
 
@@ -126,29 +84,29 @@ Checked: CoreTests and `tools/run_tests.sh` green; `tools/dap_smoke.py` (now als
   - `main.cpp`: `--dap`, `macDisableWindowRestoration()`.
 - **`vscode/calcu1600-debug/`:** the extension. Install with `tools/install_vscode_extension.sh`.
 
-## Design rules learned the hard way
+## Design rules
 
-- **Arming:** breakpoints and watches are armed only inside `DebugController::runSlice()`. A boot (`runBootToPrompt`), a preset or a load drives the machine directly and must never park on a breakpoint; those loops would hang.
-- **Queueing:** DAP messages wait while the app runs a synchronous operation (`SyncOperations::busyChanged`). An attach that arrived during the startup preset once rebuilt the machine under the running loader and aborted the app.
-- **Typing:** the GUI paste never presses ENTER; that's deliberate. Tools use `typeCommand()`, which does. `enqueueKey()` is PC-1500 only.
-- **Build & Load order:** clean start (the configuration's `preset`, else the model's default preset, else All Reset), then a direct load (no dialog or popup), then auto-start. `cleanStart: false` skips the clean start.
-- **Memory references:** must stay numeric; see `DapSession::memoryReference()`.
-- **Scripted launches:** never SIGTERM the app. macOS then shows a restore prompt, which used to deadlock the startup preset. The app now opts out of window restoration, but the smoke test still quits cleanly.
+- **Arming:** breakpoints and watches are armed only inside
+  `DebugController::runSlice()`. A boot (`runBootToPrompt`), a preset or a
+  load drives the machine directly and must never park on a breakpoint;
+  those loops would hang.
+- **Queueing:** DAP messages wait while the app runs a synchronous
+  operation (`SyncOperations::busyChanged`). An attach handled during the
+  startup preset would rebuild the machine under the running loader.
+- **Typing:** the GUI paste never presses ENTER; that's deliberate. Tools
+  use `typeCommand()`, which does. `enqueueKey()` is PC-1500 only.
+- **Build & Load order:** clean start (the configuration's `preset`, else
+  the model's default preset, else All Reset), then a direct load (no
+  dialog or popup), then auto-start. `cleanStart: false` skips the clean
+  start.
+- **Memory references** must stay numeric (VS Code can't parse `1:0000`);
+  see `DapSession::memoryReference()`.
+- **Scripted launches:** never SIGTERM the app; quit via `calcu1600/quit`
+  and launch with `-ApplePersistenceIgnoreState YES`.
 
-## Next steps
+## Later
 
-1. The user checks items 1–3 above in VS Code with a rebuilt app, and does the manual checklist in `DAP-Debugger-Plan.md` ▸ Verification:
-   - conditional breakpoint;
-   - step over a `SJP`;
-   - edit a register;
-   - data breakpoint;
-   - memory view;
-   - PC-1600 LH5803 handoff.
-2. Decide on the CMake Tools `.vscode/settings.json` question.
-3. **Known limitations** (listed in `docs/Debugger.md`):
-   - no PC-1600 vertical-bank qualifier;
-   - no ME1 writes;
-   - no BASIC start for LH5803 code;
-   - the zasm problem matcher only takes the first error per file section;
-   - CLion is not set up yet.
-4. **Later:** TASM ROM-disassembly listings (e.g. Jeff Birt's) as another `ListingSource` parser.
+- The known limitations listed in `docs/Debugger.md`: no PC-1600
+  vertical-bank qualifier, no ME1 writes, no BASIC start for LH5803 code,
+  the zasm problem matcher takes only the first error per file section.
+- TASM ROM-disassembly listings as another `ListingSource` parser.
