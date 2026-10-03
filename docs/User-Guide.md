@@ -649,6 +649,7 @@ program:
 | `- saveas: live slot-1:My card` | Name & Save the module in slot 1 into your save folder. `slot-2:` and `floppy:` are PC-1600 only. Overwrites a file of the same name, but never takes a template's name. |
 | `- saveas: template slot-1:My card` | The same, saved as a template. Running the preset again replaces your own template of that name; a bundled name is refused. |
 | `- saveas: template slot-2:file:Card.card.yaml` | Saves to that file, next to the preset (`.card.yaml` for a card, `.floppy.yaml` for `floppy:`). The name is the file name. |
+| `- expect: 11834` | Stops the preset with an error unless one line of the display contains that text, e.g. to check a result. The rest of the line is the text, `#` included. A backslash is written `\\`, and a character outside ASCII as `\xHH` (its code). |
 | `- screenshot: shot.png` | Saves the LCD image (as Copy Screen does) in the trace directory. |
 | `- syncclock:` | Sets the calculator's clock from your computer. Put it last, because a preset runs at full speed and the clock runs ahead. |
 | `- trace: run.bin` / `- trace: off` | Starts / stops a CPU trace (see the [Debug panel](#92-debug-panel)). |
@@ -711,7 +712,7 @@ This is what it leaves on the LCD:
 | `bus-rom:` | ROM files on the 60-pin bus, for developing a ROM extension: `- file:` with `bank: 4`–`7` (PC-1600 system bus) or `address:` with optional `me:`, `pv:`, `pu:` (each `0` or `1`) (PC-1500, PC-1600 LH5803 side). A bus ROM shadows a bundled ROM at the same place; see the [Debugger](Debugger.md) |
 | `debug:` | the debugger's settings for a project preset; ignored when the preset is loaded; see the [Debugger](Debugger.md) |
 
-**Steps:** `key:`, `type:`, `wait:`, `saveas:`, `screenshot:`, `syncclock:`, `trace:`.
+**Steps:** `key:`, `type:`, `wait:`, `expect:`, `saveas:`, `screenshot:`, `syncclock:`, `trace:`.
 
 **`program: file:`** is loaded by what it holds: a BASIC listing (`.bas`),
 tokenized BASIC, or machine code with or without a header. Headerless

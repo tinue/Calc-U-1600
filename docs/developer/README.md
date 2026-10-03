@@ -45,6 +45,9 @@ decisions, plans, handoffs — is in [../background/README.md](../background/REA
   host-drive ROM, its I/O protocol and FILE functions.
 - [PC1500-BASIC-Variable-Layout.md](PC1500-BASIC-Variable-Layout.md) — how
   the PC-1500 ROM BASIC stores variables in RAM.
+- [LCD-Text.md](LCD-Text.md) — reading the display as text: the ROM fonts,
+  the cursor, the encoding, and where to use it (`--lcd-text`, `expect:`,
+  `calcu1600/screen`).
 
 ## File formats
 

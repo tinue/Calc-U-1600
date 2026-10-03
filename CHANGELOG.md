@@ -11,12 +11,20 @@
   docs/Debugger.md walks through debugging it, and
   docs/PC1500-Keyword-Modules.md describes how the PC-1500 ROM finds such
   modules.
+- **`- expect: <text>` in presets** checks the display: the preset stops
+  with an error, showing the screen, unless one line contains the text.
+  The display is read as text from the calculator's own ROM font, so the
+  check is exact. The headless CLIs write the same text with
+  `--lcd-text <file|->`, and the debug server answers `calcu1600/screen`.
 - **Create Debug Project Here…** in VS Code's Explorer context menu creates
   the project in the folder you right-clicked; its launch configuration
   points into that folder.
 
 ### Changed
 
+- **The preset log** shows the display as text after each step
+  (`lcd=[...]`). What it used to call `screen="..."` was the ROM's input
+  line, not the display; it is now `input="..."`.
 - **Machine code with a bank in its PC-1600 header** loads into that bank
   (1-3) instead of being refused, and the proposed command is
   `CALL #bank,&addr`. Load Machine Code… shows an error when that bank has
