@@ -614,7 +614,6 @@ void test_subcpu_clock_ticks_and_rolls_over() {
     auto& sub = mem.subCpu();
 
     // Plain second bump, BCD-encoded fields.
-    sub.setYear(2025);
     sub.setDateTime({0x09, 0x25, 0x14, 0x37, 0x08});
     sub.tickOneSecond();
     CHECK(sub.dateTime().second == 0x09);
@@ -634,23 +633,20 @@ void test_subcpu_clock_ticks_and_rolls_over() {
     dt = sub.dateTime();
     CHECK(dt.day == 0x01 && dt.month == 0x05);
 
-    // Non-leap February stops at 28; leap February reaches 29.
-    sub.setYear(2025);
+    // No year: February ends after the 28th; a set 02/29 also rolls into
+    // 03/01 (measured on a real unit).
     sub.setDateTime({0x02, 0x28, 0x23, 0x59, 0x59});
     sub.tickOneSecond();
     CHECK(sub.dateTime().month == 0x03 && sub.dateTime().day == 0x01);
-    sub.setYear(2024);
-    sub.setDateTime({0x02, 0x28, 0x23, 0x59, 0x59});
+    sub.setDateTime({0x02, 0x29, 0x23, 0x59, 0x59});
     sub.tickOneSecond();
-    CHECK(sub.dateTime().month == 0x02 && sub.dateTime().day == 0x29);
+    CHECK(sub.dateTime().month == 0x03 && sub.dateTime().day == 0x01);
 
-    // 31 Dec 23:59:59 -> 1 Jan, year advances.
-    sub.setYear(2025);
+    // 31 Dec 23:59:59 -> 1 Jan.
     sub.setDateTime({0x0C, 0x31, 0x23, 0x59, 0x59});
     sub.tickOneSecond();
     dt = sub.dateTime();
     CHECK(dt.month == 0x01 && dt.day == 0x01);
-    CHECK(sub.year() == 2026);
 }
 
 void test_subcpu_host_seed_survives_cold_init() {
@@ -662,7 +658,6 @@ void test_subcpu_host_seed_survives_cold_init() {
     // Host seeds a real time and arms the guard (as PC1600Machine::seedClock
     // does).
     sub.setDateTime({0x09, 0x01, 0x21, 0x34, 0x56});
-    sub.setYear(2026);
     sub.armHostSeedGuard();
 
     // The boot ROM's cold-start write: 6DH with 1 Jan 00:00:00 -> swallowed.

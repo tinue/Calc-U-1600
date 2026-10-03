@@ -331,10 +331,6 @@ What's wrong with that:
   ahead after `POWER OFF`; the hour signal if SWPON bit 3 can be set from
   BASIC. Then drive `PiezoSampler` from a modelled F output
   (`PC1600SubCpu`, `PC1600Memory::updateBuzzerLine()`).
-- **Sub-CPU February: leap year or not?** The Service Manual (§4-2) says the
-  clock has no leap-year handling; the model follows the seeded year's
-  calendar. On the real unit: `DATE$="02/28":TIME$="23:59:50"`, wait, read
-  `DATE$` (02/29 or 03/01).
 - **Sub-CPU commands still unnamed** (IOCS 0CH–0FH, 1BH, 1FH, 26H, what
   1CH/1DH mean, the LH-5803's DCH): see `PC-1600-SubCpu-LU57813P.md` §8.
   The ROM trace is done (2026-09-27): 1EH is the port-mode select

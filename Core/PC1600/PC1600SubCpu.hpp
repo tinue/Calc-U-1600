@@ -111,15 +111,6 @@ public:
     void setDateTime(const DateTime& dt) { m_clock = dt; }
     DateTime dateTime() const { return m_clock; }
 
-    /// The year the host seeded, used only for February's length. The
-    /// chip keeps no year (BASIC's DATE$ is MM/DD), and the Service Manual
-    /// (§4-2) says its clock has "no leap-year handling". Which length its
-    /// February has is not documented, so this keeps the calendar one
-    /// until it's measured on a real unit (TODO.md). tickOneSecond() bumps
-    /// it when December rolls into January.
-    void setYear(int year) { m_year = year; }
-    int  year() const { return m_year; }
-
     /// Arm the one-shot cold-start guard: the next clock write (SWRT, 92H)
     /// carrying the boot ROM's 1 Jan 00:00:00 default is swallowed instead
     /// of applied, so a host-seeded time survives boot. The host calls this
@@ -290,9 +281,6 @@ private:
     // reads the clock before anything sets it gets a well-formed answer
     // rather than an all-zero (month 0) one it would reject.
     DateTime m_clock{1, 1, 0, 0, 0};
-    // Arbitrary non-leap default for the unseeded, deterministic core; the
-    // GUI/CLI replaces it with the host year at startup (see setYear()).
-    int m_year{2001};
     bool m_hostSeedGuard{false}; // see armHostSeedGuard()
     // A freshly-constructed machine has no state to keep, so it starts as
     // a cold power-up (ALL RESET); PC1600Machine::reset() switches this to

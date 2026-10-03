@@ -139,8 +139,6 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
 - **F-pin tones not generated** — key click (SBEEP), the ALARM$ beep, the
   wake-up beep and the hour signal. Frequency and length are unmeasured
   (`TODO.md`).
-- **February** follows the seeded year's calendar. The Service Manual says
-  the chip has no leap-year handling, but not which February it keeps.
 - **Response time** is one fitted figure for every command
   (`kResponseMicros`), see the timing item in `TODO.md`.
 - **Clock is never read from the host clock inside Core** — kept

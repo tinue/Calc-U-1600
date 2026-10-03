@@ -34,13 +34,13 @@ void PC1600SubCpu::tickOneSecond() {
 
 void PC1600SubCpu::carryIntoHour() {
     if (!bcdBumpField(m_clock.hour, 23, 0)) return;
-    if (!bcdBumpField(m_clock.day, bcdDaysInMonth(m_clock.month, m_year), 1)) return;
-    if (m_clock.month < 12) {
-        m_clock.month = static_cast<uint8_t>(m_clock.month + 1);
-        return;
-    }
-    m_clock.month = 1;
-    m_year++;
+    // The chip keeps no year (BASIC's DATE$ is MM/DD; Service Manual §4-2:
+    // "no leap-year handling"), so February always ends after the 28th.
+    // Measured on a real unit: a set 02/29 is accepted, but 02/28 and 02/29
+    // both roll into 03/01 -- the clock never reaches 02/29 by itself.
+    constexpr int kAnyNonLeapYear = 2001;
+    if (!bcdBumpField(m_clock.day, bcdDaysInMonth(m_clock.month, kAnyNonLeapYear), 1)) return;
+    m_clock.month = m_clock.month < 12 ? static_cast<uint8_t>(m_clock.month + 1) : 1;
 }
 
 namespace {

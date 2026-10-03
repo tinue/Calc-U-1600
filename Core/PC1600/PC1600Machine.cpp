@@ -71,7 +71,7 @@ void PC1600Machine::seedClock(int year, int month, int day, int hour, int minute
     dt.minute = PC1600SubCpu::packBcd(minute);
     dt.second = PC1600SubCpu::packBcd(second);
     m_z80Mem.subCpu().setDateTime(dt);
-    m_z80Mem.subCpu().setYear(year);
+    (void)year; // the sub-CPU keeps no year; a 29 Feb is passed as is (see PC1600SubCpu::carryIntoHour)
     // Boot re-inits the calendar to its cold-start default once; keep the
     // seeded time through that write.
     m_z80Mem.subCpu().armHostSeedGuard();
