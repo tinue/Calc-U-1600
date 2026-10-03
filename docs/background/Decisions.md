@@ -455,6 +455,18 @@ authentic speed for the span that matters.
   `Core/tests/fixtures/` (e.g. `memtest_stock.bin` next to its `.rst`), so
   renaming or editing an example can't break a test. The duplicate binary is
   deliberate.
+- **`memory_card_tests.cpp` keeps inline card definitions** (`kCe1601mYaml`,
+  `kSuperRamYaml`, ...) next to the bundled `Qt6/resources/cards/` files.
+  They are engine fixtures, not stale copies: the bundled superRAM, for
+  one, is a formatted RAM-disk image, so a "fresh bank" isn't blank there.
+  Tests about the shipped modules use `bundledCard()`.
+- **Tests type only what they test.** Typing costs ~0.13 s emulated per
+  character, so a program that is only setup goes in through the fast
+  loader (`loadBasicProgram`), and the typer is used where typing or the
+  ROM's own tokenizing is the subject (e.g. the host drive's `CDIR`/`LDIR`,
+  which libsharpdx doesn't know). Likewise, a test that applies a PC-1600
+  preset loads the ROMs first: an empty bus "boots" too, but runs into the
+  idle-wait caps and takes several times longer.
 - **`Core/tests/LegacyExpression.hpp` is a test oracle.** It keeps the old
   interpreted debugger expression evaluator, hit conditions and log
   interpolation, and the tests check the compiled forms against it. The

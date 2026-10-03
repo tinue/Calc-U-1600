@@ -16,12 +16,14 @@
 #include "../CPU/LH5803/LH5803SharedMemory.hpp"
 #include "../Display/LcdCharsets.hpp"
 #include "../Display/LcdText.hpp"
+#include "../PC1500/PC1500BasicLoader.hpp"
 #include "../PC1500/PC1500BasicTyper.hpp"
 #include "../PC1500/PC1500Display.hpp"
 #include "../PC1500/PC1500Memory.hpp"
 #include "../PC1500/PC1500LcdText.hpp"
 #include "../PC1500/PC1500PresetLoader.hpp"
 #include "../PC1600/PC1600Bank.hpp"
+#include "../PC1600/PC1600BasicLoader.hpp"
 #include "../PC1600/PC1600BasicTyper.hpp"
 #include "../PC1600/PC1600Display.hpp"
 #include "../PC1600/PC1600LcdText.hpp"
@@ -221,11 +223,8 @@ void test_pc1600_print_roundtrip() {
     LcdText t = pc1600Run(m, "PRINT MEM");
     CHECK(t.contains("11834"));
     CHECK(t.unparsed == 0);
-    tapKey(m, "mode"); // PRO, to type the program
-    waitIdle(m, kPC1600Settle);
-    CHECK(typeBasicProgramText(m, roundtripProgram()).rejectedLines.empty());
-    tapKey(m, "mode");
-    waitForKeyboardScanLoop(m); // MODE redraws the screen; keys typed before are lost
+    const std::string program = roundtripProgram();
+    CHECK(loadBasicProgram(m, std::vector<uint8_t>(program.begin(), program.end())).ok);
     const LcdFont font = pc1600LcdFont(m);
     for (int k = 0; k < kRoundtripBatches; ++k) {
         t = pc1600Run(m, "RUN " + std::to_string((k + 1) * 10));
@@ -281,6 +280,24 @@ LcdText pc1500Run(PC1500Machine& m, const std::string& line) {
     return pc1500LcdText(m);
 }
 
+// Batch k (0-based) in A$-D$, 7 codes each (a string variable holds 16
+// characters): lines 100(k+1) on, ending in END. Typed in direct mode this
+// would be ~2000 keystrokes, so a program sets the variables and the PRINT
+// is typed in direct mode.
+std::string pc1500RoundtripProgram() {
+    std::string program;
+    for (int k = 0; k < kRoundtripBatches; ++k) {
+        const int from = 0x20 + 26 * k, to = from + 25 > 0x7E ? 0x7E : from + 25;
+        for (int v = 0; v < 4; ++v) {
+            program += std::to_string(100 * (k + 1) + 10 * v) + " " + std::string(1, char('A' + v)) + "$=\"\"";
+            for (int c = from + 7 * v; c <= to && c < from + 7 * (v + 1); ++c) program += "+CHR$ " + std::to_string(c);
+            program += "\n";
+        }
+        program += std::to_string(100 * (k + 1) + 40) + " END\n";
+    }
+    return program;
+}
+
 void test_pc1500_print_roundtrip() {
     for (const char* rom : {"roms/PC-1500_A04.ROM", "roms/PC-1500_A03.ROM"}) {
         PC1500Machine m;
@@ -288,22 +305,19 @@ void test_pc1500_print_roundtrip() {
             std::fprintf(stderr, "SKIP test_pc1500_print_roundtrip: %s not found\n", rom);
             continue;
         }
-        tapKey(m, "mode"); // boots in PRO
+        std::string err;
+        typeLine(m, "NEW0", /*pressEnter=*/true, &err); // boots in PRO
+        const std::string program = pc1500RoundtripProgram();
+        CHECK(loadBasicProgram(m, std::vector<uint8_t>(program.begin(), program.end())).ok);
+        tapKey(m, "mode");
         waitIdle(m, static_cast<uint64_t>(PC1500Machine::kCpuHz * 2));
         LcdText t = pc1500Run(m, "PRINT 12345*-2");
         CHECK(t.rows.size() == 1);
         CHECK(t.contains("-24690"));
         CHECK(t.unparsed == 0);
-        // Each batch in direct mode, in A$-D$ (7 codes each: a string
-        // variable holds 16 characters, a line 80).
         const LcdFont font = pc1500LcdFont(m);
         for (int k = 0; k < kRoundtripBatches; ++k) {
-            const int from = 0x20 + 26 * k, to = from + 25 > 0x7E ? 0x7E : from + 25;
-            for (int v = 0; v < 4; ++v) {
-                std::string line = std::string(1, char('A' + v)) + "$=\"\"";
-                for (int c = from + 7 * v; c <= to && c < from + 7 * (v + 1); ++c) line += "+CHR$ " + std::to_string(c);
-                pc1500Run(m, line);
-            }
+            pc1500Run(m, "RUN " + std::to_string(100 * (k + 1)));
             t = pc1500Run(m, "PRINT A$;B$;C$;D$");
             const std::string want = roundtripWant(font, k);
             CHECK(t.contains(want));

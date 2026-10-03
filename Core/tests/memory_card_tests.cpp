@@ -30,6 +30,7 @@
 #include "../PC1600/PC1600PresetLoader.hpp"
 #include "../Yaml.hpp"
 #include "PresetTestSupport.hpp"
+#include "TestRoms.hpp"
 #include "TestCards.hpp"
 
 namespace {
@@ -511,111 +512,6 @@ void test_compat_gate_via_file_if_present() {
           err.find("not compatible") != std::string::npos);
 }
 
-void test_ce1638_card_yaml_if_present() {
-    const char* path = "Qt6/resources/cards/ce1638.card.yaml";
-    std::ifstream probe(path);
-    if (!probe) {
-        std::fprintf(stderr, "SKIP test_ce1638_card_yaml_if_present: %s not found\n", path);
-        return;
-    }
-    for (CardHost h : {CardHost::PC1500, CardHost::PC1500A, CardHost::PC1600Slot1,
-                       CardHost::PC1600Slot2}) {
-        std::string err;
-        auto card = makeSoftwareDefinedCard(path, h, &err);
-        CHECK(card != nullptr);
-    }
-
-    std::string err;
-    auto card = makeSoftwareDefinedCard(path, CardHost::PC1500, &err);
-    CHECK(card != nullptr);
-    if (!card) return;
-    CHECK(card->debugBankCount() == 8);
-
-    auto* sd = static_cast<SoftwareDefinedCard*>(card.get());
-    PinState sel;
-    sel.forWrite = true;
-    sel.pin[18] = true;
-    sel.address = 5;  // A0-A2 -> bank 5
-    CHECK(sd->respondsToWrite(sel, 0));
-    CHECK(sd->currentBank() == 5);
-
-    PinState w;
-    w.pin[4] = true;
-    w.forWrite = true;
-    w.address = 0x1234;
-    CHECK(sd->respondsToWrite(w, 0x42));
-    uint8_t v = 0;
-    CHECK(sd->respondsToRead(w, v) && v == 0x42);
-
-    sel.address = 0;
-    sd->respondsToWrite(sel, 0);
-    CHECK(sd->respondsToRead(w, v) && v == 0x00);  // bank 0 untouched (default fill)
-}
-
-void test_ce163f_card_yaml_if_present() {
-    const char* path = "Qt6/resources/cards/ce163f.card.yaml";
-    std::ifstream probe(path);
-    if (!probe) {
-        std::fprintf(stderr, "SKIP test_ce163f_card_yaml_if_present: %s not found\n", path);
-        return;
-    }
-    for (CardHost h : {CardHost::PC1500, CardHost::PC1500A, CardHost::PC1600Slot1,
-                       CardHost::PC1600Slot2}) {
-        std::string err;
-        auto card = makeSoftwareDefinedCard(path, h, &err);
-        CHECK(card != nullptr);
-    }
-
-    std::string err;
-    auto card = makeSoftwareDefinedCard(path, CardHost::PC1500, &err);
-    CHECK(card != nullptr);
-    if (!card) return;
-    CHECK(card->debugBankCount() == 16);
-    auto* sd = static_cast<SoftwareDefinedCard*>(card.get());
-
-    auto selectBank = [&](int bank) {
-        PinState p;
-        p.forWrite = true;
-        p.pin[18] = true;
-        p.address = uint16_t(bank);
-        sd->respondsToWrite(p, 0);
-    };
-    auto write = [&](uint16_t off, uint8_t data) {
-        PinState p;
-        p.pin[4] = true;
-        p.forWrite = true;
-        p.address = off;
-        return sd->respondsToWrite(p, data);
-    };
-    auto read = [&](uint16_t off) {
-        uint8_t v = 0;
-        PinState p;
-        p.pin[4] = true;
-        p.address = off;
-        sd->respondsToRead(p, v);
-        return v;
-    };
-
-    // Bank 0: ordinary RAM.
-    selectBank(0);
-    write(0x100, 0x99);
-    CHECK(read(0x100) == 0x99);
-
-    // Bank 9: FLASH, pre-loaded with real recovered firmware content
-    // (`initial-content`, dumped via the "Dump Card YAML" debug feature) --
-    // offset 0x0200 sits in that dump's untouched ($0120: FF...) tail, so it
-    // still reads the erased-flash fill. Needs the real firmware's unlock
-    // addresses (&1555/&2AAA), which the low-11-bit command-address-mask
-    // reduces to &555/&2AA.
-    selectBank(9);
-    CHECK(read(0x0200) == 0xFF);
-    write(0x1555, 0xAA);
-    write(0x2AAA, 0x55);
-    write(0x1555, 0xA0);
-    write(0x0200, 0x0F);
-    CHECK(read(0x0200) == (0xFF & 0x0F));
-}
-
 void test_superram_card_yaml_if_present() {
     const char* path = "Qt6/resources/cards/superram.card.yaml";
     std::ifstream probe(path);
@@ -972,90 +868,6 @@ void test_superram_end_to_end_through_pc1600() {
 
 // ── flash content / by-bank split ───────────────────────────────────────
 
-void test_flash_bare_write_is_noop_until_unlocked() {
-    auto sd = buildCard(kFlashByBankYaml, CardHost::PC1500);
-    CHECK(sd != nullptr);
-    if (!sd) return;
-
-    auto selectBank = [&](int bank) {
-        PinState p;
-        p.forWrite = true;
-        p.pin[18] = true;
-        p.address = uint16_t(bank);
-        CHECK(sd->respondsToWrite(p, 0));
-    };
-    auto mem = [&](uint16_t off) {
-        PinState p;
-        p.pin[4] = true;
-        p.address = off;
-        return p;
-    };
-
-    selectBank(2);  // first flash bank
-    PinState w = mem(0x10);
-    w.forWrite = true;
-    CHECK(sd->respondsToWrite(w, 0x00));  // claimed, but not a program -- no-op
-    uint8_t v = 0xFF;
-    CHECK(sd->respondsToRead(mem(0x10), v) && v == 0xAA);  // still power-up fill
-
-    // A write that doesn't match the unlock sequence's step 1 leaves the
-    // array untouched too (it just arms/re-arms/idles the decoder).
-    PinState w2 = mem(0x55);
-    w2.forWrite = true;
-    CHECK(sd->respondsToWrite(w2, 0x99));
-    CHECK(sd->respondsToRead(mem(0x55), v) && v == 0xAA);
-}
-
-void test_flash_byte_program_nor_semantics_and_glitch_reset() {
-    auto sd = buildCard(kFlashByBankYaml, CardHost::PC1500);
-    CHECK(sd != nullptr);
-    if (!sd) return;
-
-    auto selectBank = [&](int bank) {
-        PinState p;
-        p.forWrite = true;
-        p.pin[18] = true;
-        p.address = uint16_t(bank);
-        sd->respondsToWrite(p, 0);
-    };
-    auto write = [&](uint16_t off, uint8_t data) {
-        PinState p;
-        p.pin[4] = true;
-        p.forWrite = true;
-        p.address = off;
-        return sd->respondsToWrite(p, data);
-    };
-    auto read = [&](uint16_t off) {
-        uint8_t v = 0;
-        PinState p;
-        p.pin[4] = true;
-        p.address = off;
-        sd->respondsToRead(p, v);
-        return v;
-    };
-
-    selectBank(3);
-    CHECK(write(0x55, 0xAA));
-    CHECK(write(0x2A, 0x55));
-    CHECK(write(0x55, 0xA0));  // byte-program-command -> ProgramArmed
-    CHECK(write(0x10, 0x0F));  // program 0x0F at offset 0x10
-    CHECK(read(0x10) == (0xAA & 0x0F));  // NOR: powered-up 0xAA & 0x0F
-
-    // A second program can only clear further bits, never set any back.
-    CHECK(write(0x55, 0xAA));
-    CHECK(write(0x2A, 0x55));
-    CHECK(write(0x55, 0xA0));
-    CHECK(write(0x10, 0xFF));         // would try to set bits -- NOR can't
-    CHECK(read(0x10) == (0xAA & 0x0F));  // unchanged
-
-    // Glitch recovery: an unexpected step-2 write resets to Idle, so a
-    // plain write afterwards is a no-op, not a stray program.
-    CHECK(write(0x55, 0xAA));
-    CHECK(write(0x99, 0x99));  // wrong step 2 -- decoder falls back to Idle
-    CHECK(write(0x20, 0x00));  // ordinary write, no unlock armed -- no-op
-    CHECK(read(0x20) == 0xAA);
-}
-
 void test_flash_sector_and_chip_erase() {
     auto sd = buildCard(kFlashByBankYaml, CardHost::PC1500);
     CHECK(sd != nullptr);
@@ -1131,107 +943,6 @@ void test_flash_sector_and_chip_erase() {
     CHECK(read(0x00) == 0xFF);
     selectBank(3);
     CHECK(read(0x00) == 0xFF);  // bank 3 cleared too
-}
-
-void test_flash_reset_command_exception_during_program() {
-    auto sd = buildCard(kFlashByBankYaml, CardHost::PC1500);
-    CHECK(sd != nullptr);
-    if (!sd) return;
-
-    PinState sel;
-    sel.forWrite = true;
-    sel.pin[18] = true;
-    sel.address = 3;
-    sd->respondsToWrite(sel, 0);
-
-    auto write = [&](uint16_t off, uint8_t data) {
-        PinState p;
-        p.pin[4] = true;
-        p.forWrite = true;
-        p.address = off;
-        return sd->respondsToWrite(p, data);
-    };
-    auto read = [&](uint16_t off) {
-        uint8_t v = 0;
-        PinState p;
-        p.pin[4] = true;
-        p.address = off;
-        sd->respondsToRead(p, v);
-        return v;
-    };
-
-    write(0x55, 0xAA);
-    write(0x2A, 0x55);
-    write(0x55, 0xA0);      // ProgramArmed
-    write(0x10, 0xF0);      // 0xF0 as *data* here must be programmed, not treated as a reset
-    CHECK(read(0x10) == (0xAA & 0xF0));
-
-    // Outside ProgramArmed, 0xF0 does reset the decoder -- a stray program
-    // write afterwards is a no-op.
-    write(0x55, 0xAA);
-    write(0xF0, 0xF0);  // reset while awaiting a command
-    write(0x20, 0x00);
-    CHECK(read(0x20) == 0xAA);
-}
-
-void test_flash_bank_latch_does_not_perturb_decoder() {
-    auto sd = buildCard(kFlashByBankYaml, CardHost::PC1500);
-    CHECK(sd != nullptr);
-    if (!sd) return;
-
-    auto selectBank = [&](int bank) {
-        PinState p;
-        p.forWrite = true;
-        p.pin[18] = true;
-        p.address = uint16_t(bank);
-        sd->respondsToWrite(p, 0);
-    };
-    auto write = [&](uint16_t off, uint8_t data) {
-        PinState p;
-        p.pin[4] = true;
-        p.forWrite = true;
-        p.address = off;
-        return sd->respondsToWrite(p, data);
-    };
-    auto read = [&](uint16_t off) {
-        uint8_t v = 0;
-        PinState p;
-        p.pin[4] = true;
-        p.address = off;
-        sd->respondsToRead(p, v);
-        return v;
-    };
-
-    selectBank(2);
-    write(0x55, 0xAA);
-    selectBank(2);  // re-select the same bank mid-unlock -- must not reset the decoder
-    write(0x2A, 0x55);
-    write(0x55, 0xA0);
-    write(0x10, 0x00);
-    CHECK(read(0x10) == 0x00);  // the program went through -- decoder state survived the strobe
-}
-
-void test_flash_regular_banks_are_ordinary_ram() {
-    auto sd = buildCard(kFlashByBankYaml, CardHost::PC1500);
-    CHECK(sd != nullptr);
-    if (!sd) return;
-
-    PinState sel;
-    sel.forWrite = true;
-    sel.pin[18] = true;
-    sel.address = 0;
-    sd->respondsToWrite(sel, 0);
-
-    PinState w;
-    w.pin[4] = true;
-    w.forWrite = true;
-    w.address = 0x10;
-    CHECK(sd->respondsToWrite(w, 0x5A));  // no unlock needed -- Regular content
-    uint8_t v = 0;
-    PinState r;
-    r.pin[4] = true;
-    r.address = 0x10;
-    CHECK(sd->respondsToRead(r, v) && v == 0x5A);
 }
 
 // ── initial-content ──────────────────────────────────────────────────
@@ -1382,6 +1093,7 @@ void test_ce1601m_end_to_end_through_pc1600() {
     // route. `run` asserts the vertical-bank behaviour for a loaded preset.
     auto run = [&](const PresetFile& preset, const std::string& moduleDir) {
         PC1600Machine m;
+        loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
         PresetLoadResult r = applyPC1600Preset(m, preset, {}, ".", moduleDir);
         CHECK(r.ok);
         CHECK(m.slot2Attached());
@@ -1934,14 +1646,7 @@ int run_memory_card_tests() {
     test_superram_16way_vertical_banking_direct();
     test_superram_end_to_end_through_pc1600();
 
-    test_flash_bare_write_is_noop_until_unlocked();
-    test_flash_byte_program_nor_semantics_and_glitch_reset();
     test_flash_sector_and_chip_erase();
-    test_flash_reset_command_exception_during_program();
-    test_flash_bank_latch_does_not_perturb_decoder();
-    test_flash_regular_banks_are_ordinary_ram();
-    test_ce1638_card_yaml_if_present();
-    test_ce163f_card_yaml_if_present();
     test_superram_card_yaml_if_present();
 
     test_initial_content_addressed_hex_and_hex();

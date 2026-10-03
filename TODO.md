@@ -130,6 +130,20 @@ The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, 
   the TRM doesn't); `SAVE`/`LOAD "CAS:"` in MODE 1; whether the CE-158's own
   `SETDEV` is reachable on the PC-1600; CE-150/CE-158 `PRINT#`/`INPUT#` in
   MODE 0.
+- **MODE 1 + CE-155: the fast loader writes the program to the wrong
+  place.** With a CE-155 in slot 1 and `MODE1` + `NEW0`, the ROM's area
+  starts at LH5803 &20C5, and typed lines land at CE-155 backing offset
+  0x08C5; `loadBasicProgram` puts them at 0x00C5 (it takes the slot window
+  &A000 as backing offset 0). The work-area pointers match the typed ones,
+  so LIST looks right, but RUN doesn't run the program. Found when the
+  "MODE 1, CE-155" case of `test_work_area_matches_typed`
+  (`Core/tests/pc1600_basicloader_tests.cpp`) was made to run: it had
+  silently returned early since it was written (an 8 KB `plainRamCard` is
+  not a valid definition). The case is commented out there until this is
+  fixed. **Before fixing:** check how `PC1600ProgramPlacement` maps a
+  module segment to the card's backing store -- the CE-155's 2K/6K chip
+  split in the PC-1500 map is the likely mismatch -- and whether MODE 0
+  with a CE-155 has the same problem.
 - **Guide screenshots write into the real saves folder:** the chapter-5
   preset (`docs/developer/screenshots/presets/pc1600-modules.pc1600`) uses
   `saveas: live slot-1:My programs`, so every `tools/make_screenshots.sh`

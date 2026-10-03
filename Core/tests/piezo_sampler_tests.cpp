@@ -243,8 +243,9 @@ bool bootPC1500(PC1500Machine& m) {
     return true;
 }
 
-// Types `line` and returns the audio the ROM produced while executing it.
-std::vector<int16_t> runAndCapture(PC1500Machine& m, const std::string& line) {
+// Types `line` and returns the audio the ROM produced in the `seconds`
+// after Enter.
+std::vector<int16_t> runAndCapture(PC1500Machine& m, const std::string& line, double seconds = 1.5) {
     // Enter is tapped here rather than by typeLine(): typeLine() settles
     // for longer than the sampler's ~1 s ring after Enter, which would drop
     // a short BEEP before it could be drained.
@@ -254,7 +255,7 @@ std::vector<int16_t> runAndCapture(PC1500Machine& m, const std::string& line) {
     m.discardAudio();
     tapKey(m, "enter");
     std::vector<int16_t> chunk(kRate);
-    for (int i = 0; i < 30; ++i) { // 3 s in 100 ms steps, draining as we go
+    for (int i = 0; i < seconds * 10; ++i) { // 100 ms steps, draining as we go
         m.runCycles(130000);
         chunk.resize(m.drainAudio(chunk.data(), kRate));
         pcm.insert(pcm.end(), chunk.begin(), chunk.end());
@@ -279,10 +280,10 @@ void test_pc1500_beep() {
     CHECK(t.hz > 1000.0 && t.hz < 8000.0);
 
     // BEEP OFF: the ROM stops driving PC6, so nothing is audible.
-    runAndCapture(m, "BEEP OFF");
+    typeLine(m, "BEEP OFF", /*pressEnter=*/true, nullptr);
     ToneStats off = analyse(runAndCapture(m, "BEEP 1"));
     CHECK(off.audibleSamples == 0);
-    runAndCapture(m, "BEEP ON");
+    typeLine(m, "BEEP ON", /*pressEnter=*/true, nullptr);
     CHECK(analyse(runAndCapture(m, "BEEP 1")).audibleSamples > 0);
 }
 
@@ -306,7 +307,7 @@ void test_pc1500_settle_waits_for_beep() {
 
 // ── ROM-gated: PC-1600 ──────────────────────────────────────────────────
 
-std::vector<int16_t> runAndCapture(PC1600Machine& m, const std::string& line) {
+std::vector<int16_t> runAndCapture(PC1600Machine& m, const std::string& line, double seconds = 1.5) {
     // Enter is tapped here rather than by typeLine(): typeLine() settles
     // for longer than the sampler's ~1 s ring after Enter, which would drop
     // a short BEEP before it could be drained.
@@ -316,7 +317,7 @@ std::vector<int16_t> runAndCapture(PC1600Machine& m, const std::string& line) {
     m.discardAudio();
     tapKey(m, "enter");
     std::vector<int16_t> chunk(kRate);
-    for (int i = 0; i < 30; ++i) { // 3 s in 100 ms steps
+    for (int i = 0; i < seconds * 10; ++i) { // 100 ms steps
         m.runCycles(PC1600Machine::kTStateHz / 10);
         chunk.resize(m.drainAudio(chunk.data(), kRate));
         pcm.insert(pcm.end(), chunk.begin(), chunk.end());
@@ -361,9 +362,9 @@ void test_pc1600_beep() {
                 1000.0 * hw.audibleSamples / kRate, hw.hz);
     CHECK(near(hw.hz, 287.13, 0.01));
 
-    runAndCapture(m, "BEEP OFF");
+    typeLine(m, "BEEP OFF", /*pressEnter=*/true, nullptr);
     CHECK(analyse(runAndCapture(m, "BEEP 1")).audibleSamples == 0);
-    runAndCapture(m, "BEEP ON");
+    typeLine(m, "BEEP ON", /*pressEnter=*/true, nullptr);
     CHECK(analyse(runAndCapture(m, "BEEP 1")).audibleSamples > 0);
 }
 
@@ -383,7 +384,7 @@ void test_pc1600_beep_repeat_spacing() {
     CHECK((m.memory().read(0xF0B8) & 0x01) != 0);
     m.memory().piezo().setTransducer(PiezoSampler::Transducer::None);
 
-    const std::vector<int16_t> pcm = runAndCapture(m, "BEEP 12,200,20");
+    const std::vector<int16_t> pcm = runAndCapture(m, "BEEP 12,200,20", 3.0);
     std::vector<size_t> starts;
     size_t quiet = kRate; // samples since the last audible one
     for (size_t i = 0; i < pcm.size(); ++i) {
@@ -415,7 +416,7 @@ void test_pc1600_f_register_modulator() {
         return;
     }
     m.memory().piezo().setTransducer(PiezoSampler::Transducer::None);
-    ToneStats on = analyse(runAndCapture(m, "OUT 23,65"));
+    ToneStats on = analyse(runAndCapture(m, "OUT 23,65", 3.0));
     std::printf("  PC-1600 OUT 23,65: %.1f ms at %.1f Hz\n", 1000.0 * on.audibleSamples / kRate, on.hz);
     CHECK(near(on.hz, 1300000.0 / 512, 0.003));
     CHECK(on.audibleSamples > static_cast<size_t>(kRate * 2)); // keeps sounding
@@ -423,12 +424,12 @@ void test_pc1600_f_register_modulator() {
     CHECK(analyse(runAndCapture(m, "OUT 23,0")).audibleSamples < static_cast<size_t>(kRate / 20));
     // FX = phi/512 (F0-2 = 011): 635 Hz.
     CHECK(near(analyse(runAndCapture(m, "OUT 23,67")).hz, 1300000.0 / 2048, 0.003));
-    runAndCapture(m, "OUT 23,0");
+    typeLine(m, "OUT 23,0", /*pressEnter=*/true, nullptr);
     // BEEP OFF gates it like the BEEP tone.
-    runAndCapture(m, "BEEP OFF");
+    typeLine(m, "BEEP OFF", /*pressEnter=*/true, nullptr);
     CHECK(analyse(runAndCapture(m, "OUT 23,65")).audibleSamples < static_cast<size_t>(kRate / 20));
-    runAndCapture(m, "OUT 23,0");
-    runAndCapture(m, "BEEP ON");
+    typeLine(m, "OUT 23,0", /*pressEnter=*/true, nullptr);
+    typeLine(m, "BEEP ON", /*pressEnter=*/true, nullptr);
 }
 
 // Switching 17H to a faster divider mid-period (no 14H reset) leaves the

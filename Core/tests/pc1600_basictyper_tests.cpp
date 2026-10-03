@@ -36,8 +36,6 @@ int g_fail = 0;
     else { g_fail++; std::fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } \
 } while (0)
 
-// Loads the confirmed PC-1600 ROM set; returns false (test skipped) if the
-// images aren't at their repo-root path. Mirrors pc1600_preset_tests.cpp.
 // No ROM needed: an untypeable character fails the line cleanly with an
 // error rather than half-typing it.
 void test_typeline_rejects_untypeable_char() {
@@ -136,16 +134,6 @@ void test_typeline_lowercase_reaches_input_buffer() {
     CHECK(buf.find("abcXYZ") != std::string::npos);
     // ...not the fully-uppercased form.
     CHECK(buf.find("ABCXYZ") == std::string::npos);
-}
-
-// No ROM needed: '^' (caret) is typeable -- SHIFT + SPACE on real
-// hardware. A `type:` step in a preset can legitimately carry one (e.g. a
-// DiskWorks .CFG line written via PRINT#), so the typer must not reject it.
-void test_typeline_accepts_caret() {
-    PC1600Machine m;
-    std::string err;
-    CHECK(typeLine(m, "A^B", /*pressEnter=*/true, &err));
-    CHECK(err.empty());
 }
 
 // ROM-gated: a typed '^' reaches the console input buffer as a real caret
@@ -262,7 +250,6 @@ int run_pc1600_basictyper_tests() {
     test_typeline_kbii_char_after_latched_shift();
     test_typeline_kbii_char_ignored_while_kbii_latched();
     test_typeline_rejects_untypeable_char();
-    test_typeline_accepts_caret();
     test_typeline_caret_reaches_input_buffer();
     test_typebasicprogram_length_guard();
     test_typebasicprogram_pro_mode_load();

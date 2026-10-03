@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "../PC1600/PC1600BasicLoader.hpp"
 #include "TestRoms.hpp"
 
 namespace {
@@ -84,33 +85,36 @@ void type(PC1600Machine& m, const std::string& line) {
     waitIdle(m, PC1600Machine::kTStateHz);
 }
 
-// NEW, program text typed in PRO mode, back to RUN mode.
-void enterProgram(PC1600Machine& m, const std::string& text) {
+// NEW in PRO mode, then the program, back to RUN mode: `loaded` through
+// the fast loader (typing costs ~0.13 s emulated per character), `typed`
+// typed -- lines the ROM has to tokenize itself, as the host drive's CDIR
+// and LDIR, which the loader's tokenizer doesn't know.
+void enterProgram(PC1600Machine& m, const std::string& loaded, const std::string& typed = "") {
     tapKey(m, "mode");  // RUN -> PRO
     waitIdle(m, PC1600Machine::kTStateHz);
     type(m, "NEW");
-    const BasicTypeResult r = typeBasicProgramText(m, text);
-    CHECK(r.rejectedLines.empty());
+    if (!loaded.empty()) CHECK(loadBasicProgram(m, std::vector<uint8_t>(loaded.begin(), loaded.end())).ok);
+    if (!typed.empty()) CHECK(typeBasicProgramText(m, typed).rejectedLines.empty());
     tapKey(m, "mode");  // PRO -> RUN
     waitIdle(m, PC1600Machine::kTStateHz);
 }
 
 // enterProgram() + RUN.
-void runProgram(PC1600Machine& m, const std::string& text) {
-    enterProgram(m, text);
+void runProgram(PC1600Machine& m, const std::string& loaded, const std::string& typed = "") {
+    enterProgram(m, loaded, typed);
     type(m, "RUN");
 }
 
 // Runs a program that writes the error code (0 = none) of `statement` to
-// S3:E.TXT, and returns that code.
+// S3:E.TXT, and returns that code. The statement line is typed.
 int errorOf(PC1600Machine& m, const fs::path& dir, const std::string& statement) {
     enterProgram(m,
                  "5 MAXFILES=1\n"
                  "10 ON ERROR GOTO 100\n"
-                 "20 " + statement + "\n"
                  "30 E=0:GOTO 110\n"
                  "100 E=ERN\n"
-                 "110 OPEN \"S3:E.TXT\" FOR OUTPUT AS #1:PRINT #1,E:CLOSE #1\n");
+                 "110 OPEN \"S3:E.TXT\" FOR OUTPUT AS #1:PRINT #1,E:CLOSE #1\n",
+                 "20 " + statement + "\n");
     fs::remove(dir / "E.TXT");
     type(m, "RUN");
     const std::string text = readFile(dir / "E.TXT");
@@ -137,17 +141,18 @@ void test_sequential_files_round_trip() {
                "20 OPEN \"S3:OUT.TXT\" FOR APPEND AS #1:PRINT #1,\"MORE\":CLOSE #1\n");
     CHECK(readFile(dir.path / "OUT.TXT") == "HELLO!\r\nMORE\r\n\x1A");
 
-    // Past 32 KB (the 7-bit record field wraps): 3000 lines of 17 bytes.
+    // Past 32 KB (the 7-bit record field wraps): 420 lines of 80 bytes.
     runProgram(m,
-               "10 MAXFILES=1\n"
+               "5 MAXFILES=1:DIM A$(0)*78,B$(0)*78\n"
+               "10 A$(0)=\"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ012\":A$(0)=A$(0)+A$(0)\n"
                "20 OPEN \"S3:BIG.TXT\" FOR OUTPUT AS #1\n"
-               "30 FOR I=1 TO 3000:PRINT #1,\"0123456789ABCDE\":NEXT I:CLOSE #1\n"
+               "30 FOR I=1 TO 420:PRINT #1,A$(0):NEXT I:CLOSE #1\n"
                "40 N=0:OPEN \"S3:BIG.TXT\" FOR INPUT AS #1\n"
-               "50 FOR I=1 TO 3000:INPUT #1,B$:N=N+LEN(B$):NEXT I:CLOSE #1\n"
+               "50 FOR I=1 TO 420:INPUT #1,B$(0):N=N+LEN(B$(0)):NEXT I:CLOSE #1\n"
                "60 OPEN \"S3:N.TXT\" FOR OUTPUT AS #1:PRINT #1,N:CLOSE #1\n");
     std::error_code ec;
-    CHECK(fs::file_size(dir.path / "BIG.TXT", ec) == 3000 * 17 + 1);
-    CHECK(readFile(dir.path / "N.TXT").find("45000") != std::string::npos);
+    CHECK(fs::file_size(dir.path / "BIG.TXT", ec) == 420 * 80 + 1);
+    CHECK(readFile(dir.path / "N.TXT").find("32760") != std::string::npos);
 
     runProgram(m,
                "10 MAXFILES=1\n"
@@ -341,16 +346,15 @@ void test_cdir_and_ldir_statements() {
     CHECK(errorOf(m, dir.path, "LDIR") == 0);
 
     // Tokenized: LISTs back as CDIR / LDIR.
-    enterProgram(m, "10 CDIR \"SUB\":LDIR\n");
+    enterProgram(m, "", "10 CDIR \"SUB\":LDIR\n");
     type(m, "SAVE \"S3:L.BAS\",A");
     const std::string text = readFile(dir.path / "L.BAS");
     CHECK(text.find("CDIR \"SUB\"") != std::string::npos);
     CHECK(text.find("LDIR") != std::string::npos);
 
     // A string variable, a relative path, then files in the subfolder.
-    runProgram(m,
+    runProgram(m, "20 OPEN \"S3:IN.TXT\" FOR OUTPUT AS #1:PRINT #1,\"HI\":CLOSE #1\n",
                "10 MAXFILES=1:A$=\"sub\":CDIR A$:CDIR \"INNER\"\n"
-               "20 OPEN \"S3:IN.TXT\" FOR OUTPUT AS #1:PRINT #1,\"HI\":CLOSE #1\n"
                "30 CDIR \"..\":SAVE \"S3:P.BAS\"\n");
     CHECK(fs::exists(dir.path / "Sub" / "INNER" / "IN.TXT"));
     CHECK(fs::exists(dir.path / "Sub" / "P.BAS"));

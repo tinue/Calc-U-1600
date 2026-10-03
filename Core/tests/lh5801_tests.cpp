@@ -890,17 +890,21 @@ void test_rtc_calendar_seed_and_read() {
     CHECK(rtcNibble(r, 36) == 9);                          // month (plain, not BCD)
 }
 
-// `- syncclock:` re-seeds the RTC from the host: after a 10-minute
-// emulated `- wait:` (the clock would otherwise be ~10 min ahead of the
-// boot seed), the calendar reads back the host's current time. ROM-gated.
+// `- syncclock:` re-seeds the RTC from the host: the boot seeds a clearly
+// wrong clock (12 hours and 6 months off), and after a `- wait:` and the sync the
+// calendar reads back the host's current time. ROM-gated.
 void test_preset_syncclock_reseeds_rtc() {
     PresetFile preset;
     std::string err;
-    CHECK(parsePresetString("model: PC-1500A\nkeys:\n  - wait: 600\n  - syncclock:\n",
+    CHECK(parsePresetString("model: PC-1500A\nkeys:\n  - wait: 1\n  - syncclock:\n",
                             "/tmp/lh5801_tests_syncclock.pc1500a", &preset, &err));
     PC1500Machine machine(PC1500Variant::PC1500A);
     auto hostOnBoot = [&machine] {
-        machine.seedClock(2000, 1, 1, 0, 0, 0); // a clearly wrong clock to start from
+        // A clearly wrong clock to start from: 12 hours and a month off.
+        const std::time_t bootNow = std::time(nullptr);
+        std::tm b{};
+        localtime_r(&bootNow, &b);
+        machine.seedClock(2000, (b.tm_mon + 6) % 12 + 1, 1, (b.tm_hour + 12) % 24, 0, 0);
     };
     const PresetLoadResult res = applyPC1500Preset(machine, preset, {}, ".", ".", hostOnBoot, {"roms"});
     if (!res.ok) {
@@ -917,7 +921,7 @@ void test_preset_syncclock_reseeds_rtc() {
     CHECK(rtcNibble(r, 36) == t.tm_mon + 1);
     CHECK(bcd(24) == t.tm_mday || t.tm_hour == 0);          // tolerate a midnight rollover
     const int diff = (hostMinutes - rtcMinutes + 1440) % 1440;
-    CHECK(diff <= 1);                                         // not 10 minutes ahead
+    CHECK(diff <= 1);                                         // not the boot seed
 }
 
 void test_rtc_calendar_set_via_shift_and_commit() {

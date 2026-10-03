@@ -258,7 +258,7 @@ def project_run(port):
               "project: reloaded and stopped at the entry again")
         # A launch configuration key overrides the block: no entry stop.
         dap.request("restart", arguments={"project": project, "program": {"after": "none"}})
-        time.sleep(3)
+        time.sleep(1)
         dap.request("pause", threadId=1)
         stop = dap.wait_event("stopped", timeout=10)
         check(stop.get("reason") == "pause", f"project + override after:none: runs until paused ({stop.get('reason')})")
@@ -536,7 +536,6 @@ def main():
         # -ApplePersistenceIgnoreState: no macOS window restoration for this run.
         proc = subprocess.Popen([args.app, "--dap", str(args.port), "-ApplePersistenceIgnoreState", "YES"],
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(1.0)
     try:
         dap = Dap(args.port, timeout=20.0)
         caps = dap.request("initialize", adapterID="calcu1600", linesStartAt1=True, columnsStartAt1=True)

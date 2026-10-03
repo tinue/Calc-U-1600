@@ -489,12 +489,12 @@ void test_loader_applies_ce155_and_type_step() {
         &p, &err));
 
     PC1600Machine m;
-    // (No ROM set loaded -- the loader doesn't require it; boot-settle just
-    // spins the CPU. Slot wiring + step replay is what we're checking.)
+    loadPC1600Roms(m);  // optional: the loader boots an empty bus too, only slower
     PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "Qt6/resources/cards");
     CHECK(r.ok);
     CHECK(m.slot1Attached());
     CHECK(!m.slot2Attached());
+    CHECK(!m.ce1600pAttached() && !m.ce150Attached());  // no plotter: key, no plotter
 
     // The card is live: with page-C bank 0 selected it answers across
     // &A000-&BFFF; &A800 is its pin-17 (S2) block.
@@ -503,67 +503,16 @@ void test_loader_applies_ce155_and_type_step() {
     CHECK(m.memory().read(0xA800) == 0x5A);
 }
 
-void test_loader_accepts_trace_step() {
-    // `- trace:` now works for a PC-1600 preset (see
-    // presetloader_trace_tests.cpp for the full file-format check). Here:
-    // it loads, and the file is created with the TRACE.bin magic. No ROM
-    // needed -- boot-settle just spins both CPUs.
-    char tmpl[] = "/tmp/calcu1600_pc1600_trace_XXXXXX";
-    const char* dir = mkdtemp(tmpl);
-    CHECK(dir != nullptr);
-    if (!dir) return;
-
-    PresetFile p;
-    std::string err;
-    CHECK(parse("model: PC-1600\n"
-                "keys:\n"
-                "  - trace: t.bin\n"
-                "  - wait: 0.1\n"
-                "  - trace: off\n",
-                &p, &err));
-    PC1600Machine m;
-    PresetLoadResult r = applyPC1600Preset(m, p, {}, dir);
-    CHECK(r.ok);
-
-    std::string path = std::string(dir) + "/t.bin";
-    std::ifstream in(path, std::ios::binary);
-    CHECK(static_cast<bool>(in));
-    std::vector<uint8_t> buf((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    CHECK(buf.size() >= 16);
-    // 'PC15' little-endian magic, format version 2.
-    CHECK(buf.size() >= 6 && buf[0] == 0x35 && buf[1] == 0x31 && buf[2] == 0x43 && buf[3] == 0x50);
-
-    std::remove(path.c_str());
-    std::remove(dir);
-}
-
 void test_type_step_rejects_untypeable_char() {
     PresetFile p;
     std::string err;
     // A control byte (0x01) has no PC-1600 key.
     CHECK(parse(std::string("model: PC-1600\nkeys:\n  - type: a\x01""b\n"), &p, &err));
     PC1600Machine m;
+    loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
     CHECK(!r.error.empty());
-}
-
-void test_type_step_accepts_shifted_punctuation() {
-    // `INIT"S2:","M"` -- the '"' ':' ',' are SHIFT + a base key on the
-    // PC-1600 (the ROM's key-code table does the translation). The loader
-    // must resolve every such character and apply the step.
-    PresetFile p;
-    std::string err;
-    CHECK(parse("model: PC-1600\n"
-                "keys:\n"
-                "  - type: INIT\"S2:\",\"M\"\n",
-                &p, &err));
-    CHECK(p.sections.size() == 1 && p.sections[0].keys.size() == 1);
-    CHECK(p.sections[0].keys[0].text == "INIT\"S2:\",\"M\"");
-    PC1600Machine m;
-    PresetLoadResult r = applyPC1600Preset(m, p);
-    CHECK(r.ok);
-    CHECK(r.error.empty());
 }
 
 // Functional: with the real ROM booting, a `type:` line with shifted
@@ -587,6 +536,7 @@ void test_type_step_shifted_punctuation_reaches_input_buffer() {
                 "keys:\n"
                 "  - type: A\"B:C,D\n",
                 &p, &err));
+    CHECK(p.sections.size() == 1 && p.sections[0].keys.size() == 1 && p.sections[0].keys[0].text == "A\"B:C,D");
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
 
@@ -599,27 +549,6 @@ void test_type_step_shifted_punctuation_reaches_input_buffer() {
     if (!found)
         std::fprintf(stderr, "  input buffer did not contain the shifted run (got: \"%s\")\n", buf.c_str());
     CHECK(found);
-}
-
-// Functional: `type:` is case-sensitive -- a lowercase run reaches the
-// console input buffer as lowercase (SHIFT-tap path), not silently
-// uppercased the way the pre-typer raw-keystroke `type:` did.
-void test_type_step_is_case_sensitive() {
-    PC1600Machine m;
-    if (!loadPC1600Roms(m)) {
-        std::fprintf(stderr, "SKIP test_type_step_is_case_sensitive: PC-1600 ROM images not found\n");
-        return;
-    }
-    PresetFile p;
-    std::string err;
-    CHECK(parse("model: PC-1600\nkeys:\n  - type: abcXYZ\n", &p, &err));
-    PresetLoadResult r = applyPC1600Preset(m, p);
-    CHECK(r.ok);
-
-    std::string buf;
-    for (uint16_t a = 0xFBB0; a <= 0xFBFF; ++a) buf.push_back(static_cast<char>(m.memory().read(a)));
-    CHECK(buf.find("abcXYZ") != std::string::npos);
-    CHECK(buf.find("ABCXYZ") == std::string::npos);
 }
 
 // Functional: a typed `program:` (`text: |`) block loads after a `key: mode`
@@ -663,6 +592,7 @@ void test_loader_rejects_unknown_key_defensively() {
     p.sections.push_back(s);
 
     PC1600Machine m;
+    loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
     CHECK(!r.error.empty());
@@ -687,6 +617,7 @@ void test_loader_ce150_plotter_attaches_with_rom_path() {
     CHECK(parse("model: PC-1600\nplotter: CE-150\n", &p, &err));
 
     PC1600Machine m;
+    loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
     PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", ".", {}, {"roms"});
     if (!r.ok) {
         // Skip gracefully if the ROM asset isn't reachable from the cwd.
@@ -707,17 +638,6 @@ void test_loader_ce1600p_plotter_needs_rom_path() {
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
     CHECK(r.error.find("CE1600P") != std::string::npos);
-    CHECK(!m.ce1600pAttached());
-}
-
-void test_loader_no_plotter_key_attaches_nothing() {
-    PresetFile p;
-    std::string err;
-    CHECK(parse("model: PC-1600\nkeys:\n  - type: 1\n", &p, &err));
-
-    PC1600Machine m;
-    PresetLoadResult r = applyPC1600Preset(m, p);
-    CHECK(r.ok);
     CHECK(!m.ce1600pAttached());
 }
 
@@ -777,6 +697,7 @@ void test_loader_ce1600p_with_no_floppy_key_leaves_drive_empty() {
     CHECK(parse("model: PC-1600\nplotter: CE-1600P\n", &p, &err));
 
     PC1600Machine m;
+    loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
     PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", ".", {}, {"roms"});
     if (!r.ok) {
         std::fprintf(stderr, "SKIP test_loader_ce1600p_with_no_floppy_key_leaves_drive_empty: %s\n", r.error.c_str());
@@ -798,6 +719,7 @@ void test_loader_floppy_key_loads_named_disk_image() {
     CHECK(writeTextFile("/tmp/mydisk-file.floppy.yaml", formatFloppyFile("mydisk", diskImage)));
 
     PC1600Machine m;
+    loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
     PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "/tmp", {}, {"roms"});
     if (!r.ok) {
         std::fprintf(stderr, "SKIP test_loader_floppy_key_loads_named_disk_image: %s\n", r.error.c_str());
@@ -824,6 +746,7 @@ void test_loader_floppy_key_side_suffix_selects_side_b() {
     CHECK(writeTextFile("/tmp/mydiskb.floppy.yaml", formatFloppyFile("mydiskb", diskImage)));
 
     PC1600Machine m;
+    loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
     PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "/tmp", {}, {"roms"});
     if (!r.ok) {
         std::fprintf(stderr, "SKIP test_loader_floppy_key_side_suffix_selects_side_b: %s\n", r.error.c_str());
@@ -861,6 +784,7 @@ void test_loader_saveas_step_invokes_callback() {
         &p, &err));
 
     PC1600Machine m;
+    loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
     std::vector<PresetSaveAsRequest> calls;
     PresetSaveAsFn onSaveAs = [&](const PresetSaveAsRequest& request, std::string*) {
         calls.push_back(request);
@@ -890,6 +814,7 @@ void test_loader_saveas_step_failure_stops_preset() {
     CHECK(parse("model: PC-1600\nkeys:\n  - saveas: live slot-1:Bad\n  - type: 1\n", &p, &err));
 
     PC1600Machine m;
+    loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
     PresetSaveAsFn onSaveAs = [](const PresetSaveAsRequest&, std::string* error) {
         *error = "disk full";
         return false;
@@ -908,6 +833,7 @@ void test_loader_saveas_step_without_callback_is_noop() {
     CHECK(parse("model: PC-1600\nkeys:\n  - saveas: live slot-1:Whatever\n", &p, &err));
 
     PC1600Machine m;
+    loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
 }
@@ -1143,11 +1069,8 @@ int run_pc1600_preset_tests() {
     test_parser_accepts_basic_text_program();
     test_loader_reports_overlong_basic_line();
     test_loader_applies_ce155_and_type_step();
-    test_loader_accepts_trace_step();
     test_type_step_rejects_untypeable_char();
-    test_type_step_accepts_shifted_punctuation();
     test_type_step_shifted_punctuation_reaches_input_buffer();
-    test_type_step_is_case_sensitive();
     test_loader_applies_basic_text_program();
     test_loader_machine_binary_header();
     test_loader_machine_binary_length_mismatch();
@@ -1161,7 +1084,6 @@ int run_pc1600_preset_tests() {
     test_loader_ce150_plotter_needs_rom_path();
     test_loader_ce150_plotter_attaches_with_rom_path();
     test_loader_ce1600p_plotter_needs_rom_path();
-    test_loader_no_plotter_key_attaches_nothing();
     test_parser_rejects_floppy_without_ce1600p();
     test_parser_rejects_floppy_on_pc1500();
     test_parser_accepts_floppy_with_ce1600p();

@@ -850,7 +850,10 @@ void test_rom_wake_runs_command_at_the_set_time() {
 // Real ROM: auto power-off after 10 idle minutes (the INT6 handler's
 // countdown, P1-B3 426AH -> 0005H -> P0-B0 0B66H) saves SP at F0DAH and
 // marks FA08H with A5H x 4. ON then resumes through that signature, which
-// the resume path clears (P0-B0 07E6H/07FEH).
+// the resume path clears (P0-B0 07E6H/07FEH). The countdown APOCNT (F0ACH)
+// starts at 04B0H half-second ticks in KEYGET (P2-B6 929AH); the test sets
+// it to a few ticks instead of idling 10 emulated minutes, and checks the
+// 04B0H reload after the resume.
 void test_rom_auto_power_off_resumes() {
     PC1600Machine m;
     if (!bootPC1600(m)) {
@@ -859,8 +862,11 @@ void test_rom_auto_power_off_resumes() {
     }
     tapKey(m, "mode"); waitIdle(m, PC1600Machine::kTStateHz);
     tapKey(m, "mode"); waitIdle(m, PC1600Machine::kTStateHz);
-    CHECK(runUntil(m, /*wantOff=*/true, 700.0));
-    CHECK(m.memory().subCpu().dateTime().minute == 0x10);
+    auto apoCount = [&] { return m.memory().read(0xF0AC) | (m.memory().read(0xF0AD) << 8); };
+    CHECK(apoCount() > 0x04B0 - 10 && apoCount() <= 0x04B0);  // counting down from 10 minutes
+    const uint8_t fewTicks[] = {0x04, 0x00};
+    CHECK(m.pokeMemory(0xF0AC, fewTicks, sizeof fewTicks));
+    CHECK(runUntil(m, /*wantOff=*/true, 5.0));
     for (int i = 0; i < 4; i++) CHECK(m.memory().read(static_cast<uint16_t>(0xFA08 + i)) == 0xA5);
 
     m.setOnKeyPressed(true);
@@ -871,6 +877,7 @@ void test_rom_auto_power_off_resumes() {
     CHECK(!m.isPoweredOff());
     CHECK(m.memory().read(0xFA1B) == 0x10);  // power-on by the ON key
     CHECK(m.memory().read(0xFA08) == 0x00);  // signature consumed: resumed
+    CHECK(apoCount() > 0x04B0 - 10 && apoCount() <= 0x04B0);  // reloaded to 10 minutes
     std::string err;
     CHECK(typeLine(m, "POKE &FF80,55", /*pressEnter=*/true, &err));
     waitIdle(m, PC1600Machine::kTStateHz);
