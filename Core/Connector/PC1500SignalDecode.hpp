@@ -34,8 +34,9 @@ inline int sBlockIndex(uint16_t addr) {
 // caller, since S-block-to-pin routing is the one thing that actually
 // differs between ExpansionConnector and SystemBus (see their decode()).
 // Shortcut: SystemBus reuses this, so on the 60-pin connector PU/PV sit on
-// their 40-pin contacts 3/2, not on 60-pin 15 (PU) / 16 (PV; the PC-1500
-// TRM prints the two swapped). TODO.md, "Expansion connectors".
+// their 40-pin contacts 3/2, not on 60-pin 16 (PU) / 15 (PV), measured on
+// a PC-1500; the PC-1600 manuals give the opposite order. TODO.md,
+// "Expansion connectors".
 inline PinState basePinState(uint16_t addr, bool forWrite, bool pu, bool pv) {
     PinState pins;
     pins.address = addr;
