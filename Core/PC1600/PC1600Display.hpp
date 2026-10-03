@@ -117,6 +117,22 @@ public:
     /// same way `readPixel()` gates the graphics area on `displayOn`.
     void refreshStatusSymbols();
 
+    /// The gate array's mirror of the PC-1500 display RAM, measured on a real
+    /// PC-1600 (2026-10-03; no source documents it, and the ROM has no code
+    /// for it): an LH5803 write to 7600H-764DH / 7700H-774DH shows at once
+    /// on the LCD's bottom text line, in the PC-1500 layout
+    /// (Core/Display/Pc1500DisplayRam.hpp) -- the whole column is redrawn
+    /// from both bytes of its pair, replacing what was there, and it lands
+    /// on the line that is at the bottom *now*, whatever the scroll. A write
+    /// to 764EH / 764FH redraws status set 00H / 01H the same way (that is
+    /// why DEGREE / RADIAN / GRAD, which run on the LH5803, update the
+    /// legend at once). Z-80 writes to the same RAM are not mirrored.
+    /// `col` 0-155, `dots` bit n = dot n of the line, top first.
+    void mirrorPc1500Column(int col, uint8_t dots);
+    /// `set` 0 or 1: IC3 column 63, page 7 / 6, rotated by the start line
+    /// like the ROM's own symbol writer (bank 6 8220H).
+    void mirrorPc1500StatusSet(int set, uint8_t value);
+
 private:
     // Standard HD61102 geometry: 64 columns x 8 pages x 8 bits/page --
     // 64 "raw rows" total (page*8+bit), of which only 32 are ever shown

@@ -410,6 +410,73 @@ void test_status_angle_pc1500() {
     CHECK(std::find(t.status.begin(), t.status.end(), std::string("DEG")) != t.status.end());
 }
 
+// ── PC-1600: the gate array mirrors LH5803 writes to the PC-1500 display ─
+// RAM onto the LCD (measured on a real PC-1600, 2026-10-03).
+
+// Column `x`'s dots on text row `row` (bit n = dot n).
+uint8_t lcdColumn(const LcdBitmap& b, int row, int x) {
+    uint8_t dots = 0;
+    for (int dot = 0; dot < 8; ++dot)
+        if (b.pixels[static_cast<std::size_t>(row * 8 + dot) * b.cols + x]) dots |= uint8_t(1u << dot);
+    return dots;
+}
+
+void test_pc1600_mirror_unit() {
+    PC1600Display d;
+    d.writeIO(0x50, 0x3F); // both controllers on
+    for (int startLine : {0, 8, 40}) {
+        d.writeIO(0x50, uint8_t(0xC0 | startLine));
+        for (int col : {0, 39, 63, 64, 100, 127, 128, 155}) {
+            d.mirrorPc1500Column(col, 0xA5);
+            uint8_t dots = 0;
+            for (int dot = 0; dot < 8; ++dot)
+                if (d.pixel(col, 24 + dot)) dots |= uint8_t(1u << dot);
+            CHECK(dots == 0xA5); // always the visible bottom line
+            d.mirrorPc1500Column(col, 0x00);
+            CHECK(!d.pixel(col, 24) && !d.pixel(col, 31)); // replaces, not ORs
+        }
+        d.mirrorPc1500StatusSet(1, 0x46);
+        CHECK(statusWords(d.statusLine()) == (std::vector<std::string>{"GRAD", "RUN"}));
+    }
+}
+
+void test_pc1600_mirror_real_rom() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_pc1600_mirror_real_rom: PC-1600 ROMs not found\n");
+        return;
+    }
+    // DEGREE/GRAD run on the LH5803 (CD7DH) and store 764FH: the legend
+    // changes at once, no scroll needed.
+    pc1600Run(m, "CLS");
+    LcdText t = pc1600Run(m, "GRAD");
+    CHECK(t.status.size() >= 1 && t.status[0] == "GRAD");
+    t = pc1600Run(m, "DEGREE");
+    CHECK(t.status.size() >= 1 && t.status[0] == "DEG");
+
+    // The hardware test: 7601H = 80H left over in RAM, then on a clear
+    // screen 7700H = 7FH and 7600H = 01H. Bottom line: column 0 dot 0,
+    // 39 dots 0-3, 78 dot 7 (from the old 7601H), 117 dots 0-2.
+    pc1600Run(m, "XPOKE &7601,&80");
+    pc1600Run(m, "CLS");
+    pc1600Run(m, "XPOKE &7700,&7F");
+    pc1600Run(m, "XPOKE &7600,&01");
+    const LcdBitmap b = pc1600LcdBitmap(m);
+    CHECK(lcdColumn(b, 3, 0) == 0x01);
+    CHECK(lcdColumn(b, 3, 39) == 0x0F);
+    CHECK(lcdColumn(b, 3, 78) == 0x80);
+    CHECK(lcdColumn(b, 3, 117) == 0x07);
+    CHECK(lcdColumn(b, 3, 1) == 0x00 && lcdColumn(b, 3, 79) == 0x00);
+
+    // After the screen has scrolled the dots still land on the bottom line
+    // -- and the ENTER of the XPOKE line itself scrolls them up one.
+    for (int i = 0; i < 6; ++i) pc1600Run(m, "PRINT " + std::to_string(i));
+    pc1600Run(m, "XPOKE &7600,&7F");
+    const LcdBitmap scrolled = pc1600LcdBitmap(m);
+    CHECK(lcdColumn(scrolled, 2, 0) == 0x0F);
+    CHECK(lcdColumn(scrolled, 2, 78) == 0x87); // dots 0-2 and the old 7601H's dot 7
+}
+
 } // namespace
 
 int run_lcd_text_tests() {
@@ -427,6 +494,8 @@ int run_lcd_text_tests() {
     test_status_words_same_on_both_models();
     test_status_after_boot();
     test_status_angle_pc1500();
+    test_pc1600_mirror_unit();
+    test_pc1600_mirror_real_rom();
 
     std::printf("lcd_text_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

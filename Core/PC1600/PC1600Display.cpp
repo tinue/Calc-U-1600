@@ -183,3 +183,26 @@ void PC1600Display::refreshStatusSymbols() {
     m_statusLine.set(Symbol::Ctrl, bit(b02, 1));
     m_statusLine.set(Symbol::Batt, bit(b02, 0));
 }
+
+void PC1600Display::mirrorPc1500Column(int col, uint8_t dots) {
+    if (col < 0 || col >= kWidth) return;
+    // Each dot through the same visible-row -> raw (page, bit) mapping as
+    // readPixel(), so it lands on the visible bottom line at any start line.
+    Controller& c = (col < 64 || col >= kRightBlockColumnStart) ? m_ic2 : m_ic3;
+    const int ccol = col < 64 ? col : col < kRightBlockColumnStart ? col - 64 : col - kRightBlockColumnStart;
+    const int rowShift = col >= kRightBlockColumnStart ? kRightBlockRowShift : 0;
+    for (int dot = 0; dot < 8; ++dot) {
+        const int rawRow = (kHeight - 8 + dot + rowShift + c.addressStartLine) & 0x3F;
+        uint8_t& byte = c.pages[static_cast<size_t>(ccol)][static_cast<size_t>(rawRow >> 3)];
+        const uint8_t mask = uint8_t(1u << (rawRow & 7));
+        byte = (dots >> dot) & 1 ? uint8_t(byte | mask) : uint8_t(byte & ~mask);
+    }
+}
+
+void PC1600Display::mirrorPc1500StatusSet(int set, uint8_t value) {
+    if (set != 0 && set != 1) return;
+    int page = (set == 0 ? 7 : 6) + (m_ic3.addressStartLine >> 3);
+    if (page >= 8) page -= 8;
+    m_ic3.pages[63][static_cast<size_t>(page)] = value;
+    refreshStatusSymbols();
+}

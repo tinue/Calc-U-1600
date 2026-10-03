@@ -63,6 +63,12 @@
 
 ### Fixed
 
+- **PC-1600: DEGREE, RADIAN and GRAD now change the status line at once**,
+  not at the next scroll. They run on the LH5803, and a real PC-1600
+  draws the LH5803's writes to the PC-1500 display memory (&7600–&764F) on
+  the LCD straight away: the bottom line in PC-1500 layout, and the status
+  line. `XPOKE &7600,…` and PC-1500 machine code drawing there now show up
+  as on the real machine.
 - **The PC-1600 status line showed "RAD" in GRAD mode.** GRAD lights the
   G and RAD segments, and the faceplate now reads them as one word, as on
   the PC-1500. Both models now share one status-line model with the same

@@ -1,5 +1,6 @@
 #include "LH5803SharedMemory.hpp"
 
+#include "../../Display/Pc1500DisplayRam.hpp"
 #include "../../PC1600/PC1600BusArbiter.hpp"
 #include "../../PC1600/PC1600Memory.hpp"
 
@@ -17,8 +18,27 @@ uint8_t LH5803SharedMemory::readME0(uint16_t addr) {
 }
 
 void LH5803SharedMemory::writeME0(uint16_t addr, uint8_t value) {
-    if (addr < 0x8000) { m_shared.write(uint16_t(addr + 0x8000), value); return; }
+    if (addr < 0x8000) {
+        m_shared.write(uint16_t(addr + 0x8000), value);
+        mirrorPc1500Display(addr);
+        return;
+    }
     // CE-158/150 ROM window and the LH5803-private ROM: writes ignored.
+}
+
+void LH5803SharedMemory::mirrorPc1500Display(uint16_t addr) {
+    PC1600Display& display = m_shared.display();
+    if (addr == pc1500ram::kStatusSet0 || addr == pc1500ram::kStatusSet1) {
+        display.mirrorPc1500StatusSet(addr == pc1500ram::kStatusSet0 ? 0 : 1, m_shared.read(uint16_t(addr + 0x8000)));
+        return;
+    }
+    if (!pc1500ram::isColumnByte(addr)) return;
+    // The whole column, from both bytes of its pair as they are in RAM now.
+    const uint16_t pair = uint16_t(addr & ~1u);
+    const uint8_t first = m_shared.read(uint16_t(pair + 0x8000));
+    const uint8_t second = m_shared.read(uint16_t(pair + 1 + 0x8000));
+    for (int block = 0; block < 2; ++block)
+        display.mirrorPc1500Column(pc1500ram::columnOf(pair, block), pc1500ram::columnDots(first, second, block));
 }
 
 bool LH5803SharedMemory::isUartShadow(uint16_t addr, uint8_t* reg, bool* isSubCpuAnswer) {

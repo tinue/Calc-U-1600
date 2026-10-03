@@ -106,5 +106,6 @@ BUSY SHIFT S ROMAJI KANA SMALL DEG/GRAD/RAD RUN PRO RESERVE DEF I II III CTRL BA
 - The DE, G and RAD segments are joined the way the panel reads them: DE+G
   = `DEG`, G+RAD = `GRAD`, RAD alone = `RAD`.
 
-On the PC-1600, DEGREE/RADIAN/GRAD reach the glass only at the next scroll;
-see [PC1600-Core-Limitations.md](PC1600-Core-Limitations.md).
+On the PC-1600, the LH5803's writes to the PC-1500 display RAM, DEGREE/
+RADIAN/GRAD among them, reach the LCD at once through the gate array's
+mirror; see [PC1600-Core-Limitations.md](PC1600-Core-Limitations.md).

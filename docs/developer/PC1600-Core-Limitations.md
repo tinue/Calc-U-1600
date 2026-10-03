@@ -286,13 +286,27 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   DEGREE/RADIAN/GRAD, CD7DH) stores 03H / 04H / 06H, so DEG = DE+G and
   GRAD = G+RAD; the GUI and the text read-out join the lit segments into
   the word. `Core/Display/StatusLine.hpp`
-- **Open: the angle legend changes only at the next scroll.** DEGREE /
-  RADIAN / GRAD run on the LH5803 and write only `SYMB1`. At 764FH, that
-  is the RAM shadow F64FH, not the glass. The Z-80 copies the shadows to
-  the glass when it scrolls (`SYMSAVE` / `SYMRESTORE`, bank 6
-  82E4H / 82FAH), so the emulated legend lags until then. Whether the real
-  machine also lags, or something else redraws the legend, still has to be
-  checked on hardware.
+- **LH5803 writes to the PC-1500 display RAM are mirrored onto the LCD**
+  (measured on a real PC-1600, 2026-10-03; no document describes it and
+  the ROM has no code for it, so it is the gate array):
+  - A write to 7600H–764DH / 7700H–774DH redraws that column pair on the
+    bottom text line, in PC-1500 layout. The whole column is rebuilt from
+    both RAM bytes and replaces what was there. It lands on the line that
+    is at the bottom at that moment, at any scroll position.
+  - A write to 764EH / 764FH redraws status set 00H / 01H. That is why
+    DEGREE / RADIAN / GRAD, which run on the LH5803 (CD7DH), change the
+    legend at once.
+  - Z-80 writes to the same RAM (F600H–F64FH) are not mirrored. They reach
+    the glass only when the ROM redraws the symbols on a scroll (`SYMSAVE`
+    / `SYMRESTORE`, bank 6 82E4H / 82FAH).
+
+  `PC1600Display::mirrorPc1500Column()`, `LH5803SharedMemory::mirrorPc1500Display()`.
+  Not measured, and therefore not mirrored:
+  - the 7400H–754FH aliases;
+  - 774EH / 774FH;
+  - ME1 writes, which pass through `writeME0` and so *are* mirrored, which
+    is an assumption;
+  - any timing.
 
 ---
 
