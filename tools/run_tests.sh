@@ -56,7 +56,9 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/Basic/BasicProgramSource.cpp \
   Core/tests/lh5801_tests.cpp \
   Core/tests/connector_tests.cpp \
+  Core/tests/ce151_tests.cpp \
   Core/tests/ce155_tests.cpp \
+  Core/tests/ce161_tests.cpp \
   Core/tests/ce1638_tests.cpp \
   Core/tests/ce502b_tests.cpp \
   Core/tests/ce163f_tests.cpp \

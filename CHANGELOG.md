@@ -19,6 +19,8 @@
 - **Create Debug Project Here…** in VS Code's Explorer context menu creates
   the project in the folder you right-clicked; its launch configuration
   points into that folder.
+- **CE-151 (4 KB) and CE-161 (16 KB) memory modules.** The CE-151 fits the
+  PC-1500/1500A. The CE-161 fits the PC-1500/1500A and both PC-1600 slots.
 
 ### Changed
 

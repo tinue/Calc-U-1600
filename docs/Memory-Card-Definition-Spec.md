@@ -554,12 +554,12 @@ through them:
 
 | Module | D1 Addressing | D2 Content | D3 Banking | D4 Latch mechanism | Compatible hosts |
 |---|---|---|---|---|---|
-| CE-151 | (Y0 AND `AD11–AD13 = 111`) OR S1 — same pattern as CE-155, scaled down | Regular | Unbanked | — | PC-1500, PC-1500A (pins 4, 16 keep the same role on both) |
+| CE-151 | S1 OR S2 — two bare mainboard strobes, one per 2 KB chip, no on-module decode and no Y0 path (Service Manual schematic 5-3) | Regular | Unbanked | — | PC-1500, PC-1500A (pins 16, 17 keep the same role on both) — expressed as `Qt6/resources/cards/ce151.card.yaml` |
 | CE-155 | (Y0 AND `AD11–AD13 = 111`) OR S1 OR S2 OR S3 — the three S groups are bare mainboard strobes, one per dedicated 2KB chip, no on-module decode | Regular | Unbanked | — | PC-1500, PC-1500A (pins 4, 16, 17, 18 keep the same role on both — §1) |
 | CE-157 | RAM: same shape as CE-151/155 area. ROM: likely Y2 sub-range, PV-selected | RAM: Regular. ROM: ROM | RAM: Unbanked. ROM: unconfirmed — possibly banked if PV is a live line | ROM: unconfirmed — flagged in the source doc itself; this spec's job is only to be *capable* of expressing it once confirmed | PC-1500, PC-1500A |
 | CE-159 | Same as CE-155 | Regular, write-protect togglable | Unbanked | — | PC-1500, PC-1500A |
 | CE-160 | Same territory class as CE-159 (read-only) | ROM | Unbanked | — | PC-1500, PC-1500A |
-| CE-161 | Y0 alone, full 16KB | Regular | Unbanked | — | PC-1500, PC-1500A |
+| CE-161 | Y0 alone, full 16KB | Regular | Unbanked | — | PC-1500, PC-1500A, PC-1600 Slot 1, PC-1600 Slot 2 — expressed as `Qt6/resources/cards/ce161.card.yaml` |
 | CE-163 | Y0, 16KB window | Regular, all banks | Banked | Trigger-based: pin 18 write pulse; source `A0` (address domain) | PC-1500, PC-1500A |
 | 16-bank CE-163-alike | Same as CE-163 | Regular, all banks | Banked | Trigger-based: pin 18; source `A0`–`A3` | PC-1500, PC-1500A |
 | CE-1638 | Y0, 16KB window | Regular, all banks | Banked, 8 banks | Trigger-based: pin 18 write pulse; source `A0`–`A2` (address domain) | PC-1500, PC-1500A, PC-1600 Slot 1, PC-1600 Slot 2 — expressed as `Qt6/resources/cards/ce1638.card.yaml` |
@@ -606,7 +606,7 @@ Three structural points this table confirms rather than just illustrates:
 - **File format/serialization** — specified in
   `Memory-Card-Definition-Format.md` (YAML; key names, the §3 addressing
   grammar, and hex/base64/sidecar encoding of the §5a byte blocks), with
-  worked `Qt6/resources/cards/*.card.yaml` for CE-155, CE-1600M,
+  worked `Qt6/resources/cards/*.card.yaml` for CE-151, CE-155, CE-161, CE-1600M,
   CE-1601M, superRAM, CE-1638, CE-163F and CE-502B (Format.md §7). That
   format is still revisable — this content model, not the YAML spelling,
   is the fixed part.

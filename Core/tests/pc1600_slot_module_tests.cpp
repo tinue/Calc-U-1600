@@ -244,6 +244,33 @@ void test_ce155_contributes_full_8k_to_mem() {
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m1, 0xF89D)) == 8192);
 }
 
+// A CE-161 fills the whole 8000-BFFF page in either slot: the boot ROM
+// credits +16384 (MEM 11834 + 16384, Ref/PC-1600/PC-1600-Memory-Architecture.md),
+// BASIC RAM base C0C5H -> 80C5H.
+void test_ce161_contributes_full_16k_in_both_slots() {
+    auto boot = [](int slot) -> std::unique_ptr<PC1600Machine> {
+        auto m = std::make_unique<PC1600Machine>();
+        if (!loadPC1600Roms(*m)) return nullptr;
+        if (slot == 1) m->attachSlot1Card(card("ce161.card.yaml", CardHost::PC1600Slot1));
+        if (slot == 2) m->attachSlot2Card(card("ce161.card.yaml", CardHost::PC1600Slot2));
+        m->allReset();
+        m->runCycles(PC1600Machine::kTStateHz * 4);
+        return m;
+    };
+    auto m0 = boot(0), m1 = boot(1), m2 = boot(2);
+    if (!m0 || !m1 || !m2) {
+        std::fprintf(stderr, "SKIP test_ce161_contributes_full_16k_in_both_slots: PC-1600 ROM images not found\n");
+        return;
+    }
+    auto rd16 = [](PC1600Machine& m, uint16_t a) {
+        return uint16_t(m.memory().read(a) | (m.memory().read(uint16_t(a + 1)) << 8));
+    };
+    CHECK(rd16(*m1, 0xF5CF) == 0x80C5);
+    CHECK(rd16(*m2, 0xF5CF) == 0x80C5);
+    CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m1, 0xF89D)) == 16384);
+    CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m2, 0xF89D)) == 16384);
+}
+
 // The CE-1638 plugged into a PC-1600 Slot 1: the same definition the
 // PC-1500 `slot-1:` path builds, wired in pin-for-pin. Its pin-4 chip select covers &8000-&BFFF here (not a
 // PC-1500's &0000-&3FFF Y0), so the card's banked-window index is masked to
@@ -407,6 +434,7 @@ int run_pc1600_slot_module_tests() {
     test_trigger_latch_modules_in_slot2_contribute_full_16k();
     test_boot_with_ce155_in_slot1_is_stable();
     test_ce155_contributes_full_8k_to_mem();
+    test_ce161_contributes_full_16k_in_both_slots();
 
     std::printf("pc1600_slot_module_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

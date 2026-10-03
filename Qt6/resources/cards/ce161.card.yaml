@@ -1,0 +1,30 @@
+# CE-161 -- 16 KB static RAM module for the PC-1500 family.
+#
+# Y0 alone: the module fills the whole 16 KB Y0 window (&0000-&3FFF), with
+# A0-A13 as the offset and no other strobe (Memory-Card-Definition-Spec.md
+# section 9). Below the built-in RAM at &4000, so BASIC starts at &00C5.
+#
+# Modelled as plain RAM. The real module is a program module; battery
+# backup and a write-protect switch are not modelled here.
+#
+# Hosts: PC-1500/1500A natively; on the PC-1600 it fills the slot's
+# 8000-BFFF page (pin 4) in Slot 1, or Slot 2 (as a RAM disk).
+
+module-name: "CE-161"
+template: true   # read-only starting point; Name & Save copies it
+compatible-hosts: [PC-1500, PC-1500A, PC-1600-Slot-1, PC-1600-Slot-2]
+definition-terminology: PC-1500
+
+regions:
+  - name: sram-16k
+    capacity: 0x4000
+    banking: none
+    content:
+      kind: regular
+      writable: true
+      power-up-fill: 0x00
+    addressing:
+      any-of:
+        - chip-select: Y0
+          span: 0x4000
+          maps-to: 0x0000

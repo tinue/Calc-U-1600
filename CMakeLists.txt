@@ -267,7 +267,9 @@ set(TEST_SOURCES
   ${CORE_COMMON_SOURCES}
   ${CORE_ROOT}/tests/lh5801_tests.cpp
   ${CORE_ROOT}/tests/connector_tests.cpp
+  ${CORE_ROOT}/tests/ce151_tests.cpp
   ${CORE_ROOT}/tests/ce155_tests.cpp
+  ${CORE_ROOT}/tests/ce161_tests.cpp
   ${CORE_ROOT}/tests/ce1638_tests.cpp
   ${CORE_ROOT}/tests/ce502b_tests.cpp
   ${CORE_ROOT}/tests/ce163f_tests.cpp

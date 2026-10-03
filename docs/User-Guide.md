@@ -41,7 +41,7 @@ flowchart LR
     App["Calc-U-1600"] --> Model{"Model"}
     Model --> P15["PC-1500 / PC-1500A"]
     Model --> P16["PC-1600"]
-    P15 --> S["Memory slot<br/>(CE-155, CE-1638, CE-163F, CE-502B)"]
+    P15 --> S["Memory slot<br/>(CE-151, CE-155, CE-161, CE-1638, …)"]
     P15 --> C150["CE-150 plotter"]
     P15 --> C158["CE-158 interface<br/>(serial + printer port)"]
     P16 --> S1["Slot 1 / Slot 2<br/>(CE-1600M, CE-1601M, superRAM, …)"]
@@ -305,7 +305,9 @@ machine, like a model switch does.
 
 | Module | Models | What it is | Battery-backed |
 |---|---|---|---|
+| CE-151 | PC-1500/1500A | 4 KB RAM | no |
 | CE-155 | PC-1500/1500A, PC-1600 Slot 1 | 8 KB RAM | no |
+| CE-161 | PC-1500/1500A, PC-1600 Slot 1 or 2 | 16 KB RAM | no |
 | CE-1638 | PC-1500/1500A, PC-1600 | 128 KB banked RAM (hobbyist module) | yes |
 | CE-163F | PC-1500/1500A, PC-1600 | 128 KB RAM + 128 KB flash (hobbyist module) | yes |
 | CE-502B | PC-1500/1500A | "Statistics" program module (ROM) | – |

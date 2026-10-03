@@ -1,0 +1,39 @@
+# CE-151 -- 4 KB static RAM module for the PC-1500 family.
+#
+# Two 2 KB RAM chips (HM6116 or TC5517), wired per the CE-151 schematic in
+# the Service Manual (section 5-3): chip 1's CS is the mainboard strobe S1,
+# chip 2's CS is S2. A0-A10 are the offset into whichever chip is selected.
+# There is no decode logic on the module and no Y0 path (unlike CE-155).
+#
+# On the PC-1500, pins 16/17 carry S1/S2 (&4800-&57FF); on the PC-1500A
+# they carry S3/S4 (&5800-&67FF). Either way the module sits right above
+# the built-in RAM.
+#
+# Not declared for the PC-1600: its Slot 1 routes S1/S2 to A000-AFFF, so
+# the module would leave a hole at B000-BFFF below the internal RAM.
+#
+# Compatibility is an author-declared list, not a pin-derived one (spec
+# section 1).
+
+module-name: "CE-151"
+template: true   # read-only starting point; Name & Save copies it
+compatible-hosts: [PC-1500, PC-1500A]
+definition-terminology: PC-1500
+
+regions:
+  - name: sram-4k
+    capacity: 0x1000
+    banking: none
+    content:
+      kind: regular
+      writable: true
+      power-up-fill: 0x00
+    addressing:
+      any-of:
+        # Two dedicated mainboard chip-selects, one 2 KB chip each.
+        - chip-select: S1
+          span: 0x0800
+          maps-to: 0x0000
+        - chip-select: S2
+          span: 0x0800
+          maps-to: 0x0800

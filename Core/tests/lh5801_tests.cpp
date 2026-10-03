@@ -1381,10 +1381,12 @@ void test_boot_smoke_real_rom() {
 // folded into this file's single test-runner executable/exit code per
 // tools/run_tests.sh's existing single-binary convention.
 int run_connector_tests();
-// Defined in ce155_tests.cpp / ce1638_tests.cpp / ce163f_tests.cpp (the
-// bundled CE-155, CE-1638 and CE-163F module definitions) -- same
-// single-binary convention.
+// Defined in ce151_tests.cpp / ce155_tests.cpp / ce161_tests.cpp /
+// ce1638_tests.cpp / ce163f_tests.cpp (the bundled module definitions) --
+// same single-binary convention.
+int run_ce151_tests();
 int run_ce155_tests();
+int run_ce161_tests();
 int run_ce1638_tests();
 int run_ce502b_tests();
 int run_ce163f_tests();
@@ -1549,7 +1551,9 @@ int main() {
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     int connectorFailures = run_connector_tests();
+    int ce151Failures = run_ce151_tests();
     int ce155Failures = run_ce155_tests();
+    int ce161Failures = run_ce161_tests();
     int ce1638Failures = run_ce1638_tests();
     int ce502bFailures = run_ce502b_tests();
     int ce163fFailures = run_ce163f_tests();
@@ -1590,7 +1594,7 @@ int main() {
     int debugTargetFailures = run_debug_target_tests();
     int listingFailures = run_listing_tests();
     int runControlFailures = run_run_control_tests();
-    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && lcdTextFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
+    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && lcdTextFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && connectorFailures == 0 && ce151Failures == 0 && ce155Failures == 0 && ce161Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
             ce163fFailures == 0 && memoryCardFailures == 0 && batteryCardInstanceFailures == 0 &&
             presetFailures == 0 &&
             basicTyperFailures == 0 && pc1600BasicTyperFailures == 0 &&
