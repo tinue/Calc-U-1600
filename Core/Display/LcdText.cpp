@@ -44,16 +44,26 @@ LcdText parseLcdText(const LcdBitmap& bitmap, const LcdFont& font, const std::op
         result.cursorCol = cursor->col;
     }
 
-    std::map<LcdCell, uint8_t> byCell;
-    for (const auto& [code, cell] : font.glyphs) byCell.emplace(masked(cell, font), code);
+    std::map<LcdCell, const LcdGlyph*> byCell;
+    for (const LcdGlyph& g : font.glyphs) byCell.emplace(masked(g.cell, font), &g);
     std::vector<LcdCell> cursors;
     for (const LcdCell& c : font.cursorShapes) cursors.push_back(masked(c, font));
 
     const int textRows = bitmap.rows / font.cellHeight;
     const int textCols = bitmap.cols / font.cellWidth;
-    const LcdCell blank{};
+    const LcdCell empty{};
     for (int tr = 0; tr < textRows; ++tr) {
-        std::string line;
+        std::string line, plain;
+        // A blank, or a glyph's text, in both encodings.
+        auto blank = [&] {
+            line += ' ';
+            plain += ' ';
+        };
+        auto glyph = [&](const LcdGlyph& g) {
+            appendCode(line, g.code);
+            plain += g.text.empty() ? std::string(" ") : g.text;
+            ++result.parsedCells;
+        };
         for (int tc = 0; tc < textCols; ++tc) {
             LcdCell cell{};
             if (bitmap.poweredOn) {
@@ -64,8 +74,8 @@ LcdText parseLcdText(const LcdBitmap& bitmap, const LcdFont& font, const std::op
                     }
                 }
             }
-            if (cell == blank) {
-                line += ' ';
+            if (cell == empty) {
+                blank();
                 continue;
             }
             // The ROMs draw the cursor over the cell: decode what they saved.
@@ -77,26 +87,29 @@ LcdText parseLcdText(const LcdBitmap& bitmap, const LcdFont& font, const std::op
                 result.cursorRow = tr;
                 result.cursorCol = tc;
                 cell = masked(cursor->under, font);
-                if (cell == blank) {
-                    line += ' ';
+                if (cell == empty) {
+                    blank();
                     continue;
                 }
             }
             if (auto it = byCell.find(cell); it != byCell.end()) {
-                appendCode(line, it->second);
+                glyph(*it->second);
                 continue;
             }
             if (auto it = byCell.find(inverted(cell, font)); it != byCell.end()) {
-                appendCode(line, it->second);
+                glyph(*it->second);
                 ++result.reverseCells;
                 continue;
             }
             line += kUnparsed;
+            plain += ' ';
             ++result.unparsed;
         }
         // Trailing blanks carry no information and make `expect:` fussy.
         line.erase(line.find_last_not_of(' ') + 1);
+        plain.erase(plain.find_last_not_of(' ') + 1);
         result.rows.push_back(line);
+        result.plainRows.push_back(plain);
     }
     return result;
 }
@@ -106,6 +119,18 @@ std::string LcdText::text() const {
     for (std::size_t i = 0; i < rows.size(); ++i) {
         if (i) out += '\n';
         out += rows[i];
+    }
+    return out;
+}
+
+std::string LcdText::plainText() const {
+    if (!poweredOn || parsedCells == 0) return {};
+    std::size_t used = plainRows.size();
+    while (used > 0 && plainRows[used - 1].empty()) --used;
+    std::string out;
+    for (std::size_t i = 0; i < used; ++i) {
+        if (i) out += '\n';
+        out += plainRows[i];
     }
     return out;
 }

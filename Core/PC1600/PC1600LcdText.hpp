@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <optional>
 
+#include "../Display/LcdCharsets.hpp"
 #include "../Display/LcdText.hpp"
 #include "PC1600Machine.hpp"
 #include "PC1600Screenshot.hpp"
@@ -16,6 +17,11 @@
 // before it and CGSPEC (the PC-1500-style 1EH/27H/5BH/5DH) the 4 x 6
 // before that. User CGs (CGSET80 with DE <> 0, UPACGA) are not followed:
 // redefined characters come out unparsed.
+//
+// Plain text: CGLOW is ASCII with a full block at 7FH; CGHIGH draws the
+// CP437 upper half in both revisions. CGSPEC (AD8CH new / ADCBH old)
+// draws a bracket box, a root, a pi and a fourth sign with no Unicode
+// counterpart (a blank in plain text).
 //
 // Cursor: CRSRDRAW (bank 6, 8543H) overwrites the cell with five columns
 // of 40H (underline, CRSRST 1) or 7FH (block, CRSRST 2) and a blank one,
@@ -42,10 +48,15 @@ inline LcdFont pc1600LcdFont(const PC1600Machine& machine) {
         for (int i = 0; i < 6; ++i) c[i] = at(uint16_t(addr + i));
         return c;
     };
-    for (int code = 0x20; code < 0x80; ++code) font.glyphs.emplace_back(uint8_t(code), cell(uint16_t(cgLow + (code - 0x20) * 6)));
-    for (int code = 0x80; code < 0x100; ++code) font.glyphs.emplace_back(uint8_t(code), cell(uint16_t(cgHigh + (code - 0x80) * 6)));
+    for (int code = 0x20; code < 0x80; ++code)
+        font.glyphs.push_back({uint8_t(code), cell(uint16_t(cgLow + (code - 0x20) * 6)),
+                               code == 0x7F ? utf8(U'\u2588') : std::string(1, char(code))});
+    for (int code = 0x80; code < 0x100; ++code)
+        font.glyphs.push_back({uint8_t(code), cell(uint16_t(cgHigh + (code - 0x80) * 6)), utf8(kCp437High[code - 0x80])});
     const uint8_t specCodes[] = {0x1E, 0x27, 0x5B, 0x5D};
-    for (int i = 0; i < 4; ++i) font.glyphs.emplace_back(specCodes[i], cell(uint16_t(cgSpec + i * 6)));
+    const char32_t specText[] = {U'\u25A1', U'\u221A', U'\u03C0', 0}; // □ √ π, -
+    for (int i = 0; i < 4; ++i)
+        font.glyphs.push_back({specCodes[i], cell(uint16_t(cgSpec + i * 6)), specText[i] ? utf8(specText[i]) : std::string()});
     font.cursorShapes = {LcdCell{0x40, 0x40, 0x40, 0x40, 0x40, 0x00}, LcdCell{0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x00}};
     return font;
 }

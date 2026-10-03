@@ -732,10 +732,14 @@ QImage MainWindow::toQImage(const GrayImage& screen) {
     return image;
 }
 
+// The image, plus the screen as readable text (LcdText::plainText()) when
+// any of it is text -- a text editor pastes the text, an image app the dots.
 void MainWindow::copyScreenToClipboard() {
     const GrayImage screen = m_controller->currentScreenImage();
     const QImage image = toQImage(screen);
     if (image.isNull()) return;
+    LcdText lcd;
+    const QString text = m_controller->lcdText(&lcd) ? QString::fromStdString(lcd.plainText()) : QString();
 
 #ifdef Q_OS_MACOS
     // Qt's QClipboard::setImage() drops the physical size on macOS (see
@@ -743,9 +747,12 @@ void MainWindow::copyScreenToClipboard() {
     // real display's size.
     const double widthPt = screen.width * 72.0 / screen.dpi;
     const double heightPt = screen.height * 72.0 / screen.dpi;
-    if (macSetClipboardImage(image, widthPt, heightPt)) return;
+    if (macSetClipboardImage(image, widthPt, heightPt, text)) return;
 #endif
-    QGuiApplication::clipboard()->setImage(image);
+    auto* mime = new QMimeData;
+    mime->setImageData(image);
+    if (!text.isEmpty()) mime->setText(text);
+    QGuiApplication::clipboard()->setMimeData(mime);
 }
 
 void MainWindow::pasteClipboardText() {

@@ -314,6 +314,14 @@ What's wrong with that:
 
 ## Feature ideas
 
+- **LCD text: the kana set.** No font that the parser reads has katakana
+  yet, so they come out unparsed. On the PC-1500 they come from the second
+  character set at (KATACHAR) when KATAFLAGS enables it (`CHAR_2_ADDR_4`,
+  EE5AH). On the PC-1600 they appear in PC-1500 mode (LH5803 ROM
+  `KANA_LCD` C700H for 80H–D8H, `KANA_LCD_D9` C6BDH for D9H–E5H). Copy
+  Screen's mapping is ready: `jisX0201Kana()` in
+  `Core/Display/LcdCharsets.hpp` (A1H–DFH → U+FF61–FF9F).
+
 - **Sub-CPU F-pin tones: key click, `ALARM$` beep, wake-up beep, hour
   signal** (deferred until measured). The sub-CPU's F output drives the
   buzzer for SBEEP (IOCS 01H, key click with `KEY` click on), the 1 s

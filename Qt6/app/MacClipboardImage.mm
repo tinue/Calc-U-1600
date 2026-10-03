@@ -3,7 +3,7 @@
 #import <Cocoa/Cocoa.h>
 #include <cstring>
 
-bool macSetClipboardImage(const QImage& source, double widthPt, double heightPt) {
+bool macSetClipboardImage(const QImage& source, double widthPt, double heightPt, const QString& text) {
     if (source.isNull() || source.width() <= 0 || source.height() <= 0) return false;
     if (widthPt <= 0 || heightPt <= 0) return false;
 
@@ -46,5 +46,8 @@ bool macSetClipboardImage(const QImage& source, double widthPt, double heightPt)
     // physical resolution (pHYs). Best-effort: the NSImage is already there.
     NSData* png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
     if (png) [pasteboard setData:png forType:NSPasteboardTypePNG];
+    // A text flavour on the same item: text editors paste it, image
+    // consumers still take the image.
+    if (!text.isEmpty()) [pasteboard setString:text.toNSString() forType:NSPasteboardTypeString];
     return true;
 }

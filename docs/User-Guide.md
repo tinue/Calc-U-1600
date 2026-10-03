@@ -135,6 +135,16 @@ SHIFT symbol:
 
   ![The image Copy Screen puts on the clipboard](images/guide/02-copy-screen.png)
 
+  It also puts the screen on the clipboard as **text**, so a text editor
+  pastes the characters and an image app pastes the picture. The text is
+  readable Unicode: the PC-1600's international and box-drawing characters
+  (CP437) and the PC-1500's π, √ and ¥ appear as themselves. Graphics
+  (`LINE`, `GPRINT`, user-defined characters) become blanks, and a screen
+  with no text at all gives no text. A graphic cell whose dots happen to
+  match a character, for example a block like `█`, is copied as that
+  character. Paste Text after Copy Screen types the screen's first line back
+  in.
+
 - **Edit ▸ Paste Text** (⌘V / Ctrl-V) types the clipboard's **first line**
   into the calculator, key by key. It stops at the line break and doesn't
   press ENTER, so you can check the line before running it. For whole

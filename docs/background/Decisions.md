@@ -414,6 +414,13 @@ authentic speed for the span that matters.
   (`Qt6/app/MacAppSupport.mm`). Without it, the macOS "reopen windows?" prompt
   deadlocks the synchronous load of the startup preset.
 
+- **Copy Screen's text is plain Unicode, while `--lcd-text` escapes**
+  (`\\`, `\xHH`, U+FFFD; `Core/Display/LcdText.hpp`). The text is for
+  reading, so its glyphs appear as themselves and graphics as blanks. The
+  test/DAP form must stay unambiguous, so don't unify the two. The plain
+  text comes from each glyph's drawn shape, not its code, because the fonts
+  draw some ASCII codes as other signs (PC-1500 5BH √, PC-1600 `CGSPEC`).
+
 ### File formats
 - **Floppies are `.floppy.yaml` only.** `.floppy.img` isn't read, and no
   backward compatibility is wanted. Any format change bumps `format-version`.

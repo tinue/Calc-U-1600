@@ -54,6 +54,20 @@ PNG instead.
 
 `expect:` compares against this text.
 
+**Plain text (Copy Screen):** `LcdText::plainRows` / `plainText()` hold the
+same screen for reading. Each glyph carries its own Unicode text
+(`LcdGlyph::text`), which the font builder takes from the ROM shape:
+- PC-1600: ASCII, 7FH as █, `CGHIGH` as CP437 (all 128 shapes checked in
+  both ROMs), and `CGSPEC` as □ √ π (the fourth sign has no counterpart, so
+  it is a blank).
+- PC-1500: ASCII, except where `CHARSET` draws another sign: 27H □, 5BH √,
+  5CH ¥, 5DH π, 7FH █.
+
+There are no escapes, and not-text cells are blanks. `plainText()` drops
+trailing empty rows and is empty when no cell is text (`parsedCells == 0`)
+or the display is off. The tables are in `Core/Display/LcdCharsets.hpp`,
+including `jisX0201Kana()` for a future kana font.
+
 **Codes that look the same:**
 - On the PC-1500, 60H (backtick) has a blank glyph, so it reads as a space.
 - On the PC-1600, FFH is blank too.

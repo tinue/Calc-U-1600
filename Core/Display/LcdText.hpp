@@ -25,8 +25,12 @@
 // off the grid: it is written as U+FFFD and counted in `unparsed`, which
 // tells a caller to fall back to the PNG.
 //
-// Encoding: printable ASCII as is, except `\` -> `\\`; any other code the
-// font has (katakana, graphic characters, 7FH) as `\xHH`.
+// Two encodings. `rows` (--lcd-text, `expect:`, DAP) must be unambiguous:
+// printable ASCII as is, except `\` -> `\\`; any other code the font has
+// (katakana, graphic characters, 7FH) as `\xHH`; not-text as U+FFFD.
+// `plainRows` (Copy Screen) is for reading: each glyph's own Unicode text,
+// as its font builder assigned it from the ROM shape (CP437 glyphs, the
+// PC-1500's π / √ / ¥), and a blank for anything that is not text.
 //
 // Model-free, like LcdScreenshot: the per-model font and status extraction
 // lives in the model directories.
@@ -34,19 +38,27 @@
 /// One cell's dots, column-wise: bit n of a byte = row n of the cell.
 using LcdCell = std::array<uint8_t, 8>;
 
+struct LcdGlyph {
+    uint8_t code;
+    LcdCell cell;
+    std::string text; ///< UTF-8 for plainRows; empty: a blank
+};
+
 struct LcdFont {
     int cellWidth = 6;
     int cellHeight = 8;          ///< 7 (PC-1500) or 8 (PC-1600)
-    /// Character code -> its cell. On a duplicate cell the first entry
-    /// wins, so builders add printable ASCII first.
-    std::vector<std::pair<uint8_t, LcdCell>> glyphs;
+    /// On a duplicate cell the first entry wins, so builders add printable
+    /// ASCII first.
+    std::vector<LcdGlyph> glyphs;
     std::vector<LcdCell> cursorShapes;
 };
 
 struct LcdText {
     std::vector<std::string> rows;
+    std::vector<std::string> plainRows; ///< rows as readable UTF-8 (see above)
     std::vector<std::string> status; ///< lit status symbols, left to right (filled by the model adapter)
     int unparsed = 0;                ///< cells that are not text
+    int parsedCells = 0;             ///< non-blank cells that are text
     int reverseCells = 0;
     int cursorRow = -1;              ///< -1: no cursor on screen
     int cursorCol = -1;
@@ -54,6 +66,9 @@ struct LcdText {
 
     /// The rows joined with '\n' (no trailing newline).
     std::string text() const;
+    /// plainRows joined with '\n', trailing empty rows dropped -- the
+    /// clipboard text. Empty when nothing on the screen is text.
+    std::string plainText() const;
     /// True if `needle` occurs in any one row.
     bool contains(const std::string& needle) const;
     /// rows, then "status: ..." and, when nonzero, "unparsed: n" -- the

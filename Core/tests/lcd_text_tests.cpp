@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "../CPU/LH5803/LH5803SharedMemory.hpp"
+#include "../Display/LcdCharsets.hpp"
 #include "../Display/LcdText.hpp"
 #include "../PC1500/PC1500BasicTyper.hpp"
 #include "../PC1500/PC1500Display.hpp"
@@ -43,10 +44,11 @@ int g_fail = 0;
 LcdFont tinyFont() {
     LcdFont f;
     f.cellHeight = 8;
-    f.glyphs = {{'A', {0x7C, 0x12, 0x11, 0x12, 0x7C, 0}},
-                {'\\', {0x02, 0x04, 0x08, 0x10, 0x20, 0}},
-                {0x80, {0x55, 0x2A, 0x55, 0x2A, 0x55, 0}},
-                {'B', {0x7C, 0x12, 0x11, 0x12, 0x7C, 0}}}; // duplicate cell: 'A' wins
+    f.glyphs = {{'A', {0x7C, 0x12, 0x11, 0x12, 0x7C, 0}, "A"},
+                {'\\', {0x02, 0x04, 0x08, 0x10, 0x20, 0}, "\\"},
+                {0x80, {0x55, 0x2A, 0x55, 0x2A, 0x55, 0}, "\u2592"},
+                {'B', {0x7C, 0x12, 0x11, 0x12, 0x7C, 0}, "B"}, // duplicate cell: 'A' wins
+                {0x81, {0x08, 0x08, 0x08, 0, 0, 0}, ""}};      // no Unicode: a blank
     f.cursorShapes = {{0x40, 0x40, 0x40, 0x40, 0x40, 0}};
     return f;
 }
@@ -69,10 +71,10 @@ void put(LcdBitmap& b, int textRow, int textCol, const LcdCell& cell, bool inver
 void test_synthetic_cells() {
     const LcdFont f = tinyFont();
     LcdBitmap b = blankBitmap(156, 16);
-    put(b, 0, 0, f.glyphs[0].second);
-    put(b, 0, 1, f.glyphs[1].second);
-    put(b, 0, 2, f.glyphs[2].second);
-    put(b, 0, 4, f.glyphs[0].second, /*invert=*/true);
+    put(b, 0, 0, f.glyphs[0].cell);
+    put(b, 0, 1, f.glyphs[1].cell);
+    put(b, 0, 2, f.glyphs[2].cell);
+    put(b, 0, 4, f.glyphs[0].cell, /*invert=*/true);
     put(b, 1, 3, {0x01, 0, 0, 0, 0, 0}); // one stray dot: not text
     const LcdText t = parseLcdText(b, f);
     CHECK(t.rows.size() == 2);
@@ -83,12 +85,37 @@ void test_synthetic_cells() {
     CHECK(t.cursorRow == -1);
     CHECK(t.contains("\\x80"));
     CHECK(!t.contains("A\n"));
+    // Plain text: no escapes, not-text as a blank, the empty row dropped.
+    CHECK(t.parsedCells == 4);
+    CHECK(t.plainRows.size() == 2 && t.plainRows[0] == "A\\\u2592 A" && t.plainRows[1].empty());
+    CHECK(t.plainText() == "A\\\u2592 A");
+}
+
+void test_synthetic_plain_text() {
+    const LcdFont f = tinyFont();
+    // Only graphics: no text at all.
+    LcdBitmap b = blankBitmap(156, 16);
+    put(b, 0, 3, {0x01, 0, 0, 0, 0, 0});
+    put(b, 1, 0, {0xFF, 0x81, 0x81, 0xFF, 0, 0});
+    LcdText t = parseLcdText(b, f);
+    CHECK(t.unparsed == 2 && t.parsedCells == 0 && t.plainText().empty());
+    CHECK(parseLcdText(blankBitmap(156, 16), f).plainText().empty());
+    // Text after graphics, on the second row; a glyph without Unicode is a blank.
+    put(b, 1, 2, f.glyphs[0].cell);
+    put(b, 1, 3, f.glyphs[4].cell);
+    put(b, 1, 4, f.glyphs[1].cell);
+    t = parseLcdText(b, f);
+    CHECK(t.rows[1] == "\xEF\xBF\xBD A\\x81\\\\");
+    CHECK(t.plainText() == "\n  A \\");
+    CHECK(jisX0201Kana(0xB1) == U'\uFF71' && jisX0201Kana(0xA1) == U'\uFF61' && jisX0201Kana(0xDF) == U'\uFF9F');
+    CHECK(jisX0201Kana(0xA0) == 0 && jisX0201Kana(0xE0) == 0);
+    CHECK(utf8(U'\u00C4') == "\xC3\x84" && utf8(U'\uFF71') == "\xEF\xBD\xB1");
 }
 
 void test_synthetic_cursor() {
     const LcdFont f = tinyFont();
     LcdBitmap b = blankBitmap(156, 8);
-    put(b, 0, 0, f.glyphs[0].second);
+    put(b, 0, 0, f.glyphs[0].cell);
     put(b, 0, 1, f.cursorShapes[0]);
     // No cursor reported: the shape is not a glyph.
     LcdText t = parseLcdText(b, f);
@@ -96,7 +123,7 @@ void test_synthetic_cursor() {
     // Cursor over an 'A' the ROM saved, and over a blank cell; position
     // unknown (first cursor-shaped cell) and known.
     LcdCursor overA;
-    overA.under = f.glyphs[0].second;
+    overA.under = f.glyphs[0].cell;
     t = parseLcdText(b, f, overA);
     CHECK(t.rows[0] == "AA" && t.unparsed == 0 && t.cursorRow == 0 && t.cursorCol == 1);
     t = parseLcdText(b, f, LcdCursor{});
@@ -112,10 +139,11 @@ void test_synthetic_cursor() {
 
 void test_powered_off() {
     LcdBitmap b = blankBitmap(156, 8);
-    put(b, 0, 0, tinyFont().glyphs[0].second);
+    put(b, 0, 0, tinyFont().glyphs[0].cell);
     b.poweredOn = false;
     const LcdText t = parseLcdText(b, tinyFont());
     CHECK(!t.poweredOn && t.rows.size() == 1 && t.rows[0].empty());
+    CHECK(t.plainText().empty());
     CHECK(t.report() == "(display off)\nstatus:\n");
 }
 
@@ -140,14 +168,14 @@ std::string roundtripWant(const LcdFont& font, int batch) {
     std::string want;
     for (int c = from; c <= to; ++c) {
         LcdCell cell{};
-        for (const auto& [code, g] : font.glyphs)
+        for (const auto& [code, g, text] : font.glyphs)
             if (code == c) {
                 cell = g; // the main glyph, not a CGSPEC alternate
                 break;
             }
         int shown = c;
         for (auto it = font.glyphs.rbegin(); it != font.glyphs.rend(); ++it)
-            if (it->second == cell) shown = it->first;
+            if (it->cell == cell) shown = it->code;
         if (cell == LcdCell{}) shown = ' ';
         if (shown == '\\') want += "\\\\";
         else want += static_cast<char>(shown);
@@ -179,8 +207,8 @@ void test_pc1600_font_from_both_roms() {
         const LcdFont f = pc1600LcdFont(m);
         CHECK(f.glyphs.size() == 0x60 + 0x80 + 4);
         // 'A' at 41H, as dumped from both ROMs.
-        CHECK(f.glyphs.size() > 0x21 && f.glyphs[0x21].first == 'A' &&
-              f.glyphs[0x21].second == (LcdCell{0x7C, 0x12, 0x11, 0x12, 0x7C, 0x00}));
+        CHECK(f.glyphs.size() > 0x21 && f.glyphs[0x21].code == 'A' &&
+              f.glyphs[0x21].cell == (LcdCell{0x7C, 0x12, 0x11, 0x12, 0x7C, 0x00}));
     }
 }
 
@@ -218,6 +246,20 @@ void test_pc1600_graphics_is_unparsed() {
     }
     const LcdText t = pc1600Run(m, "LINE (0,3)-(155,28)");
     CHECK(t.unparsed > 0);
+}
+
+// CP437 and backslash, as readable text.
+void test_pc1600_plain_text() {
+    PC1600Machine m;
+    if (!bootPC1600(m)) {
+        std::fprintf(stderr, "SKIP test_pc1600_plain_text: PC-1600 ROMs not found\n");
+        return;
+    }
+    const LcdText t = pc1600Run(m, "PRINT CHR$(142);CHR$(177);CHR$(92);CHR$(227);CHR$(127)");
+    CHECK(t.contains("\\x8E\\xB1\\\\\\xE3\\x7F"));
+    CHECK(t.plainText().find("\u00C4\u2592\\\u03C0\u2588") != std::string::npos);
+    if (t.plainText().find("\u00C4\u2592\\\u03C0\u2588") == std::string::npos)
+        std::fprintf(stderr, "  plain text:\n%s\n", t.plainText().c_str());
 }
 
 // ── PC-1500, real ROM ───────────────────────────────────────────────────
@@ -270,6 +312,20 @@ void test_pc1500_print_roundtrip() {
         }
         CHECK(std::find(t.status.begin(), t.status.end(), std::string("RUN")) != t.status.end());
     }
+}
+
+// The signs CHARSET draws in place of ASCII.
+void test_pc1500_plain_text() {
+    PC1500Machine m;
+    if (!bootPC1500(m, "roms/PC-1500_A04.ROM")) {
+        std::fprintf(stderr, "SKIP test_pc1500_plain_text: roms/PC-1500_A04.ROM not found\n");
+        return;
+    }
+    tapKey(m, "mode"); // boots in PRO
+    waitIdle(m, static_cast<uint64_t>(PC1500Machine::kCpuHz * 2));
+    const LcdText t = pc1500Run(m, "PRINT \"AB\";CHR$ 39;CHR$ 91;CHR$ 92;CHR$ 93");
+    CHECK(t.plainText() == "AB\u25A1\u221A\u00A5\u03C0");
+    if (t.plainText() != "AB\u25A1\u221A\u00A5\u03C0") std::fprintf(stderr, "  plain text: %s\n", t.plainText().c_str());
 }
 
 // ── `expect:` preset step ───────────────────────────────────────────────
@@ -531,10 +587,13 @@ int run_lcd_text_tests() {
     test_synthetic_cells();
     test_synthetic_cursor();
     test_powered_off();
+    test_synthetic_plain_text();
     test_pc1600_font_from_both_roms();
     test_pc1600_print_roundtrip();
     test_pc1600_graphics_is_unparsed();
     test_pc1500_print_roundtrip();
+    test_pc1600_plain_text();
+    test_pc1500_plain_text();
     test_expect_parse();
     test_expect_pc1600();
     test_expect_pc1500();
