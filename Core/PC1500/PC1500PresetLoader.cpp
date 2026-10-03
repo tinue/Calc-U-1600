@@ -7,6 +7,7 @@
 #include "../Resources/BundledRomCatalog.hpp"
 #include "PC1500BasicLoader.hpp"
 #include "PC1500BasicTyper.hpp"
+#include "PC1500LcdText.hpp"
 #include "PC1500Machine.hpp"
 #include "PC1500MachineCodeLoader.hpp"
 #include "PC1500Screenshot.hpp"
@@ -25,7 +26,7 @@ constexpr uint64_t kIdleCap = static_cast<uint64_t>(kCpuHz * 5);
 
 // The ROM's typed-input line buffer (same base tools/pc1500_cli.cpp reads
 // for its "Display input-line text" dump).
-std::string screenText(PC1500Machine& machine) { return presetInputLine(machine, 0x7BB0); }
+std::string inputText(PC1500Machine& machine) { return presetInputLine(machine, 0x7BB0); }
 
 std::string hex4(uint16_t v) {
     char b[8];
@@ -42,10 +43,11 @@ public:
         return ::waitUntilBasicIdle(m_machine, maxCycles);
     }
     std::string stepTag() override {
-        // std::string, not a fixed buffer -- screenText() can return up to 80
+        // std::string, not a fixed buffer -- inputText() can return up to 80
         // chars and truncating it would blank exactly the diagnostic (what
-        // ended up on the LCD edit line) this tag exists to show.
-        return "  screen=\"" + screenText(m_machine) + "\" pc=" + hex4(m_machine.debugPC());
+        // ended up on the input line) this tag exists to show.
+        return "  input=\"" + inputText(m_machine) + "\" " + pc1500LcdText(m_machine).logField() +
+               " pc=" + hex4(m_machine.debugPC());
     }
 
     // The parser already rejected unknown key names.
@@ -61,6 +63,7 @@ public:
     bool writeScreenshot(const std::string& path, std::string* error) override {
         return writeLcdScreenshotPng(pc1500LcdBitmap(m_machine), kPC1500ScreenMm, path, error);
     }
+    LcdText lcdText() override { return pc1500LcdText(m_machine); }
 
     BasicTypeResult typeBasicProgram(const std::string& text) override {
         return typeBasicProgramText(m_machine, text);
@@ -158,7 +161,7 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
     // BASIC "> " prompt, the same key a user would press. Retry a few
     // times: the very first tap while the ROM is still finishing the check
     // can be missed.
-    for (int attempt = 0; attempt < 5 && screenText(machine).find("NEW0") != std::string::npos;
+    for (int attempt = 0; attempt < 5 && inputText(machine).find("NEW0") != std::string::npos;
          ++attempt) {
         tapKey(machine, "cl");
         machine.runCycles(kBootSettleCycles / 4);

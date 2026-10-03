@@ -267,6 +267,16 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, const std::fi
                 return false;
             }
             step.text = value;
+        } else if (verb == "expect") {
+            // Verbatim to the end of the line, like `type:` -- the expected
+            // text may well contain `#` or quotes.
+            step.kind = PresetStep::Kind::Expect;
+            const std::string afterDash = line.content.substr(2);
+            step.text = trim(afterDash.substr(afterDash.find(':') + 1));
+            if (step.text.empty()) {
+                *error = "line " + std::to_string(line.lineNo) + ": 'expect' needs the text to look for";
+                return false;
+            }
         } else if (verb == "syncclock") {
             // Re-seed the RTC from the host clock (see the loaders). Takes
             // no value.

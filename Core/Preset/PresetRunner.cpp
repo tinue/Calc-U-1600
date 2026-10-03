@@ -124,6 +124,16 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
                 if (log) log("  screenshot: -> " + path);
                 break;
             }
+            case PresetStep::Kind::Expect: {
+                const LcdText screen = machine.lcdText();
+                if (!screen.contains(step.text)) {
+                    *error = "expect: \"" + step.text + "\" is not on the LCD:\n" + screen.report();
+                    if (log) log("  expect: \"" + step.text + "\" NOT FOUND" + machine.stepTag());
+                    return false;
+                }
+                if (log) log("  expect: \"" + step.text + "\" found");
+                break;
+            }
             case PresetStep::Kind::SyncClock: {
                 const std::tm t = machine.syncClock();
                 char stamp[32];

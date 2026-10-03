@@ -49,7 +49,7 @@
 //      in each CLI.
 //
 // Step verbs: `key:`, `type:`, `wait:`, `trace:`, `screenshot:`,
-// `syncclock:`, `saveas:`. `- wait: N` runs N seconds of emulated time;
+// `expect:`, `syncclock:`, `saveas:`. `- wait: N` runs N seconds of emulated time;
 // `- wait:` with no value blocks until the ROM's keyboard idle loop
 // re-engages -- i.e. until a long-running program or plot has finished (a
 // generous safety cap still applies). `- trace: name.bin` starts a CPU
@@ -58,7 +58,11 @@
 // off` stops it, and a trace still open when the preset finishes is closed.
 // `- screenshot: name.png` writes the LCD (the image Edit > Copy Screen
 // puts on the clipboard, Core/Display/LcdScreenshot.hpp) into the same
-// directory. Neither file name may contain a path separator. `- syncclock:`
+// directory. Neither file name may contain a path separator. `- expect:
+// <text>` fails the preset unless one LCD row contains <text>, as read by
+// Core/Display/LcdText.hpp (so a backslash is written `\\`, a non-ASCII
+// code `\xHH`); like `type:`, the value is taken verbatim, `#` included.
+// `- syncclock:`
 // re-seeds the real-time clock from the host's local time -- a preset load
 // runs flat out, so put it last. A ` # comment` after a value is stripped,
 // except after `type:`.
@@ -90,13 +94,14 @@
 // run it, then load and run a second payload (see
 // examples/setup/firmware_bootstrap_util_15.pc1500a).
 struct PresetStep {
-    enum class Kind { Key, Type, Wait, Trace, Screenshot, SyncClock, SaveAs };
+    enum class Kind { Key, Type, Wait, Trace, Screenshot, Expect, SyncClock, SaveAs };
     Kind kind = Kind::Key;
     // key name (Key), program text (Type), or -- for Trace -- the trace
     // output filename to start capturing to, or "" to stop the current
     // capture (`- trace: off`). See PC1500PresetLoader.cpp's `trace:`
     // handling; a port of Calc-U-59's `KEYSTROKES:` `Trace:` directive.
-    // For Screenshot, the PNG filename. For SaveAs, the name to save
+    // For Screenshot, the PNG filename. For Expect, the text an LCD row
+    // must contain. For SaveAs, the name to save
     // under (see saveAsTarget below).
     std::string text;
     // (Wait) seconds of emulated time to run. A negative value is the

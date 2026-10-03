@@ -14,8 +14,11 @@
 #include "../Display/LcdText.hpp"
 #include "../PC1500/PC1500BasicTyper.hpp"
 #include "../PC1500/PC1500LcdText.hpp"
+#include "../PC1500/PC1500PresetLoader.hpp"
 #include "../PC1600/PC1600BasicTyper.hpp"
 #include "../PC1600/PC1600LcdText.hpp"
+#include "../PC1600/PC1600PresetLoader.hpp"
+#include "PresetTestSupport.hpp"
 #include "TestRoms.hpp"
 
 namespace {
@@ -262,6 +265,77 @@ void test_pc1500_print_roundtrip() {
     }
 }
 
+// ── `expect:` preset step ───────────────────────────────────────────────
+
+void test_expect_parse() {
+    PresetFile p;
+    std::string err;
+    CHECK(parsePresetString("model: PC-1600\nkeys:\n  - expect: ERROR 1 # not a comment\n",
+                            "/tmp/lcd_text_tests_scratch.pc1600", &p, &err));
+    CHECK(!p.sections.empty() && !p.sections[0].keys.empty() &&
+          p.sections[0].keys[0].kind == PresetStep::Kind::Expect &&
+          p.sections[0].keys[0].text == "ERROR 1 # not a comment");
+    PresetFile bad;
+    CHECK(!parsePresetString("model: PC-1600\nkeys:\n  - expect:\n", "/tmp/lcd_text_tests_scratch.pc1600", &bad,
+                             &err));
+}
+
+// MEM with and without the CE-1600P: the floppy module's work area (428H
+// bytes, EXROMWK) is reserved as soon as the drive answers -- and the
+// emulator attaches a CE-1600F with every CE-1600P.
+void test_expect_pc1600() {
+    struct Case {
+        const char* text;
+        bool ok;
+    };
+    const Case cases[] = {
+        {"model: PC-1600\nkeys:\n  - type: PRINT MEM\n  - expect: 11834\n", true},
+        {"model: PC-1600\nplotter: CE-1600P\nkeys:\n  - type: PRINT MEM\n  - expect: 10810\n", true},
+        {"model: PC-1600\nkeys:\n  - type: PRINT MEM\n  - expect: 10810\n", false},
+    };
+    for (const Case& c : cases) {
+        PresetFile p;
+        std::string err;
+        CHECK(parsePresetString(c.text, "/tmp/lcd_text_tests_scratch.pc1600", &p, &err));
+        PC1600Machine m;
+        if (!loadPC1600Roms(m)) { // the preset loader boots whatever ROMs are loaded
+            std::fprintf(stderr, "SKIP test_expect_pc1600: PC-1600 ROMs not found\n");
+            return;
+        }
+        const PresetLoadResult r = applyPC1600Preset(m, p, {}, "/tmp", ".", {}, {"roms"});
+        if (!r.ok && r.error.find("ROM") != std::string::npos && r.error.find("expect") == std::string::npos) {
+            std::fprintf(stderr, "SKIP test_expect_pc1600: %s\n", r.error.c_str());
+            return;
+        }
+        CHECK(r.ok == c.ok);
+        if (!c.ok) CHECK(r.error.find("11834") != std::string::npos); // the failure shows the screen
+        if (r.ok != c.ok) std::fprintf(stderr, "  %s-> %s\n", c.text, r.error.c_str());
+    }
+}
+
+void test_expect_pc1500() {
+    PresetFile p;
+    std::string err;
+    CHECK(parsePresetString("model: PC-1500\nkeys:\n  - key: mode\n  - type: PRINT 12345*-2\n  - expect: -24690\n",
+                            "/tmp/lcd_text_tests_scratch.pc1500", &p, &err));
+    PC1500Machine m;
+    const PresetLoadResult r = applyPC1500Preset(m, p, {}, "/tmp", ".", {}, {"roms"});
+    if (!r.ok && r.error.find("ROM") != std::string::npos && r.error.find("expect") == std::string::npos) {
+        std::fprintf(stderr, "SKIP test_expect_pc1500: %s\n", r.error.c_str());
+        return;
+    }
+    CHECK(r.ok);
+    if (!r.ok) std::fprintf(stderr, "  %s\n", r.error.c_str());
+}
+
+void test_log_field() {
+    LcdText t;
+    t.rows = {"A\"B", ""};
+    CHECK(t.logField() == "lcd=[\"A\\\"B\",\"\"]");
+    t.poweredOn = false;
+    CHECK(t.logField() == "lcd=off");
+}
+
 } // namespace
 
 int run_lcd_text_tests() {
@@ -272,6 +346,10 @@ int run_lcd_text_tests() {
     test_pc1600_print_roundtrip();
     test_pc1600_graphics_is_unparsed();
     test_pc1500_print_roundtrip();
+    test_expect_parse();
+    test_expect_pc1600();
+    test_expect_pc1500();
+    test_log_field();
 
     std::printf("lcd_text_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

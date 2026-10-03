@@ -56,8 +56,11 @@ struct LcdText {
     /// True if `needle` occurs in any one row.
     bool contains(const std::string& needle) const;
     /// rows, then "status: ..." and, when nonzero, "unparsed: n" -- the
-    /// --lcd-text / log format.
+    /// --lcd-text format.
     std::string report() const;
+    /// One line for the preset log: lcd=["row",...] (`"` -> `\"`), or
+    /// lcd=off.
+    std::string logField() const;
 };
 
 /// The angle-mode legend as the panel reads: its DE, G and RAD segments

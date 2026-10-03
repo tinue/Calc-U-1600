@@ -10,6 +10,7 @@
 #include "../Basic/BasicLoadResults.hpp"
 #include "../Connector/ExpansionCard.hpp"
 #include "../Connector/MemoryCardDefinition.hpp"
+#include "../Display/LcdText.hpp"
 #include "../HostClock.hpp"
 #include "../MachineCodeFile.hpp"
 #include "PresetFile.hpp"
@@ -96,8 +97,8 @@ public:
     /// Blocks until the BASIC interpreter is back in its command loop (a RUN,
     /// a plot, a SAVE ... has finished), or `maxCycles`. Returns cycles spent.
     virtual uint64_t waitUntilBasicIdle(uint64_t maxCycles) = 0;
-    /// Appended to every step's log line: what's on the LCD's edit line and
-    /// where the CPU is.
+    /// Appended to every step's log line: the ROM's input line, the LCD as
+    /// text and where the CPU is.
     virtual std::string stepTag() = 0;
 
     /// A `key:` step: `break`/`on` (the ON key) or one named key.
@@ -110,6 +111,8 @@ public:
     virtual void endCpuTrace() = 0;
     /// A `screenshot:` step: PNG of the LCD at `path`.
     virtual bool writeScreenshot(const std::string& path, std::string* error) = 0;
+    /// The LCD as text (`expect:` steps, the step log).
+    virtual LcdText lcdText() = 0;
     /// A `syncclock:` step: re-seed the RTC from the host; returns the time set.
     virtual std::tm syncClock() = 0;
 

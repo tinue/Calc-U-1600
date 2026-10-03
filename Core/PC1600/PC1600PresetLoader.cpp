@@ -16,6 +16,7 @@
 #include "PC1600Keyboard.hpp"
 #include "PC1600Machine.hpp"
 #include "PC1600MachineCodeLoader.hpp"
+#include "PC1600LcdText.hpp"
 #include "PC1600Screenshot.hpp"
 
 namespace {
@@ -28,9 +29,9 @@ constexpr uint64_t kHoldTStates = kFrameTStates * 4;
 
 // The console input line, as ASCII, at the PC-1600 work-area buffer
 // FBB0H-FBFFH (PC-1600-Work-Area-Map.md; the same window
-// pc1600_preset_tests.cpp reads). Logged after each step so a stuck load
-// can be lined up against the LCD's edit line.
-std::string screenText(PC1600Machine& machine) { return presetInputLine(machine, 0xFBB0); }
+// pc1600_preset_tests.cpp reads). Logged after each step, next to the LCD
+// as text, so a stuck load can be lined up against the screen.
+std::string inputText(PC1600Machine& machine) { return presetInputLine(machine, 0xFBB0); }
 
 std::string stepTag(PC1600Machine& machine) {
     // Whichever CPU currently owns the bus -- the LH5803 (BASIC-compat)
@@ -40,7 +41,7 @@ std::string stepTag(PC1600Machine& machine) {
         std::snprintf(pc, sizeof(pc), " pc=Z:$%04X", machine.sc7852().pc());
     else
         std::snprintf(pc, sizeof(pc), " pc=L:$%04X", machine.lh5803().pc());
-    return "  screen=\"" + screenText(machine) + "\"" + pc;
+    return "  input=\"" + inputText(machine) + "\" " + pc1600LcdText(machine).logField() + pc;
 }
 
 // Attach the plotter the preset's `plotter:` asks for, before the cold
@@ -164,6 +165,7 @@ public:
     bool writeScreenshot(const std::string& path, std::string* error) override {
         return writeLcdScreenshotPng(pc1600LcdBitmap(m_machine), kPC1600ScreenMm, path, error);
     }
+    LcdText lcdText() override { return pc1600LcdText(m_machine); }
 
     BasicTypeResult typeBasicProgram(const std::string& text) override {
         return typeBasicProgramText(m_machine, text);

@@ -116,6 +116,21 @@ bool LcdText::contains(const std::string& needle) const {
     return false;
 }
 
+std::string LcdText::logField() const {
+    if (!poweredOn) return "lcd=off";
+    std::string out = "lcd=[";
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        if (i) out += ',';
+        out += '"';
+        for (char ch : rows[i]) {
+            if (ch == '"') out += '\\';
+            out += ch;
+        }
+        out += '"';
+    }
+    return out + "]";
+}
+
 std::string LcdText::report() const {
     std::string out = poweredOn ? text() : "(display off)";
     out += "\nstatus:";
