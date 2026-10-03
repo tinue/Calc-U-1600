@@ -54,6 +54,18 @@ Bundled with permission; not covered by this project's GPLv3 license.
 
 ## Acknowledgments
 
+**Jeff Birt** dumped the PC-1500 system ROMs (A01, A03, A04), the CE-158
+ROM and the CE-502B module, and wrote the annotated
+[PC-1500 ROM disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly)
+(for TASM). Its routine names are used throughout the PC-1500 docs, among
+them [PC1500-Keyword-Modules.md](docs/PC1500-Keyword-Modules.md).
+`roms/README.md` lists which dumps come from him.
+
+**Paul Chambre**'s analysis of how a PC-1500 ROM module adds BASIC keywords
+was the starting point for [PC1500-Keyword-Modules.md](docs/PC1500-Keyword-Modules.md)
+and the RENUM template. The calling convention for keyword *functions*
+there comes from that analysis and isn't checked against the ROM.
+
 **MEP rev3, (c) spellbound, 2024.** The host-directory drive (**File ▸
 Mount Directory…**) is based on the MEP rev3 (Modular Extension Platform)
 with its USB memory-stick application, a 60-pin bus module for the

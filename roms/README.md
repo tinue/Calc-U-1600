@@ -33,5 +33,4 @@ it follows the CE-1600P choice.
 All PC-1600 images are our own dumps, pulled straight off real Sharp
 PC-1600 hardware with a purpose-built ROM-dumper cartridge tool (see
 [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) for the dumper
-source and full provenance writeup), and the new-ROM images are confirmed byte-identical to
-[PockEmul](https://pockemul.com)'s copies.
+source and full provenance writeup).

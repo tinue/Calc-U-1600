@@ -6,11 +6,11 @@ usual error messages. The CE-150 and CE-158 add their commands this way, and
 so does the RENUM example of the debugger's *PC-1500 ROM extension* template
 ([Debugger, §3](Debugger.md#example-renum-on-the-pc-1500)).
 
-Everything here is read from the PC-1500 system ROM. The addresses are the
-same in revisions A01, A03 and A04 (routine names from Jeff Birt's
-[disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly)),
-and the RENUM template was tested against it in Calc-U-1600. Paul
-Chambre's analysis of the mechanism was the starting point.
+Everything here is read from the PC-1500 system ROM, except where noted.
+The addresses are the same in revisions A01, A03 and A04, and the RENUM
+template was tested against it in Calc-U-1600. Routine names follow the
+ROM disassembly credited in the
+[acknowledgments](../THIRD-PARTY-NOTICES.md#acknowledgments).
 
 ## Where the firmware looks
 
@@ -102,8 +102,9 @@ the DATA pointer, the GOSUB/FOR stacks, ON ERROR and CONT.
 It works for both, so no other clean-up is needed.
 
 **Functions** (low byte below `80H`; the evaluator sorts the tokens at
-D8A3–D8CF) are called from the middle of an expression instead. According
-to Paul Chambre's analysis (not used by RENUM, not checked here), the
+D8A3–D8CF) are called from the middle of an expression instead. This part
+isn't used by RENUM and isn't checked against the ROM
+([acknowledgments](../THIRD-PARTY-NOTICES.md#acknowledgments)): the
 argument is already evaluated, in the arithmetic register at 7A00H. The
 routine leaves its result there and returns with `RTN` and UH = 0; a
 non-zero UH is raised as that error.

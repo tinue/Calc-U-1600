@@ -86,7 +86,7 @@ Then list it in your settings with the CPU and the bank it lives in:
 
 A listing that doesn't match the machine's memory (another ROM version, for example) is reported and not used, so a listing for the other model does no harm.
 
-The PC-1500 ROM disassembly is Jeff Birt's [Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly). It is written for TASM, whose listings the debugger can't read yet.
+The PC-1500 ROM disassembly (see the [acknowledgments](../THIRD-PARTY-NOTICES.md#acknowledgments)) is written for TASM, whose listings the debugger can't read yet.
 
 ---
 

@@ -2,13 +2,12 @@
 ; LCDALLON_1500A.ASM -- lights every dot-matrix pixel and every status
 ; indicator on the PC-1500A's LCD, then waits for BREAK (the ON key,
 ; pressed while this routine is running) before returning to BASIC.
-; Written to visually check LCDDisplayView's indicator/dot-matrix
-; sizing (plan.md Phase 2a "LOG panel" / LCD-sizing work) against real
-; hardware with every element lit at once.
+; Written to check the app's LCD indicator/dot-matrix sizing against
+; real hardware with every element lit at once.
 ;
 ; ENTRY = 0x7C01, outside the module window -- no BASIC-program-space
-; reservation needed, same convention as samples/memtest_1500a.asm and
-; this project's own adrtest_1500a.asm.
+; reservation needed, same convention as examples/machine-code/memtest.asm
+; and adrtest_1500a.asm.
 ;
 ; Display-RAM layout (Core/PC1500/PC1500Display.cpp, read directly from
 ; this emulator's own source, not guessed):
