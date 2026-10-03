@@ -20,9 +20,9 @@ obligations.
 
   C and D still carry ~70 T (~19 µs) per `FOR/NEXT` pass, i.e. a fixed cost
   per statement/pass rather than a percentage, with no sub-CPU involvement.
-  A and B moved when the sub-CPU's 0.5 s event started being reported on
-  every tick (below); A−C is now 60 ms against the real 45 ms, so the
-  fitted sub-CPU response time is now too long (see the timing-model item).
+  With the sub-CPU's 0.5 s event reported on every tick (below), A−C is
+  60 ms against the real 45 ms: the fitted sub-CPU response time is too
+  long (see the timing-model item).
 
   **Found and fixed on the way** (dev-0.5.0):
   - One wait per M1 cycle (f05e42e): BEEP pitch at two A values.
@@ -31,9 +31,8 @@ obligations.
   - LCD busy until the 4th LCD-clock edge (c18411b): B.
   - The ON key's live PB7 level (5011e2b).
   - SRIRQ reports the 0.5 s event on every tick (dev-0.6.0, sub-CPU
-    rework). It used to be a toggling level, so every other INT6 handler
-    skipped the 0.5 s housekeeping (battery check, SRINP, APO countdown):
-    A and B +15 ms.
+    rework), so every INT6 handler runs the 0.5 s housekeeping (battery
+    check, SRINP, APO countdown): A and B +15 ms.
 
   **Ruled out**, all with interrupts off, emulator matching real within
   ±0.1–0.2%. Test programs are in `headless/beep/bench/timing{,2,3,4,5}.bas`
@@ -149,7 +148,7 @@ The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, 
   `saveas: live slot-1:My programs`, so every `tools/make_screenshots.sh`
   run writes a live "My programs" card into the Battery-card saves folder.
 - **`examples/memory/flashtest_ce163f.pc1500a` stops with ERROR 1 IN 10.**
-  The lines are stored now (they used to be typed in RUN mode), but with
+  The lines are stored, but with
   the CE-163F in the slot, BASIC's program area starts at &00C5 inside the
   banked window, and line 10 (`POKE &6809,0`) switches that bank away
   from under the running program. The startup presets move BASIC up with
@@ -216,7 +215,7 @@ the pins reaching the cards are unchanged):**
   `CardBase` so a later 60-pin card interface can share them.
 - `PC1500Memory` owns its `ExpansionConnector` and `SystemBus` by value;
   the raw-pointer setters are gone.
-- The hosts no longer know which card sits where. `LH5803SharedMemory`
+- The hosts don't know which card sits where. `LH5803SharedMemory`
   offers its peripheral accesses to one chain,
   `PC1600Memory::lh5803PeripheralBus()`, instead of typed pointers and
   `isCe158Io`. `PC1500Memory` gives the 60-pin bus first refusal on every
@@ -298,7 +297,7 @@ What's wrong with that:
     SC7852's PU output (slot pin 3, 60-pin 15); LH5803 PV goes SC7852
     PVIN → PVOUT (slot pin 5, 60-pin 16). Slot pin 2 ("PVIN" in the TRM)
     is VCC (the CE-1620M's EPROM Vpp); the model leaves `pin[2]` low there.
-  - **Model numbering is now off on the PC-1500:** hosts and cards agree
+  - **Model numbering is off on the PC-1500:** hosts and cards agree
     on `pin[3]` = PU and `pin[2]` = PV, so behaviour is right, but the
     real 40-pin contacts are 2 = PU and 3 = PV (`SystemBus`,
     `PC1500SignalDecode::basePinState`, `resolveSignalPin`, the CE-150/

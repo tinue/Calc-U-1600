@@ -251,7 +251,9 @@ authentic speed for the span that matters.
   `0x` or `$` is hex, a bare number is decimal, also in `debug:` and in
   launch configurations' strings (they merge key by key, so one key can't
   have two rules); bare hex is refused, not guessed. Leaving a key out means
-  "none"; there is no `none` value.
+  "none"; there is no `none` value. (`after: none` in `debug:` is not an
+  exception: it names an action, load without starting, next to `call`
+  and `stopOnEntry`.)
 - **`debug:` keeps camelCase** (`stopOnEntry`, `cleanStart`) against the
   rest's kebab-case. They are the launch-configuration keys (below), and
   `stopOnEntry` is the DAP name.
@@ -413,7 +415,6 @@ authentic speed for the span that matters.
 - **The app registers `ApplePersistenceIgnoreState = YES`**
   (`Qt6/app/MacAppSupport.mm`). Without it, the macOS "reopen windows?" prompt
   deadlocks the synchronous load of the startup preset.
-
 - **Copy Screen's text is plain Unicode, while `--lcd-text` escapes**
   (`\\`, `\xHH`, U+FFFD; `Core/Display/LcdText.hpp`). The text is for
   reading, so its glyphs appear as themselves and graphics as blanks. The
