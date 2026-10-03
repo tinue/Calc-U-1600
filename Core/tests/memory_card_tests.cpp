@@ -1405,7 +1405,7 @@ void test_resolve_modulespec_ambiguous() {
 }
 
 // The ordered multi-directory overload: bundled catalogue first, then a
-// fallback directory (the GUI's iCloud `BatteryCards/` folder) that holds a
+// fallback directory (the GUI's save folder) that holds a
 // user's saved battery-card instance named `CE-1601M - Programs.card.yaml`
 // (module-name with spaces, the exact string `slot-N:` would carry).
 void test_resolve_modulespec_multi_dir() {
