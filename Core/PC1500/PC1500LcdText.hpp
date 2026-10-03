@@ -47,15 +47,6 @@ inline LcdText pc1500LcdText(const PC1500Machine& machine) {
             if (c == code) cursor->under = cell;
     }
     LcdText text = parseLcdText(pc1500LcdBitmap(machine), font, cursor);
-    const PC1500Display disp = machine.display();
-    for (const auto& [name, on] : disp.statusSymbols()) {
-        const std::string n = name;
-        if (n == "DE" || n == "G" || n == "RAD") {
-            if (n == "DE" && !lcdAngleLegend(disp.de(), disp.g(), disp.rad()).empty())
-                text.status.push_back(lcdAngleLegend(disp.de(), disp.g(), disp.rad()));
-            continue;
-        }
-        if (on) text.status.push_back(n);
-    }
+    text.status = statusWords(machine.display().statusLine());
     return text;
 }

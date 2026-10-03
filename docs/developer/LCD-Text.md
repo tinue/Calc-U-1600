@@ -94,6 +94,17 @@ text.
 ## Status symbols
 
 The status line is not part of the bitmap, so the model adapters list the
-lit symbols separately. The DE, G and RAD segments of the angle legend are
-joined the way the panel reads them: DE+G = `DEG`, G+RAD = `GRAD`, RAD
-alone = `RAD`.
+lit symbols separately. Both models use the same model and names
+(`Core/Display/StatusLine.hpp`), since their annunciator bytes are the same
+bit for bit:
+
+BUSY SHIFT S ROMAJI KANA SMALL DEG/GRAD/RAD RUN PRO RESERVE DEF I II III CTRL BATT
+
+- The PC-1600 adds S, ROMAJI and CTRL.
+- BATT is the low-battery warning, so it never shows on the PC-1500, whose
+  analog meter has no data bit.
+- The DE, G and RAD segments are joined the way the panel reads them: DE+G
+  = `DEG`, G+RAD = `GRAD`, RAD alone = `RAD`.
+
+On the PC-1600, DEGREE/RADIAN/GRAD reach the glass only at the next scroll;
+see [PC1600-Core-Limitations.md](PC1600-Core-Limitations.md).

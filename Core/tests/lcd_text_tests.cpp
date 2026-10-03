@@ -10,12 +10,17 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "../Display/LcdText.hpp"
 #include "../PC1500/PC1500BasicTyper.hpp"
+#include "../PC1500/PC1500Display.hpp"
+#include "../PC1500/PC1500Memory.hpp"
 #include "../PC1500/PC1500LcdText.hpp"
 #include "../PC1500/PC1500PresetLoader.hpp"
 #include "../PC1600/PC1600BasicTyper.hpp"
+#include "../PC1600/PC1600Display.hpp"
 #include "../PC1600/PC1600LcdText.hpp"
 #include "../PC1600/PC1600PresetLoader.hpp"
 #include "PresetTestSupport.hpp"
@@ -336,6 +341,75 @@ void test_log_field() {
     CHECK(t.logField() == "lcd=off");
 }
 
+// ── Status line: one vocabulary for both models ─────────────────────────
+
+// The same two bytes (PC-1500 764EH/764FH, PC-1600 IC3 column 63 pages
+// 7/6) read as the same words on both displays.
+void test_status_words_same_on_both_models() {
+    struct Case {
+        uint8_t set0, set1;
+        std::vector<std::string> want;
+    };
+    const Case cases[] = {
+        {0x40, 0x43, {"DEG", "RUN", "I"}},
+        {0x40, 0x46, {"GRAD", "RUN", "I"}},
+        {0x04, 0x24, {"KANA", "RAD", "PRO"}},
+        {0xBB, 0x10, {"BUSY", "SHIFT", "SMALL", "RESERVE", "DEF", "II", "III"}},
+    };
+    for (const Case& c : cases) {
+        PC1500Memory mem;
+        mem.poke(0x764E, c.set0);
+        mem.poke(0x764F, c.set1);
+        const std::vector<std::string> pc1500 = statusWords(PC1500Display(mem).statusLine());
+
+        PC1600Display d;
+        d.writeIO(0x54, 0x3F); // IC3 display on
+        for (const auto& [page, value] : {std::pair<int, uint8_t>{7, c.set0}, {6, c.set1}}) {
+            d.writeIO(0x54, uint8_t(0xB8 | page));
+            d.writeIO(0x54, 0x40 | 63);
+            d.writeIO(0x56, value);
+        }
+        const std::vector<std::string> pc1600 = statusWords(d.statusLine());
+        CHECK(pc1500 == c.want);
+        CHECK(pc1600 == c.want);
+    }
+}
+
+// Both machines boot with DEG and I lit (and RUN or PRO, by boot path).
+void test_status_after_boot() {
+    PC1600Machine m16;
+    if (bootPC1600(m16)) {
+        const LcdText t = pc1600LcdText(m16);
+        CHECK(t.status.size() >= 3 && t.status[0] == "DEG" && t.status.back() == "I");
+    } else {
+        std::fprintf(stderr, "SKIP test_status_after_boot (PC-1600): ROMs not found\n");
+    }
+    PC1500Machine m15;
+    if (bootPC1500(m15, "roms/PC-1500_A04.ROM")) {
+        const LcdText t = pc1500LcdText(m15);
+        CHECK(t.status.size() >= 3 && t.status[0] == "DEG" && t.status.back() == "I");
+    } else {
+        std::fprintf(stderr, "SKIP test_status_after_boot (PC-1500): roms/PC-1500_A04.ROM not found\n");
+    }
+}
+
+// GRAD / RADIAN on the PC-1500 write 764FH, the glass itself.
+void test_status_angle_pc1500() {
+    PC1500Machine m;
+    if (!bootPC1500(m, "roms/PC-1500_A04.ROM")) {
+        std::fprintf(stderr, "SKIP test_status_angle_pc1500: roms/PC-1500_A04.ROM not found\n");
+        return;
+    }
+    tapKey(m, "mode");
+    waitIdle(m, static_cast<uint64_t>(PC1500Machine::kCpuHz * 2));
+    LcdText t = pc1500Run(m, "GRAD");
+    CHECK(std::find(t.status.begin(), t.status.end(), std::string("GRAD")) != t.status.end());
+    t = pc1500Run(m, "RADIAN");
+    CHECK(std::find(t.status.begin(), t.status.end(), std::string("RAD")) != t.status.end());
+    t = pc1500Run(m, "DEGREE");
+    CHECK(std::find(t.status.begin(), t.status.end(), std::string("DEG")) != t.status.end());
+}
+
 } // namespace
 
 int run_lcd_text_tests() {
@@ -350,6 +424,9 @@ int run_lcd_text_tests() {
     test_expect_pc1600();
     test_expect_pc1500();
     test_log_field();
+    test_status_words_same_on_both_models();
+    test_status_after_boot();
+    test_status_angle_pc1500();
 
     std::printf("lcd_text_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

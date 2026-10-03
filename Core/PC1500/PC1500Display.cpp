@@ -37,31 +37,8 @@ bool PC1500Display::pixel(int col, int row) const {
     return ((data8 >> row) & 1) != 0;
 }
 
-uint8_t PC1500Display::symb1() const { return at(0x764E); }
-uint8_t PC1500Display::symb2() const { return at(0x764F); }
-
-namespace { bool bit(uint8_t byte, uint8_t mask) { return (byte & mask) != 0; } }
-
-bool PC1500Display::busy() const { return bit(symb1(), 0x01); }
-bool PC1500Display::shift() const { return bit(symb1(), 0x02); }
-bool PC1500Display::japanese() const { return bit(symb1(), 0x04); }
-bool PC1500Display::small() const { return bit(symb1(), 0x08); }
-bool PC1500Display::romanIII() const { return bit(symb1(), 0x10); }
-bool PC1500Display::romanII() const { return bit(symb1(), 0x20); }
-bool PC1500Display::romanI() const { return bit(symb1(), 0x40); }
-bool PC1500Display::def() const { return bit(symb1(), 0x80); }
-bool PC1500Display::de() const { return bit(symb2(), 0x01); }
-bool PC1500Display::g() const { return bit(symb2(), 0x02); }
-bool PC1500Display::rad() const { return bit(symb2(), 0x04); }
-bool PC1500Display::reserve() const { return bit(symb2(), 0x10); }
-bool PC1500Display::pro() const { return bit(symb2(), 0x20); }
-bool PC1500Display::run() const { return bit(symb2(), 0x40); }
-
-std::vector<std::pair<const char*, bool>> PC1500Display::statusSymbols() const {
-    return {
-        {"BUSY", busy()},     {"SHIFT", shift()},       {"JAPANESE", japanese()},   {"SMALL", small()},
-        {"ROMAN_I", romanI()}, {"ROMAN_II", romanII()}, {"ROMAN_III", romanIII()}, {"DEF", def()},
-        {"DE", de()},         {"G", g()},               {"RAD", rad()},             {"RESERVE", reserve()},
-        {"PRO", pro()},       {"RUN", run()},
-    };
+StatusLine PC1500Display::statusLine() const {
+    StatusLine line;
+    line.decodeCommonSets(at(0x764E), at(0x764F));
+    return line;
 }

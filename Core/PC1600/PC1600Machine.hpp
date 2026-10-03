@@ -35,7 +35,7 @@
 struct PC1600DisplaySnapshot {
     bool pixels[PC1600Display::kHeight][PC1600Display::kWidth]{};
     bool clockEnabled{false};
-    bool statusSymbols[PC1600StatusLine::kCount]{}; // PC1600StatusLine::all()'s order
+    bool statusSymbols[StatusLine::kCount]{}; // StatusLine::all()'s order
 };
 
 // ── PC-1600 dual-CPU machine facade ──────────────────────────────────────

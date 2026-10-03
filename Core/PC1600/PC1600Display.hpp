@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include "PC1600Clocks.hpp"
-#include "PC1600StatusLine.hpp"
+#include "../Display/StatusLine.hpp"
 
 // ── PC-1600 LCD (1x HD61203 + 2x HD61102) ────────────────────────────────
 //
@@ -37,7 +37,7 @@
 // for all three blocks alike. (The diagram also shows the status-symbol
 // line fed from a distinct source -- IC3's `Y6f` pin and HD61203's
 // `X49-X64` common lines, both outside the main screen's own
-// Y1-Y64/X1-X32 addressing -- consistent with `PC1600StatusLine` being a
+// Y1-Y64/X1-X32 addressing -- consistent with `StatusLine` being a
 // genuinely separate mechanism; see that class's own comment.)
 class PC1600Display {
 public:
@@ -98,15 +98,15 @@ public:
 
     /// The fixed-legend status-symbol strip above the graphics area,
     /// wired to real display memory -- see `refreshStatusSymbols()` and
-    /// `PC1600StatusLine`'s own class comment for the TRM bit map and
+    /// `StatusLine`'s own class comment for the TRM bit map and
     /// storage location.
-    PC1600StatusLine&       statusLine() { return m_statusLine; }
-    const PC1600StatusLine& statusLine() const { return m_statusLine; }
+    StatusLine&       statusLine() { return m_statusLine; }
+    const StatusLine& statusLine() const { return m_statusLine; }
 
     /// Recomputes every `statusLine()` flag from IC3's own column 63,
     /// pages 4/6/7 (rotated by IC3's own `addressStartLine`, same as the
     /// graphics-area scroll) per the TRM's SMBLSET bit map -- see
-    /// `PC1600StatusLine.hpp`'s own class comment for the full
+    /// `Core/Display/StatusLine.hpp`'s own class comment for the full
     /// derivation. Called after every write that could have
     /// touched that cell (`writeIO()`, both for IC3's own data/command
     /// ports and its `addressStartLine` register, since a scroll rotates
@@ -159,5 +159,5 @@ private:
     }
     Controller m_ic3; // panel columns 64-127
     bool m_clockEnabled{false};
-    PC1600StatusLine m_statusLine;
+    StatusLine m_statusLine;
 };

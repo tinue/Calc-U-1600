@@ -282,8 +282,9 @@ int main(int argc, char** argv) {
     // distinction) -- still useful here since PRO-mode Up/Down is a line-
     // editor navigation key, which is exactly what this buffer reflects.
     PC1500Display display = machine.display();
-    std::printf("Display: busy=%d pro=%d run=%d shift=%d sml=%d\n",
-                display.busy(), display.pro(), display.run(), display.shift(), display.small());
+    std::string statusText;
+    for (const std::string& word : statusWords(display.statusLine())) statusText += " " + word;
+    std::printf("Display status:%s\n", statusText.c_str());
     static constexpr uint16_t kDisplayTextBufBase = 0x7BB0;
     static constexpr int kDisplayTextBufLen = 80;
     std::string displayText;

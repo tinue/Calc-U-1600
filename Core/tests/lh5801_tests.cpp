@@ -1273,20 +1273,24 @@ void test_display_status_icons() {
     mem.poke(0x764E, 0xA5); // 0b10100101
     mem.poke(0x764F, 0x53); // 0b01010011
     PC1500Display disp(mem);
-    CHECK(disp.busy() == true);
-    CHECK(disp.shift() == false);
-    CHECK(disp.japanese() == true);
-    CHECK(disp.small() == false);
-    CHECK(disp.romanIII() == false);
-    CHECK(disp.romanII() == true);
-    CHECK(disp.romanI() == false);
-    CHECK(disp.def() == true);
-    CHECK(disp.de() == true);
-    CHECK(disp.g() == true);
-    CHECK(disp.rad() == false);
-    CHECK(disp.reserve() == true);
-    CHECK(disp.pro() == false);
-    CHECK(disp.run() == true);
+    using S = StatusLine::Symbol;
+    const StatusLine line = disp.statusLine();
+    CHECK(line.isOn(S::Busy) == true);
+    CHECK(line.isOn(S::Shift) == false);
+    CHECK(line.isOn(S::Kana) == true);
+    CHECK(line.isOn(S::Small) == false);
+    CHECK(line.isOn(S::III) == false);
+    CHECK(line.isOn(S::II) == true);
+    CHECK(line.isOn(S::I) == false);
+    CHECK(line.isOn(S::Def) == true);
+    CHECK(line.isOn(S::De) == true);
+    CHECK(line.isOn(S::G) == true);
+    CHECK(line.isOn(S::Rad) == false);
+    CHECK(line.isOn(S::Reserve) == true);
+    CHECK(line.isOn(S::Pro) == false);
+    CHECK(line.isOn(S::Run) == true);
+    // No bits on the PC-1500.
+    CHECK(!line.isOn(S::S) && !line.isOn(S::Romaji) && !line.isOn(S::Ctrl) && !line.isOn(S::Batt));
 }
 
 void test_boot_smoke_real_rom() {

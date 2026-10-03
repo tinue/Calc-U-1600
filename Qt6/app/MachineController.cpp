@@ -421,8 +421,8 @@ DisplayFrame MachineController::currentDisplay() const {
         }
         frame.poweredOn = snap.clockEnabled;
 
-        for (std::size_t i = 0; i < PC1600StatusLine::kCount; ++i) {
-            frame.statusSymbols.emplace_back(kPC1600StatusSymbolNames[i], snap.statusSymbols[i]);
+        for (std::size_t i = 0; i < StatusLine::kCount; ++i) {
+            frame.statusSymbols.emplace_back(kStatusSymbolNames[i], snap.statusSymbols[i]);
         }
     } else if (m_pc1500) {
         const PC1500Display disp = m_pc1500->display();
@@ -436,7 +436,9 @@ DisplayFrame MachineController::currentDisplay() const {
         }
         frame.poweredOn = m_pc1500->isDisplayOn();
 
-        for (const auto& [name, on] : disp.statusSymbols()) frame.statusSymbols.emplace_back(name, on);
+        const StatusLine line = disp.statusLine();
+        for (std::size_t i = 0; i < StatusLine::kCount; ++i)
+            frame.statusSymbols.emplace_back(kStatusSymbolNames[i], line.all()[i]);
     }
     return frame;
 }

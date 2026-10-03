@@ -63,6 +63,10 @@
 
 ### Fixed
 
+- **The PC-1600 status line showed "RAD" in GRAD mode.** GRAD lights the
+  G and RAD segments, and the faceplate now reads them as one word, as on
+  the PC-1500. Both models now share one status-line model with the same
+  symbol names (in the text read-out too: `I`, `II`, `III`, `KANA`).
 - **Debugging a project from VS Code** (a launch configuration with
   `project`) stopped at no breakpoint, for two reasons:
   - The app waited for VS Code's next request before it armed the

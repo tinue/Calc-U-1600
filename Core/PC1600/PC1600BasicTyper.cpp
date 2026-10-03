@@ -4,12 +4,12 @@
 #include <sstream>
 
 #include "../Basic/BasicLineStoreCheck.hpp"
+#include "../Display/StatusLine.hpp"
 #include "../Utf8.hpp"
 #include "PC1600Display.hpp"
 #include "PC1600Keyboard.hpp"
 #include "PC1600Machine.hpp"
 #include "PC1600ProgramPlacement.hpp"
-#include "PC1600StatusLine.hpp"
 #include "PC1600TypedInput.hpp"
 
 namespace {
@@ -141,7 +141,7 @@ void tapKey(PC1600Machine& machine, const std::string& name) {
 
 uint64_t waitIdle(PC1600Machine& machine, uint64_t maxTStates) {
     uint64_t consumed = 0;
-    while (machine.display().statusLine().isOn(PC1600StatusLine::Symbol::Busy) && consumed < maxTStates) {
+    while (machine.display().statusLine().isOn(StatusLine::Symbol::Busy) && consumed < maxTStates) {
         consumed += machine.runCycles(kFrameTStates);
     }
     return consumed;

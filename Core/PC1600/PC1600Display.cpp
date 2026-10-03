@@ -143,7 +143,7 @@ bool PC1600Display::pixel(int x, int y) const {
 }
 
 void PC1600Display::refreshStatusSymbols() {
-    using Symbol = PC1600StatusLine::Symbol;
+    using Symbol = StatusLine::Symbol;
 
     // The status-symbol segments hang off IC3 (its Y6f pin, per
     // PC-1600-Display-HD61202.md §2), so a "display off" command (0x3E) to
@@ -165,33 +165,20 @@ void PC1600Display::refreshStatusSymbols() {
     };
     auto bit = [](uint8_t byte, int b) { return (byte & (1 << b)) != 0; };
 
-    // TRM SMBLSET table (see PC1600StatusLine.hpp's own class comment):
+    // TRM SMBLSET table (see StatusLine.hpp's own class comment):
     // B=00H -> IC3 page 7, B=01H -> page 6, B=02H -> page 4.
     uint8_t b00 = m_ic3.pages[63][static_cast<size_t>(symbolPage(7))];
     uint8_t b01 = m_ic3.pages[63][static_cast<size_t>(symbolPage(6))];
     uint8_t b02 = m_ic3.pages[63][static_cast<size_t>(symbolPage(4))];
 
-    m_statusLine.set(Symbol::Def,   bit(b00, 7));
-    m_statusLine.set(Symbol::I,     bit(b00, 6));
-    m_statusLine.set(Symbol::II,    bit(b00, 5));
-    m_statusLine.set(Symbol::III,   bit(b00, 4));
-    m_statusLine.set(Symbol::Small, bit(b00, 3));
-    m_statusLine.set(Symbol::Shift, bit(b00, 1));
-    m_statusLine.set(Symbol::Busy,  bit(b00, 0));
+    m_statusLine.decodeCommonSets(b00, b01);
 
-    m_statusLine.set(Symbol::Run,      bit(b01, 6));
-    m_statusLine.set(Symbol::Pro,      bit(b01, 5));
-    m_statusLine.set(Symbol::Reserve,  bit(b01, 4));
-    m_statusLine.set(Symbol::Rad,      bit(b01, 2));
-    m_statusLine.set(Symbol::Grad,     bit(b01, 1));
-    m_statusLine.set(Symbol::Deg,      bit(b01, 0));
-
-    // The romaji->kana caption: X35 = page 4 bit 2, X59 = page 7 bit 2
-    // (Service Manual glass pinout; see PC1600StatusLine.hpp). KBII's bit 7
-    // has no electrode -- SMBLSET (bank 6 822DH) folds it into S -- so it
-    // is not read.
+    // Set 02H, PC-1600 only. The romaji->kana caption: X35 = page 4 bit 2
+    // (romaji, here) and X59 = page 7 bit 2 (kana, in decodeCommonSets())
+    // -- Service Manual glass pinout; see StatusLine.hpp. KBII's bit 7 has
+    // no electrode -- SMBLSET (bank 6 822DH) folds it into S -- so it is
+    // not read.
     m_statusLine.set(Symbol::Romaji, bit(b02, 2));
-    m_statusLine.set(Symbol::Kana,   bit(b00, 2));
     m_statusLine.set(Symbol::S,    bit(b02, 3));
     m_statusLine.set(Symbol::Ctrl, bit(b02, 1));
     m_statusLine.set(Symbol::Batt, bit(b02, 0));

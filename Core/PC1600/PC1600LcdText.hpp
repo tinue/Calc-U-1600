@@ -62,18 +62,8 @@ inline LcdText pc1600LcdText(PC1600Machine& machine) {
     }
     LcdText text = parseLcdText(pc1600LcdBitmap(machine), pc1600LcdFont(machine), cursor);
     const PC1600DisplaySnapshot snap = machine.displaySnapshot();
-    // Deg/Grad/Rad are the DE, G and RAD segments of one legend (see
-    // PC1600StatusLine.hpp): reported once, joined, where Deg sits.
-    using S = PC1600StatusLine::Symbol;
-    auto lit = [&](S s) { return snap.statusSymbols[static_cast<std::size_t>(s)]; };
-    for (std::size_t i = 0; i < PC1600StatusLine::kCount; ++i) {
-        const S s = static_cast<S>(i);
-        if (s == S::Deg) {
-            const std::string angle = lcdAngleLegend(lit(S::Deg), lit(S::Grad), lit(S::Rad));
-            if (!angle.empty()) text.status.push_back(angle);
-        } else if (s != S::Grad && s != S::Rad && lit(s)) {
-            text.status.emplace_back(kPC1600StatusSymbolNames[i]);
-        }
-    }
+    StatusLine line;
+    for (std::size_t i = 0; i < StatusLine::kCount; ++i) line.set(static_cast<StatusLine::Symbol>(i), snap.statusSymbols[i]);
+    text.status = statusWords(line);
     return text;
 }

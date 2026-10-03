@@ -257,7 +257,7 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
 
 ## PC-1600 display (HD61203 + 2× HD61102)
 
-`Core/PC1600/PC1600Display.*`, `PC1600StatusLine.hpp`
+`Core/PC1600/PC1600Display.*`, `Core/Display/StatusLine.hpp`
 
 - **Controller busy time is fitted, not from a datasheet**: busy (status
   bit 7) holds until the 4th edge of the 216.7 kHz LCD clock after each
@@ -274,15 +274,25 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   stance. `PC1600Display.cpp:31`, `PC1600Display.cpp:118`
 - **Status-symbol line** is read from display RAM (IC3 column 63, pages
   4/6/7), as the ROM's symbol writer (bank 6 8220H) stores it and the
-  Service Manual glass pinout wires it. `PC1600StatusLine.hpp`
+  Service Manual glass pinout wires it. Sets 00H/01H are the PC-1500's
+  764EH/764FH bit for bit; both models decode them in one place.
+  `Core/Display/StatusLine.hpp`
 - **`Romaji` / `Kana` segments** (page 4 bit 2 / page 7 bit 2, commons
   X35 / X59): which part of the "ローマ字→カナ" caption each lights is
   *inferred* from pin order, and the GUI's `kana` position is estimated.
-  The western ROM never sets either bit. `PC1600StatusLine.hpp`,
+  The western ROM never sets either bit. `Core/Display/StatusLine.hpp`,
   `Qt6/app/LcdWidget.cpp`
-- **DEG / RAD / GRAD modelled as three independent bits** even though the
-  hardware has one physical legend; real firmware is *assumed* to only
-  ever set one at a time. `PC1600StatusLine.hpp:58`
+- **DE / G / RAD are three segments of one legend**: the ROM (LH5803
+  DEGREE/RADIAN/GRAD, CD7DH) stores 03H / 04H / 06H, so DEG = DE+G and
+  GRAD = G+RAD; the GUI and the text read-out join the lit segments into
+  the word. `Core/Display/StatusLine.hpp`
+- **Open: the angle legend changes only at the next scroll.** DEGREE /
+  RADIAN / GRAD run on the LH5803 and write only `SYMB1`. At 764FH, that
+  is the RAM shadow F64FH, not the glass. The Z-80 copies the shadows to
+  the glass when it scrolls (`SYMSAVE` / `SYMRESTORE`, bank 6
+  82E4H / 82FAH), so the emulated legend lags until then. Whether the real
+  machine also lags, or something else redraws the legend, still has to be
+  checked on hardware.
 
 ---
 

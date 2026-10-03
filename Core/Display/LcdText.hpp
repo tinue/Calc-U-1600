@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "LcdScreenshot.hpp"
+#include "StatusLine.hpp"
 
 // ── LCD text: dot matrix -> characters, by exact glyph lookup ────────────
 //
@@ -68,6 +69,24 @@ struct LcdText {
 /// are joined left to right. Empty when none is lit.
 inline std::string lcdAngleLegend(bool de, bool g, bool rad) {
     return std::string(de ? "DE" : "") + (g ? "G" : "") + (rad ? "RAD" : "");
+}
+
+/// The lit symbols as words, in panel order, the same for both models
+/// (kStatusSymbolNames); DE / G / RAD come out as one lcdAngleLegend() word
+/// where DE sits.
+inline std::vector<std::string> statusWords(const StatusLine& line) {
+    using S = StatusLine::Symbol;
+    std::vector<std::string> words;
+    for (std::size_t i = 0; i < StatusLine::kCount; ++i) {
+        const S s = static_cast<S>(i);
+        if (s == S::De) {
+            const std::string angle = lcdAngleLegend(line.isOn(S::De), line.isOn(S::G), line.isOn(S::Rad));
+            if (!angle.empty()) words.push_back(angle);
+        } else if (s != S::G && s != S::Rad && line.isOn(s)) {
+            words.emplace_back(kStatusSymbolNames[i]);
+        }
+    }
+    return words;
 }
 
 /// A cursor the model reports as shown.

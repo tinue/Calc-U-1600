@@ -13,11 +13,11 @@
 #include <string>
 #include <vector>
 
+#include "../Display/StatusLine.hpp"
 #include "../PC1600/PC1600Bank.hpp"
 #include "../PC1600/PC1600Display.hpp"
 #include "../PC1600/PC1600Keyboard.hpp"
 #include "../PC1600/PC1600Memory.hpp"
-#include "../PC1600/PC1600StatusLine.hpp"
 #include "../SharpShiftedSymbols.hpp"
 
 namespace {
@@ -323,7 +323,7 @@ void test_display_status_symbols_wired_to_ic3_column63() {
     d.writeIO(0x54, 0x40 | 63);
     d.writeIO(0x56, 0x09);
 
-    using Symbol = PC1600StatusLine::Symbol;
+    using Symbol = StatusLine::Symbol;
     CHECK(d.statusLine().isOn(Symbol::Def));
     CHECK(d.statusLine().isOn(Symbol::Busy));
     CHECK(!d.statusLine().isOn(Symbol::Shift));
@@ -334,8 +334,8 @@ void test_display_status_symbols_wired_to_ic3_column63() {
     CHECK(!d.statusLine().isOn(Symbol::Pro));
     CHECK(!d.statusLine().isOn(Symbol::Reserve));
     CHECK(!d.statusLine().isOn(Symbol::Rad));
-    CHECK(!d.statusLine().isOn(Symbol::Grad));
-    CHECK(!d.statusLine().isOn(Symbol::Deg));
+    CHECK(!d.statusLine().isOn(Symbol::G));
+    CHECK(!d.statusLine().isOn(Symbol::De));
 
     CHECK(d.statusLine().isOn(Symbol::S));
     CHECK(d.statusLine().isOn(Symbol::Batt));
@@ -351,7 +351,7 @@ void test_display_status_symbols_wired_to_ic3_column63() {
 // retained pixel RAM.
 void test_display_status_symbols_blank_when_ic3_display_off() {
     PC1600Display d;
-    using Symbol = PC1600StatusLine::Symbol;
+    using Symbol = StatusLine::Symbol;
 
     d.writeIO(0x54, 0x3F); // IC3 on
     d.writeIO(0x54, 0xB8 | 7);
@@ -377,35 +377,35 @@ void test_display_clock_enable_flag() {
     CHECK(d.clockEnabled());
 }
 
-// ── PC1600StatusLine ─────────────────────────────────────────────────
+// ── StatusLine ─────────────────────────────────────────────────
 
 void test_statusline_defaults_all_off() {
-    PC1600StatusLine s;
+    StatusLine s;
     for (bool on : s.all()) CHECK(!on);
 }
 
 void test_statusline_set_and_read() {
-    PC1600StatusLine s;
-    s.set(PC1600StatusLine::Symbol::Batt, true);
-    CHECK(s.isOn(PC1600StatusLine::Symbol::Batt));
-    CHECK(!s.isOn(PC1600StatusLine::Symbol::Busy));
-    s.set(PC1600StatusLine::Symbol::Batt, false);
-    CHECK(!s.isOn(PC1600StatusLine::Symbol::Batt));
+    StatusLine s;
+    s.set(StatusLine::Symbol::Batt, true);
+    CHECK(s.isOn(StatusLine::Symbol::Batt));
+    CHECK(!s.isOn(StatusLine::Symbol::Busy));
+    s.set(StatusLine::Symbol::Batt, false);
+    CHECK(!s.isOn(StatusLine::Symbol::Batt));
 }
 
 void test_statusline_reset_clears_all() {
-    PC1600StatusLine s;
-    s.set(PC1600StatusLine::Symbol::Deg, true);
-    s.set(PC1600StatusLine::Symbol::Ctrl, true);
+    StatusLine s;
+    s.set(StatusLine::Symbol::De, true);
+    s.set(StatusLine::Symbol::Ctrl, true);
     s.reset();
     for (bool on : s.all()) CHECK(!on);
 }
 
 void test_display_owns_status_line() {
     PC1600Display d;
-    CHECK(!d.statusLine().isOn(PC1600StatusLine::Symbol::Shift));
-    d.statusLine().set(PC1600StatusLine::Symbol::Shift, true);
-    CHECK(d.statusLine().isOn(PC1600StatusLine::Symbol::Shift));
+    CHECK(!d.statusLine().isOn(StatusLine::Symbol::Shift));
+    d.statusLine().set(StatusLine::Symbol::Shift, true);
+    CHECK(d.statusLine().isOn(StatusLine::Symbol::Shift));
 }
 
 // ── PC1600Memory I/O wiring ────────────────────────────────────────────
@@ -720,7 +720,7 @@ void test_romaji_kana_segments_follow_the_glass_pinout() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
     auto& bus = static_cast<SC7852Bus&>(mem);
-    using Symbol = PC1600StatusLine::Symbol;
+    using Symbol = StatusLine::Symbol;
     bus.writeIO(0x54, 0x3F);        // display on
     bus.writeIO(0x54, 0x40 | 63);   // column 63
 

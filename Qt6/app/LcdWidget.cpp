@@ -170,21 +170,18 @@ void LcdWidget::paintPC1500(QPainter& painter) {
 
     if (flag("BUSY")) drawLabel(kP15BusyX, "BUSY");
     if (flag("SHIFT")) drawLabel(kP15ShiftX, "SHIFT");
-    if (flag("JAPANESE")) drawLabel(kP15JapX, "JPN");
+    if (flag("KANA")) drawLabel(kP15JapX, "JPN");
     if (flag("SMALL")) drawLabel(kP15SmallX, "SMALL");
     if (flag("RUN")) drawLabel(kP15RunX, "RUN");
     if (flag("PRO")) drawLabel(kP15ProX, "PRO");
     if (flag("RESERVE")) drawLabel(kP15ReserveX, "RESERVE");
     if (flag("DEF")) drawLabel(kP15DefX, "DEF");
-    if (flag("ROMAN_I")) drawLabel(kP15RomanIX, "I");
-    if (flag("ROMAN_II")) drawLabel(kP15RomanIIX, "II");
-    if (flag("ROMAN_III")) drawLabel(kP15RomanIIIX, "III");
+    if (flag("I")) drawLabel(kP15RomanIX, "I");
+    if (flag("II")) drawLabel(kP15RomanIIX, "II");
+    if (flag("III")) drawLabel(kP15RomanIIIX, "III");
 
     // DE/G/RAD concatenate into one shared "DEGRAD" template span.
-    QString angle;
-    if (flag("DE")) angle += "DE";
-    if (flag("G")) angle += "G";
-    if (flag("RAD")) angle += "RAD";
+    const QString angle = QString::fromStdString(lcdAngleLegend(flag("DE"), flag("G"), flag("RAD")));
     if (!angle.isEmpty()) drawLabel(kP15AngleX, angle);
 
     // Battery indicator: always on, no data bit backs it.
@@ -264,10 +261,10 @@ void LcdWidget::paintPC1600(QPainter& painter) {
     if (flag("CTRL")) drawLabel("ctrl", "CTRL");
     if (flag("BATT")) drawInvertedLabel("batt", "BATT");
 
-    // DEGRAD: whichever of DEG/RAD/GRAD is set, first match wins.
-    if (flag("DEG")) drawLabel("degrad", "DEG");
-    else if (flag("RAD")) drawLabel("degrad", "RAD");
-    else if (flag("GRAD")) drawLabel("degrad", "GRAD");
+    // DEGRAD: the DE/G/RAD segments read as one word (DE+G = DEG,
+    // G+RAD = GRAD), as on the PC-1500.
+    const QString angle = QString::fromStdString(lcdAngleLegend(flag("DE"), flag("G"), flag("RAD")));
+    if (!angle.isEmpty()) drawLabel("degrad", angle);
 
     // I/II/III: one shared position, first match wins.
     if (flag("I")) drawLabel("roman", "I");
