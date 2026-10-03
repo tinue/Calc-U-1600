@@ -38,6 +38,7 @@ with a status note on how the implementation differed. New plans go into
 | [Drag-and-drop loading](plans/Drag-And-Drop-Plan.md) | 2026-09-30 | Implemented |
 | [PC-1500 ROM extension demo: RENUM](plans/PC1500-RENUM-ROM-Plan.md) | 2026-10-02 | Implemented |
 | [Reading the LCD as text](plans/LCD-Text-Plan.md) | 2026-10-03 | Implemented |
+| [Loader matrix: CE-158/sde vs. fast loader](plans/Loader-Matrix-Plan.md) | 2026-10-03 | Implemented; results in dev/loader-matrix/ |
 | [Copy Screen: the LCD as text](plans/Copy-Screen-Text-Plan.md) | 2026-10-03 | Implemented |
 
 ## Handoffs
