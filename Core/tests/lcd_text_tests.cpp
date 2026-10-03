@@ -13,12 +13,14 @@
 #include <utility>
 #include <vector>
 
+#include "../CPU/LH5803/LH5803SharedMemory.hpp"
 #include "../Display/LcdText.hpp"
 #include "../PC1500/PC1500BasicTyper.hpp"
 #include "../PC1500/PC1500Display.hpp"
 #include "../PC1500/PC1500Memory.hpp"
 #include "../PC1500/PC1500LcdText.hpp"
 #include "../PC1500/PC1500PresetLoader.hpp"
+#include "../PC1600/PC1600Bank.hpp"
 #include "../PC1600/PC1600BasicTyper.hpp"
 #include "../PC1600/PC1600Display.hpp"
 #include "../PC1600/PC1600LcdText.hpp"
@@ -477,6 +479,19 @@ void test_pc1600_mirror_real_rom() {
     CHECK(lcdColumn(scrolled, 2, 78) == 0x87); // dots 0-2 and the old 7601H's dot 7
 }
 
+// ME0 writes drive the mirror; ME1 writes reach only the RAM.
+void test_pc1600_mirror_me0_only() {
+    PC1600Bank bank;
+    PC1600Memory mem(bank);
+    LH5803SharedMemory lh(mem);
+    mem.display().writeIO(0x50, 0x3F); // both controllers on
+    lh.writeME0(0x764F, 0x46);
+    CHECK(statusWords(mem.display().statusLine()) == (std::vector<std::string>{"GRAD", "RUN"}));
+    lh.writeME1(0x764F, 0x44);
+    CHECK(mem.read(0xF64F) == 0x44);
+    CHECK(statusWords(mem.display().statusLine()) == (std::vector<std::string>{"GRAD", "RUN"}));
+}
+
 } // namespace
 
 int run_lcd_text_tests() {
@@ -496,6 +511,7 @@ int run_lcd_text_tests() {
     test_status_angle_pc1500();
     test_pc1600_mirror_unit();
     test_pc1600_mirror_real_rom();
+    test_pc1600_mirror_me0_only();
 
     std::printf("lcd_text_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

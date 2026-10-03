@@ -156,5 +156,8 @@ void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
     // ignores writes at 8000+ anyway).
     if (addr >= 0x8000 && cardWrite(addr, /*me1=*/true, value)) return;
     if (addr >= 0x8000 && addr < kRomBase) return;
-    writeME0(addr, value); // default aliasing for every other ME1 address
+    // Default aliasing for every other ME1 address -- the RAM only: the
+    // gate array's LCD mirror (mirrorPc1500Display()) is taken to watch
+    // ME0 writes, the ones PC-1500 display code makes.
+    if (addr < 0x8000) m_shared.write(uint16_t(addr + 0x8000), value);
 }

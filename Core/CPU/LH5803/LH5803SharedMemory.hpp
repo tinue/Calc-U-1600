@@ -158,6 +158,7 @@ private:
 
     /// An ME0 write to the PC-1500 display RAM (7600H-764FH) also goes to
     /// the LCD, as the gate array does: see PC1600Display::mirrorPc1500Column().
+    /// ME1 writes there only reach the RAM.
     void mirrorPc1500Display(uint16_t addr);
     /// Offers an access to the cards on PC1600Memory::lh5803PeripheralBus().
     /// True (with *value set, for a read) when a card claims it.

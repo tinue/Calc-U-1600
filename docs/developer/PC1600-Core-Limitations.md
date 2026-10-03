@@ -301,12 +301,11 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
     / `SYMRESTORE`, bank 6 82E4H / 82FAH).
 
   `PC1600Display::mirrorPc1500Column()`, `LH5803SharedMemory::mirrorPc1500Display()`.
-  Not measured, and therefore not mirrored:
+  ME1 writes there reach only the RAM. They are unlikely to drive the
+  mirror on the hardware, and the ROM uses ME1 only for I/O. Not measured,
+  and therefore not mirrored:
   - the 7400H–754FH aliases;
-  - 774EH / 774FH;
-  - ME1 writes, which pass through `writeME0` and so *are* mirrored, which
-    is an assumption;
-  - any timing.
+  - 774EH / 774FH.
 
 ---
 
