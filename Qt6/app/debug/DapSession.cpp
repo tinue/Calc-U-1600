@@ -115,6 +115,7 @@ void DapSession::handle(const QJsonObject& request) {
     else if (command == QLatin1String("restart")) restart(args, &body, &error);
     else if (command == QLatin1String("calcu1600/load")) customLoad(args, &body, &error);
     else if (command == QLatin1String("calcu1600/reset")) customReset(args, &body, &error);
+    else if (command == QLatin1String("calcu1600/screen")) customScreen(&body, &error);
     else if (command == QLatin1String("calcu1600/quit")) {}
     else error = QStringLiteral("Unsupported request '%1'").arg(command);
     respond(request, error.isEmpty(), body, error);
@@ -518,6 +519,26 @@ void DapSession::customReset(const QJsonObject& args, QJsonObject*, QString* err
     if (!ready(error)) return;
     const bool all = args.value(QStringLiteral("kind")).toString() == QLatin1String("allReset");
     m_controller->resetMachine(all, args.value(QStringLiteral("stop")).toBool(true), error);
+}
+
+// The LCD as text (Core/Display/LcdText.hpp): {rows, status, unparsed,
+// poweredOn, cursor?: {row, col}}. Needs no debug session, only a machine.
+void DapSession::customScreen(QJsonObject* body, QString* error) {
+    LcdText screen;
+    if (!m_controller->lcdText(&screen)) {
+        *error = QStringLiteral("No machine is running");
+        return;
+    }
+    QJsonArray rows, status;
+    for (const std::string& row : screen.rows) rows.append(QString::fromStdString(row));
+    for (const std::string& s : screen.status) status.append(QString::fromStdString(s));
+    body->insert(QStringLiteral("rows"), rows);
+    body->insert(QStringLiteral("status"), status);
+    body->insert(QStringLiteral("unparsed"), screen.unparsed);
+    body->insert(QStringLiteral("poweredOn"), screen.poweredOn);
+    if (screen.cursorRow >= 0)
+        body->insert(QStringLiteral("cursor"),
+                     QJsonObject{{QStringLiteral("row"), screen.cursorRow}, {QStringLiteral("col"), screen.cursorCol}});
 }
 
 void DapSession::configurationDone(const QJsonObject&, QJsonObject*, QString* error) {

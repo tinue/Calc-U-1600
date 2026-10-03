@@ -64,6 +64,7 @@ private:
     void restart(const QJsonObject& args, QJsonObject* body, QString* error);
     void customLoad(const QJsonObject& args, QJsonObject* body, QString* error);
     void customReset(const QJsonObject& args, QJsonObject* body, QString* error);
+    void customScreen(QJsonObject* body, QString* error);
 
     /// The attach configuration in force: the client's arguments on top of
     /// the `debug:` block of the preset `project` names (re-read each call,

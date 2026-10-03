@@ -50,16 +50,15 @@ inline LcdFont pc1600LcdFont(const PC1600Machine& machine) {
     return font;
 }
 
-/// Unlocked (reads RAM through memory()): headless tools and tests, or a
-/// caller already holding the machine.
+/// Thread-safe: RAM through the locked debugPeek(), the screen through the
+/// locked displaySnapshot(), the font from ROM.
 inline LcdText pc1600LcdText(PC1600Machine& machine) {
-    PC1600Memory& mem = machine.memory();
     std::optional<LcdCursor> cursor;
-    if (mem.peek(0xF05E) & 0x01) {
+    if (machine.debugPeek(0xF05E) & 0x01) {
         cursor = LcdCursor{};
-        cursor->row = mem.peek(0xF05F);
-        cursor->col = mem.peek(0xF060);
-        for (int i = 0; i < 6; ++i) cursor->under[i] = mem.peek(uint16_t(0xF069 + i));
+        cursor->row = machine.debugPeek(0xF05F);
+        cursor->col = machine.debugPeek(0xF060);
+        for (int i = 0; i < 6; ++i) cursor->under[i] = machine.debugPeek(uint16_t(0xF069 + i));
     }
     LcdText text = parseLcdText(pc1600LcdBitmap(machine), pc1600LcdFont(machine), cursor);
     const PC1600DisplaySnapshot snap = machine.displaySnapshot();

@@ -11,6 +11,7 @@
 
 #include "Connector/AlpsPlotterMechanism.hpp"
 #include "Display/LcdScreenshot.hpp"
+#include "Display/LcdText.hpp"
 #include "KeyPaste.hpp"
 #include "PC1500/PC1500Variant.hpp"
 #include "Serial/LazySerialLink.hpp"
@@ -229,6 +230,8 @@ public:
     std::size_t drainAudio(std::int16_t* out, std::size_t max);
     void discardAudio();
     DisplayFrame currentDisplay() const;
+    /// The LCD as text (Core/Display/LcdText.hpp); false with no machine.
+    bool lcdText(LcdText* out) const;
 
     // Cycles-per-second of whichever machine is currently active --
     // MainWindow's frame timer divides this by its own tick rate to get

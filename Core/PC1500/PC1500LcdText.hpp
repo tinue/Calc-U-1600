@@ -22,7 +22,7 @@
 inline LcdFont pc1500LcdFont(const PC1500Machine& machine) {
     LcdFont font;
     font.cellHeight = 7;
-    const PC1500Memory& mem = machine.memory();
+    const PC1500Memory& mem = machine.memory(); // ROM: never written, safe unlocked
     for (int code = 0x20; code < 0x80; ++code) {
         LcdCell cell{};
         for (int i = 0; i < 5; ++i) cell[i] = mem.peek(uint16_t(0xFCA0 + (code - 0x20) * 5 + i));
@@ -32,17 +32,16 @@ inline LcdFont pc1500LcdFont(const PC1500Machine& machine) {
     return font;
 }
 
-/// Unlocked (reads RAM through memory()): headless tools and tests, or a
-/// caller already holding the machine.
+/// Thread-safe: RAM through the locked debugPeek(), the screen through the
+/// locked display() snapshot.
 inline LcdText pc1500LcdText(const PC1500Machine& machine) {
-    const PC1500Memory& mem = machine.memory();
     const LcdFont font = pc1500LcdFont(machine);
     // The cell's position is only kept as a display-RAM address
     // (CURS_POS_NBUF, 787EH); glyph 7FH is no other character's shape, so
     // the first block cell is taken.
     std::optional<LcdCursor> cursor;
-    if ((mem.peek(0x787C) & 0x81) == 0x81) {
-        const uint8_t code = mem.peek(0x787D);
+    if ((machine.debugPeek(0x787C) & 0x81) == 0x81) {
+        const uint8_t code = machine.debugPeek(0x787D);
         cursor = LcdCursor{};
         for (const auto& [c, cell] : font.glyphs)
             if (c == code) cursor->under = cell;

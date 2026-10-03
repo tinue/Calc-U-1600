@@ -10,10 +10,12 @@
 #include <algorithm>
 
 #include "PC1500/PC1500BasicTyper.hpp"
+#include "PC1500/PC1500LcdText.hpp"
 #include "PC1500/PC1500Machine.hpp"
 #include "PC1500/PC1500Screenshot.hpp"
 #include "PC1500/PC1500TypedInput.hpp"
 #include "PC1600/PC1600BasicTyper.hpp"
+#include "PC1600/PC1600LcdText.hpp"
 #include "PC1600/PC1600Machine.hpp"
 #include "PC1600/PC1600Screenshot.hpp"
 #include "PC1600/PC1600TypedInput.hpp"
@@ -437,6 +439,13 @@ DisplayFrame MachineController::currentDisplay() const {
         for (const auto& [name, on] : disp.statusSymbols()) frame.statusSymbols.emplace_back(name, on);
     }
     return frame;
+}
+
+bool MachineController::lcdText(LcdText* out) const {
+    if (m_pc1600) *out = pc1600LcdText(*m_pc1600);
+    else if (m_pc1500) *out = pc1500LcdText(*m_pc1500);
+    else return false;
+    return true;
 }
 
 // ---- Debug panel support ----

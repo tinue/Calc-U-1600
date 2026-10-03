@@ -4,7 +4,8 @@
 Connects to a running app (started with `--dap <port>`, or with the debug
 server enabled in Settings), attaches, and drives the requests VS Code
 uses: threads, pause, stackTrace/scopes/variables, disassemble, readMemory,
-evaluate, instruction and data breakpoints, stepping, continue, disconnect.
+evaluate, instruction and data breakpoints, stepping, continue, disconnect,
+and the calcu1600/screen text read-out.
 
 Stdlib only:  uv run tools/dap_smoke.py [--port 32168] [--app PATH]
 With --app the script starts the app itself (with --dap) and quits it
@@ -52,7 +53,7 @@ class Dap:
         self.buf = rest[length:]
         return json.loads(rest[:length])
 
-    def send(self, command, **arguments):
+    def send(self, command, /, **arguments):
         """Sends a request without waiting for its response; returns its seq."""
         seq = self.seq
         self.seq += 1
@@ -60,7 +61,7 @@ class Dap:
         self.sock.sendall(b"Content-Length: %d\r\n\r\n" % len(body) + body)
         return seq
 
-    def request(self, command, **arguments):
+    def request(self, command, /, **arguments):
         seq = self.send(command, **arguments)
         while True:
             msg = self._read_message()
@@ -501,6 +502,29 @@ def reset_run(port):
     dap.sock.close()
 
 
+def screen_run(port):
+    """calcu1600/screen: the LCD as text, after a typed PRINT MEM."""
+    print("Screen run:")
+    dap = Dap(port)
+    dap.request("initialize", adapterID="calcu1600")
+    dap.wait_event("initialized")
+    dap.request("attach", preset=os.path.join(REPO, "vscode/calcu1600-debug/presets/debug-pc1600.pc1600"),
+                command="PRINT MEM")
+    dap.request("configurationDone")
+    screen = {}
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        screen = dap.request("calcu1600/screen")
+        if any("11834" in row for row in screen.get("rows", [])):
+            break
+        time.sleep(0.25)
+    check(any("11834" in row for row in screen.get("rows", [])), f"screen rows: {screen.get('rows')}")
+    check(screen.get("unparsed") == 0 and screen.get("poweredOn") is True,
+          f"unparsed {screen.get('unparsed')}, status {screen.get('status')}")
+    dap.request("disconnect")
+    dap.sock.close()
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=32168)
@@ -587,6 +611,7 @@ def main():
         rom_run(args.port)
         reset_run(args.port)
         lh5803_run(args.port)
+        screen_run(args.port)
         print("done:", "all passed" if check.failures == 0 else f"{check.failures} failed")
     finally:
         if proc:
