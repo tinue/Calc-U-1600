@@ -168,9 +168,9 @@ It is not a copy of the PC-1500's signals.
 **Shortcuts in place today** (each one must go):
 - 60-pin PU/PV sit on `pin[3]`/`pin[2]`, their **40-pin** contact
   numbers (`PC1500SignalDecode::basePinState`). The CE-150 and CE-158
-  read them from there. Measured 2026-10-03: the PC-1500's 60-pin plug
-  has PV on 15 and PU on 16, the PC-1600's has PU on 15 and PVOUT on 16
-  (see below).
+  read them from there. Measured 2026-10-03: 60-pin 15 = PU, 16 = PV on
+  both machines, and the PC-1500's 40-pin pins are 2 = PU, 3 = PV, not
+  the TRM's 2 = PV, 3 = PU (see below).
 - On the PC-1600, `LH5803SharedMemory::peripheralPins` hands the
   LH5803's own PU and PV flip-flops straight to the cards. On real
   hardware PV goes out through the SC7852 as PVOUT. The LH5803's PU has
@@ -274,23 +274,22 @@ What's wrong with that:
   - ELH (58) low = LH5803 running: the ownership signal.
   - PV: "the PV signal of the LH-5803 is directly sent by PVOUT"; ME1
     `8000–BFFF` is the CE-150 at PVOUT = 0, the CE-158 at PVOUT = 1.
-  - **PC-1500 measured 2026-10-03: contact 15 = PV, contact 16 = PU**,
-    as the PC-1500 TRM prints (continuity from 40-pin pins 2/3 on a real
-    PC-1500; contact 44 is F-GND, not VBAT). Details in Sharp1500-1600-Ref
-    `Expansion-Connectors.md` §2.2b.
-  - **PC-1600 measured 2026-10-03:** 60-pin 14/15/16 = PT/PU/PVOUT, as
-    its TRM says (same nets as slot pins 19/3/5, on both slots). So the
-    machines really differ: a CE-150/CE-158 on a PC-1600 reads the
-    SC7852's PU as PV and PVOUT as PU. Slot pin 2 ("PVIN" in the TRM) is
-    tied to VCC on both slots; the model leaves `pin[2]` low there.
-  - **Open:** what the SC7852 drives on PU/PVOUT (60-pin 15/16) while the
-    LH5803 runs, so that a PC-1500 card's ROM switching works. Needs a
-    logic probe or the ROM's bank-switching code, not continuity.
-  - **Also open:** what reaches the CE-158's PU contact on the PC-1600
-    while the LH5803 runs. The SC7852 has PVIN but no PU input, and its
-    PU output is a Port 31H bit. The SM's LHNMIO note (SC7852 pin 92,
-    "PU = PV is high (CE-158 internal ROM)") hints that the gate array
-    handles this. Needs the SM schematic's LH5803 PU net.
+  - **Settled 2026-10-03 by measurement: 60-pin contact 15 = PU, 16 = PV
+    on both machines** (PVOUT on the PC-1600, which carries the LH5803's
+    PV). On the PC-1500, LH5801 pin 60 (PV) beeps to contact 16 and pin 61
+    (PU) to 15, and the **40-pin connector has pin 2 = PU, pin 3 = PV**.
+    Both PC-1500 TRM tables have PU/PV swapped. Contact 44 is F-GND, not
+    VBAT. Details in Sharp1500-1600-Ref `Expansion-Connectors.md` §2.2b.
+  - PC-1600 nets (SM schematic): LH5803 PU shares one line with the
+    SC7852's PU output (slot pin 3, 60-pin 15); LH5803 PV goes SC7852
+    PVIN → PVOUT (slot pin 5, 60-pin 16). Slot pin 2 ("PVIN" in the TRM)
+    is VCC (the CE-1620M's EPROM Vpp); the model leaves `pin[2]` low there.
+  - **Model numbering is now off on the PC-1500:** hosts and cards agree
+    on `pin[3]` = PU and `pin[2]` = PV, so behaviour is right, but the
+    real 40-pin contacts are 2 = PU and 3 = PV (`SystemBus`,
+    `PC1500SignalDecode::basePinState`, `resolveSignalPin`, the CE-150/
+    CE-158/bus-ROM cards, `LH5803SharedMemory::peripheralPins`). The
+    PC-1600 slot's `pin[3]` = PU is correct.
   - Not yet looked at: which pins tell bank 4 from bank 5 for the
     CE-1600P ROM, and how its I/O ports show up (the CE-1600P PDF).
 - ~~Why `PC1500Memory` gets its `ExpansionConnector` and `SystemBus` by
