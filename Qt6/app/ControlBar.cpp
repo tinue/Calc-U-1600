@@ -9,6 +9,7 @@
 #include <QGuiApplication>
 #include <QSignalBlocker>
 #include <QStyle>
+#include <QStyleOptionButton>
 
 namespace {
 
@@ -154,9 +155,20 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_floppySideButton->setFocusPolicy(Qt::NoFocus);
     m_floppySideButton->setToolTip(tr("Eject and turn the disk over"));
     m_floppySideButton->setObjectName(QStringLiteral("controlbar.floppy.side"));
-    // Compact: one letter / one icon, so no wider than the diskette symbol.
+    // Compact: one letter / one icon, so no wider than the diskette symbol --
+    // unless the style insets a button's text further than that (macOS: 12 px
+    // a side, which clipped the letter), so the letter itself still fits.
     const int compactWidth = m_floppySideButton->iconSize().width() + 12;
-    m_floppySideButton->setFixedWidth(compactWidth);
+    QStyleOptionButton sideOption;
+    sideOption.initFrom(m_floppySideButton);
+    // The real size, not the not-yet-laid-out default: macOS picks its inset by button size.
+    sideOption.rect.setSize({compactWidth, m_floppySideButton->sizeHint().height()});
+    const int textInset =
+        sideOption.rect.width() -
+        style()->subElementRect(QStyle::SE_PushButtonContents, &sideOption, m_floppySideButton).width();
+    const QFontMetrics metrics = m_floppySideButton->fontMetrics();
+    const int letterWidth = qMax(metrics.horizontalAdvance(tr("A")), metrics.horizontalAdvance(tr("B")));
+    m_floppySideButton->setFixedWidth(qMax(compactWidth, letterWidth + textInset));
     layout->addWidget(m_floppySideButton);
 
     m_floppySaveButton = new QPushButton(this);
