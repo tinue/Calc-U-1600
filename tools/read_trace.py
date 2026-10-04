@@ -16,6 +16,10 @@ PC-1500/1500A's own CPU, or the PC-1600's LH5803 co-processor) and
 `CPU_ID_*`) so a 'trace'/'trace_z80' record always says which physical CPU
 emitted it.
 
+Each frame's registers are the ones its instruction started from
+(pre-execution, as the debugger shows them); the instruction's effect shows
+in that CPU's next frame.
+
 Usage:
     python3 read_trace.py TRACE.bin
     python3 read_trace.py --dedup TRACE.bin   # drop consecutive same-PC frames (per CPU)
@@ -29,7 +33,7 @@ import json
 # ── Constants (must match Core/PC1500/PC1500TraceFile.cpp) ──
 
 MAGIC   = 0x50433135   # 'PC15'
-VERSION = 2            # v2: 25-byte TRACE_EVENT (added cpuId), new TRACE_EVENT_Z80 record
+VERSION = 3            # v3: registers are pre-execution (layout as v2: 25-byte TRACE_EVENT, TRACE_EVENT_Z80)
 
 REC_SESSION_START = 0x01
 REC_TRACE_EVENT   = 0x02
@@ -63,7 +67,8 @@ def _parse_file_header(f):
     if magic != MAGIC:
         raise ValueError(f"Bad magic: 0x{magic:08X} (expected 0x{MAGIC:08X})")
     if version != VERSION:
-        raise ValueError(f"Unsupported version: {version} (expected {VERSION})")
+        hint = " (v2 files hold post-execution registers; capture the trace again)" if version == 2 else ""
+        raise ValueError(f"Unsupported version: {version} (expected {VERSION}){hint}")
     return version
 
 def _parse_trace_event(payload):

@@ -40,6 +40,7 @@ with a status note on how the implementation differed. New plans go into
 | [Reading the LCD as text](plans/LCD-Text-Plan.md) | 2026-10-03 | Implemented |
 | [Loader matrix: CE-158/sde vs. fast loader](plans/Loader-Matrix-Plan.md) | 2026-10-03 | Implemented, PC-1500 and PC-1600; results in dev/loader-matrix/ |
 | [Copy Screen: the LCD as text](plans/Copy-Screen-Text-Plan.md) | 2026-10-03 | Implemented |
+| [Pre-execution snapshots: history and trace](plans/Pre-Execution-Snapshots-Plan.md) | 2026-10-04 | Implemented |
 
 ## Handoffs
 

@@ -7,7 +7,7 @@ namespace {
 // ── Format constants ─────────────────────────────────────────────────────
 // MUST match tools/read_trace.py's constant block.
 constexpr uint32_t kMagic   = 0x50433135;  // 'PC15'
-constexpr uint16_t kVersion = 2;  // v2: 25-byte TRACE_EVENT (added cpuId), new TRACE_EVENT_Z80 record
+constexpr uint16_t kVersion = 3;  // v3: registers are pre-execution (layout as v2: 25-byte TRACE_EVENT, TRACE_EVENT_Z80)
 constexpr int      kHeaderSize = 16;
 
 enum RecType : uint8_t {

@@ -307,7 +307,7 @@ What to check:
 
 - **Call Stack:** one thread per CPU: `LH5801` on the PC-1500; `Z80 (SC7852)` and `LH5803` on the PC-1600, where the CPU that owns the bus is marked `[bus]`. A stop always stops both CPUs and names the one that caused it.
   - **Frame 0** is the live state.
-  - **Frames 1–20** are the last 20 instructions that CPU executed, newest first, e.g. `after C0EE  call KEYGET`. Each shows its registers *after* it ran, and its source line if it has one. An interrupt shows as `interrupt at …`. The history is always recorded, so it is there even when you attach after something went wrong.
+  - **Frames 1–20** are the last 20 instructions that CPU executed, newest first, e.g. `C0EE  call KEYGET`. Like frame 0, each shows the registers *before* its instruction ran, and its source line if it has one; what an instruction did shows in the next newer frame (or the live state). An interrupt shows as `interrupt at …`, with the registers at the point it interrupted. After a data breakpoint, frame 1 is the instruction that made the access. The history is always recorded, so it is there even when you attach after something went wrong.
 - **Variables ▸ Registers:** the selected frame's registers, plus *Flags* and, for the live frame, *Banks* (PC-1600 page banks, or PU/PV).
 - **Disassembly:** right-click a frame ▸ **Open Disassembly View**. It opens by itself where there's no source.
 - **Memory:** VS Code shows memory in Microsoft's Hex Editor extension (`ms-vscode.hexeditor`), which it offers to install the first time.

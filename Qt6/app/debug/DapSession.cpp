@@ -677,7 +677,7 @@ void DapSession::stackTrace(const QJsonObject& args, QJsonObject* body, QString*
                 const debug::SourceMap& map = m_controller->sourceMap();
                 const disasm::SymbolFn symbols = [&map, thread](uint16_t a) { return map.symbolAt(thread, a); };
                 const disasm::Decoded d = t->decode(thread, h, symbols);
-                text = QStringLiteral("after %1  %2")
+                text = QStringLiteral("%1  %2")
                            .arg(QStringLiteral("%1").arg(pc, 4, 16, QLatin1Char('0')).toUpper(), QString::fromStdString(d.text));
                 debug::SourceLocation loc;
                 if (m_controller->sourceMap().lookup(thread, pc, rc->bankMatch(), &loc)) {

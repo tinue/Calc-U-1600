@@ -299,12 +299,23 @@ private:
     // one pass. 65536 frames is ~1.9 MB.
     TraceRing<Z80CpuFrame, 65536> m_trace;
 
-    /// Records a TRACE frame if `tf` asks for one. The flag test is inline
-    /// so the untraced hot path pays no call.
+    // Trace frames and history entries hold the registers an instruction
+    // started from (pre-execution, like the debugger's live frame): they
+    // are captured before the fetch and committed once the instruction is
+    // known.
+
+    /// Captures the TRACE registers if `tf` asks for them, and records the
+    /// frame if `tf` asks for one. The flag tests are inline so the
+    /// untraced hot path pays no call.
+    void captureTraceRegisters(uint32_t tf) {
+        if (tf & (TRACE_REGS_LIGHT | TRACE_REGS_FULL)) fillTraceRegisters(tf);
+    }
     void recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles) {
         if (tf & (TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL)) pushTraceFrame(tf, pcAtStart, opcodeWord, cycles);
     }
+    void fillTraceRegisters(uint32_t tf);
     void pushTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles);
+    Z80CpuFrame m_traceRegisters; // the current step()'s pre-execution registers
 
     History m_history;
     BreakpointSet m_breakpoints;
@@ -313,5 +324,6 @@ private:
     int32_t m_skipBreakpointAt{-1}; // resumePastBreakpoint(); -1 = none
     Z80HistoryFrame* m_historyFrame{&m_history.next()}; // the frame the current step() fills
     uint8_t m_fetchLen{0}; // bytes fetched by the current step(), mirrored into *m_historyFrame
-    void recordHistory(uint16_t pcAtStart, bool interrupt);
+    void captureHistory();
+    void commitHistory(uint16_t pcAtStart, bool interrupt);
 };

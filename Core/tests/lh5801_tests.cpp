@@ -370,7 +370,10 @@ void test_trace_ring_and_drain() {
     CHECK(frames[0].opcode == 0x00B5);
     CHECK(frames[1].pc == 0x8002);
     CHECK(frames[2].pc == 0x8004);
-    CHECK(frames[2].a == 0x03);
+    // Pre-execution registers: each frame has the A its ldi started from.
+    CHECK(frames[1].a == 0x01);
+    CHECK(frames[2].a == 0x02);
+    CHECK(r.cpu.a() == 0x03);
     // A second drain with nothing new produces nothing.
     n = r.cpu.drainTraceEvents(frames, 8, &lost);
     CHECK(n == 0);
@@ -406,12 +409,12 @@ void test_trace_ring_peek_does_not_consume() {
     CHECK(n == 2);
     CHECK(peeked[0].pc == 0x8000);
     CHECK(peeked[1].pc == 0x8002);
-    CHECK(peeked[1].a == 0x02);
+    CHECK(peeked[1].a == 0x01); // pre-execution: the A ldi a,2 started from
     // Peeking again returns the identical snapshot -- it's read-only.
     CpuFrame peekedAgain[8];
     n = r.cpu.peekTraceEvents(peekedAgain, 8);
     CHECK(n == 2);
-    CHECK(peekedAgain[1].a == 0x02);
+    CHECK(peekedAgain[1].a == 0x01);
     // A real drain afterward still sees both frames -- peeking didn't
     // advance the drain cursor.
     CpuFrame drained[8];
@@ -419,7 +422,7 @@ void test_trace_ring_peek_does_not_consume() {
     n = r.cpu.drainTraceEvents(drained, 8, &lost);
     CHECK(n == 2);
     CHECK(lost == 0);
-    CHECK(drained[1].a == 0x02);
+    CHECK(drained[1].a == 0x01);
     // A third instruction, then peek should reflect only the newest 1
     // when asked for max=1 (most-recent-first semantics), while a
     // larger max still returns everything available.
@@ -428,7 +431,7 @@ void test_trace_ring_peek_does_not_consume() {
     n = r.cpu.peekTraceEvents(onlyNewest, 1);
     CHECK(n == 1);
     CHECK(onlyNewest[0].pc == 0x8004);
-    CHECK(onlyNewest[0].a == 0x03);
+    CHECK(onlyNewest[0].a == 0x02);
 }
 
 void test_breakpoint_halts_step() {

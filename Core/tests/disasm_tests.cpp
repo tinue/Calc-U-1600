@@ -640,7 +640,7 @@ void test_z80_sweep_matches_cpu() {
 
 // ── History rings ─────────────────────────────────────────────────────────
 
-void test_lh5801_history_records_bytes_and_post_registers() {
+void test_lh5801_history_records_bytes_and_pre_registers() {
     LhBus bus;
     const uint8_t code[] = {0xB5, 0x42,        // ldi a,0x42
                             0xFD, 0xEF, 0x78, 0x00, 0x01, // adi #(0x7800),0x01 (5 bytes)
@@ -656,10 +656,14 @@ void test_lh5801_history_records_bytes_and_post_registers() {
     CHECK(h.size() == 3);
     const LH5801HistoryFrame& last = h.recent(0);
     CHECK(last.pc == 0x4007 && last.len == 2 && last.bytes[0] == 0x48 && last.bytes[1] == 0x78);
-    CHECK(last.x == 0x7800 && last.p == 0x4009 && last.a == 0x42);
+    // Registers are the ones each instruction started from: the newest
+    // frame doesn't repeat the live state.
+    CHECK(last.x == 0x0000 && last.a == 0x42);
+    CHECK(cpu.x() == 0x7800 && cpu.pc() == 0x4009);
     const LH5801HistoryFrame& adi = h.recent(1);
     CHECK(adi.pc == 0x4002 && adi.len == 5 && adi.bytes[0] == 0xFD && adi.bytes[4] == 0x01);
-    CHECK(h.recent(2).pc == 0x4000 && h.recent(2).a == 0x42);
+    CHECK(adi.a == 0x42);
+    CHECK(h.recent(2).pc == 0x4000 && h.recent(2).a == 0x00);
     CHECK(bus.me1[0x7800] == 0x01);
     cpu.reset();
     CHECK(cpu.history().size() == 0);
@@ -692,16 +696,18 @@ void test_z80_history_carried_prefix_and_interrupt() {
     CHECK(h.recent(2).pc == 0x0000 && h.recent(2).len == 1 && h.recent(2).bytes[0] == 0xDD);
     const Z80HistoryFrame& ld = h.recent(1);
     CHECK(ld.pc == 0x0001 && ld.len == 4 && ld.bytes[0] == 0xFD && ld.bytes[1] == 0x21 && ld.bytes[3] == 0x12);
-    CHECK(ld.iy == 0x1234);
+    CHECK(ld.iy == 0x0000 && cpu.iy() == 0x1234); // before the load
     const Z80HistoryFrame& exx = h.recent(0);
-    CHECK(exx.bc2 == 0xBBCC && exx.pcAfter == 0x0006);
+    CHECK(exx.pc == 0x0005 && exx.bc == 0xBBCC && cpu.bc2() == 0xBBCC && cpu.pc() == 0x0006);
     // An accepted interrupt leaves an entry of its own.
     bus.mem[0x0006] = 0xFB; // ei
     cpu.step();
     bus.intLine = true;
     cpu.step(); // the EI shadow: executes the nop
     cpu.step(); // accepts: IM 0 behaves as RST 38H
-    CHECK(h.recent(0).interrupt && h.recent(0).len == 0 && h.recent(0).pc == 0x0008 && h.recent(0).pcAfter == 0x0038);
+    // The state it interrupted: IFF1 still set, PC not yet vectored.
+    CHECK(h.recent(0).interrupt && h.recent(0).len == 0 && h.recent(0).pc == 0x0008 && h.recent(0).iff1);
+    CHECK(cpu.pc() == 0x0038);
     cpu.reset();
     CHECK(cpu.history().size() == 0);
 }
@@ -718,7 +724,7 @@ void test_z80_history_drops_prefix_before_ed() {
     const Z80HistoryFrame& f = cpu.history().recent(0);
     CHECK(f.pc == 0x0001 && f.len == 4);
     CHECK(f.bytes[0] == 0xED && f.bytes[1] == 0x43 && f.bytes[2] == 0x00 && f.bytes[3] == 0x80);
-    CHECK(f.pcAfter == 0x0005 && bus.mem[0x8000] == 0x34);
+    CHECK(f.bc == 0x1234 && cpu.pc() == 0x0005 && bus.mem[0x8000] == 0x34);
 }
 
 } // namespace
@@ -735,7 +741,7 @@ int run_disasm_tests() {
     test_z80_flow();
     test_z80_prefix_oddities();
     test_z80_sweep_matches_cpu();
-    test_lh5801_history_records_bytes_and_post_registers();
+    test_lh5801_history_records_bytes_and_pre_registers();
     test_lh5801_history_ring_wraps();
     test_z80_history_carried_prefix_and_interrupt();
     test_z80_history_drops_prefix_before_ed();

@@ -74,7 +74,7 @@ TraceSummary readTrace(const std::string& path) {
     std::vector<uint8_t> buf((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 
     if (buf.size() < 16) { s.truncated = true; return s; }
-    s.headerOk = (le32(buf.data()) == 0x50433135u) && (le16(buf.data() + 4) == 2);
+    s.headerOk = (le32(buf.data()) == 0x50433135u) && (le16(buf.data() + 4) == 3);
 
     size_t i = 16;
     while (i + 3 <= buf.size()) {
@@ -214,7 +214,7 @@ void test_z80_frame_shares_one_file_with_lh5801_frame() {
     CHECK(buf.size() >= 16);
     CHECK(counted == buf.size()); // what the GUI's size cap reads instead of stat()
     CHECK(le32(buf.data()) == 0x50433135u);
-    CHECK(le16(buf.data() + 4) == 2); // version
+    CHECK(le16(buf.data() + 4) == 3); // version
 
     size_t i = 16;
     int lh5801Events = 0, z80Events = 0, sessionEnds = 0;

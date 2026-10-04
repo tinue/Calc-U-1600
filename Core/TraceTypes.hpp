@@ -37,7 +37,9 @@ enum : uint8_t {
 //
 // One entry per executed instruction, captured into a lock-free ring buffer.
 // Field groups populated depend on which TRACE_* flags are active at the time
-// of capture (see LH5801::step()).
+// of capture (see LH5801::step()). The registers are the ones the
+// instruction started from (pre-execution); its effect shows in the next
+// frame.
 
 struct CpuFrame {
     // Identity (always captured when tracing is enabled at all)

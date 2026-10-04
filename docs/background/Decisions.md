@@ -520,6 +520,12 @@ authentic speed for the span that matters.
 - **The extension runs `build` itself before the session, instead of
   `preLaunchTask`.** Build & Load needs the same build, and a
   configuration generated for "the current file" can't name a task label.
+- **Snapshots are pre-execution everywhere.** The live frame, the history
+  frames 1–20 and every `TRACE.bin` frame show the registers an instruction
+  started from, not its result. An instruction's effect is in the next newer
+  frame (post(N) = pre(N+1)). Post-execution history made frame 1 a copy of
+  frame 0 and gave the highlighted line two meanings. Don't switch any of
+  them back.
 
 ### Wording and sources
 - **Comments and docs cite original sources only**: TRM, Service Manual,

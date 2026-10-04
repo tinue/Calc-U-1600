@@ -460,9 +460,10 @@ int SC7852::step() {
     const bool takeInt = !m_pendingPrefix && IFF1 && !eiShadow && bus.interruptLevel();
     if (!m_pendingPrefix && (m_nmiPending || takeInt)) {
         const uint16_t interruptedPC = PC;
+        captureHistory(); // left uncommitted if nothing is serviced
         int serviced = serviceInterrupt(takeInt);
         if (serviced >= 0) { // interrupt ack consumes this step() call on its own; no trace frame
-            recordHistory(interruptedPC, true);
+            commitHistory(interruptedPC, true);
             return serviced;
         }
     }
@@ -481,6 +482,8 @@ int SC7852::step() {
         }
     }
 
+    captureTraceRegisters(tf);
+    captureHistory();
     uint16_t pcAtStart = m_pendingPrefix ? uint16_t(PC - 1) : PC; // a carried prefix starts the instruction
     m_fetchLen = 0;
     if (m_pendingPrefix) { m_historyFrame->bytes[0] = m_pendingPrefix; m_fetchLen = 1; }
@@ -501,7 +504,7 @@ int SC7852::step() {
             cycles = 4 + kM1WaitStates;
             recordTraceFrame(tf, pcAtStart, opcode, uint8_t(cycles));
             m_fetchLen = 1; // the carried prefix belongs to the next frame
-            recordHistory(pcAtStart, false);
+            commitHistory(pcAtStart, false);
             return cycles;
         }
         if (indexedOp == 0xED) {
@@ -527,7 +530,7 @@ int SC7852::step() {
     }
 
     recordTraceFrame(tf, pcAtStart, opcodeWord, uint8_t(cycles));
-    recordHistory(histPc, false);
+    commitHistory(histPc, false);
     return cycles;
 }
 
@@ -1133,31 +1136,39 @@ int SC7852::executeDDFDCB(uint8_t opcode, uint16_t ixy, int8_t d) {
 
 // ── Trace ─────────────────────────────────────────────────────────────
 
+void SC7852::fillTraceRegisters(uint32_t tf) {
+    Z80CpuFrame& f = m_traceRegisters;
+    f.af = af(); f.bc = bc(); f.de = de(); f.hl = hl(); f.ix = IX; f.iy = IY; f.sp = SP;
+    if (tf & TRACE_REGS_FULL) {
+        f.i = I; f.r = R; f.iff1 = IFF1; f.iff2 = IFF2; f.im = IM;
+    } else {
+        f.i = f.r = f.im = 0; f.iff1 = f.iff2 = false;
+    }
+}
+
 void SC7852::pushTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles) {
-    Z80CpuFrame f{};
+    Z80CpuFrame f = (tf & (TRACE_REGS_LIGHT | TRACE_REGS_FULL)) ? m_traceRegisters : Z80CpuFrame{};
     f.seqno = m_traceSeqno++;
     f.pc = pcAtStart;
     f.opcode = opcodeWord;
     f.cycles = cycles;
-    if (tf & (TRACE_REGS_LIGHT | TRACE_REGS_FULL)) {
-        f.af = af(); f.bc = bc(); f.de = de(); f.hl = hl(); f.ix = IX; f.iy = IY; f.sp = SP;
-    }
-    if (tf & TRACE_REGS_FULL) {
-        f.i = I; f.r = R; f.iff1 = IFF1; f.iff2 = IFF2; f.im = IM;
-    }
 
     m_trace.push(f);
 }
 
-void SC7852::recordHistory(uint16_t pcAtStart, bool interrupt) {
-    Z80HistoryFrame& h = *m_historyFrame; // bytes[] already filled by readCode()
+void SC7852::captureHistory() {
+    Z80HistoryFrame& h = *m_historyFrame; // bytes[] are filled by readCode() afterwards
+    h.af = af(); h.bc = bc(); h.de = de(); h.hl = hl();
+    h.af2 = af2(); h.bc2 = bc2(); h.de2 = de2(); h.hl2 = hl2();
+    h.ix = IX; h.iy = IY; h.sp = SP;
+    h.i = I; h.r = R; h.im = IM; h.iff1 = IFF1; h.iff2 = IFF2;
+}
+
+void SC7852::commitHistory(uint16_t pcAtStart, bool interrupt) {
+    Z80HistoryFrame& h = *m_historyFrame;
     h.pc = pcAtStart;
     h.len = interrupt ? 0 : m_fetchLen;
     h.interrupt = interrupt;
-    h.af = af(); h.bc = bc(); h.de = de(); h.hl = hl();
-    h.af2 = af2(); h.bc2 = bc2(); h.de2 = de2(); h.hl2 = hl2();
-    h.ix = IX; h.iy = IY; h.sp = SP; h.pcAfter = PC;
-    h.i = I; h.r = R; h.im = IM; h.iff1 = IFF1; h.iff2 = IFF2;
     m_history.commit();
     m_historyFrame = &m_history.next();
 }

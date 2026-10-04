@@ -228,31 +228,39 @@ void LH5801::serviceInterrupt() {
 
 // ── Trace ─────────────────────────────────────────────────────────────────
 
+void LH5801::fillTraceRegisters(uint32_t tf) {
+    CpuFrame& f = m_traceRegisters;
+    f.a = A; f.xl = XL; f.xh = XH; f.yl = YL; f.yh = YH; f.ul = UL; f.uh = UH;
+    f.s = S; f.t = T;
+    if (tf & TRACE_REGS_FULL) {
+        f.pu = PU; f.pv = PV; f.disp = DISP; f.tm = TM;
+    } else {
+        f.pu = f.pv = f.disp = 0; f.tm = 0;
+    }
+}
+
 void LH5801::pushTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles) {
-    CpuFrame f{};
+    CpuFrame f = (tf & (TRACE_REGS_LIGHT | TRACE_REGS_FULL)) ? m_traceRegisters : CpuFrame{};
     f.seqno = m_traceSeqno++;
     f.pc = pcAtStart;
     f.opcode = opcodeWord;
     f.cycles = cycles;
     f.cpuId = m_cpuIdTag;
-    if (tf & (TRACE_REGS_LIGHT | TRACE_REGS_FULL)) {
-        f.a = A; f.xl = XL; f.xh = XH; f.yl = YL; f.yh = YH; f.ul = UL; f.uh = UH;
-        f.s = S; f.t = T;
-    }
-    if (tf & TRACE_REGS_FULL) {
-        f.pu = PU; f.pv = PV; f.disp = DISP; f.tm = TM;
-    }
 
     m_trace.push(f);
 }
 
-void LH5801::recordHistory(uint16_t pcAtStart, bool interrupt) {
-    LH5801HistoryFrame& h = m_history.next(); // bytes[] already filled by fetch8()
+void LH5801::captureHistory() {
+    LH5801HistoryFrame& h = m_history.next(); // bytes[] are filled by fetch8() afterwards
+    h.a = A; h.x = x(); h.y = y(); h.u = u(); h.s = S; h.t = T;
+    h.pu = PU; h.pv = PV;
+}
+
+void LH5801::commitHistory(uint16_t pcAtStart, bool interrupt) {
+    LH5801HistoryFrame& h = m_history.next();
     h.pc = pcAtStart;
     h.len = interrupt ? 0 : uint8_t(m_fetchLen < sizeof(h.bytes) ? m_fetchLen : sizeof(h.bytes));
     h.interrupt = interrupt;
-    h.a = A; h.x = x(); h.y = y(); h.u = u(); h.s = S; h.p = P; h.t = T;
-    h.pu = PU; h.pv = PV;
     m_history.commit();
 }
 
@@ -279,8 +287,9 @@ int LH5801::step() {
     // finally consumes it.
     if (m_irqPending && flagIE()) {
         const uint16_t interruptedP = P;
+        captureHistory();
         serviceInterrupt();
-        recordHistory(interruptedP, true);
+        commitHistory(interruptedP, true);
         // Interrupt acknowledge consumes this step() call on its own —
         // the handler's first instruction executes on the *next* step(),
         // starting cleanly at the vector address. Keeps one step() ==
@@ -310,6 +319,8 @@ int LH5801::step() {
     }
 
     uint32_t tf = traceFlags();
+    captureTraceRegisters(tf);
+    captureHistory();
 
     uint16_t pcAtStart = P;
     m_fetchLen = 0;
@@ -332,7 +343,7 @@ int LH5801::step() {
     }
 
     recordTraceFrame(tf, pcAtStart, opcodeWord, uint8_t(cycles));
-    recordHistory(pcAtStart, false);
+    commitHistory(pcAtStart, false);
     tickTimer(cycles);
     return cycles;
 }

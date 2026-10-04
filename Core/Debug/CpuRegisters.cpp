@@ -133,7 +133,7 @@ HistoryEntry lhHistoryEntry(const LH5801HistoryFrame& f) {
     e.len = f.len;
     std::copy(f.bytes, f.bytes + sizeof f.bytes, e.bytes);
     e.interrupt = f.interrupt;
-    e.registers = lhList({f.a, f.x, f.y, f.u, f.s, f.p, f.t, f.pu, f.pv});
+    e.registers = lhList({f.a, f.x, f.y, f.u, f.s, f.pc, f.t, f.pu, f.pv});
     return e;
 }
 
@@ -241,7 +241,7 @@ HistoryEntry z80HistoryEntry(const Z80HistoryFrame& f) {
     e.len = f.len;
     std::copy(f.bytes, f.bytes + sizeof f.bytes, e.bytes);
     e.interrupt = f.interrupt;
-    e.registers = zList({f.af, f.bc, f.de, f.hl, f.ix, f.iy, f.sp, f.pcAfter, f.af2, f.bc2, f.de2, f.hl2,
+    e.registers = zList({f.af, f.bc, f.de, f.hl, f.ix, f.iy, f.sp, f.pc, f.af2, f.bc2, f.de2, f.hl2,
                          f.i, f.r, f.im, f.iff1, f.iff2});
     return e;
 }
