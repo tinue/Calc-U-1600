@@ -573,6 +573,10 @@ TapeDeck::Status MachineController::tapeStatus() const {
     return withMachine(TapeDeck::Status{}, [](auto& machine) { return machine.tapeStatus(); });
 }
 
+QString MachineController::tapeTakeLastError() {
+    return withMachine(QString(), [](auto& machine) { return QString::fromStdString(machine.tapeTakeLastError()); });
+}
+
 // ---- Plotter support ----
 
 void MachineController::flushFloppyBeforeDetach() {

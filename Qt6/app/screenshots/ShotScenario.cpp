@@ -206,6 +206,9 @@ bool parseStep(const YamlNode& node, const QDir& baseDir, const ShotScenario& sc
     } else if (verb == QLatin1String("close")) {
         out->kind = K::Close;
         if (!noValue()) return false;
+    } else if (verb == QLatin1String("accept")) {
+        out->kind = K::Accept;
+        if (!noValue()) return false;
     } else if (verb == QLatin1String("choose-file")) {
         out->kind = K::ChooseFile;
         if (!needText(&out->text)) return false;

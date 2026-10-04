@@ -84,6 +84,17 @@ QString floppyInstancePathFor(const QString& diskName) {
     return QDir(instanceDir()).filePath(sanitizedFloppyFileName(diskName));
 }
 
+QString tapeDir() {
+    QString dir = AppSettings::tapeDirOverride();
+    if (dir.isEmpty()) dir = QDir(instanceDir()).filePath(QStringLiteral("Tapes"));
+    QDir().mkpath(dir);
+    return dir;
+}
+
+QString tapePathFor(const QString& tapeName) {
+    return QDir(tapeDir()).filePath(QString::fromStdString(namedFileName(tapeName.toStdString(), ".wav")));
+}
+
 bool isUnderDir(const QString& path, const QString& dir) {
     if (path.isEmpty() || dir.isEmpty()) return false;
     const QString a = QFileInfo(path).canonicalFilePath();

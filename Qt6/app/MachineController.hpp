@@ -371,13 +371,14 @@ public:
     // PC-1500(A), the CE-1600P on a PC-1600 (the CE-150 on a PC-1600 has no
     // tape path yet). Arm it with a WAV to play (CLOAD) or a file to record
     // into (CSAVE); the ROM's remote relay runs it, in emulated time. A
-    // recording is written on tapeEject() -- and whenever the machine is
-    // replaced (model / ROM switch, preset), which ejects the tape.
+    // recording is saved each time the motor stops; replacing the machine
+    // (model / ROM switch, preset) ejects the tape. TapeManager drives this.
     bool tapeInterfaceAttached() const;
     bool tapePlay(const QString& path, QString* error = nullptr);
     void tapeRecord(const QString& path);
     bool tapeEject(QString* error = nullptr);
     TapeDeck::Status tapeStatus() const;
+    QString tapeTakeLastError(); // a failed automatic save, once
 
     // CE-158 RS-232C / parallel interface: PC1500(A), or a PC-1600's LH5803
     // side (MODE 1). Same live power-cycled attach as the plotters; it

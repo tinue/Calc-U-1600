@@ -30,6 +30,7 @@ class PlotterPaperWidget;
 class Ce158PrinterWidget;
 class MemoryModuleManager;
 class FloppyDiskManager;
+class TapeManager;
 class PresetController;
 class AudioOutput;
 class EmulationPacer;
@@ -109,6 +110,7 @@ private:
     std::unique_ptr<MachineController> m_controller;
     std::unique_ptr<MemoryModuleManager> m_moduleManager;
     std::unique_ptr<FloppyDiskManager> m_floppyManager;
+    std::unique_ptr<TapeManager> m_tapeManager;
     std::unique_ptr<PresetController> m_presetController;
     std::unique_ptr<PlotterController> m_plotterController;
     FaceplateWidget* m_faceplate = nullptr;
@@ -174,10 +176,6 @@ private:
     QAction* m_loadMachineCodeAction = nullptr;
     QAction* m_mountDirectoryAction = nullptr;   // File > Mount Directory… (PC-1600 host drive S3:)
     QAction* m_unmountDirectoryAction = nullptr;
-    QAction* m_tapePlayAction = nullptr;         // File > Tape (also the control bar's Tape button)
-    QAction* m_tapeRecordAction = nullptr;
-    QAction* m_tapeEjectAction = nullptr;
-    void syncTapeActions();
     QAction* m_settingsAction = nullptr;
     QAction* m_aboutAction = nullptr;
 
@@ -224,10 +222,10 @@ private:
     bool m_startupDone = false;  // the startup preset (if any) has run
     void mountHostDirectory();
     void unmountHostDirectory();
-    // Control bar > Tape: arm the cassette recorder (see MachineController).
-    void playTape();
-    void recordTape();
-    void ejectTape();
+    // Control bar > Tape: the cassette bay (TapeManager).
+    void refreshTapeCombo();
+    void selectTape(const QString& nameOrEmpty);
+    void saveTape();
     void syncHostDriveActions();
     // Reset / Reset All (control bar, Machine menu): see resetMachine() in
     // MainWindow.cpp.

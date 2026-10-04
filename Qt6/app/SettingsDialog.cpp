@@ -223,8 +223,6 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
                      AppSettings::OpenFolder::Assembly);
     addOpenFolderRow(general, 4, this, sections, tr("Host drive folder:"), tr("Choose Host Drive Folder"),
                      AppSettings::OpenFolder::HostDrive);
-    addOpenFolderRow(general, 5, this, sections, tr("Tape folder:"), tr("Choose Tape Folder"),
-                     AppSettings::OpenFolder::Tape);
 
     // ── Default presets ──────────────────────────────────────────────────
     // Applied whenever that model gets selected (including at startup) --
@@ -245,6 +243,14 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
         spec.isOverridden = [] { return !AppSettings::instanceDirOverride().isEmpty(); };
         spec.set = [](const QString& dir) { AppSettings::setInstanceDirOverride(dir); };
         addPathRow(storage, 0, this, sections, spec);
+    }
+    {
+        PathRowSpec spec = directorySpec(this, tr("Tapes:"), tr("Choose Tape Folder"),
+                                         [] { return AppPaths::tapeDir(); });
+        spec.display = [] { return AppPaths::displayPath(AppPaths::tapeDir()); };
+        spec.isOverridden = [] { return !AppSettings::tapeDirOverride().isEmpty(); };
+        spec.set = [](const QString& dir) { AppSettings::setTapeDirOverride(dir); };
+        addPathRow(storage, 1, this, sections, spec);
     }
 
     // ── Tracing ──────────────────────────────────────────────────────────

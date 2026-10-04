@@ -3,7 +3,6 @@
 #include <QComboBox>
 #include <QFileInfo>
 #include <QFrame>
-#include <QMenu>
 #include <QLabel>
 #include <QPushButton>
 #include <QHBoxLayout>
@@ -218,15 +217,32 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     setFloppyEnabled(false);
     setFloppySaveEnabled(false);
 
-    // Cassette recorder -- the tape follows the interface's remote relay,
-    // so arming it is all the user does; CLOAD / CSAVE start the motor.
+    // Cassette bay -- the tape follows the interface's remote relay, so
+    // putting one in is all the user does; CLOAD / CSAVE start the motor.
     m_tapeSeparator = addSeparator(layout, this);
-    m_tapeButton = new QPushButton(tr("Tape"), this);
-    m_tapeButton->setFocusPolicy(Qt::NoFocus);
-    m_tapeButton->setToolTip(tr("Cassette recorder: put in a WAV to CLOAD, or a blank tape to CSAVE onto"));
-    m_tapeButton->setObjectName(QStringLiteral("controlbar.tape"));
-    m_tapeButton->setMenu(new QMenu(m_tapeButton)); // filled by setTapeActions()
-    layout->addWidget(m_tapeButton);
+    m_tapeTitle = new QLabel(tr("Tape:"), this);
+    layout->addWidget(m_tapeTitle);
+
+    m_tapeCombo = new QComboBox(this);
+    m_tapeCombo->setFocusPolicy(Qt::NoFocus);
+    m_tapeCombo->setMinimumContentsLength(9);
+    m_tapeCombo->setToolTip(tr("A tape to play (CLOAD)"));
+    m_tapeCombo->setObjectName(QStringLiteral("controlbar.tape"));
+    layout->addWidget(m_tapeCombo);
+
+    m_tapeSaveButton = new QPushButton(this);
+    m_tapeSaveButton->setIcon(style()->standardIcon(QStyle::SP_DialogSaveButton));
+    m_tapeSaveButton->setToolTip(tr("A new tape to record onto (CSAVE)"));
+    m_tapeSaveButton->setFocusPolicy(Qt::NoFocus);
+    m_tapeSaveButton->setFixedWidth(compactWidth);
+    m_tapeSaveButton->setObjectName(QStringLiteral("controlbar.tape.save"));
+    layout->addWidget(m_tapeSaveButton);
+    // activated, not currentIndexChanged: picking the tape that's already
+    // shown counts too -- a recording picked from the list goes back in to
+    // play, and a playing tape picked again starts over, rewound.
+    connect(m_tapeCombo, &QComboBox::activated, this,
+            [this](int index) { emit tapeSelected(m_tapeCombo->itemData(index).toString()); });
+    connect(m_tapeSaveButton, &QPushButton::clicked, this, [this] { emit tapeSaveRequested(); });
 
     m_tapeLabel = new QLabel(QStringLiteral("–"), this);
     m_tapeLabel->setObjectName(QStringLiteral("controlbar.tape.counter"));
@@ -383,14 +399,17 @@ void ControlBar::applyFloppyLampStyle() {
                                                      : QStringLiteral("color: #888888;"));
 }
 
-void ControlBar::setTapeActions(const QList<QAction*>& actions) {
-    m_tapeButton->menu()->clear();
-    m_tapeButton->menu()->addActions(actions);
+void ControlBar::setTapeCombo(const QStringList& names, const QString& selectedOrEmpty) {
+    QStringList all = names;
+    if (!selectedOrEmpty.isEmpty() && !all.contains(selectedOrEmpty)) all << selectedOrEmpty;
+    fillPicker(m_tapeCombo, all, {}, selectedOrEmpty);
 }
 
 void ControlBar::setTapeVisible(bool visible) {
     m_tapeSeparator->setVisible(visible);
-    m_tapeButton->setVisible(visible);
+    m_tapeTitle->setVisible(visible);
+    m_tapeCombo->setVisible(visible);
+    m_tapeSaveButton->setVisible(visible);
     m_tapeLabel->setVisible(visible);
     m_tapeLampLabel->setVisible(visible);
 }

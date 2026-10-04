@@ -40,13 +40,27 @@ inline void setInstanceDirOverride(const QString& dir) {
         s.setValue(QStringLiteral("storage/instanceDirOverride"), dir);
 }
 
+// Key: "storage/tapeDirOverride" -- the cassette tapes' folder; empty/absent
+// means "Tapes" inside the save folder (see AppPaths::tapeDir()).
+inline QString tapeDirOverride() {
+    return backingStore().value(QStringLiteral("storage/tapeDirOverride"), QString()).toString();
+}
+
+inline void setTapeDirOverride(const QString& dir) {
+    QSettings s = backingStore();
+    if (dir.isEmpty())
+        s.remove(QStringLiteral("storage/tapeDirOverride"));
+    else
+        s.setValue(QStringLiteral("storage/tapeDirOverride"), dir);
+}
+
 // The folders the file-open dialogs start in, one per kind of file, each
 // shown as its own row in Settings:
 //   Samples  -- "Load Preset…" (and Settings' default-preset pickers)
 //   Basic    -- "Load BASIC Program…" (.bas listings)
 //   Assembly -- "Load Machine Code…" (.bin files)
 //   HostDrive -- "Mount Directory…" (PC-1600 host drive S3:)
-enum class OpenFolder { Samples, Basic, Assembly, HostDrive, Tape };
+enum class OpenFolder { Samples, Basic, Assembly, HostDrive };
 
 // Key group per folder. Samples keeps the original "preset/" keys so a
 // folder configured before the split carries over.
@@ -56,7 +70,6 @@ inline QString openFolderKeyGroup(OpenFolder folder) {
         case OpenFolder::Basic: return QStringLiteral("basic/");
         case OpenFolder::Assembly: return QStringLiteral("assembly/");
         case OpenFolder::HostDrive: return QStringLiteral("hostDrive/");
-        case OpenFolder::Tape: return QStringLiteral("tape/");
     }
     return QStringLiteral("preset/");
 }

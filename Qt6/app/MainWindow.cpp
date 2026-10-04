@@ -7,6 +7,7 @@
 #include "MachineController.hpp"
 #include "MemoryModuleManager.hpp"
 #include "FloppyDiskManager.hpp"
+#include "TapeManager.hpp"
 #include "PC1500KeyboardMap.hpp"
 #include "PlotterController.hpp"
 #include "PlotterPaperWidget.hpp"
@@ -79,6 +80,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_moduleManager = std::make_unique<MemoryModuleManager>(m_controller.get(), this);
     m_controller->setModuleManager(m_moduleManager.get());
     m_floppyManager = std::make_unique<FloppyDiskManager>(m_controller.get(), this);
+    m_tapeManager = std::make_unique<TapeManager>(m_controller.get(), this);
     m_controller->setFloppyManager(m_floppyManager.get());
     m_presetController = std::make_unique<PresetController>(m_controller.get(), m_moduleManager.get(),
                                                              m_floppyManager.get(), this);
@@ -180,10 +182,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         m_floppyManager->selectDisk(diskNameOrEmpty);
         refreshFloppyCombo();
     });
-    connect(m_tapePlayAction, &QAction::triggered, this, &MainWindow::playTape);
-    connect(m_tapeRecordAction, &QAction::triggered, this, &MainWindow::recordTape);
-    connect(m_tapeEjectAction, &QAction::triggered, this, &MainWindow::ejectTape);
-    m_controlBar->setTapeActions({m_tapePlayAction, m_tapeRecordAction, m_tapeEjectAction});
+    connect(m_controlBar, &ControlBar::tapeSelected, this, &MainWindow::selectTape);
+    connect(m_controlBar, &ControlBar::tapeSaveRequested, this, &MainWindow::saveTape);
+    connect(m_tapeManager.get(), &TapeManager::tapesChanged, this, &MainWindow::refreshTapeCombo);
+    connect(m_tapeManager.get(), &TapeManager::errorMessage, this,
+            [this](const QString& text) { QMessageBox::warning(this, tr("Tape"), text); });
     connect(m_controlBar, &ControlBar::floppySideToggleRequested, this, [this] {
         m_floppyManager->toggleSide();
         m_controlBar->setFloppySide(m_floppyManager->side());
@@ -317,7 +320,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     AppSettings::setWindowSize(size());
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
-    ejectTape(); // a recording goes to its file
+    m_controller->tapeEject(); // writes anything a CSAVE still had running
     QMainWindow::closeEvent(event);
 }
 
@@ -379,64 +382,34 @@ void MainWindow::unmountHostDirectory() {
     syncHostDriveActions();
 }
 
-namespace {
-// The tape actions run from the control bar's Tape menu (or File ▸ Tape)
-// and may open a file dialog; when they're done, however they end, the
-// keyboard goes back to the calculator, so CLOAD / CSAVE can be typed at
-// once. Deferred to the next event-loop turn: Qt restores focus as the
-// menu and the dialog close, after the action itself returns.
-struct ReturnFocusToCalculator {
-    QWidget* window;
-    ~ReturnFocusToCalculator() {
-        QTimer::singleShot(0, window, [w = window] {
-            w->activateWindow();
-            w->setFocus();
-        });
-    }
-};
-} // namespace
-
-// Tape > Play…: the WAV waits in the recorder; CLOAD starts the motor
-// through the remote relay. Any tape already in comes out first (a
-// recording is written).
-void MainWindow::playTape() {
-    const ReturnFocusToCalculator refocus{this};
-    const QString path = QFileDialog::getOpenFileName(this, tr("Play Tape"),
-                                                      AppSettings::openStartDir(AppSettings::OpenFolder::Tape),
-                                                      tr("WAV Audio (*.wav);;All Files (*)"));
-    if (path.isEmpty()) return;
-    AppSettings::rememberOpenFile(AppSettings::OpenFolder::Tape, path);
-    ejectTape();
+// Control bar > Tape: picking a tape puts it in to play (CLOAD), rewound;
+// "–empty–" takes the tape out. A recording is already saved (at each motor
+// stop), so taking it out only un-arms it.
+void MainWindow::selectTape(const QString& nameOrEmpty) {
     QString error;
-    if (!m_controller->tapePlay(path, &error)) QMessageBox::warning(this, tr("Play Tape"), error);
+    if (!m_tapeManager->selectForPlay(nameOrEmpty, &error)) QMessageBox::warning(this, tr("Tape"), error);
+    refreshTapeCombo();
 }
 
-// Tape > Record…: a blank tape that CSAVE records onto; the WAV is
-// written on Eject (or when the tape comes out any other way).
-void MainWindow::recordTape() {
-    const ReturnFocusToCalculator refocus{this};
-    const QString start = QDir(AppSettings::openStartDir(AppSettings::OpenFolder::Tape)).filePath(tr("tape.wav"));
-    QString path = QFileDialog::getSaveFileName(this, tr("Record Tape"), start, tr("WAV Audio (*.wav)"));
-    if (path.isEmpty()) return;
-    if (QFileInfo(path).suffix().isEmpty()) path += QStringLiteral(".wav");
-    AppSettings::rememberOpenFile(AppSettings::OpenFolder::Tape, path);
-    ejectTape();
-    m_controller->tapeRecord(path);
-}
-
-// Play / Record need a tape interface (CE-150, CE-1600P); Eject follows the
-// tape (the frame tick keeps it current).
-void MainWindow::syncTapeActions() {
-    const bool attached = m_controller->tapeInterfaceAttached();
-    m_tapePlayAction->setEnabled(attached);
-    m_tapeRecordAction->setEnabled(attached);
-    m_tapeEjectAction->setEnabled(m_controller->tapeStatus().mode != TapeDeck::Mode::Empty);
-}
-
-void MainWindow::ejectTape() {
-    const ReturnFocusToCalculator refocus{this};
+// Control bar > Tape > Save: a blank tape to record onto (CSAVE), named like
+// a card or disk. It keeps recording -- each CSAVE appended -- until another
+// tape goes in.
+void MainWindow::saveTape() {
+    bool ok = false;
+    const QString name = QInputDialog::getText(this, tr("Save Tape"), tr("Tape name:"), QLineEdit::Normal,
+                                               QString(), &ok).trimmed();
+    if (!ok) return;
+    if (m_tapeManager->exists(name) &&
+        QMessageBox::question(this, tr("Save Tape"), tr("A tape named \"%1\" exists. Replace it?").arg(name)) !=
+            QMessageBox::Yes)
+        return;
     QString error;
-    if (!m_controller->tapeEject(&error)) QMessageBox::warning(this, tr("Eject Tape"), error);
+    if (!m_tapeManager->recordNew(name, &error)) QMessageBox::warning(this, tr("Save Tape"), error);
+    refreshTapeCombo();
+}
+
+void MainWindow::refreshTapeCombo() {
+    m_controlBar->setTapeCombo(m_tapeManager->tapeNames(), m_tapeManager->currentName());
 }
 
 void MainWindow::syncHostDriveActions() {
@@ -580,7 +553,7 @@ void MainWindow::syncPeripherals() {
         m_plotterPaper->setKind(ce150Attached ? PlotterPaperWidget::Kind::CE150 : PlotterPaperWidget::Kind::CE1600P);
     setDockedPane(m_plotterPaper, ce150Attached || ce1600pAttached);
     m_controlBar->setTapeVisible(m_controller->tapeInterfaceAttached());
-    syncTapeActions();
+    refreshTapeCombo();
     setDockedPane(m_ce158Printer, ce158Attached);
 }
 
@@ -966,9 +939,8 @@ void MainWindow::refreshViewsAfterAdvance() {
     m_moduleManager->markDirtyAndSchedulePersist();
     m_floppyManager->markDirtyAndSchedulePersist();
     m_controlBar->setFloppyMotorOn(m_floppyManager->motorOn());
-    const TapeDeck::Status tape = m_controller->tapeStatus();
-    m_controlBar->setTapeStatus(tape);
-    m_tapeEjectAction->setEnabled(tape.mode != TapeDeck::Mode::Empty);
+    m_tapeManager->onFrameTick();
+    m_controlBar->setTapeStatus(m_controller->tapeStatus());
     m_debugPanel->onFrameTick();
     if (m_debugRowLayout->indexOf(m_plotterPaper) >= 0) m_plotterPaper->onFrameTick();
     if (m_debugRowLayout->indexOf(m_ce158Printer) >= 0) m_ce158Printer->onFrameTick();
@@ -993,11 +965,6 @@ void MainWindow::buildMenuBar() {
     fileMenu->addSeparator();
     m_mountDirectoryAction = fileMenu->addAction(tr("Mount Directory…"));
     m_unmountDirectoryAction = fileMenu->addAction(tr("Unmount Directory"));
-    fileMenu->addSeparator();
-    QMenu* tapeMenu = fileMenu->addMenu(tr("Tape"));
-    m_tapePlayAction = tapeMenu->addAction(tr("Play…"));
-    m_tapeRecordAction = tapeMenu->addAction(tr("Record…"));
-    m_tapeEjectAction = tapeMenu->addAction(tr("Eject"));
     fileMenu->addSeparator();
     QAction* quitAction = fileMenu->addAction(tr("Quit"));
     quitAction->setMenuRole(QAction::QuitRole);

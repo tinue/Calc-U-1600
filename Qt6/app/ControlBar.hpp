@@ -5,7 +5,6 @@
 #include "MemoryModuleManager.hpp"
 #include "FloppyDiskManager.hpp"
 
-class QAction;
 class QComboBox;
 class QLabel;
 class QPushButton;
@@ -74,12 +73,14 @@ public:
     // manual's own cue for when it's safe to eject and flip the disk.
     void setFloppyMotorOn(bool on);
 
-    // Cassette recorder (CE-150 / CE-1600P jacks): a "Tape" menu button,
-    // the tape counter, and the motor lamp. The button's menu holds
-    // MainWindow's File > Tape actions (setTapeActions). Shown only while a
-    // tape interface is attached. setTapeStatus() is polled every frame; it
-    // only touches widgets whose text changed.
-    void setTapeActions(const QList<QAction*>& actions);
+    // Cassette bay (CE-150 / CE-1600P jacks, TapeManager): the tape picker
+    // ("–empty–", then the tape folder's WAVs; picking one plays it), the
+    // Save button (a blank tape to record onto), the tape counter and the
+    // motor lamp. Shown only while a tape interface is attached.
+    // setTapeCombo() lists `names` plus `selectedOrEmpty` if it isn't one of
+    // them yet (a recording before its first save). setTapeStatus() is
+    // polled every frame; it only touches widgets whose text changed.
+    void setTapeCombo(const QStringList& names, const QString& selectedOrEmpty);
     void setTapeVisible(bool visible);
     void setTapeStatus(const TapeDeck::Status& status);
 
@@ -96,6 +97,8 @@ signals:
     void floppyDiskSelected(QString diskNameOrEmpty); // "" => no disk
     void floppyNameAndSaveRequested();
     void floppySideToggleRequested();
+    void tapeSelected(QString tapeNameOrEmpty); // "" => take the tape out
+    void tapeSaveRequested();
 
 private:
     QComboBox* m_modelCombo = nullptr;
@@ -114,7 +117,9 @@ private:
     void applyFloppyLampStyle();
 
     QWidget* m_tapeSeparator = nullptr;
-    QPushButton* m_tapeButton = nullptr;
+    QLabel* m_tapeTitle = nullptr;
+    QComboBox* m_tapeCombo = nullptr;
+    QPushButton* m_tapeSaveButton = nullptr;
     QLabel* m_tapeLabel = nullptr;
     QLabel* m_tapeLampLabel = nullptr;
     bool m_tapeMotorOn = false;

@@ -188,6 +188,7 @@ qt_add_executable(CalcU1600Qt
   app/AppLogging.cpp
   app/MemoryModuleManager.cpp
   app/FloppyDiskManager.cpp
+  app/TapeManager.cpp
   app/SettingsDialog.cpp
   app/MachineCodeLoadDialog.cpp
   app/AboutDialog.cpp

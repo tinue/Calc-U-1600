@@ -302,7 +302,12 @@ bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void(
                          .arg(step.text, step.text2, items.join(QStringLiteral(", ")));
             return false;
         }
-        *deferred = [combo, index] { combo->setCurrentIndex(index); };
+        // As a user's pick: the index changes (if it does), then activated
+        // -- which fires even when the item was already shown.
+        *deferred = [combo, index] {
+            combo->setCurrentIndex(index);
+            emit combo->activated(index);
+        };
         *delayMs = settle;
         return true;
     }
@@ -364,6 +369,18 @@ bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void(
             return false;
         }
         edit->setText(step.text);
+        *delayMs = settle;
+        return true;
+    }
+    case K::Accept: {
+        QDialog* dialog = topmostDialog();
+        if (!dialog) {
+            *error = QStringLiteral("no dialog is open");
+            return false;
+        }
+        // Deferred, as for choose-file: accepting returns from the
+        // dialog's exec(), and the code after it may open another dialog.
+        *deferred = [dialog] { dialog->accept(); };
         *delayMs = settle;
         return true;
     }
