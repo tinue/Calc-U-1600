@@ -325,6 +325,37 @@ What's wrong with that:
   60-pin side moves to its own contact numbering (the memory-card tests
   should pass unchanged).
 
+## Cassette tape: still open
+
+CLOAD/CSAVE work on the PC-1500/1500A + CE-150 and the PC-1600 (MODE 0) +
+CE-1600P (docs/background/plans/Cassette-Tape-Plan.md, dev/tape-matrix/).
+
+- **PC-1600 MODE 1: `CLOAD` of PC-1500 tapes through the CE-1600P.** The
+  reader (`CM1500BIT`, bank 5 62BDH) writes F (17H) = 01H, resets the
+  divider (14H) on each input edge and times the bit against MSK 1AH b7.
+  On the PC-1500 that bit is CL1, wired to the G-register serial clock
+  (CL0). But no PC-1600 ROM bank writes G (19H), and Baum's Appendix 6
+  names 1AH b7 "RD". **Before fixing:** find what drives 1AH b7 on the
+  SC-7852. Candidate: the FX clock (F = 01H, phi/128 = 2539 Hz), which
+  would make the timer one PC-1500 "1" half cycle. Real-unit check: a short
+  machine-code loop doing `OUT (17H),01H`, `OUT (14H),A`, then counting
+  `IN A,(1AH)` b7 toggles for a fixed number of loops, with and without
+  F = 00H. Only then model it (LH5811Serial already has the divider).
+- **CE-150 on a PC-1600 (MODE 1): no tape path.** The CE-150 ROM runs on
+  the LH5803 and drives ME1 F004H-F00FH, which `LH5803SharedMemory` keeps
+  as a plain latch. How that block reaches the SC-7852's SD0/PB2 (pin 76:
+  `SD0 = OR(SD0', PC7')`, SD0' = "CE-150 cassette output") is undocumented.
+- **Tape sound on the buzzer.** The PC-1500 Service Manual says CMT OUT
+  (SDO) sounds the buzzer together with PC6 or CMT IN; on the PC-1600,
+  `PC6 = NAND(PB2, PC6', PC7', SD0)` puts the tape input on it too. Today
+  the PC-1500 buzzer follows PC6 only (CSAVE is silent), and the PC-1600's
+  follows 18H b6/b7 and SDO (CSAVE audible, CLOAD silent). Listen to a real
+  unit during CSAVE and CLOAD, then model what it does.
+- **Real-hardware cross-check** (both machines): `CLOAD` an emulator
+  `CSAVE` WAV on the real unit, and `CLOAD` a real `CSAVE` recording in the
+  emulator. It also checks the LH5811 transmitter model (Decisions.md: "L
+  is a holding register").
+
 ## Feature ideas
 
 - **LCD text: the kana set.** No font that the parser reads has katakana

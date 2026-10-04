@@ -11,3 +11,17 @@ shots:
   - name: 04-hanoi-running
     preset: ../presets/pc1600-hanoi-run.pc1600
     capture: { target: lcd, file: 04-hanoi-running.png }
+
+  # Cassette: a bin2wav tape in the recorder, CLOAD running (motor lamp on),
+  # then the loaded program's name on the LCD.
+  - name: 04-tape-loading
+    window: 1620x1000   # the Tape group widens the PC-1600 control bar
+    preset: ../presets/pc1600-tape.pc1600
+    steps:
+      - action: File > Tape > Play…
+      - choose-file: ../../../../Core/tests/fixtures/tape/pc1600_tape.wav
+      - type: CLOAD
+      - run: 5
+      - capture: { target: controlbar, file: 04-tape-loading.png, padding: 4 }
+      - run: 20
+    capture: { target: lcd, file: 04-tape-loaded.png }

@@ -2,6 +2,23 @@
 
 ## [0.8.0] - work in progress
 
+### New
+
+- **Cassette tape: CLOAD and CSAVE.** The CE-150 (PC-1500/1500A) and the
+  CE-1600P (PC-1600, MODE 0) now drive a cassette recorder that plays and
+  records WAV files: **File ▸ Tape ▸ Play… / Record… / Eject**, or the Tape
+  button on the control bar with its counter and motor lamp. The
+  calculator's own ROM does the bit timing, the remote relay runs the tape,
+  and the tape runs in emulated time, so turbo doesn't change the WAV.
+  The WAVs work with Pocket Tools' `bin2wav` / `wav2bin` (give `bin2wav`
+  `-s 3`); the headless CLIs take `--tape-in` / `--tape-out`. Not yet:
+  the PC-1600 reading PC-1500 tapes in MODE 1, and the CE-150 on a PC-1600.
+
+### Fixed
+
+- **PC-1500: the ON key reads high on PB7 while pressed.** The CE-150's
+  tape reader saw BREAK all the time before.
+
 ## [0.7.0] - 2026-10-04
 
 ### New

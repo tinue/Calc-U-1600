@@ -67,6 +67,34 @@ PC-1600 port 18H b6 && b7 && SDO). It doesn't synthesize BEEP tones, because
 the user wants the actual square wave. New sound sources drive
 `PiezoSampler::setLevel` from their emulated signal.
 
+### The cassette tape moves only while the remote relay runs it
+`TapeDeck` advances by emulated CPU cycles, and only while the interface's
+remote relay is closed: CE-150 PA1-PA4 pulses (either REMOTE 0 or 1), or
+CE-1600P 82H b4/b5. Motor-off time is neither played nor recorded, as with
+a CE-152 on the remote jack. The ROM waits ~0.6 s for the motor before it
+counts the leader, so a tape needs a long leader (`bin2wav -s 3`); don't
+start the tape before the relay closes to make short leaders work. Because
+time is emulated, a recording is the same in real time, turbo or the CLI.
+
+### LH5811 L is a holding register; TD means "L is empty"
+`LH5811Serial` moves a byte from L into the shift register at a rising
+serial-clock edge and sets TD then. The TRM only says TD is set "upon
+completion of serial data transmission". With TD set at the end of the
+second stop bit, every PC-1500 nibble frame would carry an extra idle bit.
+This model gives the "start + 4 data + 6 stop" frames that `bin2wav` writes
+and real tapes carry; the emulator's CSAVE matches `bin2wav` bit for bit.
+
+### PC-1500 PB7 reads high while ON is pressed
+The CE-150's tape reader (LOAD_NIBBLE &BE2F) takes PB7 = 1 as BREAK, IF1
+latches PB7's rising edge on a press (TRM p.71), and the PC-1600's
+compatible block reads 1 = pressed. The system ROM only sees IF1, so the
+polarity matters for the CE-150 alone.
+
+### CE-1600P port 82H reads back its latch
+The service manual lists the readback, and the plotter and tape drivers
+read-modify-write 82H. Open bus (FFH) would pulse both relay coils and the
+CMT-in enable on every plotter Z-motor write.
+
 ### HLE sub-CPU answers IOCS 25H
 The HLE sub-CPU answers the IOCS 25H probe (4FH/4EH → AAH/55H) and responds
 in 1.66 ms. Without the answer, every OUT (21H) waits for a PB5 edge and the
@@ -178,6 +206,11 @@ CE-151 then lands at A800-B7FF.
 - **`INIT"Sx:","P"` / `"M"` can wipe the S0 program.** When the S0 area moves
   (a slot leaves or joins it), `PRGMOVED` (rom3b 65C8H) empties the S0
   program at the new base.
+- **A `bin2wav` tape with its default 0.5 s leader doesn't `CLOAD`.** The
+  ROM pulses the remote relay, waits ~0.6 s for the motor (PC-1600
+  `CASMOTOR` 642EH + `DELAYF0`; the CE-150 likewise), then counts the
+  leader: 5000 cycles on the PC-1600 (`CMSYNC`, F1AAH). The ROM's own
+  `CSAVE` writes 10000 (PC-1600) or ~8 s (PC-1500). Use `bin2wav -s 3`.
 - **`CLOAD -1` doesn't read a PC-1500 tape in MODE 0.** The `-1` is parsed
   and skipped (CE-1600P bank 5 77F6H); only MODE (BMODE b6) picks the tape
   format. Through the CE-1600P, `CSAVE` in MODE 1 is ERROR 110 (66A0H).

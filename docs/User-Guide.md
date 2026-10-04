@@ -2,8 +2,8 @@
 
 Calc-U-1600 emulates three Sharp pocket computers in one desktop app: the
 **PC-1500**, the **PC-1500A** and the **PC-1600**. Around them it emulates
-the memory modules, the CE-150 and CE-1600P plotters, the CE-1600F floppy
-drive and the CE-158 interface. It connects the calculators' serial ports
+the memory modules, the CE-150 and CE-1600P plotters with their cassette
+interfaces, the CE-1600F floppy drive and the CE-158 interface. It connects the calculators' serial ports
 to your computer, and on the PC-1600 a folder on your computer can be a
 drive.
 
@@ -280,8 +280,54 @@ Good to know:
   program.
 - **No export.** The app doesn't export programs as files. Use the machine's
   own `SAVE` to a memory module or a floppy. To get a program onto your
-  computer, `SAVE` it to a [folder mounted as a drive](#a-folder-as-a-drive-pc-1600)
+  computer, `CSAVE` it to a [tape](#cassette-tape-cload-and-csave), `SAVE`
+  it to a [folder mounted as a drive](#a-folder-as-a-drive-pc-1600)
   (PC-1600) or over `COM1:` (see [COM ports](#7-com-ports)).
+
+### Cassette tape: CLOAD and CSAVE
+
+The CE-150 (PC-1500/1500A) and the CE-1600P (PC-1600) have the jacks of a
+cassette recorder. In the app the recorder plays and records WAV files.
+You put a tape in, then type the command as on the real machine:
+
+- **File ▸ Tape ▸ Play…** (or the **Tape** button on the control bar) puts
+  a WAV in the recorder. Type `CLOAD`, `CLOAD "name"`, `CLOAD M` or
+  `CLOAD?`.
+- **File ▸ Tape ▸ Record…** puts in a blank tape and asks where its WAV
+  goes. Type `CSAVE "name"` (or `CSAVE M`). The WAV is written when you
+  choose **Eject**. Switching the model or ROM, loading a preset, or
+  quitting ejects the tape too, so a recording is never lost.
+
+The Tape button appears while a CE-150 or CE-1600P is attached. Next to
+it, the counter shows ▶ (playing) or ● (recording) and the tape position,
+and the lamp lights while the motor runs:
+
+![CLOAD running: the tape counter and the motor lamp](images/guide/04-tape-loading.png)
+
+![The program loaded from the tape](images/guide/04-tape-loaded.png)
+
+Good to know:
+- **The calculator runs the motor.** As with a real CE-152 on the remote
+  jack, the tape moves only while the calculator's remote relay is on:
+  from the moment it starts `CLOAD` or `CSAVE` until it's done. A tape put
+  in early simply waits.
+- **Real time or faster.** The tape runs in the calculator's own time, so
+  you hear `CSAVE` (and see the counter) at the real speed. Pressing and
+  holding the LCD runs everything faster as usual, sound off; the WAV comes
+  out the same.
+- **Interchangeable WAVs.** The files are standard 48 kHz, 16-bit WAVs.
+  The app plays any PCM WAV, 8 to 32 bits, mono or stereo: recordings of a
+  real calculator, or files made with Pocket Tools' `bin2wav` and read with
+  its `wav2bin`.
+- **Leave a long lead-in.** After switching on the motor the calculator
+  waits about half a second for the recorder, then needs a few seconds of
+  lead-in tone. A tape made with `bin2wav` therefore needs `-s 3` (a 3 s
+  lead-in); its 0.5 s default is too short. The calculator's own `CSAVE`
+  writes a long lead-in.
+- **Formats.** The PC-1500 reads and writes PC-1500 tapes. The PC-1600 in
+  MODE 0 reads and writes PC-1600 tapes. Not yet supported: the PC-1600
+  reading PC-1500 tapes in MODE 1 (`CLOAD` through the CE-1600P), and the
+  CE-150 on a PC-1600.
 
 ---
 
@@ -759,6 +805,8 @@ elsewhere. Changes apply immediately; there is only **Close**.
     Program… and Load Machine Code… open. `<last used>` by default.
   - **Host drive folder:** where Mount Directory… opens. `<last used>` (the
     directory last mounted) by default.
+  - **Tape folder:** where Tape ▸ Play… and Record… open. `<last used>` by
+    default.
 - **Default presets:** one per model, see [Startup presets](#88-startup-presets).
 - **Storage ▸ Battery-card saves:** where saved modules and disks go.
 - **Tracing:** where CPU traces go, and the size at which a trace stops.

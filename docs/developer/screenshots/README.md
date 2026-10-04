@@ -68,9 +68,9 @@ A shot without `preset:` continues from where the previous one left off.
 The window is set to the shot's size when the shot starts, and again after
 each `preset:` or `reset`, since a model switch changes the minimum size.
 Two limits apply. A window can't be narrower than its layout: the PC-1600's
-control bar needs about 1430. It also can't be taller than the screen. If
-the real size differs from the requested one, the capture logs a
-`note: window is …`. Give the shot a `window:` that fits: the plotter shot
+control bar needs about 1430, or 1620 with the Tape group showing. It also
+can't be taller than the screen. If the real size differs from the
+requested one, the capture logs a `note: window is …`. Give the shot a `window:` that fits: the plotter shot
 uses `1430x1280`, so the paper panel shows the whole figure.
 `capture:` on the shot is a final capture step. `capture: name.png` alone
 captures the whole window. More captures can go in `steps:` as
@@ -165,6 +165,7 @@ Two macOS details:
 | `controlbar.slot1`, `controlbar.slot2`, `controlbar.slot1.save`, `controlbar.slot2.save` | module pickers and their Name & Save buttons |
 | `controlbar.ce150`, `controlbar.ce158`, `controlbar.ce1600p`, `controlbar.ce1600p.rom` | peripheral toggles, CE-1600P ROM picker |
 | `controlbar.floppy`, `controlbar.floppy.side`, `controlbar.floppy.save`, `controlbar.floppy.lamp` | CE-1600F disk row |
+| `controlbar.tape`, `controlbar.tape.counter`, `controlbar.tape.lamp` | cassette recorder (with a CE-150 or CE-1600P) |
 | `debugpanel`, `debugpanel.pointers`, `debugpanel.dumpmem`, `debugpanel.dumpcard`, `debugpanel.clear`, `debugpanel.trace` | Debug panel and its buttons |
 | `paper`, `paper.copy`, `paper.cut` | plotter paper panel |
 | `ce158printer`, `ce158printer.save`, `ce158printer.clear` | CE-158 printer panel |
