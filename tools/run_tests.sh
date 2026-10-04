@@ -88,6 +88,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/pc1600_program_placement_tests.cpp \
   Core/tests/basic_program_source_tests.cpp \
   Core/tests/piezo_sampler_tests.cpp \
+  Core/tests/tape_deck_tests.cpp \
   Core/tests/key_paste_tests.cpp \
   Core/tests/lcd_screenshot_tests.cpp \
   Core/tests/lcd_text_tests.cpp \
