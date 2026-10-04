@@ -162,4 +162,13 @@ public:
     /// must not read it. Lets a host's debug peek skip such addresses
     /// without knowing which card sits where. Default: reads are harmless.
     virtual bool readHasSideEffects(const PinState& /*pins*/) const { return false; }
+
+    /// Cassette lines of the 60-pin connector (CMTOUT pin 29, CMTIN pin
+    /// 27; the 40-pin connector has neither). The main unit drives CMTOUT;
+    /// a card with a tape interface (the CE-150) passes it to its MIC jack.
+    virtual void cmtOut(bool /*level*/) {}
+    /// Return true and set `level` if this card drives CMTIN.
+    virtual bool cmtIn(bool& /*level*/) const { return false; }
+    /// Elapsed CPU cycles, for the recorder behind a tape interface.
+    virtual void advanceCassette(uint32_t /*cycles*/) {}
 };

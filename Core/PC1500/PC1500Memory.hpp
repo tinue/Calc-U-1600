@@ -5,6 +5,7 @@
 
 #include "../Audio/PiezoSampler.hpp"
 #include "../CPU/LH5801/LH5801.hpp"
+#include "../CPU/LH5811Serial.hpp"
 #include "../Connector/ExpansionConnector.hpp"
 #include "../Connector/SystemBus.hpp"
 #include "PC1500Keyboard.hpp"
@@ -44,13 +45,16 @@
 // registers a stock PC-1500 actually needs are modeled — DDA/OPA (drives
 // the keyboard's column strobe; keyboard *rows* are read directly off the
 // CPU's IN0-IN7 pins via ITA, bypassing this chip entirely) and DDB/OPB
-// (PB3's "must read high" ROM dispatch gotcha, PB7's ON-key readback), and
+// (PB3's "must read high" ROM dispatch gotcha, PB7's ON-key readback, PB2
+// the cassette input), and
 // the uPD1990AC real-time clock bit-banged via OPC/PC0-PC5 (see
 // Upd1990ac.hpp) — WAIT/BEEP's timing depends on its TP output, latched
 // into IF bit 1 (0xB). The buzzer is PC6 (OPC bit 6): the ROM's BEEP loop
 // (A04 E655ff) toggles it directly, and every write is forwarded to
 // m_piezo (see PiezoSampler.hpp) so the sound comes from that square wave
-// itself. Serial transfer is out of scope. Any ME1 address outside the
+// itself. The serial block (divider, serial clock, F-register modulation,
+// transmitter) is the cassette path -- see LH5811Serial.hpp; serial
+// receive is out of scope. Any ME1 address outside the
 // I/O-chip's decode window mirrors ME0: nothing else is documented as
 // living there.
 class PC1500Memory : public LH5801Bus {
@@ -144,6 +148,18 @@ public:
     /// once per instruction (and per halted/off tick) by PC1500Machine.
     void advancePiezo(uint32_t cycles) { m_piezo.advance(cycles); }
     PiezoSampler& piezo() { return m_piezo; }
+
+    /// The LH5811's serial block (divider, serial clock, SDO), advanced
+    /// with the RTC. SDO is the cassette-write line CMTOUT; the 60-pin
+    /// cards' recorder time is credited in the same stretches, so every
+    /// SDO edge lands on the tape at its exact cycle.
+    void advanceSerial(uint32_t cycles) {
+        m_serial.advance(cycles, [this](uint32_t n, bool sdo) {
+            m_systemBus.setCmtOut(sdo);
+            m_systemBus.advanceCassette(n);
+        });
+    }
+    const LH5811Serial& serial() const { return m_serial; }
 
     /// Seed the uPD1990AC's calendar from the host clock (see
     /// PC1500Machine::seedClock). month is 1-12, dow 0-6 (Sunday=0), the
@@ -245,15 +261,17 @@ private:
     Upd1990ac m_rtc;
     PiezoSampler m_piezo{static_cast<double>(kPC1500CpuHz), PiezoSampler::Transducer::PC1500}; // LH5801 clock; buzzer driven from OPC bit 6 (PC6)
 
-    // F/G/MSK (registers 0x7,0x9,0xA) and the two unused register-select
-    // codes (0x0-0x3): stored as plain read/write bytes, defaulting to
-    // 0x00. This does NOT model the real hardware behind these registers
-    // (serial transfer, and MSK's real interrupt-masking effect, are out
-    // of scope — see this file's top comment) -- but a real ROM both
-    // writes AND reads some of them (e.g. it zeroes MSK during boot), so
-    // storing what's written and echoing it back is a strictly more
-    // faithful default than a hardcoded constant that ignores writes
-    // entirely.
+    // The serial block behind registers 4 (divider reset), 6 (L), 7 (F)
+    // and 9 (G), plus MSK's CL1 bit and IF's TD bit -- the cassette path.
+    // φOS is the CPU clock.
+    LH5811Serial m_serial{kPC1500CpuHz, kPC1500CpuHz};
+
+    // MSK (register 0xA) and the unused register-select codes (0x0-0x3,
+    // 0x5 = U): stored as plain read/write bytes, defaulting to 0x00.
+    // MSK's interrupt-masking effect isn't modelled -- but a real ROM both
+    // writes AND reads it (e.g. it zeroes MSK during boot), so storing
+    // what's written and echoing it back is a strictly more faithful
+    // default than a hardcoded constant that ignores writes entirely.
     std::array<uint8_t, 16> m_ioScratchRegs{};
 
     // Expansion connectors -- see expansionConnector()/systemBus() above.

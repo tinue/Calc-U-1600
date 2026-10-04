@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "AlpsPlotterMechanism.hpp"
+#include "../Tape/TapeDeck.hpp"
 #include "ExpansionCard.hpp"
 
 // ── CE-150 printer / plotter / cassette interface (PC-1500 60-pin bus) ──
@@ -33,9 +34,15 @@
 // (`decode`/`decodeME1`); on the PC-1600, `LH5803SharedMemory::
 // peripheralPins()` builds the same four with no S-block/Y-strobe decode.
 //
-// Cassette (CSAVE/CLOAD/CHAIN/PRINT#) is out of scope, same as the
-// CE-1600P: the RMT bits on OPA are latched and ignored, the ROM's tape
-// paths run but move no data.
+// Cassette: the bit stream is the main unit's (its LH5811 SDO drives
+// CMTOUT, its PB2 reads CMTIN); the CE-150 conditions it to and from the
+// MIC / EAR jacks and switches the recorder's motor. That's two latching
+// REMOTE relays pulsed on port A (Ref/PC-1500/Peripherals/CE-150-Hardware.md
+// §5; ROM REMOTE_PULSE &BF28): PA1 / PA2 REMOTE 0 on / off, PA3 / PA4
+// REMOTE 1 on / off. The recorder (connectRecorder()) runs while either
+// relay is closed -- one recorder, plugged into whichever jack the command
+// uses (`CLOAD -1` / `RMT ON` select REMOTE 1). CMTIN is driven only while
+// a tape is playing, so the plotter's tests and boot see PB2 unchanged.
 class Ce150Card final : public ExpansionCard {
 public:
     static constexpr size_t   kRomSize = 0x2000;   // 8192 B
@@ -67,6 +74,25 @@ public:
     void reset() {
         m_opa = m_opb = m_opc = m_dda = m_ddb = m_g = m_msk = m_if = 0;
         m_mechanism.reset();
+    }
+
+    /// The cassette recorder on the jacks, or null for none.
+    void connectRecorder(TapeDeck* deck) {
+        m_recorder = deck;
+        updateMotor();
+    }
+    bool remoteRelay(int n) const { return m_relay[n & 1]; }
+
+    void cmtOut(bool level) override {
+        if (m_recorder) m_recorder->setOutputLevel(level);
+    }
+    bool cmtIn(bool& level) const override {
+        if (!m_recorder || m_recorder->mode() != TapeDeck::Mode::Play) return false;
+        level = m_recorder->inputLevel();
+        return true;
+    }
+    void advanceCassette(uint32_t cycles) override {
+        if (m_recorder) m_recorder->advance(cycles);
     }
 
     /// Per-emulation-step hook. A no-op today: the plotter is fully
@@ -158,9 +184,16 @@ private:
             case 0xB: m_if = value; return;
             case 0xC: m_dda = value; return;
             case 0xD: m_ddb = value; return;
-            case 0xE: // OPA -- write reaches output bits only; RMT lives here, latched/ignored
+            case 0xE: { // OPA -- write reaches output bits only; PA1-4 pulse the REMOTE relays
                 m_opa = uint8_t((m_opa & ~m_dda) | (value & m_dda));
+                const uint8_t out = uint8_t(value & m_dda);
+                if (out & 0x02) m_relay[0] = true;
+                if (out & 0x04) m_relay[0] = false;
+                if (out & 0x08) m_relay[1] = true;
+                if (out & 0x10) m_relay[1] = false;
+                updateMotor();
                 return;
+            }
             case 0xF: // OPB -- write reaches output bits only; PB0/PB1 drive the pen
                 m_opb = uint8_t((m_opb & ~m_ddb) | (value & m_ddb));
                 m_mechanism.applyPenSignals(m_opb & 0x01, m_opb & 0x02);
@@ -177,4 +210,11 @@ private:
     uint8_t m_opa = 0, m_opb = 0, m_opc = 0;
     uint8_t m_dda = 0, m_ddb = 0;
     uint8_t m_g = 0, m_msk = 0, m_if = 0;
+
+    // Latching relays: they keep their state through reset().
+    bool m_relay[2] = {false, false};
+    TapeDeck* m_recorder = nullptr;
+    void updateMotor() {
+        if (m_recorder) m_recorder->setMotor(m_relay[0] || m_relay[1]);
+    }
 };

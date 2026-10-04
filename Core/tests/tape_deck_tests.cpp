@@ -1,6 +1,8 @@
-// Headless C++ tests for Core/Tape/TapeDeck.hpp (the WAV-backed cassette
-// recorder) and Core/Audio/WavFile.hpp's reader. Synthetic only -- the
-// machine-level CSAVE/CLOAD tests drive the real ROMs elsewhere.
+// Headless C++ tests for the cassette building blocks: Core/Tape/TapeDeck.hpp
+// (the WAV-backed recorder), Core/Audio/WavFile.hpp's reader, and
+// Core/CPU/LH5811Serial.hpp (the PC-1500's tape transmitter and timer).
+// Synthetic only -- the machine-level CSAVE/CLOAD tests drive the real ROMs
+// in pc1500_tape_tests.cpp / pc1600_tape_tests.cpp.
 //
 // Build & run: see tools/run_tests.sh
 
@@ -15,6 +17,7 @@
 #include <vector>
 
 #include "../Audio/WavFile.hpp"
+#include "../CPU/LH5811Serial.hpp"
 #include "../Tape/TapeDeck.hpp"
 
 namespace {
@@ -286,6 +289,96 @@ void testRecordThenPlay() {
     CHECK(fast >= 1190);
 }
 
+// ── LH5811Serial ─────────────────────────────────────────────────────────
+
+constexpr uint64_t kPhi = 1300000; // PC-1500: phi = the CPU clock
+
+// SDO as a list of (level, cycles) runs over `cycles`.
+std::vector<std::pair<bool, uint64_t>> sdoRuns(LH5811Serial& s, uint32_t cycles, uint32_t step = 7) {
+    std::vector<std::pair<bool, uint64_t>> runs;
+    for (uint32_t t = 0; t < cycles; t += step) {
+        s.advance(step, [&](uint32_t n, bool level) {
+            if (!runs.empty() && runs.back().first == level) runs.back().second += n;
+            else runs.emplace_back(level, n);
+        });
+    }
+    return runs;
+}
+
+// The serial clock comes out on CL0 only with G4 = 1, and restarts low on
+// a divider reset: ÷4096 = low for 2048 phi, then high for 2048.
+void testSerialClockAndDividerReset() {
+    LH5811Serial s(kPhi, kPhi);
+    s.reset();
+    s.writeG(0x07); // ÷4096, output inhibited
+    auto ignore = [](uint32_t, bool) {};
+    s.advance(3000, ignore);
+    CHECK(!s.cl0());
+    s.writeG(0x17); // + clock output
+    CHECK(s.cl0()); // 3000 phi into the period: the high half
+    s.resetDivider();
+    CHECK(!s.cl0());
+    s.advance(2047, ignore);
+    CHECK(!s.cl0());
+    s.advance(1, ignore);
+    CHECK(s.cl0());
+    s.advance(2048, ignore);
+    CHECK(!s.cl0());
+    s.writeG(0x1F); // external clock: CL0 isn't driven
+    CHECK(!s.cl0());
+}
+
+// L sends start, 8 data bits LSB first, 2 stop bits, one per serial clock
+// period; TD goes high once L is free again, and a byte written then
+// follows without a gap.
+void testTransmitFrames() {
+    LH5811Serial s(kPhi, kPhi);
+    s.reset();
+    s.writeG(0x17); // bit time 4096 phi
+    s.writeF(0x00); // no modulation: SDO = the serial data
+    s.resetDivider();
+    CHECK(s.sdo());
+    s.writeL(0xA5);
+    CHECK(!s.td());
+    auto ignore = [](uint32_t, bool) {};
+    s.advance(2048, ignore); // first rising clock edge: the frame starts
+    CHECK(s.td());
+    s.writeL(0xF3);
+    CHECK(!s.td());
+    const auto runs = sdoRuns(s, 24 * 4096);
+    // Expected bits: 0 10100101 11 0 11001111 11, then idle mark.
+    const std::string expect = "0101001011101100111111";
+    std::string got;
+    for (const auto& [level, n] : runs)
+        for (uint64_t k = 0; k < (n + 2048) / 4096; ++k) got += level ? '1' : '0';
+    CHECK(got.compare(0, expect.size(), expect) == 0);
+    CHECK(s.td());
+    CHECK(s.sdo());
+}
+
+// F6 = 1: SDO carries FX for a 1 bit and FY for a 0 bit. F = 63H (the
+// CE-150's) gives FX = phi/512, FY = phi/1024: 8 and 4 cycles per bit.
+void testModulation() {
+    LH5811Serial s(kPhi, kPhi);
+    s.reset();
+    s.writeG(0x17);
+    s.writeF(0x63);
+    s.resetDivider();
+    auto halfPeriods = [&](uint32_t cycles) {
+        const auto runs = sdoRuns(s, cycles, 5);
+        std::vector<uint64_t> out;
+        for (size_t i = 1; i + 1 < runs.size(); ++i) out.push_back(runs[i].second);
+        return out;
+    };
+    for (uint64_t h : halfPeriods(4096)) CHECK(h == 256); // idle mark: FX
+    s.writeL(0x00);
+    s.advance(4096, [](uint32_t, bool) {}); // to the next clock rise: the start bit
+    // The start bit and the data bits (all 0): FY.
+    const auto fy = halfPeriods(4 * 4096);
+    CHECK(!fy.empty());
+    for (uint64_t h : fy) CHECK(h == 512);
+}
+
 } // namespace
 
 int run_tape_deck_tests() {
@@ -295,6 +388,9 @@ int run_tape_deck_tests() {
     testMotorGating();
     testRecord();
     testRecordThenPlay();
+    testSerialClockAndDividerReset();
+    testTransmitFrames();
+    testModulation();
     std::printf("tape_deck_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

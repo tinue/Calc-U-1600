@@ -1420,6 +1420,9 @@ int run_tape_deck_tests();
 // Defined in pc1600_tape_tests.cpp (CLOAD/CSAVE through the CE-1600P) --
 // same single-binary convention.
 int run_pc1600_tape_tests();
+// Defined in pc1500_tape_tests.cpp (CLOAD/CSAVE through the CE-150) --
+// same single-binary convention.
+int run_pc1500_tape_tests();
 // Defined in pc1600_bank_tests.cpp (PC1600Bank/PC1600Memory bank-switching
 // truth tables) -- same single-binary convention.
 int run_pc1600_bank_tests();
@@ -1596,6 +1599,7 @@ int main() {
     int piezoSamplerFailures = run_piezo_sampler_tests();
     int tapeDeckFailures = run_tape_deck_tests();
     int pc1600TapeFailures = run_pc1600_tape_tests();
+    int pc1500TapeFailures = run_pc1500_tape_tests();
     int keyPasteFailures = run_key_paste_tests();
     int lcdScreenshotFailures = run_lcd_screenshot_tests();
     int lcdTextFailures = run_lcd_text_tests();
@@ -1605,7 +1609,7 @@ int main() {
     int debugTargetFailures = run_debug_target_tests();
     int listingFailures = run_listing_tests();
     int runControlFailures = run_run_control_tests();
-    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && tapeDeckFailures == 0 && pc1600TapeFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && lcdTextFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && connectorFailures == 0 && ce151Failures == 0 && ce155Failures == 0 && ce161Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
+    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && tapeDeckFailures == 0 && pc1600TapeFailures == 0 && pc1500TapeFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && lcdTextFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && connectorFailures == 0 && ce151Failures == 0 && ce155Failures == 0 && ce161Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
             ce163fFailures == 0 && memoryCardFailures == 0 && batteryCardInstanceFailures == 0 &&
             presetFailures == 0 &&
             basicTyperFailures == 0 && pc1600BasicTyperFailures == 0 &&

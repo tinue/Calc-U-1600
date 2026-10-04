@@ -15,6 +15,7 @@
 #include "../Connector/Ce158Port.hpp"
 #include "../Connector/ExpansionConnector.hpp"
 #include "../Connector/SystemBus.hpp"
+#include "../Tape/TapeDeck.hpp"
 #include "PC1500Clocks.hpp"
 #include "PC1500Display.hpp"
 #include "PC1500Memory.hpp"
@@ -235,6 +236,19 @@ public:
     std::vector<std::string> drainCE150Events();
     void clearCE150Paper();
 
+    // ── Cassette recorder (CE-152 on the CE-150's jacks) ────────────────
+    //
+    // The recorder outlives attach/detach of the interface: arm it with a
+    // WAV to play (CLOAD) or a file to record into (CSAVE); it moves only
+    // while a CE-150 REMOTE relay runs it, in emulated time. A recording is
+    // written on tapeEject(). All GUI-safe (take m_mutex).
+    bool tapePlay(const std::string& path, std::string& error);
+    void tapeRecord(const std::string& path);
+    bool tapeEject(std::string* error = nullptr);
+    TapeDeck::Status tapeStatus() const;
+    /// Unlocked direct access -- headless/tests only.
+    TapeDeck& tapeDeck() { return m_tapeDeck; }
+
     // ── CE-158 RS-232C / Centronics interface (60-pin system bus) ────────
     //
     // Attached to the same SystemBus chain as the CE-150, alone or together
@@ -311,6 +325,7 @@ private:
     WatchSet*    m_watches{nullptr};
     DebugStopLatch m_debugStop;
     std::unique_ptr<ExpansionCard> m_attachedExpansionCard; // see attachExpansionCard()
+    TapeDeck m_tapeDeck{double(kPC1500CpuHz)};               // see tapePlay()
     std::unique_ptr<Ce150Card> m_ce150Card;                 // see attachCE150()
     Ce158Port m_ce158;                                      // see attachCE158()
     std::vector<std::unique_ptr<BusRomCard>> m_busRoms;     // see attachBusRom()

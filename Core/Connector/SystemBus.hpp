@@ -22,12 +22,11 @@
 // Exposes signals the 40-pin connector doesn't: ME1-space access (DME1/ME1,
 // pins 58/59 -- the LH5801's second bank; see readME1/writeME1 and
 // PinState::me1's own doc comment for why this path doesn't reuse the
-// Y0/Y2/S-block decode), and named-but-unwired placeholder pins for
-// CMTIN/CMTOUT (cassette FSK audio -- genuinely analog, out of scope until
-// cassette support is built), WEX/W1 (external WAIT), INT, BFO/φOS
-// (sub-timing signals). None of those are consulted by anything in this
-// phase -- they exist here only so the connector's pin model stays honest
-// about the full 60 pins.
+// Y0/Y2/S-block decode), and the cassette lines CMTOUT/CMTIN (pins 29/27:
+// the LH5811's SDO out, its PB2 in; see setCmtOut()/cmtIn()). Named but
+// unwired: WEX/W1 (external WAIT), INT, BFO/φOS (sub-timing signals) --
+// they exist only so the connector's pin model stays honest about the
+// full 60 pins.
 //
 // Assumption, not yet independently confirmed: the 60-pin connector's
 // pinout is identical between PC-1500 and PC-1500A. Ref/Shared/Expansion-Connectors.md
@@ -90,6 +89,20 @@ public:
 
     // Queried on every host-ROM fetch; see InhibitSource.
     bool inhibitAsserted() const { return m_chain.inhibitAsserted(); }
+
+    /// CMTOUT: the main unit's cassette-write line (LH5811 SDO).
+    void setCmtOut(bool level) {
+        for (ExpansionCard* card : m_chain.cards()) card->cmtOut(level);
+    }
+    /// CMTIN as a card drives it; false if none does.
+    bool cmtIn(bool& level) const {
+        for (ExpansionCard* card : m_chain.cards())
+            if (card->cmtIn(level)) return true;
+        return false;
+    }
+    void advanceCassette(uint32_t cycles) {
+        for (ExpansionCard* card : m_chain.cards()) card->advanceCassette(cycles);
+    }
 
 private:
     PC1500Variant m_variant;

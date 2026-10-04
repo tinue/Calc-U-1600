@@ -303,6 +303,7 @@ set(TEST_SOURCES
   ${CORE_ROOT}/tests/piezo_sampler_tests.cpp
   ${CORE_ROOT}/tests/tape_deck_tests.cpp
   ${CORE_ROOT}/tests/pc1600_tape_tests.cpp
+  ${CORE_ROOT}/tests/pc1500_tape_tests.cpp
   ${CORE_ROOT}/tests/key_paste_tests.cpp
   ${CORE_ROOT}/tests/lcd_screenshot_tests.cpp
   ${CORE_ROOT}/tests/lcd_text_tests.cpp

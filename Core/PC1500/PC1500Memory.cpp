@@ -55,6 +55,7 @@ void PC1500Memory::reset() {
     m_if = 0;
     m_rtc = Upd1990ac{}; // fresh chip state -- TP un-configured until the ROM issues a rate-select, same as real power-on
     m_ioScratchRegs.fill(0);
+    m_serial.reset();
     // Keyboard/ON-key state deliberately untouched -- a CPU reset doesn't
     // release physically-held keys.
 }
@@ -197,7 +198,14 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
                 uint8_t v = uint8_t(m_opb | 0x08); // PB3 must read high -- confirmed ROM-dispatch gotcha, see header comment
                 if (m_rtc.tp()) v |= 0x20; else v &= uint8_t(~0x20); // PB5 = RTC TP live level (+ any pending edge) -- see Upd1990ac::tp()
                 if (m_rtc.dataOut()) v |= 0x40; else v &= uint8_t(~0x40); // PB6 = RTC DATA OUT -- the bit WRITE_2_CLOCK ($E52B) clocks out on a TIME read
-                if (m_onKeyPressed) v &= uint8_t(~0x80); else v |= 0x80; // ON key on PB7; polarity unconfirmed, see header comment
+                // ON key on PB7, high while pressed: IF1 latches PB7's rising
+                // edge on a press (TRM p.71), the CE-150's tape reader takes
+                // PB7 = 1 as BREAK (LOAD_NIBBLE &BE2F), and the PC-1600's
+                // compatible block reads 1 = pressed (Baum p.92). The system
+                // ROM itself only sees the IF1 latch.
+                if (m_onKeyPressed) v |= 0x80; else v &= uint8_t(~0x80);
+                bool cmt = false; // PB2 = CMTIN, while a tape interface drives it
+                if (m_systemBus.cmtIn(cmt)) v = cmt ? uint8_t(v | 0x04) : uint8_t(v & ~0x04);
                 return v;
             }
             case 0x8: return m_opc;
@@ -207,8 +215,12 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
                 // comment in the header for why that specific behavior is
                 // what actually breaks BREAK.
                 if (m_rtc.consumeRisingEdge()) m_if |= 0x02;
-                return m_if;
-            default: return m_ioScratchRegs[addr & 0xF]; // serial/etc: not modeled, but read back what was written
+                return uint8_t((m_if & ~0x08) | (m_serial.td() ? 0x08 : 0x00)); // b3 = TD, read-only
+            // MSK read: bit 7 = CL1, wired to CL0 (the serial clock; PC-1500
+            // Service Manual pin table) -- the CE-150 tape reader's timer.
+            case 0xA: return uint8_t((m_ioScratchRegs[0xA] & 0x7F) | (m_serial.cl0() ? 0x80 : 0x00));
+            case 0x9: return m_serial.g();
+            default: return m_ioScratchRegs[addr & 0xF]; // not modeled, but read back what was written
         }
     }
     return readME0(addr); // no other documented ME1 wiring -- conservative mirror
@@ -236,7 +248,11 @@ void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
                 m_piezo.setLevel((value & 0x40) != 0);
                 return;
             case 0xB: m_if = value; return;
-            default: m_ioScratchRegs[addr & 0xF] = value; return; // serial/etc: not modeled, but not discarded either
+            case 0x4: m_serial.resetDivider(); return;
+            case 0x6: m_serial.writeL(value); return;
+            case 0x7: m_serial.writeF(value); return;
+            case 0x9: m_serial.writeG(value); return;
+            default: m_ioScratchRegs[addr & 0xF] = value; return; // not modeled, but not discarded either
         }
     }
     writeME0(addr, value);

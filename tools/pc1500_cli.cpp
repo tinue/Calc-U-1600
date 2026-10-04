@@ -9,7 +9,7 @@
 //   - a demonstration of the trace ring buffer.
 //
 // Usage: pc1500_cli <rom-file> [maxCycles]
-//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--wav <out.wav>] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
+//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--wav <out.wav>] [--tape-in <in.wav>] [--tape-out <out.wav>] [--dump-mem <addr>,<len>] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
 //
 // The --preset form parses and applies a `.pc1500` scenario file
 // (PresetFile.hpp/PC1500PresetLoader.hpp) instead of a bare ROM --
@@ -30,6 +30,13 @@
 //
 // --wav <out.wav> records the buzzer (PC6, see PiezoSampler.hpp) for the
 // whole run -- preset script included -- as 48 kHz mono 16-bit PCM.
+//
+// --tape-in <in.wav> / --tape-out <out.wav> put a cassette into the
+// recorder behind the CE-150 (Core/Tape/TapeDeck.hpp) before the run: a
+// WAV to play for the preset's CLOAD, or a blank tape whose recording (the
+// preset's CSAVE) is written to <out.wav> at the end. The tape moves only
+// while a CE-150 REMOTE relay runs it. The preset needs `plotter: CE-150`.
+// --dump-mem <addr>,<len> (repeatable) prints memory as hex at the end.
 //
 // CE-158 (a preset with `interface: CE-158`):
 //   --ce158-pty       attach a host PTY as the RS-232C peer; its stable
@@ -70,6 +77,8 @@ int main(int argc, char** argv) {
     std::string wavPath;
     std::string lcdPng;
     std::string lcdTextPath;
+    std::string tapeIn, tapeOut;
+    std::vector<std::pair<uint32_t, uint32_t>> memDumps;
     Ce158CliPeer ce158Peer;
     {
         std::vector<char*> kept;
@@ -84,6 +93,25 @@ int main(int argc, char** argv) {
             }
             if (std::strcmp(argv[i], "--lcd-text") == 0 && i + 1 < argc) {
                 lcdTextPath = argv[++i];
+                continue;
+            }
+            if (std::strcmp(argv[i], "--tape-in") == 0 && i + 1 < argc) {
+                tapeIn = argv[++i];
+                continue;
+            }
+            if (std::strcmp(argv[i], "--tape-out") == 0 && i + 1 < argc) {
+                tapeOut = argv[++i];
+                continue;
+            }
+            if (std::strcmp(argv[i], "--dump-mem") == 0 && i + 1 < argc) {
+                char* rest = nullptr;
+                const uint32_t start = static_cast<uint32_t>(std::strtoul(argv[++i], &rest, 0));
+                const uint32_t length = (rest && *rest == ',') ? static_cast<uint32_t>(std::strtoul(rest + 1, nullptr, 0)) : 0;
+                if (length == 0) {
+                    std::fprintf(stderr, "--dump-mem wants <addr>,<len>\n");
+                    return 1;
+                }
+                memDumps.emplace_back(start, length);
                 continue;
             }
             if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
@@ -104,7 +132,7 @@ int main(int argc, char** argv) {
     if (argc < 2) {
         std::fprintf(stderr, "usage: %s <rom-file> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       %s --preset <preset-file.pc1500> [maxCycles]\n", argv[0]);
-        std::fprintf(stderr, "       options: --modules-dir <dir>  --dump-basic  --wav <out.wav>  --lcd-png <out.png>  --lcd-text <out.txt|->\n");
+        std::fprintf(stderr, "       options: --modules-dir <dir>  --dump-basic  --wav <out.wav>  --tape-in <in.wav>  --tape-out <out.wav>  --dump-mem <addr>,<len>  --lcd-png <out.png>  --lcd-text <out.txt|->\n");
         std::fprintf(stderr, "                %s\n", Ce158CliPeer::kUsage);
         return 1;
     }
@@ -154,6 +182,15 @@ int main(int argc, char** argv) {
     // The CE-158's serial peer. Set before the preset attaches the card --
     // attachCE158() picks up whatever link the machine already holds.
     if (!ce158Peer.attach(machine)) return 1;
+    if (!tapeIn.empty()) {
+        std::string tapeError;
+        if (!machine.tapePlay(tapeIn, tapeError)) {
+            std::fprintf(stderr, "--tape-in: %s\n", tapeError.c_str());
+            return 1;
+        }
+    } else if (!tapeOut.empty()) {
+        machine.tapeRecord(tapeOut);
+    }
 
     if (usingPreset) {
         std::string presetPath = argv[2];
@@ -217,6 +254,25 @@ int main(int argc, char** argv) {
     }
 
     std::printf("Ran %llu instructions, %llu cycles\n", (unsigned long long)steps, (unsigned long long)consumed);
+    if (!tapeIn.empty() || !tapeOut.empty()) {
+        const TapeDeck::Status tape = machine.tapeStatus();
+        std::printf("Tape: %.2f s of %.2f s, motor %s\n", tape.position, tape.length, tape.motor ? "on" : "off");
+        std::string tapeError;
+        if (!machine.tapeEject(&tapeError)) {
+            std::fprintf(stderr, "--tape-out: %s\n", tapeError.c_str());
+            return 1;
+        }
+        if (!tapeOut.empty()) std::printf("Wrote %.2f s of tape to %s\n", tape.length, tapeOut.c_str());
+    }
+    for (const auto& [start, length] : memDumps) {
+        std::printf("--- memory $%04X+%u ---\n", start, length);
+        for (uint32_t a = start; a < start + length && a <= 0xFFFF; a += 16) {
+            std::printf("%04X:", a);
+            for (uint32_t i = a; i < a + 16 && i < start + length && i <= 0xFFFF; ++i)
+                std::printf(" %02X", machine.debugPeek(static_cast<uint16_t>(i)));
+            std::printf("\n");
+        }
+    }
     if (!lcdPng.empty()) {
         std::string pngError;
         if (!writeLcdScreenshotPng(pc1500LcdBitmap(machine), kPC1500ScreenMm, lcdPng, &pngError)) {
