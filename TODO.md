@@ -345,6 +345,13 @@ CE-1600P (docs/background/plans/Cassette-Tape-Plan.md, dev/tape-matrix/).
   the LH5803 and drives ME1 F004H-F00FH, which `LH5803SharedMemory` keeps
   as a plain latch. How that block reaches the SC-7852's SD0/PB2 (pin 76:
   `SD0 = OR(SD0', PC7')`, SD0' = "CE-150 cassette output") is undocumented.
+- **Control bar too wide with a tape interface.** With a CE-150 or
+  CE-1600P attached, the cassette bay (Tape picker, save button, counter,
+  lamp) widens the PC-1600's control bar to ~1758 px (1430 without it), more
+  than a 13-14" MacBook screen (1440-1512 points). Dropping the "Tape:"
+  label and narrowing the picker only gets to ~1690. Options: a second row
+  for the media (Disk, Tape) while one is attached; or narrower pickers
+  everywhere. Undecided.
 - **Real-hardware cross-check, remaining half:** `CLOAD` an emulator
   `CSAVE` WAV on the real units (PC-1500 + CE-150, PC-1600 + CE-1600P).
   The other half is done (2026-10-04): real `CSAVE` recordings of both

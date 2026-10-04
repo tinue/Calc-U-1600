@@ -96,6 +96,7 @@ captures the whole window. More captures can go in `steps:` as
 | `close` | Close the topmost popup, dialog, or native menu. |
 | `choose-file: <path>` | Pick that file (relative to the scenario) in the open file dialog and accept it, e.g. after `action: File > Load Machine Code…`. In a Save dialog (`File > Tape > Record…`) the file may not exist yet; its folder must. |
 | `enter-text: <text>` | Type into the text field of the open dialog, e.g. a name in Name & Save. |
+| `accept` | Accept the open dialog (its OK button), e.g. after `enter-text`. |
 | `capture: …` | Write an image; see below. |
 
 A dialog opened by `action:` or `click:` stays open and scriptable: the
@@ -165,7 +166,7 @@ Two macOS details:
 | `controlbar.slot1`, `controlbar.slot2`, `controlbar.slot1.save`, `controlbar.slot2.save` | module pickers and their Name & Save buttons |
 | `controlbar.ce150`, `controlbar.ce158`, `controlbar.ce1600p`, `controlbar.ce1600p.rom` | peripheral toggles, CE-1600P ROM picker |
 | `controlbar.floppy`, `controlbar.floppy.side`, `controlbar.floppy.save`, `controlbar.floppy.lamp` | CE-1600F disk row |
-| `controlbar.tape`, `controlbar.tape.counter`, `controlbar.tape.lamp` | cassette recorder (with a CE-150 or CE-1600P) |
+| `controlbar.tape`, `controlbar.tape.save`, `controlbar.tape.counter`, `controlbar.tape.lamp` | cassette bay: tape picker, Save, counter, motor lamp (with a CE-150 or CE-1600P) |
 | `debugpanel`, `debugpanel.pointers`, `debugpanel.dumpmem`, `debugpanel.dumpcard`, `debugpanel.clear`, `debugpanel.trace` | Debug panel and its buttons |
 | `paper`, `paper.copy`, `paper.cut` | plotter paper panel |
 | `ce158printer`, `ce158printer.save`, `ce158printer.clear` | CE-158 printer panel |

@@ -70,6 +70,17 @@ counts as high while no tape interface drives it. It doesn't synthesize
 BEEP tones, because the user wants the actual square wave. New sound
 sources drive `PiezoSampler::setLevel` from their emulated signal.
 
+### Tapes are fixed-role media, saved at each motor stop
+The cassette bay works like the card and disk pickers (TapeManager): a
+tape picked from the tape folder's list only plays; one named with the
+save button only records, and goes back in to play only by picking it from
+the list. That is deliberate: nothing records over a tape picked to load
+it. A recording is written (whole) each time the remote relay stops the
+motor, so a finished CSAVE is on disk at once and taking the tape out only
+un-arms it; while it stays in, further CSAVEs are appended. The tape combo
+reacts to `activated`, so picking the tape it already shows still puts it
+in to play (rewound).
+
 ### The cassette tape moves only while the remote relay runs it
 `TapeDeck` advances by emulated CPU cycles, and only while the interface's
 remote relay is closed: CE-150 PA1-PA4 pulses (either REMOTE 0 or 1), or

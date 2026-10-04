@@ -287,22 +287,33 @@ Good to know:
 ### Cassette tape: CLOAD and CSAVE
 
 The CE-150 (PC-1500/1500A) and the CE-1600P (PC-1600) have the jacks of a
-cassette recorder. In the app the recorder plays and records WAV files.
-You put a tape in, then type the command as on the real machine:
+cassette recorder. In the app its tapes are WAV files in the tape folder
+(Settings ▸ Storage ▸ Tapes, `~/Calc-U-1600/Tapes` by default), and the
+cassette bay sits on the control bar while a CE-150 or CE-1600P is
+attached. It starts empty. You put a tape in, then type the command as on
+the real machine:
 
-- **File ▸ Tape ▸ Play…** (or the **Tape** button on the control bar) puts
-  a WAV in the recorder. Type `CLOAD`, `CLOAD "name"`, `CLOAD M` or
-  `CLOAD?`.
-- **File ▸ Tape ▸ Record…** puts in a blank tape and asks where its WAV
-  goes. Type `CSAVE "name"` (or `CSAVE M`). The WAV is written when you
-  choose **Eject**. Switching the model or ROM, loading a preset, or
-  quitting ejects the tape too, so a recording is never lost.
+- **To load,** pick a tape from the **Tape** list. It goes in rewound.
+  Type `CLOAD`, `CLOAD "name"`, `CLOAD M` or `CLOAD?`. A second `CLOAD`
+  reads on from where the first one stopped, as on a real tape.
+- **To save,** click the save button next to the list and name the new
+  tape, as with Name & Save for cards and disks. Type `CSAVE "name"` (or
+  `CSAVE M`). The tape is written to `<name>.wav` each time the motor
+  stops, so a finished `CSAVE` is saved at once. Another `CSAVE` onto the
+  same tape goes after it. If a tape of that name exists, you're asked
+  before it is replaced.
 
-The Tape button appears while a CE-150 or CE-1600P is attached. Next to
-it, the counter shows ▶ (playing) or ● (recording) and the tape position,
-and the lamp lights while the motor runs:
+![Naming a new tape](images/guide/04-tape-save.png)
 
-![CLOAD running: the tape counter and the motor lamp](images/guide/04-tape-loading.png)
+A tape keeps its role: one picked from the list only plays, a new one only
+records. To play back what you recorded, pick it from the list; that also
+takes the recording tape out. "–empty–" takes a tape out. The counter
+shows ▶ (playing) or ● (recording) and the tape position, and the lamp
+lights while the motor runs:
+
+![CSAVE running onto a new tape](images/guide/04-tape-recording.png)
+
+![CLOAD running from the same tape, picked from the list](images/guide/04-tape-loading.png)
 
 ![The program loaded from the tape](images/guide/04-tape-loaded.png)
 
@@ -316,9 +327,11 @@ Good to know:
   holding the LCD runs everything faster as usual, sound off; the WAV comes
   out the same.
 - **Interchangeable WAVs.** The files are standard 48 kHz, 16-bit WAVs.
-  The app plays any PCM WAV, 8 to 32 bits, mono or stereo: recordings of a
-  real calculator, or files made with Pocket Tools' `bin2wav` and read with
-  its `wav2bin`.
+  The app plays any PCM WAV, 8 to 32 bits, mono or stereo, that you put in
+  the tape folder: recordings of a real calculator, or files made with
+  Pocket Tools' `bin2wav` and read with its `wav2bin`.
+- **The buzzer sounds the tape** while saving and loading, as on the real
+  machines.
 - **Leave a long lead-in.** After switching on the motor the calculator
   waits about half a second for the recorder, then needs a few seconds of
   lead-in tone. A tape made with `bin2wav` therefore needs `-s 3` (a 3 s
@@ -806,10 +819,11 @@ elsewhere. Changes apply immediately; there is only **Close**.
     Program… and Load Machine Code… open. `<last used>` by default.
   - **Host drive folder:** where Mount Directory… opens. `<last used>` (the
     directory last mounted) by default.
-  - **Tape folder:** where Tape ▸ Play… and Record… open. `<last used>` by
-    default.
 - **Default presets:** one per model, see [Startup presets](#88-startup-presets).
 - **Storage ▸ Battery-card saves:** where saved modules and disks go.
+- **Storage ▸ Tapes:** the cassette tapes' folder (see
+  [Cassette tape](#cassette-tape-cload-and-csave)); `Tapes` inside the save
+  folder by default.
 - **Tracing:** where CPU traces go, and the size at which a trace stops.
 - **Serial ports:** where the serial port files go, and their current paths
   (see [COM ports](#7-com-ports)).

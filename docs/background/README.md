@@ -42,6 +42,7 @@ with a status note on how the implementation differed. New plans go into
 | [Copy Screen: the LCD as text](plans/Copy-Screen-Text-Plan.md) | 2026-10-03 | Implemented |
 | [Pre-execution snapshots: history and trace](plans/Pre-Execution-Snapshots-Plan.md) | 2026-10-04 | Implemented |
 | [Cassette CLOAD / CSAVE via WAV files](plans/Cassette-Tape-Plan.md) | 2026-10-04 | Implemented for PC-1500 + CE-150 and PC-1600 MODE 0; MODE 1 `CLOAD` open in TODO.md |
+| [Tape as control-bar media](plans/Tape-Bay-Plan.md) | 2026-10-04 | Implemented |
 
 ## Handoffs
 

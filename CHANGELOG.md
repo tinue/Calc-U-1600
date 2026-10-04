@@ -5,16 +5,18 @@
 ### New
 
 - **Cassette tape: CLOAD and CSAVE.** The CE-150 (PC-1500/1500A) and the
-  CE-1600P (PC-1600, MODE 0) now drive a cassette recorder that plays and
-  records WAV files: **File ▸ Tape ▸ Play… / Record… / Eject**, or the Tape
-  button on the control bar with its counter and motor lamp. The
+  CE-1600P (PC-1600, MODE 0) now drive a cassette recorder. Its tapes are
+  WAV files in a tape folder (Settings ▸ Storage ▸ Tapes): pick one on the
+  control bar to `CLOAD` it, or name a new one with the save button to
+  `CSAVE` onto it -- saved each time the motor stops, further `CSAVE`s
+  appended. A counter and a motor lamp show what the tape does. The
   calculator's own ROM does the bit timing, the remote relay runs the tape,
   and the tape runs in emulated time, so turbo doesn't change the WAV.
   The WAVs work with Pocket Tools' `bin2wav` / `wav2bin` (give `bin2wav`
-  `-s 3` or `-l 0x400`); the headless CLIs take `--tape-in` / `--tape-out`. Not yet:
-  the PC-1600 reading PC-1500 tapes in MODE 1, and the CE-150 on a PC-1600.
-  As on the real machines, the buzzer sounds the tape while saving and
-  loading.
+  `-s 3` or `-l 0x400`) and with real recordings; the headless CLIs take
+  `--tape-in` / `--tape-out`. As on the real machines, the buzzer sounds
+  the tape while saving and loading. Not yet: the PC-1600 reading PC-1500
+  tapes in MODE 1, and the CE-150 on a PC-1600.
 
 ### Fixed
 

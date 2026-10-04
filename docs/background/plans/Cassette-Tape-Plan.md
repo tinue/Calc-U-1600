@@ -15,6 +15,9 @@
 >   BREAK all the time.
 > - **CE-1600P port 82H reads back its latch.** The tape driver
 >   read-modify-writes it; open bus (FFH) would have pulsed both relay coils.
+> - **Later replaced** by the cassette bay on the control bar
+>   ([Tape-Bay-Plan.md](Tape-Bay-Plan.md)): the File ▸ Tape menu below is
+>   gone.
 > - No separate `TapeController`: `MainWindow` handles File ▸ Tape (Play…,
 >   Record…, Eject), and the control-bar Tape button shows the same actions.
 >   The menu items also make the flow scriptable for screenshots.

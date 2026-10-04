@@ -1,8 +1,12 @@
 # User-guide screenshots: a PC-1600 with the CE-1600P (its cassette
-# interface), cleared and back in RUN mode, ready for File > Tape > Play….
+# interface) and a short program in memory, back in RUN mode, ready to
+# CSAVE onto a new tape.
 model: PC-1600
 plotter: CE-1600P
 keys:
   - key: mode
   - type: NEW0
+program:
+  file: ../../../../examples/plotter/lissajou-1600.bas
+keys:
   - key: mode
