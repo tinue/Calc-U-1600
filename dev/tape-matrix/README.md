@@ -41,6 +41,8 @@ the test fixture, the PC-1600 examples in `examples/basic/` and
 - **`csave`: four programs come out a few bytes longer from the emulator's
   tokenizer than from `bas2img`** (`pc1600_tape`, `old-vs-new-rom`,
   `ascii`, `biorhythmus_1600`). That's the listing tokenizer, not the tape:
-  the cell compares `wav2bin`'s output with memory, which match.
+  the emulator keeps the space after `REM` (`10 REM LISSAJOU` stores
+  `F1 AB 20 4C ...`), `bas2img` drops it. The cell compares `wav2bin`'s
+  output with memory, which match.
 - `csavem` skips 2000 bytes: the BASIC `POKE` loop that fills memory stops
   with `ERROR 19 IN 10` there.
