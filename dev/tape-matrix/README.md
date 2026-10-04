@@ -77,9 +77,9 @@ From `bin2wav_211c1d2.c` (Pocket Tools 2.1.1, in
 |---|---|---|
 | Source of the waveform | Drawn per bit from tables (`bit3_15` PC-1500, `bitE3` PC-1600): characters for full, ¾, ⅜ level and mid | The calculator's own output line, box-filtered to 48 kHz |
 | Format | 8-bit unsigned; 44.1 kHz (PC-1500), 48 kHz (PC-1600); 16 kHz with `-l 3` | 16-bit, 48 kHz |
-| Level | PC-1500 ±0.70 with ~6% peak overshoot (`AMP_HIGH` DAH / `AMP_LOW` 26H, `^`/`v`); PC-1600 ±0.97 (FCH / 04H) | ±0.45, edges overshoot to ~0.6 (up to 0.9 on the first edge after a gap) through the 300 Hz coupling |
-| Edges | Pre-rounded: ramps through ¾ and mid level, near-sine on the PC-1500 | Sharp (one sample), then AC-coupling droop |
-| DC / silence | Symmetric around 80H by construction; silence = 80H | Parked line → silence through the coupling; tone settles in ~1 ms |
+| Level | PC-1500 ±0.70 with ~6% peak overshoot (`AMP_HIGH` DAH / `AMP_LOW` 26H, `^`/`v`); PC-1600 ±0.97 (FCH / 04H) | ±0.45; a lone step of the line reaches 0.9 |
+| Edges | Pre-rounded: ramps through ¾ and mid level, near-sine on the PC-1500 | Sharp (one sample), flat tops (12 Hz coupling) |
+| DC / silence | Symmetric around 80H by construction; silence = 80H | Parked line decays to silence through the coupling; each lone step (line switched on, parked for a gap) is a 2x spike that dies away in ~30 ms, as on the real tape |
 | End of transmission | `*` shutdown: an exponential settle with a small overshoot, imitating a coupled signal floating back to mid | Same effect from the coupling itself |
 | PC-1500 tones | 144 samples per bit at 44.1 kHz: 2450 / 1225 Hz | LH5811: 2539 / 1270 Hz (3.6% faster) |
 | PC-1600 tones | 16 / 40 samples: 3000 / 1200 Hz, symmetric halves | ROM loops: 3029 / 1222 Hz, high half a little longer (30 vs 23 loops for "0") |
@@ -87,6 +87,28 @@ From `bin2wav_211c1d2.c` (Pocket Tools 2.1.1, in
 | Gap and leader | Default: PC-1500 0.5 s; PC-1600 its minimum ~2.1 s (6406 cycles), no gap. `-l 0x400` ("like the original"): PC-1500 ~8 s (2504 bits), PC-1600 an 8 s gap, then 10000 cycles | What the ROM writes: PC-1600 an 8 s gap (`CMGAP`, line low), then 10000 cycles; PC-1500 ~8 s |
 
 So `bin2wav` draws an idealised, band-limited tape signal, while the
-emulator records the logic line through a model of the interface's output
-coupling. Both are centred, settle at the edges of a transmission and keep
+emulator records the logic line through the output coupling measured on a
+real unit (below). Both are centred, settle at the edges of a transmission and keep
 the zero crossings every decoder uses, and each reads the other's files.
+
+## A real PC-1600 + CE-1600P `CSAVE`, compared (2026-10-04)
+
+Recorded from the CE-1600P's MIC jack into a Mac line input (48 kHz,
+16-bit), a 1332-byte BASIC program:
+
+- **It loads.** `wav2bin` decodes it, and the emulator `CLOAD`s it.
+- **Tones:** 3022 / 1190-1212 Hz; the emulator's ROM tones are 3028 /
+  1215-1221 Hz. Flat-topped, with some HF ripple from the CE-1600P's
+  filter.
+- **Timing:** header block 3.538 s (emulator 3.532 s), data block 10.421 s
+  (10.409 s), the 8 s gap 8.025 s (8.009 s): the known ~0.2-0.6% PC-1600
+  speed residual.
+- **Lone steps are real.** The line switched high before the motor
+  (`CMMOTORON`) and parked low for the gap (`CMGAP`) record as spikes of
+  ~2x the tone level decaying with a 13.8 ms time constant (12 Hz). The
+  emulator records them the same way: 1.96x, 13.3 ms. The direct recording
+  also has a spike when the motor stops (the relay pulse) and the motor-off
+  time between the blocks, which a cassette deck wouldn't record.
+- **Polarity:** line high = positive, as in the emulator.
+- **Not modelled:** the leader starts ~1.6x louder and settles over ~1.5 s,
+  possibly the Mac input's automatic gain.

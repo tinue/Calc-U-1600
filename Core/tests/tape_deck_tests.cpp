@@ -245,7 +245,7 @@ void testRecord() {
     CHECK(near(zeroCrossings(rec, 25000, 48000), 2 * 1200 * 23000 / 48000.0, 10));
     int16_t peak = 0;
     for (int16_t v : rec) peak = std::max<int16_t>(peak, static_cast<int16_t>(std::abs(v)));
-    CHECK(peak > 16000 && peak < 32767);
+    CHECK(peak > 13000 && peak < 32767);
 
     CHECK(deck.eject());
     CHECK(deck.mode() == TapeDeck::Mode::Empty);
@@ -286,7 +286,7 @@ void testRecordStartsQuiet() {
     driveTone(deck, 2539.0, 0.05);
     int16_t peak = 0;
     for (int16_t v : deck.recording()) peak = std::max<int16_t>(peak, static_cast<int16_t>(std::abs(v)));
-    CHECK(peak > 13000 && peak < 26000); // ~0.45 of full scale plus the coupling's overshoot, not clipped
+    CHECK(peak > 13000 && peak < 17000); // ~0.45 of full scale, flat-topped
 }
 
 // What one deck records, another plays back with the same edge timing.

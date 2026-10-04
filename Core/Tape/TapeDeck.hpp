@@ -28,15 +28,14 @@
 //
 // Record: the output line is box-filtered into 48 kHz 16-bit PCM (each
 // sample the line's average over its interval, so edges between sample
-// boundaries keep their exact duty cycle), then AC-coupled at 300 Hz. That
-// is the order of the interfaces' own output coupling (CE-1600P: a
-// DC-decoupling chain ending in 0.047 µF; CE-150: 0.1 µF into the MIC
-// input), so a parked line records as silence and a tone that starts or
-// stops settles within a millisecond, as on a real tape. The tones stay
-// square apart from some droop; their zero crossings, all a decoder looks
-// at, are unchanged. The rest of the interfaces' analog path (low-pass,
-// level) isn't modelled. Only motor-on time is recorded, as on a real
-// tape.
+// boundaries keep their exact duty cycle), then AC-coupled at 12 Hz, as
+// measured on a real PC-1600 + CE-1600P recorded through a Mac line input
+// (2026-10-04: a lone step decays with a 13.8 ms time constant; the tones
+// are flat-topped). So a parked line decays to silence, and each lone step
+// of the line -- the ROM parking it for a gap, or switching it on before
+// the motor -- records as a ~1.8x spike that dies away within ~30 ms, as
+// on the real tape. The interfaces' low-pass and level aren't modelled.
+// Only motor-on time is recorded, as on a real tape.
 //
 // Not thread-safe on its own -- the owning machine serializes access under
 // its own mutex.
@@ -174,10 +173,10 @@ private:
     // follows any recording's DC drift without touching the tones.
     static constexpr double kPlayHighPassHz = 20.0;
     // Recording output coupling, see the class comment.
-    static constexpr double kRecordHighPassHz = 300.0;
-    // Recording level. Through the 300 Hz coupling a square wave's edges
-    // overshoot: ~1.4x its amplitude at 1200 Hz, 2x on the first edge after
-    // a parked line. 0.45 keeps even that below full scale (-1 dBFS).
+    static constexpr double kRecordHighPassHz = 12.0;
+    // Recording level. A lone step of the line (or a tone's first edge
+    // after a parked line) swings to 2x the tone's level, as on the real
+    // tape; 0.45 keeps that below full scale (-1 dBFS).
     static constexpr double kRecordGain = 0.45 * 32767.0;
 
     uint64_t sampleIndex() const {

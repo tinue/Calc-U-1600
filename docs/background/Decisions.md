@@ -77,16 +77,19 @@ counts the leader, so a tape needs a long leader (`bin2wav -s 3` or
 start the tape before the relay closes to make short leaders work. Because
 time is emulated, a recording is the same in real time, turbo or the CLI.
 
-### Tape recordings are AC-coupled at 300 Hz
-`TapeDeck` records the cassette line through a 300 Hz high-pass at 0.45 of
-full scale, primed with the line's average over the first 2 ms. That is the
-order of the CE-150 / CE-1600P output coupling (0.1 µF / 0.047 µF into the
-MIC input), so a parked line is silence and a tone onset settles within a
-millisecond. With a 20 Hz corner, every onset swung to 2x for ~20 ms and
-clipped, which showed as a spike in each file. Don't lower the corner to
-make the tones "squarer": the zero crossings, which every decoder uses,
-are the same, and the interfaces' real low-pass and level aren't modelled
-either (no schematic topology for the CE-1600P).
+### Tape recordings are AC-coupled at 12 Hz, spikes included
+`TapeDeck` records the cassette line through a 12 Hz high-pass at 0.45 of
+full scale, primed with the line's average over the first 2 ms. 12 Hz is
+measured: a real PC-1600 + CE-1600P `CSAVE`, recorded through a Mac line
+input (2026-10-04), decays from a lone step with a 13.8 ms time constant,
+and its tones are flat-topped. The real tape has the same lone-step spikes
+as ours (the line switched high before the motor, parked low for the 8 s
+gap): ~1.8x the tone level, gone within ~30 ms. They are authentic, so
+don't filter them out. A 300 Hz corner (tried, from the schematic values)
+made them short but drooped the tones, unlike the real unit. Gain 0.45
+keeps the 2x steps from clipping; the priming keeps sample 0 silent. The
+real leader also starts ~1.6x louder and settles over ~1.5 s; that may be
+the recording input's automatic gain, so it isn't modelled.
 
 ### LH5811 L is a holding register; TD means "L is empty"
 `LH5811Serial` moves a byte from L into the shift register at a rising
