@@ -28,10 +28,15 @@
 
 namespace {
 
-// Wall-clock pauses: long enough for the window server to show/hide a
-// native menu that osascript opened or closed.
-constexpr int kNativeMenuSettleMs = 1000;
-constexpr int kNativeMenuCloseMs = 600;
+// Native menus opened/closed through osascript: how often to look whether
+// they did, how long to give up after, and the wall-clock pause once they
+// did (fade-in / fade-out). See ShotRunner::nativeMenuSettled().
+constexpr int kNativeMenuPollMs = 50;
+constexpr int kNativeMenuOpenTimeoutMs = 10000; // the script itself waits up to 5 s
+constexpr int kNativeMenuCloseRetryMs = 1500;
+constexpr int kNativeMenuCloseTries = 3;
+constexpr int kNativeMenuSettleMs = 500;
+constexpr int kNativeMenuCloseMs = 300;
 // Before the first step: the window must be exposed and laid out.
 constexpr int kStartupDelayMs = 800;
 // Emulated time a `key:` tap holds / then lets the ROM react.
@@ -135,6 +140,7 @@ void ShotRunner::runNextStep() {
         scheduleNext(50);
         return;
     }
+    if (!nativeMenuSettled()) return;
     const Shot& shot = currentShot();
     if (m_stepIdx == 0) {
         log(QStringLiteral("shot '%1'").arg(shot.name));
@@ -143,14 +149,12 @@ void ShotRunner::runNextStep() {
     if (m_stepIdx >= shot.steps.size()) {
         m_window->faceplate()->releasePressedKey();
         closeAllTransient();
-        const int delay = m_nativeMenuDepth > 0 ? kNativeMenuCloseMs : m_scenario.settleMs;
-        m_nativeMenuDepth = 0;
         m_stepIdx = 0;
         if (++m_shotPos >= m_shotOrder.size()) {
             finishAll();
             return;
         }
-        scheduleNext(delay);
+        scheduleNext(m_scenario.settleMs);
         return;
     }
 
@@ -313,7 +317,8 @@ bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void(
     }
     case K::Menu:
         if (!openMenu(step.text, deferred, error)) return false;
-        *delayMs = m_nativeMenuDepth > 0 ? std::max(settle, kNativeMenuSettleMs) : settle;
+        if (m_nativeMenuDepth > 0) m_nativeMenuWaitLine = step.line;
+        *delayMs = settle;
         return true;
     case K::Action: {
         QAction* action = findMenuAction(step.text, error);
@@ -330,12 +335,10 @@ bool ShotRunner::runStep(const ShotStep& step, int* delayMs, std::function<void(
         *delayMs = settle;
         return true;
     }
-    case K::Close: {
-        const bool native = m_nativeMenuDepth > 0;
+    case K::Close:
         if (!closeTopmost(error)) return false;
-        *delayMs = native ? std::max(settle, kNativeMenuCloseMs) : settle;
+        *delayMs = settle;
         return true;
-    }
     case K::ChooseFile: {
         QFileDialog* dialog = nullptr;
         for (QWidget* w : QApplication::topLevelWidgets()) {
@@ -467,6 +470,17 @@ bool ShotRunner::openMenu(const QString& path, std::function<void()>* deferred, 
         }
         script += QStringLiteral("end tell\n");
         m_nativeMenuDepth = static_cast<int>(parts.size());
+        for (const QMetaObject::Connection& c : std::as_const(m_nativeMenuConnections)) disconnect(c);
+        m_nativeMenuConnections.clear();
+        m_nativeMenuShown = false;
+        m_nativeMenuOpen = false;
+        QMenu* top = chain.first()->menu();
+        QMenu* deepest = chain.last()->menu();
+        m_nativeMenuConnections << connect(deepest, &QMenu::aboutToShow, this, [this] { m_nativeMenuShown = true; })
+                                << connect(top, &QMenu::aboutToShow, this, [this] { m_nativeMenuOpen = true; })
+                                << connect(top, &QMenu::aboutToHide, this, [this] { m_nativeMenuOpen = false; });
+        m_nativeMenuWait = NativeMenuWait::Open;
+        m_nativeMenuWaitClock.start();
         if (m_menuScript) m_menuScript->deleteLater();
         m_menuScript = new QProcess(this);
         *deferred = [process = m_menuScript, script] {
@@ -496,14 +510,13 @@ bool ShotRunner::openMenu(const QString& path, std::function<void()>* deferred, 
 
 bool ShotRunner::closeTopmost(QString* error) {
     if (m_nativeMenuDepth > 0) {
-#ifdef Q_OS_MACOS
-        const QString script =
-            QStringLiteral("tell application \"System Events\"\n  repeat %1 times\n    key code 53\n"
-                           "    delay 0.1\n  end repeat\nend tell\n")
-                .arg(m_nativeMenuDepth);
-        QProcess::startDetached(QStringLiteral("/usr/bin/osascript"), {QStringLiteral("-e"), script});
-#endif
+        sendNativeMenuEscapes(m_nativeMenuDepth);
+        m_nativeMenuCloseDepth = m_nativeMenuDepth;
+        m_nativeMenuCloseTries = 1;
         m_nativeMenuDepth = 0;
+        // Never seen open (a failed `menu:`): nothing to wait for.
+        m_nativeMenuWait = m_nativeMenuOpen ? NativeMenuWait::Close : NativeMenuWait::None;
+        m_nativeMenuWaitClock.start();
         return true;
     }
     if (QWidget* popup = QApplication::activePopupWidget()) {
@@ -520,6 +533,70 @@ bool ShotRunner::closeTopmost(QString* error) {
     }
     *error = QStringLiteral("nothing to close");
     return false;
+}
+
+void ShotRunner::sendNativeMenuEscapes(int count) {
+#ifdef Q_OS_MACOS
+    const QString script = QStringLiteral("tell application \"System Events\"\n  repeat %1 times\n    key code 53\n"
+                                          "    delay 0.1\n  end repeat\nend tell\n")
+                               .arg(count);
+    QProcess::startDetached(QStringLiteral("/usr/bin/osascript"), {QStringLiteral("-e"), script});
+#else
+    Q_UNUSED(count);
+#endif
+}
+
+bool ShotRunner::nativeMenuSettled() {
+    using W = NativeMenuWait;
+    const qint64 waited = m_nativeMenuWaitClock.elapsed();
+    switch (m_nativeMenuWait) {
+    case W::None:
+        return true;
+    case W::Open: {
+        QString error;
+        if (m_nativeMenuShown) {
+            m_nativeMenuWait = W::None;
+            scheduleNext(std::max(m_scenario.settleMs, kNativeMenuSettleMs));
+            return false;
+        }
+        if (!menuScriptError(&error) && waited < kNativeMenuOpenTimeoutMs) {
+            scheduleNext(kNativeMenuPollMs);
+            return false;
+        }
+        if (error.isEmpty()) {
+            error = QStringLiteral("the native menu did not open within %1 s").arg(kNativeMenuOpenTimeoutMs / 1000);
+            // Don't let it pop up later, after the shot has moved on.
+            if (m_menuScript) m_menuScript->kill();
+        }
+        m_nativeMenuWait = W::None;
+        failStep(error, m_nativeMenuWaitLine);
+        if (!m_done) scheduleNext(0);
+        return false;
+    }
+    case W::Close:
+        if (!m_nativeMenuOpen) {
+            m_nativeMenuWait = W::None;
+            scheduleNext(std::max(m_scenario.settleMs, kNativeMenuCloseMs));
+            return false;
+        }
+        if (waited >= kNativeMenuCloseRetryMs) {
+            if (m_nativeMenuCloseTries >= kNativeMenuCloseTries) {
+                // Carry on regardless: the next shot may still work.
+                m_failures++;
+                log(QStringLiteral("%1: the native menu did not close after %2 Escape tries")
+                        .arg(m_scenario.path)
+                        .arg(kNativeMenuCloseTries));
+                m_nativeMenuWait = W::None;
+                return true;
+            }
+            sendNativeMenuEscapes(m_nativeMenuCloseDepth);
+            m_nativeMenuCloseTries++;
+            m_nativeMenuWaitClock.start();
+        }
+        scheduleNext(kNativeMenuPollMs);
+        return false;
+    }
+    return true;
 }
 
 void ShotRunner::closeAllTransient() {
