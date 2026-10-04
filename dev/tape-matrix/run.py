@@ -18,7 +18,8 @@ Each cell runs the model's headless CLI once and checks one direction:
 
 Every load cell runs once per WAV flavour: bin2wav's default (48 kHz on the
 PC-1600, 44.1 kHz on the PC-1500) and its 16 kHz one (-l 3). bin2wav gets
--s 3 (a 3 s leader): its 0.5 s default is shorter than the ROM's motor
+-s 3 (a 3 s leader): its default (0.5 s on the PC-1500, ~2.1 s on the
+PC-1600) is shorter than the ROM's motor
 start-up delay plus the leader the ROM wants (see
 Core/tests/pc1600_tape_tests.cpp).
 

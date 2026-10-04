@@ -72,7 +72,8 @@ the user wants the actual square wave. New sound sources drive
 remote relay is closed: CE-150 PA1-PA4 pulses (either REMOTE 0 or 1), or
 CE-1600P 82H b4/b5. Motor-off time is neither played nor recorded, as with
 a CE-152 on the remote jack. The ROM waits ~0.6 s for the motor before it
-counts the leader, so a tape needs a long leader (`bin2wav -s 3`); don't
+counts the leader, so a tape needs a long leader (`bin2wav -s 3` or
+`-l 0x400`); don't
 start the tape before the relay closes to make short leaders work. Because
 time is emulated, a recording is the same in real time, turbo or the CLI.
 
@@ -217,11 +218,13 @@ CE-151 then lands at A800-B7FF.
 - **`INIT"Sx:","P"` / `"M"` can wipe the S0 program.** When the S0 area moves
   (a slot leaves or joins it), `PRGMOVED` (rom3b 65C8H) empties the S0
   program at the new base.
-- **A `bin2wav` tape with its default 0.5 s leader doesn't `CLOAD`.** The
+- **A `bin2wav` tape with its default leader doesn't `CLOAD`** (0.5 s on
+  the PC-1500; on the PC-1600 its minimum of ~2.1 s, 6406 cycles). The
   ROM pulses the remote relay, waits ~0.6 s for the motor (PC-1600
   `CASMOTOR` 642EH + `DELAYF0`; the CE-150 likewise), then counts the
   leader: 5000 cycles on the PC-1600 (`CMSYNC`, F1AAH). The ROM's own
-  `CSAVE` writes 10000 (PC-1600) or ~8 s (PC-1500). Use `bin2wav -s 3`.
+  `CSAVE` writes 10000 (PC-1600) or ~8 s (PC-1500). Use `bin2wav -s 3`,
+  or `-l 0x400`, which writes the ROM's own gap and leader lengths.
 - **`CLOAD -1` doesn't read a PC-1500 tape in MODE 0.** The `-1` is parsed
   and skipped (CE-1600P bank 5 77F6H); only MODE (BMODE b6) picks the tape
   format. Through the CE-1600P, `CSAVE` in MODE 1 is ERROR 110 (66A0H).

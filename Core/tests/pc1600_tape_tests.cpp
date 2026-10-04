@@ -6,9 +6,10 @@
 // The fixture in fixtures/tape/ was made with Pocket Tools 2.1.1:
 //   bas2img -p 1600 pc1600_tape.bas pc1600_tape.img
 //   bin2wav -p 1600 -l 3 -s 3 -nTAPEFIX pc1600_tape.img pc1600_tape.wav
-// (-s 3: a 3 s leader. bin2wav's default 0.5 s one is too short once the
-// ROM's ~0.6 s motor start-up delay has eaten into it -- CMSYNC needs 5000
-// leader cycles after that, the ROM's own CSAVE writes 10000.)
+// (-s 3: a 3 s leader. bin2wav's default for the PC-1600, ~2.1 s (6406
+// cycles, no gap before it), is too short once the ROM's ~0.6 s motor
+// start-up delay has eaten into it -- CMSYNC needs 5000 leader cycles
+// after that, the ROM's own CSAVE writes 10000.)
 //
 // Build & run: see tools/run_tests.sh
 

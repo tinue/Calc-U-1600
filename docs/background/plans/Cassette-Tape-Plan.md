@@ -18,7 +18,8 @@
 > - No separate `TapeController`: `MainWindow` handles File ▸ Tape (Play…,
 >   Record…, Eject), and the control-bar Tape button shows the same actions.
 >   The menu items also make the flow scriptable for screenshots.
-> - `bin2wav` tapes need `-s 3`: its default leader is shorter than the
+> - `bin2wav` tapes need `-s 3` or `-l 0x400`: its default leader (0.5 s on
+>   the PC-1500, ~2.1 s on the PC-1600) is shorter than the
 >   ROM's motor start-up delay plus the leader it counts.
 > - Verification: CoreTests (`tape_deck_tests`, `pc1500_tape_tests`,
 >   `pc1600_tape_tests`), and `dev/tape-matrix/` (PC-1500A 26/26, PC-1600

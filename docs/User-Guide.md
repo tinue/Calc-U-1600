@@ -322,8 +322,9 @@ Good to know:
 - **Leave a long lead-in.** After switching on the motor the calculator
   waits about half a second for the recorder, then needs a few seconds of
   lead-in tone. A tape made with `bin2wav` therefore needs `-s 3` (a 3 s
-  lead-in); its 0.5 s default is too short. The calculator's own `CSAVE`
-  writes a long lead-in.
+  lead-in) or `-l 0x400` (gap and lead-in as long as the calculator's
+  own); its default (0.5 s on the PC-1500, 2.1 s on the PC-1600) is too
+  short. The calculator's own `CSAVE` writes a long lead-in.
 - **Formats.** The PC-1500 reads and writes PC-1500 tapes. The PC-1600 in
   MODE 0 reads and writes PC-1600 tapes. Not yet supported: the PC-1600
   reading PC-1500 tapes in MODE 1 (`CLOAD` through the CE-1600P), and the
