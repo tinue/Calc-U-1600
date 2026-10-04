@@ -379,10 +379,28 @@ void MainWindow::unmountHostDirectory() {
     syncHostDriveActions();
 }
 
+namespace {
+// The tape actions run from the control bar's Tape menu (or File ▸ Tape)
+// and may open a file dialog; when they're done, however they end, the
+// keyboard goes back to the calculator, so CLOAD / CSAVE can be typed at
+// once. Deferred to the next event-loop turn: Qt restores focus as the
+// menu and the dialog close, after the action itself returns.
+struct ReturnFocusToCalculator {
+    QWidget* window;
+    ~ReturnFocusToCalculator() {
+        QTimer::singleShot(0, window, [w = window] {
+            w->activateWindow();
+            w->setFocus();
+        });
+    }
+};
+} // namespace
+
 // Tape > Play…: the WAV waits in the recorder; CLOAD starts the motor
 // through the remote relay. Any tape already in comes out first (a
 // recording is written).
 void MainWindow::playTape() {
+    const ReturnFocusToCalculator refocus{this};
     const QString path = QFileDialog::getOpenFileName(this, tr("Play Tape"),
                                                       AppSettings::openStartDir(AppSettings::OpenFolder::Tape),
                                                       tr("WAV Audio (*.wav);;All Files (*)"));
@@ -396,6 +414,7 @@ void MainWindow::playTape() {
 // Tape > Record…: a blank tape that CSAVE records onto; the WAV is
 // written on Eject (or when the tape comes out any other way).
 void MainWindow::recordTape() {
+    const ReturnFocusToCalculator refocus{this};
     const QString start = QDir(AppSettings::openStartDir(AppSettings::OpenFolder::Tape)).filePath(tr("tape.wav"));
     QString path = QFileDialog::getSaveFileName(this, tr("Record Tape"), start, tr("WAV Audio (*.wav)"));
     if (path.isEmpty()) return;
@@ -415,6 +434,7 @@ void MainWindow::syncTapeActions() {
 }
 
 void MainWindow::ejectTape() {
+    const ReturnFocusToCalculator refocus{this};
     QString error;
     if (!m_controller->tapeEject(&error)) QMessageBox::warning(this, tr("Eject Tape"), error);
 }
