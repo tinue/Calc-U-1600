@@ -208,7 +208,7 @@ private:
             m_hpOut = m_priming.front() - mean;
             std::vector<double> primed;
             primed.swap(m_priming);
-            emit(m_hpOut);
+            emitSample(m_hpOut);
             for (size_t i = 1; i < primed.size(); ++i) filterAndEmit(primed[i], r);
             return;
         }
@@ -217,9 +217,9 @@ private:
     void filterAndEmit(double x, double r) {
         m_hpOut = x - m_hpIn + r * m_hpOut;
         m_hpIn = x;
-        emit(m_hpOut);
+        emitSample(m_hpOut);
     }
-    void emit(double y) {
+    void emitSample(double y) {
         const double s = std::min(32767.0, std::max(-32768.0, y * kRecordGain));
         m_recording.push_back(static_cast<int16_t>(std::lround(s)));
     }
