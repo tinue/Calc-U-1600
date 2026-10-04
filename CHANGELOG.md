@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.7.0] - work in progress
+## [0.7.0] - 2026-10-04
 
 ### New
 
