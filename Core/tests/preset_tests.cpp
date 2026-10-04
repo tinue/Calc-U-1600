@@ -188,7 +188,7 @@ void test_trace_step_start_and_stop() {
 }
 
 // A trace filename with a path separator is rejected up front -- WHERE the
-// file lands is the trace directory's concern, mirroring Calc-U-59.
+// file lands is the trace directory's concern.
 void test_trace_step_rejects_path_separator() {
     PresetFile p;
     std::string err;
@@ -272,7 +272,7 @@ void test_syncclock_step() {
     CHECK(err.find("syncclock") != std::string::npos);
 }
 
-// A wait value is a number and nothing else (`1s` used to pass as 1).
+// A wait value is a number and nothing else (`1s` is refused, not read as 1).
 void test_wait_step_rejects_trailing_text() {
     PresetFile p;
     std::string err;
@@ -590,7 +590,7 @@ void test_preset_parser_model_rom_pc1500() {
 
 void test_preset_parser_model_rom_pc1500a_is_a04_only() {
     // PC-1500A can only run A04: no suffix or A04 are fine, anything else
-    // is now an error (it used to be silently ignored).
+    // is an error.
     PresetFile preset;
     std::string error;
     CHECK(parse("model: PC-1500A\n", &preset, &error));
@@ -710,10 +710,60 @@ void test_debug_block_rejects_unknown_keys_and_shapes() {
     CHECK(err.find("line 4") != std::string::npos);
 }
 
+// Numbers in `debug:` follow the preset's rule: `&`, `0x` or `$` is hex, a
+// bare number decimal. Bare hex, and values out of range, are refused.
+void test_debug_block_numbers_follow_the_preset_rule() {
+    PresetFile p;
+    std::string err;
+    const auto program = [](const std::string& line) {
+        return "model: PC-1600\ndebug:\n  program:\n    bin: a.bin\n    " + line + "\n";
+    };
+    CHECK(parse(program("address: 1234"), &p, &err));
+    CHECK(parse(program("address: &C0C5"), &p, &err));
+    CHECK(parse(program("address: 0x40C5"), &p, &err));
+    CHECK(parse(program("address: $7C01"), &p, &err));
+    CHECK(!parse(program("address: C0C5"), &p, &err));
+    CHECK(err.find("line 5") != std::string::npos && err.find("'address'") != std::string::npos);
+    CHECK(!parse(program("address: &10000"), &p, &err));
+    CHECK(parse(program("bank: &7"), &p, &err));
+    CHECK(parse(program("bank: 0x6"), &p, &err));
+    CHECK(!parse(program("bank: 8"), &p, &err));
+    CHECK(!parse(program("me: 2"), &p, &err));
+    CHECK(parse(program("entry: START"), &p, &err)); // a symbol stays text
+    CHECK(!parse("model: PC-1600\ndebug:\n  listings:\n    - path: a.lst\n      pv: x\n", &p, &err));
+    CHECK(err.find("line 5") != std::string::npos);
+}
+
+// The other values are checked against the attach-key table too, with the
+// line number, instead of reaching the debugger unchecked.
+void test_debug_block_checks_choices_and_booleans() {
+    PresetFile p;
+    std::string err;
+    const auto program = [](const std::string& line) {
+        return "model: PC-1600\ndebug:\n  program:\n    bin: a.bin\n    " + line + "\n";
+    };
+    CHECK(parse(program("after: call"), &p, &err));
+    CHECK(!parse(program("after: foo"), &p, &err));
+    CHECK(err.find("line 5") != std::string::npos && err.find("stopOnEntry, call, none") != std::string::npos);
+    CHECK(parse(program("cpu: lh5803"), &p, &err));
+    CHECK(!parse(program("cpu: x86"), &p, &err));
+    CHECK(!parse(program("cleanStart: maybe"), &p, &err));
+    CHECK(!parse(program("cleanStart: \"false\""), &p, &err)); // would reach the debugger as text
+    CHECK(parse("model: PC-1600\ndebug:\n  boot: debug\n", &p, &err));
+    CHECK(!parse("model: PC-1600\ndebug:\n  boot: foo\n", &p, &err));
+    CHECK(err.find("line 3") != std::string::npos);
+    CHECK(!parse("model: PC-1600\ndebug:\n  reset: yes\n", &p, &err));
+    CHECK(!parse("model: PC-1600\ndebug:\n  stopOnEntry: maybe\n", &p, &err));
+    CHECK(!parse("model: PC-1600\ndebug:\n  symbols:\n    - path: a.sym\n      source: a.asm\n", &p, &err));
+    CHECK(err.find("unknown key 'source'") != std::string::npos);
+}
+
 int run_preset_tests() {
     test_debug_block_parses_and_resolves_paths();
     test_debug_block_absent_is_null();
     test_debug_block_rejects_unknown_keys_and_shapes();
+    test_debug_block_numbers_follow_the_preset_rule();
+    test_debug_block_checks_choices_and_booleans();
     test_preset_parser_model_rom_pc1600();
     test_preset_parser_plotter_ce1600p_rom();
     test_preset_parser_model_rom_pc1500a_is_a04_only();

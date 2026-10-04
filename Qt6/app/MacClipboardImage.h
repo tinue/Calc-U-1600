@@ -1,5 +1,6 @@
 #pragma once
 #include <QImage>
+#include <QString>
 
 #ifdef Q_OS_MACOS
 // Writes `source` to the general pasteboard as an NSImage sized to
@@ -15,9 +16,10 @@
 // unaffected), but the NSImage's/rep's own `size` is set to the true
 // physical dimensions in points, which is what AppKit consumers (Preview,
 // the print system) actually read to determine physical size. A PNG
-// flavour (public.png) of the same bitmap is put on the pasteboard too.
+// flavour (public.png) of the same bitmap is put on the pasteboard too,
+// and `text`, when not empty, as a plain-text flavour.
 //
 // Returns false (nothing written) if `source` is empty/invalid -- caller
 // should fall back to Qt's own clipboard path in that case.
-bool macSetClipboardImage(const QImage& source, double widthPt, double heightPt);
+bool macSetClipboardImage(const QImage& source, double widthPt, double heightPt, const QString& text = {});
 #endif

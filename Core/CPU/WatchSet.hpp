@@ -12,8 +12,8 @@
 // instruction against it -- operand reads/writes, stack pushes and pops,
 // vector-table reads -- but never its opcode and operand fetches, which go
 // through the core's fetch helpers instead. A hit only latches: the
-// instruction completes (post-execution semantics, like the history ring)
-// and the machine stops after it. Owned by the debugger; a CPU with no
+// instruction completes and the machine stops after it (the debugger's
+// history then shows that instruction with the registers it started from). Owned by the debugger; a CPU with no
 // watches holds nullptr and pays one pointer test per access, one with
 // watches a bit test (a 64K-bit map per space and access kind in use).
 

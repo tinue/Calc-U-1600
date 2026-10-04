@@ -9,6 +9,7 @@
 #include "../PC1500/PC1500MachineCodeLoader.hpp"
 #include "../PC1600/PC1600Machine.hpp"
 #include "../PC1600/PC1600MachineCodeLoader.hpp"
+#include "../Preset/PresetFile.hpp"
 #include "Listing/Listing.hpp"
 
 namespace debug {
@@ -64,7 +65,8 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
 
     std::string err;
     const bool written = pc1500 ? loadPC1500MachineCode(*pc1500, plan.busAddr, file.payload.data(), plan.len, &err)
-                                : loadPC1600MachineCode(*pc1600, int(plan.slot), plan.busAddr, file.payload.data(), plan.len, &err);
+                                : loadPC1600MachineCode(*pc1600, int(plan.slot), plan.busAddr, file.payload.data(), plan.len, &err,
+                                                        plan.bank);
     if (!written) {
         r.error = err;
         return r;
@@ -88,7 +90,7 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
         r.entry = req.entry;
     } else if (!req.entrySymbol.empty()) {
         if (symbol(req.entrySymbol, &entry)) r.entry = entry;
-        else if (machinecode::parseHexAddress(req.entrySymbol, &parsed)) r.entry = uint16_t(parsed);
+        else if (parseNumber(req.entrySymbol, &parsed) && parsed <= 0xFFFF) r.entry = uint16_t(parsed);
         else {
             r.error = "\"entry\": " + req.entrySymbol + " is neither a symbol of the listing nor an address";
             return r;
@@ -107,10 +109,11 @@ LoadResult loadProgram(PC1500Machine* pc1500, PC1600Machine* pc1600, const LoadR
     uint32_t ramStart = 0, ramEnd = 0;
     if (pc1500) pc1500UserRam(*pc1500, &ramStart, &ramEnd);
     // advice() starts at r.entry (the `entry` override, the header's
-    // auto-run address, or the load address): CALL, with slot 2's bank, for
-    // main-CPU code; XCALL (an LH5803 address) for the PC-1600's LH5803.
+    // auto-run address, or the load address): CALL, with the plan's bank
+    // (slot 2, or a header bank), for main-CPU code; XCALL (an LH5803
+    // address) for the PC-1600's LH5803.
     const bool lh5803 = req.thread == 2;
-    r.callCommand = machinecode::advice(options.target, plan.slot, lh5803 ? plan.addr : plan.busAddr, plan.len, r.entry,
+    r.callCommand = machinecode::advice(options.target, plan.slot, plan.bank, lh5803 ? plan.addr : plan.busAddr, plan.len, r.entry,
                                         ramStart, ramEnd, state,
                                         lh5803 ? machinecode::Cpu::LH5803 : machinecode::Cpu::Z80)
                         .callCommand;

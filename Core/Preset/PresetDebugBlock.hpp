@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <string>
 
+#include "../Debug/AttachKeys.hpp"
 #include "../Yaml.hpp"
 #include "PresetFile.hpp"
 
@@ -27,87 +28,105 @@
 //
 // The preset runner ignores the block; only the debugger reads it
 // (Qt6/app/debug/DapSession). parsePresetDebugBlock() checks the keys and
+// values against the attach-key table (Core/Debug/AttachKeys.hpp) and
 // resolves every file path against the preset's directory, in place, so the
 // node can be handed on as it is.
 namespace preset_debug {
 
+using namespace debug::attach;
+
 inline bool resolvePathScalar(YamlNode* node, const std::filesystem::path& dir, std::string* error) {
     std::string value;
+    if (!node->isScalar()) {
+        *error = yaml_detail::errAt(node->line, "expected a path");
+        return false;
+    }
     if (!node->asString(&value, error)) return false;
     node->scalar = resolvePath(dir, value);
     return true;
 }
 
-inline bool resolvePathKey(YamlNode* map, const char* key, const std::filesystem::path& dir, std::string* error) {
-    for (auto& kv : map->map)
-        if (kv.first == key) return resolvePathScalar(&kv.second, dir, error);
+inline bool checkMap(YamlNode* map, const Table& table, const std::filesystem::path& dir, std::string* error);
+
+// One value in the shape its key takes; paths resolved against `dir`.
+inline bool checkValue(const std::string& name, const Key& key, YamlNode* v, const std::filesystem::path& dir,
+                       std::string* error) {
+    switch (key.kind) {
+        case Kind::Map:
+            if (!v->isMap()) {
+                *error = yaml_detail::errAt(v->line, "'" + name + ":' takes a block of settings");
+                return false;
+            }
+            if (!checkMap(v, kProgramKeys, dir, error)) return false;
+            if (!v->has("bin")) {
+                *error = yaml_detail::errAt(v->line, "'" + name + ":' needs at least 'bin'");
+                return false;
+            }
+            return true;
+        case Kind::FileList:
+            if (!v->isSeq()) {
+                *error = yaml_detail::errAt(v->line, "'" + name + ":' expects a list");
+                return false;
+            }
+            for (YamlNode& item : v->seq) {
+                if (item.isScalar()) {
+                    if (!resolvePathScalar(&item, dir, error)) return false;
+                } else if (!item.isMap() || !item.has("path")) {
+                    *error = yaml_detail::errAt(item.line, "expected a path, or a map with 'path'");
+                    return false;
+                } else if (!checkMap(&item, itemKeys(key), dir, error)) {
+                    return false;
+                }
+            }
+            return true;
+        case Kind::PathList:
+            if (!v->isSeq()) {
+                *error = yaml_detail::errAt(v->line, "'" + name + ":' expects a list of paths");
+                return false;
+            }
+            for (YamlNode& item : v->seq)
+                if (!resolvePathScalar(&item, dir, error)) return false;
+            return true;
+        case Kind::Path: return resolvePathScalar(v, dir, error);
+        default: break;
+    }
+    std::string text, why;
+    if (!v->isScalar()) {
+        *error = yaml_detail::errAt(v->line, "'" + name + "' takes a single value");
+        return false;
+    }
+    if (!v->asString(&text, error)) return false;
+    // A quoted `"true"` would reach the debugger as text, not a boolean.
+    const bool quotedBool = key.kind == Kind::Bool && text != v->scalar;
+    if (quotedBool || !checkScalar(key, text, &why)) {
+        if (quotedBool) why = "true or false, without quotes";
+        *error = yaml_detail::errAt(v->line, "'" + name + "' is " + why + ", not '" + text + "'");
+        return false;
+    }
     return true;
 }
 
-// `listings:` / `symbols:` items are a path, or a map with `path`, `cpu`
-// and bank qualifiers (`source` too, for a listing).
-inline bool resolveFileList(YamlNode* list, bool listings, const std::filesystem::path& dir, std::string* error) {
-    if (!list->isSeq()) {
-        *error = yaml_detail::errAt(list->line, "expected a list");
-        return false;
-    }
-    for (YamlNode& item : list->seq) {
-        if (item.isScalar()) {
-            if (!resolvePathScalar(&item, dir, error)) return false;
-            continue;
-        }
-        if (!item.isMap() || !item.has("path")) {
-            *error = yaml_detail::errAt(item.line, "expected a path, or a map with 'path'");
+// Only the keys of `table`, each in its shape.
+inline bool checkMap(YamlNode* map, const Table& table, const std::filesystem::path& dir, std::string* error) {
+    for (auto& kv : map->map) {
+        const Key* key = find(table, kv.first);
+        if (!key) {
+            *error = yaml_detail::errAt(map->line, "unknown key '" + kv.first + "'");
             return false;
         }
-        if (listings ? !item.requireOnlyKeys({"path", "source", "cpu", "bank", "me", "pu", "pv"}, error)
-                     : !item.requireOnlyKeys({"path", "cpu", "bank", "me", "pu", "pv"}, error))
-            return false;
-        if (!resolvePathKey(&item, "path", dir, error) || !resolvePathKey(&item, "source", dir, error)) return false;
+        if (!checkValue(kv.first, *key, &kv.second, dir, error)) return false;
     }
     return true;
 }
 
 } // namespace preset_debug
 
-/// Checks a parsed `debug:` block and resolves its paths against `presetDir`.
+/// Checks a parsed `debug:` block against the attach keys and resolves its
+/// paths against `presetDir`.
 inline bool parsePresetDebugBlock(YamlNode* block, const std::filesystem::path& presetDir, std::string* error) {
-    using namespace preset_debug;
     if (!block->isMap()) {
         *error = yaml_detail::errAt(block->line, "'debug:' takes a block of settings");
         return false;
     }
-    if (!block->requireOnlyKeys({"reset", "stopOnEntry", "command", "program", "listings", "symbols", "boot"}, error))
-        return false;
-    for (auto& kv : block->map) {
-        YamlNode& v = kv.second;
-        if (kv.first == "program") {
-            if (!v.isMap() || !v.has("bin")) {
-                *error = yaml_detail::errAt(v.line, "'program:' needs at least 'bin'");
-                return false;
-            }
-            if (!v.requireOnlyKeys({"bin", "listing", "source", "symbols", "cpu", "address", "entry", "after",
-                                    "cleanStart", "bank", "me", "pu", "pv"},
-                                   error))
-                return false;
-            if (!resolvePathKey(&v, "bin", presetDir, error) || !resolvePathKey(&v, "listing", presetDir, error) ||
-                !resolvePathKey(&v, "source", presetDir, error))
-                return false;
-            for (auto& p : v.map)
-                if (p.first == "symbols") {
-                    if (!p.second.isSeq()) {
-                        *error = yaml_detail::errAt(p.second.line, "'symbols:' expects a list of paths");
-                        return false;
-                    }
-                    for (YamlNode& s : p.second.seq)
-                        if (!resolvePathScalar(&s, presetDir, error)) return false;
-                }
-        } else if (kv.first == "listings" || kv.first == "symbols") {
-            if (!resolveFileList(&v, kv.first == "listings", presetDir, error)) return false;
-        } else if (!v.isScalar()) {
-            *error = yaml_detail::errAt(v.line, "'" + kv.first + "' takes a single value");
-            return false;
-        }
-    }
-    return true;
+    return preset_debug::checkMap(block, debug::attach::kBlockKeys, presetDir, error);
 }

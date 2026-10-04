@@ -87,6 +87,11 @@ public:
     uint16_t pc() const { return P; }
     void     setPC(uint16_t v) { P = v; }
     uint16_t sp() const { return S; }
+    /// The internal 16-bit operand register (the "W register" of the PC-1500
+    /// Service Manual's MPU block diagram, which nothing else documents).
+    /// No documented instruction names it; the undocumented "V" opcodes
+    /// expose it as (WH, 00) -- see the V block in execute().
+    uint16_t w() const { return W; }
     void     setSP(uint16_t v) { S = v; }
 
     uint8_t  statusReg() const { return T; }
@@ -201,7 +206,7 @@ public:
     bool consumeBreakpointHit() { return m_breakpoints.consumeHit(); }
 
     /// True if the most recently executed opcode had no case in execute()/
-    /// executeFD() (i.e. isn't in the LH5801_Guide.md instruction set this
+    /// executeFD() (i.e. isn't in the Ref/PC-1500/Assembly-Programming/LH5801_Guide.md instruction set this
     /// core was built from). Execution still proceeds as a no-op rather than
     /// halting — real hardware behavior for undocumented opcodes isn't
     /// sourced — but this makes that distinguishable from a genuinely
@@ -229,6 +234,7 @@ private:
     uint16_t S{0};
     uint16_t P{0};
     uint8_t  T{0};             // bit0=C,1=IE,2=Z,3=V,4=H; bits 7:5 always 0
+    uint16_t W{0};             // internal operand register: last 16-bit operand / vector address
     bool     PU{false}, PV{false};
     bool     DISP{false};
     uint16_t TM{0};            // 9-bit timer counter (bit 8 in bit position 8)
@@ -252,7 +258,8 @@ private:
 
     // ── Fetch helpers ────────────────────────────────────────────────────
     uint8_t  fetch8();
-    uint16_t fetch16(); // big-endian: high byte first, then low
+    uint16_t fetch16(); // big-endian: high byte first, then low; loads W
+    uint16_t vPtr() const { return uint16_t(W & 0xFF00); } // the address (V) / #(V) use: WH:00
 
     // ── ALU / flag helpers ───────────────────────────────────────────────
     void setZFlagFrom(uint8_t result) { setFlagBit(0x04, result == 0); }
@@ -303,11 +310,18 @@ private:
     uint16_t m_lastIllegalOpcode{0};
     uint8_t  m_cpuIdTag{CPU_ID_UNSPECIFIED};
 
+    // History entries and trace frames hold the registers an instruction
+    // started from (pre-execution, like the debugger's live frame):
+    // captureHistory() takes them before the fetch, a trace frame copies
+    // them from that still uncommitted entry, and commitHistory() files
+    // the entry once the instruction is known.
+
     /// Records a TRACE frame if `tf` asks for one. The flag test is inline
     /// so the untraced hot path pays no call.
     void recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles) {
         if (tf & (TRACE_PC | TRACE_REGS_LIGHT | TRACE_REGS_FULL)) pushTraceFrame(tf, pcAtStart, opcodeWord, cycles);
     }
     void pushTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles);
-    void recordHistory(uint16_t pcAtStart, bool interrupt);
+    void captureHistory();
+    void commitHistory(uint16_t pcAtStart, bool interrupt);
 };

@@ -13,11 +13,11 @@
 #include <string>
 #include <vector>
 
+#include "../Display/StatusLine.hpp"
 #include "../PC1600/PC1600Bank.hpp"
 #include "../PC1600/PC1600Display.hpp"
 #include "../PC1600/PC1600Keyboard.hpp"
 #include "../PC1600/PC1600Memory.hpp"
-#include "../PC1600/PC1600StatusLine.hpp"
 #include "../SharpShiftedSymbols.hpp"
 
 namespace {
@@ -56,7 +56,7 @@ void test_keyboard_rsv_matrix_position() {
 
 void test_keyboard_scan_single_strobe() {
     PC1600Keyboard kb;
-    // '5' is KS0 bit1 (PC-1600-Keyboard.md §5).
+    // '5' is KS0 bit1 (Ref/PC-1600/PC-1600-Keyboard.md §5).
     kb.setKeyState(PC1600Keyboard::Key::Digit5, true);
     // Strobe only KS0 (bit0 low -> active), rest high (inactive).
     uint8_t sense = kb.scan(0xFE, false);
@@ -323,7 +323,7 @@ void test_display_status_symbols_wired_to_ic3_column63() {
     d.writeIO(0x54, 0x40 | 63);
     d.writeIO(0x56, 0x09);
 
-    using Symbol = PC1600StatusLine::Symbol;
+    using Symbol = StatusLine::Symbol;
     CHECK(d.statusLine().isOn(Symbol::Def));
     CHECK(d.statusLine().isOn(Symbol::Busy));
     CHECK(!d.statusLine().isOn(Symbol::Shift));
@@ -334,8 +334,8 @@ void test_display_status_symbols_wired_to_ic3_column63() {
     CHECK(!d.statusLine().isOn(Symbol::Pro));
     CHECK(!d.statusLine().isOn(Symbol::Reserve));
     CHECK(!d.statusLine().isOn(Symbol::Rad));
-    CHECK(!d.statusLine().isOn(Symbol::Grad));
-    CHECK(!d.statusLine().isOn(Symbol::Deg));
+    CHECK(!d.statusLine().isOn(Symbol::G));
+    CHECK(!d.statusLine().isOn(Symbol::De));
 
     CHECK(d.statusLine().isOn(Symbol::S));
     CHECK(d.statusLine().isOn(Symbol::Batt));
@@ -345,13 +345,13 @@ void test_display_status_symbols_wired_to_ic3_column63() {
 }
 
 // A "display off" command (0x3E) to IC3 must also blank the status-symbol
-// strip -- those segments hang off IC3 (PC-1600-Display-HD61202.md §2), so
+// strip -- those segments hang off IC3 (Ref/PC-1600/PC-1600-Display-HD61202.md §2), so
 // the ROM's OFF-key / auto-power-off power-down should not leave DEG/RUN/
 // BUSY frozen on the glass. Turning the display back on recomputes from the
 // retained pixel RAM.
 void test_display_status_symbols_blank_when_ic3_display_off() {
     PC1600Display d;
-    using Symbol = PC1600StatusLine::Symbol;
+    using Symbol = StatusLine::Symbol;
 
     d.writeIO(0x54, 0x3F); // IC3 on
     d.writeIO(0x54, 0xB8 | 7);
@@ -377,35 +377,35 @@ void test_display_clock_enable_flag() {
     CHECK(d.clockEnabled());
 }
 
-// ── PC1600StatusLine ─────────────────────────────────────────────────
+// ── StatusLine ─────────────────────────────────────────────────
 
 void test_statusline_defaults_all_off() {
-    PC1600StatusLine s;
+    StatusLine s;
     for (bool on : s.all()) CHECK(!on);
 }
 
 void test_statusline_set_and_read() {
-    PC1600StatusLine s;
-    s.set(PC1600StatusLine::Symbol::Batt, true);
-    CHECK(s.isOn(PC1600StatusLine::Symbol::Batt));
-    CHECK(!s.isOn(PC1600StatusLine::Symbol::Busy));
-    s.set(PC1600StatusLine::Symbol::Batt, false);
-    CHECK(!s.isOn(PC1600StatusLine::Symbol::Batt));
+    StatusLine s;
+    s.set(StatusLine::Symbol::Batt, true);
+    CHECK(s.isOn(StatusLine::Symbol::Batt));
+    CHECK(!s.isOn(StatusLine::Symbol::Busy));
+    s.set(StatusLine::Symbol::Batt, false);
+    CHECK(!s.isOn(StatusLine::Symbol::Batt));
 }
 
 void test_statusline_reset_clears_all() {
-    PC1600StatusLine s;
-    s.set(PC1600StatusLine::Symbol::Deg, true);
-    s.set(PC1600StatusLine::Symbol::Ctrl, true);
+    StatusLine s;
+    s.set(StatusLine::Symbol::De, true);
+    s.set(StatusLine::Symbol::Ctrl, true);
     s.reset();
     for (bool on : s.all()) CHECK(!on);
 }
 
 void test_display_owns_status_line() {
     PC1600Display d;
-    CHECK(!d.statusLine().isOn(PC1600StatusLine::Symbol::Shift));
-    d.statusLine().set(PC1600StatusLine::Symbol::Shift, true);
-    CHECK(d.statusLine().isOn(PC1600StatusLine::Symbol::Shift));
+    CHECK(!d.statusLine().isOn(StatusLine::Symbol::Shift));
+    d.statusLine().set(StatusLine::Symbol::Shift, true);
+    CHECK(d.statusLine().isOn(StatusLine::Symbol::Shift));
 }
 
 // ── PC1600Memory I/O wiring ────────────────────────────────────────────
@@ -614,7 +614,6 @@ void test_subcpu_clock_ticks_and_rolls_over() {
     auto& sub = mem.subCpu();
 
     // Plain second bump, BCD-encoded fields.
-    sub.setYear(2025);
     sub.setDateTime({0x09, 0x25, 0x14, 0x37, 0x08});
     sub.tickOneSecond();
     CHECK(sub.dateTime().second == 0x09);
@@ -634,23 +633,20 @@ void test_subcpu_clock_ticks_and_rolls_over() {
     dt = sub.dateTime();
     CHECK(dt.day == 0x01 && dt.month == 0x05);
 
-    // Non-leap February stops at 28; leap February reaches 29.
-    sub.setYear(2025);
+    // No year: February ends after the 28th; a set 02/29 also rolls into
+    // 03/01 (measured on a real unit).
     sub.setDateTime({0x02, 0x28, 0x23, 0x59, 0x59});
     sub.tickOneSecond();
     CHECK(sub.dateTime().month == 0x03 && sub.dateTime().day == 0x01);
-    sub.setYear(2024);
-    sub.setDateTime({0x02, 0x28, 0x23, 0x59, 0x59});
+    sub.setDateTime({0x02, 0x29, 0x23, 0x59, 0x59});
     sub.tickOneSecond();
-    CHECK(sub.dateTime().month == 0x02 && sub.dateTime().day == 0x29);
+    CHECK(sub.dateTime().month == 0x03 && sub.dateTime().day == 0x01);
 
-    // 31 Dec 23:59:59 -> 1 Jan, year advances.
-    sub.setYear(2025);
+    // 31 Dec 23:59:59 -> 1 Jan.
     sub.setDateTime({0x0C, 0x31, 0x23, 0x59, 0x59});
     sub.tickOneSecond();
     dt = sub.dateTime();
     CHECK(dt.month == 0x01 && dt.day == 0x01);
-    CHECK(sub.year() == 2026);
 }
 
 void test_subcpu_host_seed_survives_cold_init() {
@@ -662,7 +658,6 @@ void test_subcpu_host_seed_survives_cold_init() {
     // Host seeds a real time and arms the guard (as PC1600Machine::seedClock
     // does).
     sub.setDateTime({0x09, 0x01, 0x21, 0x34, 0x56});
-    sub.setYear(2026);
     sub.armHostSeedGuard();
 
     // The boot ROM's cold-start write: 6DH with 1 Jan 00:00:00 -> swallowed.
@@ -725,7 +720,7 @@ void test_romaji_kana_segments_follow_the_glass_pinout() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
     auto& bus = static_cast<SC7852Bus&>(mem);
-    using Symbol = PC1600StatusLine::Symbol;
+    using Symbol = StatusLine::Symbol;
     bus.writeIO(0x54, 0x3F);        // display on
     bus.writeIO(0x54, 0x40 | 63);   // column 63
 
@@ -886,8 +881,8 @@ void test_memory_clock_enable_via_port37_write() {
 
 // The GUI/typer's PC-1600 digit-row SHIFT table must agree with the ROM's
 // own SHIFT-code table (SFTCDT, bank 6 @ 953FH, indexed by key code - 08H;
-// PC-1600-Keyboard.md §7). Regression: '_' used to map to SHIFT + 9, but
-// SFTCDT puts it on "." and leaves 9 unshifted.
+// Ref/PC-1600/PC-1600-Keyboard.md §7): '_' is SHIFT + ".", and 9 has no
+// SHIFT character.
 void test_digit_row_shift_table_matches_rom_sftcdt() {
     std::ifstream in("roms/PC1600-P2-B6-new.bin", std::ios::binary);
     if (!in) {

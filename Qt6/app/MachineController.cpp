@@ -10,10 +10,12 @@
 #include <algorithm>
 
 #include "PC1500/PC1500BasicTyper.hpp"
+#include "PC1500/PC1500LcdText.hpp"
 #include "PC1500/PC1500Machine.hpp"
 #include "PC1500/PC1500Screenshot.hpp"
 #include "PC1500/PC1500TypedInput.hpp"
 #include "PC1600/PC1600BasicTyper.hpp"
+#include "PC1600/PC1600LcdText.hpp"
 #include "PC1600/PC1600Machine.hpp"
 #include "PC1600/PC1600Screenshot.hpp"
 #include "PC1600/PC1600TypedInput.hpp"
@@ -49,11 +51,9 @@ Model initialModel() {
 // A missing/unreadable bundled ROM means the install is broken -- there's
 // no usable machine to fall back to (this is called both at startup and
 // from a later model switch, and either way the app can't proceed without
-// its firmware). Previously this was qFatal(), which aborts (SIGABRT) --
-// on a packaged macOS/Windows build launched normally (not from a
-// terminal) that's just a silent crash/bounce with no visible message at
-// all. Show the user what's actually wrong and where Calc-U-1600 looked,
-// then exit cleanly instead. std::exit() (not returning to unwind the
+// its firmware). Show the user what's wrong and where Calc-U-1600 looked,
+// then exit: an abort (qFatal) would be a silent crash for an app not
+// launched from a terminal. std::exit() (not returning to unwind the
 // call stack) is deliberate: this can be reached mid-construction of
 // MainWindow/MachineController, which aren't set up to unwind safely from
 // here, and terminating the process reclaims everything the OS owns
@@ -407,49 +407,29 @@ double MachineController::clockHz() const {
 
 DisplayFrame MachineController::currentDisplay() const {
     DisplayFrame frame;
+    auto fill = [&frame](LcdBitmap bitmap, const StatusLine& line) {
+        frame.cols = bitmap.cols;
+        frame.rows = bitmap.rows;
+        frame.pixels = std::move(bitmap.pixels);
+        frame.poweredOn = bitmap.poweredOn;
+        for (std::size_t i = 0; i < StatusLine::kCount; ++i)
+            frame.statusSymbols.emplace_back(kStatusSymbolNames[i], line.all()[i]);
+    };
     if (m_pc1600) {
         const PC1600DisplaySnapshot snap = m_pc1600->displaySnapshot();
-        frame.cols = PC1600Display::kWidth;
-        frame.rows = PC1600Display::kHeight;
-        frame.pixels.resize(static_cast<std::size_t>(frame.cols) * frame.rows);
-        for (int row = 0; row < frame.rows; ++row) {
-            for (int col = 0; col < frame.cols; ++col) {
-                frame.pixels[static_cast<std::size_t>(row) * frame.cols + col] = snap.pixels[row][col];
-            }
-        }
-        frame.poweredOn = snap.clockEnabled;
-
-        static const char* kSymbolNames[] = {
-            "BUSY", "SHIFT", "S", "ROMAJI", "KANA", "SMALL", "DEG", "RAD", "GRAD",
-            "RUN", "PRO", "RESERVE", "DEF", "I", "II", "III", "CTRL", "BATT",
-        };
-        static_assert(std::size(kSymbolNames) == PC1600StatusLine::kCount, "one name per PC1600StatusLine::Symbol");
-        for (std::size_t i = 0; i < PC1600StatusLine::kCount; ++i) {
-            frame.statusSymbols.emplace_back(kSymbolNames[i], snap.statusSymbols[i]);
-        }
+        fill(pc1600LcdBitmap(snap), snap.statusLine);
     } else if (m_pc1500) {
         const PC1500Display disp = m_pc1500->display();
-        frame.cols = PC1500Display::kCols;
-        frame.rows = PC1500Display::kRows;
-        frame.pixels.resize(static_cast<std::size_t>(frame.cols) * frame.rows);
-        for (int row = 0; row < frame.rows; ++row) {
-            for (int col = 0; col < frame.cols; ++col) {
-                frame.pixels[static_cast<std::size_t>(row) * frame.cols + col] = disp.pixel(col, row);
-            }
-        }
-        frame.poweredOn = m_pc1500->isDisplayOn();
-
-        frame.statusSymbols = {
-            {"BUSY", disp.busy()},       {"SHIFT", disp.shift()},
-            {"JAPANESE", disp.japanese()}, {"SMALL", disp.small()},
-            {"ROMAN_I", disp.romanI()},  {"ROMAN_II", disp.romanII()},
-            {"ROMAN_III", disp.romanIII()}, {"DEF", disp.def()},
-            {"DE", disp.de()},           {"G", disp.g()},
-            {"RAD", disp.rad()},         {"RESERVE", disp.reserve()},
-            {"PRO", disp.pro()},         {"RUN", disp.run()},
-        };
+        fill(pc1500LcdBitmap(disp, m_pc1500->isDisplayOn()), disp.statusLine());
     }
     return frame;
+}
+
+bool MachineController::lcdText(LcdText* out) const {
+    if (m_pc1600) *out = pc1600LcdText(*m_pc1600);
+    else if (m_pc1500) *out = pc1500LcdText(*m_pc1500);
+    else return false;
+    return true;
 }
 
 // ---- Debug panel support ----

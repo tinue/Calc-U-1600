@@ -113,7 +113,7 @@ directly; a single-term group may drop `all-of` and give the bare term.
 | `chip-select: [A, B, C]` | All listed lines asserted at the same access (an AND). Uncommon — the host's 2 KB strobes are mutually exclusive, so this is only for a strobe that is qualified by another live signal. |
 | `signal: NAME` / `signal: [..]` | Same as `chip-select`; use when the line isn't a decode strobe (e.g. `PVOUT`). |
 | `signal-negated: NAME` | Line explicitly **not** asserted. Needed to split a window by a half-select line (`PVOUT` low vs. high). |
-| `address-bits: { An: 0\|1, … }` | Specific address lines required at specific levels, AND'd into the group. Models an on-module decoder that gates on a **few** address lines alongside a chip select — *not* a full address-bus comparison. CE-155's `Y0` chip: `{ A13: 1, A12: 1, A11: 1 }` (the "`AD11–AD13 = 111`" of `PC-1500-Address-Decoding.md` §3.2). Lines not listed are not tested. Does **not** set `span` — the low, un-listed lines are the offset. |
+| `address-bits: { An: 0\|1, … }` | Specific address lines required at specific levels, AND'd into the group. Models an on-module decoder that gates on a **few** address lines alongside a chip select — *not* a full address-bus comparison. CE-155's `Y0` chip: `{ A13: 1, A12: 1, A11: 1 }` (the "`AD11–AD13 = 111`" of [Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md) §3.2). Lines not listed are not tested. Does **not** set `span` — the low, un-listed lines are the offset. |
 | `memory-range: { from, to }` | A raw address window the card magnitude-decodes itself, with **no** chip select in the group (spec §4 direct memory-range match). Fixes `span` from `to − from + 1`; the offset within the slice is `address − from`, so the window need be neither a power of two nor aligned. Flagged distinctly because the author's host-compatibility judgement has no pin to anchor to (spec §1). |
 
 ### Group keys
@@ -312,6 +312,8 @@ threaded through the loader, which nothing else currently needs.
 
 | File | Card | Shows |
 |---|---|---|
+| `Qt6/resources/cards/ce151.card.yaml` | CE-151, 4 KB | Two bare-strobe `span` groups (`S1`, `S2`), one 2 KB chip each, no on-module decode (Service Manual schematic 5-3); PC-1500/1500A and PC-1600 Slot 1. |
+| `Qt6/resources/cards/ce161.card.yaml` | CE-161, 16 KB | One bare `Y0` group spanning the whole 16 KB window; PC-1500/1500A and both PC-1600 slots. |
 | `Qt6/resources/cards/ce155.card.yaml` | CE-155, 8 KB | one `address-bits` group (the on-module `AD11–AD13` decoder) OR'd with three bare-strobe `span` groups; an author-declared host list (spec §1) covering PC-1500 and PC-1600 Slot 1. |
 | `Qt6/resources/cards/ce1600m.card.yaml` | CE-1600M, 32 KB | `PVOUT` folded into addressing as a half-select line — unbanked despite two physical halves (spec §6); one Slot-1-terminology file declared for both PC-1600 slots (`RAM2` resolves to the pin-4 enable on both — spec §1). |
 | `Qt6/resources/cards/ce1601m.card.yaml` | CE-1601M, 64 KB | Trigger-based vertical banking — `trigger: { io-port: 0x28 }`, `source-domain: data` (the byte written by `OUT (28H)`); `bank-window` nesting the `PVOUT` half-select (spec §4/§9). |

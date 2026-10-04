@@ -370,7 +370,10 @@ void test_trace_ring_and_drain() {
     CHECK(frames[0].opcode == 0x00B5);
     CHECK(frames[1].pc == 0x8002);
     CHECK(frames[2].pc == 0x8004);
-    CHECK(frames[2].a == 0x03);
+    // Pre-execution registers: each frame has the A its ldi started from.
+    CHECK(frames[1].a == 0x01);
+    CHECK(frames[2].a == 0x02);
+    CHECK(r.cpu.a() == 0x03);
     // A second drain with nothing new produces nothing.
     n = r.cpu.drainTraceEvents(frames, 8, &lost);
     CHECK(n == 0);
@@ -406,12 +409,12 @@ void test_trace_ring_peek_does_not_consume() {
     CHECK(n == 2);
     CHECK(peeked[0].pc == 0x8000);
     CHECK(peeked[1].pc == 0x8002);
-    CHECK(peeked[1].a == 0x02);
+    CHECK(peeked[1].a == 0x01); // pre-execution: the A ldi a,2 started from
     // Peeking again returns the identical snapshot -- it's read-only.
     CpuFrame peekedAgain[8];
     n = r.cpu.peekTraceEvents(peekedAgain, 8);
     CHECK(n == 2);
-    CHECK(peekedAgain[1].a == 0x02);
+    CHECK(peekedAgain[1].a == 0x01);
     // A real drain afterward still sees both frames -- peeking didn't
     // advance the drain cursor.
     CpuFrame drained[8];
@@ -419,7 +422,7 @@ void test_trace_ring_peek_does_not_consume() {
     n = r.cpu.drainTraceEvents(drained, 8, &lost);
     CHECK(n == 2);
     CHECK(lost == 0);
-    CHECK(drained[1].a == 0x02);
+    CHECK(drained[1].a == 0x01);
     // A third instruction, then peek should reflect only the newest 1
     // when asked for max=1 (most-recent-first semantics), while a
     // larger max still returns everything available.
@@ -428,7 +431,7 @@ void test_trace_ring_peek_does_not_consume() {
     n = r.cpu.peekTraceEvents(onlyNewest, 1);
     CHECK(n == 1);
     CHECK(onlyNewest[0].pc == 0x8004);
-    CHECK(onlyNewest[0].a == 0x03);
+    CHECK(onlyNewest[0].a == 0x02);
 }
 
 void test_breakpoint_halts_step() {
@@ -452,21 +455,81 @@ void test_breakpoint_halts_step() {
 }
 
 void test_illegal_opcode_is_distinguishable_from_nop() {
-    // 0x30 has no case in execute()'s switch and isn't in the vej range
-    // (0xC0-0xFE even) -- an undocumented opcode. Execution still proceeds
-    // (so a malformed stream doesn't wedge step()), but the event must be
-    // reported distinctly from a real NOP.
-    Rig r({0x30, 0x38}); // illegal ; nop
+    // 0x74 has no case in execute()'s switch, isn't one of the measured "V"
+    // opcodes and isn't in the vej range (0xC0-0xFE even) -- an undocumented
+    // opcode. Execution still proceeds (so a malformed stream doesn't wedge
+    // step()), but the event must be reported distinctly from a real NOP.
+    Rig r({0x74, 0x38}); // illegal ; nop
     CHECK(!r.cpu.consumeIllegalOpcodeHit()); // nothing hit yet
     int c = r.cpu.step(); // the illegal opcode
     CHECK(c != 0); // execution still advances
     CHECK(r.cpu.consumeIllegalOpcodeHit());
     CHECK(r.cpu.lastIllegalOpcodePC() == 0x8000);
-    CHECK(r.cpu.lastIllegalOpcode() == 0x0030);
+    CHECK(r.cpu.lastIllegalOpcode() == 0x0074);
     CHECK(!r.cpu.consumeIllegalOpcodeHit()); // consumed: false on the next check
 
     r.cpu.step(); // nop -- a genuinely documented instruction
     CHECK(!r.cpu.consumeIllegalOpcodeHit()); // must not be reported as illegal
+}
+
+void test_v_register_reads_operand_high_byte() {
+    // The undocumented "V" opcodes, as measured on a real PC-1500A and PC-1600:
+    // V reads as (WH, 00), W = the last 16-bit
+    // operand; writes are ignored; LDI VL,n is two bytes.
+    Rig r({0xA5, 0x7A, 0x55,   // lda (0x7A55)       -> W = 7A55
+           0xB4,               // lda vh             -> A = 7A
+           0x34,               // lda vl             -> A = 00
+           0xB5, 0x5A, 0x3A,   // ldi a,0x5A ; sta vl (ignored)
+           0x34,               // lda vl             -> still 00
+           0x4A, 0x22,         // ldi xl,0x22
+           0x7A, 0x40,         // ldi vl,0x40        -> two bytes: INC XL is not executed
+           0x04,               // lda xl             -> 22
+           0x48, 0x23, 0x05,   // ldi xh,0x23 ; lda (x): indexed, W unchanged
+           0xB4});             // lda vh             -> still 7A
+    r.bus.mem[0x7A55] = 0x99;
+    r.cpu.step();
+    CHECK(r.cpu.w() == 0x7A55);
+    r.cpu.step();
+    CHECK(r.cpu.a() == 0x7A);
+    r.cpu.step();
+    CHECK(r.cpu.a() == 0x00 && r.cpu.flagZ());
+    r.cpu.step(); r.cpu.step(); r.cpu.step();
+    CHECK(r.cpu.a() == 0x00);
+    r.cpu.step(); r.cpu.step();
+    CHECK(r.cpu.pc() == 0x800D); // LDI VL,n consumed its operand
+    r.cpu.step();
+    CHECK(r.cpu.a() == 0x22);
+    r.cpu.step(); r.cpu.step();
+    CHECK(r.cpu.w() == 0x7A55); // LDA (X) does not load W
+    r.cpu.step();
+    CHECK(r.cpu.a() == 0x7A);
+    CHECK(!r.cpu.consumeIllegalOpcodeHit());
+}
+
+void test_v_register_arithmetic_and_pointer() {
+    // SBC VL computes with VL = 00 (hardware: 10 with C -> 10, flags C H;
+    // 10 without C -> 0F, flags C). LDA (V) reads WH:00. A vector call loads
+    // W with the vector's table address (FFxx).
+    Rig r({0xA5, 0x01, 0x23,   // lda (0x0123)  -> W = 0123
+           0xFB, 0xB5, 0x10, 0x30,   // sec ; ldi a,0x10 ; sbc vl
+           0xF9, 0xB5, 0x10, 0x30,   // rec ; ldi a,0x10 ; sbc vl
+           0x35,               // lda (v)       -> mem[0x0100]
+           0xCD, 0x54,         // vmj (0x54)    -> W = FF54
+           0x00});
+    r.bus.mem[0x0100] = 0xCA;
+    r.bus.mem[0xFF54] = 0x90; r.bus.mem[0xFF55] = 0x00; // vector -> 9000
+    r.bus.mem[0x9000] = 0x9A;                         // rtn
+    r.cpu.setSP(0x7000);
+    r.cpu.step();
+    r.cpu.step(); r.cpu.step(); r.cpu.step();
+    CHECK(r.cpu.a() == 0x10 && (r.cpu.statusReg() & 0x11) == 0x11);
+    r.cpu.step(); r.cpu.step(); r.cpu.step();
+    CHECK(r.cpu.a() == 0x0F && (r.cpu.statusReg() & 0x11) == 0x01);
+    r.cpu.step();
+    CHECK(r.cpu.a() == 0xCA);
+    r.cpu.step();
+    CHECK(r.cpu.w() == 0xFF54);
+    CHECK(r.cpu.pc() == 0x9000);
 }
 
 void test_flag_cost_gating_no_trace_by_default() {
@@ -495,7 +558,7 @@ void test_memory_open_bus_and_ram_regions() {
 }
 
 void test_memory_display_ram_mirroring() {
-    // Per PC-1500-Address-Decoding.md: the V2/V3 sub-decode only examines
+    // Per Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md: the V2/V3 sub-decode only examines
     // AD8/DME0, so the 2KB S6 window (0x7000-0x77FF) collapses onto the
     // same 512 physical bytes 4 times.
     PC1500Memory mem;
@@ -508,7 +571,7 @@ void test_memory_display_ram_mirroring() {
     CHECK(mem.readME0(0x77FF) == 0x66);
 }
 
-// Per PC-1500-Address-Decoding.md §2.3/§4.2: the *plain* PC-1500's S7 block
+// Per Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md §2.3/§4.2: the *plain* PC-1500's S7 block
 // is backed by a TC5514 pair that only decodes A0-A9 (10 lines) across a
 // 2KB (11-line) window, so &7800-&7BFF and &7C00-&7FFF alias the same 1024
 // physical bytes, offset by &400 -- e.g. a write to &7C00 is electrically
@@ -630,7 +693,7 @@ void test_io_chip_keyboard_wiring_through_memory() {
     CHECK(mem.readInputPort() == 0xFF);
 
     // An ME1 address outside the I/O-chip's decode window (bits 12-13 not
-    // both set) still falls back to mirroring ME0 -- the Phase 1 default.
+    // both set) mirrors ME0.
     mem.writeME1(0x4100, 0x77);
     CHECK(mem.readME0(0x4100) == 0x77);
 }
@@ -727,16 +790,12 @@ void test_rtc_if_does_not_clear_on_read() {
 }
 
 void test_rtc_opb_and_if_never_disagree_within_one_poll() {
-    // A real regression, reproduced live: pressing WAIT-driven PRINT
-    // reported "BREAK AT <line>" within the first tick or two, every
-    // time. Root cause -- IF's read (via the ROM's own E451 helper) was
-    // firing independently of OPB's immediately-preceding read within the
-    // *same* WAIT poll iteration (E89C: check OPB, ~15 cycles later check
-    // IF), so it could see a "new" edge OPB's own check a few cycles
-    // earlier hadn't -- and since IF is deliberately sticky (see
-    // test_rtc_if_does_not_clear_on_read), any such disagreement, even
-    // once, got misread as BREAK on every later iteration of the *same*
-    // poll loop, not just the one where it happened. Simulates WAIT's own
+    // The ROM's WAIT poll checks OPB (E89C) and, ~15 cycles later, IF (via
+    // E451) within the *same* iteration. If IF could see a TP edge that
+    // OPB's check a few cycles earlier hadn't, the disagreement -- sticky,
+    // since IF doesn't clear on read (test_rtc_if_does_not_clear_on_read)
+    // -- is read as BREAK on every later iteration, and a WAIT-driven PRINT
+    // stops with "BREAK AT <line>" within a tick or two. Simulates WAIT's own
     // poll cadence (OPB, then ~15 cycles later IF) across many simulated
     // ticks and confirms they always agree -- the exact invariant
     // Upd1990ac's debounce (see its own class doc comment) exists to
@@ -830,17 +889,21 @@ void test_rtc_calendar_seed_and_read() {
     CHECK(rtcNibble(r, 36) == 9);                          // month (plain, not BCD)
 }
 
-// `- syncclock:` re-seeds the RTC from the host: after a 10-minute
-// emulated `- wait:` (the clock would otherwise be ~10 min ahead of the
-// boot seed), the calendar reads back the host's current time. ROM-gated.
+// `- syncclock:` re-seeds the RTC from the host: the boot seeds a clearly
+// wrong clock (12 hours and 6 months off), and after a `- wait:` and the sync the
+// calendar reads back the host's current time. ROM-gated.
 void test_preset_syncclock_reseeds_rtc() {
     PresetFile preset;
     std::string err;
-    CHECK(parsePresetString("model: PC-1500A\nkeys:\n  - wait: 600\n  - syncclock:\n",
+    CHECK(parsePresetString("model: PC-1500A\nkeys:\n  - wait: 1\n  - syncclock:\n",
                             "/tmp/lh5801_tests_syncclock.pc1500a", &preset, &err));
     PC1500Machine machine(PC1500Variant::PC1500A);
     auto hostOnBoot = [&machine] {
-        machine.seedClock(2000, 1, 1, 0, 0, 0); // a clearly wrong clock to start from
+        // A clearly wrong clock to start from: 12 hours and a month off.
+        const std::time_t bootNow = std::time(nullptr);
+        std::tm b{};
+        localtime_r(&bootNow, &b);
+        machine.seedClock(2000, (b.tm_mon + 6) % 12 + 1, 1, (b.tm_hour + 12) % 24, 0, 0);
     };
     const PresetLoadResult res = applyPC1500Preset(machine, preset, {}, ".", ".", hostOnBoot, {"roms"});
     if (!res.ok) {
@@ -857,7 +920,7 @@ void test_preset_syncclock_reseeds_rtc() {
     CHECK(rtcNibble(r, 36) == t.tm_mon + 1);
     CHECK(bcd(24) == t.tm_mday || t.tm_hour == 0);          // tolerate a midnight rollover
     const int diff = (hostMinutes - rtcMinutes + 1440) % 1440;
-    CHECK(diff <= 1);                                         // not 10 minutes ahead
+    CHECK(diff <= 1);                                         // not the boot seed
 }
 
 void test_rtc_calendar_set_via_shift_and_commit() {
@@ -1213,20 +1276,24 @@ void test_display_status_icons() {
     mem.poke(0x764E, 0xA5); // 0b10100101
     mem.poke(0x764F, 0x53); // 0b01010011
     PC1500Display disp(mem);
-    CHECK(disp.busy() == true);
-    CHECK(disp.shift() == false);
-    CHECK(disp.japanese() == true);
-    CHECK(disp.small() == false);
-    CHECK(disp.romanIII() == false);
-    CHECK(disp.romanII() == true);
-    CHECK(disp.romanI() == false);
-    CHECK(disp.def() == true);
-    CHECK(disp.de() == true);
-    CHECK(disp.g() == true);
-    CHECK(disp.rad() == false);
-    CHECK(disp.reserve() == true);
-    CHECK(disp.pro() == false);
-    CHECK(disp.run() == true);
+    using S = StatusLine::Symbol;
+    const StatusLine line = disp.statusLine();
+    CHECK(line.isOn(S::Busy) == true);
+    CHECK(line.isOn(S::Shift) == false);
+    CHECK(line.isOn(S::Kana) == true);
+    CHECK(line.isOn(S::Small) == false);
+    CHECK(line.isOn(S::III) == false);
+    CHECK(line.isOn(S::II) == true);
+    CHECK(line.isOn(S::I) == false);
+    CHECK(line.isOn(S::Def) == true);
+    CHECK(line.isOn(S::De) == true);
+    CHECK(line.isOn(S::G) == true);
+    CHECK(line.isOn(S::Rad) == false);
+    CHECK(line.isOn(S::Reserve) == true);
+    CHECK(line.isOn(S::Pro) == false);
+    CHECK(line.isOn(S::Run) == true);
+    // No bits on the PC-1500.
+    CHECK(!line.isOn(S::S) && !line.isOn(S::Romaji) && !line.isOn(S::Ctrl) && !line.isOn(S::Batt));
 }
 
 void test_boot_smoke_real_rom() {
@@ -1241,7 +1308,7 @@ void test_boot_smoke_real_rom() {
     CHECK(machine.cpu().pc() == 0xE000); // confirmed reset vector target, see LH5801.cpp comment
 
     // The ROM's documented input-buffer-clear fill loop (DEL_DIM_VAR_4,
-    // $D0B0 per PC-1500-Address-Decoding.md §4.2) must be reached during a
+    // $D0B0 per Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md §4.2) must be reached during a
     // real cold boot -- a source-independent correctness signal that
     // doesn't depend on decoding the LCD's pixel format.
     machine.setTraceFlags(TRACE_PC);
@@ -1317,10 +1384,12 @@ void test_boot_smoke_real_rom() {
 // folded into this file's single test-runner executable/exit code per
 // tools/run_tests.sh's existing single-binary convention.
 int run_connector_tests();
-// Defined in ce155_tests.cpp / ce1638_tests.cpp / ce163f_tests.cpp (the
-// bundled CE-155, CE-1638 and CE-163F module definitions) -- same
-// single-binary convention.
+// Defined in ce151_tests.cpp / ce155_tests.cpp / ce161_tests.cpp /
+// ce1638_tests.cpp / ce163f_tests.cpp (the bundled module definitions) --
+// same single-binary convention.
+int run_ce151_tests();
 int run_ce155_tests();
+int run_ce161_tests();
 int run_ce1638_tests();
 int run_ce502b_tests();
 int run_ce163f_tests();
@@ -1392,7 +1461,7 @@ int run_pc1600_host_drive_tests();
 // its PC1500Machine / 60-pin SystemBus integration.
 int run_ce150_tests();
 // Defined in pc1600_ce150_tests.cpp -- the CE-150 attached to the PC-1600's
-// LH5803 side (Phase 2).
+// LH5803 side.
 int run_pc1600_ce150_tests();
 // Defined in ce158_tests.cpp -- Ce158Card (ROM window, LH5811, CDP1854 UART,
 // Centronics) and the CE-158 driven by BASIC on a PC1500Machine.
@@ -1413,6 +1482,8 @@ int run_pc1600_program_placement_tests();
 int run_key_paste_tests();
 // Defined in lcd_screenshot_tests.cpp -- LCD PNG render + `screenshot:` step.
 int run_lcd_screenshot_tests();
+// Defined in lcd_text_tests.cpp -- the LCD read back as text.
+int run_lcd_text_tests();
 // Defined in machine_code_file_tests.cpp -- "Load Machine Code…": header
 // recognition, load plan, NEW/CALL advice, and the two writers.
 int run_machine_code_file_tests();
@@ -1444,6 +1515,8 @@ int main() {
     test_trace_ring_peek_does_not_consume();
     test_breakpoint_halts_step();
     test_illegal_opcode_is_distinguishable_from_nop();
+    test_v_register_reads_operand_high_byte();
+    test_v_register_arithmetic_and_pointer();
     test_flag_cost_gating_no_trace_by_default();
     test_memory_open_bus_and_ram_regions();
     test_memory_display_ram_mirroring();
@@ -1481,7 +1554,9 @@ int main() {
 
     std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
     int connectorFailures = run_connector_tests();
+    int ce151Failures = run_ce151_tests();
     int ce155Failures = run_ce155_tests();
+    int ce161Failures = run_ce161_tests();
     int ce1638Failures = run_ce1638_tests();
     int ce502bFailures = run_ce502b_tests();
     int ce163fFailures = run_ce163f_tests();
@@ -1515,13 +1590,14 @@ int main() {
     int piezoSamplerFailures = run_piezo_sampler_tests();
     int keyPasteFailures = run_key_paste_tests();
     int lcdScreenshotFailures = run_lcd_screenshot_tests();
+    int lcdTextFailures = run_lcd_text_tests();
     int machineCodeFileFailures = run_machine_code_file_tests();
     int programFileFailures = run_program_file_tests();
     int disasmFailures = run_disasm_tests();
     int debugTargetFailures = run_debug_target_tests();
     int listingFailures = run_listing_tests();
     int runControlFailures = run_run_control_tests();
-    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && connectorFailures == 0 && ce155Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
+    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && lcdTextFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && connectorFailures == 0 && ce151Failures == 0 && ce155Failures == 0 && ce161Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
             ce163fFailures == 0 && memoryCardFailures == 0 && batteryCardInstanceFailures == 0 &&
             presetFailures == 0 &&
             basicTyperFailures == 0 && pc1600BasicTyperFailures == 0 &&

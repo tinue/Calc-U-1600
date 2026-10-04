@@ -1,8 +1,9 @@
 #pragma once
 #include <cstddef>
+#include <string>
 #include <string_view>
 
-// ── Minimal UTF-8 decoding for host text typed into a machine ────────────
+// ── Minimal UTF-8 for host text: typed into a machine, read off the LCD ──
 //
 // The typed-input paths (preset `type:` steps, Edit > Paste) walk host text
 // one character at a time; a PC-1600 accented character (KBII, see
@@ -51,4 +52,25 @@ inline bool decodeUtf8(std::string_view text, std::size_t& i, char32_t& cp) {
     }
     i += static_cast<std::size_t>(extra) + 1;
     return true;
+}
+
+/// Encodes code point `c` (at most U+10FFFF) as UTF-8.
+inline std::string encodeUtf8(char32_t c) {
+    std::string out;
+    if (c < 0x80) {
+        out += char(c);
+    } else if (c < 0x800) {
+        out += char(0xC0 | (c >> 6));
+        out += char(0x80 | (c & 0x3F));
+    } else if (c < 0x10000) {
+        out += char(0xE0 | (c >> 12));
+        out += char(0x80 | ((c >> 6) & 0x3F));
+        out += char(0x80 | (c & 0x3F));
+    } else {
+        out += char(0xF0 | (c >> 18));
+        out += char(0x80 | ((c >> 12) & 0x3F));
+        out += char(0x80 | ((c >> 6) & 0x3F));
+        out += char(0x80 | (c & 0x3F));
+    }
+    return out;
 }

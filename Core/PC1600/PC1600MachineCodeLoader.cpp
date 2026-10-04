@@ -1,11 +1,12 @@
 #include "PC1600MachineCodeLoader.hpp"
 
+#include <algorithm>
 #include <cstdio>
 
 #include "PC1600Machine.hpp"
 
 bool loadPC1600MachineCode(PC1600Machine& machine, int slot, uint32_t addr, const uint8_t* data, size_t len,
-                           std::string* error) {
+                           std::string* error, int bank) {
     if (slot == 0) {
         if (addr < 0xC000 || static_cast<uint64_t>(addr) + len > 0x10000) {
             char b[160];
@@ -21,18 +22,32 @@ bool loadPC1600MachineCode(PC1600Machine& machine, int slot, uint32_t addr, cons
         return true;
     }
     const char* slotName = (slot == 1) ? "S1" : "S2";
-    if (addr < 0x8000 || static_cast<uint64_t>(addr) + len > 0xC000) {
+    if (addr < 0x8000 || addr >= 0xC000 || static_cast<uint64_t>(addr) + len > 0x10000) {
         char b[192];
-        std::snprintf(b, sizeof(b),
-                      "load $%04X + %zu bytes does not fit the %s memory-slot window "
-                      "($8000-$BFFF) -- use slot: S0 or split the image",
+        std::snprintf(b, sizeof(b), "load $%04X + %zu bytes does not start in the %s memory-slot window ($8000-$BFFF)",
                       addr, len, slotName);
         *error = b;
         return false;
     }
-    if (!machine.debugWriteSlotImage(slot, addr - 0x8000, data, len)) {
-        *error = std::string("backing-store write failed for slot ") + slotName +
-                 " (empty slot, or a module with no writable RAM)";
+    if (static_cast<int>(machinecode::pc1600BankSlot(bank)) != slot) {
+        char b[96];
+        std::snprintf(b, sizeof(b), "bank %d is not in the %s memory slot", bank, slotName);
+        *error = b;
+        return false;
+    }
+    // Past $BFFF the code continues in internal RAM, as BLOAD / CLOAD M write it.
+    const size_t inWindow = std::min<size_t>(len, 0xC000 - addr);
+    if (!machine.debugWriteSlotBus(bank, static_cast<uint16_t>(addr), data, inWindow)) {
+        char b[160];
+        std::snprintf(b, sizeof(b),
+                      "no RAM for $%04X + %zu bytes in slot %s, bank %d (empty slot, or a module with no writable "
+                      "RAM there)",
+                      addr, inWindow, slotName, bank);
+        *error = b;
+        return false;
+    }
+    if (inWindow < len && !machine.debugWriteInternalRam(0, data + inWindow, len - inWindow)) {
+        *error = "internal-RAM write failed";
         return false;
     }
     return true;
@@ -65,6 +80,12 @@ machinecode::PC1600State pc1600LoadState(PC1600Machine& machine) {
         st.titleBase = static_cast<uint32_t>(d.basePage) << 8;
         st.titleStart = d.start;
     }
+    for (int bank = 0; bank < 4; bank++) {
+        for (uint32_t page = 0; page < 64; page++) {
+            if (machine.debugSlotBusWritable(bank, static_cast<uint16_t>(0x8000 + page * 0x100), 0x100))
+                st.bankRamPages[static_cast<size_t>(bank)] |= uint64_t{1} << page;
+        }
+    }
     return st;
 }
 
@@ -81,8 +102,7 @@ std::vector<machinecode::BasicArea> pc1600BasicAreas(PC1600Machine& machine) {
         a.slot = seg.kind == pc1600::ProgramSegment::Kind::InternalRam ? 0 : seg.slot;
         a.windowBase = seg.windowBase;
         a.top = seg.top;
-        // Backing offset of the window base (segment 0's base was moved up to BASPRG_ST).
-        a.imageOffset = seg.backingBase - (static_cast<uint32_t>(seg.base) - seg.windowBase);
+        a.bank = seg.adtblBank;
         areas.push_back(a);
     }
     return areas;

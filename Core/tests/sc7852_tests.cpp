@@ -6,13 +6,9 @@
 
 #include <cstdint>
 #include <cstdio>
-#include <set>
 #include <vector>
 
 #include "../CPU/SC7852/SC7852.hpp"
-#include "../PC1600/PC1600Bank.hpp"
-#include "../PC1600/PC1600Memory.hpp"
-#include "TestRoms.hpp"
 
 namespace {
 
@@ -546,60 +542,6 @@ void test_ddcb_bit_set_res_on_displacement() {
     CHECK(!r.cpu.flagZ()); // bit is set -> Z clear
 }
 
-// ── Boot smoke test: real ROM images, PC1600Bank/PC1600Memory as the bus ──
-
-void test_boot_smoke_real_rom() {
-    std::vector<uint8_t> lower, upper, bank3, bank3b, bank6;
-    if (!readRomImage("roms/PC1600-P0-B0-new.bin", &lower) ||
-        !readRomImage("roms/PC1600-P1-B0-new.bin", &upper) ||
-        !readRomImage("roms/PC1600-P1-B3-new.bin", &bank3) ||
-        !readRomImage("roms/PC1600-P1-B3B-new.bin", &bank3b) ||
-        !readRomImage("roms/PC1600-P2-B6-new.bin", &bank6)) {
-        std::fprintf(stderr, "SKIP test_boot_smoke_real_rom: one or more roms/PC1600-*.bin "
-                              "files not found relative to cwd (run tests from the repo root)\n");
-        return;
-    }
-
-    PC1600Bank bank;
-    PC1600Memory mem(bank);
-    CHECK(mem.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
-    CHECK(mem.loadBank3Rom(bank3.data(), bank3.size()));
-    CHECK(mem.loadBank3bRom(bank3b.data(), bank3b.size()));
-    CHECK(mem.loadBank6Rom(bank6.data(), bank6.size()));
-    SC7852 cpu(mem);
-    cpu.reset();
-    CHECK(cpu.pc() == 0x0000);
-
-    // Loads bank3/bank3b/bank6 in addition to bank0, with a 2M-step
-    // warm-up: the boot ROM's own busy-wait on PC1600Display's "not busy"
-    // status (0x0807 in PC1600-P0-B0-new.bin) only clears once that status is
-    // reported accurately, letting real execution continue on into
-    // bank3/bank6 code rather than parking in a tiny loop. Running this
-    // test without those banks loaded produces open-bus wandering, not a
-    // bounded loop, so the fuller ROM set is required for the "boots to a
-    // stable, bounded execution pattern" check below to mean anything.
-    //
-    // Run a substantial warm-up period, then confirm the PC settles into
-    // a small, bounded set of addresses -- a "stable, bounded execution
-    // pattern". A ROM boot that ran off into garbage (bad decode, wrong
-    // flag behavior corrupting a branch) would instead keep visiting
-    // new, ever-growing sets of
-    // addresses. **Not yet a claim of reaching genuine BASIC-ready idle**:
-    // this is a standalone SC7852 + PC1600Memory (no PC1600Machine), so
-    // the TC8576F is present with real SSR/PSR status but its BUSY window
-    // and the 64Hz/0.5s interrupt sources are not being pumped -- the
-    // boot still settles into a bounded loop, which is all this exit
-    // criterion asks.
-    for (int i = 0; i < 2'000'000; i++) cpu.step();
-
-    std::set<uint16_t> visited;
-    for (int i = 0; i < 200000; i++) {
-        visited.insert(cpu.pc());
-        cpu.step();
-    }
-    CHECK(visited.size() < 500);
-}
-
 } // namespace
 
 int run_sc7852_tests() {
@@ -642,7 +584,6 @@ int run_sc7852_tests() {
     test_ix_add_and_inc_dec();
     test_ix_plain_opcode_passthrough_when_unrelated();
     test_ddcb_bit_set_res_on_displacement();
-    test_boot_smoke_real_rom();
 
     std::printf("sc7852_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

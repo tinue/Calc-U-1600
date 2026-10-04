@@ -20,6 +20,7 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/PC1500/PC1500PresetLoader.cpp \
   Core/PC1500/PC1500MachineCodeLoader.cpp \
   Core/Display/LcdScreenshot.cpp \
+  Core/Display/LcdText.cpp \
   Core/Basic/BasicProgramSource.cpp \
   Core/PC1500/PC1500TraceFile.cpp \
   Core/Serial/PtySerialLink.cpp \

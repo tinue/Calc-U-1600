@@ -155,7 +155,7 @@ inline int dapPort() {
 inline void setDapPort(int port) { backingStore().setValue(QStringLiteral("debug/dapPort"), port); }
 
 // Key: "serial/linkDirectory" -- directory PtySerialLink creates its stable
-// `calcu1600.serial` symlink in. Empty/absent means AppPaths::instanceDir()
+// serial port symlinks (`calcu1600-rs232c.serial`, ...) in. Empty/absent means AppPaths::instanceDir()
 // (the same ~/Calc-U-1600 default everything else uses); MachineController
 // always resolves and passes a concrete directory here.
 inline QString serialLinkDirOverride() {

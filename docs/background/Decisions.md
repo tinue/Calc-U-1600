@@ -83,7 +83,7 @@ then resumes through the FA08H signature, or runs the WAKE$ command string.
   own resume logic only work through the reset.
 - `m_rtcAccum` isn't touched by any reset or power cycle: it's the
   sub-CPU's divider.
-Source: Sharp1500-1600-Ref PC-1600-SubCpu-LU57813P.md §4.1.
+Source: [Ref/PC-1600/PC-1600-SubCPU-LU57813P.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-SubCPU-LU57813P.md) §4.1.
 
 ### Sub-CPU SRIRQ clears on read; INT6 is a level
 `PC1600SubCpu` keeps events as pending bits. SRIRQ (A2H) returns and clears
@@ -146,6 +146,19 @@ status byte reports display-off in bit 5, and busy doesn't clear while CK0
   The re-fit plan is in TODO.md.
 - The controllers aren't reset on power-on or reset: VGG keeps their RAM and
   registers. Only CK0 stops.
+
+### PC-1600 Slot 1 S1-S3 follow Port 3CH b6, in reverse order
+`MemorySlotConnector::decode()` drives Slot 1 pins 16/17/18 from the
+SC7852's LHS3/LHS2/LHS1, not LHS1/LHS2/LHS3 as the names suggest. Port 3CH
+b6 remaps them (TRM SC7852 pins 46-48), and they select bank 0 only:
+b6 = 0 gives B800/B000/A800, b6 = 1 gives A000/A800/B000. The boot probe
+(P0-B0 03CF) sets 1BH with an empty slot, 1AH for a CE-151 and 5BH for a
+CE-155 or a full 16/32 KB module. This order is the only one that fits the
+measurements on a real PC-1600: a CE-155 (MEM +8192, 3CH = 5BH, four
+separate 2 KB blocks at A000-BFFF) and a CE-155 with pins 4 and 18 taped
+off, which is electrically a CE-151 (MEM +4096, 3CH = 1AH, RAM at B000 and
+B800 only, BASIC start B0C5H). Don't straighten it to pin 16 = LHS1: the
+CE-151 then lands at A800-B7FF.
 
 ## Authentic ROM behaviour: not bugs
 
@@ -220,6 +233,15 @@ authentic speed for the span that matters.
   header), the VARIABLE POINTER check, PRGADR (FE3C-FE41), F89E and F1C1
   (LOADEND, rom3b 70E1H). LIST reads PRGADR, so without it a loaded program
   lists as empty (7b327cd). Checked byte for byte against the typer.
+- **The PC-1600 loaders write a module through the slot's pins**
+  (`PC1600Memory::slotBusWrite`, a global bank + Z-80 address), not into
+  the card image at "address minus window base". A card's image isn't in
+  address order: a CE-155 keeps A000H (S1) at 0800H and B800H (its own
+  decoder) at 0000H. Found by the loader matrix (dev/loader-matrix/).
+  Don't bring back image-offset writes.
+- **Machine code may run from a module window on past &BFFF** into
+  internal RAM, as `BLOAD` and `CLOAD M` write it. In MODE 1 that is one
+  LH5803 range, where PC-1500 machine code naturally lives.
 - **No line straddles two module banks** (`PC1600ProgramPlacement`). The ROM
   leaves a `00 00` bank-end mark and starts the next bank (LOADSTORE 7074H);
   only ADTBL entry 5 -> internal RAM is contiguous and may be straddled.
@@ -248,8 +270,12 @@ authentic speed for the span that matters.
   `slot-1-file:`, `floppy:` / `floppy-file:`; a path-valued key is `file`
   or ends in `-file` (only `host-drive:`, a folder, doesn't). `saveas:`
   uses the same device words (`slot-1`, `slot-2`, `floppy`). Numbers: `&`,
-  `0x` or `$` is hex, a bare number is decimal. Leaving a key out means
-  "none"; there is no `none` value.
+  `0x` or `$` is hex, a bare number is decimal, also in `debug:` and in
+  launch configurations' strings (they merge key by key, so one key can't
+  have two rules); bare hex is refused, not guessed. Leaving a key out means
+  "none"; there is no `none` value. (`after: none` in `debug:` is not an
+  exception: it names an action, load without starting, next to `call`
+  and `stopOnEntry`.)
 - **`debug:` keeps camelCase** (`stopOnEntry`, `cleanStart`) against the
   rest's kebab-case. They are the launch-configuration keys (below), and
   `stopOnEntry` is the DAP name.
@@ -297,6 +323,20 @@ authentic speed for the span that matters.
   both the code heuristic *and* a `.bin` / `.rom` name, because the heuristic
   alone takes JPEGs, PDFs, fonts and Mach-O binaries for code. Drops that
   aren't recognized are ignored without a message, on purpose.
+- **A PC-1600 header's bank 0 means "no bank given".** Banks 1-3 are
+  honoured exactly (1 = slot 1's upper 16 KB, 2/3 = slot 2), refused when
+  that bank has no RAM under the code, and started with `CALL #bank,`.
+  Bank 0 can't be told apart from a file that names none, and such files
+  are common (e.g. a C program linked at &80C5): they follow the program
+  area like `BLOAD` without `#bank`, so they land in bank 2 when slot 2
+  holds S0's first run (the ROM fills S0 slot 2 first). Don't make bank 0
+  force slot 1: with RAM in both slots (the usual emulator setup -- memory
+  costs nothing there) slot 1 is the *middle* of the BASIC area, where
+  `NEW "S0:"` can't protect the code; the start of S0 is where it can. On
+  real machines slot 1 alone is the common case (a slot 2 card was mostly
+  a RAM disk); there S0 starts in bank 0, so reading bank 0 literally and
+  auto-detecting give the same place. The two only differ when slot 2
+  holds RAM too -- exactly the case where slot 1 can't be protected.
 - **Machine code may go into the work area F000-FFFF, with a warning.**
   Many PC-1600 programs live up there, above all in the area of the CE-1F01A
   bar-code reader pen, &FF40-&FFFF (e.g. CLOCK.BIN at &FF3A-&FFFB, which also
@@ -397,6 +437,12 @@ authentic speed for the span that matters.
 - **The app registers `ApplePersistenceIgnoreState = YES`**
   (`Qt6/app/MacAppSupport.mm`). Without it, the macOS "reopen windows?" prompt
   deadlocks the synchronous load of the startup preset.
+- **Copy Screen's text is plain Unicode, while `--lcd-text` escapes**
+  (`\\`, `\xHH`, U+FFFD; `Core/Display/LcdText.hpp`). The text is for
+  reading, so its glyphs appear as themselves and graphics as blanks. The
+  test/DAP form must stay unambiguous, so don't unify the two. The plain
+  text comes from each glyph's drawn shape, not its code, because the fonts
+  draw some ASCII codes as other signs (PC-1500 5BH √, PC-1600 `CGSPEC`).
 
 ### File formats
 - **Floppies are `.floppy.yaml` only.** `.floppy.img` isn't read, and no
@@ -413,6 +459,13 @@ authentic speed for the span that matters.
 - **The slot-record layout stays additive** for the planned battery-backed
   module split. Reserve the `batteryBacked` flag and keep
   `ExpansionCard` serialize/deserialize as the single seam for it.
+- **Serial port files are named after their connector:**
+  `calcu1600-rs232c.serial`, `calcu1600-ce158.serial`, and later
+  `calcu1600-sio.serial`. One file per connector; a file carries data only
+  while its connector is selected (PRIME), like a cable in the other
+  socket. No bare `calcu1600.serial` and no alias for an old name.
+  SharpDataExchange's `pc1600emul` device appends the RS-232C name itself,
+  so a rename goes into both repositories.
 
 ### Repository layout
 - **`examples/` is user-facing only.** It ships as the release's examples
@@ -425,6 +478,18 @@ authentic speed for the span that matters.
   `Core/tests/fixtures/` (e.g. `memtest_stock.bin` next to its `.rst`), so
   renaming or editing an example can't break a test. The duplicate binary is
   deliberate.
+- **`memory_card_tests.cpp` keeps inline card definitions** (`kCe1601mYaml`,
+  `kSuperRamYaml`, ...) next to the bundled `Qt6/resources/cards/` files.
+  They are engine fixtures, not stale copies: the bundled superRAM, for
+  one, is a formatted RAM-disk image, so a "fresh bank" isn't blank there.
+  Tests about the shipped modules use `bundledCard()`.
+- **Tests type only what they test.** Typing costs ~0.13 s emulated per
+  character, so a program that is only setup goes in through the fast
+  loader (`loadBasicProgram`), and the typer is used where typing or the
+  ROM's own tokenizing is the subject (e.g. the host drive's `CDIR`/`LDIR`,
+  which libsharpdx doesn't know). Likewise, a test that applies a PC-1600
+  preset loads the ROMs first: an empty bus "boots" too, but runs into the
+  idle-wait caps and takes several times longer.
 - **`Core/tests/LegacyExpression.hpp` is a test oracle.** It keeps the old
   interpreted debugger expression evaluator, hit conditions and log
   interpolation, and the tests check the compiled forms against it. The
@@ -455,9 +520,29 @@ authentic speed for the span that matters.
 - **The extension runs `build` itself before the session, instead of
   `preLaunchTask`.** Build & Load needs the same build, and a
   configuration generated for "the current file" can't name a task label.
+- **Snapshots are pre-execution everywhere.** The live frame, the history
+  frames 1–20 and every `TRACE.bin` frame show the registers an instruction
+  started from, not its result. An instruction's effect is in the next newer
+  frame (post(N) = pre(N+1)). Post-execution history made frame 1 a copy of
+  frame 0 and gave the highlighted line two meanings. Don't switch any of
+  them back.
 
 ### Wording and sources
 - **Comments and docs cite original sources only**: TRM, Service Manual,
   ROM dumps and disassembly. Other emulators aren't cited as an authority.
+  Other people's non-primary material (disassemblies, analyses, dumps) is
+  credited in THIRD-PARTY-NOTICES.md's acknowledgments, not inline.
+- **The research repository is cited as `Ref/<path>`**, a path inside
+  [Sharp1500-1600-Ref](https://github.com/tinue/Sharp1500-1600-Ref). The
+  full link is in docs/developer/README.md; Markdown files link each
+  citation.
+- **Docs and comments describe what is, not how it got there.** Fix
+  stories, "used to", plan phases and commit hashes go in commit messages
+  and CHANGELOG.md. This file is the exception: it may name the commit
+  where something was tried and reverted. A handoff is deleted once its
+  work is resolved, after its lasting facts move to the code, Decisions or
+  the developer docs.
+- **No FILEX guide or binary in this repository.** There is no agreement
+  with its author. FILEX is named only as MEP software that runs on `S3:`.
 - **Calc-U-1600 is original work.** Don't call it a "fork", and don't call
   other projects "upstream".

@@ -71,7 +71,7 @@ void PC1600Machine::seedClock(int year, int month, int day, int hour, int minute
     dt.minute = PC1600SubCpu::packBcd(minute);
     dt.second = PC1600SubCpu::packBcd(second);
     m_z80Mem.subCpu().setDateTime(dt);
-    m_z80Mem.subCpu().setYear(year);
+    (void)year; // the sub-CPU keeps no year; a 29 Feb is passed as is (see PC1600SubCpu::carryIntoHour)
     // Boot re-inits the calendar to its cold-start default once; keep the
     // seeded time through that write.
     m_z80Mem.subCpu().armHostSeedGuard();
@@ -558,10 +558,14 @@ bool PC1600Machine::debugWriteInternalRam(size_t off, const uint8_t* data, size_
     return m_z80Mem.debugWriteInternalRam(off, data, n);
 }
 
-bool PC1600Machine::debugWriteSlotImage(int slot, size_t off, const uint8_t* data, size_t n) {
+bool PC1600Machine::debugWriteSlotBus(int bank, uint16_t addr, const uint8_t* data, size_t n) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    return slot == 1 ? m_z80Mem.slot1CardImageWrite(off, data, n)
-                     : m_z80Mem.slot2CardImageWrite(off, data, n);
+    return m_z80Mem.slotBusWrite(bank, addr, data, n);
+}
+
+bool PC1600Machine::debugSlotBusWritable(int bank, uint16_t addr, size_t n) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_z80Mem.slotBusWritable(bank, addr, n);
 }
 
 std::vector<uint8_t> PC1600Machine::debugSlotImage(int slot) {
@@ -703,7 +707,6 @@ PC1600DisplaySnapshot PC1600Machine::displaySnapshot() const {
             snap.pixels[y][x] = disp.pixel(x, y);
         }
     }
-    const auto& symbols = disp.statusLine().all();
-    for (size_t i = 0; i < symbols.size(); i++) snap.statusSymbols[i] = symbols[i];
+    snap.statusLine = disp.statusLine();
     return snap;
 }

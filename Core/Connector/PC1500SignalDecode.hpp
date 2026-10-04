@@ -7,8 +7,8 @@
 // (ExpansionConnector) and 60-pin (SystemBus) connectors. The underlying
 // TC40H139F (Y0-Y3) / TC40H138F (S0-S7) decoders are identical on both
 // models and reach both connectors identically -- see
-// Sharp1500-1600-Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md §2
-// and Expansion-Connectors.md §3.1. Only *pin routing* (which of these
+// Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md §2
+// and Ref/Shared/Expansion-Connectors.md §3.1. Only *pin routing* (which of these
 // strobes reaches a given physical pin, on a given connector, on a given
 // model) differs -- that's each connector class's own concern, not this
 // file's.
@@ -21,7 +21,7 @@ inline bool isY2(uint16_t addr) { return addr >= 0x8000 && addr < 0xC000; }
 // S-block a connector ever routes out. S0 (&4000-&47FF) is always built-in
 // RAM and never reaches a connector pin; S6/S7 (&7000-&7FFF, display/system
 // RAM) likewise have no external strobe wired to either connector
-// (Expansion-Connectors.md §2.1/§3.2 -- only S1-S5 ever appear on a pin, and
+// (Ref/Shared/Expansion-Connectors.md §2.1/§3.2 -- only S1-S5 ever appear on a pin, and
 // S5 only reaches the PC-1500A's 40-pin connector, never the PC-1500's).
 inline int sBlockIndex(uint16_t addr) {
     if (addr < 0x4800 || addr >= 0x7000) return 0;
@@ -34,8 +34,10 @@ inline int sBlockIndex(uint16_t addr) {
 // caller, since S-block-to-pin routing is the one thing that actually
 // differs between ExpansionConnector and SystemBus (see their decode()).
 // Shortcut: SystemBus reuses this, so on the 60-pin connector PU/PV sit on
-// their 40-pin contacts 3/2, not on 60-pin 15/16 (whose PU/PV order the
-// PC-1500 and PC-1600 manuals dispute). TODO.md, "Expansion connectors".
+// 3/2, not on 60-pin 15 (PU) / 16 (PV). Measured on a real PC-1500, the
+// 40-pin contacts are 2 = PU, 3 = PV (the TRM prints them swapped), so the
+// numbers below are swapped too; hosts and cards agree, so behaviour is
+// right. TODO.md, "Expansion connectors".
 inline PinState basePinState(uint16_t addr, bool forWrite, bool pu, bool pv) {
     PinState pins;
     pins.address = addr;

@@ -139,7 +139,7 @@ void tapKey(PC1500Machine& machine, const std::string& name) {
 
 uint64_t waitIdle(PC1500Machine& machine, uint64_t maxCycles) {
     uint64_t consumed = 0;
-    while (machine.display().busy() && consumed < maxCycles) {
+    while (machine.display().statusLine().isOn(StatusLine::Symbol::Busy) && consumed < maxCycles) {
         consumed += machine.runCycles(kCyclesPerFrame);
     }
     return consumed;

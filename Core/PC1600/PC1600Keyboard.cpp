@@ -3,7 +3,7 @@
 namespace {
 
 // Matrix position (strobe 0-8, sense bit 0-7) for each key, transcribed
-// directly from PC-1600-Keyboard.md §5's table (strobe 8 == the PB6 line).
+// directly from Ref/PC-1600/PC-1600-Keyboard.md §5's table (strobe 8 == the PB6 line).
 struct Pos { int strobe; int bit; };
 
 Pos positionOf(PC1600Keyboard::Key k) {

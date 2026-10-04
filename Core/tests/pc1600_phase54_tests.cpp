@@ -1,5 +1,5 @@
 // Headless C++ tests for the remaining PC-1600 ROM images:
-// PC1600-P1-B3-new.bin/PC1600-P1-B3B-new.bin/PC1600-P2-B6-new.bin wired into PC1600Machine at their
+// PC1600-P1-B3-new.bin/PC1600-P1-B3B-new.bin wired into PC1600Machine at their
 // documented bank addresses, and PC1600-P1-B4-CE1600P-new.bin/PC1600-P1-B5-CE1600P-OR-F-new.bin
 // (confirmed CE-1600P ROM -- see roms/README.md) wired in via PC1600Machine::attachCE1600P().
 // Same no-framework, assert-and-tally style as lh5801_tests.cpp -- see that
@@ -59,25 +59,6 @@ void test_hidden_rom_latch_via_execution() {
     m.bank().writePort3D(0x00); // bit2 clear -> hidden Bank 3b
     m.step();
     CHECK(m.sc7852().a() == bank3b[0]);
-}
-
-void test_bank6_display_timer_serial_char_rom_load() {
-    PC1600Machine m;
-    std::vector<uint8_t> bank6;
-    if (!readRomImage("roms/PC1600-P2-B6-new.bin", &bank6)) {
-        std::fprintf(stderr, "SKIP test_bank6_display_timer_serial_char_rom_load: "
-                              "roms/PC1600-P2-B6-new.bin not found\n");
-        return;
-    }
-    std::vector<uint8_t> lower(16384, 0x00), upper(16384, 0x00);
-    lower[0] = 0x3A; lower[1] = 0x00; lower[2] = 0x80; // LD A,(8000H)
-    lower[3] = 0x76;                                     // HALT
-    CHECK(m.loadBank0(lower.data(), lower.size(), upper.data(), upper.size()));
-    CHECK(m.loadBank6Rom(bank6.data(), bank6.size()));
-    m.reset();
-    m.bank().writePort31(static_cast<uint8_t>(6 << 4)); // pageCBank() == 6
-    m.step();
-    CHECK(m.sc7852().a() == bank6[0]);
 }
 
 // CE-1600P ROM (PC1600-P1-B4-CE1600P-new.bin/PC1600-P1-B5-CE1600P-OR-F-new.bin,
@@ -188,7 +169,6 @@ void test_ce1600p_rom_version_selection() {
 int run_pc1600_phase54_tests() {
     test_ce1600p_rom_version_selection();
     test_hidden_rom_latch_via_execution();
-    test_bank6_display_timer_serial_char_rom_load();
     test_ce1600p_rom_attach_and_open_bus();
 
     std::printf("pc1600_phase54_tests: %d passed, %d failed\n", g_pass, g_fail);

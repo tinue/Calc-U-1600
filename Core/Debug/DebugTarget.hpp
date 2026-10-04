@@ -58,7 +58,7 @@ struct HistoryEntry {
     uint8_t bytes[5] = {};
     uint8_t len = 0;            ///< 0 for an interrupt entry
     bool interrupt = false;
-    std::vector<Register> registers; ///< after the instruction
+    std::vector<Register> registers; ///< before the instruction ran
 };
 
 /// Bank qualifier of a listing or breakpoint; -1 = don't care. `bank`: the

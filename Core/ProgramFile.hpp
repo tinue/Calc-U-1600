@@ -10,7 +10,7 @@
 // BASIC listing, tokenized BASIC or machine code behind a CE-158 or
 // PC-1600 header, or headerless bytes. Every loader builds on it --
 // machinecode::readFile() and basic::readBasicProgram(). Header layouts:
-// Sharp1500-1600-Ref Shared/Data-Formats/Binary-Exchange-Formats.md §2 / §3.
+// Ref/Shared/Data-Formats/Binary-Exchange-Formats.md §2 / §3.
 //
 // No CPU guessing (docs/background/plans/Loader-Mode-Plan.md, principle 3):
 // the library's raw-lh5801 / raw-z80 guess for headerless code never picks

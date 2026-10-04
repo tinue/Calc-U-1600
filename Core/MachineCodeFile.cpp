@@ -1,5 +1,6 @@
 #include "MachineCodeFile.hpp"
 
+#include <algorithm>
 #include <cstdio>
 
 #include "PC1600/PC1600ProgramPlacement.hpp"
@@ -48,6 +49,10 @@ const char* slotName(Slot slot) {
     }
     return "S0";
 }
+
+int pc1600DefaultBank(Slot slot) { return slot == Slot::S2 ? 2 : 0; }
+
+Slot pc1600BankSlot(int bank) { return bank < 2 ? Slot::S1 : Slot::S2; }
 
 File readFile(const std::vector<uint8_t>& bytes) {
     using programfile::Kind;
@@ -114,13 +119,13 @@ bool pc1600TargetFor(uint32_t busAddr, size_t len, const PC1600State& state, Slo
         if (why) *why = at + " is ROM -- machine code goes into RAM, from " + hexIn(pc1600DefaultAddress(state), cpu) + ".";
         return false;
     }
-    if (end > kPc1600S0Base) {
-        if (why)
-            *why = at + " + " + std::to_string(len) + " bytes crosses " + hexIn(kPc1600S0Base, cpu) +
-                   " -- a memory module's window is " + hexIn(kPc1600SlotBase, cpu) + "-" + hexIn(kPc1600S0Base - 1, cpu) + ".";
+    if (end > 0x10000) {
+        if (why) *why = at + " + " + std::to_string(len) + " bytes runs past " + hexIn(0xFFFF, cpu) + ".";
         return false;
     }
-    // $8000-$BFFF: the module behind the selected program area.
+    // $8000-$BFFF: the module behind the selected program area. Code that
+    // runs on past $BFFF continues in internal RAM, as BLOAD / CLOAD M write
+    // it (in MODE 1 the module and internal RAM are one LH5803 range).
     if (state.title == 1 || state.title == 2) {
         if (busAddr < state.titleBase) {
             if (why) *why = at + " is below the slot " + std::to_string(state.title) + " module, which starts at " +
@@ -188,6 +193,50 @@ std::string headerMismatch(Target target, const File& file, bool mode1) {
     return {};
 }
 
+namespace {
+
+const char* bankWhere(int bank) {
+    switch (bank) {
+        case 0: return "the slot 1 module's lower 16 KB";
+        case 1: return "the slot 1 module's upper 16 KB";
+        case 2: return "the slot 2 module's lower 16 KB";
+        default: return "the slot 2 module's upper 16 KB";
+    }
+}
+
+// A PC-1600 header that names a bank (1-3): the code goes exactly there,
+// whatever MODE / TITLE / the program area say -- if that bank has RAM
+// under all of [addr, addr + len) that lies in its window. Code that runs
+// on past $BFFF continues in internal RAM, as BLOAD writes it.
+bool pc1600BankTarget(uint32_t addr, size_t len, int bank, const PC1600State& state, Slot* slot, std::string* why) {
+    const uint64_t end = static_cast<uint64_t>(addr) + len;  // one past the last byte
+    if (bank > 3) {
+        *why = "the header asks for bank " + std::to_string(bank) +
+               ", but only banks 0-3 (the two memory slots) can hold machine code.";
+        return false;
+    }
+    if (addr < kPc1600SlotBase || addr >= kPc1600S0Base || end > 0x10000) {
+        *why = "the header asks for bank " + std::to_string(bank) + ", which is only reachable at " +
+               hex(kPc1600SlotBase) + "-" + hex(kPc1600S0Base - 1) + ", but the code occupies " + hex(addr) + "-" +
+               hex(static_cast<uint32_t>(end - 1)) + ".";
+        return false;
+    }
+    const uint64_t pages = state.bankRamPages[static_cast<size_t>(bank)];
+    const uint64_t windowEnd = std::min<uint64_t>(end, kPc1600S0Base);
+    for (uint32_t page = (addr - kPc1600SlotBase) >> 8; page <= ((windowEnd - 1 - kPc1600SlotBase) >> 8); page++) {
+        if (!(pages >> page & 1)) {
+            *why = "the header asks for bank " + std::to_string(bank) + " (" + bankWhere(bank) +
+                   "), but there is no RAM at " + hex(addr) + "-" + hex(static_cast<uint32_t>(windowEnd - 1)) +
+                   " in that bank.";
+            return false;
+        }
+    }
+    *slot = pc1600BankSlot(bank);
+    return true;
+}
+
+}  // namespace
+
 LoadPlan planLoad(const File& file, const LoadOptions& o, const PC1600State& state) {
     LoadPlan p;
     auto refuse = [&p](LoadError e, std::string detail = {}) {
@@ -218,6 +267,20 @@ LoadPlan planLoad(const File& file, const LoadOptions& o, const PC1600State& sta
     p.len = o.hasLength ? o.length : file.payload.size();
     if (p.len == 0) return refuse(LoadError::Empty);
     if (p.len > file.payload.size()) return refuse(LoadError::LengthExceeds);
+    // A PC-1600 header's bank (bits 16-23). Bank 0 is "none given", like
+    // BLOAD without `#bank`: the program area decides below -- so an &80C5
+    // file goes to slot 2 when slot 2 holds S0's first run.
+    const int headerBank = pc1600 && file.header == File::Header::PC1600 && !o.hasAddress
+                               ? static_cast<int>(file.loadAddr >> 16)
+                               : 0;
+    if (headerBank != 0) {
+        p.addr = file.loadAddr & 0xFFFF;
+        p.busAddr = p.addr;
+        std::string why;
+        if (!pc1600BankTarget(p.addr, p.len, headerBank, state, &p.slot, &why)) return refuse(LoadError::NoSlot, why);
+        p.bank = headerBank;
+        return p;
+    }
     if (o.checkRange && p.addr > 0xFFFF) return refuse(LoadError::OutsideBank0);
     p.busAddr = p.addr;
     if (pc1600 && p.cpu == Cpu::LH5803) {
@@ -227,6 +290,7 @@ LoadPlan planLoad(const File& file, const LoadOptions& o, const PC1600State& sta
     if (pc1600) {
         std::string why;
         if (!pc1600TargetFor(p.busAddr, p.len, state, &p.slot, &why, p.cpu)) return refuse(LoadError::NoSlot, why);
+        p.bank = pc1600DefaultBank(p.slot);
     }
     if (o.checkRange && static_cast<uint64_t>(p.busAddr) + p.len > 0x10000) return refuse(LoadError::PastEnd);
     return p;
@@ -240,6 +304,7 @@ Plan plan(Target target, const File& file, const PC1600State& state) {
     const LoadPlan lp = planLoad(file, o, state);
     Plan p;
     p.slot = lp.slot;
+    p.bank = lp.bank;
     p.cpu = lp.cpu;
     p.busAddr = lp.busAddr;
     switch (lp.error) {
@@ -250,7 +315,7 @@ Plan plan(Target target, const File& file, const PC1600State& state) {
             break;
         case LoadError::Empty: p.error = "The file contains no code."; break;
         case LoadError::OutsideBank0:
-            p.error = "The header's load address " + hex(file.loadAddr) + " is outside bank 0; banked loads are not supported.";
+            p.error = "The header's load address " + hex(file.loadAddr) + " is above &FFFF.";
             break;
         case LoadError::LhRange:
             p.error = "The header's load address " + hex(file.loadAddr) + " + " + std::to_string(file.payload.size()) +
@@ -272,18 +337,17 @@ const char* areaWhere(int slot) {
 }
 
 // Whether `slot`'s load window maps [addr, end) onto the memory of `area`:
-// same physical target, and (for a module) the same card-image bytes --
-// Slot loads write card-image offset (addr - $8000).
-bool sameMemory(const BasicArea& area, Slot slot, uint32_t addr) {
+// same physical target, and (for a module) the same bank.
+bool sameMemory(const BasicArea& area, Slot slot, int bank, uint32_t addr) {
     const int wanted = slot == Slot::S0 ? 0 : slot == Slot::S1 ? 1 : 2;
     if (area.slot != wanted) return false;
     if (wanted == 0) return true;
-    return addr >= area.windowBase && area.imageOffset + (addr - area.windowBase) == addr - kPc1600SlotBase;
+    return addr >= area.windowBase && area.bank == bank;
 }
 
 }  // namespace
 
-Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t autorunAddr, uint32_t ramStart,
+Advice advice(Target target, Slot slot, int bank, uint32_t addr, size_t len, uint32_t autorunAddr, uint32_t ramStart,
               uint32_t ramEnd, const PC1600State& state, Cpu cpu) {
     Advice a;
     const uint32_t entry = autorunAddr != 0 ? autorunAddr : addr;
@@ -312,15 +376,18 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
     }
 
     // PC-1600. LH5801 code is started from BASIC with XCALL (an LH5803
-    // address); Z-80 code with CALL. Slot 2's window is global bank 2
-    // (PC-1600-Memory-Architecture.md §4); S0 and slot 1 are reached from
-    // bank 0. Checked in the emulator: `CALL #2,&80C5` runs code loaded at
-    // $80C5 in a slot 2 CE-1600M.
+    // address); Z-80 code with CALL. The window shows the plan's bank:
+    // slot 2 is global bank 2/3, slot 1 bank 0/1 (Ref/PC-1600/PC-1600-Memory-Architecture.md
+    // §4); S0 and slot 1's lower half are reached from bank 0. Checked in
+    // the emulator: `CALL #2,&80C5` runs code loaded at $80C5 in a slot 2
+    // CE-1600M. A header auto-run address with a bank of its own names it.
     if (cpu == Cpu::LH5803) {
         a.callCommand = "XCALL " + hex(entry);
         a.callNote += " (an LH5803 address: the code is LH5801 code)";
     } else {
-        a.callCommand = slot == Slot::S2 ? "CALL #2," + hex(entry) : "CALL " + hex(entry);
+        const int callBank = (autorunAddr >> 16) != 0 ? static_cast<int>(autorunAddr >> 16) : bank;
+        const std::string at = hex(entry & 0xFFFF);
+        a.callCommand = callBank != 0 ? "CALL #" + std::to_string(callBank) + "," + at : "CALL " + at;
     }
     // The rest works on Z-80 addresses.
     const uint32_t bus = cpu == Cpu::LH5803 ? pc1600::lh5803ToZ80(static_cast<uint16_t>(addr)) : addr;
@@ -350,7 +417,7 @@ Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t auto
     int hit = -1;
     for (size_t i = 0; i < state.basicAreas.size(); i++) {
         const BasicArea& area = state.basicAreas[i];
-        if (sameMemory(area, slot, bus) && bus <= area.top && end > area.windowBase) {
+        if (sameMemory(area, slot, bank, bus) && bus <= area.top && end > area.windowBase) {
             hit = static_cast<int>(i);
             break;
         }

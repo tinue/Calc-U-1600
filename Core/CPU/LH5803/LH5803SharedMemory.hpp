@@ -26,7 +26,11 @@ class PC1600BusArbiter;
 // decode already resolves whichever Z-80 bank is currently switched into
 // Slot 1/2.
 //
-//   0000-7FFF  forwarded to sharedMem.read/write(addr + 0x8000)
+//   0000-7FFF  forwarded to sharedMem.read/write(addr + 0x8000), except that
+//              7400-744F / 7500-754F land on 7600-764F / 7700-774F (lha90());
+//              an ME0 write to the PC-1500 display RAM 7600-764F is also
+//              drawn on the LCD (the gate array's mirror, see
+//              mirrorPc1500Display())
 //   8000-BFFF  peripheral ROM window, offered to the cards on
 //              PC1600Memory::lh5803PeripheralBus(): CE-150 ROM (PV=0,
 //              A000-BFFF) or CE-158 ROM (PV=1, 8000-9FFF, PU picks its
@@ -48,6 +52,12 @@ class PC1600BusArbiter;
 //     LH5803-side alias of the SC7852's Port 38H, since the LH5803 has no
 //     I/O space of its own) -- forwarded to a PC1600BusArbiter via
 //     setBusArbiter() if one is attached.
+//   * the rest of ME1 0xA030-0xA03F: the SC7852's 30H-3FH control ports,
+//     straight to PC1600Memory::readIO/writeIO -- P_MOD (30H), P_BANK
+//     (31H), P_INT (32H), P_LHMSK2 (34H), P_CL1 (36H) in rom1500. P_BANK
+//     is what MODE 1 PEEK/XPEEK depend on (P_MAPPRG, rom1500 E63C). The
+//     32H read clears the cause as on the Z-80 side; only the LH5803 ISR
+//     (E6B9) reads it, and no LH5803 interrupt is raised yet.
 //   * ME1 0xF000-0xF00F: the LH5803's own on-chip LH5811-compat PIO port
 //     controller -- the analogue of the chip PC1500Memory models for the
 //     PC-1500's LH5801 (see that file's top comment / its `case 0xB`).
@@ -125,6 +135,11 @@ private:
     /// 20H-27H or 33H, in either the bare or the 0xA0xx-shadowed form).
     static bool isUartShadow(uint16_t addr, uint8_t* reg, bool* isSubCpuAnswer);
 
+    /// ME1 A030-A03F: the SC7852's 30H-3FH control ports as the LH5803 sees
+    /// them (rom1500's P_MOD..P_CPUSW). A033 is caught by isUartShadow()
+    /// first and A038 by the handoff check; the rest go to readIO/writeIO.
+    static bool isControlPort(uint16_t addr) { return (addr & 0xFFF0) == 0xA030; }
+
     /// Build the PinState the 60-pin peripheral cards decode on (address,
     /// forWrite, me1, PV, PU) -- no S-block/Y strobe, so no
     /// PC1500SignalDecode dependency here. See Ce150Card.hpp's "Bus
@@ -143,6 +158,18 @@ private:
         return p;
     }
 
+    /// The SC7852's LHA90 pin (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md,
+    /// pin 38) is forced high while the LH5803 accesses 7400H-744FH or
+    /// 7500H-754FH, so those land on 7600H-764FH / 7700H-774FH -- the
+    /// PC-1500's display-RAM aliases. Confirmed on a real PC-1600: an XPOKE
+    /// there reads back at 76xxH and draws on the LCD like one to 76xxH.
+    static constexpr uint16_t lha90(uint16_t addr) {
+        return ((addr & 0xFE00) == 0x7400 && (addr & 0xFF) < 0x50) ? uint16_t(addr | 0x0200) : addr;
+    }
+    /// An ME0 write to the PC-1500 display RAM (7600H-764FH) also goes to
+    /// the LCD, as the gate array does: see PC1600Display::mirrorPc1500Column().
+    /// ME1 writes there only reach the RAM.
+    void mirrorPc1500Display(uint16_t addr);
     /// Offers an access to the cards on PC1600Memory::lh5803PeripheralBus().
     /// True (with *value set, for a read) when a card claims it.
     bool cardRead(uint16_t addr, bool me1, uint8_t* value) const;

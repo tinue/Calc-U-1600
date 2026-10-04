@@ -258,6 +258,8 @@ debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request
 
 void DebugController::typeCommand(const std::string& line) { m_machines->typeCommand(line); }
 
+bool DebugController::lcdText(LcdText* out) const { return m_machines->lcdText(out); }
+
 bool DebugController::resetMachine(bool allReset, bool stop, QString* error) {
     if (!m_target || !m_run || !m_sync) {
         *error = tr("No machine is running");

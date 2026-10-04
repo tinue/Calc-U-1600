@@ -2,15 +2,16 @@
 #include <array>
 #include <cstdint>
 
+#include "../Display/StatusLine.hpp"
+
 class PC1500Memory;
 
 // ── PC-1500/1500A dot-matrix LCD ─────────────────────────────────────────
 //
 // 156 x 7 pixel dot-matrix display plus a row of fixed status icons.
 // Decodes from a snapshot of PC1500Memory's display-RAM region
-// (0x7000-0x77FF's 512-byte backing store, already backed since Phase 1)
-// — no new memory-map work, just a read-only interpretation layer on top
-// of it.
+// (0x7000-0x77FF's 512-byte backing store) -- a read-only interpretation
+// layer on top of it.
 //
 // This is a genuine value-type snapshot, copied once at construction, not
 // a live view: PC1500Machine::display() is meant to be safely readable
@@ -32,22 +33,11 @@ public:
     /// handful of byte lookups), immutable once constructed.
     bool pixel(int col, int row) const;
 
-    // Status icons, decoded from the two fixed bytes at 0x764E (SYMB1) and
-    // 0x764F (SYMB2) immediately following the 156x7 pixel data.
-    bool busy() const;
-    bool shift() const;
-    bool japanese() const;    ///< Katakana/JAP mode indicator
-    bool small() const;       ///< SML (small-caps alpha) mode
-    bool romanI() const;
-    bool romanII() const;
-    bool romanIII() const;
-    bool def() const;         ///< DEF key-reassignment mode active
-    bool de() const;          ///< "DE" — degrees-mode-adjacent indicator (exact meaning not sourced beyond the bit position)
-    bool g() const;           ///< "G" — grad-mode-adjacent indicator (same caveat as de())
-    bool rad() const;         ///< RAD (radians) angular-mode indicator
-    bool reserve() const;     ///< RESERVE area in use
-    bool pro() const;         ///< PRO (program) mode
-    bool run() const;         ///< RUN mode
+    /// The status line, decoded from the two fixed bytes at 0x764E and
+    /// 0x764F right after the 156x7 pixel data -- the same two sets as the
+    /// PC-1600's; see Core/Display/StatusLine.hpp. S, ROMAJI, CTRL and BATT
+    /// have no bits here and stay off.
+    StatusLine statusLine() const;
 
 private:
     // 512-byte copy of PC1500Memory's display-RAM backing store
@@ -56,6 +46,4 @@ private:
     // PC1500Memory's own `(addr - 0x7000) % 0x200` mirroring formula.
     std::array<uint8_t, 0x200> m_bytes;
     uint8_t at(uint16_t addr) const;
-    uint8_t symb1() const;
-    uint8_t symb2() const;
 };

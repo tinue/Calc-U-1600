@@ -320,16 +320,34 @@ void test_debug_write_internal_ram_and_slot_image_land_directly() {
     CHECK(!m.debugWriteInternalRam(0x3FFF, block, 3));   // runs past the 16 KB end
     CHECK(m.debugPeek(0xFFFF) == 0x00);                  // nothing written
 
-    // Slot image: an empty slot rejects; an attached plain-RAM card takes
-    // the write into its backing (visible via debugSlotImage()).
-    CHECK(!m.debugWriteSlotImage(1, 0, block, 3));
+    // Slot bus: an empty slot rejects; an attached plain-RAM card takes the
+    // write in the named bank, whatever bank is mapped.
+    CHECK(!m.debugWriteSlotBus(1, 0x8000, block, 3));
     m.memory().attachSlot1Card(plainRamCard(2 * PC1600Memory::kBankSize));
-    CHECK(m.debugWriteSlotImage(1, 0x4000, block, 3));   // start of the high 16 KB half
+    CHECK(m.debugWriteSlotBus(1, 0x8000, block, 3));     // bank 1: the high 16 KB half
     auto img = m.debugSlotImage(1);
     CHECK(img.size() == 2u * 0x4000);
     CHECK(img[0x4000] == 0x11 && img[0x4002] == 0x33);
-    CHECK(!m.debugWriteSlotImage(1, 0x7FFF, block, 3));  // past the 32 KB end -> nothing
+    CHECK(!m.debugWriteSlotBus(1, 0xBFFF, block, 3));    // past the window -> nothing
     CHECK(m.debugSlotImage(1)[0x7FFF] == 0x00);
+    CHECK(!m.debugWriteSlotBus(2, 0x8000, block, 3));    // bank 2 is slot 2: empty
+}
+
+// A loader's bus write lands where a CPU write to that bank lands, through
+// the card's own wiring: a CE-155 keeps A000H (its S1 chip) at image
+// offset 0800H, not 2000H.
+void test_debug_write_slot_bus_follows_card_wiring() {
+    PC1600Machine m;
+    m.memory().attachSlot1Card(bundledCard("ce155.card.yaml", CardHost::PC1600Slot1));
+    m.memory().writeIO(0x3C, 0x5B);                      // what the boot probe sets for a CE-155
+    m.memory().writeIO(0x31, 0x20);                      // page-C bank 2 mapped: the loader doesn't care
+    const uint8_t v = 0x5A;
+    CHECK(m.debugWriteSlotBus(0, 0xA0C5, &v, 1));
+    CHECK(m.debugSlotImage(1)[0x08C5] == 0x5A);
+    m.memory().writeIO(0x31, 0x00);                      // page-C bank 0: the CPU's view
+    CHECK(m.memory().read(0xA0C5) == 0x5A);
+    CHECK(m.debugSlotBusWritable(0, 0xA000, 0x2000));    // A000-BFFF: the module's 8 KB
+    CHECK(!m.debugSlotBusWritable(0, 0x9F00, 0x100));    // below it: open bus
 }
 
 void test_debug_bank_state_reports_registers_and_card_bank() {
@@ -850,7 +868,10 @@ void test_rom_wake_runs_command_at_the_set_time() {
 // Real ROM: auto power-off after 10 idle minutes (the INT6 handler's
 // countdown, P1-B3 426AH -> 0005H -> P0-B0 0B66H) saves SP at F0DAH and
 // marks FA08H with A5H x 4. ON then resumes through that signature, which
-// the resume path clears (P0-B0 07E6H/07FEH).
+// the resume path clears (P0-B0 07E6H/07FEH). The countdown APOCNT (F0ACH)
+// starts at 04B0H half-second ticks in KEYGET (P2-B6 929AH); the test sets
+// it to a few ticks instead of idling 10 emulated minutes, and checks the
+// 04B0H reload after the resume.
 void test_rom_auto_power_off_resumes() {
     PC1600Machine m;
     if (!bootPC1600(m)) {
@@ -859,8 +880,11 @@ void test_rom_auto_power_off_resumes() {
     }
     tapKey(m, "mode"); waitIdle(m, PC1600Machine::kTStateHz);
     tapKey(m, "mode"); waitIdle(m, PC1600Machine::kTStateHz);
-    CHECK(runUntil(m, /*wantOff=*/true, 700.0));
-    CHECK(m.memory().subCpu().dateTime().minute == 0x10);
+    auto apoCount = [&] { return m.memory().read(0xF0AC) | (m.memory().read(0xF0AD) << 8); };
+    CHECK(apoCount() > 0x04B0 - 10 && apoCount() <= 0x04B0);  // counting down from 10 minutes
+    const uint8_t fewTicks[] = {0x04, 0x00};
+    CHECK(m.pokeMemory(0xF0AC, fewTicks, sizeof fewTicks));
+    CHECK(runUntil(m, /*wantOff=*/true, 5.0));
     for (int i = 0; i < 4; i++) CHECK(m.memory().read(static_cast<uint16_t>(0xFA08 + i)) == 0xA5);
 
     m.setOnKeyPressed(true);
@@ -871,6 +895,7 @@ void test_rom_auto_power_off_resumes() {
     CHECK(!m.isPoweredOff());
     CHECK(m.memory().read(0xFA1B) == 0x10);  // power-on by the ON key
     CHECK(m.memory().read(0xFA08) == 0x00);  // signature consumed: resumed
+    CHECK(apoCount() > 0x04B0 - 10 && apoCount() <= 0x04B0);  // reloaded to 10 minutes
     std::string err;
     CHECK(typeLine(m, "POKE &FF80,55", /*pressEnter=*/true, &err));
     waitIdle(m, PC1600Machine::kTStateHz);
@@ -880,7 +905,7 @@ void test_rom_auto_power_off_resumes() {
 // Real ROM: a COM1: transfer through the TC8576F to an attached peer --
 // SETCOM, OPEN, PRINT#, CLOSE. Exercises the CPC as the ROM programs it:
 // PR7/PR1:PR0 baud, the serial command shadow (TxEN), and the CS/CD/DR
-// status polarity the ROM checks before it sends (PC-1600-CPC-TC8576.md §9).
+// status polarity the ROM checks before it sends (Ref/PC-1600/PC-1600-CPC-TC8576.md §9).
 struct RecordingLink : SerialLink {
     std::vector<uint8_t> tx;
     std::deque<uint8_t> rx;
@@ -943,6 +968,7 @@ int run_pc1600_machine_tests() {
     test_debug_copy_internal_ram_is_the_live_state();
     test_debug_slot_image_returns_the_whole_card_backing_store();
     test_debug_write_internal_ram_and_slot_image_land_directly();
+    test_debug_write_slot_bus_follows_card_wiring();
     test_debug_bank_state_reports_registers_and_card_bank();
     test_debug_bank_state_resolves_the_live_address_map();
     test_reset_starts_on_sc7852();

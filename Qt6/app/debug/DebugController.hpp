@@ -13,6 +13,7 @@
 #include "Debug/ProgramLoader.hpp"
 #include "Debug/RunControl.hpp"
 #include "Debug/SourceMap.hpp"
+#include "Display/LcdText.hpp"
 
 class DapServer;
 class DapSession;
@@ -89,6 +90,8 @@ public:
     debug::LoadResult loadProgram(const debug::LoadRequest& request, After after, const std::string& command = {});
     /// Types a BASIC line and ENTER into the machine as it runs.
     void typeCommand(const std::string& line);
+    /// The LCD as text; false with no machine.
+    bool lcdText(LcdText* out) const;
     /// Machine reset (all = RAM cleared first) without the boot run: with
     /// `stop` the machine halts before its first instruction (reason
     /// "entry"), else it runs on.

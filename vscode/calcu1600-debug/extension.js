@@ -260,7 +260,8 @@ function activate(context) {
         vscode.commands.registerCommand('calcu1600.buildAndLoad', buildAndLoad),
         vscode.commands.registerCommand('calcu1600.resetAndStop', () => reset('reset')),
         vscode.commands.registerCommand('calcu1600.allResetAndStop', () => reset('allReset')),
-        vscode.commands.registerCommand('calcu1600.createProject', () => scaffold.createProject(extensionPath))
+        vscode.commands.registerCommand('calcu1600.createProject', () => scaffold.createProject(extensionPath)),
+        vscode.commands.registerCommand('calcu1600.createProjectHere', uri => scaffold.createProject(extensionPath, uri))
     );
 }
 

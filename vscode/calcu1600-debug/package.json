@@ -19,7 +19,8 @@
     "onCommand:calcu1600.buildAndLoad",
     "onCommand:workbench.action.tasks.runTask",
     "onCommand:workbench.action.tasks.build",
-    "onCommand:calcu1600.createProject"
+    "onCommand:calcu1600.createProject",
+    "onCommand:calcu1600.createProjectHere"
   ],
   "contributes": {
     "breakpoints": [
@@ -62,8 +63,27 @@
         "command": "calcu1600.createProject",
         "title": "Create Debug Project…",
         "category": "Calc-U-1600"
+      },
+      {
+        "command": "calcu1600.createProjectHere",
+        "title": "Calc-U-1600: Create Debug Project Here…"
       }
     ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "calcu1600.createProjectHere",
+          "when": "explorerResourceIsFolder",
+          "group": "navigation@99"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "calcu1600.createProjectHere",
+          "when": "false"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "calcu1600.buildAndLoad",
@@ -196,14 +216,14 @@
                       "string",
                       "number"
                     ],
-                    "description": "Load address (headerless files), e.g. \"0x40C5\"; default: the listing's lowest address"
+                    "description": "Load address (headerless files): a number, or text with &, 0x or $ for hex, e.g. \"0x40C5\"; default: the listing's lowest address"
                   },
                   "entry": {
                     "type": [
                       "string",
                       "number"
                     ],
-                    "description": "Where it starts: an address, or a symbol of the listing. Default: the header's auto-run address, else the listing's ENTRY (if in the program), else the load address"
+                    "description": "Where it starts: an address (&, 0x or $ for hex), or a symbol of the listing. Default: the header's auto-run address, else the listing's ENTRY (if in the program), else the load address"
                   },
                   "after": {
                     "enum": [
@@ -219,17 +239,29 @@
                     "description": "Before each load: apply 'preset' (else the model's default preset, else All Reset)."
                   },
                   "bank": {
-                    "type": "number",
+                    "type": [
+                      "number",
+                      "string"
+                    ],
                     "description": "PC-1600 Z80 page bank 0-7"
                   },
                   "me": {
-                    "type": "number"
+                    "type": [
+                      "number",
+                      "string"
+                    ]
                   },
                   "pu": {
-                    "type": "number"
+                    "type": [
+                      "number",
+                      "string"
+                    ]
                   },
                   "pv": {
-                    "type": "number"
+                    "type": [
+                      "number",
+                      "string"
+                    ]
                   }
                 },
                 "required": [
@@ -259,16 +291,28 @@
                       ]
                     },
                     "bank": {
-                      "type": "number"
+                      "type": [
+                        "number",
+                        "string"
+                      ]
                     },
                     "me": {
-                      "type": "number"
+                      "type": [
+                        "number",
+                        "string"
+                      ]
                     },
                     "pu": {
-                      "type": "number"
+                      "type": [
+                        "number",
+                        "string"
+                      ]
                     },
                     "pv": {
-                      "type": "number"
+                      "type": [
+                        "number",
+                        "string"
+                      ]
                     }
                   }
                 }
@@ -293,16 +337,28 @@
                       ]
                     },
                     "bank": {
-                      "type": "number"
+                      "type": [
+                        "number",
+                        "string"
+                      ]
                     },
                     "me": {
-                      "type": "number"
+                      "type": [
+                        "number",
+                        "string"
+                      ]
                     },
                     "pu": {
-                      "type": "number"
+                      "type": [
+                        "number",
+                        "string"
+                      ]
                     },
                     "pv": {
-                      "type": "number"
+                      "type": [
+                        "number",
+                        "string"
+                      ]
                     }
                   }
                 }
@@ -447,16 +503,28 @@
                 ]
               },
               "bank": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "string"
+                ]
               },
               "me": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "string"
+                ]
               },
               "pu": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "string"
+                ]
               },
               "pv": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "string"
+                ]
               }
             }
           }
@@ -482,16 +550,28 @@
                 ]
               },
               "bank": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "string"
+                ]
               },
               "me": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "string"
+                ]
               },
               "pu": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "string"
+                ]
               },
               "pv": {
-                "type": "number"
+                "type": [
+                  "number",
+                  "string"
+                ]
               }
             }
           }

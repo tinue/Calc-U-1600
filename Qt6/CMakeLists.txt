@@ -38,7 +38,7 @@ set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../Core)
 # Version.h below and the MACOSX_BUNDLE_*VERSION* properties further down
 # reference this instead of each hardcoding "0.1.0" separately, as does
 # the Windows installer (generated Version.iss below).
-set(APP_VERSION "0.6.0")
+set(APP_VERSION "0.7.0")
 
 # git describe gives a short, human-meaningful build id (tag or short hash,
 # +"-dirty" if the tree has local changes) for bug reports. Falls back to
@@ -110,6 +110,7 @@ set(CORE_SOURCES
   ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
+  ${CORE_ROOT}/Display/LcdText.cpp
   ${CORE_ROOT}/KeyPaste.cpp
   # "Load Machine Code…"
   ${CORE_ROOT}/MachineCodeFile.cpp
@@ -260,18 +261,26 @@ endif()
 
 # ---- App icon (macOS bundle icon; Windows' equivalent is the WIN32
 # block's calc-u-1600.rc above, Linux's is the AppImage's --icon-file in
-# build.yml). A committed .icns, same as the vendored libsharpdx.a above --
-# regenerate it with `iconutil -c icns` from an .iconset if the icon changes.
+# build.yml). The source is the Icon Composer bundle
+# resources/macos/AppIcon.icon (macOS 26+ masks, sizes and shades it). The CI runner's Xcode can't compile .icon, so its actool
+# output is committed, same as the vendored libsharpdx.a above: Assets.car
+# (macOS 26+) and AppIcon.icns (fallback for older macOS). Regenerate both
+# if the icon changes:
+#   xcrun actool Qt6/resources/macos/AppIcon.icon --compile Qt6/resources/macos
+#     --app-icon AppIcon --platform macosx --minimum-deployment-target 15.8
+#     --target-device mac --output-partial-info-plist /dev/null
 if(APPLE)
-  set(APP_ICON_FILE ${CMAKE_CURRENT_SOURCE_DIR}/resources/CalcU1600.icns)
-  set_source_files_properties(${APP_ICON_FILE} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
-  target_sources(CalcU1600Qt PRIVATE ${APP_ICON_FILE})
+  set(APP_ICON_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/AppIcon.icns
+    ${CMAKE_CURRENT_SOURCE_DIR}/resources/macos/Assets.car)
+  set_source_files_properties(${APP_ICON_FILES} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+  target_sources(CalcU1600Qt PRIVATE ${APP_ICON_FILES})
   # Explicit bundle identifier (same ch.erzberger.* namespace as
   # SharpDataExchange's ch.erzberger.SharpDataExchange) -- needed for
   # stable codesigning/notarization identity across CI runs, rather than
   # whatever default CMake would otherwise synthesize.
   set_target_properties(CalcU1600Qt PROPERTIES
-    MACOSX_BUNDLE_ICON_FILE CalcU1600.icns
+    MACOSX_BUNDLE_ICON_FILE AppIcon
     MACOSX_BUNDLE_GUI_IDENTIFIER ch.erzberger.CalcU1600Qt
     MACOSX_BUNDLE_BUNDLE_VERSION ${APP_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${APP_VERSION}

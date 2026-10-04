@@ -30,7 +30,7 @@
 // about the full 60 pins.
 //
 // Assumption, not yet independently confirmed: the 60-pin connector's
-// pinout is identical between PC-1500 and PC-1500A. Expansion-Connectors.md
+// pinout is identical between PC-1500 and PC-1500A. Ref/Shared/Expansion-Connectors.md
 // documents a pin-reassignment table for the 40-pin connector's S1-S4/S5
 // pins (§3.1) but no equivalent table for the 60-pin connector, so all
 // S1-S4 route unconditionally here on both models. Worth confirming against

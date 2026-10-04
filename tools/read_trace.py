@@ -9,16 +9,16 @@ both via the Core writer `Core/PC1500/PC1500TraceFile.cpp`) and either:
   • Prints a human-readable text trace to stdout (default)
   • Emits a JSON array (--json)
 
-Structurally mirrors Calc-U-59's own tools/read_trace.py (see plan.md §0),
-scaled down to this project's much smaller per-CPU frame structs — the
-LH5801/SC7852's registers are plain single-byte/short values, not
-TI-59-style packed BCD digit arrays, so there is no nibble-unpacking step
-here. Two frame shapes share one file: `PCCpuFrame` (LH5801-shaped -- the
+Two frame shapes share one file: `PCCpuFrame` (LH5801-shaped -- the
 PC-1500/1500A's own CPU, or the PC-1600's LH5803 co-processor) and
 `PCZ80CpuFrame` (the PC-1600's SC7852) -- both carry a `cpuId` byte
 (0=unspecified/PC-1500, 1=SC7852, 2=LH5803, see Core/TraceTypes.hpp's
 `CPU_ID_*`) so a 'trace'/'trace_z80' record always says which physical CPU
 emitted it.
+
+Each frame's registers are the ones its instruction started from
+(pre-execution, as the debugger shows them); the instruction's effect shows
+in that CPU's next frame.
 
 Usage:
     python3 read_trace.py TRACE.bin
@@ -33,7 +33,7 @@ import json
 # ── Constants (must match Core/PC1500/PC1500TraceFile.cpp) ──
 
 MAGIC   = 0x50433135   # 'PC15'
-VERSION = 2            # v2: 25-byte TRACE_EVENT (added cpuId), new TRACE_EVENT_Z80 record
+VERSION = 3            # v3: registers are pre-execution (layout as v2: 25-byte TRACE_EVENT, TRACE_EVENT_Z80)
 
 REC_SESSION_START = 0x01
 REC_TRACE_EVENT   = 0x02
@@ -67,7 +67,8 @@ def _parse_file_header(f):
     if magic != MAGIC:
         raise ValueError(f"Bad magic: 0x{magic:08X} (expected 0x{MAGIC:08X})")
     if version != VERSION:
-        raise ValueError(f"Unsupported version: {version} (expected {VERSION})")
+        hint = " (v2 files hold post-execution registers; capture the trace again)" if version == 2 else ""
+        raise ValueError(f"Unsupported version: {version} (expected {VERSION}){hint}")
     return version
 
 def _parse_trace_event(payload):

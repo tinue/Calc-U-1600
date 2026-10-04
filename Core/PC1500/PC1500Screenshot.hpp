@@ -6,10 +6,8 @@
 #include "PC1500Machine.hpp"
 
 // The PC-1500/1500A dot matrix (156 x 7) as an LcdBitmap -- see
-// Core/Display/LcdScreenshot.hpp. Thread-safe: goes through the locked
-// display() snapshot.
-inline LcdBitmap pc1500LcdBitmap(const PC1500Machine& machine) {
-    const PC1500Display disp = machine.display();
+// Core/Display/LcdScreenshot.hpp.
+inline LcdBitmap pc1500LcdBitmap(const PC1500Display& disp, bool poweredOn) {
     LcdBitmap bitmap;
     bitmap.cols = PC1500Display::kCols;
     bitmap.rows = PC1500Display::kRows;
@@ -19,6 +17,11 @@ inline LcdBitmap pc1500LcdBitmap(const PC1500Machine& machine) {
             bitmap.pixels[static_cast<std::size_t>(row) * bitmap.cols + col] = disp.pixel(col, row);
         }
     }
-    bitmap.poweredOn = machine.isDisplayOn();
+    bitmap.poweredOn = poweredOn;
     return bitmap;
+}
+
+/// Thread-safe: goes through the locked display() snapshot.
+inline LcdBitmap pc1500LcdBitmap(const PC1500Machine& machine) {
+    return pc1500LcdBitmap(machine.display(), machine.isDisplayOn());
 }

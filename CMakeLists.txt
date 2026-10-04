@@ -85,6 +85,7 @@ set(CORE_COMMON_SOURCES
   ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
+  ${CORE_ROOT}/Display/LcdText.cpp
   ${CORE_ROOT}/KeyPaste.cpp
   ${CORE_ROOT}/MachineCodeFile.cpp
   ${CORE_ROOT}/ProgramFile.cpp
@@ -129,6 +130,7 @@ set(PC1500_CLI_SOURCES
   ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
   ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
+  ${CORE_ROOT}/Display/LcdText.cpp
   ${CORE_ROOT}/Basic/BasicProgramSource.cpp
   ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
   ${CORE_ROOT}/Serial/PtySerialLink.cpp
@@ -164,6 +166,7 @@ set(PC1600_CLI_SOURCES
   ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
+  ${CORE_ROOT}/Display/LcdText.cpp
   ${CORE_ROOT}/Basic/BasicProgramSource.cpp
   ${TOOLS_ROOT}/pc1600_cli.cpp
 )
@@ -243,6 +246,7 @@ set(PC1600_PLOTTER_PROBE_SOURCES
   ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
   ${CORE_ROOT}/Display/LcdScreenshot.cpp
+  ${CORE_ROOT}/Display/LcdText.cpp
   ${CORE_ROOT}/Basic/BasicProgramSource.cpp
   ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
@@ -263,7 +267,9 @@ set(TEST_SOURCES
   ${CORE_COMMON_SOURCES}
   ${CORE_ROOT}/tests/lh5801_tests.cpp
   ${CORE_ROOT}/tests/connector_tests.cpp
+  ${CORE_ROOT}/tests/ce151_tests.cpp
   ${CORE_ROOT}/tests/ce155_tests.cpp
+  ${CORE_ROOT}/tests/ce161_tests.cpp
   ${CORE_ROOT}/tests/ce1638_tests.cpp
   ${CORE_ROOT}/tests/ce502b_tests.cpp
   ${CORE_ROOT}/tests/ce163f_tests.cpp
@@ -297,6 +303,7 @@ set(TEST_SOURCES
   ${CORE_ROOT}/tests/piezo_sampler_tests.cpp
   ${CORE_ROOT}/tests/key_paste_tests.cpp
   ${CORE_ROOT}/tests/lcd_screenshot_tests.cpp
+  ${CORE_ROOT}/tests/lcd_text_tests.cpp
   ${CORE_ROOT}/tests/machine_code_file_tests.cpp
   ${CORE_ROOT}/tests/program_file_tests.cpp
   ${CORE_ROOT}/tests/disasm_tests.cpp
@@ -309,6 +316,15 @@ add_executable(CoreTests ${TEST_SOURCES})
 target_include_directories(CoreTests PRIVATE ${CORE_ROOT})
 target_link_libraries(CoreTests PRIVATE ZLIB::ZLIB)
 target_link_libraries(CoreTests PRIVATE ${SHARPDX_LIB})
+
+# The suite runs ~3x faster at -O1 than at -O0, so a Debug build compiles
+# CoreTests at -O1 (as tools/run_tests.sh does); CI builds RelWithDebInfo.
+# To step through a failing test, configure a separate full-debug tree:
+#   cmake -S . -B build-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCALCU_TESTS_DEBUG=ON
+option(CALCU_TESTS_DEBUG "Build CoreTests at -O0 for debugging" OFF)
+if(NOT CALCU_TESTS_DEBUG AND NOT MSVC)
+  target_compile_options(CoreTests PRIVATE $<$<CONFIG:Debug>:-O1>)
+endif()
 
 enable_testing()
 add_test(NAME CoreTests COMMAND CoreTests WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

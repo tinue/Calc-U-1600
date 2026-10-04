@@ -300,7 +300,7 @@ void test_preset_plotter_ce150_attaches_before_reset() {
 
     // The CE-150 ROM in 0x8000-0xBFFF is only visible with PV = 0: the
     // system ROM rests at PV = 1 (its own extension tables) and issues RPV
-    // just before jumping into the peripheral ROM (PU-PV-Signals.md). Boot
+    // just before jumping into the peripheral ROM (Ref/PC-1500/Memory-Architecture/PU-PV-Signals.md). Boot
     // settles at PV = 1, so at rest the window is open bus; drop PV and the
     // CE-150 ROM appears.
     machine.memory().updatePUPV(machine.cpu().pu(), /*pv=*/true);

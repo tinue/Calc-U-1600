@@ -1,6 +1,5 @@
 // Headless end-to-end test for the preset loader's `- trace:` step
-// (PC1500PresetLoader.cpp) -- a port of Calc-U-59's `KEYSTROKES:` `Trace:`
-// directive. Drives applyPC1500Preset() against a real ROM
+// (PC1500PresetLoader.cpp). Drives applyPC1500Preset() against a real ROM
 // (roms/PC-1500_A04.ROM, relative to the repo root) with a preset that
 // starts a CPU instruction trace, runs a bit, and stops it, then parses
 // the produced file back with a minimal inline reader and checks it is a
@@ -75,7 +74,7 @@ TraceSummary readTrace(const std::string& path) {
     std::vector<uint8_t> buf((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 
     if (buf.size() < 16) { s.truncated = true; return s; }
-    s.headerOk = (le32(buf.data()) == 0x50433135u) && (le16(buf.data() + 4) == 2);
+    s.headerOk = (le32(buf.data()) == 0x50433135u) && (le16(buf.data() + 4) == 3);
 
     size_t i = 16;
     while (i + 3 <= buf.size()) {
@@ -145,8 +144,7 @@ void test_trace_step_produces_wellformed_file() {
 }
 
 // A trace left running at the end of the preset is still finalised
-// (SESSION_END written, file closed) by runPresetSections()' TraceCloser guard
-// -- mirrors Calc-U-59's auto-close of a scripted trace.
+// (SESSION_END written, file closed) by runPresetSections()' TraceCloser guard.
 void test_trace_left_open_is_auto_closed() {
     if (!romPresent()) {
         std::fprintf(stderr, "SKIP test_trace_left_open_is_auto_closed: %s not found\n", kRomPath);
@@ -216,7 +214,7 @@ void test_z80_frame_shares_one_file_with_lh5801_frame() {
     CHECK(buf.size() >= 16);
     CHECK(counted == buf.size()); // what the GUI's size cap reads instead of stat()
     CHECK(le32(buf.data()) == 0x50433135u);
-    CHECK(le16(buf.data() + 4) == 2); // version
+    CHECK(le16(buf.data() + 4) == 3); // version
 
     size_t i = 16;
     int lh5801Events = 0, z80Events = 0, sessionEnds = 0;

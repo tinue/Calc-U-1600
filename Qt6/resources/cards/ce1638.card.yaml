@@ -6,9 +6,7 @@
 # latches a bank number sampled from the *address* lines of that same
 # write, not the data bus.
 #
-# Bank select samples A0-A2 -- confirmed real-hardware behavior, per
-# ~/Development/sharp/pc1500/CE-163X/CE1638-CE163F-BankSwitching-Reference.md
-# ("the CE1638 reportedly uses A0-A2 for bank select"). 3 bits exactly
+# Bank select samples A0-A2, as reported for the real CE-1638. 3 bits exactly
 # cover the 8 banks, so unlike the CE-163 family's 4-bit (A0-A3) sampling
 # used elsewhere for a hypothetical 16-bank module, no mod-wrap is needed
 # here.

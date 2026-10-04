@@ -1,7 +1,7 @@
 # CE-1601M -- 64 KB vertically-banked SRAM module, PC-1600 Slot 2 only.
 #
-# Confirmed from the CE-1601M Service Manual (PC-1600-Memory-Bank-Switching
-# .md Part 7a): 2 x 32Kx8 SRAM (RAM0, RAM1) behind a 74HC137-class
+# Confirmed from the CE-1601M Service Manual (Ref/PC-1600/
+# PC-1600-Memory-Bank-Switching.md Part 7a): 2 x 32Kx8 SRAM (RAM0, RAM1) behind a 74HC137-class
 # 3-to-8 decoder/latch. Two selection layers:
 #
 #   * VERTICAL BANK -- which 32 KB chip sits behind the 8000-BFFF window.

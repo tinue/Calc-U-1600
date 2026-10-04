@@ -41,7 +41,7 @@ flowchart LR
     App["Calc-U-1600"] --> Model{"Model"}
     Model --> P15["PC-1500 / PC-1500A"]
     Model --> P16["PC-1600"]
-    P15 --> S["Memory slot<br/>(CE-155, CE-1638, CE-163F, CE-502B)"]
+    P15 --> S["Memory slot<br/>(CE-151, CE-155, CE-161, CE-1638, …)"]
     P15 --> C150["CE-150 plotter"]
     P15 --> C158["CE-158 interface<br/>(serial + printer port)"]
     P16 --> S1["Slot 1 / Slot 2<br/>(CE-1600M, CE-1601M, superRAM, …)"]
@@ -134,6 +134,16 @@ SHIFT symbol:
   PC-1600 LCD, as it gets pasted:
 
   ![The image Copy Screen puts on the clipboard](images/guide/02-copy-screen.png)
+
+  It also puts the screen on the clipboard as **text**, so a text editor
+  pastes the characters and an image app pastes the picture. The text is
+  readable Unicode: the PC-1600's international and box-drawing characters
+  (CP437) and the PC-1500's π, √ and ¥ appear as themselves. Graphics
+  (`LINE`, `GPRINT`, user-defined characters) become blanks, and a screen
+  with no text at all gives no text. A graphic cell whose dots happen to
+  match a character, for example a block like `█`, is copied as that
+  character. Paste Text after Copy Screen types the screen's first line back
+  in.
 
 - **Edit ▸ Paste Text** (⌘V / Ctrl-V) types the clipboard's **first line**
   into the calculator, key by key. It stops at the line break and doesn't
@@ -295,7 +305,9 @@ machine, like a model switch does.
 
 | Module | Models | What it is | Battery-backed |
 |---|---|---|---|
+| CE-151 | PC-1500/1500A, PC-1600 Slot 1 | 4 KB RAM | no |
 | CE-155 | PC-1500/1500A, PC-1600 Slot 1 | 8 KB RAM | no |
+| CE-161 | PC-1500/1500A, PC-1600 Slot 1 or 2 | 16 KB RAM | no |
 | CE-1638 | PC-1500/1500A, PC-1600 | 128 KB banked RAM (hobbyist module) | yes |
 | CE-163F | PC-1500/1500A, PC-1600 | 128 KB RAM + 128 KB flash (hobbyist module) | yes |
 | CE-502B | PC-1500/1500A | "Statistics" program module (ROM) | – |
@@ -329,8 +341,8 @@ are ordinary files in the folder, stored byte for byte.
   folder (`CDIR ".."` goes up, `CDIR "/"` to the top) and `LDIR` lists the
   subfolders. All file commands work in the current folder. Switching the
   calculator off returns to the top.
-- **MEP programs:** tools written for the MEP module, such as FILEX
-  ([PC1600-FILEX.md](PC1600-FILEX.md)), work on `S3:`.
+- **MEP programs:** tools written for the MEP module, such as FILEX,
+  work on `S3:`.
 - **Dates:** the PC-1600 shows each file's month, day and time. Your
   computer keeps the full date.
 - **Refused:** `INIT "S3:"`, so a format can never wipe the folder.
@@ -443,7 +455,7 @@ flowchart LR
       U16["PC-1600 RS-232C<br/>(COM1:)"]
       U158["CE-158 RS-232C"]
     end
-    U16 --> L1["calcu1600.serial"]
+    U16 --> L1["calcu1600-rs232c.serial"]
     U158 --> L2["calcu1600-ce158.serial"]
     L1 --> SDE["SharpDataExchange (sde)"]
     L1 --> T["any terminal program"]
@@ -481,10 +493,10 @@ part of the data, because no driver on the computer side reacts to them.
 
 ```sh
 # computer → PC-1600: start LOAD "COM1:" on the calculator, then
-sde put myprogram.bas --device pc1600emul --port ~/Calc-U-1600/calcu1600.serial
+sde put myprogram.bas --device pc1600emul --port ~/Calc-U-1600/calcu1600-rs232c.serial
 
 # PC-1600 → computer: start this first, then SAVE "COM1:" on the calculator
-sde get myprogram.bas --device pc1600emul --port ~/Calc-U-1600/calcu1600.serial
+sde get myprogram.bas --device pc1600emul --port ~/Calc-U-1600/calcu1600-rs232c.serial
 ```
 
 To avoid typing `--port` every time, store the folder once:
@@ -649,6 +661,7 @@ program:
 | `- saveas: live slot-1:My card` | Name & Save the module in slot 1 into your save folder. `slot-2:` and `floppy:` are PC-1600 only. Overwrites a file of the same name, but never takes a template's name. |
 | `- saveas: template slot-1:My card` | The same, saved as a template. Running the preset again replaces your own template of that name; a bundled name is refused. |
 | `- saveas: template slot-2:file:Card.card.yaml` | Saves to that file, next to the preset (`.card.yaml` for a card, `.floppy.yaml` for `floppy:`). The name is the file name. |
+| `- expect: 11834` | Stops the preset with an error unless one line of the display contains that text, e.g. to check a result. The rest of the line is the text, `#` included. A backslash is written `\\`, and a character outside ASCII as `\xHH` (its code). |
 | `- screenshot: shot.png` | Saves the LCD image (as Copy Screen does) in the trace directory. |
 | `- syncclock:` | Sets the calculator's clock from your computer. Put it last, because a preset runs at full speed and the clock runs ahead. |
 | `- trace: run.bin` / `- trace: off` | Starts / stops a CPU trace (see the [Debug panel](#92-debug-panel)). |
@@ -711,7 +724,7 @@ This is what it leaves on the LCD:
 | `bus-rom:` | ROM files on the 60-pin bus, for developing a ROM extension: `- file:` with `bank: 4`–`7` (PC-1600 system bus) or `address:` with optional `me:`, `pv:`, `pu:` (each `0` or `1`) (PC-1500, PC-1600 LH5803 side). A bus ROM shadows a bundled ROM at the same place; see the [Debugger](Debugger.md) |
 | `debug:` | the debugger's settings for a project preset; ignored when the preset is loaded; see the [Debugger](Debugger.md) |
 
-**Steps:** `key:`, `type:`, `wait:`, `saveas:`, `screenshot:`, `syncclock:`, `trace:`.
+**Steps:** `key:`, `type:`, `wait:`, `expect:`, `saveas:`, `screenshot:`, `syncclock:`, `trace:`.
 
 **`program: file:`** is loaded by what it holds: a BASIC listing (`.bas`),
 tokenized BASIC, or machine code with or without a header. Headerless

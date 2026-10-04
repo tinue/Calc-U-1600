@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -28,6 +29,14 @@ enum class Target { PC1500, PC1600 };  // PC1500 also covers the PC-1500A
 // used only when a module is folded into that area as extension memory.
 enum class Slot { S0, S1, S2 };
 const char* slotName(Slot slot);
+
+// The global bank the $8000-$BFFF window shows for code in `slot` when the
+// file names none: bank 0 (slot 1's lower half; S0 needs none), bank 2 for
+// slot 2 (Ref/PC-1600/PC-1600-Memory-Architecture.md §4). `CALL #bank,&addr` for bank != 0.
+int pc1600DefaultBank(Slot slot);
+
+// The memory slot behind global `bank` 0-3: banks 0/1 slot 1, 2/3 slot 2.
+Slot pc1600BankSlot(int bank);
 
 struct File {
     enum class Header { None, CE158, PC1600 };
@@ -65,7 +74,7 @@ struct BasicArea {
     int slot = 0;              // 0 = internal RAM, 1 / 2 = that slot's module
     uint32_t windowBase = 0;   // $C000, or the module window base (usually $8000)
     uint32_t top = 0;          // last usable address (inclusive)
-    uint32_t imageOffset = 0;  // module only: card-image offset of windowBase
+    int bank = 0;              // module only: the global bank 0-3 behind $8000-$BFFF
 };
 
 // The CPU whose address space a load address is given in. On the PC-1600
@@ -82,6 +91,9 @@ struct PC1600State {
     uint32_t titleBase = 0;             // TITLE 1/2: the program module's window base (Z-80)
     uint32_t titleStart = 0;            // TITLE 1/2: its program start (Z-80, descriptor +4/+5)
     uint32_t ramEnd = 0;                // Z-80 address of the S0 user-area top, (F864H):00
+    // Writable RAM per global bank 0..3 behind $8000-$BFFF: bit i set =
+    // page $80+i (256 bytes) is RAM. For a header that names a bank.
+    std::array<uint64_t, 4> bankRamPages{};
 };
 
 // The PC-1600 target for `len` bytes at the Z-80 address `busAddr`: S0 for
@@ -112,6 +124,7 @@ struct Plan {
     uint32_t defaultAddr = 0;   // headerless PC-1600: proposed start address in `cpu`'s space (0 = none)
     Cpu cpu = Cpu::Z80;         // PC-1600: the address space of the file's addresses
     Slot slot = Slot::S0;       // PC-1600 with a header: where the code goes
+    int bank = 0;               // PC-1600 with a header: the global bank behind $8000-$BFFF (see LoadPlan)
     uint32_t busAddr = 0;       // PC-1600 with a header: the Z-80 address it goes to
 };
 
@@ -149,7 +162,7 @@ enum class LoadError {
     LengthExceeds,  // `length` is more than the payload
     OutsideBank0,   // the address is above $FFFF
     LhRange,        // LH5803 code outside its 0000-7FFF
-    NoSlot,         // detail: pc1600TargetFor()'s reason
+    NoSlot,         // detail: pc1600TargetFor()'s reason, or why the header's bank can't take the code
     PastEnd,        // the code runs past $FFFF
 };
 
@@ -161,6 +174,10 @@ struct LoadPlan {
     uint32_t busAddr = 0;      // where the bytes go: the Z-80 address
     size_t len = 0;
     Slot slot = Slot::S0;
+    // PC-1600: the global bank the code sits in -- the header's bank 1-3,
+    // else pc1600DefaultBank(slot). A header bank 0 means "none given":
+    // the program area decides, as for BLOAD without `#bank`.
+    int bank = 0;
     uint32_t defaultAddr = 0;  // NeedsAddress on a PC-1600, in `cpu`'s space
 };
 
@@ -187,7 +204,8 @@ struct Advice {
 // with XCALL; in MODE 1 the PC-1500 style `NEW &addr` protects code in S0,
 // in MODE 0 `NEW "S0:",size`; code in the selected S1/S2 module gets
 // `NEW "Sn:",size`.
-Advice advice(Target target, Slot slot, uint32_t addr, size_t len, uint32_t autorunAddr, uint32_t ramStart,
+// `bank` (PC-1600): the plan's bank; a non-zero bank gives `CALL #bank,`.
+Advice advice(Target target, Slot slot, int bank, uint32_t addr, size_t len, uint32_t autorunAddr, uint32_t ramStart,
               uint32_t ramEnd, const PC1600State& state, Cpu cpu);
 
 // Parses a user-typed hex address: `C000`, `&C000`, `$C000`, `0xC000`

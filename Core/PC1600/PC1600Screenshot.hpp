@@ -6,10 +6,8 @@
 #include "PC1600Machine.hpp"
 
 // The PC-1600 graphics area (156 x 32, status strip excluded) as an
-// LcdBitmap -- see Core/Display/LcdScreenshot.hpp. Thread-safe: goes
-// through the locked displaySnapshot().
-inline LcdBitmap pc1600LcdBitmap(const PC1600Machine& machine) {
-    const PC1600DisplaySnapshot snap = machine.displaySnapshot();
+// LcdBitmap -- see Core/Display/LcdScreenshot.hpp.
+inline LcdBitmap pc1600LcdBitmap(const PC1600DisplaySnapshot& snap) {
     LcdBitmap bitmap;
     bitmap.cols = PC1600Display::kWidth;
     bitmap.rows = PC1600Display::kHeight;
@@ -22,3 +20,6 @@ inline LcdBitmap pc1600LcdBitmap(const PC1600Machine& machine) {
     bitmap.poweredOn = snap.clockEnabled;
     return bitmap;
 }
+
+/// Thread-safe: goes through the locked displaySnapshot().
+inline LcdBitmap pc1600LcdBitmap(const PC1600Machine& machine) { return pc1600LcdBitmap(machine.displaySnapshot()); }

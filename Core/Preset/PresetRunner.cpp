@@ -89,10 +89,9 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
                 break;
             }
             case PresetStep::Kind::Trace: {
-                // Port of Calc-U-59's `KEYSTROKES:` `Trace:` directive.
                 // Empty text -> stop; otherwise (re)start a capture to
                 // <traceDir>/<text>. Starting a new one first closes any
-                // open one (matching Calc-U-59); one left running is closed
+                // open one; one left running is closed
                 // by runPresetSections()'s TraceCloser guard.
                 if (machine.cpuTraceActive()) machine.endCpuTrace();
                 if (step.text.empty()) {
@@ -122,6 +121,16 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
                     return false;
                 }
                 if (log) log("  screenshot: -> " + path);
+                break;
+            }
+            case PresetStep::Kind::Expect: {
+                const LcdText screen = machine.lcdText();
+                if (!screen.contains(step.text)) {
+                    *error = "expect: \"" + step.text + "\" is not on the LCD:\n" + screen.report();
+                    if (log) log("  expect: \"" + step.text + "\" NOT FOUND" + machine.stepTag());
+                    return false;
+                }
+                if (log) log("  expect: \"" + step.text + "\" found");
                 break;
             }
             case PresetStep::Kind::SyncClock: {
@@ -204,13 +213,14 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
     const uint32_t addr = plan.addr;
     const size_t len = plan.len;
     std::string loadError;
-    if (!machine.loadMachineCode(plan.slot, plan.busAddr, file.payload.data(), len, &loadError)) {
+    if (!machine.loadMachineCode(plan.slot, plan.bank, plan.busAddr, file.payload.data(), len, &loadError)) {
         *error = tag + "binary " + program.path + ": " + loadError;
         return false;
     }
     if (log) {
         const bool pc1600 = machine.codeTarget() == machinecode::Target::PC1600;
         const std::string slot = pc1600 ? std::string(", ") + machinecode::slotName(plan.slot) +
+                                              (plan.bank != 0 ? ", bank " + std::to_string(plan.bank) : "") +
                                               (plan.cpu == machinecode::Cpu::LH5803 ? ", LH5803 address" : "")
                                         : "";
         char range[40];
@@ -220,19 +230,10 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
     }
 
     if (file.autorunAddr != 0) {
-        if (file.autorunAddr > 0xFFFF) {
-            char b[208];
-            std::snprintf(b, sizeof(b),
-                          "header auto-run address $%X is outside bank 0 -- add an explicit "
-                          "'- type: CALL #<bank>,&<addr>' step instead",
-                          file.autorunAddr);
-            *error = tag + b;
-            return false;
-        }
-        // The same CALL Load Machine Code proposes: `CALL #2,&<addr>` for
-        // code in slot 2 (global bank 2), `XCALL` for LH5801 code, `CALL
-        // &<addr>` otherwise.
-        const std::string line = machinecode::advice(machine.codeTarget(), plan.slot, addr, len,
+        // The same CALL Load Machine Code proposes: `CALL #<bank>,&<addr>`
+        // for code in banks 1-3 (slot 2, or a header bank), `XCALL` for
+        // LH5801 code, `CALL &<addr>` otherwise.
+        const std::string line = machinecode::advice(machine.codeTarget(), plan.slot, plan.bank, addr, len,
                                                      file.autorunAddr, 0, 0, state, plan.cpu)
                                      .callCommand;
         std::string typeError;
@@ -295,8 +296,7 @@ void runPresetSections(PresetMachine& machine, const PresetFile& preset, PresetL
                        const PresetLogFn& log, const std::string& traceDir, const PresetSaveAsFn& onSaveAs) {
     // A trace started by a `- trace:` step and never explicitly stopped is
     // closed (SESSION_END written, file closed) when the sections are done,
-    // by ANY path -- mirrors Calc-U-59's own auto-close of a scripted trace
-    // left open past the end of a KEYSTROKES sequence.
+    // by ANY path.
     struct TraceCloser {
         PresetMachine& m;
         ~TraceCloser() {

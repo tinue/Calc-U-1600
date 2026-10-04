@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "../Basic/BasicLineStoreCheck.hpp"
+#include "../PC1500/PC1500BasicLoader.hpp"
 #include "../PC1500/PC1500BasicTyper.hpp"
 #include "../PC1500/PC1500Machine.hpp"
 
@@ -158,16 +159,19 @@ void test_typebasicprogram_long_data_then_short_line_tail() {
 
     // 33 x ~72-char DATA lines, then a long DATA line, then a short REM --
     // enough preceding program that the final DATA line's link lags the
-    // false idle far enough to expose the early return.
+    // false idle far enough to expose the early return. The preceding lines
+    // only have to be there, so they go in through the fast loader.
     std::string prog;
     for (int n = 10; n <= 330; n += 10) {
         prog += std::to_string(n) +
                 " DATA 6809AE15552EFD8A0E38BEE45189030799099AB5AAAE6809AE1555B555AE6808\n";
     }
-    prog += "340 DATA AE2AAA9AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\n";
-    prog += "350 REM CS: -9066 (0xdc96) set X=34\n";
-
-    BasicTypeResult result = typeFreshProgram(machine, prog);
+    CHECK(typeFreshProgram(machine, "").ok);
+    CHECK(loadBasicProgram(machine, std::vector<uint8_t>(prog.begin(), prog.end())).ok);
+    BasicTypeResult result = typeBasicProgramText(
+        machine,
+        "340 DATA AE2AAA9AFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\n"
+        "350 REM CS: -9066 (0xdc96) set X=34\n");
 
     CHECK(result.ok);
     CHECK(result.rejectedLines.empty());
@@ -242,7 +246,8 @@ void test_typeline_waits_for_run_to_finish() {
         prog += std::to_string(10 + i) + " POKE " + std::to_string(0x7C50 + i) + "," +
                 std::to_string(0x41 + i) + "\n";
     }
-    CHECK(typeFreshProgram(machine, prog).ok);
+    CHECK(typeFreshProgram(machine, "").ok);  // CL + NEW0; the program itself isn't under test
+    CHECK(loadBasicProgram(machine, std::vector<uint8_t>(prog.begin(), prog.end())).ok);
 
     tapKey(machine, "mode"); // PRO -> RUN
     // Run it, then immediately (no manual settle) issue a direct command.

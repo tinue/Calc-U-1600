@@ -1,6 +1,6 @@
 # CE-155 -- 8 KB static RAM module for the PC-1500 family.
 #
-# Fully confirmed design (PC-1500-Address-Decoding.md section 3.2). Four
+# Fully confirmed design (Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md section 3.2). Four
 # 2 KB RAM chips, reached two different ways:
 #
 #   * ONE chip via Y0: Y0 alone is a raw 16 KB enable, so this chip sits

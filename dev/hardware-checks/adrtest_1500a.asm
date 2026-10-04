@@ -1,34 +1,29 @@
 ; ============================================================
-; ADRTEST_1500A.ASM -- Real-hardware verification of ADR's flag
-; behavior, for Calc-U-1600's ADR investigation.
+; ADRTEST_1500A.ASM -- Real-hardware check of ADR's flag behavior.
 ; ============================================================
 ;
 ; The PC-1500 Technical Reference Manual says ADR (Rreg = Rreg + A,
 ; 16-bit) changes C/H/Z/V, matching the 8-bit low-byte addition's own
-; flags. Two independent reference emulators (pc1500emu,
-; forever1500.fr) instead PRESERVE the caller's flags across ADR, and
-; Calc-U-1600's own LH5801 core was changed to match them -- a fix
-; that resolved a real, reproducible Up/Down-key redraw bug, but
-; directly contradicts the manual, and is marked PROVISIONAL pending
-; exactly this test. See the investigation doc before touching either
-; the emulator's ADR implementation or this file.
+; flags. The emulator's LH5801 core instead PRESERVES the caller's
+; flags across ADR: with the manual's reading, the PC-1500's Up/Down-key
+; redraw goes wrong. Until this test has run on hardware, that choice is
+; provisional; keep it in mind before touching either the core's ADR or
+; this file.
 ;
 ; This program settles it empirically: SEC (force C=1), then ADR X
 ; with operands guaranteed to produce NO carry out of the low byte
 ; (0x00 + 0x00 = 0x00, no carry), then read C back.
 ;
 ;   Result 1 (carry survived the ADR)  -> silicon PRESERVES flags ->
-;     the manual's ADR row is wrong, and Calc-U-1600's current fix is
-;     correct as-is.
+;     the manual's ADR row is wrong, and the core is right.
 ;   Result 0 (carry was cleared)       -> the manual is right, ADR
-;     DOES publish the low-byte add's own flags, and Calc-U-1600's
-;     fix is wrong (per the investigation doc, the real bug would
-;     then be upstream of ADR, most likely whatever leaves A=0x00 at
-;     the ROM's own D2AA site).
+;     DOES publish the low-byte add's own flags, and the core is
+;     wrong; the Up/Down redraw problem would then lie before ADR,
+;     most likely in whatever leaves A=0x00 at the ROM's D2AA.
 ;
 ; ============================================================
-; Calling convention (CALL address,X), matching samples/
-; memtest_1500a.asm's own convention exactly:
+; Calling convention (CALL address,X), the same as
+; examples/machine-code/memtest.asm:
 ;
 ;   - X's value on entry is irrelevant -- this test needs no input.
 ;   - This routine always sets carry before RTN, so BASIC always
@@ -47,7 +42,7 @@
 ENTRY       .equ    0x7C01      ; PC-1500A -- same "outside the module
                                  ; window, no BASIC-program-space
                                  ; reservation needed" convention as
-                                 ; samples/memtest_1500a.asm.
+                                 ; examples/machine-code/memtest.asm.
 
 ; ============================================================
             .area   CODE (ABS)
@@ -80,7 +75,7 @@ ADRTEST:
                                      ; the manual)
 
 ; Carry survived the ADR -- flags were preserved (matches
-; Calc-U-1600's current, provisional fix).
+; what the core does).
             ldi     a,0x01
             sta     (RESULT)
             ldi     xh,0x00

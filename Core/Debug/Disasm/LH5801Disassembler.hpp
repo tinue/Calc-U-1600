@@ -9,7 +9,7 @@
 // `(x)` for ME0 and `#(x)` for ME1, `0x` hex -- so a disassembly reads like
 // the listings of the project's own sources. The opcode map is the Sharp
 // LH5801 instruction set (Technical Reference Manual, as transcribed in
-// Sharp1500-1600-Ref's LH5801_Guide.md), matching Core/CPU/LH5801's
+// Ref/PC-1500/Assembly-Programming/LH5801_Guide.md), matching Core/CPU/LH5801's
 // execute()/executeFD() one-for-one. Code is always fetched from ME0.
 namespace disasm {
 

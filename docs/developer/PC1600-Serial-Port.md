@@ -10,7 +10,7 @@ about the implementation; for using the port, see the User Guide,
 
 **Transport: host pseudo-terminal.** `posix_openpt`/`grantpt`/`unlockpt`/
 `ptsname` give a `/dev/ttysNNN` slave that any serial tool can open
-like a real port. A stable `calcu1600.serial` symlink is the documented
+like a real port. A stable `calcu1600-rs232c.serial` symlink is the documented
 target, so the per-run `ttysNNN` name never leaks to the user. The
 symlink's folder is **Settings ▸ Serial ports ▸ Symlink directory**
 (default `~/Calc-U-1600`).
@@ -30,7 +30,7 @@ app is concerned. In practice this makes `X` handshake tricky to use;
 see "Calculator-side settings" below for the recommended alternative (no
 handshake, paced with a delay instead). The RS-232C hardware lines are
 modelled inside the TC8576F as the Toshiba data sheet and the ROM describe
-them (Sharp1500-1600-Ref `PC-1600/PC-1600-CPC-TC8576.md` §9.5): RTS/DTR
+them ([Ref/PC-1600/PC-1600-CPC-TC8576.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-CPC-TC8576.md) §9.5): RTS/DTR
 from the serial command register are forwarded via
 `SerialLink::setControl()`, and the peer's CS/CD/DR are cached each
 `tick()` into the parallel status register, bits 0/1/2. CS reads 0 when on,

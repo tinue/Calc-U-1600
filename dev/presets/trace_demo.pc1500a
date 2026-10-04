@@ -1,5 +1,4 @@
-# Demonstrates the `- trace:` preset step (a port of Calc-U-59's
-# `KEYSTROKES:` `Trace:` directive). Loads a tiny BASIC loop, then wraps
+# Demonstrates the `- trace:` preset step. Loads a tiny BASIC loop, then wraps
 # its RUN in a CPU instruction trace written to `trace_demo.bin` under the
 # configured trace directory (the CLI's cwd; the app's
 # AppSettings.traceDirectory()).

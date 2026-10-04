@@ -20,9 +20,9 @@ obligations.
 
   C and D still carry ~70 T (~19 µs) per `FOR/NEXT` pass, i.e. a fixed cost
   per statement/pass rather than a percentage, with no sub-CPU involvement.
-  A and B moved when the sub-CPU's 0.5 s event started being reported on
-  every tick (below); A−C is now 60 ms against the real 45 ms, so the
-  fitted sub-CPU response time is now too long (see the timing-model item).
+  With the sub-CPU's 0.5 s event reported on every tick (below), A−C is
+  60 ms against the real 45 ms: the fitted sub-CPU response time is too
+  long (see the timing-model item).
 
   **Found and fixed on the way** (dev-0.5.0):
   - One wait per M1 cycle (f05e42e): BEEP pitch at two A values.
@@ -31,9 +31,8 @@ obligations.
   - LCD busy until the 4th LCD-clock edge (c18411b): B.
   - The ON key's live PB7 level (5011e2b).
   - SRIRQ reports the 0.5 s event on every tick (dev-0.6.0, sub-CPU
-    rework). It used to be a toggling level, so every other INT6 handler
-    skipped the 0.5 s housekeeping (battery check, SRINP, APO countdown):
-    A and B +15 ms.
+    rework), so every INT6 handler runs the 0.5 s housekeeping (battery
+    check, SRINP, APO countdown): A and B +15 ms.
 
   **Ruled out**, all with interrupts off, emulator matching real within
   ±0.1–0.2%. Test programs are in `headless/beep/bench/timing{,2,3,4,5}.bas`
@@ -91,12 +90,26 @@ obligations.
   for the length of each call. Check which program showed the 2.3x, and
   what the emulator does differently on the headless and `- wait: <n>`
   paths.
+- **Open bus reads as a constant FFH; real hardware returns the last byte
+  on the data bus. To decide.** PC-1600 MODE 0, CE-163F in Slot 2:
+  `XPEEK&C5` returns 37 on a real unit and 255 in the emulator. In MODE 0
+  the Z-80 hands over with Port 31H = 06H (page C = bank 0, the empty
+  Slot 1) and `P_MAPPRG` leaves it there, so the mapping is right. The
+  LH5803's PEEK reads with `lda (u)` (rom1500 D997), opcode 25H = 37: the
+  floating bus still holds the opcode just fetched. Decide whether to
+  model this (last data-bus byte per CPU/bus, on both machines?) or keep
+  FFH and record the choice in Decisions.md. A change would reach every
+  open-bus read, e.g. the RAM-sizing probes and the empty-slot checks in
+  the tests.
 
 ## PC-1600 serial port
 
 - **RS-232C / SIO connector mux.** PRIME (the PRIM select) is tracked in
   `TC8576F::rs232Selected()`; both connectors still share the one
-  `SerialLink`.
+  `SerialLink`, whose file is `calcu1600-rs232c.serial`. The split gives
+  SIO its own `calcu1600-sio.serial` (Decisions.md, "Serial port files are
+  named after their connector"), carrying data only while PRIME selects
+  SIO; `calcu1600-rs232c.serial` then carries RS-232C only.
 - Capture the exact on-wire `SAVE"COM1:"`/`LOAD"COM1:"` framing from a
   real ROM trace, and do an end-to-end round-trip against real
   SharpDataExchange.
@@ -108,20 +121,34 @@ obligations.
 
 The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, done). Left:
 
-- **The open questions of the load/save matrix** (Sharp1500-1600-Ref
-  `PC-1600/PC-1600-Load-Save-Matrix.md` §6), to be discussed: are all tokens
+- **The open questions of the load/save matrix**
+  ([Ref/PC-1600/PC-1600-Load-Save-Matrix.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-Load-Save-Matrix.md) §6), to be discussed: are all tokens
   the PC-1500 and PC-1600 share identical (the MODE 1 listing rule assumes
   so; a table comparison of libsharpdx's two tables against the ROM's would
   settle it); `INPUT#-1` in MODE 1 through the CE-1600P (the ROM allows it,
   the TRM doesn't); `SAVE`/`LOAD "CAS:"` in MODE 1; whether the CE-158's own
   `SETDEV` is reachable on the PC-1600; CE-150/CE-158 `PRINT#`/`INPUT#` in
   MODE 0.
+- **MODE 1 + CE-155: the fast loader writes the program to the wrong
+  place.** With a CE-155 in slot 1 and `MODE1` + `NEW0`, the ROM's area
+  starts at LH5803 &20C5, and typed lines land at CE-155 backing offset
+  0x08C5; `loadBasicProgram` puts them at 0x00C5 (it takes the slot window
+  &A000 as backing offset 0). The work-area pointers match the typed ones,
+  so LIST looks right, but RUN doesn't run the program. Found when the
+  "MODE 1, CE-155" case of `test_work_area_matches_typed`
+  (`Core/tests/pc1600_basicloader_tests.cpp`) was made to run: it had
+  silently returned early since it was written (an 8 KB `plainRamCard` is
+  not a valid definition). The case is commented out there until this is
+  fixed. **Before fixing:** check how `PC1600ProgramPlacement` maps a
+  module segment to the card's backing store -- the CE-155's 2K/6K chip
+  split in the PC-1500 map is the likely mismatch -- and whether MODE 0
+  with a CE-155 has the same problem.
 - **Guide screenshots write into the real saves folder:** the chapter-5
   preset (`docs/developer/screenshots/presets/pc1600-modules.pc1600`) uses
   `saveas: live slot-1:My programs`, so every `tools/make_screenshots.sh`
   run writes a live "My programs" card into the Battery-card saves folder.
 - **`examples/memory/flashtest_ce163f.pc1500a` stops with ERROR 1 IN 10.**
-  The lines are stored now (they used to be typed in RUN mode), but with
+  The lines are stored, but with
   the CE-163F in the slot, BASIC's program area starts at &00C5 inside the
   banked window, and line 10 (`POKE &6809,0`) switches that bank away
   from under the running program. The startup presets move BASIC up with
@@ -154,8 +181,9 @@ It is not a copy of the PC-1500's signals.
 **Shortcuts in place today** (each one must go):
 - 60-pin PU/PV sit on `pin[3]`/`pin[2]`, their **40-pin** contact
   numbers (`PC1500SignalDecode::basePinState`). The CE-150 and CE-158
-  read them from there. Which 60-pin contacts really carry PU and PV is
-  disputed (see "Still open" below).
+  read them from there. Measured 2026-10-03: 60-pin 15 = PU, 16 = PV on
+  both machines, and the PC-1500's 40-pin pins are 2 = PU, 3 = PV, not
+  the TRM's 2 = PV, 3 = PU (see below).
 - On the PC-1600, `LH5803SharedMemory::peripheralPins` hands the
   LH5803's own PU and PV flip-flops straight to the cards. On real
   hardware PV goes out through the SC7852 as PVOUT. The LH5803's PU has
@@ -165,7 +193,7 @@ It is not a copy of the PC-1500's signals.
   60-pin paths on the PC-1600. (Typed `Ce150Card*`/`Ce158Card*`,
   `isCe158Io` and the PC-1500's `kCe150IoBase` are gone, see below.)
 
-**Hardware facts** (Expansion-Connectors.md §2, §4):
+**Hardware facts** ([Ref/Shared/Expansion-Connectors.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/Shared/Expansion-Connectors.md) §2, §4):
 - Both connectors carry the address bus, data bus, PU/PV, INHIBIT, DME0,
   R/W and OD.
 - The 60-pin one adds ME1/DME1, INT, WAIT (WEX/W1), CMTIN/CMTOUT, VBAT, BFO
@@ -187,7 +215,7 @@ the pins reaching the cards are unchanged):**
   `CardBase` so a later 60-pin card interface can share them.
 - `PC1500Memory` owns its `ExpansionConnector` and `SystemBus` by value;
   the raw-pointer setters are gone.
-- The hosts no longer know which card sits where. `LH5803SharedMemory`
+- The hosts don't know which card sits where. `LH5803SharedMemory`
   offers its peripheral accesses to one chain,
   `PC1600Memory::lh5803PeripheralBus()`, instead of typed pointers and
   `isCe158Io`. `PC1500Memory` gives the 60-pin bus first refusal on every
@@ -259,30 +287,22 @@ What's wrong with that:
   - ELH (58) low = LH5803 running: the ownership signal.
   - PV: "the PV signal of the LH-5803 is directly sent by PVOUT"; ME1
     `8000–BFFF` is the CE-150 at PVOUT = 0, the CE-158 at PVOUT = 1.
-  - **Still open:** the PC-1500 TRM gives 60-pin contact 15 = PV,
-    16 = PU; the PC-1600 TRM *and* Service Manual give 15 = PU,
-    16 = PVOUT. Taken literally, a CE-150 would see PU on its PV contact,
-    which contradicts the SM's PVOUT split above. Needs the CE-150's own
-    connector wiring (its Service Manual schematic) or a continuity check.
-    Not blocking: the model can route PVOUT to the cards' PV input on the
-    SM's word.
-    Checked 2026-09-26 (details in Sharp1500-1600-Ref
-    `Expansion-Connectors.md` §2.2b):
-    - The PC-1500 TRM scan really prints 15 = PV; it isn't an OCR slip.
-    - No online erratum turned up.
-    - Neither the CE-150 schematic nor the PC-2 Service Manual gives
-      contact numbers. The PC-2 PCB pad labels at 15/16 are illegible.
-    - The CE-158 decodes **both** PV (ROM enable) and PU (8 KB half
-      select), per TRM Memory Map I (PDF p.174) and the
-      `CE-158_ROM_SPV_RPU_LOW`/`_SPV_SPU_HIGH` dump names. So a swap
-      breaks it rather than just disabling it.
-
-    Likely verdict: the PC-1500 TRM table is the wrong one.
-  - **Also open:** what reaches the CE-158's PU contact on the PC-1600
-    while the LH5803 runs. The SC7852 has PVIN but no PU input, and its
-    PU output is a Port 31H bit. The SM's LHNMIO note (SC7852 pin 92,
-    "PU = PV is high (CE-158 internal ROM)") hints that the gate array
-    handles this. Needs the SM schematic's LH5803 PU net.
+  - **Settled 2026-10-03 by measurement: 60-pin contact 15 = PU, 16 = PV
+    on both machines** (PVOUT on the PC-1600, which carries the LH5803's
+    PV). On the PC-1500, LH5801 pin 60 (PV) beeps to contact 16 and pin 61
+    (PU) to 15, and the **40-pin connector has pin 2 = PU, pin 3 = PV**.
+    Both PC-1500 TRM tables have PU/PV swapped. Contact 44 is F-GND, not
+    VBAT. Details in [Ref/Shared/Expansion-Connectors.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/Shared/Expansion-Connectors.md) §2.2b.
+  - PC-1600 nets (SM schematic): LH5803 PU shares one line with the
+    SC7852's PU output (slot pin 3, 60-pin 15); LH5803 PV goes SC7852
+    PVIN → PVOUT (slot pin 5, 60-pin 16). Slot pin 2 ("PVIN" in the TRM)
+    is VCC (the CE-1620M's EPROM Vpp); the model leaves `pin[2]` low there.
+  - **Model numbering is off on the PC-1500:** hosts and cards agree
+    on `pin[3]` = PU and `pin[2]` = PV, so behaviour is right, but the
+    real 40-pin contacts are 2 = PU and 3 = PV (`SystemBus`,
+    `PC1500SignalDecode::basePinState`, `resolveSignalPin`, the CE-150/
+    CE-158/bus-ROM cards, `LH5803SharedMemory::peripheralPins`). The
+    PC-1600 slot's `pin[3]` = PU is correct.
   - Not yet looked at: which pins tell bank 4 from bank 5 for the
     CE-1600P ROM, and how its I/O ports show up (the CE-1600P PDF).
 - ~~Why `PC1500Memory` gets its `ExpansionConnector` and `SystemBus` by
@@ -307,6 +327,14 @@ What's wrong with that:
 
 ## Feature ideas
 
+- **LCD text: the kana set.** No font that the parser reads has katakana
+  yet, so they come out unparsed. On the PC-1500 they come from the second
+  character set at (KATACHAR) when KATAFLAGS enables it (`CHAR_2_ADDR_4`,
+  EE5AH). On the PC-1600 they appear in PC-1500 mode (LH5803 ROM
+  `KANA_LCD` C700H for 80H–D8H, `KANA_LCD_D9` C6BDH for D9H–E5H). Copy
+  Screen's mapping is ready: `jisX0201Kana()` in
+  `Core/Display/LcdCharsets.hpp` (A1H–DFH → U+FF61–FF9F).
+
 - **Sub-CPU F-pin tones: key click, `ALARM$` beep, wake-up beep, hour
   signal** (deferred until measured). The sub-CPU's F output drives the
   buzzer for SBEEP (IOCS 01H, key click with `KEY` click on), the 1 s
@@ -317,12 +345,8 @@ What's wrong with that:
   ahead after `POWER OFF`; the hour signal if SWPON bit 3 can be set from
   BASIC. Then drive `PiezoSampler` from a modelled F output
   (`PC1600SubCpu`, `PC1600Memory::updateBuzzerLine()`).
-- **Sub-CPU February: leap year or not?** The Service Manual (§4-2) says the
-  clock has no leap-year handling; the model follows the seeded year's
-  calendar. On the real unit: `DATE$="02/28":TIME$="23:59:50"`, wait, read
-  `DATE$` (02/29 or 03/01).
 - **Sub-CPU commands still unnamed** (IOCS 0CH–0FH, 1BH, 1FH, 26H, what
-  1CH/1DH mean, the LH-5803's DCH): see `PC-1600-SubCpu-LU57813P.md` §8.
+  1CH/1DH mean, the LH-5803's DCH): see [Ref/PC-1600/PC-1600-SubCPU-LU57813P.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-SubCPU-LU57813P.md) §8.
   The ROM trace is done (2026-09-27): 1EH is the port-mode select
   (F12CH b0 analog input, b1 external keyboard; `ON ADIN`, `KEYSTAT`),
   16H/17H are the external keyboard, 1CH/1DH come from `SINIT`. The rest have
@@ -525,8 +549,78 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
   1. ~~The TC8576F datasheet check~~ — done (dev-0.6.0): PSR BUSY and
      XBUSY are separate, the DSTB delay is modelled (27.7 us of the fit).
   2. ~~The sub-CPU protocol spec~~ — done in the corpus
-     (`PC-1600-SubCpu-LU57813P.md`): the 0.5 s ISR sends A2H, A8H, A3H.
+     ([Ref/PC-1600/PC-1600-SubCPU-LU57813P.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-SubCPU-LU57813P.md)): the 0.5 s ISR sends A2H, A8H, A3H.
   3. The residual itself. The `ON TIME$` hypothesis is ruled out by the
      ROM (see the known issue); next is timing the FOR/NEXT routine from
      RAM.
   4. Then re-fit once, against A−C = 45 ms.
+- **The debugger parses the project preset twice per session action.**
+  Attach, restart and Build & Load call `effectiveConfig` →
+  `parsePresetFile`, then `loadPreset` / `cleanStart` parse the same file
+  again by path (`PresetController::parsePreset`), each time re-reading
+  every `program: file:`. One parse per clean start is deliberate
+  (Decisions.md), two isn't. Fix: pass the `PresetFile` from
+  `effectiveConfig` down (`DebugController` → `SyncOperations` →
+  `PresetController::runPreset(preset)`).
+- **Catalogue scans read `encoding: file` sidecar ROMs.**
+  `MemoryCardCatalog.hpp` `parseEntry` passes `baseDir`, so every scan
+  (`scanMemoryCardDirectory`, `readMemoryCardCatalogEntry`,
+  `resolveModuleSpecByName`, every picker refresh) opens each sidecar just
+  to fill the catalogue entry. No bundled card uses `encoding: file` yet.
+  Fix: part of the catalogue parse mode in the template-vs-instance entry
+  above (skip content). **Before fixing:** today a missing sidecar drops
+  the card from the list; with a metadata-only parse it would be listed
+  and fail on attach -- decide which is wanted.
+- **Small leftovers from the 2026-09-30 simplify pass.** Take them when
+  the file is next touched:
+  - `--lcd-png` write-and-error block is the same in `pc1500_cli.cpp` and
+    `pc1600_cli.cpp`: a `cli::writeLcdPng(bitmap, mm, path)` in
+    `tools/CliCommon.hpp`.
+  - `DropFile.cpp` `classify` and `PresetFile.cpp`'s `program:` switch
+    both sort `programfile::Kind` into BASIC / code: `isBasic(Kind)` /
+    `isCode(Kind)` next to `headerName()` in `ProgramFile.hpp` (the
+    headerless rules stay with the callers).
+  - `parsePresetFile` spells the top-level keys three times (`kKeys`, the
+    `block` test, the dispatch chain): one `{name, isBlock}` table.
+  - `parsePresetFile`'s `plotter` / `interfaceName` locals only copy into
+    `out->` at the end; assign directly.
+  - `SettingsDialog.cpp` `addOpenFolderRow` special-cases
+    `OpenFolder::HostDrive` for the reset tooltip; pass the tooltip in
+    like the label.
+  - `extension.js`: `createDebugAdapterDescriptor` falls back to
+    `setting('port') || 32168` although the resolver already filled
+    `config.port`.
+  - `tools/dap_smoke.py`: each run repeats Dap/initialize/attach/
+    disconnect; a `session(port, **attach)` context manager.
+- **PC-1600 module window base is guessed from the card image size.**
+  `PC1600ProgramPlacement.cpp` (`windowContent`/`windowBase`) and
+  `pc1600SlotGeometry` (`PC1600MachineCodeLoader.cpp`) take the image as
+  top-justified in &8000-&BFFF (4 KB = &B000, 8 KB = &A000), while the
+  writes go through the slot pins. CE-151 and CE-155 only agree because
+  their sizes match their decode; a module whose RAM isn't top-justified
+  would get its program written where the pins hold no RAM. Fix: derive
+  the base from what the card answers through the pins
+  (`pc1600LoadState`'s `bankRamPages` already scans that), and drop
+  `SlotGeometry::imageSize`/`bankSize`. *(behaviour)* **Before fixing:**
+  check every bundled PC-1600 card gives the same base both ways, and what
+  the `windowContent(g) < 0x1000` check becomes.
+- **The PC-1600 loaders route page C / page D themselves.**
+  `PC1600BasicLoader.cpp` (`writeAt`) and `PC1600MachineCodeLoader.cpp`
+  each pick slot bus vs. `debugWriteInternalRam(addr - 0xC000)` and split
+  at &BFFF for the run-on; `MachineCodeFile.cpp` (`windowEnd = min(end,
+  kPc1600S0Base)`) does the same arithmetic for planning. Fix: one
+  `PC1600Memory::busWrite(bank, addr, data, n)` that resolves each address
+  as the CPU would with page C = `bank` and page D = bank 0, so the
+  boundary lives in one place (and a later page-D or SLOT1MAP change
+  touches one spot).
+- **`dev/loader-matrix/` re-implements Core helpers.** Take it when the
+  matrix is next run:
+  - `readFile` in both harnesses: `readWholeFile` (`Core/FileIO.hpp`).
+  - `lcd()` and `screen.find("ERROR")`: `LcdText::logField()` /
+    `LcdText::contains()`.
+  - PC-1600 MEM is typed and parsed off the LCD:
+    `CoreDebug::readPC1600ProgramAreas(peek).memS0`
+    (`Core/Debug/BasicPointerTable.cpp`, add it to the build script).
+  - `snapshot()` peeks C000-FFFF byte by byte:
+    `PC1600Machine::debugCopyInternalRam()` (note that a peek at F07DH
+    returns the Port 3DH mirror, not the RAM byte).

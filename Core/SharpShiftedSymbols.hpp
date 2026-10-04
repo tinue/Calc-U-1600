@@ -42,7 +42,7 @@ inline bool sharpShiftedSymbolBaseKey(char c, std::string* base) {
 // (sharpdx-gated) build unit.
 //
 // Checked against the ROM's SHIFT-code table (SFTCDT, bank 6 @ 953FH,
-// indexed by key code - 08H; see PC-1600-Keyboard.md §7): 1-8 and 0 carry
+// indexed by key code - 08H; see Ref/PC-1600/PC-1600-Keyboard.md §7): 1-8 and 0 carry
 // these second legends, 9 has none (SHIFT + 9 stays 9), and _ is on the
 // "." key -- the one entry here that isn't on the digit row.
 inline bool pc1600DigitRowShiftedBaseKey(char c, std::string* base) {

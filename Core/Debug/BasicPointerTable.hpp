@@ -47,8 +47,8 @@ extern const int kPC1600PointerMaxNameLength;
 // ── PC-1600 program areas (S0, and S1/S2 program modules) ────────────────
 //
 // What the ROM itself reports, computed the ROM's way so the Debug panel
-// agrees with MEM / STATUS 259 / STATUS 260. Sources: Sharp1500-1600-Ref
-// PC-1600-Work-Area-Map.md §3.5 and §4.5 (LH5803 ROM $CC30 / $CE41).
+// agrees with MEM / STATUS 259 / STATUS 260. Sources:
+// Ref/PC-1600/PC-1600-Work-Area-Map.md §3.5 and §4.5 (LH5803 ROM $CC30 / $CE41).
 struct PC1600SlotProgramArea : pc1600::SlotDescriptor {
     int freeBytes = 0;           // STATUS 259 / 260
 };

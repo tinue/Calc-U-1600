@@ -1,10 +1,11 @@
 #include "LH5803SharedMemory.hpp"
 
+#include "../../Display/Pc1500DisplayRam.hpp"
 #include "../../PC1600/PC1600BusArbiter.hpp"
 #include "../../PC1600/PC1600Memory.hpp"
 
 uint8_t LH5803SharedMemory::readME0(uint16_t addr) {
-    if (addr < 0x8000) return m_shared.read(uint16_t(addr + 0x8000));
+    if (addr < 0x8000) return m_shared.read(uint16_t(lha90(addr) + 0x8000));
     if (addr < kRomBase) {
         // 8000-BFFF peripheral-ROM window, selected by the LH5803's own PV
         // (the ROM sets it from CALLH's PARBAN): CE-150 ROM at PVOUT=0
@@ -17,8 +18,28 @@ uint8_t LH5803SharedMemory::readME0(uint16_t addr) {
 }
 
 void LH5803SharedMemory::writeME0(uint16_t addr, uint8_t value) {
-    if (addr < 0x8000) { m_shared.write(uint16_t(addr + 0x8000), value); return; }
+    if (addr < 0x8000) {
+        addr = lha90(addr);
+        m_shared.write(uint16_t(addr + 0x8000), value);
+        mirrorPc1500Display(addr);
+        return;
+    }
     // CE-158/150 ROM window and the LH5803-private ROM: writes ignored.
+}
+
+void LH5803SharedMemory::mirrorPc1500Display(uint16_t addr) {
+    PC1600Display& display = m_shared.display();
+    if (addr == pc1500ram::kStatusSet0 || addr == pc1500ram::kStatusSet1) {
+        display.mirrorPc1500StatusSet(addr == pc1500ram::kStatusSet0 ? 0 : 1, m_shared.read(uint16_t(addr + 0x8000)));
+        return;
+    }
+    if (!pc1500ram::isColumnByte(addr)) return;
+    // The whole column, from both bytes of its pair as they are in RAM now.
+    const uint16_t pair = uint16_t(addr & ~1u);
+    const uint8_t first = m_shared.read(uint16_t(pair + 0x8000));
+    const uint8_t second = m_shared.read(uint16_t(pair + 1 + 0x8000));
+    for (int block = 0; block < 2; ++block)
+        display.mirrorPc1500Column(pc1500ram::columnOf(pair, block), pc1500ram::columnDots(first, second, block));
 }
 
 bool LH5803SharedMemory::isUartShadow(uint16_t addr, uint8_t* reg, bool* isSubCpuAnswer) {
@@ -76,6 +97,9 @@ uint8_t LH5803SharedMemory::readME1(uint16_t addr) {
         return answer ? m_shared.subCpu().readAnswer()
                       : m_shared.uart().readRegister(reg);
     }
+    // SC7852 control-port block 30H-3FH at ME1 A030-A03F, e.g. the bank
+    // register save `LDA #(P_BANK)` at rom1500 DC85/DC9A. See writeME1().
+    if (isControlPort(addr)) return m_shared.readIO(static_cast<uint8_t>(addr));
     // LH5803 on-chip LH5811-compat PIO, ME1 0xF000-0xF00F. Unconditional
     // (CPU-internal, present with or without a CE-150). Without this, an
     // ME1 read here falls through to readME0() and 0xF00B >= kRomBase
@@ -96,9 +120,9 @@ uint8_t LH5803SharedMemory::readME1(uint16_t addr) {
         if (cardRead(addr, /*me1=*/true, &v)) return v;
     }
     // 8000-BFFF unclaimed: ME1 reaches the bus as an I/O cycle (IORQ), so
-    // it never selects a peripheral ROM -- open bus. Aliasing this to
-    // readME0() served CE-150/CE-158 ROM bytes as I/O (the CE-150 LPRINT
-    // one-character bug came from exactly that at B000-B007).
+    // it never selects a peripheral ROM -- open bus. Aliasing it to
+    // readME0() would serve CE-150/CE-158 ROM bytes as I/O (the CE-150
+    // ROM reads ME1 B000-B007 as I/O).
     if (addr >= 0x8000 && addr < kRomBase) return 0xFF;
     return readME0(addr); // default aliasing -- no other read-side trigger
 }
@@ -113,6 +137,15 @@ void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
         if (!answer) m_shared.uart().writeRegister(reg, value); // 33H is read-only
         return;
     }
+    // SC7852 control-port block 30H-3FH at ME1 A030-A03F (A038 is the
+    // handoff, above). rom1500 writes P_MOD/P_BANK/P_LHMSK2/P_CL1 here; the
+    // one that matters today is P_MAPPRG's `STA #(P_BANK)` (E652 -> DC94),
+    // which maps the BASIC program bank into page C for MODE 1 PEEK/XPEEK.
+    // Dropping it left page C on whatever the Z-80 had set (bank 0).
+    if (isControlPort(addr)) {
+        m_shared.writeIO(static_cast<uint8_t>(addr), value);
+        return;
+    }
     // Internal LH5811-compat PIO, ME1 0xF000-0xF00F -- straight-through
     // latch (IF at 0xB included). See readME1() for the rationale.
     if ((addr & 0xFFF0) == 0xF000) {
@@ -124,5 +157,8 @@ void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
     // ignores writes at 8000+ anyway).
     if (addr >= 0x8000 && cardWrite(addr, /*me1=*/true, value)) return;
     if (addr >= 0x8000 && addr < kRomBase) return;
-    writeME0(addr, value); // default aliasing for every other ME1 address
+    // Default aliasing for every other ME1 address -- the RAM only: the
+    // gate array's LCD mirror (mirrorPc1500Display()) is taken to watch
+    // ME0 writes, the ones PC-1500 display code makes.
+    if (addr < 0x8000) m_shared.write(uint16_t(lha90(addr) + 0x8000), value);
 }

@@ -9,8 +9,8 @@
 
 #include "DapServer.hpp"
 #include "DebugController.hpp"
+#include "Debug/AttachKeys.hpp"
 #include "Debug/Listing/Listing.hpp"
-#include "MachineCodeFile.hpp"
 #include "Preset/PresetFile.hpp"
 
 namespace {
@@ -115,6 +115,7 @@ void DapSession::handle(const QJsonObject& request) {
     else if (command == QLatin1String("restart")) restart(args, &body, &error);
     else if (command == QLatin1String("calcu1600/load")) customLoad(args, &body, &error);
     else if (command == QLatin1String("calcu1600/reset")) customReset(args, &body, &error);
+    else if (command == QLatin1String("calcu1600/screen")) customScreen(&body, &error);
     else if (command == QLatin1String("calcu1600/quit")) {}
     else error = QStringLiteral("Unsupported request '%1'").arg(command);
     respond(request, error.isEmpty(), body, error);
@@ -176,10 +177,9 @@ void DapSession::attach(const QJsonObject& args, QJsonObject*, QString* error) {
 
 namespace {
 
-// A `debug:` block value as the attach configuration's JSON. Quoted scalars
-// stay text; bare `true`/`false` and decimal integers (bank qualifiers)
-// become JSON values; everything else (`0x40C5`, symbols) stays text, which
-// the address parsers accept.
+// A `debug:` block value as the attach configuration's JSON. Bare
+// `true`/`false` become JSON booleans; every other scalar stays text.
+// Numbers are read later by numberOf(), with the preset's rule.
 QJsonValue toJson(const YamlNode& n) {
     switch (n.type) {
         case YamlNode::Type::Map: {
@@ -200,9 +200,6 @@ QJsonValue toJson(const YamlNode& n) {
             if (raw != value) return value; // quoted
             if (value == QLatin1String("true")) return true;
             if (value == QLatin1String("false")) return false;
-            bool isInt = false;
-            const int i = value.toInt(&isInt, 10);
-            if (isInt) return i;
             return value;
         }
         case YamlNode::Type::Null: break;
@@ -226,11 +223,18 @@ bool DapSession::effectiveConfig(const QJsonObject& args, QJsonObject* out, QStr
         return false;
     }
     // The project preset sets the machine up; its `debug:` block gives the
-    // rest. Keys of the launch configuration win; `program` merges key by key.
+    // rest. Keys of the launch configuration win; `program` merges key by
+    // key, and `listings` / `symbols` add to the block's (the VS Code
+    // extension always sends both, with the user's ROM listings).
     QJsonObject merged = preset.debug.isMap() ? toJson(preset.debug).toObject() : QJsonObject();
     merged.insert(QStringLiteral("preset"), QString::fromStdString(path));
     for (auto it = args.begin(); it != args.end(); ++it) {
-        if (it.key() == QLatin1String("program") && merged.value(it.key()).isObject()) {
+        if ((it.key() == QLatin1String("listings") || it.key() == QLatin1String("symbols")) &&
+            merged.value(it.key()).isArray() && it.value().isArray()) {
+            QJsonArray both = merged.value(it.key()).toArray();
+            for (const QJsonValue& v : it.value().toArray()) both.append(v);
+            merged.insert(it.key(), both);
+        } else if (it.key() == QLatin1String("program") && merged.value(it.key()).isObject()) {
             QJsonObject program = merged.value(it.key()).toObject();
             const QJsonObject over = it.value().toObject();
             for (auto p = over.begin(); p != over.end(); ++p) program.insert(p.key(), p.value());
@@ -245,28 +249,99 @@ bool DapSession::effectiveConfig(const QJsonObject& args, QJsonObject* out, QStr
 
 namespace {
 
-bool parseAddress(const QJsonValue& v, uint32_t* out) {
+// A number of the attach configuration, from a `debug:` block or a launch
+// configuration alike: a JSON number, or text with the preset's rule (`&`,
+// `0x` or `$` is hex, a bare number decimal).
+bool numberOf(const QJsonValue& v, uint32_t max, uint32_t* out) {
+    uint32_t n = 0;
     if (v.isDouble()) {
         const double d = v.toDouble();
-        if (d < 0 || d > 0xFFFF) return false;
-        *out = uint32_t(d);
-        return true;
+        if (d < 0 || d != double(uint32_t(d))) return false;
+        n = uint32_t(d);
+    } else if (!v.isString() || !parseNumber(v.toString().toStdString(), &n)) {
+        return false;
     }
-    return machinecode::parseHexAddress(v.toString().toStdString(), out);
+    if (n > max) return false;
+    *out = n;
+    return true;
 }
 
+bool parseAddress(const QJsonValue& v, uint32_t* out) { return numberOf(v, 0xFFFF, out); }
+
+// The bank qualifiers `bank`, `me`, `pu`, `pv` (checked by checkAttach); a
+// missing one is -1.
 debug::BankKey bankKeyOf(const QJsonObject& o) {
+    const auto qualifier = [&o](const char* name) {
+        uint32_t n = 0;
+        const uint32_t max = debug::attach::find(debug::attach::kListingKeys, name)->max;
+        return numberOf(o.value(QLatin1String(name)), max, &n) ? int(n) : -1;
+    };
     debug::BankKey k;
-    k.bank = o.value(QStringLiteral("bank")).toInt(-1);
-    k.me = o.value(QStringLiteral("me")).toInt(-1);
-    k.pu = o.value(QStringLiteral("pu")).toInt(-1);
-    k.pv = o.value(QStringLiteral("pv")).toInt(-1);
+    k.bank = qualifier("bank");
+    k.me = qualifier("me");
+    k.pu = qualifier("pu");
+    k.pv = qualifier("pv");
     return k;
+}
+
+// Checks the keys of `table` in a launch configuration, a `debug:` block
+// or a `calcu1600/load` (Core/Debug/AttachKeys.hpp). Keys the table doesn't
+// know pass: a launch configuration also carries the IDE's own.
+bool checkAttach(const QJsonObject& o, const debug::attach::Table& table, QString* error) {
+    using namespace debug::attach;
+    for (const Key& key : table) {
+        const QJsonValue v = o.value(QLatin1String(key.name));
+        if (v.isUndefined() || v.isNull()) continue;
+        std::string why;
+        const auto bad = [&](const std::string& what) {
+            *error = QStringLiteral("Bad \"%1\": %2").arg(QLatin1String(key.name), QString::fromStdString(what));
+            return false;
+        };
+        switch (key.kind) {
+            case Kind::Map:
+                if (!v.isObject()) return bad("a block of settings");
+                if (!checkAttach(v.toObject(), kProgramKeys, error)) return false;
+                break;
+            case Kind::FileList:
+                if (!v.isArray()) return bad("a list of paths or {path, ...} objects");
+                for (const QJsonValue& item : v.toArray()) {
+                    if (item.isString()) continue;
+                    if (!item.isObject()) return bad("a list of paths or {path, ...} objects");
+                    if (!checkAttach(item.toObject(), itemKeys(key), error)) return false;
+                }
+                break;
+            case Kind::PathList:
+                if (!v.isArray()) return bad("a list of paths");
+                for (const QJsonValue& item : v.toArray())
+                    if (!item.isString()) return bad("a list of paths");
+                break;
+            case Kind::Bool:
+                if (!v.isBool()) return bad("true or false");
+                break;
+            case Kind::Number: {
+                uint32_t n = 0;
+                if (!numberOf(v, key.max, &n)) return bad(describe(key));
+                break;
+            }
+            case Kind::Choice:
+                if (!v.isString()) return bad("text");
+                if (!checkScalar(key, v.toString().toStdString(), &why)) return bad(why);
+                break;
+            case Kind::Text: // `entry` may be a number
+                if (!v.isString() && !v.isDouble()) return bad("text");
+                break;
+            case Kind::Path:
+                if (!v.isString()) return bad("a path");
+                break;
+        }
+    }
+    return true;
 }
 
 } // namespace
 
 bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* error) {
+    if (!checkAttach(d, debug::attach::kProgramKeys, error)) return false;
     debug::LoadRequest req;
     req.bin = debug::absolutePath(d.value(QStringLiteral("bin")).toString().toStdString());
     if (d.value(QStringLiteral("bin")).toString().isEmpty()) {
@@ -281,13 +356,7 @@ bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* e
         req.symbols.push_back(debug::absolutePath(s.toString().toStdString()));
     req.thread = threadForCpu(d.value(QStringLiteral("cpu")).toString());
     req.key = bankKeyOf(d);
-    if (d.contains(QStringLiteral("address"))) {
-        req.hasAddress = parseAddress(d.value(QStringLiteral("address")), &req.address);
-        if (!req.hasAddress) {
-            *error = QStringLiteral("Bad \"address\"");
-            return false;
-        }
-    }
+    if (d.contains(QStringLiteral("address"))) req.hasAddress = parseAddress(d.value(QStringLiteral("address")), &req.address);
     if (d.contains(QStringLiteral("slot"))) {
         *error = QStringLiteral("\"slot\" was removed: the loader places code by the machine's MODE, the program "
                                 "area TITLE selects, and the address. Set MODE / TITLE on the calculator first.");
@@ -347,12 +416,8 @@ bool DapSession::loadProgram(const QJsonObject& d, QJsonObject* body, QString* e
 bool DapSession::prepare(const QJsonObject& args, QString* error) {
     // `boot: debug`: the preset only sets the machine up, and the debugger
     // runs the boot, with breakpoints armed (ROM code that runs at power-on).
-    const QString boot = args.value(QStringLiteral("boot")).toString();
-    if (!boot.isEmpty() && boot != QLatin1String("debug")) {
-        *error = QStringLiteral("\"boot\" is \"debug\" or absent, not \"%1\"").arg(boot);
-        return false;
-    }
-    const bool bootDebug = !boot.isEmpty();
+    if (!checkAttach(args, debug::attach::kBlockKeys, error)) return false;
+    const bool bootDebug = args.contains(QStringLiteral("boot"));
     // 1. A preset rebuilds the machine. With a program, the program's clean
     // start (step 4) applies it instead.
     const QString preset = args.value(QStringLiteral("preset")).toString();
@@ -452,6 +517,26 @@ void DapSession::customReset(const QJsonObject& args, QJsonObject*, QString* err
     if (!ready(error)) return;
     const bool all = args.value(QStringLiteral("kind")).toString() == QLatin1String("allReset");
     m_controller->resetMachine(all, args.value(QStringLiteral("stop")).toBool(true), error);
+}
+
+// The LCD as text (Core/Display/LcdText.hpp): {rows, status, unparsed,
+// poweredOn, cursor?: {row, col}}. Needs no debug session, only a machine.
+void DapSession::customScreen(QJsonObject* body, QString* error) {
+    LcdText screen;
+    if (!m_controller->lcdText(&screen)) {
+        *error = QStringLiteral("No machine is running");
+        return;
+    }
+    QJsonArray rows, status;
+    for (const std::string& row : screen.rows) rows.append(QString::fromStdString(row));
+    for (const std::string& s : screen.status) status.append(QString::fromStdString(s));
+    body->insert(QStringLiteral("rows"), rows);
+    body->insert(QStringLiteral("status"), status);
+    body->insert(QStringLiteral("unparsed"), screen.unparsed);
+    body->insert(QStringLiteral("poweredOn"), screen.poweredOn);
+    if (screen.cursorRow >= 0)
+        body->insert(QStringLiteral("cursor"),
+                     QJsonObject{{QStringLiteral("row"), screen.cursorRow}, {QStringLiteral("col"), screen.cursorCol}});
 }
 
 void DapSession::configurationDone(const QJsonObject&, QJsonObject*, QString* error) {
@@ -592,7 +677,7 @@ void DapSession::stackTrace(const QJsonObject& args, QJsonObject* body, QString*
                 const debug::SourceMap& map = m_controller->sourceMap();
                 const disasm::SymbolFn symbols = [&map, thread](uint16_t a) { return map.symbolAt(thread, a); };
                 const disasm::Decoded d = t->decode(thread, h, symbols);
-                text = QStringLiteral("after %1  %2")
+                text = QStringLiteral("%1  %2")
                            .arg(QStringLiteral("%1").arg(pc, 4, 16, QLatin1Char('0')).toUpper(), QString::fromStdString(d.text));
                 debug::SourceLocation loc;
                 if (m_controller->sourceMap().lookup(thread, pc, rc->bankMatch(), &loc)) {

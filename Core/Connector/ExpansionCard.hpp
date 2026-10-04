@@ -27,8 +27,10 @@ struct PinState {
     // `address`, the read return value, and `forWrite` respectively.
     //
     // Pin roles per host (a card must not care which):
-    //   pin[2]  PC-1500 PV        / PC-1600 PVIN
+    //   pin[2]  PC-1500 PV        / PC-1600 VCC (TRM: PVIN; measured tied to VCC)
     //   pin[3]  PC-1500 PU        / PC-1600 PU
+    //   (PC-1500 per the TRM; measured, the real contacts are 2 = PU,
+    //   3 = PV. TODO.md, "Expansion connectors".)
     //   (The 60-pin cards CE-150/CE-158 also read PV/PU here, a shortcut:
     //   on the 60-pin plug they are contacts 15/16. TODO.md.)
     //   pin[4]  PC-1500 Y0 (CS &0000-&3FFF) / PC-1600 RAM2 (Slot 1) or RAM1 (Slot 2) CS
@@ -82,7 +84,7 @@ struct WriteResult {
     constexpr operator bool() const { return claimed; }
 };
 
-// A card that can drive INHIBIT (Expansion-Connectors.md's INHIBIT/INH
+// A card that can drive INHIBIT (Ref/Shared/Expansion-Connectors.md's INHIBIT/INH
 // pin, pin 15) to suppress the host's internal ROM and substitute its own
 // content derives from this too. Connectors look for it once, when the
 // card is attached, so the (usual) cards without it cost nothing on each
@@ -133,23 +135,10 @@ public:
     virtual std::vector<uint8_t> debugImage() const { return {}; }
 
     /// Bumped whenever debugImage()'s content changes -- a stored byte that
-    /// took a new value, a flash erase, a debugImageWrite() -- so a host
+    /// took a new value, a flash erase -- so a host
     /// that persists the card compares one number instead of the whole
     /// image. Stays 0 for a card with no writable storage.
     virtual uint64_t contentRevision() const { return 0; }
-
-    /// The write counterpart of debugImage(): overwrite `n` bytes of the
-    /// backing store starting at concatenated offset `off` (same address
-    /// space debugImage() returns). For a host-side debug / program-loader
-    /// path that must land bytes in a card's RAM regardless of the current
-    /// bank-register / pin state -- e.g. the PC-1600 fast BASIC loader
-    /// injecting a tokenised program into a slot-RAM program area the
-    /// emulated bus does not currently map for writes. Returns false,
-    /// writing nothing, when the card has no writable backing or the range
-    /// would run past its end. Default: no writable backing.
-    virtual bool debugImageWrite(size_t /*off*/, const uint8_t* /*data*/, size_t /*n*/) {
-        return false;
-    }
 
     /// The module's name (a definition's `module-name:`, e.g. "CE-1600M"),
     /// so the GUI can read what sits in a slot from the slot itself.

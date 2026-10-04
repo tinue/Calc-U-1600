@@ -5,8 +5,8 @@
 // ── Debugger instruction history ─────────────────────────────────────────
 //
 // A tiny always-on ring of the last few retired instructions per CPU, for
-// the debugger's call-stack view (frames 1..20: "after <insn>", each with
-// its post-execution registers). Unlike TraceRing it has no mutex and no
+// the debugger's call-stack view (frames 1..20: each instruction with the
+// registers it started from -- pre-execution, like the live frame 0). Unlike TraceRing it has no mutex and no
 // drain cursor: the CPU writes it from step() and the debugger reads it
 // from the same (emulation == GUI) thread while the machine is paused, so
 // recording one frame costs a handful of plain stores. It is independent of
@@ -19,11 +19,13 @@ struct LH5801HistoryFrame {
     uint8_t  len{};       ///< number of valid bytes; 0 for an interrupt entry
     bool     interrupt{}; ///< interrupt acknowledge: `pc` is the interrupted P, no bytes
 
-    // Post-execution registers
+    // Pre-execution registers (P is `pc`)
     uint8_t  a{};
-    uint16_t x{}, y{}, u{}, s{}, p{};
+    uint16_t x{}, y{}, u{}, s{};
     uint8_t  t{};
     bool     pu{}, pv{};
+    bool     disp{};  ///< for TRACE frames only (see LH5801::pushTraceFrame)
+    uint16_t tm{};    ///< for TRACE frames only
 };
 
 /// One retired SC7852 (Z-80) instruction (or interrupt entry).
@@ -33,10 +35,10 @@ struct Z80HistoryFrame {
     uint8_t  len{};       ///< number of valid bytes; 0 for an interrupt entry
     bool     interrupt{}; ///< interrupt acknowledge: `pc` is the interrupted PC, no bytes
 
-    // Post-execution registers
+    // Pre-execution registers (PC is `pc`)
     uint16_t af{}, bc{}, de{}, hl{};
     uint16_t af2{}, bc2{}, de2{}, hl2{};
-    uint16_t ix{}, iy{}, sp{}, pcAfter{};
+    uint16_t ix{}, iy{}, sp{};
     uint8_t  i{}, r{}, im{};
     bool     iff1{}, iff2{};
 };

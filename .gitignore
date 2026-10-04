@@ -6,6 +6,7 @@
 .Trashes
 
 build/
+build-debug/
 
 # CLion's own out-of-source build directories for the root CMakeLists.txt
 # (cmake-build-debug, cmake-build-release, ...). CLion drops a self-ignoring

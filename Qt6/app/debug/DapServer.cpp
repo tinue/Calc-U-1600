@@ -62,8 +62,12 @@ void DapServer::onNewConnection() {
 
 void DapServer::onReadyRead() {
     if (!m_client) return;
-    m_buffer += m_client->readAll();
     for (;;) {
+        // Read again before each message: a handler that pumps the event
+        // loop (a preset load) lets more requests arrive, and Qt doesn't
+        // emit readyRead again while this slot runs -- they'd wait for the
+        // client's next request.
+        m_buffer += m_client->readAll();
         const int headerEnd = m_buffer.indexOf("\r\n\r\n");
         if (headerEnd < 0) return;
         int length = -1;

@@ -9,94 +9,37 @@
 #include "../PC1500/PC1500Variant.hpp"
 #include "../Yaml.hpp"
 
-// ── Preset file model + parser (the "common loader": file open, parse, ──
-//     model resolution -- see the 3-part structure note below) ───────────
+// ── Preset file model + parser ───────────────────────────────────────────
 //
 // A hand-rolled parser for the preset format (`.pc1500`, `.pc1500a`,
-// `.pc1600`; docs/User-Guide.md chapter 8 is the reference). YAML-shaped,
-// not YAML (docs/background/Decisions.md): flat `key: value` top-level
-// fields, `- verb: value` steps, one `text: |` block scalar, and a `type:`
-// step that is typed exactly as written to the end of the line (`PRINT #1`
-// keeps its `#`, quotes are typed). Only `debug:` and `bus-rom:` are YAML
-// proper and go to Core/Yaml.hpp. Tabs, flow style and multiple documents
-// are rejected.
+// `.pc1600`). docs/User-Guide.md chapter 8 is the reference for keys,
+// step verbs, naming and `saveas:`; docs/background/Decisions.md
+// ("Preset format") says why it is shaped the way it is. YAML-shaped, not
+// YAML: flat `key: value` fields, `- verb: value` steps, one `text: |`
+// block, and `type:` typed exactly as written. Only `debug:` and
+// `bus-rom:` are YAML proper (Core/Yaml.hpp).
 //
-// The naming rules:
-//   * Sharp's product names, hyphen included, in any case: `model: PC-1600`,
-//     `plotter: CE-1600P`, `interface: CE-158`. A ROM choice rides on the
-//     name after a colon (`PC-1500:A03`, `PC-1600:old`, `CE-1600P:old`).
-//   * A device by name, or by file: `slot-1: CE-1600M` / `slot-1-file:
-//     my.card.yaml`, `floppy: Formatted` / `floppy-file: my.floppy.yaml`.
-//     A path-valued key is `file` or ends in `-file`, except `host-drive:`,
-//     a folder. Paths are relative to the preset; `~/` is the home folder.
-//   * `saveas:` names its device with the same words: `slot-1`, `slot-2`,
-//     `floppy`.
-//   * Numbers: `&`, `0x` or `$` makes them hex, otherwise decimal.
-//   * Leaving a key out means "none"; there is no `none` value.
+// Preset loading is three parts:
+//   1. this file -- parsePresetFile() opens and parses the file and
+//      resolves `model:` (`isPC1600` / `variant`);
+//   2. the family loader -- applyPC1500Preset() / applyPC1600Preset() --
+//      arms and boots a machine, then hands the `keys:` / `program:`
+//      blocks, in file order, to runPresetSections() (PresetRunner.hpp);
+//   3. the dispatch (peek the model, build the machine, call its loader)
+//      in the GUI's PresetController::loadPreset and in each CLI.
 //
-// PRESET LOADING IS THREE PARTS:
-//   1. this file -- parsePresetFile() opens the file, parses it, and
-//      resolves `model:` into `PresetFile` (`isPC1600` / `variant`). Model-
-//      family-agnostic.
-//   2. the family loader arms and boots a machine for the parsed
-//      PresetFile -- Core/PC1500/PC1500PresetLoader.cpp
-//      `applyPC1500Preset()` for PC-1500/1500A,
-//      Core/PC1600/PC1600PresetLoader.cpp `applyPC1600Preset()` for
-//      PC-1600 -- then hands the `keys:` / `program:` sections to the
-//      shared runPresetSections() (Core/Preset/PresetRunner.hpp).
-//   3. the dispatch (peek model -> build the right machine -> call its
-//      family loader) lives in the GUI's PresetController::loadPreset and
-//      in each CLI.
-//
-// Step verbs: `key:`, `type:`, `wait:`, `trace:`, `screenshot:`,
-// `syncclock:`, `saveas:`. `- wait: N` runs N seconds of emulated time;
-// `- wait:` with no value blocks until the ROM's keyboard idle loop
-// re-engages -- i.e. until a long-running program or plot has finished (a
-// generous safety cap still applies). `- trace: name.bin` starts a CPU
-// instruction trace to `name.bin` under the configured trace directory
-// (overwriting; starting a new one first closes the open one), `- trace:
-// off` stops it, and a trace still open when the preset finishes is closed.
-// `- screenshot: name.png` writes the LCD (the image Edit > Copy Screen
-// puts on the clipboard, Core/Display/LcdScreenshot.hpp) into the same
-// directory. Neither file name may contain a path separator. `- syncclock:`
-// re-seeds the real-time clock from the host's local time -- a preset load
-// runs flat out, so put it last. A ` # comment` after a value is stripped,
-// except after `type:`.
-//
-// `- saveas: template|live <device>:<name>` saves the battery card in
-// `slot-1` / `slot-2`, or the floppy disk (`floppy`) -- the scripted
-// counterpart of the control bar's "Name & Save". The leading word is
-// required:
-//   * `live`     -- an ordinary instance: the GUI autosaves later changes
-//                   into it.
-//   * `template` -- written with `template: true`: read-only from then on,
-//                   every use starts from the saved contents.
-// `<name>` saves into the environment's configured save directory under that
-// module-name / disk-name. `file:<path>` instead writes exactly that file,
-// relative to the preset's own directory; the path must end in `.card.yaml`
-// (slots) or `.floppy.yaml` (floppy), and the name is the file name without
-// that suffix:
-//   - saveas: template slot-2:file:CE-1601M - Progs.card.yaml
-//   - saveas: live floppy:Progs
-// `slot-2`/`floppy` are PC-1600 only. Unlike the GUI's Name & Save, it works
-// even when the slot/floppy was already saved/loaded from a named instance,
-// and it silently overwrites an existing file of the same name (a template
-// too). WHERE a by-name save goes is environment-specific, so Core only
-// parses the step and hands a PresetSaveAsRequest to PresetSaveAsFn (below);
-// a caller that doesn't supply the callback gets a logged no-op.
-//
-// A preset is an ordered SEQUENCE of `keys:`/`program:` blocks, executed
-// top-to-bottom in file order -- so a preset can install a loader program,
-// run it, then load and run a second payload (see
-// examples/setup/firmware_bootstrap_util_15.pc1500a).
+// Where trace, screenshot and by-name `saveas:` files go is the caller's
+// business: Core parses `saveas:` into a PresetSaveAsRequest for
+// PresetSaveAsFn (below); without that callback the step is a logged no-op.
 struct PresetStep {
-    enum class Kind { Key, Type, Wait, Trace, Screenshot, SyncClock, SaveAs };
+    enum class Kind { Key, Type, Wait, Trace, Screenshot, Expect, SyncClock, SaveAs };
     Kind kind = Kind::Key;
     // key name (Key), program text (Type), or -- for Trace -- the trace
     // output filename to start capturing to, or "" to stop the current
     // capture (`- trace: off`). See PC1500PresetLoader.cpp's `trace:`
-    // handling; a port of Calc-U-59's `KEYSTROKES:` `Trace:` directive.
-    // For Screenshot, the PNG filename. For SaveAs, the name to save
+    // handling.
+    // For Screenshot, the PNG filename. For Expect, the text an LCD row
+    // must contain. For SaveAs, the name to save
     // under (see saveAsTarget below).
     std::string text;
     // (Wait) seconds of emulated time to run. A negative value is the
@@ -309,3 +252,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
 /// A path in a preset: `~` / `~/...` is the home directory, anything else
 /// relative is relative to the preset's directory `dir`.
 std::string resolvePath(const std::filesystem::path& dir, const std::string& value);
+
+/// A number anywhere in a preset: `&`, `0x` or `$` makes it hex, otherwise
+/// decimal. The whole value must be the number.
+bool parseNumber(const std::string& value, uint32_t* out);

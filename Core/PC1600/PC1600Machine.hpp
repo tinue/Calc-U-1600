@@ -30,12 +30,11 @@
 /// a snapshot type constructed fresh from RAM bytes), PC1600Display is a
 /// live, continuously-written HD61102 controller pair, so handing out a
 /// reference to it would not be safe to read from a different thread while
-/// the emulation loop is mid-step(). Row-major ([row][col]) to match
-/// PCDisplaySnapshot's Bridge convention.
+/// the emulation loop is mid-step(). Row-major ([row][col]).
 struct PC1600DisplaySnapshot {
     bool pixels[PC1600Display::kHeight][PC1600Display::kWidth]{};
     bool clockEnabled{false};
-    bool statusSymbols[PC1600StatusLine::kCount]{}; // PC1600StatusLine::all()'s order
+    StatusLine statusLine;
 };
 
 // ── PC-1600 dual-CPU machine facade ──────────────────────────────────────
@@ -50,7 +49,7 @@ struct PC1600DisplaySnapshot {
 // the bus; only one CPU ever executes per step() call, matching the real
 // hardware's ELH#-gated single-owner bus. reset() always starts on SC7852
 // (architecturally guaranteed, not configurable -- see
-// PC-1600-Machine-Overview.md §6).
+// Ref/PC-1600/PC-1600-Machine-Overview.md §6).
 class PC1600Machine {
 public:
     PC1600Machine();
@@ -90,14 +89,14 @@ public:
     // The two CPUs run off different crystals and their step() costs are
     // NOT interchangeable. `kTStateHz` is this machine's canonical unit of
     // emulated time: SC-7852 T-states at 3.58 MHz
-    // (PC-1600-CPU-SC7852-Z80.md §2.1). `kLH5803Hz` is the LH-5803's basic
+    // (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md §2.1). `kLH5803Hz` is the LH-5803's basic
     // clock phi-OS on pin 4 -- a real PC-1600 number, but explicitly *not*
     // the Z-80 core clock; §2.1 warns about exactly this confusion, and
     // conflating the two runs the machine 2.75x too slow.
     //
     // Everything that measures emulated time derives from kTStateHz rather
     // than restating it: the timer periods below, runCycles()'s budget, and
-    // (via `paceHz` on the Bridge wrapper) the GUI's batch pacing.
+    // the app's frame pacing (MachineController::clockHz()).
     static constexpr uint32_t kTStateHz = kPC1600TStateHz;
     static_assert(CE1600FCard::kTStateHz == kTStateHz, "CE1600FCard times seeks in SC7852 T-states");
     static constexpr uint32_t kLH5803Hz = kPC1600PhiOsHz;
@@ -175,7 +174,7 @@ public:
     void detachCE1600P();
     bool ce1600pAttached() const { return m_ce1600pCard != nullptr; }
     /// Unlocked direct access -- headless/tests only, same convention as
-    /// `keyboard()`/`memory()`. The GUI Bridge must use the three locked
+    /// `keyboard()`/`memory()`. The app uses the three locked
     /// accessors below instead: the mechanism's stroke/event containers are
     /// mutated from inside `step()` (motor writes), so a GUI-thread reader
     /// touching them directly races the emulation loop.
@@ -186,7 +185,7 @@ public:
     std::vector<AlpsPlotterMechanism::FlatPoint> ce1600pPlotPoints() const;
     /// O(1) change token for the plot geometry (0 when no plotter attached).
     /// A GUI poll loop reads this every frame and only calls the copying
-    /// `ce1600pPlotPoints()` when it has moved -- see `EmulatorViewModel.tick()`.
+    /// `ce1600pPlotPoints()` when it has moved (PlotterPaperWidget).
     uint64_t ce1600pPlotRevision() const;
     std::vector<std::string> drainCE1600PEvents();
     void clearCE1600PPaper();
@@ -278,6 +277,7 @@ public:
     const LH5803& lh5803() const { return m_lh5803; }
     PC1600Bank&   bank() { return m_bank; }
     PC1600Memory& memory() { return m_z80Mem; }
+    const PC1600Memory& memory() const { return m_z80Mem; }
     /// The LH5803's memory view -- its 0000-3FFF window aliases the Z-80's
     /// 8000-BFFF (Slot 1/2), so a slot card is visible through both.
     LH5803SharedMemory& lh5803Memory() { return m_lh5803Mem; }
@@ -300,7 +300,7 @@ public:
     // keyboard()/display() are unlocked direct access, for tests/headless
     // tools only (same convention PC1500Machine's cpu()/memory() already
     // use) -- pressKey/releaseKey/setOnKeyPressed/displaySnapshot below are
-    // the locked, cross-thread-safe surface the GUI Bridge layer uses.
+    // the locked, cross-thread-safe surface the app uses.
     PC1600Keyboard&       keyboard() { return m_z80Mem.keyboard(); }
     const PC1600Keyboard& keyboard() const { return m_z80Mem.keyboard(); }
     PC1600Display&        display() { return m_z80Mem.display(); }
@@ -364,7 +364,7 @@ public:
     // ── Debug reads (GUI-safe: take m_mutex, like pokeMemory()) ───────────
     //
     // The unlocked memory()/bank() accessors above are "tests/headless tools
-    // only"; these are the cross-thread-safe surface the GUI Bridge uses for
+    // only"; these are the cross-thread-safe surface the app uses for
     // the debug panel's "Pointers" / "Dump Mem" buttons.
 
     /// One byte, read through the currently-selected banks (Port 31H/28H/3DH
@@ -391,17 +391,18 @@ public:
     static constexpr size_t kInternalRamSize = 0x4000;
     void debugCopyInternalRam(uint8_t* out);
 
-    /// Direct backing-store writes, bypassing the emulated bus / bank
-    /// gating -- the write side of debugCopyInternalRam() / debugSlotImage().
-    /// Used by the fast BASIC loader to scatter a tokenised program across
-    /// module banks + internal RAM regardless of the current page-C bank
-    /// state. GUI-safe (take m_mutex, like pokeMemory()). Return false,
-    /// writing nothing, on an out-of-range offset or an empty/read-only
-    /// slot. `off` is into the concatenated card image (debugSlotImage()'s
-    /// address space) for debugWriteSlotImage(), or 0..kInternalRamSize for
-    /// debugWriteInternalRam().
+    /// Loader writes regardless of the current page-C bank state, for the
+    /// fast loaders that scatter a program across module banks + internal
+    /// RAM. GUI-safe (take m_mutex, like pokeMemory()). Return false,
+    /// writing nothing, unless every byte lands in RAM.
+    /// debugWriteInternalRam(): `off` 0..kInternalRamSize into the internal
+    /// RAM's backing store. debugWriteSlotBus(): Z-80 `addr` ($8000-$BFFF)
+    /// in global `bank` 0-3, through the slot's pins
+    /// (PC1600Memory::slotBusWrite), so the card's own wiring applies.
     bool debugWriteInternalRam(size_t off, const uint8_t* data, size_t n);
-    bool debugWriteSlotImage(int slot, size_t off, const uint8_t* data, size_t n);
+    bool debugWriteSlotBus(int bank, uint16_t addr, const uint8_t* data, size_t n);
+    /// Whether debugWriteSlotBus() would store [addr, addr + n).
+    bool debugSlotBusWritable(int bank, uint16_t addr, size_t n);
 
     /// The entire backing store of the card in Slot `slot` (1 or 2) --
     /// every bank / vertical bank concatenated ascending
@@ -547,7 +548,7 @@ private:
     // 64 Hz square wave confirmed by Systemhandbuch §7.3/§7.4 (see
     // PC1600Memory::setTimer64Bit()'s own comment), modeled here as a
     // T-state accumulator against the SC-7852's own 3.58 MHz crystal
-    // (PC-1600-CPU-SC7852-Z80.md §2.1) since that's the domain the ROM's
+    // (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md §2.1) since that's the domain the ROM's
     // polling loop actually observes it in -- accumulates only SC7852
     // T-states (not LH5803 cycles, a different clock domain entirely), so
     // the pulse effectively pauses while the SC7852 is parked, a real but
@@ -574,7 +575,7 @@ private:
     // The sub-CPU's 0.5 s tick. Its interrupt line (Z7 -> INT6, port 32H
     // bit 6) and the other events that drive it -- the 1 s tick and the
     // wake-up / alarm timers, compared at each minute carry -- live in
-    // PC1600SubCpu (Sharp1500-1600-Ref PC-1600-SubCpu-LU57813P.md §5).
+    // PC1600SubCpu (Ref/PC-1600/PC-1600-SubCPU-LU57813P.md §5).
     //
     // Both signals come out of the sub-CPU's one divider chain, so 0.5 s is
     // exactly 64 edges (32 periods) of the 64 Hz signal, at a fixed phase

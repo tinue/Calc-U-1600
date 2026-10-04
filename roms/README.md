@@ -8,10 +8,10 @@ verifies each against the md5 in the table below.
 
 | File | Source | Model / role | Confidence |
 |---|---|---|---|
-| `PC-1500_A04.ROM` | [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | Runs on **both** PC-1500 and PC-1500A — originally developed for the PC-1500A's release, later also used in later-production PC-1500 (non-A) units. Sole/default ROM for the PC-1500A-only build; also one of three options in the PC-1500 ROM selector. | Confirmed |
-| `PC-1500_A01.ROM` | [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | PC-1500 (non-A) **only** — must not be offered for PC-1500A. | Confirmed |
-| `PC-1500_A03.ROM` | [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | PC-1500 (non-A) **only**, same as A01. | Confirmed |
-| `CE-150.ROM` | [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (`dumps/CE-150.BIN`) | CE-150 printer/plotter/cassette-interface firmware, 8192 bytes, md5 `eb9aa5156c6849890b137799efc50a4b`. Runs on the host LH5801 from guest 0xA000–0xBFFF (its pc1500 and pc1500A copies are byte-identical). | Confirmed, dumped from real hardware |
+| `PC-1500_A04.ROM` | [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (`dumps/a04/PC-1500-A04.BIN`), originally [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | Runs on **both** PC-1500 and PC-1500A — originally developed for the PC-1500A's release, later also used in later-production PC-1500 (non-A) units. Sole/default ROM for the PC-1500A-only build; also one of three options in the PC-1500 ROM selector. | Confirmed |
+| `PC-1500_A01.ROM` | [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (`dumps/a01/PC-1500-A01.BIN`), originally [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | PC-1500 (non-A) **only** — must not be offered for PC-1500A. | Confirmed |
+| `PC-1500_A03.ROM` | [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (`dumps/a03/PC-1500-A03.BIN`), originally [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | PC-1500 (non-A) **only**, same as A01. | Confirmed |
+| `CE-150.ROM` | [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (`dumps/ce150/CE-150.BIN`) | CE-150 printer/plotter/cassette-interface firmware, 8192 bytes, md5 `eb9aa5156c6849890b137799efc50a4b`. Runs on the host LH5801 from guest 0xA000–0xBFFF (its pc1500 and pc1500A copies are byte-identical). | Confirmed, dumped from real hardware |
 | `PC1600-LH5803-C000-FFFF-new.bin`, `PC1600-LH5803-C000-FFFF-old.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/new/`, `dumps/old/`) | PC-1600's LH5803 co-processor ROM (its own C000–FFFF) — **new** and **old** ROM version | Confirmed, dumped from real hardware |
 | `PC1600-P0-B0-new.bin`, `PC1600-P0-B0-old.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/new/`, `dumps/old/`) | Bank 0 lower half, 0x0000, system ROM (CS001, never switched out) — **new** and **old** ROM version | Confirmed, dumped from real hardware |
 | `PC1600-P1-B0-new.bin`, `PC1600-P1-B0-old.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/new/`, `dumps/old/`) | Bank 0 upper half, 0x4000 — **new** and **old** ROM version | Confirmed, dumped from real hardware |
@@ -20,7 +20,7 @@ verifies each against the md5 in the table below.
 | `PC1600-P2-B6-new.bin`, `PC1600-P2-B6-old.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/new/`, `dumps/old/`) | Bank 6, 0x8000 (display/timer/serial/char tables, CS123) — **new** and **old** ROM version | Confirmed, dumped from real hardware |
 | `PC1600-P1-B4-CE1600P-new.bin`, `PC1600-P1-B4-CE1600P-old.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/ce1600p/new/`, `dumps/ce1600p/old/`) | CE-1600P plotter ROM, lower 16KB half (card-local 0x0000-0x3FFF), banked onto the PC-1600's Page B bank 4 via the PV pin — **new** (`PEEK #(5,&7FFE)` = 5) and **old** (= 4) CE-1600P ROM version | Confirmed, dumped from real hardware |
 | `PC1600-P1-B5-CE1600P-OR-F-new.bin`, `PC1600-P1-B5-CE1600P-OR-F-old.bin` | [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) (`dumps/ce1600p/new/`, `dumps/ce1600p/old/`) | CE-1600P plotter ROM, upper 16KB half (card-local 0x4000-0x7FFF), banked onto Page B bank 5 via the PV pin; also the CE-1600F's ROM — **new** (`PEEK #(5,&7FFF)` = 18) and **old** (= 16) | Confirmed, dumped from real hardware |
-| `CE-158.ROM` | [Jeff-Birt/Sharp_CE-158](https://github.com/Jeff-Birt/Sharp_CE-158) (`CE-158_ROM_ORIG.bin`) | CE-158 RS-232C / Centronics interface firmware, 16384 bytes, md5 `aa952878fb29da4844791d95185649ca`: two 8 KB banks for guest 0x8000-0x9FFF at PV = 1 (first half PU = 0, second half PU = 1). Used by `Core/Connector/Ce158Card.hpp`. | Confirmed |
+| `CE-158.ROM` | [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (`dumps/ce158/CE-158-LOW.BIN` + `CE-158-HIGH.BIN`, joined), originally [Jeff-Birt/Sharp_CE-158](https://github.com/Jeff-Birt/Sharp_CE-158) (`CE-158_ROM_ORIG.bin`) | CE-158 RS-232C / Centronics interface firmware, 16384 bytes, md5 `aa952878fb29da4844791d95185649ca`: two 8 KB banks for guest 0x8000-0x9FFF at PV = 1 (first half PU = 0, second half PU = 1). Used by `Core/Connector/Ce158Card.hpp`. | Confirmed |
 
 The PC-1600 has two calculator ROM versions, selectable in the app
 (Machine > ROM Version, or `model: PC-1600:new|old` in a PC-1600 preset).
@@ -33,5 +33,4 @@ it follows the CE-1600P choice.
 All PC-1600 images are our own dumps, pulled straight off real Sharp
 PC-1600 hardware with a purpose-built ROM-dumper cartridge tool (see
 [tinue/PC-1600-ROM](https://github.com/tinue/PC-1600-ROM) for the dumper
-source and full provenance writeup), and the new-ROM images are confirmed byte-identical to
-[PockEmul](https://pockemul.com)'s copies.
+source and full provenance writeup).

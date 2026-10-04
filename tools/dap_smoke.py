@@ -4,7 +4,8 @@
 Connects to a running app (started with `--dap <port>`, or with the debug
 server enabled in Settings), attaches, and drives the requests VS Code
 uses: threads, pause, stackTrace/scopes/variables, disassemble, readMemory,
-evaluate, instruction and data breakpoints, stepping, continue, disconnect.
+evaluate, instruction and data breakpoints, stepping, continue, disconnect,
+and the calcu1600/screen text read-out.
 
 Stdlib only:  uv run tools/dap_smoke.py [--port 32168] [--app PATH]
 With --app the script starts the app itself (with --dap) and quits it
@@ -52,11 +53,16 @@ class Dap:
         self.buf = rest[length:]
         return json.loads(rest[:length])
 
-    def request(self, command, **arguments):
+    def send(self, command, /, **arguments):
+        """Sends a request without waiting for its response; returns its seq."""
         seq = self.seq
         self.seq += 1
         body = json.dumps({"seq": seq, "type": "request", "command": command, "arguments": arguments}).encode()
         self.sock.sendall(b"Content-Length: %d\r\n\r\n" % len(body) + body)
+        return seq
+
+    def request(self, command, /, **arguments):
+        seq = self.send(command, **arguments)
         while True:
             msg = self._read_message()
             if msg["type"] == "event":
@@ -149,6 +155,23 @@ def program_run(port):
     body = dap.request("calcu1600/load", bin=os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest_stock.bin"), listing=rst,
                        entry="MEMTEST", after="none")
     check(body.get("entry") == "0x40CC" and body.get("call") == "CALL &40CC", f"entry MEMTEST -> {body}")
+    # Numbers follow the preset's rule: `&`, `0x` or `$` is hex, a bare
+    # number decimal; bare hex is refused.
+    bin_ = os.path.join(REPO, "Core/tests/fixtures/listings/sdas-lh5801/memtest_stock.bin")
+    body = dap.request("calcu1600/load", bin=bin_, listing=rst, address="16581", entry="&40CC", after="none")
+    check(body.get("start") == "0x40C5" and body.get("entry") == "0x40CC", f"address \"16581\", entry \"&40CC\" -> {body}")
+    try:
+        dap.request("calcu1600/load", bin=bin_, listing=rst, address="40C5", after="none")
+        check(False, "address \"40C5\" (bare hex) refused")
+    except RuntimeError as e:
+        check("address" in str(e), f"address \"40C5\" (bare hex) refused: {e}")
+    # Other values are checked against the attach-key table.
+    for bad in ({"after": "foo"}, {"cpu": "x86"}, {"cleanStart": "false"}):
+        try:
+            dap.request("calcu1600/load", bin=bin_, listing=rst, **bad)
+            check(False, f"{bad} refused")
+        except RuntimeError as e:
+            check(next(iter(bad)) in str(e), f"{bad} refused: {e}")
     # Restart (the toolbar's): the attach configuration again -- preset,
     # load, entry stop -- and a breakpoint set before it still hits.
     dap.request("setBreakpoints", source={"path": MEMTEST_ASM}, breakpoints=[{"line": 88}])
@@ -215,6 +238,7 @@ def project_run(port):
                     "  program:\n"
                     f"    bin: {os.path.relpath(dumper + '.bin', tmp)}\n"
                     f"    listing: {dumper}.lst\n"
+                    "    address: &C0C5\n"
                     "    after: stopOnEntry\n")
         dap = Dap(port)
         dap.request("initialize", adapterID="calcu1600")
@@ -234,7 +258,7 @@ def project_run(port):
               "project: reloaded and stopped at the entry again")
         # A launch configuration key overrides the block: no entry stop.
         dap.request("restart", arguments={"project": project, "program": {"after": "none"}})
-        time.sleep(3)
+        time.sleep(1)
         dap.request("pause", threadId=1)
         stop = dap.wait_event("stopped", timeout=10)
         check(stop.get("reason") == "pause", f"project + override after:none: runs until paused ({stop.get('reason')})")
@@ -337,6 +361,71 @@ def bus_rom_run(port):
         dap.sock.close()
 
 
+def renum_template_run(port):
+    """The PC-1500 ROM extension template: RENUM built as the extension builds it, stopped in, and run."""
+    print("RENUM template run:")
+    sdcc = os.environ.get("CALCU_SDCC_BIN") or os.path.dirname(shutil.which("sdaslh5801") or "")
+    if not sdcc or not os.path.exists(os.path.join(sdcc, "sdaslh5801")):
+        print("  skip: no sdaslh5801 (set CALCU_SDCC_BIN)")
+        return
+    template = os.path.join(REPO, "vscode/calcu1600-debug/templates/pc1500-bus-rom")
+    with tempfile.TemporaryDirectory() as tmp:
+        for name in ("NAME.asm", "debug.pc1500a"):
+            with open(os.path.join(template, name)) as f:
+                text = f.read().replace("{{name}}", "rom")
+            with open(os.path.join(tmp, name.replace("NAME", "rom")), "w") as f:
+                f.write(text)
+        # The VS Code extension's recipe (extension.js, assembleCommand).
+        build = subprocess.run(
+            f"'{sdcc}/sdaslh5801' -plosgff rom.asm"
+            " && printf -- '-muwx\\n-i rom\\nrom.rel\\n\\n-e\\n' > rom.lnk"
+            f" && '{sdcc}/sdld' -nf rom"
+            f" && '{sdcc}/makebin' -p -s 65536 -o 0x$(head -1 rom.ihx | cut -c4-7) rom.ihx rom.bin",
+            shell=True, cwd=tmp, capture_output=True, text=True)
+        check(build.returncode == 0 and not build.stdout.strip(), f"RENUM template builds {build.stdout.strip()}")
+        dap = Dap(port)
+        dap.request("initialize", adapterID="calcu1600")
+        dap.wait_event("initialized")
+        # As VS Code sends it: the extension adds `listings` / `symbols` (the
+        # user's ROM listings, here none), which must add to the project's;
+        # and the breakpoints follow the attach while it is still loading
+        # the preset -- they must not wait for a later request.
+        dap.send("attach", project=os.path.join(tmp, "debug.pc1500a"), listings=[], symbols=[])
+        time.sleep(0.05)
+        asm = os.path.join(tmp, "rom.asm")
+        with open(asm) as f:
+            line = next(i for i, l in enumerate(f, 1) if l.startswith("RENFIX:"))
+        bps = dap.request("setBreakpoints", source={"path": asm}, breakpoints=[{"line": line}])["breakpoints"]
+        check(bps and bps[0]["verified"], f"RENUM template: line breakpoint on RENFIX (line {line}) verified")
+        dap.request("configurationDone")
+        try:
+            stop = dap.wait_event("stopped", timeout=60)
+        except TimeoutError:
+            stop = {}
+        top = top_frame(dap, 1)
+        check(stop.get("reason") == "breakpoint" and top.get("source", {}).get("name") == "rom.asm",
+              f"RENUM template: RENUM 100,,10 stops at {top.get('source', {}).get('name')}:{top.get('line')}")
+        dap.request("setBreakpoints", source={"path": asm}, breakpoints=[])
+        dap.request("continue", threadId=1)
+        time.sleep(1.0)
+        dap.request("pause", threadId=1)
+        dap.wait_event("stopped")
+        start = base64.b64decode(dap.request("readMemory", memoryReference="0x7865", count=2)["data"])
+        prog = base64.b64decode(dap.request("readMemory", memoryReference=f"0x{start[0]:02X}{start[1]:02X}", count=160)["data"])
+        lines, i = [], 0
+        while i < len(prog) and prog[i] != 0xFF:
+            lines.append((prog[i] << 8 | prog[i + 1], prog[i + 3:i + 3 + prog[i + 2] - 1]))
+            i += 3 + prog[i + 2]
+        check([n for n, _ in lines] == list(range(100, 190, 10)), f"RENUM template: lines {[n for n, _ in lines]}")
+        refs = {n: t for n, t in lines}
+        check(refs.get(110, b"").endswith(b"170") and b"\xf1\x92160,140,140,140" in refs.get(130, b"")
+              and refs.get(140, b"").endswith(b"180") and refs.get(150, b"").endswith(b"120"),
+              "RENUM template: RESTORE 170, ON ... GOTO 160,140,140,140, GOSUB 180, THEN 120")
+        dap.request("continue", threadId=1)
+        dap.request("disconnect")
+        dap.sock.close()
+
+
 def lh5803_run(port):
     """PC-1600 LH5803: LH5801 code loaded for the LH5803, started with the XCALL the debugger types."""
     print("LH5803 run:")
@@ -413,6 +502,29 @@ def reset_run(port):
     dap.sock.close()
 
 
+def screen_run(port):
+    """calcu1600/screen: the LCD as text, after a typed PRINT MEM."""
+    print("Screen run:")
+    dap = Dap(port)
+    dap.request("initialize", adapterID="calcu1600")
+    dap.wait_event("initialized")
+    dap.request("attach", preset=os.path.join(REPO, "vscode/calcu1600-debug/presets/debug-pc1600.pc1600"),
+                command="PRINT MEM")
+    dap.request("configurationDone")
+    screen = {}
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        screen = dap.request("calcu1600/screen")
+        if any("11834" in row for row in screen.get("rows", [])):
+            break
+        time.sleep(0.25)
+    check(any("11834" in row for row in screen.get("rows", [])), f"screen rows: {screen.get('rows')}")
+    check(screen.get("unparsed") == 0 and screen.get("poweredOn") is True,
+          f"unparsed {screen.get('unparsed')}, status {screen.get('status')}")
+    dap.request("disconnect")
+    dap.sock.close()
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=32168)
@@ -424,7 +536,6 @@ def main():
         # -ApplePersistenceIgnoreState: no macOS window restoration for this run.
         proc = subprocess.Popen([args.app, "--dap", str(args.port), "-ApplePersistenceIgnoreState", "YES"],
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(1.0)
     try:
         dap = Dap(args.port, timeout=20.0)
         caps = dap.request("initialize", adapterID="calcu1600", linesStartAt1=True, columnsStartAt1=True)
@@ -495,9 +606,11 @@ def main():
         pc1600_run(args.port)
         project_run(args.port)
         bus_rom_run(args.port)
+        renum_template_run(args.port)
         rom_run(args.port)
         reset_run(args.port)
         lh5803_run(args.port)
+        screen_run(args.port)
         print("done:", "all passed" if check.failures == 0 else f"{check.failures} failed")
     finally:
         if proc:

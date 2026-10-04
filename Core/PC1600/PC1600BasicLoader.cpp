@@ -11,10 +11,10 @@ namespace {
 
 // BASIC program-area pointers (SC7852 view). F865/F867/F869 (big-endian)
 // are the PC-1500's BASPRG_ST/END/EDT trio, inherited verbatim
-// (PC-1600-Work-Area-Map.md, Block C). Their *values* are LH5803-side
+// (Ref/PC-1600/PC-1600-Work-Area-Map.md, Block C). Their *values* are LH5803-side
 // addresses -- $40C5 on a stock machine, $00C5 once a Slot-1/Slot-2 RAM
 // module has moved the program area into a parked bank window. See
-// Sharp1500-1600-Ref/PC-1600/PC-1600-BASIC-Program-Placement.md.
+// Ref/PC-1600/PC-1600-BASIC-Program-Placement.md.
 constexpr uint16_t kBasPrgSt = 0xF865;
 constexpr uint16_t kBasPrgEnd = 0xF867;
 constexpr uint16_t kPrgAdrStart = 0xFE3C;  // start lo, hi, bank; end lo, hi, bank (FE3C-FE41)
@@ -42,10 +42,13 @@ BasicLoadResult fail(const std::string& msg) {
     return r;
 }
 
-bool writeBacking(PC1600Machine& machine, pc1600::ProgramSegment::Kind kind, int slot, uint32_t offset,
-                  const uint8_t* src, size_t n) {
-    return kind == pc1600::ProgramSegment::Kind::InternalRam ? machine.debugWriteInternalRam(offset, src, n)
-                                                             : machine.debugWriteSlotImage(slot, offset, src, n);
+// Internal RAM by its backing store; a module through its slot's pins in
+// the segment's bank, so the card's own wiring places the bytes.
+bool writeAt(PC1600Machine& machine, pc1600::ProgramSegment::Kind kind, int bank, uint16_t addr,
+             const uint8_t* src, size_t n) {
+    return kind == pc1600::ProgramSegment::Kind::InternalRam
+               ? machine.debugWriteInternalRam(static_cast<size_t>(addr - 0xC000), src, n)
+               : machine.debugWriteSlotBus(bank, addr, src, n);
 }
 
 }  // namespace
@@ -104,14 +107,14 @@ int segmentOf(const std::vector<pc1600::ProgramSegment>& segs, uint16_t end, int
 
 bool writeImage(PC1600Machine& machine, const pc1600::PlacementResult& plan, std::string* error) {
     for (const pc1600::PlacementWrite& w : plan.writes) {
-        if (!writeBacking(machine, w.kind, w.slot, w.backingOffset, w.data.data(), w.data.size())) {
+        if (!writeAt(machine, w.kind, w.bank, w.addr, w.data.data(), w.data.size())) {
             char buf[192];
             if (w.kind == pc1600::ProgramSegment::Kind::InternalRam)
-                std::snprintf(buf, sizeof(buf), "backing-store write failed (internal RAM +$%X, %zu bytes)",
-                              w.backingOffset, w.data.size());
+                std::snprintf(buf, sizeof(buf), "write failed (internal RAM $%04X, %zu bytes)", w.addr,
+                              w.data.size());
             else
-                std::snprintf(buf, sizeof(buf), "backing-store write failed (slot %d image +$%X, %zu bytes)",
-                              w.slot, w.backingOffset, w.data.size());
+                std::snprintf(buf, sizeof(buf), "write failed (slot %d, bank %d, $%04X, %zu bytes)", w.slot,
+                              w.bank, w.addr, w.data.size());
             *error = buf;
             return false;
         }
@@ -127,7 +130,7 @@ void eraseOld(PC1600Machine& machine, const std::vector<pc1600::ProgramSegment>&
         const pc1600::ProgramSegment& sg = segs[i];
         const uint16_t last = i == endSegment ? end : sg.top;
         const std::vector<uint8_t> blank(static_cast<size_t>(last - sg.base) + 1, 0x00);
-        if (!writeBacking(machine, sg.kind, sg.slot, sg.backingBase, blank.data(), blank.size()))
+        if (!writeAt(machine, sg.kind, sg.adtblBank, sg.base, blank.data(), blank.size()))
             std::fprintf(stderr, "[PC1600BasicLoader] note: failed to clear the old program\n");
     }
 }
@@ -138,9 +141,10 @@ void eraseOld(PC1600Machine& machine, const std::vector<pc1600::ProgramSegment>&
 // change, no NEW0. The target is the program area TITLE (F1D5H) selects:
 // S0 (placement across S0's ADTBL banks and internal RAM, planS0Placement)
 // or the S1 / S2 program module (planModuleRegionPlacement). The bytes go
-// straight into the backing store; the pointers are then left exactly as
-// the ROM's own LOAD leaves them (LOADEND, rom3b 70E1H -- Sharp1500-1600-Ref
-// PC-1600-Work-Area-Map.md §3.5 / §4.5).
+// in whatever bank is mapped (internal RAM directly, a module through its
+// slot's pins in the segment's bank); the pointers are then left exactly as
+// the ROM's own LOAD leaves them (LOADEND, rom3b 70E1H --
+// Ref/PC-1600/PC-1600-Work-Area-Map.md §3.5 / §4.5).
 BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
                                        const std::vector<uint8_t>& payload) {
     const int title = machine.programAreaTitle();
@@ -182,8 +186,7 @@ BasicLoadResult loadBasicBinaryPayload(PC1600Machine& machine,
                                                                    : 0x4000;
         const uint16_t offset = static_cast<uint16_t>((plan.endAddr - from) & 0x7FFF);
         const uint8_t hdr[2] = {static_cast<uint8_t>(offset >> 8), static_cast<uint8_t>(offset & 0xFF)};
-        const uint32_t headerBacking = seg0.backingBase - (seg0.base - seg0.windowBase);
-        if (!machine.debugWriteSlotImage(title, headerBacking + 5, hdr, 2))
+        if (!machine.debugWriteSlotBus(seg0.adtblBank, static_cast<uint16_t>(seg0.windowBase + 5), hdr, 2))
             return fail("could not update the S" + std::to_string(title) + " module header");
         // PRGADR copies the descriptor's start/end triples to FE3C-FE41.
         uint8_t prgAdr[6];

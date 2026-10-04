@@ -45,6 +45,19 @@ decisions, plans, handoffs — is in [../background/README.md](../background/REA
   host-drive ROM, its I/O protocol and FILE functions.
 - [PC1500-BASIC-Variable-Layout.md](PC1500-BASIC-Variable-Layout.md) — how
   the PC-1500 ROM BASIC stores variables in RAM.
+- [LCD-Text.md](LCD-Text.md) — reading the display as text: the ROM fonts,
+  the cursor, the encoding, and where to use it (`--lcd-text`, `expect:`,
+  `calcu1600/screen`).
+
+## Sources
+
+Comments and docs cite the original sources: the Technical Reference
+Manual (TRM), the Service Manuals, data sheets and the ROMs (by bank and
+address). Hardware facts collected from these sources are written up in
+the research repository
+[Sharp1500-1600-Ref](https://github.com/tinue/Sharp1500-1600-Ref). Comments
+cite it as `Ref/<path>`, a path inside that repository, e.g.
+`Ref/PC-1600/PC-1600-Keyboard.md §5`.
 
 ## File formats
 

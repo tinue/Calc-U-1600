@@ -1,5 +1,109 @@
 # Changelog
 
+## [0.7.0] - 2026-10-04
+
+### New
+
+- **RENUM for the PC-1500**, as a worked ROM extension: the debugger's
+  *PC-1500 ROM extension* template (Create Debug Project…) is now a keyword
+  module at &8800 that adds `RENUM [new][,[old][,step]]` to PC-1500 BASIC,
+  following the PC-1600's own RENUM. It replaces the `CALL &8000` stub.
+  docs/Debugger.md walks through debugging it, and
+  docs/PC1500-Keyword-Modules.md describes how the PC-1500 ROM finds such
+  modules.
+- **The display as text.**
+  - **Edit ▸ Copy Screen** puts the screen on the clipboard as text as
+    well as the image; a text editor pastes the text.
+  - **`- expect: <text>` in presets** stops the preset with an error,
+    showing the screen, unless one line of the display contains the text.
+  - The headless CLIs write the display text with `--lcd-text <file|->`,
+    and the debug server answers `calcu1600/screen`.
+
+  The text is read with the calculator's own ROM font, so it is exact.
+- **Create Debug Project Here…** in VS Code's Explorer context menu creates
+  the project in the folder you right-clicked; its launch configuration
+  points into that folder.
+- **CE-151 (4 KB) and CE-161 (16 KB) memory modules.** The CE-151 fits the
+  PC-1500/1500A and PC-1600 Slot 1, where it adds &B000-&BFFF as on a real
+  PC-1600. The CE-161 fits the PC-1500/1500A and both PC-1600 slots.
+
+### Changed
+
+- **New app icon**, a simplified PC-1600. On macOS it now has the same
+  size and shape as the other Dock icons.
+- **The debugger's history shows the registers before each instruction**,
+  like the live frame. Call Stack frames 1–20 read `C0EE  call KEYGET`
+  (no "after"); what an instruction did shows in the next newer frame.
+  `TRACE.bin` captures follow the same rule (format v3);
+  `tools/read_trace.py` refuses older captures.
+- **The preset log** shows the display as text after each step
+  (`lcd=[...]`). What it used to call `screen="..."` was the ROM's input
+  line, not the display; it is now `input="..."`.
+- **Machine code with a bank in its PC-1600 header** loads into that bank
+  (1-3) instead of being refused, and the proposed command is
+  `CALL #bank,&addr`. Load Machine Code… shows an error when that bank has
+  no RAM at the load address. Presets and the debugger follow the header's
+  bank too.
+- **Debugger settings are checked**, in a preset's `debug:` block (with the
+  line number) and in a launch configuration alike:
+  - Numbers follow the preset rule: `&`, `0x` or `$` is hex, a bare number
+    decimal. `"address": "1234"` in a launch configuration is now decimal
+    (it was hex), and hex without a prefix is refused. `bank: &7` and
+    `"bank": "7"` now take effect; they used to be ignored.
+  - Bad values (`after: foo`, `cpu: x86`, `boot: foo`, a quoted `"true"`)
+    are refused instead of falling back to a default.
+- **The PC-1600's serial port file is `calcu1600-rs232c.serial`** (was
+  `calcu1600.serial`), named after its connector like
+  `calcu1600-ce158.serial`. SharpDataExchange 0.3.2 looks for the new name
+  with `--device pc1600emul`.
+- **The LH5801/LH5803's undocumented "V register" opcodes** behave as on a
+  real PC-1500A and PC-1600 (VH reads the high byte of the last 16-bit
+  operand, VL reads 00, writes are ignored). The debugger disassembles them
+  as `.db`, marked undocumented.
+
+### Fixed
+
+- **PC-1600: loading into a CE-155 put the program in the wrong place.**
+  A BASIC program loaded into a CE-155 (Load BASIC Program, presets) came
+  out garbled, and machine code was refused. All loaders now store the
+  bytes where a CPU write would.
+- **PC-1600: machine code that runs from a module on past &BFFF loads.**
+  It continues into internal RAM, as `BLOAD "COM1:"` and `CLOAD M` write
+  it. In MODE 1, PC-1500 machine code bigger than the module part was
+  refused before.
+- **PC-1600: DEGREE, RADIAN and GRAD change the status line at once**, not
+  at the next scroll. As on a real PC-1600, the LH5803's writes to the
+  PC-1500 display memory (&7600–&764F, and its aliases &7400–&754F) show
+  on the LCD straight away, so `XPOKE &7600,…` and PC-1500 machine code
+  drawing there now show up too.
+- **The PC-1600 status line showed "RAD" in GRAD mode.** Both models now
+  name the status symbols the same way (`I`, `II`, `III`, `KANA` in the
+  text read-out too).
+- **PC-1600 MODE 1: `XPEEK`/`XPOKE` on a CE-163F in Slot 2** read 255
+  instead of the stored value.
+- **PC-1600 clock: 29 February.** The real clock keeps no year, so both
+  02/28 and 02/29 roll over into 03/01; the emulator followed a calendar
+  year. A date set to 02/29 is still accepted.
+- **PC-1600 faceplate:** some key labels had the wrong colour, and
+  Shift+0 now shows a broken bar instead of two dots.
+- **Debugging a project from VS Code** (a launch configuration with
+  `project`) stopped at no breakpoint: the breakpoints were armed too late
+  and `command` never ran, and the extension's (usually empty) ROM listing
+  settings replaced the project's listings.
+- **The VS Code extension failed to install on Node 18** (Debian 12,
+  Ubuntu 24.04). It is now packaged without `vsce`.
+
+### Internal
+
+- `tools/fetch_roms.sh` fetches the PC-1500 ROMs from
+  [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (same files;
+  `PC1500_ROM_BASE` overrides it). libsharpdx 0.3.2.
+- Tests build with `-O1`; the suite runs in 66 s instead of 172 s.
+- Loader matrix (dev/loader-matrix/): every loader checked against the ROM's
+  own loading, on both machines.
+- Docs and comments: primary sources only, measured connector pins
+  (PU/PV), resolved handoffs removed.
+
 ## [0.6.0] - 2026-09-30
 
 ### New

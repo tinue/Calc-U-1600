@@ -46,7 +46,7 @@ flowchart LR
 
 The extension finds them on your `PATH`, or where the [settings](#setup) say.
 
-**3. Install the VS Code extension.** From the Calc-U-1600 repository root:
+**3. Install the VS Code extension.** You need `python3` and VS Code's `code` command on the `PATH`. From the Calc-U-1600 repository root:
 
 ```sh
 tools/install_vscode_extension.sh
@@ -86,7 +86,7 @@ Then list it in your settings with the CPU and the bank it lives in:
 
 A listing that doesn't match the machine's memory (another ROM version, for example) is reported and not used, so a listing for the other model does no harm.
 
-The PC-1500 ROM disassembly is Jeff Birt's [Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly). It is written for TASM, whose listings the debugger can't read yet.
+The PC-1500 ROM disassembly (see the [acknowledgments](../THIRD-PARTY-NOTICES.md#acknowledgments)) is written for TASM, whose listings the debugger can't read yet.
 
 ---
 
@@ -94,7 +94,7 @@ The PC-1500 ROM disassembly is Jeff Birt's [Sharp_PC-1500_ROM_Disassembly](https
 
 You work in the program's own folder. *Create Debug Project…* sets it up once, and from then on F5 builds, loads and starts it.
 
-**Create the project.** Open an empty folder in VS Code, then run **Calc-U-1600: Create Debug Project…** from the Command Palette. Choose *PC-1600 program* or *PC-1500A program* and a name. You get:
+**Create the project.** Open an empty folder in VS Code, then run **Calc-U-1600: Create Debug Project…** from the Command Palette. Choose *PC-1600 program* or *PC-1500A program* and a name. To put the project into a subfolder of the workspace instead, right-click that folder in the Explorer and choose **Calc-U-1600: Create Debug Project Here…**; the launch configuration then names the folder (`Debug tmp/main`) and points into it. You get:
 
 | File | What it is |
 |---|---|
@@ -184,7 +184,7 @@ A ROM extension (like Calc-U-1600's own host-drive ROM) isn't loaded into RAM an
 | Target | What you get |
 |---|---|
 | *PC-1600 ROM extension* | a minimal ROM module (ID, jump table, reset entry) in page 1, bank 6 of the 60-pin bus, built with zasm |
-| *PC-1500 ROM extension* | a minimal ROM at &8000 on the 60-pin bus, built with sdaslh5801. It is entered with `CALL &8000`, just to show the mechanics |
+| *PC-1500 ROM extension* | `RENUM`, a new BASIC command in a ROM at &8800 on the 60-pin bus, built with sdaslh5801 (see [the example below](#example-renum-on-the-pc-1500)) |
 
 **Plugging the ROM in.** The project preset's `bus-rom:` puts your `.bin` on the bus:
 
@@ -216,7 +216,7 @@ bus-rom:
 ```
 
 **Getting into the code.** A real ROM extension is rarely called directly. It usually adds BASIC commands: the firmware finds the extension at power-on, activates its commands, and the commands run the extension's machine code. The `debug:` block has two ways to reach that code:
-- **`command:`** types a BASIC line once the machine is up: one of your new commands, `FILES "S3:"` for a file device, or `CALL &8000` for the minimal template. Set a breakpoint in the code behind it, press F5, and it stops there.
+- **`command:`** types a BASIC line once the machine is up: one of your new commands (`RENUM 100,,10` in the PC-1500 template), or `FILES "S3:"` for a file device. Set a breakpoint in the code behind it, press F5, and it stops there.
 - **`boot: debug`** runs the power-on under the debugger. The preset only sets the machine up; then the debugger switches it on, with your breakpoints armed. That's how you debug a module's reset or initialisation, which runs before BASIC's prompt appears. The preset's `keys:` are skipped in this mode, and a `program` or `command` is refused.
 
 ```mermaid
@@ -230,6 +230,19 @@ flowchart LR
 ```
 
 **Build & Load** in a ROM project rebuilds the ROM and does the whole set-up again: power-on with the new ROM, listings read again, `command` typed (or the boot run under the debugger).
+
+### Example: RENUM on the PC-1500
+
+The *PC-1500 ROM extension* template is a complete extension: it adds `RENUM [new][,[old][,step]]` to PC-1500 BASIC, the PC-1600's command for renumbering a program. The PC-1500 ROM looks for such modules by itself, so the command works like a built-in one: typed, abbreviated as `REN.`, with the usual error messages.
+
+1. **Create it.** Open an empty folder, run **Create Debug Project…**, and choose *PC-1500 ROM extension*. You get `rom.asm`, `debug.pc1500a` and a launch configuration.
+2. **Look at the module.** The top of `rom.asm` is what the firmware looks for: the `55H` at &8800, the power-on entry `INIT` at &880A, an index by first letter, and the keyword table with `RENUM`'s code and address. The comments say what each byte means.
+3. **Set a breakpoint and press F5.** Put one on `RENUM` (the first instruction of the command) or on `RENFIX` (where the references are rewritten). F5 builds the ROM, starts a PC-1500A with it, enters the sample program from `debug.pc1500a` and types `RENUM 100,,10`. The debugger stops at your breakpoint. Step through it, and watch the program area in memory (it starts at the address in &7865).
+4. **Look at the result.** Continue, switch to PRO mode and `LIST`: the lines are now numbered 100, 110, … and every `GOTO`, `GOSUB`, `THEN` and `RESTORE` was changed to match. `RUN` (in RUN mode) still prints 3, 2, 1 and DONE.
+5. **Change it.** Edit `rom.asm`, then **Build & Load**: the machine starts again with the new ROM and runs `RENUM` again.
+6. **Debug the power-on.** Add `boot: debug` to `debug:` (and remove `command:`), set a breakpoint on `INIT`, and press F5: the firmware calls `INIT` while it starts up.
+
+How the firmware finds a keyword module, and what each field of the table does, is in [PC1500-Keyword-Modules.md](PC1500-Keyword-Modules.md).
 
 **ROM modules in a memory slot.** A ROM in a memory module (a PC-1500 module slot, or PC-1600 slot S1/S2) is a card definition (`.card.yaml`, see [Memory-Card-Definition-Format.md](Memory-Card-Definition-Format.md)) whose ROM content comes from your `.bin`:
 
@@ -294,7 +307,7 @@ What to check:
 
 - **Call Stack:** one thread per CPU: `LH5801` on the PC-1500; `Z80 (SC7852)` and `LH5803` on the PC-1600, where the CPU that owns the bus is marked `[bus]`. A stop always stops both CPUs and names the one that caused it.
   - **Frame 0** is the live state.
-  - **Frames 1–20** are the last 20 instructions that CPU executed, newest first, e.g. `after C0EE  call KEYGET`. Each shows its registers *after* it ran, and its source line if it has one. An interrupt shows as `interrupt at …`. The history is always recorded, so it is there even when you attach after something went wrong.
+  - **Frames 1–20** are the last 20 instructions that CPU executed, newest first, e.g. `C0EE  call KEYGET`. Like frame 0, each shows the registers *before* its instruction ran, and its source line if it has one; what an instruction did shows in the next newer frame (or the live state). An interrupt shows as `interrupt at …`, with the registers at the point it interrupted. After a data breakpoint, frame 1 is the instruction that made the access. The history is always recorded, so it is there even when you attach after something went wrong.
 - **Variables ▸ Registers:** the selected frame's registers, plus *Flags* and, for the live frame, *Banks* (PC-1600 page banks, or PU/PV).
 - **Disassembly:** right-click a frame ▸ **Open Disassembly View**. It opens by itself where there's no source.
 - **Memory:** VS Code shows memory in Microsoft's Hex Editor extension (`ms-vscode.hexeditor`), which it offers to install the first time.
@@ -335,7 +348,9 @@ What to check:
 
 ### The `debug:` block and launch configurations
 
-A launch configuration and a project preset's `debug:` block take the same keys. With `project`, the block supplies whatever the launch configuration leaves out, and the configuration's own keys win (`program` merges key by key). The project is read again at every restart and Build & Load.
+A launch configuration and a project preset's `debug:` block take the same keys. With `project`, the block supplies whatever the launch configuration leaves out, and the configuration's own keys win. `program` merges key by key, and the configuration's `listings` and `symbols` add to the block's (the extension sends the `calcu1600.romListings` / `romSymbols` settings there). The project is read again at every restart and Build & Load.
+
+Numbers (`address`, `entry`, `bank`, `me`, `pu`, `pv`) follow the preset rule in both places: `&`, `0x` or `$` makes a number hex, a bare number is decimal. So `address: &C0C5` and `"address": "0xC0C5"` are the same address; `C0C5` without a prefix is refused (for `entry` it can still be a symbol). A launch configuration may also give a plain JSON number, which is decimal.
 
 | Key | Meaning |
 |---|---|

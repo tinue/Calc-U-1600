@@ -171,7 +171,7 @@ using machinecode::PC1600State;
 
 const std::vector<BasicArea> kStockAreas = {{0, 0xC000, 0xEFFF, 0}};
 const std::vector<BasicArea> kSlot1FirstAreas = {{1, 0x8000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
-const std::vector<BasicArea> kSlot2FirstAreas = {{2, 0x8000, 0xBFFF, 0}, {0, 0xC000, 0xEFFF, 0}};
+const std::vector<BasicArea> kSlot2FirstAreas = {{2, 0x8000, 0xBFFF, 2}, {0, 0xC000, 0xEFFF, 0}};
 
 PC1600State state(const std::vector<BasicArea>& areas, bool mode1 = false, int title = 0) {
     PC1600State st;
@@ -248,9 +248,10 @@ void test_plan_pc1600_target() {
     auto rom = machinecode::readFile(pc1600File(kCode, 0x7000, 0));
     CHECK(!machinecode::plan(Target::PC1600, rom, kSlot1First).error.empty());
 
-    // $BFFE + 5 bytes crosses into $C000.
+    // $BFFE + 5 bytes runs on into internal RAM, as BLOAD writes it.
     auto crossing = machinecode::readFile(pc1600File(kCode, 0xBFFE, 0));
-    CHECK(!machinecode::plan(Target::PC1600, crossing, kSlot1First).error.empty());
+    p = machinecode::plan(Target::PC1600, crossing, kSlot1First);
+    CHECK(p.error.empty() && p.slot == Slot::S1);
 
     // The work area is allowed, with a warning -- many programs live up
     // there, e.g. CLOCK.BIN at &FF3A-&FFFB (WAKE$ + the CE-1F01A pen area).
@@ -347,79 +348,133 @@ void test_plan_load_configurations() {
 
 void test_advice_pc1500() {
     // PC-1500A-style RAM $4000-$57FF: BASIC can start at $40C5 at the lowest.
-    auto a = machinecode::advice(Target::PC1500, Slot::S0, 0x40C5, 0x20, 0, 0x4000, 0x5800, {}, Cpu::Z80);
+    auto a = machinecode::advice(Target::PC1500, Slot::S0, 0, 0x40C5, 0x20, 0, 0x4000, 0x5800, {}, Cpu::Z80);
     CHECK(a.newCommand == "NEW &40E5");
     CHECK(a.callCommand == "CALL &40C5");
     CHECK(a.callNote.find("first byte") != std::string::npos);
 
-    a = machinecode::advice(Target::PC1500, Slot::S0, 0x4010, 0x20, 0x4012, 0x4000, 0x5800, {}, Cpu::Z80);
+    a = machinecode::advice(Target::PC1500, Slot::S0, 0, 0x4010, 0x20, 0x4012, 0x4000, 0x5800, {}, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("reserve") != std::string::npos);
     CHECK(a.callCommand == "CALL &4012");
     CHECK(a.callNote.find("auto-run") != std::string::npos);
 
-    a = machinecode::advice(Target::PC1500, Slot::S0, 0x7C01, 0x10, 0, 0x4000, 0x5800, {}, Cpu::Z80);
+    a = machinecode::advice(Target::PC1500, Slot::S0, 0, 0x7C01, 0x10, 0, 0x4000, 0x5800, {}, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("outside") != std::string::npos);
 }
 
 void test_advice_pc1600() {
     // Stock: the S0 area starts in internal RAM.
-    auto a = machinecode::advice(Target::PC1600, Slot::S0, 0xC0C5, 0x100, 0, 0, 0, kStock, Cpu::Z80);
+    auto a = machinecode::advice(Target::PC1600, Slot::S0, 0, 0xC0C5, 0x100, 0, 0, 0, kStock, Cpu::Z80);
     CHECK(a.newCommand == "NEW \"S0:\",&1C5");
     CHECK(a.newNote.find("Warning") == std::string::npos);
     CHECK(a.callCommand == "CALL &C0C5");
 
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0xC000, 0x10, 0, 0, 0, kStock, Cpu::Z80);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0, 0xC000, 0x10, 0, 0, 0, kStock, Cpu::Z80);
     CHECK(a.newNote.find("Warning") != std::string::npos);
 
     // Top of the work area: WAKE$ storage, then the de-facto free FF40-FFFF.
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0xFF3A, 0xC2, 0, 0, 0, kStock, Cpu::Z80);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0, 0xFF3A, 0xC2, 0, 0, 0, kStock, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("WAKE$") != std::string::npos);
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0xFF40, 0xBC, 0, 0, 0, kStock, Cpu::Z80);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0, 0xFF40, 0xBC, 0, 0, 0, kStock, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("Warning") == std::string::npos);
     CHECK(a.newNote.find("CE-1F01A") != std::string::npos);
 
     // Module in slot 1: BASIC starts there, so NEW "S0:" counts from $8000.
-    a = machinecode::advice(Target::PC1600, Slot::S1, 0x80C5, 0x40, 0x80D0, 0, 0, kSlot1First, Cpu::Z80);
+    a = machinecode::advice(Target::PC1600, Slot::S1, 0, 0x80C5, 0x40, 0x80D0, 0, 0, kSlot1First, Cpu::Z80);
     CHECK(a.newCommand == "NEW \"S0:\",&105");
     CHECK(a.callCommand == "CALL &80D0");
 
     // ... and internal RAM is the area's LAST run: NEW can't protect code there.
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0xC0C5, 0x40, 0, 0, 0, kSlot1First, Cpu::Z80);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0, 0xC0C5, 0x40, 0, 0, 0, kSlot1First, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("&80C5") != std::string::npos);
 
     // Slot 2 outside the BASIC area: no NEW needed; CALL goes through bank 2.
-    a = machinecode::advice(Target::PC1600, Slot::S2, 0x80C5, 0x40, 0, 0, 0, kSlot1First, Cpu::Z80);
+    a = machinecode::advice(Target::PC1600, Slot::S2, 2, 0x80C5, 0x40, 0, 0, 0, kSlot1First, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("doesn't use") != std::string::npos);
     CHECK(a.callCommand == "CALL #2,&80C5");
 
-    a = machinecode::advice(Target::PC1600, Slot::S2, 0x80C5, 0x40, 0, 0, 0, kSlot2First, Cpu::Z80);
+    a = machinecode::advice(Target::PC1600, Slot::S2, 2, 0x80C5, 0x40, 0, 0, 0, kSlot2First, Cpu::Z80);
     CHECK(a.newCommand == "NEW \"S0:\",&105");
     CHECK(a.callCommand == "CALL #2,&80C5");
 
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0xC0C5, 0x40, 0, 0, 0, PC1600State{}, Cpu::Z80);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0, 0xC0C5, 0x40, 0, 0, 0, PC1600State{}, Cpu::Z80);
     CHECK(a.newCommand.empty());
     CHECK(a.newNote.find("couldn't be read") != std::string::npos);
 
     // TITLE "S1:": code in that program module is reserved with NEW "S1:".
-    a = machinecode::advice(Target::PC1600, Slot::S1, 0x80C5, 0x40, 0, 0, 0, state(kStockAreas, false, 1), Cpu::Z80);
+    a = machinecode::advice(Target::PC1600, Slot::S1, 0, 0x80C5, 0x40, 0, 0, 0, state(kStockAreas, false, 1), Cpu::Z80);
     CHECK(a.newCommand == "NEW \"S1:\",&105");
 
     // MODE 1, LH5801 code: XCALL an LH5803 address; NEW <address> the
     // PC-1500 way, BASIC right after the code.
     const PC1600State mode1 = state(kStockAreas, true);
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0x40C5, 0x40, 0, 0, 0, mode1, Cpu::LH5803);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0, 0x40C5, 0x40, 0, 0, 0, mode1, Cpu::LH5803);
     CHECK(a.callCommand == "XCALL &40C5");
     CHECK(a.newCommand == "NEW &4105");
     // MODE 1, Z-80 code (PC-1600 header): still CALL, NEW is the MODE's.
-    a = machinecode::advice(Target::PC1600, Slot::S0, 0xC0C5, 0x40, 0, 0, 0, mode1, Cpu::Z80);
+    a = machinecode::advice(Target::PC1600, Slot::S0, 0, 0xC0C5, 0x40, 0, 0, 0, mode1, Cpu::Z80);
     CHECK(a.callCommand == "CALL &C0C5");
     CHECK(a.newCommand == "NEW &4105");
+}
+
+void test_plan_header_bank() {
+    // Bank 0 is "no bank given": an &80C5 file goes to S0's first module
+    // run -- slot 2 (bank 2) when slot 2 starts S0, as with RAM in both slots.
+    auto noBank = machinecode::readFile(pc1600File(kCode, 0x0080C5, 0));
+    auto p = machinecode::plan(Target::PC1600, noBank, kSlot2First);
+    CHECK(p.error.empty() && p.slot == Slot::S2 && p.bank == 2);
+    p = machinecode::plan(Target::PC1600, noBank, kSlot1First);
+    CHECK(p.error.empty() && p.slot == Slot::S1 && p.bank == 0);
+
+    // A header bank 1-3 is honoured, whatever the program area is -- if
+    // that bank has RAM under the code.
+    PC1600State ram = kSlot1First;
+    ram.bankRamPages = {~uint64_t{0}, ~uint64_t{0}, ~uint64_t{0}, ~uint64_t{0}};
+    auto bank3 = machinecode::readFile(pc1600File(kCode, 0x0380C5, 0));
+    p = machinecode::plan(Target::PC1600, bank3, ram);
+    CHECK(p.error.empty() && p.slot == Slot::S2 && p.bank == 3 && p.busAddr == 0x80C5);
+    auto bank1 = machinecode::readFile(pc1600File(kCode, 0x01A000, 0));
+    p = machinecode::plan(Target::PC1600, bank1, kStock);
+    CHECK(p.error.find("no RAM") != std::string::npos);  // no module at all
+    PC1600State stockRam = state(kStockAreas);
+    stockRam.bankRamPages[1] = ~uint64_t{0};
+    p = machinecode::plan(Target::PC1600, bank1, stockRam);
+    CHECK(p.error.empty() && p.slot == Slot::S1 && p.bank == 1 && p.busAddr == 0xA000);
+
+    // RAM under only part of the code: refused, naming the bank.
+    PC1600State partial = kSlot1First;
+    partial.bankRamPages[3] = 1;  // page $80 only
+    auto spill = machinecode::readFile(pc1600File(std::vector<uint8_t>(0x100, 0), 0x0380C5, 0));
+    p = machinecode::plan(Target::PC1600, spill, partial);
+    CHECK(p.error.find("bank 3") != std::string::npos && p.error.find("no RAM") != std::string::npos);
+
+    // Only the module window has banks; only banks 0-3 are memory slots.
+    auto internal = machinecode::readFile(pc1600File(kCode, 0x02C0C5, 0));
+    CHECK(machinecode::plan(Target::PC1600, internal, ram).error.find("&8000-&BFFF") != std::string::npos);
+    auto bank5 = machinecode::readFile(pc1600File(kCode, 0x0580C5, 0));
+    CHECK(machinecode::plan(Target::PC1600, bank5, ram).error.find("banks 0-3") != std::string::npos);
+
+    // An explicit address (preset `address:`, debugger) drops the header's bank.
+    machinecode::LoadOptions o;
+    o.target = Target::PC1600;
+    o.hasAddress = true;
+    o.address = 0xC0C5;
+    auto lp = machinecode::planLoad(bank3, o, ram);
+    CHECK(lp.error == machinecode::LoadError::None && lp.slot == Slot::S0 && lp.bank == 0);
+
+    // The CALL goes through the bank; an auto-run bank of its own wins.
+    auto a = machinecode::advice(Target::PC1600, Slot::S2, 3, 0x80C5, 0x40, 0, 0, 0, ram, Cpu::Z80);
+    CHECK(a.callCommand == "CALL #3,&80C5");
+    a = machinecode::advice(Target::PC1600, Slot::S1, 1, 0x80C5, 0x40, 0x0180D0, 0, 0, ram, Cpu::Z80);
+    CHECK(a.callCommand == "CALL #1,&80D0");
+    a = machinecode::advice(Target::PC1600, Slot::S2, 2, 0x80C5, 0x40, 0, 0, 0, kSlot2First, Cpu::Z80);
+    CHECK(a.callCommand == "CALL #2,&80C5");
 }
 
 // ── parseHexAddress ──────────────────────────────────────────────────────
@@ -441,22 +496,37 @@ void test_parse_hex_address() {
 void test_pc1600_writer() {
     PC1600Machine m;
     std::string err;
-    CHECK(loadPC1600MachineCode(m, 0, 0xC0C5, kCode.data(), kCode.size(), &err));
+    CHECK(loadPC1600MachineCode(m, 0, 0xC0C5, kCode.data(), kCode.size(), &err, 0));
     std::vector<uint8_t> ram(PC1600Machine::kInternalRamSize);
     m.debugCopyInternalRam(ram.data());
     CHECK(std::vector<uint8_t>(ram.begin() + 0xC5, ram.begin() + 0xC5 + 5) == kCode);
 
     // Slot 1: nothing attached -> refused; with 32 KB RAM -> lands at image offset $00C5.
-    CHECK(!loadPC1600MachineCode(m, 1, 0x80C5, kCode.data(), kCode.size(), &err));
+    CHECK(!loadPC1600MachineCode(m, 1, 0x80C5, kCode.data(), kCode.size(), &err, 0));
     m.memory().attachSlot1Card(plainRamCard(0x8000));
-    CHECK(loadPC1600MachineCode(m, 1, 0x80C5, kCode.data(), kCode.size(), &err));
+    CHECK(loadPC1600MachineCode(m, 1, 0x80C5, kCode.data(), kCode.size(), &err, 0));
     std::vector<uint8_t> image = m.debugSlotImage(1);
     CHECK(image.size() >= 0xC5 + 5);
     if (image.size() >= 0xC5 + 5) CHECK(std::vector<uint8_t>(image.begin() + 0xC5, image.begin() + 0xC5 + 5) == kCode);
 
+    // Bank 1: the module's upper 16 KB, image offset $40C5; bank 2 isn't slot 1's.
+    CHECK(loadPC1600MachineCode(m, 1, 0x80C5, kCode.data(), kCode.size(), &err, 1));
+    image = m.debugSlotImage(1);
+    if (image.size() >= 0x40C5 + 5) CHECK(std::vector<uint8_t>(image.begin() + 0x40C5, image.begin() + 0x40C5 + 5) == kCode);
+    CHECK(!loadPC1600MachineCode(m, 1, 0x80C5, kCode.data(), kCode.size(), &err, 2));
+
+    // Which pages of banks 0-3 are RAM: a 32 KB module in slot 1 fills banks 0 and 1.
+    const PC1600State st = pc1600LoadState(m);
+    CHECK(st.bankRamPages[0] == ~uint64_t{0} && st.bankRamPages[1] == ~uint64_t{0});
+    CHECK(st.bankRamPages[2] == 0 && st.bankRamPages[3] == 0);
+
     // Window checks.
-    CHECK(!loadPC1600MachineCode(m, 0, 0xBFFF, kCode.data(), kCode.size(), &err));
-    CHECK(!loadPC1600MachineCode(m, 1, 0xBFFE, kCode.data(), kCode.size(), &err));
+    CHECK(!loadPC1600MachineCode(m, 0, 0xBFFF, kCode.data(), kCode.size(), &err, 0));
+    // Past $BFFF the code continues in internal RAM.
+    CHECK(loadPC1600MachineCode(m, 1, 0xBFFE, kCode.data(), kCode.size(), &err, 0));
+    image = m.debugSlotImage(1);
+    if (image.size() >= 0x4000) CHECK(image[0x3FFE] == kCode[0] && image[0x3FFF] == kCode[1]);
+    CHECK(m.debugPeek(0xC000) == kCode[2] && m.debugPeek(0xC002) == kCode[4]);
 }
 
 void test_pc1500_writer() {
@@ -489,7 +559,7 @@ void test_pc1600_basic_areas() {
         CHECK(areas.size() >= 2);
         if (areas.size() >= 2) {
             CHECK(areas.front().slot == 1 && areas.front().windowBase == 0x8000);
-            CHECK(areas.front().imageOffset == 0);
+            CHECK(areas.front().bank == 0);
             CHECK(areas.back().slot == 0);
         }
     }
@@ -515,6 +585,7 @@ int run_machine_code_file_tests() {
     test_plan_load_configurations();
     test_advice_pc1500();
     test_advice_pc1600();
+    test_plan_header_bank();
     test_parse_hex_address();
     test_pc1600_writer();
     test_pc1500_writer();

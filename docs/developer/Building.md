@@ -199,13 +199,24 @@ zlib (`zlib1g-dev` on Ubuntu; macOS has it).
 
 The same suite is also a `CoreTests` target in the root `CMakeLists.txt`
 (see [CLion / IDE integration](#clion--ide-integration) above), which is
-what CI's `core-tests` job runs and what to use if you want to debug a
-failing test:
+what CI's `core-tests` job runs (as `RelWithDebInfo`):
 
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --target CoreTests
 ctest --test-dir build --output-on-failure
+```
+
+The tests are always built optimized: `tools/run_tests.sh` uses `-O1`, and
+so does `CoreTests` in a Debug build — the suite runs about three times
+faster than at `-O0`. To step through a failing test, build a separate
+full-debug tree with `CALCU_TESTS_DEBUG=ON` (in CLion: add the option to a
+CMake profile's options):
+
+```sh
+cmake -S . -B build-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCALCU_TESTS_DEBUG=ON
+cmake --build build-debug --target CoreTests
+./build-debug/CoreTests   # from the repo root
 ```
 
 ## Packaging

@@ -45,17 +45,6 @@ uint16_t windowBase(const SlotGeometry& g) {
     return static_cast<uint16_t>(kInternalBase - inBank);
 }
 
-// Card-image offset of that ADTBL bank's window base, within bank 0 of the
-// module (the BASIC program area never leaves bank 0 -- for a vertically
-// banked CE-1601M that is Port 28H = 0, the first bankSize bytes of the
-// image). A >=32 KB window splits into a low / high 16 KB half picked by
-// the ADTBL bank parity (mirroring the PVOUT half-select); a smaller
-// window is a single slice at offset 0.
-uint32_t bankHalfOffset(const SlotGeometry& g, int adtblBank) {
-    if (windowContent(g) > 0x4000) return static_cast<uint32_t>(adtblBank & 1) * 0x4000u;
-    return 0;
-}
-
 const SlotGeometry& geomForSlot(const PlacementInput& in, int slot) {
     return slot == 2 ? in.slot2 : in.slot1;
 }
@@ -122,12 +111,13 @@ bool placeImage(PlacementResult& r, const std::vector<uint8_t>& payload) {
         }
         const ProgramSegment& s = segs[seg];
         if (r.writes.empty() || r.writes.back().segment != seg ||
-            r.writes.back().backingOffset + r.writes.back().data.size() != s.backingBase + (addr - s.base)) {
+            r.writes.back().addr + r.writes.back().data.size() != addr) {
             PlacementWrite w;
             w.kind = s.kind;
             w.slot = s.slot;
+            w.bank = s.adtblBank;
             w.segment = seg;
-            w.backingOffset = s.backingBase + (addr - s.base);
+            w.addr = static_cast<uint16_t>(addr);
             r.writes.push_back(w);
         }
         r.writes.back().data.push_back(byte);
@@ -199,8 +189,7 @@ PlacementResult buildPlacement(const PlacementInput& in, int firstIdx, int lastI
                             std::to_string(windowContent(g)) + " bytes -- too small for the "
                             "BASIC program area");
             // A vertically / D4 banked module (CE-1601M, ...) is fine: the
-            // BASIC program area lives entirely in bank 0 (Port 28H = 0),
-            // the first windowContent(g) bytes of the card image.
+            // BASIC program area lives entirely in bank 0 (Port 28H = 0).
             ProgramSegment s;
             s.kind = ProgramSegment::Kind::SlotModule;
             s.slot = slot;
@@ -209,7 +198,6 @@ PlacementResult buildPlacement(const PlacementInput& in, int firstIdx, int lastI
             s.base = windowBase(g);
             s.windowBase = s.base;
             s.top = kSlotWindowTop;
-            s.backingBase = bankHalfOffset(g, bank);
             r.segments.push_back(s);
         }
     }
@@ -220,7 +208,6 @@ PlacementResult buildPlacement(const PlacementInput& in, int firstIdx, int lastI
         s.base = kInternalBase;
         s.windowBase = kInternalBase;
         s.top = internalCeiling(in);
-        s.backingBase = 0;
         r.segments.push_back(s);
     }
 
@@ -235,14 +222,12 @@ PlacementResult buildPlacement(const PlacementInput& in, int firstIdx, int lastI
             return fail("BASPRG_ST ($F865=" + hex(r.basPrgStValue, 4) +
                         ") lands outside the first S0 segment " + hex(seg0.base, 4) + ".." +
                         hex(seg0.top, 4));
-        seg0.backingBase += static_cast<uint16_t>(z) - seg0.base;
         seg0.base = static_cast<uint16_t>(z);
     } else {
         // A program-module region: the descriptor's start, when it lies in
         // the leading bank's window past the header; else window + 197.
         uint16_t start = static_cast<uint16_t>(seg0.base + kHeaderReserve);
         if (regionStart >= start && regionStart <= seg0.top) start = regionStart;
-        seg0.backingBase += static_cast<uint16_t>(start - seg0.base);
         seg0.base = start;
         // The descriptor's limit page ends the last bank (C0H = the whole window).
         ProgramSegment& last = r.segments.back();

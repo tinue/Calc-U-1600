@@ -17,8 +17,9 @@
 // terminal program -- opens the slave end at `slavePath()`, or the stable
 // symlink at `stablePath()` (`<linkDir>/<linkName>`), which survives
 // across runs even though the /dev/ttysNNN name does not. Each emulated
-// port passes its own `linkName` so several can share one `linkDir`: the
-// PC-1600's built-in port is `kPC1600LinkName`, the CE-158 interface
+// port passes its own `linkName` so several can share one `linkDir`. Each
+// file is named after its connector (docs/background/Decisions.md): the
+// PC-1600's RS-232C port is `kRS232CLinkName`, the CE-158 interface
 // `kCE158LinkName`.
 //
 // `linkDir` (the constructor argument) is the directory the symlink is
@@ -39,10 +40,10 @@
 // a no-op and `isOpen()` is false.
 class PtySerialLink final : public SerialLink {
 public:
-    static constexpr const char* kPC1600LinkName = "calcu1600.serial";
+    static constexpr const char* kRS232CLinkName = "calcu1600-rs232c.serial";
     static constexpr const char* kCE158LinkName = "calcu1600-ce158.serial";
 
-    explicit PtySerialLink(std::string linkDir = {}, std::string linkName = kPC1600LinkName);
+    explicit PtySerialLink(std::string linkDir = {}, std::string linkName = kRS232CLinkName);
     ~PtySerialLink() override;
     PtySerialLink(const PtySerialLink&) = delete;
     PtySerialLink& operator=(const PtySerialLink&) = delete;

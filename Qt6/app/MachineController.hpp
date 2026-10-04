@@ -11,6 +11,7 @@
 
 #include "Connector/AlpsPlotterMechanism.hpp"
 #include "Display/LcdScreenshot.hpp"
+#include "Display/LcdText.hpp"
 #include "KeyPaste.hpp"
 #include "PC1500/PC1500Variant.hpp"
 #include "Serial/LazySerialLink.hpp"
@@ -48,9 +49,9 @@ inline QString modelSettingsKey(Model model) {
 }
 
 // One flat, model-agnostic frame the UI paints from -- deliberately wider
-// than either Core display type (PC1500Display's 156x7 + 14 named status
-// bits vs PC1600DisplaySnapshot's 156x32 + 17-entry status array) so
-// LcdWidget never needs to know which model is active.
+// than either Core display type (PC1500Display's 156x7 vs
+// PC1600DisplaySnapshot's 156x32, one StatusLine each) so LcdWidget never
+// needs to know which model is active.
 struct DisplayFrame {
     int cols = 0;
     int rows = 0;
@@ -229,6 +230,8 @@ public:
     std::size_t drainAudio(std::int16_t* out, std::size_t max);
     void discardAudio();
     DisplayFrame currentDisplay() const;
+    /// The LCD as text (Core/Display/LcdText.hpp); false with no machine.
+    bool lcdText(LcdText* out) const;
 
     // Cycles-per-second of whichever machine is currently active --
     // MainWindow's frame timer divides this by its own tick rate to get

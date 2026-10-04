@@ -23,97 +23,42 @@
 //
 // Resolves each of the SC7852's four 16KB pages against a PC1600Bank's
 // current register state, per the "Memory Map by Bank" table in
-// Sharp1500-1600-Ref/PC-1600/PC-1600-Memory-Bank-Switching.md.
+// Ref/PC-1600/PC-1600-Memory-Bank-Switching.md.
 //
 // Pages (Z-80 address space):
-//   Page A  0000-3FFF  system ROM, CS001 — always resident, regardless of
-//                      Port 31H bit 0 (only bank 0's content is loaded;
-//                      a hypothetical bank 1 here is undocumented).
-//                      SLOT2MAP mode 2 CAN still swap this ROM out live, via
-//                      slot2MapTarget()'s page-A branch (checked before this
-//                      class's own resolveConst()) — "always" above means
-//                      "under the plain, non-remapped decode," not "no
-//                      register can ever override it." (EmulatorViewModel's
-//                      debug bank-grid page-A bank-1 CELL prints this plain
-//                      meaning unconditionally, since it can't show "would
-//                      redirect if selected" on a bank that isn't currently
-//                      selected — see its own comment for the same gotcha.)
-//   Page B  4000-7FFF  bank-selected (Port 31H bits 1-3): bank 0 = system
-//                      ROM upper half (same physical ROM device as page A,
-//                      loaded together — see loadBank0()); bank 3 = normal
-//                      Bank 3 ROM, or the hidden Bank 3b BASIC ROM in its
-//                      place when Port 3DH bit 2 is clear (see
-//                      PC1600Bank::hiddenBasicRomSelected()) — modeled as a
-//                      whole-16KB swap between the two images; the
-//                      documented CS24 8KB-sub-banking detail (A16A
-//                      splitting Bank 3's window into two independent 8KB
-//                      halves) isn't separately modeled since both ROM
-//                      images load as flat 16KB blocks with no internal
-//                      structure this decoder needs to reason about.
-//                      Banks 1/2 are genuinely open bus, not merely
-//                      unresearched: PC-1600-Memory-Bank-Switching.md's
-//                      "Slot 2 ROM"/"Slot 1 ROM" labels for this table cell
-//                      are a loose paraphrase, corrected at schematic level
-//                      (Part 4/12, and the CE-1600M/CE-1620M module
-//                      schematics) — the whole 4000-7FFF window is decoded
-//                      by CS24 alone, wired only to the internal Memory-PWB
-//                      ROM; neither memory-slot connector's pin 4 (RAMSN)
-//                      is ever asserted outside 8000-BFFF, so no card in
-//                      Slot 1/2 can ever answer here. Bank
-//                      6 has no documented content in this window at all
-//                      (as opposed to Page C's bank 6, a different bank
-//                      register value entirely — see below). Banks 4/5
-//                      (CE-1600P plotter/floppy ROM) are real, documented
-//                      peripheral content, deliberately left open bus until
-//                      CE-1600P itself is emulated.
-//   Page C  8000-BFFF  bank-selected (Port 31H bits 4-6): bank 6 = display/
-//                      timer/serial/char-table ROM (CS123). Banks 0/1
-//                      (Slot 1) and 2/3 (Slot 2, whose vertical bank the
-//                      module further selects off Port 28H) route through
-//                      the m_slot1Conn/m_slot2Conn MemorySlotConnectors to
-//                      whatever ExpansionCard is attached — open bus only
-//                      when the slot is empty. Bank 7 is dual-source
-//                      confirmed (TRM §2.1 and
-//                      the PC-1600's German user manual, independently) as
-//                      genuinely unused hardware-wide, not merely
-//                      undocumented — open bus permanently.
-//                      (Page C has no separate banks 4/5 of its own;
-//                      those bank numbers belong to Page B, above.)
-//   Page D  C000-FFFF  bank-selected (Port 31H bit 7): bank 0 = fixed
-//                      internal 16KB RAM (RAM3). Bank 1's target is
-//                      undocumented in the TRM, Service Manual, and
-//                      German user manual — left open bus until a
-//                      primary source confirms what it maps to.
+//   Page A  0000-3FFF  system ROM (CS001), bank 0 only; a bank 1 here is
+//                      undocumented. SLOT2MAP mode 2 can still map Slot 2
+//                      over it (slot2MapTarget(), checked first).
+//   Page B  4000-7FFF  Port 31H bits 1-3: bank 0 = system ROM upper half
+//                      (loadBank0()); bank 3 = Bank 3 ROM, or the hidden
+//                      Bank 3b BASIC ROM when Port 3DH bit 2 is clear (a
+//                      whole-16KB swap; CS24's 8KB sub-banking isn't
+//                      modelled). Banks 1/2 are open bus: CS24 decodes the
+//                      window to internal ROM only, and no slot's RAMSN
+//                      (pin 4) is asserted outside 8000-BFFF (Service
+//                      Manual Part 4/12, module schematics). Banks 4-7 go
+//                      to the 60-pin system bus (4/5 CE-1600P, 7 the
+//                      host-directory drive).
+//   Page C  8000-BFFF  Port 31H bits 4-6: bank 6 = display/timer/serial/
+//                      char-table ROM (CS123); banks 0/1 = Slot 1 and 2/3
+//                      = Slot 2, through the MemorySlotConnectors (open bus
+//                      when empty; Slot 2's vertical bank is the card's,
+//                      off Port 28H). Bank 7 is unused (TRM §2.1).
+//   Page D  C000-FFFF  Port 31H bit 7: bank 0 = internal 16KB RAM (RAM3);
+//                      bank 1 is undocumented and open bus.
 //
-// System address F07DH (within page D bank 0's RAM window) is a read-side
-// mirror of Port 3DH's last-written value (Port 3DH itself isn't readable
-// via IN) — handled as a special case in read(), not stored separately.
+// F07DH reads back Port 3DH's last-written value (the port itself isn't
+// readable); read() handles it.
 //
-// The gateway routines that make bank switching software-transparent all
-// live in the always-resident page A ROM, so they need no special-casing
-// here — their addresses are recorded as constants purely so a ROM
-// sanity check can confirm they're actually present where documented.
-//
-// Also implements SC7852Bus so this one object can drive a standalone
-// SC7852 core for boot testing -- readMem/writeMem delegate straight to
-// read()/write() above; readIO/writeIO decode a subset of the 0x00-0xBF
-// I/O space: Port 31H/28H/3DH (forwarded to PC1600Bank, same registers
-// the memory decode above already reads), Port 32H/35H (interrupt
-// cause/mask, stored but not wired to any real interrupt source), Port
-// 39H (IM2 vector low byte), and Port 38H (CPU-switch trigger, forwarded
-// to a PC1600BusArbiter via setBusArbiter() or silently ignored if none
-// is attached, e.g. standalone single-CPU tests). Also wired: Port
-// 1CH-1FH (LH5810-style DDA/DDB/OPA/OPB, keyboard strobes -- see
-// PC1600Keyboard), Port 1BH (IF register, ON/BREAK latch), Port 37H (read:
-// keyboard sense via PC1600Keyboard::scan(); write: bit4 gates the LCD's
-// CK0 clock, see PC1600Display), Port 18H (OPC -- buzzer drive, see
-// m_opc), and Port 50H-5BH (forwarded to PC1600Display). Every other port reads open bus (0xFF) and ignores
-// writes -- this class has no opinion on the rest of the I/O map (UART,
-// timer/RTC, etc. all remain out of scope).
+// As an SC7852Bus, readIO/writeIO decode the PIO and keyboard (14H,
+// 17H-1FH), the TC8576F (20H-27H), the Slot 2 card latch (28H-2FH), the
+// bank, interrupt, sub-CPU, LCD-clock and CPU-switch ports (31H-3DH), the
+// LCD (50H-5BH, PC1600Display) and the 60-pin bus (70H-9FH). Other ports
+// read open bus (0xFF) and ignore writes.
 class PC1600Memory : public SC7852Bus {
 public:
     // Firmware gateway routines (always in page A, Bank 0) —
-    // PC-1600-Memory-Bank-Switching.md Part 5.
+    // Ref/PC-1600/PC-1600-Memory-Bank-Switching.md Part 5.
     static constexpr uint16_t kMemoryChk = 0x018D;
     static constexpr uint16_t kBankSet   = 0x0190;
     static constexpr uint16_t kSlot1Map  = 0x0196;
@@ -170,7 +115,7 @@ public:
     /// Sets/clears the ON key's live state (not part of the scan matrix --
     /// see PC1600Keyboard's class comment). A press transition sets IF
     /// register (port 1BH) bit 1, per
-    /// PC-1600-Keyboard.md §8 -- confirmed distinct from the PC-1500's own
+    /// Ref/PC-1600/PC-1600-Keyboard.md §8 -- confirmed distinct from the PC-1500's own
     /// ON-key wiring in bit position only, same latch-on-press-edge idea.
     /// Returns true on a press (rising) edge -- the caller
     /// (PC1600Machine::setOnKeyPressed) uses that to resume whichever CPU
@@ -212,7 +157,7 @@ public:
     /// edge only, and `readIO()`'s own read-clears-cause convention.
     /// Stored in `m_pbIn` (the live PB *pin* levels), NOT in `m_opb` (the
     /// output latch): PB5 is an input pin, so per §2.4 of
-    /// PC-1600-IO-Ports.md a read of 1FH must return its pin level, not
+    /// Ref/PC-1600/PC-1600-IO-Ports.md a read of 1FH must return its pin level, not
     /// whatever the CPU last wrote to the port. Keeping the two apart
     /// means a plain `OUT (1FH),A` cannot forge an input pin's level, even
     /// though the ROM only ever touches OPB through a read-modify-write
@@ -287,6 +232,9 @@ public:
     bool loadBank3bRom(const uint8_t* data, size_t size);
     /// Page C bank 6 (PC1600-P2-B6-new.bin, display/timer/serial/char tables).
     bool loadBank6Rom(const uint8_t* data, size_t size);
+    /// Bank 6's kBankSize bytes as mapped at 8000H, or nullptr before
+    /// loadBank6Rom() -- read-only, so safe from any thread.
+    const uint8_t* bank6Rom() const { return m_bank6Loaded ? m_bank6Rom.data() : nullptr; }
 
     /// The 60-pin system bus (Page B banks 4-7 ROM window + I/O ports
     /// 0x70-0x9F) -- CE-1600P and the host drive plug in here, not the memory slots. See
@@ -368,20 +316,30 @@ public:
         std::copy(m_internalRam.begin(), m_internalRam.end(), out);
     }
 
-    /// Write counterparts of slot{1,2}CardImage() / debugCopyInternalRam():
-    /// overwrite backing storage directly, bypassing the emulated bus and
-    /// its bank-register / pin gating. For the fast BASIC loader, which
-    /// scatters a tokenised program across module banks + internal RAM that
-    /// the post-NEW0 bank state may not currently map for CPU writes. Each
-    /// returns false, writing nothing, on an empty slot / out-of-range /
-    /// non-writable-backing.
-    bool slot1CardImageWrite(size_t off, const uint8_t* data, size_t n) {
-        auto* c = m_slot1Conn.attachedCard();
-        return c && c->debugImageWrite(off, data, n);
+    /// Host writes into the slot card behind global page-C `bank` (0/1 =
+    /// Slot 1, 2/3 = Slot 2) at `addr` ($8000-$BFFF), whichever bank is
+    /// mapped right now. The card gets the pins a CPU access to that bank
+    /// drives (MemorySlotConnector::writeInBank), so its own wiring places
+    /// each byte. For the fast loaders, which scatter a program across
+    /// banks the post-NEW0 state doesn't map. Writes nothing and returns
+    /// false unless every byte lands in RAM.
+    bool slotBusWrite(int bank, uint16_t addr, const uint8_t* data, size_t n) {
+        if (!slotBusWritable(bank, addr, n)) return false;
+        MemorySlotConnector& c = bank < 2 ? m_slot1Conn : m_slot2Conn;
+        for (size_t i = 0; i < n; ++i) c.writeInBank(bank, static_cast<uint16_t>(addr + i), data[i]);
+        return true;
     }
-    bool slot2CardImageWrite(size_t off, const uint8_t* data, size_t n) {
-        auto* c = m_slot2Conn.attachedCard();
-        return c && c->debugImageWrite(off, data, n);
+    /// Whether slotBusWrite() would store [addr, addr + n): each byte is
+    /// read and written back unchanged.
+    bool slotBusWritable(int bank, uint16_t addr, size_t n) {
+        if (bank < 0 || bank > 3 || addr < 0x8000 || addr + n > 0xC000) return false;
+        MemorySlotConnector& c = bank < 2 ? m_slot1Conn : m_slot2Conn;
+        for (size_t i = 0; i < n; ++i) {
+            const uint16_t a = static_cast<uint16_t>(addr + i);
+            uint8_t v;
+            if (!c.readInBank(bank, a, v) || !c.writeInBank(bank, a, v).stored) return false;
+        }
+        return true;
     }
     bool debugWriteInternalRam(size_t off, const uint8_t* data, size_t n) {
         if (n == 0) return true;
@@ -506,7 +464,7 @@ private:
     //
     // SDO reaches the buzzer through the same gate as OPC b7/b6. The line
     // idles high and either input going low sounds it
-    // (PC-1600-CPU-SC7852-Z80.md pin 75: PC6 = NAND(..., SD0)). So the
+    // (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md pin 75: PC6 = NAND(..., SD0)). So the
     // audible level is (b6 && b7) && SDO. The recording agrees: the
     // whistle runs on unchanged through the noise routine's OPC writes, and
     // BEEP OFF (b6 low) silences both.
@@ -526,7 +484,7 @@ private:
     /// **PB3 starts high.** Pin 78 (PCSTB) is "reset → input mode, current
     /// state latched in the PB3 flip-flop (externally pulled up on the
     /// PC-1600) ... not used on the production PC-1600"
-    /// (PC-1600-CPU-SC7852-Z80.md §6). Nothing ever drives it low on a
+    /// (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md §6). Nothing ever drives it low on a
     /// production machine, so the flip-flop latches the pull-up at reset
     /// and PB3 reads 1 forever after.
     ///
@@ -596,7 +554,7 @@ private:
     /// SLOT2MAP gate-array remap (Port 3CH b5:b4, PC1600Bank::slot2MapMode):
     /// the firmware can make the Slot 2 RAM chip-select assert for a bank-1
     /// access *outside* the normal page-C window -- the "(S2:) at Bank 1"
-    /// path (PC-1600-Memory-Bank-Switching.md Part 1; SLOT2MAP ROM routine
+    /// path (Ref/PC-1600/PC-1600-Memory-Bank-Switching.md Part 1; SLOT2MAP ROM routine
     /// PC1600-P0-B0-new.bin 0A6DH). Modelled as an effective-address rewrite feeding
     /// the ordinary Slot 2 decode. Returns true when `addr` is currently so
     /// remapped, filling `*pvoutHigh` (false/true = low/high 16 KB half of

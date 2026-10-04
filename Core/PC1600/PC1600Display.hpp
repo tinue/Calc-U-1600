@@ -3,12 +3,12 @@
 #include <cstdint>
 
 #include "PC1600Clocks.hpp"
-#include "PC1600StatusLine.hpp"
+#include "../Display/StatusLine.hpp"
 
 // ── PC-1600 LCD (1x HD61203 + 2x HD61102) ────────────────────────────────
 //
 // Model of the LF7204E panel per
-// Sharp1500-1600-Ref/PC-1600/PC-1600-Display-HD61202.md: 156x32 graphics
+// Ref/PC-1600/PC-1600-Display-HD61202.md: 156x32 graphics
 // dots split across two HD61102 column-driver chips (IC2/IC3), standard
 // HD61102 register model (command vs. data selected by which port-number
 // offset within a 4-port block is addressed, rather than a dedicated D/I
@@ -37,7 +37,7 @@
 // for all three blocks alike. (The diagram also shows the status-symbol
 // line fed from a distinct source -- IC3's `Y6f` pin and HD61203's
 // `X49-X64` common lines, both outside the main screen's own
-// Y1-Y64/X1-X32 addressing -- consistent with `PC1600StatusLine` being a
+// Y1-Y64/X1-X32 addressing -- consistent with `StatusLine` being a
 // genuinely separate mechanism; see that class's own comment.)
 class PC1600Display {
 public:
@@ -46,7 +46,7 @@ public:
     static constexpr int kRightBlockColumnStart = 128; // see class comment
     // Raw-row offset the right block reads at relative to the left/centre
     // blocks, before the shared `displaySL` rotation is applied (see
-    // `readPixel()`) -- 32, i.e. "the other half of the chip's 64 raw
+    // `dotAddress()`) -- 32, i.e. "the other half of the chip's 64 raw
     // rows." Not a page number by itself once `displaySL` is nonzero;
     // kept as a named constant for what it means at `displaySL == 0`
     // (pages 4-7), the default/reset state.
@@ -92,21 +92,21 @@ public:
     /// reads IC2's own column `x - kRightBlockColumnStart` (0-27), offset
     /// by `kRightBlockRowShift` raw rows and the controller's own
     /// `displaySL` scroll register -- see the class comment and
-    /// `readPixel()`'s own. A controller whose display is currently off
+    /// `dotAddress()`'s own. A controller whose display is currently off
     /// also reads false.
     bool pixel(int x, int y) const;
 
     /// The fixed-legend status-symbol strip above the graphics area,
     /// wired to real display memory -- see `refreshStatusSymbols()` and
-    /// `PC1600StatusLine`'s own class comment for the TRM bit map and
+    /// `StatusLine`'s own class comment for the TRM bit map and
     /// storage location.
-    PC1600StatusLine&       statusLine() { return m_statusLine; }
-    const PC1600StatusLine& statusLine() const { return m_statusLine; }
+    StatusLine&       statusLine() { return m_statusLine; }
+    const StatusLine& statusLine() const { return m_statusLine; }
 
     /// Recomputes every `statusLine()` flag from IC3's own column 63,
     /// pages 4/6/7 (rotated by IC3's own `addressStartLine`, same as the
     /// graphics-area scroll) per the TRM's SMBLSET bit map -- see
-    /// `PC1600StatusLine.hpp`'s own class comment for the full
+    /// `Core/Display/StatusLine.hpp`'s own class comment for the full
     /// derivation. Called after every write that could have
     /// touched that cell (`writeIO()`, both for IC3's own data/command
     /// ports and its `addressStartLine` register, since a scroll rotates
@@ -114,8 +114,24 @@ public:
     /// cheap enough to just always recompute rather than track precisely
     /// which write mattered. While IC3's display is off (a 0x3E command --
     /// e.g. the ROM's power-down path), every symbol reads back off, the
-    /// same way `readPixel()` gates the graphics area on `displayOn`.
+    /// same way `pixel()` gates the graphics area on `displayOn`.
     void refreshStatusSymbols();
+
+    /// The gate array's mirror of the PC-1500 display RAM, measured on a real
+    /// PC-1600 (2026-10-03; no source documents it, and the ROM has no code
+    /// for it): an LH5803 write to 7600H-764DH / 7700H-774DH shows at once
+    /// on the LCD's bottom text line, in the PC-1500 layout
+    /// (Core/Display/Pc1500DisplayRam.hpp) -- the whole column is redrawn
+    /// from both bytes of its pair, replacing what was there, and it lands
+    /// on the line that is at the bottom *now*, whatever the scroll. A write
+    /// to 764EH / 764FH redraws status set 00H / 01H the same way (that is
+    /// why DEGREE / RADIAN / GRAD, which run on the LH5803, update the
+    /// legend at once). Z-80 writes to the same RAM are not mirrored.
+    /// `col` 0-155, `dots` bit n = dot n of the line, top first.
+    void mirrorPc1500Column(int col, uint8_t dots);
+    /// `set` 0 or 1: IC3 column 63, page 7 / 6, rotated by the start line
+    /// like the ROM's own symbol writer (bank 6 8220H).
+    void mirrorPc1500StatusSet(int set, uint8_t value);
 
 private:
     // Standard HD61102 geometry: 64 columns x 8 pages x 8 bits/page --
@@ -136,13 +152,20 @@ private:
     };
 
     void writeCommand(Controller& c, uint8_t value);
-    /// True if the pixel at raw-row-space `y + rowShift`, rotated by the
-    /// controller's own `addressStartLine`, is set -- `rowShift` is 0 for
-    /// the left/centre blocks, `kRightBlockRowShift` (32) for the right
-    /// block (see class comment). Goes from a wanted visible `y` back to
-    /// which raw (page, bit) to read, since that's the direction this
-    /// class's callers need.
-    bool readPixel(const Controller& c, int col, int y, int rowShift) const;
+    /// Where visible pixel (x, y) is stored: the controller (IC3 or IC2),
+    /// its column, and the raw (page, bit) after `kRightBlockRowShift` for
+    /// the right block (see class comment) and the controller's own
+    /// `addressStartLine` rotation. `x`, `y` must be on the panel.
+    struct DotAddress {
+        bool ic3 = false;
+        int col = 0;
+        int page = 0;
+        uint8_t mask = 0;
+    };
+    DotAddress dotAddress(int x, int y) const;
+    /// IC3 page holding status-symbol set `basePage` (column 63), after
+    /// the start-line rotation.
+    int symbolPage(int basePage) const;
 
     Controller m_ic2; // panel columns 0-63
     // LCD clock: phi-OS (1.3 MHz) / 6, counted in edges. Scaled by 6 so the
@@ -159,5 +182,5 @@ private:
     }
     Controller m_ic3; // panel columns 64-127
     bool m_clockEnabled{false};
-    PC1600StatusLine m_statusLine;
+    StatusLine m_statusLine;
 };

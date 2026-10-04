@@ -10,8 +10,9 @@
 // On a stock PC-1600 the BASIC program area ("S0") is a single contiguous
 // window at Z-80 $C0C5 (internal RAM). With a RAM / program module fitted,
 // the ROM builds S0 by SCATTERING it across the module's 16 KB banks and
-// then internal RAM -- an image larger than one bank straddles a bank
-// boundary mid-line. The fast loader has to reproduce that placement to
+// then internal RAM -- an image larger than one bank continues in the next
+// one, after a 00 00 bank-end mark (no line straddles a module bank). The
+// fast loader has to reproduce that placement to
 // inject the program without driving the firmware LOAD path.
 //
 // This module is the pure-logic half: given a way to read the work-area
@@ -20,7 +21,7 @@
 // backing-store writes that place a `payloadLen`-byte tokenised image plus
 // its single terminating $FF marker.
 //
-// Reference: Sharp1500-1600-Ref/PC-1600/PC-1600-BASIC-Program-Placement.md
+// Reference: Ref/PC-1600/PC-1600-BASIC-Program-Placement.md
 // (memory model §1, work-area bytes §3, segment list §4, placement §5).
 // The address-space geometry and the reserve conventions are from the
 // PC-1600 Technical Reference Manual; the ADTBL byte bit-layout is
@@ -89,9 +90,6 @@ struct ProgramSegment {
     // module's window base otherwise), before segment 0 is moved up to
     // BASPRG_ST -- where a `NEW "S0:",<size>` reserve counts from.
     uint16_t windowBase = 0;
-    // Backing-store offset of `base`: into debugSlotImage(slot) for a
-    // SlotModule, or (base - $C000) into internal RAM.
-    uint32_t backingBase = 0;
     uint32_t bytes() const { return uint32_t(top) - base + 1; }
 };
 
@@ -115,13 +113,14 @@ struct PlacementInput {
     SlotGeometry slot2;
 };
 
-// Bytes to copy into one segment's backing store: program lines, the ROM's
+// Bytes to write into one segment: program lines, the ROM's
 // 00 00 bank-end marks and the final $FF end mark, as the ROM lays them down.
 struct PlacementWrite {
     ProgramSegment::Kind kind = ProgramSegment::Kind::InternalRam;
     int slot = 0;
+    int bank = 0;                // the segment's adtblBank (SlotModule only)
     size_t segment = 0;          // index into PlacementResult::segments
-    uint32_t backingOffset = 0;
+    uint16_t addr = 0;           // Z-80 address of data[0]
     std::vector<uint8_t> data;
 };
 

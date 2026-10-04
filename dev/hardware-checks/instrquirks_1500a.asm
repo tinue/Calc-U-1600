@@ -1,22 +1,13 @@
 ; ============================================================
-; INSTRQUIRKS_1500A.ASM -- Real-hardware verification of three
-; LH5801 instructions implemented inconsistently across existing
-; emulators (MESS/MAME, PockEmul, forever1500, this project), because
-; the Sharp PC-1500 Technical Reference Manual is ambiguous or wrong
-; about them.
+; INSTRQUIRKS_1500A.ASM -- Real-hardware check of three LH5801
+; instructions the Sharp PC-1500 Technical Reference Manual leaves
+; ambiguous: DRL (X), DRR (X) and ADR. Anyone can rerun it and read
+; the results with PEEK.
 ;
-; RESULT (confirmed on real PC-1500A hardware): reading (a) below --
-; DRL -> A=0x34, mem=0x41 ; DRR -> A=0x34, mem=0x23 -- matching MESS/
-; MAME, PockEmul, forever1500, and this project's own LH5801 core
-; (Core/CPU/LH5801/LH5801.cpp's drlMerge/drrMerge). Readings (b) and
-; (c) are both wrong; kept in the comments below only so a future
-; reader can see what was ruled out and why the accumulator/memory
-; pair was captured in the first place.
-;
-; Calc-U-1600's own ADR behaviour was already settled before this file
-; existed (see the ADR section below). This program exists so both findings can be
-; reproduced independently on real hardware, by anyone, straight from
-; PEEK.
+; RESULT (real PC-1500A): reading (a) below -- DRL -> A=0x34,
+; mem=0x41 ; DRR -> A=0x34, mem=0x23 -- which is what the emulator's
+; LH5801 core does (Core/CPU/LH5801/LH5801.cpp, drlMerge/drrMerge).
+; The ADR result (D+5) hasn't been read back from hardware yet.
 ;
 ; Target: PC-1500A, machine-language area (see examples/machine-code/memtest_1500a.pc1500a
 ; for why that area needs no NEW/module reservation on this model).
@@ -24,11 +15,9 @@
 ; ============================================================
 ; Test 1 & 2 -- DRL (X) / DRR (X), the nibble-rotate instructions
 ; ============================================================
-; With A = 0x12 and (X) = 0x34, three readings existed in the wild
-; before this test ran:
+; With A = 0x12 and (X) = 0x34, the candidate readings are:
 ;
-;   (a) MESS/MAME, PockEmul, forever1500: A is replaced by the ENTIRE
-;       old memory byte.                                 -- CONFIRMED
+;   (a) A is replaced by the ENTIRE old memory byte.     -- CONFIRMED
 ;         DRL -> A=0x34, mem=0x41   |   DRR -> A=0x34, mem=0x23
 ;   (b) 3-nibble rotate, one nibble of A preserved.            -- WRONG
 ;         DRL -> A=0x32, mem=0x41   |   DRR -> A=0x14, mem=0x23
@@ -49,21 +38,18 @@
 ; ============================================================
 ; Test 3 -- ADR, flag behaviour
 ; ============================================================
-; ADR (16-bit register = register + A) is documented as leaving H/V/Z/C
-; unaffected, but a naive implementation lets the internal 8-bit low-byte
-; add clobber them anyway (this is what MAME still does today). Calc-
-; U-1600's own LH5801 core was changed to preserve flags across ADR -- a
-; fix that resolved a real, reproducible Up/Down-key redraw bug -- keep
-; that in mind before touching either the emulator's ADR implementation
-; or this file.
+; ADR (16-bit register = register + A): do the flags survive, or does
+; the internal 8-bit low-byte add set them? The emulator's LH5801 core
+; preserves them; with clobbered flags the PC-1500's Up/Down-key
+; redraw goes wrong. Keep that in mind before touching either the
+; core's ADR or this file.
 ;
 ; Test: set T = 0x1F (IE|H|V|Z|C all set), set U = 0 and A = 0, execute
 ; ADR U, then read T back via TTA.
-;   Result 0x1F -> flags PRESERVED  (Calc-U-1600's current fix, and the
-;                  two reference emulators pc1500emu/forever1500.fr)
-;   Result 0x06 -> flags CLOBBERED  (the manual's literal reading; IE
-;                  stays set since it isn't one of the ALU flags, but
-;                  Z becomes 1 from the 0+0 low-byte add's own result)
+;   Result 0x1F -> flags PRESERVED  (what the core does)
+;   Result 0x06 -> flags CLOBBERED  (IE stays set since it isn't one of
+;                  the ALU flags, but Z becomes 1 from the 0+0
+;                  low-byte add's own result)
 ; T's value must have IE set (bit 0x02) going in, so the routine never
 ; leaves maskable interrupts disabled if this hypothesis turns out true
 ; and returns to BASIC with T genuinely clobbered.
@@ -204,19 +190,17 @@ START:
 ; ============================================================
 ; Expected PEEK values (D = 0x7C01):
 ;
-;                    (a) MESS/MAME,   (b) 3-nibble    (c) Z80
-;                    PockEmul,        rotate           RLD/RRD
-;                    forever1500
-;                    -- CONFIRMED --     -- WRONG --     -- WRONG --
+;                    (a) whole       (b) 3-nibble    (c) Z80
+;                    memory byte     rotate          RLD/RRD
+;                    -- CONFIRMED -- -- WRONG --     -- WRONG --
 ;   D+1 A/DRL  &7C02   0x34             0x32             0x13
 ;   D+2 mem/DRL &7C03  0x41             0x41             0x42
 ;   D+3 A/DRR  &7C04   0x34             0x14             0x14
 ;   D+4 mem/DRR &7C05  0x23             0x23             0x23
 ;
-;   D+5 T/ADR  &7C06:  0x1F = flags preserved (Calc-U-1600's fix)
-;                      0x06 = flags clobbered (manual's literal text)
+;   D+5 T/ADR  &7C06:  0x1F = flags preserved (the core)
+;                      0x06 = flags clobbered
 ;
-; Confirmed on real PC-1500A hardware: D+1..D+4 read 0x34,0x41,0x34,0x23
-; -- reading (a). D+5 not yet independently reported back; ADR's flag-
-; preservation fix predates this file and was settled separately.
+; Real PC-1500A: D+1..D+4 read 0x34,0x41,0x34,0x23 -- reading (a).
+; D+5 not read back yet.
 ; ============================================================

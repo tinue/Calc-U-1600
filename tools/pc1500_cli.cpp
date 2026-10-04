@@ -9,7 +9,7 @@
 //   - a demonstration of the trace ring buffer.
 //
 // Usage: pc1500_cli <rom-file> [maxCycles]
-//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--wav <out.wav>] [--lcd-png <out.png>]
+//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--wav <out.wav>] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
 //
 // The --preset form parses and applies a `.pc1500` scenario file
 // (PresetFile.hpp/PC1500PresetLoader.hpp) instead of a bare ROM --
@@ -24,7 +24,9 @@
 // `slot-1-file: <path>` reference ignores it.
 //
 // --lcd-png <out.png> writes the LCD, as Copy Screen does, at the end of
-// the run.
+// the run. --lcd-text <out.txt> (or - for stdout) writes it as text at the
+// same point (Core/Display/LcdText.hpp): the row, the lit status symbols,
+// and the number of cells that are not text.
 //
 // --wav <out.wav> records the buzzer (PC6, see PiezoSampler.hpp) for the
 // whole run -- preset script included -- as 48 kHz mono 16-bit PCM.
@@ -53,6 +55,7 @@
 #include "../Core/PC1500/PC1500Machine.hpp"
 #include "../Core/Preset/PresetFile.hpp"
 #include "../Core/PC1500/PC1500PresetLoader.hpp"
+#include "../Core/PC1500/PC1500LcdText.hpp"
 #include "../Core/PC1500/PC1500Screenshot.hpp"
 #include "Ce158CliPeer.hpp"
 #include "CliCommon.hpp"
@@ -66,6 +69,7 @@ int main(int argc, char** argv) {
     bool dumpBasic = false;
     std::string wavPath;
     std::string lcdPng;
+    std::string lcdTextPath;
     Ce158CliPeer ce158Peer;
     {
         std::vector<char*> kept;
@@ -76,6 +80,10 @@ int main(int argc, char** argv) {
             }
             if (std::strcmp(argv[i], "--lcd-png") == 0 && i + 1 < argc) {
                 lcdPng = argv[++i];
+                continue;
+            }
+            if (std::strcmp(argv[i], "--lcd-text") == 0 && i + 1 < argc) {
+                lcdTextPath = argv[++i];
                 continue;
             }
             if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
@@ -96,7 +104,7 @@ int main(int argc, char** argv) {
     if (argc < 2) {
         std::fprintf(stderr, "usage: %s <rom-file> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       %s --preset <preset-file.pc1500> [maxCycles]\n", argv[0]);
-        std::fprintf(stderr, "       options: --modules-dir <dir>  --dump-basic  --wav <out.wav>  --lcd-png <out.png>\n");
+        std::fprintf(stderr, "       options: --modules-dir <dir>  --dump-basic  --wav <out.wav>  --lcd-png <out.png>  --lcd-text <out.txt|->\n");
         std::fprintf(stderr, "                %s\n", Ce158CliPeer::kUsage);
         return 1;
     }
@@ -216,6 +224,13 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
+    if (!lcdTextPath.empty()) {
+        std::string textError;
+        if (!writeLcdTextReport(pc1500LcdText(machine), lcdTextPath, &textError)) {
+            std::fprintf(stderr, "failed to write '%s': %s\n", lcdTextPath.c_str(), textError.c_str());
+            return 1;
+        }
+    }
 
     // Convergence signal: an idle loop revisits a small set of addresses a
     // large number of times. Report the most-visited PC and how many
@@ -267,8 +282,9 @@ int main(int argc, char** argv) {
     // distinction) -- still useful here since PRO-mode Up/Down is a line-
     // editor navigation key, which is exactly what this buffer reflects.
     PC1500Display display = machine.display();
-    std::printf("Display: busy=%d pro=%d run=%d shift=%d sml=%d\n",
-                display.busy(), display.pro(), display.run(), display.shift(), display.small());
+    std::string statusText;
+    for (const std::string& word : statusWords(display.statusLine())) statusText += " " + word;
+    std::printf("Display status:%s\n", statusText.c_str());
     static constexpr uint16_t kDisplayTextBufBase = 0x7BB0;
     static constexpr int kDisplayTextBufLen = 80;
     std::string displayText;
@@ -280,8 +296,7 @@ int main(int argc, char** argv) {
     std::printf("Display input-line text: \"%s\"\n", displayText.c_str());
 
     if (dumpBasic) {
-        // Read-only oracle for the fast BASIC loader work (see
-        // ~/.claude/plans/goal-faster-basic-program-woolly-wall.md): dump the
+        // Read-only oracle for the fast BASIC loader: dump the
         // BASIC program pointers and the raw bytes the ROM's line editor
         // actually laid down, so a direct-poke loader can reproduce them.
         auto be16 = [&](uint16_t a) {

@@ -36,8 +36,6 @@ itself. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
   including the PC-1600's accented characters.
 - [Host drive](docs/PC1600-Host-Drive.md) — a folder on your computer as
   PC-1600 drive `S3:`.
-- [FILEX on the PC-1600](docs/PC1600-FILEX.md) — a guide to FILEX, a
-  third-party drive and file browser, running in the emulator.
 - [Examples](examples/README.md) — what each sample preset and program does.
 
 **Writing programs for the PC-1500 / PC-1600**
@@ -47,6 +45,8 @@ itself. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
   firmware analysis.
 - [VS Code extension](vscode/calcu1600-debug/README.md) — what the
   Calc-U-1600 Debugger extension provides.
+- [PC-1500 keyword modules](docs/PC1500-Keyword-Modules.md) — how a ROM
+  extension adds BASIC commands to the PC-1500.
 
 **Custom memory modules**
 
@@ -57,9 +57,9 @@ itself. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Serial port
 
-The emulated PC-1600's RS-232C port (and the CE-158's) appears on your
-computer as a serial port file, `calcu1600.serial` — **macOS and Linux
-only** for now. Point any serial program at it, for example
+The emulated PC-1600's RS-232C port appears on your computer as a serial
+port file, `calcu1600-rs232c.serial` (the CE-158's as
+`calcu1600-ce158.serial`) — **macOS and Linux only** for now. Point any serial program at it, for example
 [SharpDataExchange](https://github.com/tinue/SharpDataExchange) to copy
 programs to and from the calculator. The User Guide's
 [COM ports](docs/User-Guide.md#7-com-ports) chapter has the settings.

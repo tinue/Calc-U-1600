@@ -27,7 +27,7 @@ public:
 
     /// `port` is the low 8 bits of the I/O address (the only part any
     /// PC-1600 port decode documented so far depends on -- see
-    /// PC-1600-IO-Ports.md). The high 8 bits (A register for `OUT (n),A`/
+    /// Ref/PC-1600/PC-1600-IO-Ports.md). The high 8 bits (A register for `OUT (n),A`/
     /// `IN A,(n)`, or the B register for `OUT (C),r`/`IN r,(C)`) aren't
     /// forwarded since nothing in this project's scope needs them yet.
     virtual uint8_t readIO(uint8_t port) { (void)port; return 0xFF; }
@@ -299,6 +299,12 @@ private:
     // one pass. 65536 frames is ~1.9 MB.
     TraceRing<Z80CpuFrame, 65536> m_trace;
 
+    // History entries and trace frames hold the registers an instruction
+    // started from (pre-execution, like the debugger's live frame):
+    // captureHistory() takes them before the fetch, a trace frame copies
+    // them from that still uncommitted entry, and commitHistory() files
+    // the entry once the instruction is known.
+
     /// Records a TRACE frame if `tf` asks for one. The flag test is inline
     /// so the untraced hot path pays no call.
     void recordTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles) {
@@ -313,5 +319,6 @@ private:
     int32_t m_skipBreakpointAt{-1}; // resumePastBreakpoint(); -1 = none
     Z80HistoryFrame* m_historyFrame{&m_history.next()}; // the frame the current step() fills
     uint8_t m_fetchLen{0}; // bytes fetched by the current step(), mirrored into *m_historyFrame
-    void recordHistory(uint16_t pcAtStart, bool interrupt);
+    void captureHistory();
+    void commitHistory(uint16_t pcAtStart, bool interrupt);
 };

@@ -98,45 +98,6 @@ void test_reset_clears_ram_not_rom() {
     CHECK(mem.peek(0xC000) == 0x42); // ROM untouched
 }
 
-void test_boot_smoke_real_rom() {
-    LH5803Memory mem;
-    if (!mem.loadROMFile("roms/PC1600-LH5803-C000-FFFF-new.bin")) {
-        std::fprintf(stderr, "SKIP test_boot_smoke_real_rom: roms/PC1600-LH5803-C000-FFFF-new.bin "
-                              "not found relative to cwd (run tests from the repo root)\n");
-        return;
-    }
-    LH5803 cpu(mem);
-    cpu.reset();
-    CHECK(cpu.pc() == 0xE000); // confirmed reset vector target (matches the real PC-1500 A04 ROM's own)
-
-    // Real, meaningful signal that ROM execution is correct so far: the
-    // boot sequence reaches and repeatedly executes a delay loop at
-    // 0xE006 (visible by tracing the first ~60 steps) before falling
-    // through further into the boot sequence.
-    bool sawDelayLoop = false;
-    int delayLoopHits = 0;
-    for (int i = 0; i < 300 && delayLoopHits < 20; i++) {
-        if (cpu.pc() == 0xE006) { sawDelayLoop = true; delayLoopHits++; }
-        cpu.step();
-    }
-    CHECK(sawDelayLoop);
-    CHECK(delayLoopHits >= 20);
-
-    // NOT asserted here: convergence to a stable BASIC-idle loop. Tracing
-    // past the delay loop shows execution falls through into the
-    // 0000-3FFF "Slot 1/2 module RAM" window (per
-    // PC-1600-CPU-LH5803-Compat.md §2) almost immediately afterward --
-    // which this standalone LH5803Memory correctly reports as open bus,
-    // since no concrete memory module is attached here and, more
-    // fundamentally, that window is supposed to be backed by whatever the
-    // SC7852 side has bank-switched into Slot 1/2 (shared physical RAM,
-    // not LH5803-private storage) -- whether the LH5803 alone can ever
-    // reach a stable idle loop without that real data is unclear;
-    // full end-to-end convergence is deferred to Phase 5.3, once
-    // PC1600Machine wires the two CPUs and their shared RAM together for
-    // real.
-}
-
 } // namespace
 
 int run_lh5803_tests() {
@@ -147,7 +108,6 @@ int run_lh5803_tests() {
     test_memory_rom_load_and_write_ignored();
     test_memory_load_rejects_wrong_size();
     test_reset_clears_ram_not_rom();
-    test_boot_smoke_real_rom();
 
     std::printf("lh5803_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

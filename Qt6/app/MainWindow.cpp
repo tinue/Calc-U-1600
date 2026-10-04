@@ -83,9 +83,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_presetController = std::make_unique<PresetController>(m_controller.get(), m_moduleManager.get(),
                                                              m_floppyManager.get(), this);
 
-    // QMainWindow requires exactly one central widget -- everything that
-    // used to be added straight into `this`'s own QVBoxLayout now lives in
-    // this wrapper instead, freeing `this` up for setMenuBar() below.
+    // QMainWindow takes exactly one central widget; the faceplate, control
+    // bar and debug panel live in this wrapper.
     auto* central = new QWidget(this);
     m_faceplate = new FaceplateWidget(central);
     m_controlBar = new ControlBar(central);
@@ -433,17 +432,20 @@ void MainWindow::loadMachineCodeFile(const QString& path) {
 
     PresetController::MachineCodeLoadRequest request;
     request.payload = code.payload;
-    uint32_t addr = code.loadAddr;  // in the code's CPU's address space
+    uint32_t addr = code.loadAddr & 0xFFFF;  // in the code's CPU's address space (a header's bank is plan.bank)
     request.addr = plan.busAddr;
     machinecode::Slot slot = plan.slot;
+    int bank = plan.bank;  // the header's bank, else the slot's
     if (plan.needsAddress) {
         MachineCodeLoadDialog dialog(this, target, code.payload.size(), plan.defaultAddr, state, plan.cpu);
         if (dialog.exec() != QDialog::Accepted) return;
         addr = dialog.address();
         request.addr = dialog.busAddress();
         slot = dialog.slot();
+        bank = machinecode::pc1600DefaultBank(slot);
     }
     request.slot = static_cast<int>(slot);
+    request.bank = bank;
 
     bool loaded = false;
     m_sync->run(title, [this, &request, &loaded](QString* error) {
@@ -462,12 +464,14 @@ void MainWindow::loadMachineCodeFile(const QString& path) {
     }
     const size_t len = request.payload.size();
     const machinecode::Advice advice =
-        machinecode::advice(target, slot, addr, len, code.autorunAddr, ramStart, ramEnd, state, plan.cpu);
+        machinecode::advice(target, slot, bank, addr, len, code.autorunAddr, ramStart, ramEnd, state, plan.cpu);
 
     auto hex = [](uint32_t v) { return QStringLiteral("&") + QString::number(v, 16).toUpper(); };
     QString where = tr("Loaded %1 bytes at %2–%3").arg(len).arg(hex(addr), hex(addr + len - 1));
     if (isPC1600 && plan.cpu == machinecode::Cpu::LH5803)
         where += tr(" (LH5803 addresses; Z-80 %1, %2)").arg(hex(request.addr), QString::fromLatin1(machinecode::slotName(slot)));
+    else if (isPC1600 && bank != 0)
+        where += tr(" (%1, bank %2)").arg(QString::fromLatin1(machinecode::slotName(slot))).arg(bank);
     else if (isPC1600)
         where += tr(" (%1)").arg(QString::fromLatin1(machinecode::slotName(slot)));
     QString html = QStringLiteral("<p>%1.</p>").arg(where.toHtmlEscaped());
@@ -727,10 +731,14 @@ QImage MainWindow::toQImage(const GrayImage& screen) {
     return image;
 }
 
+// The image, plus the screen as readable text (LcdText::plainText()) when
+// any of it is text -- a text editor pastes the text, an image app the dots.
 void MainWindow::copyScreenToClipboard() {
     const GrayImage screen = m_controller->currentScreenImage();
     const QImage image = toQImage(screen);
     if (image.isNull()) return;
+    LcdText lcd;
+    const QString text = m_controller->lcdText(&lcd) ? QString::fromStdString(lcd.plainText()) : QString();
 
 #ifdef Q_OS_MACOS
     // Qt's QClipboard::setImage() drops the physical size on macOS (see
@@ -738,9 +746,12 @@ void MainWindow::copyScreenToClipboard() {
     // real display's size.
     const double widthPt = screen.width * 72.0 / screen.dpi;
     const double heightPt = screen.height * 72.0 / screen.dpi;
-    if (macSetClipboardImage(image, widthPt, heightPt)) return;
+    if (macSetClipboardImage(image, widthPt, heightPt, text)) return;
 #endif
-    QGuiApplication::clipboard()->setImage(image);
+    auto* mime = new QMimeData;
+    mime->setImageData(image);
+    if (!text.isEmpty()) mime->setText(text);
+    QGuiApplication::clipboard()->setMimeData(mime);
 }
 
 void MainWindow::pasteClipboardText() {

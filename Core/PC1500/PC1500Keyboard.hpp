@@ -18,8 +18,8 @@
 //
 // The ON key is deliberately NOT part of this matrix — real hardware wires
 // it straight to the CPU's BFI pin (a power-on latch), not through the
-// column/row grid. Modeling that wake path is out of scope for now (see
-// PC1500Machine's doc comment); pressKey("on") is a no-op here.
+// column/row grid (PC1500Machine::setOnKeyPressed()); pressKey("on") is a
+// no-op here.
 class PC1500Keyboard {
 public:
     // Named-key vocabulary used by preset scripts and the BASIC typer.

@@ -143,37 +143,6 @@ public:
         return out;
     }
 
-    /// Write counterpart of debugImage(): overwrite `n` bytes at the
-    /// concatenated backing offset `off`, walking regions in definition
-    /// order. All-or-nothing -- returns false and writes nothing if the
-    /// range would cross past the last region's end. A write that straddles
-    /// two adjacent regions is split across their backings (the regions are
-    /// contiguous in this address space by construction).
-    bool debugImageWrite(size_t off, const uint8_t* data, size_t n) override {
-        if (n == 0) return true;
-        if (!data) return false;
-        size_t total = 0;
-        for (const RegionState& st : m_regions) total += st.backing.size();
-        if (off > total || n > total - off) return false;
-        if (touchesRom(off, n)) return false;  // ROM is read-only for this path too
-        size_t base = 0;
-        for (RegionState& st : m_regions) {
-            const size_t regEnd = base + st.backing.size();
-            if (off < regEnd) {
-                const size_t local = off - base;
-                const size_t take = std::min(n, st.backing.size() - local);
-                std::copy(data, data + take, st.backing.begin() + local);
-                ++m_contentRevision;
-                data += take;
-                n -= take;
-                off += take;
-                if (n == 0) return true;
-            }
-            base = regEnd;
-        }
-        return n == 0;
-    }
-
 private:
     // Stores `value` into a backing cell, counting it as a content change
     // only when the cell actually takes a new value (see contentRevision()).
@@ -181,24 +150,6 @@ private:
         if (cell == value) return;
         cell = value;
         ++m_contentRevision;
-    }
-
-    // Whether [off, off+n) of the concatenated backing (debugImage()'s
-    // address space) touches a byte of a `rom` range.
-    bool touchesRom(size_t off, size_t n) const {
-        size_t base = 0;
-        for (const RegionState& st : m_regions) {
-            const Region& r = *st.def;
-            const size_t regEnd = base + st.backing.size();
-            const size_t lo = std::max(off, base), hi = std::min(off + n, regEnd);
-            if (lo < hi) {
-                const size_t bankSize = r.banking.bankSize;
-                for (size_t b = (lo - base) / bankSize; b <= (hi - 1 - base) / bankSize; ++b)
-                    if (r.contentForBank(static_cast<uint32_t>(b)).kind == ContentKind::Rom) return true;
-            }
-            base = regEnd;
-        }
-        return false;
     }
 
     // One flash command decoder per

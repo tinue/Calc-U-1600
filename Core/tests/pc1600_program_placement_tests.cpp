@@ -2,7 +2,7 @@
 // pure segment-list + scatter-placement logic for the PC-1600 fast BASIC
 // loader. Driven entirely by a synthetic `peek` over the work-area bytes
 // (no CPU, no ROM), checked against the two worked examples in
-// Sharp1500-1600-Ref/PC-1600/PC-1600-BASIC-Program-Placement.md.
+// Ref/PC-1600/PC-1600-BASIC-Program-Placement.md.
 //
 // Build & run: see tools/run_tests.sh
 
@@ -98,7 +98,7 @@ void test_stock_single_internal_segment() {
     CHECK(r.endAddr == 0xC0C5 + 100);   // the $FF marker
     CHECK(r.writes.size() == 1);
     CHECK(r.writes[0].kind == ProgramSegment::Kind::InternalRam);
-    CHECK(r.writes[0].backingOffset == 0x00C5);
+    CHECK(r.writes[0].addr == 0xC0C5);
     CHECK(r.writes[0].data.size() == 101);   // payload + $FF
     CHECK(r.writes[0].data.back() == 0xFF);
 }
@@ -157,13 +157,13 @@ void test_ce1600m_slot1_extension_memory() {
     CHECK(r.segments[0].slot == 1 && r.segments[0].adtblBank == 0);
     CHECK(r.segments[0].base == 0x80C5 && r.segments[0].top == 0xBFFF);
     CHECK(r.segments[1].slot == 1 && r.segments[1].adtblBank == 1);
-    CHECK(r.segments[1].base == 0x8000 && r.segments[1].backingBase == 0x4000);
+    CHECK(r.segments[1].base == 0x8000);
     CHECK(r.segments[2].kind == ProgramSegment::Kind::InternalRam);
     CHECK(r.startAddr == 0x80C5);
     CHECK(r.endAddr == 0x80C5 + 422);
     CHECK(r.writes.size() == 1);
-    CHECK(r.writes[0].slot == 1);
-    CHECK(r.writes[0].backingOffset == 0x00C5);
+    CHECK(r.writes[0].slot == 1 && r.writes[0].bank == 0);
+    CHECK(r.writes[0].addr == 0x80C5);
     CHECK(r.writes[0].data.size() == 423);
 }
 
@@ -193,16 +193,15 @@ void test_trm_example1_scatter_and_bank_end_mark() {
     CHECK(r.segments[0].slot == 1 && r.segments[0].adtblBank == 0 && r.segments[0].base == 0xA0C5);
     CHECK(r.segments[0].adtblIndex == 3);
     CHECK(r.segments[1].slot == 2 && r.segments[1].adtblBank == 2 && r.segments[1].base == 0x8000);
-    CHECK(r.segments[1].backingBase == 0x0000 && r.segments[1].adtblIndex == 4);
+    CHECK(r.segments[1].adtblIndex == 4);
     CHECK(r.segments[2].slot == 2 && r.segments[2].adtblBank == 3 && r.segments[2].base == 0x8000);
-    CHECK(r.segments[2].backingBase == 0x4000);
     CHECK(r.segments[3].kind == ProgramSegment::Kind::InternalRam && r.segments[3].adtblIndex == 5);
 
     CHECK(r.writes.size() == 2);
-    CHECK(r.writes[0].slot == 1 && r.writes[0].backingOffset == 0x00C5);
+    CHECK(r.writes[0].slot == 1 && r.writes[0].bank == 0 && r.writes[0].addr == 0xA0C5);
     CHECK(r.writes[0].data.size() == 7900 + 2);          // 79 lines + the 00 00 mark
     CHECK(r.writes[0].data[7900] == 0x00 && r.writes[0].data[7901] == 0x00);
-    CHECK(r.writes[1].slot == 2 && r.writes[1].backingOffset == 0x0000);
+    CHECK(r.writes[1].slot == 2 && r.writes[1].bank == 2 && r.writes[1].addr == 0x8000);
     CHECK(r.writes[1].data.size() == 200 + 1);           // lines 80, 81 + $FF
     CHECK(r.endAddr == 0x8000 + 200);
     CHECK(r.endSegment == 1);
@@ -236,8 +235,8 @@ void test_entry5_straddles_into_internal_ram() {
     CHECK(r.ok);
     CHECK(r.segments.size() == 2);
     CHECK(r.writes.size() == 2);
-    CHECK(r.writes[0].slot == 1 && r.writes[0].backingOffset == 0x3FC5 && r.writes[0].data.size() == 59);
-    CHECK(r.writes[1].kind == ProgramSegment::Kind::InternalRam && r.writes[1].backingOffset == 0);
+    CHECK(r.writes[0].slot == 1 && r.writes[0].addr == 0xBFC5 && r.writes[0].data.size() == 59);
+    CHECK(r.writes[1].kind == ProgramSegment::Kind::InternalRam && r.writes[1].addr == 0xC000);
     CHECK(r.writes[1].data.size() == 200 - 59 + 1);
     CHECK(r.endAddr == 0xC000 + 200 - 59);
     CHECK(r.endSegment == 1);
@@ -267,9 +266,8 @@ void test_trm_example2_program_module_region() {
     CHECK(r.segments.size() == 2);      // no internal-RAM tail for a module region
     CHECK(r.segments[0].slot == 1 && r.segments[0].adtblBank == 0);
     CHECK(r.segments[0].base == 0x80C5);           // window base $8000 + 197
-    CHECK(r.segments[0].backingBase == 197);
     CHECK(r.segments[1].slot == 1 && r.segments[1].adtblBank == 1);
-    CHECK(r.segments[1].base == 0x8000 && r.segments[1].backingBase == 0x4000);
+    CHECK(r.segments[1].base == 0x8000);
     CHECK(r.startAddr == 0x80C5);
     CHECK(r.writes.size() == 1 && r.writes[0].data.size() == 51);
 
@@ -335,11 +333,11 @@ void test_vertical_banked_module_uses_bank0() {
     CHECK(r.segments.size() == 3);
     CHECK(r.segments[0].slot == 2 && r.segments[0].base == 0x80C5);
     CHECK(r.segments[1].slot == 2 && r.segments[1].base == 0x8000 &&
-          r.segments[1].backingBase == 0x4000);   // high 16 KB half of vertical bank 0
+          r.segments[1].adtblBank == 3);   // high 16 KB half of vertical bank 0
     CHECK(r.segments[2].kind == ProgramSegment::Kind::InternalRam);
     CHECK(r.writes.size() == 1);
-    CHECK(r.writes[0].slot == 2);
-    CHECK(r.writes[0].backingOffset == 0x00C5);    // within vertical bank 0 (image < $8000)
+    CHECK(r.writes[0].slot == 2 && r.writes[0].bank == 2);
+    CHECK(r.writes[0].addr == 0x80C5);
     CHECK(r.writes[0].data.size() == 301);
 }
 

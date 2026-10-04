@@ -7,7 +7,7 @@ namespace {
 // ── Format constants ─────────────────────────────────────────────────────
 // MUST match tools/read_trace.py's constant block.
 constexpr uint32_t kMagic   = 0x50433135;  // 'PC15'
-constexpr uint16_t kVersion = 2;  // v2: 25-byte TRACE_EVENT (added cpuId), new TRACE_EVENT_Z80 record
+constexpr uint16_t kVersion = 3;  // v3: registers are pre-execution (layout as v2: 25-byte TRACE_EVENT, TRACE_EVENT_Z80)
 constexpr int      kHeaderSize = 16;
 
 enum RecType : uint8_t {
@@ -47,7 +47,7 @@ PC1500TraceFile::PC1500TraceFile(std::FILE* handle) : m_fh(handle) {
     ByteSink h{header};
     h.u32(kMagic);
     h.u16(kVersion);
-    h.u16(0);   // reserved (was "model" in Calc-U-59's v2 -- single model here)
+    h.u16(0);   // reserved
     h.u64(0);   // reserved for future use
     m_bytesWritten += std::fwrite(header, 1, sizeof(header), m_fh);
 

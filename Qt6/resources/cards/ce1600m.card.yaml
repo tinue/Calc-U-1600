@@ -1,6 +1,6 @@
 # CE-1600M -- 32 KB battery-backed SRAM module for the PC-1600.
 #
-# Confirmed from the CE-1600M Schaltplan (PC-1600-Memory-Bank-Switching.md
+# Confirmed from the CE-1600M Schaltplan (Ref/PC-1600/PC-1600-Memory-Bank-Switching.md
 # Part 7): 4 x 8 KB SRAM behind a TC74HC139F. The module is active only
 # over the 8000-BFFF window; the gate array gates its enable (RAM2 on
 # Slot 1, pin 4) to exactly that window and to this slot, so RAM2 is a

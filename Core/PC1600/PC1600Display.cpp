@@ -1,14 +1,14 @@
 #include "PC1600Display.hpp"
 
 // HD61102 command byte encoding (not detailed in
-// PC-1600-Display-HD61202.md, which only describes command functionality,
+// Ref/PC-1600/PC-1600-Display-HD61202.md, which only describes command functionality,
 // not exact bit patterns -- see that doc's §3):
 //   0x3E           display off (bit0 = 0)
 //   0x3F           display on  (bit0 = 1)
 //   0xB8-0xBF      set page address (low 3 bits = page 0-7)
 //   0x40-0x7F      set column address (low 6 bits = column 0-63)
 //   0xC0-0xFF      set display start line (low 6 bits) -- see
-//                  Controller's own comment and readPixel() below
+//                  Controller's own comment and dotAddress() below
 namespace {
 constexpr uint8_t kCmdDisplayOff = 0x3E;
 constexpr uint8_t kCmdDisplayOn = 0x3F;
@@ -114,41 +114,49 @@ void PC1600Display::writeIO(uint8_t port, uint8_t value) {
     if (port >= 0x58 && port <= 0x5B) { apply(m_ic2); return; }
 }
 
-bool PC1600Display::readPixel(const Controller& c, int col, int y, int rowShift) const {
-    if (!c.displayOn || col < 0 || col >= 64) return false;
-    // Goes from a wanted visible y to which raw (page,bit) address to
-    // read -- the inverse of the controller's own mapping from a raw
-    // address to a visible y (subtract displaySL and wrap). See the class
-    // comment on Controller for why this rotation must be applied.
-    int rawRow = (y + rowShift + c.addressStartLine) & 0x3F; // mod 64
-    int page = rawRow >> 3;
-    int bit = rawRow & 7;
-    uint8_t byte = c.pages[static_cast<size_t>(col)][static_cast<size_t>(page)];
-    return (byte & (1 << bit)) != 0;
-}
-
-bool PC1600Display::pixel(int x, int y) const {
-    if (x < 0 || x >= kWidth || y < 0 || y >= kHeight) return false;
+PC1600Display::DotAddress PC1600Display::dotAddress(int x, int y) const {
     // Columns 128-155 are IC2's own upper raw rows (32-63 before the
     // addressStartLine rotation -- pages 4-7 when addressStartLine == 0,
     // the default/reset state), columns 0-27 of that same chip -- genuinely
     // independent, individually-addressable memory, NOT a duplicate/mirror
     // of columns 0-27's own lower rows.
-    if (x >= kRightBlockColumnStart) {
-        return readPixel(m_ic2, x - kRightBlockColumnStart, y, kRightBlockRowShift);
-    }
-    const Controller& c = (x < 64) ? m_ic2 : m_ic3;
-    int col = (x < 64) ? x : (x - 64);
-    return readPixel(c, col, y, 0);
+    DotAddress d;
+    d.ic3 = x >= 64 && x < kRightBlockColumnStart;
+    d.col = x < 64 ? x : d.ic3 ? x - 64 : x - kRightBlockColumnStart;
+    const int rowShift = x >= kRightBlockColumnStart ? kRightBlockRowShift : 0;
+    // Goes from a wanted visible y to which raw (page,bit) address holds it
+    // -- the inverse of the controller's own mapping from a raw address to
+    // a visible y (subtract displaySL and wrap). See the class comment on
+    // Controller for why this rotation must be applied.
+    const Controller& c = d.ic3 ? m_ic3 : m_ic2;
+    const int rawRow = (y + rowShift + c.addressStartLine) & 0x3F; // mod 64
+    d.page = rawRow >> 3;
+    d.mask = static_cast<uint8_t>(1u << (rawRow & 7));
+    return d;
+}
+
+bool PC1600Display::pixel(int x, int y) const {
+    if (x < 0 || x >= kWidth || y < 0 || y >= kHeight) return false;
+    const DotAddress d = dotAddress(x, y);
+    const Controller& c = d.ic3 ? m_ic3 : m_ic2;
+    return c.displayOn && (c.pages[static_cast<size_t>(d.col)][static_cast<size_t>(d.page)] & d.mask) != 0;
+}
+
+int PC1600Display::symbolPage(int basePage) const {
+    // Same rotation as dotAddress()'s displaySL handling, but at page
+    // granularity only (symbol storage is addressed by whole page, not by
+    // individual raw row).
+    const int p = basePage + (m_ic3.addressStartLine >> 3);
+    return p >= 8 ? p - 8 : p;
 }
 
 void PC1600Display::refreshStatusSymbols() {
-    using Symbol = PC1600StatusLine::Symbol;
+    using Symbol = StatusLine::Symbol;
 
     // The status-symbol segments hang off IC3 (its Y6f pin, per
-    // PC-1600-Display-HD61202.md §2), so a "display off" command (0x3E) to
+    // Ref/PC-1600/PC-1600-Display-HD61202.md §2), so a "display off" command (0x3E) to
     // IC3 stops them being driven -- exactly as it stops the graphics area
-    // (see readPixel()'s own `!c.displayOn` guard). Without this, the ROM's
+    // (see pixel()'s own `displayOn` guard). Without this, the ROM's
     // auto-power-off / OFF-key power-down would blank the 156x32 dot-matrix
     // but leave DEG/RUN/BUSY etc. frozen on the glass. The pixel RAM behind
     // these cells is retained across the off state (VGG rail), so a later
@@ -156,43 +164,41 @@ void PC1600Display::refreshStatusSymbols() {
     // area.
     if (!m_ic3.displayOn) { m_statusLine.reset(); return; }
 
-    // Same rotation as readPixel()'s own displaySL handling, but at page
-    // granularity only (symbol storage is addressed by whole page, not
-    // by individual raw row).
-    auto symbolPage = [&](int basePage) {
-        int p = basePage + (m_ic3.addressStartLine >> 3);
-        return (p >= 8) ? p - 8 : p;
-    };
     auto bit = [](uint8_t byte, int b) { return (byte & (1 << b)) != 0; };
 
-    // TRM SMBLSET table (see PC1600StatusLine.hpp's own class comment):
+    // TRM SMBLSET table (see StatusLine.hpp's own class comment):
     // B=00H -> IC3 page 7, B=01H -> page 6, B=02H -> page 4.
     uint8_t b00 = m_ic3.pages[63][static_cast<size_t>(symbolPage(7))];
     uint8_t b01 = m_ic3.pages[63][static_cast<size_t>(symbolPage(6))];
     uint8_t b02 = m_ic3.pages[63][static_cast<size_t>(symbolPage(4))];
 
-    m_statusLine.set(Symbol::Def,   bit(b00, 7));
-    m_statusLine.set(Symbol::I,     bit(b00, 6));
-    m_statusLine.set(Symbol::II,    bit(b00, 5));
-    m_statusLine.set(Symbol::III,   bit(b00, 4));
-    m_statusLine.set(Symbol::Small, bit(b00, 3));
-    m_statusLine.set(Symbol::Shift, bit(b00, 1));
-    m_statusLine.set(Symbol::Busy,  bit(b00, 0));
+    m_statusLine.decodeCommonSets(b00, b01);
 
-    m_statusLine.set(Symbol::Run,      bit(b01, 6));
-    m_statusLine.set(Symbol::Pro,      bit(b01, 5));
-    m_statusLine.set(Symbol::Reserve,  bit(b01, 4));
-    m_statusLine.set(Symbol::Rad,      bit(b01, 2));
-    m_statusLine.set(Symbol::Grad,     bit(b01, 1));
-    m_statusLine.set(Symbol::Deg,      bit(b01, 0));
-
-    // The romaji->kana caption: X35 = page 4 bit 2, X59 = page 7 bit 2
-    // (Service Manual glass pinout; see PC1600StatusLine.hpp). KBII's bit 7
-    // has no electrode -- SMBLSET (bank 6 822DH) folds it into S -- so it
-    // is not read.
+    // Set 02H, PC-1600 only. The romaji->kana caption: X35 = page 4 bit 2
+    // (romaji, here) and X59 = page 7 bit 2 (kana, in decodeCommonSets())
+    // -- Service Manual glass pinout; see StatusLine.hpp. KBII's bit 7 has
+    // no electrode -- SMBLSET (bank 6 822DH) folds it into S -- so it is
+    // not read.
     m_statusLine.set(Symbol::Romaji, bit(b02, 2));
-    m_statusLine.set(Symbol::Kana,   bit(b00, 2));
     m_statusLine.set(Symbol::S,    bit(b02, 3));
     m_statusLine.set(Symbol::Ctrl, bit(b02, 1));
     m_statusLine.set(Symbol::Batt, bit(b02, 0));
+}
+
+void PC1600Display::mirrorPc1500Column(int col, uint8_t dots) {
+    if (col < 0 || col >= kWidth) return;
+    // Each dot through pixel()'s own mapping, so it lands on the visible
+    // bottom line at any start line.
+    for (int dot = 0; dot < 8; ++dot) {
+        const DotAddress d = dotAddress(col, kHeight - 8 + dot);
+        Controller& c = d.ic3 ? m_ic3 : m_ic2;
+        uint8_t& byte = c.pages[static_cast<size_t>(d.col)][static_cast<size_t>(d.page)];
+        byte = (dots >> dot) & 1 ? uint8_t(byte | d.mask) : uint8_t(byte & ~d.mask);
+    }
+}
+
+void PC1600Display::mirrorPc1500StatusSet(int set, uint8_t value) {
+    if (set != 0 && set != 1) return;
+    m_ic3.pages[63][static_cast<size_t>(symbolPage(set == 0 ? 7 : 6))] = value;
+    refreshStatusSymbols();
 }

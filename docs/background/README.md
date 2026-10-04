@@ -36,13 +36,18 @@ with a status note on how the implementation differed. New plans go into
 | [Loaders: one file classifier from libsharpdx](plans/Loader-File-Kind-Plan.md) | 2026-09-27 | Implemented |
 | [PC-1600 host-directory drive](plans/PC1600-Host-Drive-Plan.md) | 2026-09-29 | Implemented |
 | [Drag-and-drop loading](plans/Drag-And-Drop-Plan.md) | 2026-09-30 | Implemented |
+| [PC-1500 ROM extension demo: RENUM](plans/PC1500-RENUM-ROM-Plan.md) | 2026-10-02 | Implemented |
+| [Reading the LCD as text](plans/LCD-Text-Plan.md) | 2026-10-03 | Implemented |
+| [Loader matrix: CE-158/sde vs. fast loader](plans/Loader-Matrix-Plan.md) | 2026-10-03 | Implemented, PC-1500 and PC-1600; results in dev/loader-matrix/ |
+| [Copy Screen: the LCD as text](plans/Copy-Screen-Text-Plan.md) | 2026-10-03 | Implemented |
+| [Pre-execution snapshots: history and trace](plans/Pre-Execution-Snapshots-Plan.md) | 2026-10-04 | Implemented |
 
 ## Handoffs
 
-Notes left at the end of a working session: where things stand, what was
-verified, what to pick up next.
+Notes left at the end of a working session on work that is still open:
+where things stand and what to pick up next. A handoff is removed once
+its work is resolved.
 
 | Handoff | Status |
 |---|---|
-| [Debugger](handoffs/Debugger-Handoff.md) | Current (updated 2026-09-30) |
-| [CE-1600F floppy FORMAT self-test](handoffs/PC1600-CE1600F-Format-Handoff.md) | Resolved 2026-09-18, kept for history |
+| [Debugger](handoffs/Debugger-Handoff.md) | Open: checks in VS Code, CLion |
