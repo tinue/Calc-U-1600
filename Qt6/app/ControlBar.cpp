@@ -12,7 +12,7 @@
 
 namespace {
 
-// A thin vertical rule between control-bar groups (model/ROM pickers | module slots | plotter toggles) so same-looking
+// A thin vertical rule between control-bar groups (model picker | module slots | peripheral toggles) so same-looking
 // widgets in adjacent groups -- most notably the two slots' identical save-
 // icon buttons -- read as belonging to different groups instead of mushing
 // into one undifferentiated row.
@@ -68,25 +68,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_modelCombo->setFocusPolicy(Qt::NoFocus);
     m_modelCombo->setObjectName(QStringLiteral("controlbar.model"));
     layout->addWidget(m_modelCombo);
-
-    m_romCombo = new QComboBox(this);
-    m_romCombo->addItem(tr("A01"), static_cast<int>(PC1500RomRevision::A01));
-    m_romCombo->addItem(tr("A03"), static_cast<int>(PC1500RomRevision::A03));
-    m_romCombo->addItem(tr("A04"), static_cast<int>(PC1500RomRevision::A04));
-    m_romCombo->setCurrentIndex(2); // A04, matching MachineController's default
-    m_romCombo->setFocusPolicy(Qt::NoFocus);
-    m_romCombo->setObjectName(QStringLiteral("controlbar.rom"));
-    layout->addWidget(m_romCombo);
-    setRomPickerVisible(false); // PC-1500A is the default model (see m_modelCombo above)
-
-    m_rom1600Combo = new QComboBox(this);
-    m_rom1600Combo->addItem(tr("New"), static_cast<int>(PC1600RomVersion::New));
-    m_rom1600Combo->addItem(tr("Old"), static_cast<int>(PC1600RomVersion::Old));
-    m_rom1600Combo->setToolTip(tr("PC-1600 BASIC ROM version"));
-    m_rom1600Combo->setFocusPolicy(Qt::NoFocus);
-    m_rom1600Combo->setObjectName(QStringLiteral("controlbar.rom1600"));
-    layout->addWidget(m_rom1600Combo);
-    setPC1600RomPickerVisible(false);
+    // The ROM versions rarely change, so they live in the Machine menu only.
 
     addSeparator(layout, this);
     for (int i = 0; i < 2; ++i) {
@@ -123,7 +105,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     setSlot2Visible(false);
 
     // Left group is ordered most-common-first (model, slots)
-    // so model-dependent widgets (ROM picker, slot 2) only change its tail
+    // so model-dependent widgets (slot 2) only change its tail
     // and switching models doesn't shift the rest; the plotter/floppy group
     // below is pinned to the right edge.
     layout->addStretch();
@@ -150,17 +132,6 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_ce1600pButton->setToolTip(tr("Attach/detach the CE-1600P plotter (requires a power cycle)"));
     layout->addWidget(m_ce1600pButton);
     setCe1600pVisible(false);
-
-    // The CE-1600P's ROM chip sits in its box, so the CE-1600F follows this
-    // choice too. Independent of the PC-1600 ROM picker above.
-    m_ce1600pRomCombo = new QComboBox(this);
-    m_ce1600pRomCombo->addItem(tr("New"), static_cast<int>(CE1600PRomVersion::New));
-    m_ce1600pRomCombo->addItem(tr("Old"), static_cast<int>(CE1600PRomVersion::Old));
-    m_ce1600pRomCombo->setToolTip(tr("CE-1600P ROM version (also used by the CE-1600F)"));
-    m_ce1600pRomCombo->setFocusPolicy(Qt::NoFocus);
-    m_ce1600pRomCombo->setObjectName(QStringLiteral("controlbar.ce1600p.rom"));
-    layout->addWidget(m_ce1600pRomCombo);
-    setCE1600PRomPickerVisible(false);
 
     // CE-1600F floppy disk picker -- attaches as a union with CE-1600P
     // (PC1600Machine::attachCE1600P()). Always shown on a PC-1600 (see
@@ -248,27 +219,10 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_tapeLabel->setObjectName(QStringLiteral("controlbar.tape.counter"));
     m_tapeLabel->setMinimumWidth(m_tapeLabel->fontMetrics().horizontalAdvance(QStringLiteral("● 00:00 ")));
     layout->addWidget(m_tapeLabel);
-
-    m_tapeLampLabel = new QLabel(QStringLiteral("●"), this);
-    m_tapeLampLabel->setFixedWidth(14);
-    m_tapeLampLabel->setAlignment(Qt::AlignCenter);
-    m_tapeLampLabel->setObjectName(QStringLiteral("controlbar.tape.lamp"));
-    m_tapeLampLabel->setToolTip(tr("Tape motor (switched by the remote relay)"));
-    applyLampStyle(m_tapeLampLabel, false);
-    layout->addWidget(m_tapeLampLabel);
     setTapeVisible(false);
 
     connect(m_modelCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
         emit modelSelected(static_cast<Model>(m_modelCombo->itemData(index).toInt()));
-    });
-    connect(m_romCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
-        emit romRevisionSelected(static_cast<PC1500RomRevision>(m_romCombo->itemData(index).toInt()));
-    });
-    connect(m_rom1600Combo, &QComboBox::currentIndexChanged, this, [this](int index) {
-        emit pc1600RomVersionSelected(static_cast<PC1600RomVersion>(m_rom1600Combo->itemData(index).toInt()));
-    });
-    connect(m_ce1600pRomCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
-        emit ce1600pRomVersionSelected(static_cast<CE1600PRomVersion>(m_ce1600pRomCombo->itemData(index).toInt()));
     });
     // Buttons are checkable so their own click already toggled the visual
     // check state -- MainWindow will resync it (via setCe150State/
@@ -282,26 +236,6 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
 void ControlBar::setModel(Model model) {
     const QSignalBlocker blocker(m_modelCombo);
     m_modelCombo->setCurrentIndex(static_cast<int>(model));
-}
-
-void ControlBar::setRomRevision(PC1500RomRevision revision) {
-    const QSignalBlocker blocker(m_romCombo);
-    const int idx = m_romCombo->findData(static_cast<int>(revision));
-    m_romCombo->setCurrentIndex(idx >= 0 ? idx : m_romCombo->count() - 1);
-}
-
-void ControlBar::setRomPickerVisible(bool visible) {
-    m_romCombo->setVisible(visible);
-}
-
-void ControlBar::setPC1600RomVersion(PC1600RomVersion version) {
-    const QSignalBlocker blocker(m_rom1600Combo);
-    const int idx = m_rom1600Combo->findData(static_cast<int>(version));
-    m_rom1600Combo->setCurrentIndex(idx >= 0 ? idx : 0);
-}
-
-void ControlBar::setPC1600RomPickerVisible(bool visible) {
-    m_rom1600Combo->setVisible(visible);
 }
 
 void ControlBar::setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& templates,
@@ -344,18 +278,16 @@ void ControlBar::setCe1600pState(bool attached, bool enabled) {
     m_ce1600pButton->setEnabled(enabled);
 }
 
+void ControlBar::setCe150Visible(bool visible) {
+    m_ce150Button->setVisible(visible);
+}
+
+void ControlBar::setCe158Visible(bool visible) {
+    m_ce158Button->setVisible(visible);
+}
+
 void ControlBar::setCe1600pVisible(bool visible) {
     m_ce1600pButton->setVisible(visible);
-}
-
-void ControlBar::setCE1600PRomVersion(CE1600PRomVersion version) {
-    const QSignalBlocker blocker(m_ce1600pRomCombo);
-    const int idx = m_ce1600pRomCombo->findData(static_cast<int>(version));
-    m_ce1600pRomCombo->setCurrentIndex(idx >= 0 ? idx : 0);
-}
-
-void ControlBar::setCE1600PRomPickerVisible(bool visible) {
-    m_ce1600pRomCombo->setVisible(visible);
 }
 
 void ControlBar::setFloppyCombo(const QVector<FloppyDiskManager::DiskEntry>& templates,
@@ -411,11 +343,11 @@ void ControlBar::setTapeVisible(bool visible) {
     m_tapeCombo->setVisible(visible);
     m_tapeSaveButton->setVisible(visible);
     m_tapeLabel->setVisible(visible);
-    m_tapeLampLabel->setVisible(visible);
 }
 
 // "▶ 0:12" playing (position on the tape), "● 0:03" recording (recorded so
-// far), "–" empty. The file name goes in the tooltip.
+// far), "–" empty. The file name goes in the tooltip. The counter doubles as
+// the motor lamp: green while the remote relay runs the motor.
 void ControlBar::setTapeStatus(const TapeDeck::Status& status) {
     QString text = QStringLiteral("–");
     if (status.mode != TapeDeck::Mode::Empty) {
@@ -428,12 +360,14 @@ void ControlBar::setTapeStatus(const TapeDeck::Status& status) {
     if (text != m_tapeLabel->text()) {
         m_tapeLabel->setText(text);
         const QString name = QFileInfo(QString::fromStdString(status.path)).fileName();
-        m_tapeLabel->setToolTip(status.mode == TapeDeck::Mode::Play     ? tr("Playing %1").arg(name)
-                                : status.mode == TapeDeck::Mode::Record ? tr("Recording into %1").arg(name)
-                                                                        : tr("No tape"));
+        const QString what = status.mode == TapeDeck::Mode::Play     ? tr("Playing %1").arg(name)
+                             : status.mode == TapeDeck::Mode::Record ? tr("Recording into %1").arg(name)
+                                                                     : tr("No tape");
+        m_tapeLabel->setToolTip(tr("%1 (green while the motor runs)").arg(what));
     }
+    // Off is the default text color, not the lamps' grey, which would read as disabled.
     if (status.motor != m_tapeMotorOn) {
         m_tapeMotorOn = status.motor;
-        applyLampStyle(m_tapeLampLabel, m_tapeMotorOn);
+        m_tapeLabel->setStyleSheet(m_tapeMotorOn ? QStringLiteral("color: #2ecc40;") : QString());
     }
 }

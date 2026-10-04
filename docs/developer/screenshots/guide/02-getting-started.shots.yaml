@@ -9,11 +9,12 @@ shots:
       - open: controlbar.model
     capture: { target: controlbar, file: 02-model-picker.png, padding: 4 }
 
-  - name: 02-rom-picker-pc1500
+  - name: 02-rom-menu-pc1500
+    window: 900x1000
     preset: ../presets/pc1500-ready.pc1500
     steps:
-      - open: controlbar.rom
-    capture: { target: controlbar, file: 02-rom-picker-pc1500.png, padding: 4 }
+      - menu: Machine > ROM Revision
+    capture: { method: system, target: screen-region, file: 02-rom-menu-pc1500.png, padding: 8 }
 
   - name: 02-control-bar-pc1600
     window: 1430x1000

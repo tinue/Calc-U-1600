@@ -30,7 +30,7 @@ stay up to date with the app.
 
 The window has three parts:
 - **The calculator** (faceplate and LCD) at the top.
-- **The control bar** below it: model and ROM, memory slots and peripherals.
+- **The control bar** below it: model, memory slots and peripherals.
 - **The panels** at the bottom: the Debug panel, plus the plotter paper or
   the CE-158 printer output when one is attached.
 
@@ -75,18 +75,20 @@ switch.
 
 ### ROM choices
 
-The control bar shows the ROM choices the current model has:
+The **Machine** menu holds the ROM choices the current model has:
 
-- **PC-1500:** ROM revision A01, A03 or A04 (default). The PC-1500A always
-  runs its one ROM.
+- **PC-1500:** **ROM Revision** A01, A03 or A04 (default). The PC-1500A
+  always runs its one ROM.
 
-  ![The PC-1500 ROM picker](images/guide/02-rom-picker-pc1500.png)
+  ![The PC-1500 ROM Revision menu](images/guide/02-rom-menu-pc1500.png)
 
-- **PC-1600:** the BASIC ROM, **New** or **Old**, next to the model. A second
-  New/Old picker, after the CE-1600P button, selects the CE-1600P ROM. The
-  CE-1600F floppy drive uses that ROM too.
+- **PC-1600:** **ROM Version** picks the BASIC ROM, **New** or **Old**.
+  **CE-1600P ROM** picks the CE-1600P's ROM, New or Old. The CE-1600F floppy
+  drive uses that ROM too.
 
-  ![The PC-1600 control bar: model, BASIC ROM, two slots, peripherals, CE-1600P ROM and disk](images/guide/02-control-bar-pc1600.png)
+The PC-1600 control bar:
+
+![The PC-1600 control bar: model, two slots, CE-1600P and disk](images/guide/02-control-bar-pc1600.png)
 
 ### Reset and Reset All
 
@@ -185,16 +187,18 @@ yet, the file is loaded after the startup preset.
 ## 3. Plotters
 
 The **CE-150** (PC-1500, 1500A and PC-1600) and the **CE-1600P** (PC-1600
-only) are pen plotters. They are attached and detached with their control-bar
-buttons. Only one plotter can be attached at a time. The emulator also
+only) are pen plotters. They are attached and detached in **Machine ▸
+Peripherals**. The control bar has a button for each model's own
+peripherals: CE-150 and CE-158 on a PC-1500/1500A, CE-1600P on a PC-1600.
+Only one plotter can be attached at a time. The emulator also
 doesn't support the CE-1600P together with the CE-158 yet. The real
 CE-1600P has its own connector at the back, like the CE-150, so both could
 be connected:
 
-![CE-1600P attached: the CE-150 and CE-158 buttons are greyed out](images/guide/03-plotter-attached.png)
+![CE-1600P attached: the CE-150 and CE-158 are greyed out](images/guide/03-peripherals-menu.png)
 
 On a real machine the ROM only notices a new peripheral when it powers on,
-so clicking a button runs a power cycle:
+so attaching or detaching runs a power cycle:
 
 ```mermaid
 sequenceDiagram
@@ -325,8 +329,8 @@ the real machine:
 A tape keeps its role: one picked from the list only plays, a new one only
 records. To play back what you recorded, pick it from the list; that also
 takes the recording tape out. "–empty–" takes a tape out. The counter
-shows ▶ (playing) or ● (recording) and the tape position, and the lamp
-lights while the motor runs:
+shows ▶ (playing) or ● (recording) and the tape position. It turns green
+while the motor runs:
 
 ![CSAVE running onto a new tape](images/guide/04-tape-recording.png)
 
@@ -582,8 +586,8 @@ To avoid typing `--port` every time, store the folder once:
 
 ### CE-158: serial and printer port
 
-The **CE-158** button attaches the CE-158 interface, with a power cycle
-like the plotters. It works on all three models. The emulator doesn't
+The **CE-158** button (PC-1500/1500A) or **Machine ▸ Peripherals ▸ CE-158**
+attaches the CE-158 interface, with a power cycle like the plotters. It works on all three models. The emulator doesn't
 support it together with the CE-1600P yet.
 
 - **Serial port:** `calcu1600-ce158.serial` runs at 300 baud by default,

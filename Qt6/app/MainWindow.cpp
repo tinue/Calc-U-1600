@@ -127,9 +127,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     buildMenuBar();
 
     connect(m_controlBar, &ControlBar::modelSelected, this, &MainWindow::applyModelSelection);
-    connect(m_controlBar, &ControlBar::romRevisionSelected, this, &MainWindow::applyRomRevisionSelection);
-    connect(m_controlBar, &ControlBar::pc1600RomVersionSelected, this, &MainWindow::applyPC1600RomVersionSelection);
-    connect(m_controlBar, &ControlBar::ce1600pRomVersionSelected, this, &MainWindow::applyCE1600PRomVersionSelection);
     connect(m_controlBar, &ControlBar::moduleSelected, this, [this](int slot, QString moduleNameOrEmpty) {
         m_moduleManager->selectModule(slot, moduleNameOrEmpty);
         m_controller->switchModel(m_controller->currentModel(), /*keepPlotter=*/true); // rebuild -> re-attach
@@ -328,8 +325,12 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 void MainWindow::syncControlBarForModel() {
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     m_controlBar->setSlot2Visible(isPC1600);
+    // Each model's own peripherals get a button; all of them (CE-1600P on a
+    // PC-1600 only) are in Machine > Peripherals.
+    m_controlBar->setCe150Visible(!isPC1600);
+    m_controlBar->setCe158Visible(!isPC1600);
     m_controlBar->setCe1600pVisible(isPC1600);
-    m_controlBar->setCE1600PRomPickerVisible(isPC1600);
+    m_ce1600pAction->setVisible(isPC1600);
     m_ce1600pRomMenuAction->setVisible(isPC1600);
     // Always shown on a PC-1600 (never hidden alongside the CE-1600P
     // toggle) so the control bar doesn't jump around as the plotter/
@@ -339,10 +340,7 @@ void MainWindow::syncControlBarForModel() {
     if (isPC1600) refreshFloppyCombo();
     // PC-1500A is A04-only (PC1500Variant.hpp), so the picker is only worth
     // showing for the plain PC-1500.
-    const bool romPickerVisible = m_controller->currentModel() == Model::PC1500;
-    m_controlBar->setRomPickerVisible(romPickerVisible);
-    m_romMenuAction->setVisible(romPickerVisible);
-    m_controlBar->setPC1600RomPickerVisible(isPC1600);
+    m_romMenuAction->setVisible(m_controller->currentModel() == Model::PC1500);
     m_rom1600MenuAction->setVisible(isPC1600);
     syncHostDriveActions();
 }
@@ -568,6 +566,12 @@ void MainWindow::syncPeripherals() {
     m_controlBar->setCe150State(ce150Attached, !ce1600pAttached);
     m_controlBar->setCe1600pState(ce1600pAttached, !ce150Attached && !ce158Attached);
     m_controlBar->setCe158State(ce158Attached, !ce1600pAttached);
+    m_ce150Action->setChecked(ce150Attached);
+    m_ce150Action->setEnabled(!ce1600pAttached);
+    m_ce1600pAction->setChecked(ce1600pAttached);
+    m_ce1600pAction->setEnabled(!ce150Attached && !ce158Attached);
+    m_ce158Action->setChecked(ce158Attached);
+    m_ce158Action->setEnabled(!ce1600pAttached);
     // CE-1600F attaches as a union with CE-1600P (PC1600Machine::
     // attachCE1600P()); whoever attached it (PlotterController or a
     // preset) already put its disk in. Gray the picker in/out alongside
@@ -620,9 +624,6 @@ void MainWindow::syncUiFromController() {
     const Model model = m_controller->currentModel();
     m_faceplate->setModel(model);
     m_controlBar->setModel(model);
-    m_controlBar->setRomRevision(m_controller->pc1500RomRevision());
-    m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
-    m_controlBar->setCE1600PRomVersion(m_controller->ce1600pRomVersion());
     syncControlBarForModel();
     syncMachineMenuFromModel(model);
     syncMachineMenuFromRomRevision(m_controller->pc1500RomRevision());
@@ -1037,8 +1038,9 @@ void MainWindow::buildMenuBar() {
     if (m_settingsAction->shortcut().isEmpty())
         m_settingsAction->setShortcut(QKeySequence(Qt::ControlModifier | Qt::Key_Comma));
 
-    // Machine: duplicates ControlBar's model/ROM pickers (checkable, exclusive
-    // per group) plus Reset/Reset All -- the only place Reset lives.
+    // Machine: duplicates ControlBar's model picker and peripheral toggles,
+    // plus the ROM pickers (checkable, exclusive per group) and Reset/Reset
+    // All, which live only here.
     QMenu* machineMenu = menuBar()->addMenu(tr("&Machine"));
 
     QMenu* modelMenu = machineMenu->addMenu(tr("Model"));
@@ -1102,6 +1104,20 @@ void MainWindow::buildMenuBar() {
     addCE1600PRomAction(CE1600PRomVersion::Old, tr("Old"));
     m_ce1600pRomMenuAction->setVisible(false);
 
+    // Peripherals: checkable like the control bar's toggles; syncPeripherals()
+    // resyncs check and enabled state once PlotterController confirms.
+    QMenu* peripheralsMenu = machineMenu->addMenu(tr("Peripherals"));
+    auto addPeripheralAction = [&](const QString& label, void (PlotterController::*toggle)()) {
+        QAction* action = peripheralsMenu->addAction(label);
+        action->setCheckable(true);
+        connect(action, &QAction::triggered, this, [this, toggle] { (m_plotterController.get()->*toggle)(); });
+        return action;
+    };
+    m_ce150Action = addPeripheralAction(tr("CE-150"), &PlotterController::requestToggleCE150);
+    m_ce158Action = addPeripheralAction(tr("CE-158"), &PlotterController::requestToggleCE158);
+    m_ce1600pAction = addPeripheralAction(tr("CE-1600P"), &PlotterController::requestToggleCE1600P);
+    m_ce1600pAction->setVisible(false);
+
     machineMenu->addSeparator();
     QAction* resetAction = machineMenu->addAction(tr("Reset"));
     resetAction->setShortcut(QKeySequence(Qt::ControlModifier | Qt::Key_R));
@@ -1146,7 +1162,6 @@ void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
     m_controller->setPC1500RomRevision(revision); // rebuilds the machine
     m_pacer->restart(); // after the rebuild's flat-out boot
     m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
-    m_controlBar->setRomRevision(revision);
     syncMachineMenuFromRomRevision(revision);
     refreshModuleCombos();
 }
@@ -1159,7 +1174,6 @@ void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
     m_pacer->restart(); // after the rebuild's flat-out boot
     m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
     // The controller may have fallen back to New if the old ROM failed to load.
-    m_controlBar->setPC1600RomVersion(m_controller->pc1600RomVersion());
     syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
     syncControlBarForModel();
     refreshModuleCombos();
@@ -1173,7 +1187,6 @@ void MainWindow::applyCE1600PRomVersionSelection(CE1600PRomVersion version) {
     if (m_controller->ce1600pAttached()) m_plotterController->requestCE1600PRomSwap(version);
     else m_controller->setCE1600PRomVersion(version);
     // The controller may have fallen back to New if the old ROM failed to load.
-    m_controlBar->setCE1600PRomVersion(m_controller->ce1600pRomVersion());
     syncMachineMenuFromCE1600PRomVersion(m_controller->ce1600pRomVersion());
 }
 

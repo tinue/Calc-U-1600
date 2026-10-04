@@ -18,16 +18,6 @@ public:
 
     void setModel(Model model); // reflect an externally-driven model change
 
-    // ROM-revision picker -- PC-1500 (plain) only; PC-1500A is A04-only
-    // (see PC1500Variant.hpp) so there's nothing worth picking there. The
-    // PC-1600 has its own New/Old picker below. Mirrors setModel()'s
-    // QSignalBlocker'd external-resync shape.
-    void setRomRevision(PC1500RomRevision revision);
-    void setRomPickerVisible(bool visible);
-    // PC-1600 calculator ROM version picker (New/Old).
-    void setPC1600RomVersion(PC1600RomVersion version);
-    void setPC1600RomPickerVisible(bool visible);
-
     // Resyncs slot `slot`'s (1 or 2) combo box: template entries (RAM),
     // then a separator, then instance entries, then the ROM templates,
     // with a leading "-empty-" item;
@@ -46,16 +36,15 @@ public:
     // setModel()). CE-1600P only exists on PC-1600.
     void setCe150State(bool attached, bool enabled);
     void setCe1600pState(bool attached, bool enabled);
+    // Each model shows its own peripherals' buttons (PC-1500/1500A: CE-150
+    // and CE-158, PC-1600: CE-1600P); the rest are in Machine > Peripherals.
+    void setCe150Visible(bool visible);
+    void setCe158Visible(bool visible);
     void setCe1600pVisible(bool visible);
     // CE-158 RS-232C/parallel interface toggle, same conventions as the
     // plotter buttons. It coexists with the CE-150; on a PC-1600 it and
     // the CE-1600P exclude each other.
     void setCe158State(bool attached, bool enabled);
-    // CE-1600P ROM version picker (New/Old), shown next to the CE-1600P
-    // button on a PC-1600. Independent of the PC-1600 ROM picker.
-    void setCE1600PRomVersion(CE1600PRomVersion version);
-    void setCE1600PRomPickerVisible(bool visible);
-
     // CE-1600F floppy disk picker -- same combo+save-button shape as a
     // memory slot (setModuleCombos/setSlotSaveEnabled above). Always
     // shown on a PC-1600 (setFloppyVisible) so the control bar doesn't
@@ -75,8 +64,8 @@ public:
 
     // Cassette bay (CE-150 / CE-1600P jacks, TapeManager): the tape picker
     // ("–empty–", then the tape folder's WAVs; picking one plays it), the
-    // Save button (a blank tape to record onto), the tape counter and the
-    // motor lamp. Shown only while a tape interface is attached.
+    // Save button (a blank tape to record onto), the tape counter (green
+    // while the motor runs). Shown only while a tape interface is attached.
     // setTapeCombo() lists `names` plus `selectedOrEmpty` if it isn't one of
     // them yet (a recording before its first save). setTapeStatus() is
     // polled every frame; it only touches widgets whose text changed.
@@ -86,9 +75,6 @@ public:
 
 signals:
     void modelSelected(Model model);
-    void romRevisionSelected(PC1500RomRevision revision);
-    void pc1600RomVersionSelected(PC1600RomVersion version);
-    void ce1600pRomVersionSelected(CE1600PRomVersion version);
     void moduleSelected(int slot, QString moduleNameOrEmpty); // "" => -empty-
     void nameAndSaveRequested(int slot);
     void ce150ToggleRequested();
@@ -102,12 +88,9 @@ signals:
 
 private:
     QComboBox* m_modelCombo = nullptr;
-    QComboBox* m_romCombo = nullptr;
-    QComboBox* m_rom1600Combo = nullptr;
     QPushButton* m_ce150Button = nullptr;
     QPushButton* m_ce1600pButton = nullptr;
     QPushButton* m_ce158Button = nullptr;
-    QComboBox* m_ce1600pRomCombo = nullptr;
     QLabel* m_floppyLabel = nullptr;
     QComboBox* m_floppyCombo = nullptr;
     QPushButton* m_floppySaveButton = nullptr;
@@ -121,7 +104,6 @@ private:
     QComboBox* m_tapeCombo = nullptr;
     QPushButton* m_tapeSaveButton = nullptr;
     QLabel* m_tapeLabel = nullptr;
-    QLabel* m_tapeLampLabel = nullptr;
     bool m_tapeMotorOn = false;
 
     struct SlotWidgets {

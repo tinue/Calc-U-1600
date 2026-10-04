@@ -514,6 +514,11 @@ authentic speed for the span that matters.
 - **Hardware pickers (model, memory modules) live on the control bar**, not
   in Settings. The picks reset on a model switch and aren't saved. Settings
   holds app-level preferences only.
+- **ROM versions and the "foreign" peripherals are in the Machine menu
+  only**, to keep the control bar narrow; they rarely change. The bar has
+  buttons only for each model's own peripherals (CE-150 + CE-158 on a
+  PC-1500/1500A, CE-1600P on a PC-1600); Machine ▸ Peripherals has all of
+  them. The tape counter doubles as the motor lamp (green while it runs).
 - **Mount Directory is in the File menu**, not on the control bar, at the
   user's request. Like the hardware pickers, it isn't saved across launches.
 - **The app registers `ApplePersistenceIgnoreState = YES`**

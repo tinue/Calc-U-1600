@@ -168,6 +168,10 @@ private:
     QActionGroup* m_modelActionGroup = nullptr;
     QActionGroup* m_romActionGroup = nullptr;
     QAction* m_romMenuAction = nullptr; // Machine > ROM Revision submenu's own action, for show/hide
+    // Machine > Peripherals toggles, mirroring the control bar's buttons.
+    QAction* m_ce150Action = nullptr;
+    QAction* m_ce158Action = nullptr;
+    QAction* m_ce1600pAction = nullptr; // PC-1600 only
 
     // File/Help actions whose handlers are wired up in the constructor
     // (alongside the equivalent ControlBar signal), not inside

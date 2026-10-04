@@ -162,11 +162,11 @@ Two macOS details:
 |---|---|
 | `faceplate`, `lcd` | calculator face / its LCD |
 | `controlbar` | the whole control bar |
-| `controlbar.model`, `controlbar.rom`, `controlbar.rom1600` | model / PC-1500 ROM / PC-1600 ROM pickers |
+| `controlbar.model` | model picker |
 | `controlbar.slot1`, `controlbar.slot2`, `controlbar.slot1.save`, `controlbar.slot2.save` | module pickers and their Name & Save buttons |
-| `controlbar.ce150`, `controlbar.ce158`, `controlbar.ce1600p`, `controlbar.ce1600p.rom` | peripheral toggles, CE-1600P ROM picker |
+| `controlbar.ce150`, `controlbar.ce158`, `controlbar.ce1600p` | peripheral toggles (CE-150/CE-158 on PC-1500/1500A, CE-1600P on PC-1600) |
 | `controlbar.floppy`, `controlbar.floppy.side`, `controlbar.floppy.save`, `controlbar.floppy.lamp` | CE-1600F disk row |
-| `controlbar.tape`, `controlbar.tape.save`, `controlbar.tape.counter`, `controlbar.tape.lamp` | cassette bay: tape picker, Save, counter, motor lamp (with a CE-150 or CE-1600P) |
+| `controlbar.tape`, `controlbar.tape.save`, `controlbar.tape.counter` | cassette bay: tape picker, Save, counter (green while the motor runs; with a CE-150 or CE-1600P) |
 | `debugpanel`, `debugpanel.pointers`, `debugpanel.dumpmem`, `debugpanel.dumpcard`, `debugpanel.clear`, `debugpanel.trace` | Debug panel and its buttons |
 | `paper`, `paper.copy`, `paper.cut` | plotter paper panel |
 | `ce158printer`, `ce158printer.save`, `ce158printer.clear` | CE-158 printer panel |
