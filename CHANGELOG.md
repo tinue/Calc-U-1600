@@ -4,6 +4,14 @@
 
 ### New
 
+- **Fast-load cassette WAVs.** File ▸ Load BASIC Program…, Load Machine
+  Code… and a drop open a WAV of a PC-1500 (CE-150) or PC-1600 (CE-1600P)
+  tape and write the file on it straight into memory, as for a `.bbin` or
+  `.bin` -- no `CLOAD`, no tape time. Real recordings work too: quiet,
+  noisy, a little fast or slow. A tape with several files asks which one; a
+  damaged file is refused with where it is damaged. Decoding is
+  libsharpdx's (SharpDataExchange 0.3.3).
+
 - **Cassette tape: CLOAD and CSAVE.** The CE-150 (PC-1500/1500A) and the
   CE-1600P (PC-1600, MODE 0) now drive a cassette recorder. Its tapes are
   WAV files in a tape folder (Settings ▸ Storage ▸ Tapes): pick one on the

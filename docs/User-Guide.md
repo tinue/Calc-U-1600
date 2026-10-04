@@ -168,6 +168,7 @@ inside the file decides what happens, not its name:
 | a BASIC listing, or tokenized BASIC (`.bbin`) | **File ▸ Load BASIC Program…** ([chapter 4](#4-loading-a-basic-program)) |
 | machine code with a CE-158 or PC-1600 header | **File ▸ Load Machine Code…** ([chapter 6](#6-machine-code-programs)) |
 | machine code without a header, in a `.bin` or `.rom` file | **File ▸ Load Machine Code…** |
+| a cassette tape (WAV) of a PC-1500 (CE-150) or PC-1600 (CE-1600P) | by the file on the tape, as above ([fast-loading a tape](#fast-loading-a-cassette-wav)) |
 
 Anything else is ignored, and so is a drag of several files at once: the
 pointer shows that the window won't take them. A drop loads into the running
@@ -226,9 +227,10 @@ paper scrolls, and it follows the pen as long as you are at the bottom:
 
 ## 4. Loading a BASIC program
 
-**File ▸ Load BASIC Program…** opens a plain-text BASIC listing (`.bas`)
-or an already tokenized program (`.bbin`, as SharpDataExchange's
-`sde convert` writes it, with a CE-158 or PC-1600 header), converts a
+**File ▸ Load BASIC Program…** opens a plain-text BASIC listing (`.bas`),
+an already tokenized program (`.bbin`, as SharpDataExchange's
+`sde convert` writes it, with a CE-158 or PC-1600 header), or a cassette
+tape WAV ([below](#fast-loading-a-cassette-wav)), converts a
 listing to BASIC's internal form, and writes the program straight into the
 program memory. It behaves like the real `LOAD`: it doesn't reset the
 machine, change the mode, or run `NEW` for you. So prepare the machine the
@@ -283,6 +285,21 @@ Good to know:
   computer, `CSAVE` it to a [tape](#cassette-tape-cload-and-csave), `SAVE`
   it to a [folder mounted as a drive](#a-folder-as-a-drive-pc-1600)
   (PC-1600) or over `COM1:` (see [COM ports](#7-com-ports)).
+
+### Fast-loading a cassette WAV
+
+**File ▸ Load BASIC Program…**, **File ▸ Load Machine Code…** and a drop
+also open a cassette WAV of a PC-1500 / 1500A (CE-150) or PC-1600 (CE-1600P,
+MODE 0) — a real recording or one the emulator saved. The tape is decoded at
+once (by libsharpdx, the same code as `sde get tape.wav`) and the file on it
+is written straight into memory, like a `.bbin` or `.bin`: no `CLOAD`, no
+waiting for the tape. If the tape holds several files, a list asks which
+one. Recordings may be quiet, noisy, a little fast or slow, or at any sample
+rate; a file is only loaded when all of its checksums match, otherwise the
+message says what is damaged and where on the tape.
+
+This is not the cassette bay below: that plays the tape to the emulated
+interface in real time, and the ROM's `CLOAD` reads it.
 
 ### Cassette tape: CLOAD and CSAVE
 

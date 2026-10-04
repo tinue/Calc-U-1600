@@ -266,6 +266,48 @@ void test_real_sample_files() {
     }
 }
 
+// A cassette WAV is classified as the file on it: these are bin2wav tapes of
+// the .img next to them (Core/tests/pc1500_tape_tests.cpp,
+// pc1600_tape_tests.cpp load the same WAVs through the emulated ROM).
+void test_cassette_wav() {
+    struct Case {
+        const char* wav;
+        const char* img;
+        Kind kind;
+    };
+    for (const Case& c : {Case{"Core/tests/fixtures/tape/pc1500_tape.wav", "Core/tests/fixtures/tape/pc1500_tape.img",
+                               Kind::BasicPC1500},
+                          Case{"Core/tests/fixtures/tape/pc1600_tape.wav", "Core/tests/fixtures/tape/pc1600_tape.img",
+                               Kind::BasicPC1600}}) {
+        bool ok = false;
+        const auto wav = readFixture(c.wav, &ok);
+        CHECK(ok);
+        const auto img = readFixture(c.img, &ok);
+        CHECK(ok);
+        const auto f = classify(wav);
+        CHECK(f.kind == c.kind);
+        CHECK(f.fromTape && f.tapeFiles == 1 && f.tapeName.rfind("TAPEFIX", 0) == 0);  // bin2wav adds .BAS on the PC-1600
+        CHECK(!f.damaged && !f.lengthMismatch);
+        CHECK(f.payload == img);
+        CHECK(dropfile::classify(wav, "tape.wav") == dropfile::Target::BasicProgram);
+        const auto files = programfile::tapeFiles(wav, nullptr);
+        CHECK(files.size() == 1 && classify(files[0].image).payload == img);
+    }
+
+    // A WAV with no tape on it (here: one second of silence) is Other but
+    // still goes to a loader, which explains.
+    std::vector<uint8_t> silent = {'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E', 'f', 'm', 't', ' ',
+                                   16, 0, 0, 0, 1, 0, 1, 0, 0x40, 0x1F, 0, 0, 0x40, 0x1F, 0, 0, 1, 0, 8, 0,
+                                   'd', 'a', 't', 'a', 0x40, 0x1F, 0, 0};
+    silent.insert(silent.end(), 8000, 0x80);
+    const auto f = classify(silent);
+    CHECK(f.kind == Kind::Other && f.fromTape && f.damaged);
+    CHECK(f.token.find("cassette WAV") != std::string::npos);
+    CHECK(dropfile::classify(silent, "x.wav") == dropfile::Target::BasicProgram);
+    std::string why;
+    CHECK(programfile::tapeFiles(silent, &why).empty() && !why.empty());
+}
+
 }  // namespace
 
 int run_program_file_tests() {
@@ -279,6 +321,7 @@ int run_program_file_tests() {
     test_real_sample_files();
     test_looks_like_code();
     test_drop_targets();
+    test_cassette_wav();
 
     std::printf("program_file_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

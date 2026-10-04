@@ -26,6 +26,7 @@
 #include "PC1600/PC1600Machine.hpp"
 #include "PC1600/PC1600MachineCodeLoader.hpp"
 #include "DropFile.hpp"
+#include "ProgramFile.hpp"
 
 #include <QHBoxLayout>
 #include <QInputMethodEvent>
@@ -170,7 +171,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         // Starts in Settings' "Basic folder" (fixed or <last used>).
         const QString path = QFileDialog::getOpenFileName(this, tr("Load BASIC Program"),
                                                             AppSettings::openStartDir(AppSettings::OpenFolder::Basic),
-                                                            tr("BASIC Programs (*.bas *.bbin);;All Files (*)"));
+                                                            tr("BASIC Programs (*.bas *.bbin *.wav);;All Files (*)"));
         if (!path.isEmpty()) loadBasicProgramFile(path);
     });
     connect(m_loadMachineCodeAction, &QAction::triggered, this, &MainWindow::loadMachineCode);
@@ -426,7 +427,7 @@ void MainWindow::loadMachineCode() {
     const QString title = tr("Load Machine Code");
     const QString path = QFileDialog::getOpenFileName(this, title,
                                                       AppSettings::openStartDir(AppSettings::OpenFolder::Assembly),
-                                                      tr("Machine Code (*.bin);;All Files (*)"));
+                                                      tr("Machine Code (*.bin *.wav);;All Files (*)"));
     if (!path.isEmpty()) loadMachineCodeFile(path);
 }
 
@@ -435,10 +436,46 @@ void MainWindow::loadPresetFile(const QString& path) {
     m_sync->loadPreset(path);
 }
 
+QString MainWindow::pickTapeFile(const QString& path, const QString& title) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return path;  // the loader reports it
+    const QByteArray raw = file.readAll();
+    const std::vector<uint8_t> bytes(raw.begin(), raw.end());
+    const programfile::ProgramFile pf = programfile::classify(bytes);
+    if (!pf.fromTape || pf.tapeFiles < 2) return path;  // the loaders decode a single file themselves
+
+    const std::vector<programfile::TapeFile> files = programfile::tapeFiles(bytes, nullptr);
+    QStringList names;
+    for (size_t i = 0; i < files.size(); i++) {
+        const QString name = QString::fromStdString(files[i].name);
+        names << tr("%1. %2").arg(i + 1).arg(name.isEmpty() ? tr("(no name)") : name);
+    }
+    bool ok = false;
+    const QString choice = QInputDialog::getItem(this, title,
+                                                 tr("%1 holds %2 files. Load which one?")
+                                                     .arg(QFileInfo(path).fileName())
+                                                     .arg(files.size()),
+                                                 names, 0, false, &ok);
+    if (!ok) return {};
+    const auto index = static_cast<size_t>(names.indexOf(choice));
+    if (!m_tapeFileDir) m_tapeFileDir = std::make_unique<QTemporaryDir>();
+    const QString image = m_tapeFileDir->filePath(QStringLiteral("tape-file-%1.bin").arg(index + 1));
+    QFile out(image);
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate) ||
+        out.write(reinterpret_cast<const char*>(files[index].image.data()),
+                  static_cast<qint64>(files[index].image.size())) != static_cast<qint64>(files[index].image.size())) {
+        QMessageBox::warning(this, title, tr("Could not write a temporary file: %1").arg(out.errorString()));
+        return {};
+    }
+    return image;
+}
+
 void MainWindow::loadBasicProgramFile(const QString& path) {
     AppSettings::rememberOpenFile(AppSettings::OpenFolder::Basic, path);
-    m_sync->run(tr("Load BASIC Program"), [this, path](QString* error) {
-        return m_presetController->loadBasicProgramLive(path, error);
+    const QString source = pickTapeFile(path, tr("Load BASIC Program"));
+    if (source.isEmpty()) return;
+    m_sync->run(tr("Load BASIC Program"), [this, source](QString* error) {
+        return m_presetController->loadBasicProgramLive(source, error);
     });
 }
 
@@ -446,7 +483,9 @@ void MainWindow::loadMachineCodeFile(const QString& path) {
     const QString title = tr("Load Machine Code");
     AppSettings::rememberOpenFile(AppSettings::OpenFolder::Assembly, path);
 
-    QFile file(path);
+    const QString source = pickTapeFile(path, title);
+    if (source.isEmpty()) return;
+    QFile file(source);
     if (!file.open(QIODevice::ReadOnly)) {
         QMessageBox::warning(this, title, tr("Could not read %1: %2").arg(path, file.errorString()));
         return;

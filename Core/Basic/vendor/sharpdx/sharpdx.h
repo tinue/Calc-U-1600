@@ -120,6 +120,37 @@
 #define SDE_FILE_NAME_SIZE 49
 
 /*
+ Not a RIFF/WAVE file (or a WAV encoding that can't be read).
+ */
+#define SDE_ERR_WAV_FORMAT -12
+
+/*
+ A WAV with no PC-1500 / PC-1600 tape signal on it.
+ */
+#define SDE_ERR_WAV_NO_SIGNAL -13
+
+/*
+ A tape file was found but failed its checksums: it could not be decoded safely.
+ */
+#define SDE_ERR_WAV_CORRUPT -14
+
+/*
+ Content this library can't put on (or take off) a tape, e.g. a PC-1500 data file.
+ */
+#define SDE_ERR_WAV_UNSUPPORTED -15
+
+/*
+ `leader_ms` for `sde_wav_encode`: the default short leader (about 2 s on the
+ PC-1500, 3 s on the PC-1600).
+ */
+#define SDE_WAV_LEADER_DEFAULT 0
+
+/*
+ `leader_ms` for `sde_wav_encode`: the ROMs' own, long leader.
+ */
+#define SDE_WAV_LEADER_ROM 4294967295
+
+/*
  Detected input content kind.
  */
 typedef enum {
@@ -254,6 +285,32 @@ typedef enum {
 } SdeSegmentMarker;
 
 /*
+ Which machine / interface a tape is for.
+ */
+typedef enum {
+    /*
+     PC-1500 / PC-1500A with CE-150.
+     */
+    SDE_TAPE_FORMAT_PC1500_CE150 = 0,
+    /*
+     PC-1600 with CE-1600P, MODE 0.
+     */
+    SDE_TAPE_FORMAT_PC1600_CE1600P = 1,
+} SdeTapeFormat;
+
+/*
+ What a tape file holds.
+ */
+typedef enum {
+    SDE_TAPE_KIND_BASIC = 0,
+    SDE_TAPE_KIND_MACHINE = 1,
+    SDE_TAPE_KIND_RESERVE = 2,
+    SDE_TAPE_KIND_DEF_KEYS = 3,
+    SDE_TAPE_KIND_DATA = 4,
+    SDE_TAPE_KIND_ASCII = 5,
+} SdeTapeKind;
+
+/*
  Volume geometry. Only the CE-1600F floppy side is implemented; a RAM-disk card would
  read these values from its boot sector instead.
  */
@@ -337,6 +394,40 @@ typedef struct {
      */
     char name[SDE_FILE_NAME_SIZE];
 } SdeFileInfo;
+
+/*
+ One file decoded from a tape.
+ */
+typedef struct {
+    SdeTapeFormat format;
+    SdeTapeKind kind;
+    /*
+     Name on the tape, UTF-8, NUL-terminated.
+     */
+    char name[SDE_FILE_NAME_SIZE];
+    /*
+     Machine code: load / entry address as on the tape (PC-1600: bank in bits
+     16-23). Else `0`.
+     */
+    uint32_t load_addr;
+    uint32_t run_addr;
+    /*
+     Machine code: `1` if `run_addr` is a real auto-start.
+     */
+    int32_t autorun;
+    /*
+     Payload bytes (without header).
+     */
+    size_t payload_len;
+    /*
+     Where the file starts on the tape, milliseconds.
+     */
+    uint32_t start_ms;
+    /*
+     Measured tape speed, per mille of nominal (`1000` = exact, `1050` = 5 % fast).
+     */
+    uint32_t speed_permille;
+} SdeWavFile;
 
 
 
@@ -493,8 +584,10 @@ int32_t sde_disk_delete(uint8_t *side_buf,
 /*
  Classify `in` as a one-word token: `basic-ascii`, `basic-pc1500`, `basic-pc1600`,
  `ml-lh5801`, `ml-z80`, `raw-lh5801`, `raw-z80`, `raw`, `reserve`, `reserve-text`,
- `variables`, `variables-text`, `text`, `empty` — or `damaged` if the file has a
- fatal problem (`SDE_PROBLEM_FATAL`). `raw-*` are heuristic CPU guesses.
+ `variables`, `variables-text`, `text`, `empty`, `wav-pc1500`, `wav-pc1600`, `wav` —
+ or `damaged` if the file has a fatal problem (`SDE_PROBLEM_FATAL`). `raw-*` are
+ heuristic CPU guesses. For a cassette WAV (`wav-*`) the other `SdeFileInfo` fields
+ describe the first file on the tape; `sde_wav_decode` gets its serial image.
  `*out_kind` receives a static NUL-terminated string: do not free it.
 
  # Safety
@@ -510,6 +603,54 @@ int32_t sde_file_kind(const uint8_t *input, size_t in_len, const char **out_kind
  `in`/`in_len` describe a readable buffer; `out` is a writable `SdeFileInfo`.
  */
 int32_t sde_file_info(const uint8_t *input, size_t in_len, SdeFileInfo *out);
+
+/*
+ Count the files on the tape in `in` that decode safely. `*out_issues` (may be NULL)
+ receives the number of files found but *not* decodable (checksum errors,
+ unsupported types). Returns `SDE_ERR_WAV_NO_SIGNAL` when nothing at all is on it.
+
+ # Safety
+ `in`/`in_len` describe a readable buffer; `out_count` is writable; `out_issues` is
+ NULL or writable.
+ */
+int32_t sde_wav_count(const uint8_t *input, size_t in_len, size_t *out_count, size_t *out_issues);
+
+/*
+ Decode file `index` (0-based, in tape order) of the tape in `in` to its serial image
+ (CE-158 / PC-1600 header + payload) in `*out` / `*out_len` (free with
+ `sde_buf_free`). `*out_file` (may be NULL) receives its description. With no file at
+ `index`, the error explains why (e.g. the checksum error of a damaged file).
+
+ # Safety
+ `in`/`in_len` describe a readable buffer; `out`/`out_len` are writable; `out_file`
+ is NULL or writable.
+ */
+int32_t sde_wav_decode(const uint8_t *input,
+                       size_t in_len,
+                       size_t index,
+                       uint8_t **out,
+                       size_t *out_len,
+                       SdeWavFile *out_file);
+
+/*
+ Encode a serial image (CE-158 or PC-1600 header + payload: BASIC, machine code, or
+ PC-1500 reserve) as a cassette WAV (16-bit mono) in `*out` / `*out_len` (free with
+ `sde_buf_free`). The tape format follows the header: CE-158 → PC-1500 / CE-150,
+ PC-1600 → CE-1600P. `name` (may be NULL) overrides the file name on the tape;
+ `leader_ms` is the lead-in length (`SDE_WAV_LEADER_DEFAULT`, `SDE_WAV_LEADER_ROM`,
+ or milliseconds).
+
+ # Safety
+ `in`/`in_len` describe a readable buffer; `name` is NULL or a NUL-terminated string;
+ `out`/`out_len` are writable.
+ */
+int32_t sde_wav_encode(const uint8_t *input,
+                       size_t in_len,
+                       uint32_t sample_rate,
+                       uint32_t leader_ms,
+                       const char *name,
+                       uint8_t **out,
+                       size_t *out_len);
 
 #ifdef __cplusplus
 }  // extern "C"

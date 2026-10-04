@@ -2,17 +2,18 @@
 
 `libsharpdx.a` + `sharpdx.h` are the prebuilt static library and generated C
 header of [`SharpDataExchange`](../../../../SharpDataExchange) (crate `sharpdx`,
-version 0.3.2). Every program loader uses it: `sde_file_info` tells what a
+version 0.3.3). Every program loader uses it: `sde_file_info` tells what a
 file is (BASIC listing, tokenized BASIC, machine code with or without a
-header) and where its payload is (`Core/ProgramFile.cpp`), and `sde_tokenize`
+header, cassette WAV) and where its payload is (`Core/ProgramFile.cpp`,
+which decodes a WAV with `sde_wav_count` / `sde_wav_decode`), and `sde_tokenize`
 turns a `.bas` listing into in-RAM line records
 (`Core/Basic/BasicProgramSource.cpp`). It is a required dependency.
 
 We vendor the built artifact rather than adding a Rust toolchain to the
-Calc-U-1600 build. Only `sde_file_info` / `sde_tokenize` / `sde_last_error` /
-`sde_buf_free` are used; the library does no file I/O and never panics across
-the FFI boundary. It is built without sharpdx's `serial` feature
-(`--lib --no-default-features`), so it links no serial-port code or
+Calc-U-1600 build. Only `sde_file_info` / `sde_tokenize` / `sde_wav_count` /
+`sde_wav_decode` / `sde_last_error` / `sde_buf_free` are used; the library does no file I/O and never panics across
+the FFI boundary. It is built without sharpdx's `serial` and `audio` features
+(`--lib --no-default-features`), so it links no serial-port or audio code or
 frameworks.
 
 ## Architecture

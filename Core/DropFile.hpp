@@ -11,6 +11,8 @@
 //     (parsePresetFile(): "'model' is required"). Not left to libsharpdx: a
 //     preset with a character outside the Sharp set isn't `text` there;
 //   - a BASIC program: a listing or tokenized BASIC behind a header;
+//   - a cassette WAV: by the file on the tape (ProgramFile decodes it); one
+//     that can't be read goes to the BASIC loader, which explains;
 //   - machine code: behind a CE-158 / PC-1600 header, or headerless bytes the
 //     library's heuristic takes for code (ProgramFile::looksLikeCode) in a
 //     file named .bin / .rom. The heuristic alone also takes JPEGs, PDFs and

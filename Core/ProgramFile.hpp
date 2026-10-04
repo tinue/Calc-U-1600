@@ -8,7 +8,8 @@
 //
 // The one place that asks libsharpdx (sde_file_info) what a file is: a
 // BASIC listing, tokenized BASIC or machine code behind a CE-158 or
-// PC-1600 header, or headerless bytes. Every loader builds on it --
+// PC-1600 header, or headerless bytes -- or a cassette WAV, which it decodes
+// (sde_wav_decode) and then describes as the file on the tape. Every loader builds on it --
 // machinecode::readFile() and basic::readBasicProgram(). Header layouts:
 // Ref/Shared/Data-Formats/Binary-Exchange-Formats.md §2 / §3.
 //
@@ -52,9 +53,27 @@ struct ProgramFile {
     size_t headerPayloadLen = 0;  // the payload the header describes (== payload.size() unless mismatched)
     uint32_t loadAddr = 0;        // code: load address (PC-1600: bank in bits 16-23)
     uint32_t autorunAddr = 0;     // code: auto-run address; 0 = none (the header held 0 or FFFF)
+    /// A cassette WAV (PC-1500 CE-150 / PC-1600 CE-1600P tape). Everything
+    /// above then describes the first file on it that decodes safely; with
+    /// none, the kind is Other and `token` says why.
+    bool fromTape = false;
+    std::string tapeName;  // the file's name on the tape
+    size_t tapeFiles = 0;  // files on the tape that decode safely
 };
 
 ProgramFile classify(const std::vector<uint8_t>& bytes);
+
+/// One file of a cassette WAV, as the serial image (CE-158 / PC-1600 header +
+/// payload) every loader takes.
+struct TapeFile {
+    std::string name;
+    std::vector<uint8_t> image;
+};
+
+/// The files of a cassette WAV that decode safely, in tape order. Empty when
+/// `bytes` is no tape or nothing on it decodes; `*error` (may be null) then
+/// says why.
+std::vector<TapeFile> tapeFiles(const std::vector<uint8_t>& bytes, std::string* error);
 
 /// A Kind::Other file's token in words ("plain text", "a Reserve Area as text", ...).
 std::string describe(const std::string& token);

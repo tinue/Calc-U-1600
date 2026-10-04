@@ -391,6 +391,13 @@ authentic speed for the span that matters.
   survives only as `looksLikeCode`, which admits a dropped file. A header
   auto-run of `0` or `FFFF` means no auto-run (the library only knows
   `FFFF`). The library is therefore a required build dependency.
+- **A cassette WAV is a program file too.** `Core/ProgramFile` decodes it with
+  libsharpdx (`sde_wav_decode`) and describes the file on the tape, so every
+  loader (menus, drop, presets) takes WAVs without its own code. This
+  fast-load is separate from the cassette bay, where the ROM reads the tape
+  in emulated time; the two never share code. A tape with several files:
+  the GUI asks which one and hands its image to the loader as a temporary
+  file; everywhere else (presets, a drop's target) the first file counts.
 - **A dropped file's content picks the loader** (`Core/DropFile`,
   docs/background/plans/Drag-And-Drop-Plan.md). Presets are recognized by a top-level
   `model:` line, not by extension and not by sde: a preset with a character

@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QImage>
 #include <QString>
+#include <QTemporaryDir>
 #include <functional>
 #include <memory>
 #include <string>
@@ -214,6 +215,11 @@ private:
     void loadPresetFile(const QString& path);
     void loadBasicProgramFile(const QString& path);
     void loadMachineCodeFile(const QString& path);
+    // A cassette WAV with several files: ask which one, and return a
+    // temporary file holding its image for the loaders. Any other file:
+    // `path` itself. Empty if the user cancels.
+    QString pickTapeFile(const QString& path, const QString& title);
+    std::unique_ptr<QTemporaryDir> m_tapeFileDir;  // pickTapeFile()'s images
     // The one local file a drag carries, if its content is something to
     // load (openDroppedFile()); empty otherwise.
     QString droppableFile(const QMimeData* mime) const;

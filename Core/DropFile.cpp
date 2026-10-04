@@ -58,8 +58,10 @@ Target classify(const std::vector<uint8_t>& bytes, const std::string& fileName) 
         case Kind::CodeZ80: return Target::MachineCode;
         case Kind::Headerless:
             return f.looksLikeCode && codeFileName(fileName) ? Target::MachineCode : Target::None;
-        case Kind::Empty:
-        case Kind::Other: return Target::None;
+        case Kind::Empty: return Target::None;
+        // A cassette WAV that can't be loaded goes to the BASIC loader, which
+        // says why; other files go nowhere.
+        case Kind::Other: return f.fromTape ? Target::BasicProgram : Target::None;
     }
     return Target::None;
 }
