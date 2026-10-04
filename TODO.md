@@ -592,3 +592,35 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
     `config.port`.
   - `tools/dap_smoke.py`: each run repeats Dap/initialize/attach/
     disconnect; a `session(port, **attach)` context manager.
+- **PC-1600 module window base is guessed from the card image size.**
+  `PC1600ProgramPlacement.cpp` (`windowContent`/`windowBase`) and
+  `pc1600SlotGeometry` (`PC1600MachineCodeLoader.cpp`) take the image as
+  top-justified in &8000-&BFFF (4 KB = &B000, 8 KB = &A000), while the
+  writes go through the slot pins. CE-151 and CE-155 only agree because
+  their sizes match their decode; a module whose RAM isn't top-justified
+  would get its program written where the pins hold no RAM. Fix: derive
+  the base from what the card answers through the pins
+  (`pc1600LoadState`'s `bankRamPages` already scans that), and drop
+  `SlotGeometry::imageSize`/`bankSize`. *(behaviour)* **Before fixing:**
+  check every bundled PC-1600 card gives the same base both ways, and what
+  the `windowContent(g) < 0x1000` check becomes.
+- **The PC-1600 loaders route page C / page D themselves.**
+  `PC1600BasicLoader.cpp` (`writeAt`) and `PC1600MachineCodeLoader.cpp`
+  each pick slot bus vs. `debugWriteInternalRam(addr - 0xC000)` and split
+  at &BFFF for the run-on; `MachineCodeFile.cpp` (`windowEnd = min(end,
+  kPc1600S0Base)`) does the same arithmetic for planning. Fix: one
+  `PC1600Memory::busWrite(bank, addr, data, n)` that resolves each address
+  as the CPU would with page C = `bank` and page D = bank 0, so the
+  boundary lives in one place (and a later page-D or SLOT1MAP change
+  touches one spot).
+- **`dev/loader-matrix/` re-implements Core helpers.** Take it when the
+  matrix is next run:
+  - `readFile` in both harnesses: `readWholeFile` (`Core/FileIO.hpp`).
+  - `lcd()` and `screen.find("ERROR")`: `LcdText::logField()` /
+    `LcdText::contains()`.
+  - PC-1600 MEM is typed and parsed off the LCD:
+    `CoreDebug::readPC1600ProgramAreas(peek).memS0`
+    (`Core/Debug/BasicPointerTable.cpp`, add it to the build script).
+  - `snapshot()` peeks C000-FFFF byte by byte:
+    `PC1600Machine::debugCopyInternalRam()` (note that a peek at F07DH
+    returns the Port 3DH mirror, not the RAM byte).
