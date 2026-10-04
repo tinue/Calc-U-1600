@@ -76,6 +76,17 @@ counts the leader, so a tape needs a long leader (`bin2wav -s 3`); don't
 start the tape before the relay closes to make short leaders work. Because
 time is emulated, a recording is the same in real time, turbo or the CLI.
 
+### Tape recordings are AC-coupled at 300 Hz
+`TapeDeck` records the cassette line through a 300 Hz high-pass at 0.45 of
+full scale, primed with the line's average over the first 2 ms. That is the
+order of the CE-150 / CE-1600P output coupling (0.1 µF / 0.047 µF into the
+MIC input), so a parked line is silence and a tone onset settles within a
+millisecond. With a 20 Hz corner, every onset swung to 2x for ~20 ms and
+clipped, which showed as a spike in each file. Don't lower the corner to
+make the tones "squarer": the zero crossings, which every decoder uses,
+are the same, and the interfaces' real low-pass and level aren't modelled
+either (no schematic topology for the CE-1600P).
+
 ### LH5811 L is a holding register; TD means "L is empty"
 `LH5811Serial` moves a byte from L into the shift register at a rising
 serial-clock edge and sets TD then. The TRM only says TD is set "upon

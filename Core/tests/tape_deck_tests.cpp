@@ -264,6 +264,31 @@ void testRecord() {
     CHECK(!why.empty());
 }
 
+// A line already parked high (or low) when the motor starts records as
+// silence, not a click.
+void testRecordStartsQuiet() {
+    for (bool level : {true, false}) {
+        TapeDeck deck(kCpuHz);
+        deck.armRecord("");
+        deck.setOutputLevel(level);
+        deck.setMotor(true);
+        deck.advance(static_cast<uint64_t>(0.05 * kCpuHz));
+        int16_t peak = 0;
+        for (int16_t v : deck.recording()) peak = std::max<int16_t>(peak, static_cast<int16_t>(std::abs(v)));
+        CHECK(!deck.recording().empty());
+        CHECK(peak < 100);
+    }
+    // A tone already running when the motor starts records at its normal
+    // level from the first cycle, without the blocker's start-up swing.
+    TapeDeck deck(kCpuHz);
+    deck.armRecord("");
+    deck.setMotor(true);
+    driveTone(deck, 2539.0, 0.05);
+    int16_t peak = 0;
+    for (int16_t v : deck.recording()) peak = std::max<int16_t>(peak, static_cast<int16_t>(std::abs(v)));
+    CHECK(peak > 13000 && peak < 26000); // ~0.45 of full scale plus the coupling's overshoot, not clipped
+}
+
 // What one deck records, another plays back with the same edge timing.
 void testRecordThenPlay() {
     TapeDeck rec(kCpuHz);
@@ -387,6 +412,7 @@ int run_tape_deck_tests() {
     testPlayFsk();
     testMotorGating();
     testRecord();
+    testRecordStartsQuiet();
     testRecordThenPlay();
     testSerialClockAndDividerReset();
     testTransmitFrames();

@@ -28,9 +28,15 @@
 //
 // Record: the output line is box-filtered into 48 kHz 16-bit PCM (each
 // sample the line's average over its interval, so edges between sample
-// boundaries keep their exact duty cycle), through the same kind of
-// DC blocker a recorder's AC-coupled input has. Only motor-on time is
-// recorded, as on a real tape.
+// boundaries keep their exact duty cycle), then AC-coupled at 300 Hz. That
+// is the order of the interfaces' own output coupling (CE-1600P: a
+// DC-decoupling chain ending in 0.047 µF; CE-150: 0.1 µF into the MIC
+// input), so a parked line records as silence and a tone that starts or
+// stops settles within a millisecond, as on a real tape. The tones stay
+// square apart from some droop; their zero crossings, all a decoder looks
+// at, are unchanged. The rest of the interfaces' analog path (low-pass,
+// level) isn't modelled. Only motor-on time is recorded, as on a real
+// tape.
 //
 // Not thread-safe on its own -- the owning machine serializes access under
 // its own mutex.
@@ -91,6 +97,7 @@ public:
         m_area = 0.0;
         m_hpIn = 0.0;
         m_hpOut = 0.0;
+        m_priming.clear();
         return ok;
     }
 
@@ -163,32 +170,68 @@ private:
     double m_hpIn = 0.0, m_hpOut = 0.0;
     std::vector<int16_t> m_recording;
 
-    // Corner of both DC blockers: far below the 1-3 kHz tape tones, so a
-    // tone's half-cycle droops by only a few percent.
-    static constexpr double kHighPassHz = 20.0;
-    // Recording level, about -3 dBFS for a full-swing square wave.
-    static constexpr double kRecordGain = 0.7 * 32767.0;
+    // Playback input coupling: far below the 1-3 kHz tape tones, so it
+    // follows any recording's DC drift without touching the tones.
+    static constexpr double kPlayHighPassHz = 20.0;
+    // Recording output coupling, see the class comment.
+    static constexpr double kRecordHighPassHz = 300.0;
+    // Recording level. Through the 300 Hz coupling a square wave's edges
+    // overshoot: ~1.4x its amplitude at 1200 Hz, 2x on the first edge after
+    // a parked line. 0.45 keeps even that below full scale (-1 dBFS).
+    static constexpr double kRecordGain = 0.45 * 32767.0;
 
     uint64_t sampleIndex() const {
         return static_cast<uint64_t>(static_cast<long double>(m_posCycles) * m_rate / m_cpuHz);
     }
 
-    static double highPassCoefficient(int rate) {
-        return 1.0 - 2.0 * 3.14159265358979323846 * kHighPassHz / rate;
+    static double highPassCoefficient(int rate, double hz) {
+        return 1.0 - 2.0 * 3.14159265358979323846 * hz / rate;
+    }
+
+    // The line was at work long before the motor started, so the
+    // recorder's coupling has settled on its average: its level if it's
+    // parked, about 0 if it carries a tone (the PC-1500's leader). The
+    // blocker starts there -- from 0 the tape would begin with a
+    // full-scale click. The first kPrimeSamples (2 ms, several cycles of
+    // the slowest tape tone) are held back to measure that average.
+    static constexpr size_t kPrimeSamples = kRecordSampleRate / 500;
+    std::vector<double> m_priming;
+
+    void pushSample(double x, double r) {
+        if (m_recording.empty() && m_priming.size() < kPrimeSamples) {
+            m_priming.push_back(x);
+            if (m_priming.size() < kPrimeSamples) return;
+            double mean = 0.0;
+            for (double v : m_priming) mean += v;
+            mean /= double(m_priming.size());
+            m_hpIn = m_priming.front();
+            m_hpOut = m_priming.front() - mean;
+            std::vector<double> primed;
+            primed.swap(m_priming);
+            emit(m_hpOut);
+            for (size_t i = 1; i < primed.size(); ++i) filterAndEmit(primed[i], r);
+            return;
+        }
+        filterAndEmit(x, r);
+    }
+    void filterAndEmit(double x, double r) {
+        m_hpOut = x - m_hpIn + r * m_hpOut;
+        m_hpIn = x;
+        emit(m_hpOut);
+    }
+    void emit(double y) {
+        const double s = std::min(32767.0, std::max(-32768.0, y * kRecordGain));
+        m_recording.push_back(static_cast<int16_t>(std::lround(s)));
     }
 
     void record(double cycles) {
         if (m_recording.empty() && m_phase == 0.0) m_recording.reserve(size_t(m_rate) * 60);
-        const double r = highPassCoefficient(m_rate);
+        const double r = highPassCoefficient(m_rate, kRecordHighPassHz);
         while (m_phase + cycles >= m_cyclesPerSample) {
             const double take = m_cyclesPerSample - m_phase;
             if (m_out) m_area += take;
             cycles -= take;
-            const double x = 2.0 * m_area / m_cyclesPerSample - 1.0; // -1..+1
-            m_hpOut = x - m_hpIn + r * m_hpOut;
-            m_hpIn = x;
-            const double s = std::min(32767.0, std::max(-32768.0, m_hpOut * kRecordGain));
-            m_recording.push_back(static_cast<int16_t>(std::lround(s)));
+            pushSample(2.0 * m_area / m_cyclesPerSample - 1.0, r); // -1..+1
             m_phase = 0.0;
             m_area = 0.0;
         }
@@ -201,7 +244,7 @@ private:
     // below kFloor so a quiet noise floor can't toggle it.
     static std::vector<uint8_t> conditionInput(const std::vector<float>& in, int rate) {
         constexpr double kFloor = 0.02;
-        const double r = highPassCoefficient(rate);
+        const double r = highPassCoefficient(rate, kPlayHighPassHz);
         const double decay = std::exp(-1.0 / (0.020 * rate));
         std::vector<uint8_t> out(in.size());
         double prevIn = in.empty() ? 0.0 : in.front(); // no step at the first sample
