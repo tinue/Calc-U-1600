@@ -345,12 +345,6 @@ CE-1600P (docs/background/plans/Cassette-Tape-Plan.md, dev/tape-matrix/).
   the LH5803 and drives ME1 F004H-F00FH, which `LH5803SharedMemory` keeps
   as a plain latch. How that block reaches the SC-7852's SD0/PB2 (pin 76:
   `SD0 = OR(SD0', PC7')`, SD0' = "CE-150 cassette output") is undocumented.
-- **Tape sound on the buzzer.** The PC-1500 Service Manual says CMT OUT
-  (SDO) sounds the buzzer together with PC6 or CMT IN; on the PC-1600,
-  `PC6 = NAND(PB2, PC6', PC7', SD0)` puts the tape input on it too. Today
-  the PC-1500 buzzer follows PC6 only (CSAVE is silent), and the PC-1600's
-  follows 18H b6/b7 and SDO (CSAVE audible, CLOAD silent). Listen to a real
-  unit during CSAVE and CLOAD, then model what it does.
 - **Real-hardware cross-check, remaining half:** `CLOAD` an emulator
   `CSAVE` WAV on the real units (PC-1500 + CE-150, PC-1600 + CE-1600P).
   The other half is done (2026-10-04): real `CSAVE` recordings of both

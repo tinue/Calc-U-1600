@@ -144,18 +144,18 @@ public:
     /// time.
     void advanceRtc(uint32_t cycles) { m_rtc.advance(cycles); }
 
-    /// The buzzer line (PC6) as PCM -- advanced alongside the RTC, i.e.
-    /// once per instruction (and per halted/off tick) by PC1500Machine.
-    void advancePiezo(uint32_t cycles) { m_piezo.advance(cycles); }
     PiezoSampler& piezo() { return m_piezo; }
 
-    /// The LH5811's serial block (divider, serial clock, SDO), advanced
-    /// with the RTC. SDO is the cassette-write line CMTOUT; the 60-pin
-    /// cards' recorder time is credited in the same stretches, so every
-    /// SDO edge lands on the tape at its exact cycle.
+    /// The LH5811's serial block (divider, serial clock, SDO), the buzzer
+    /// and the 60-pin cards' cassette recorder, advanced together once per
+    /// instruction (and per halted/off tick) by PC1500Machine. SDO is the
+    /// cassette-write line CMTOUT; it and the buzzer get every SDO edge at
+    /// its exact cycle.
     void advanceSerial(uint32_t cycles) {
         m_serial.advance(cycles, [this](uint32_t n, bool sdo) {
             m_systemBus.setCmtOut(sdo);
+            updateBuzzerLine(sdo);
+            m_piezo.advance(n);
             m_systemBus.advanceCassette(n);
         });
     }
@@ -259,7 +259,18 @@ private:
                         // (which looks like the "obvious" flag-register convention)
                         // is actually what breaks BREAK.
     Upd1990ac m_rtc;
-    PiezoSampler m_piezo{static_cast<double>(kPC1500CpuHz), PiezoSampler::Transducer::PC1500}; // LH5801 clock; buzzer driven from OPC bit 6 (PC6)
+    PiezoSampler m_piezo{static_cast<double>(kPC1500CpuHz), PiezoSampler::Transducer::PC1500}; // LH5801 clock; see updateBuzzerLine()
+    // The buzzer's drive gate (PC-1500 Service Manual p.16): a NAND of SD0
+    // (CMT OUT) and the wired-AND of PC6 and PB2 (CMT IN, through diodes,
+    // pulled up). The piezo sounds when any of the three toggles while the
+    // other two are high: PC6 for BEEP, SDO for CSAVE, CMT IN for CLOAD --
+    // a real unit is audible on both. CMT IN counts as high (the pull-up)
+    // while no tape interface drives it.
+    void updateBuzzerLine(bool sdo) {
+        bool cmtIn = true;
+        if (!m_systemBus.cmtIn(cmtIn)) cmtIn = true;
+        m_piezo.setLevel(!(sdo && (m_opc & 0x40) != 0 && cmtIn));
+    }
 
     // The serial block behind registers 4 (divider reset), 6 (L), 7 (F)
     // and 9 (G), plus MSK's CL1 bit and IF's TD bit -- the cassette path.

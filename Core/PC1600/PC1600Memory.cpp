@@ -65,6 +65,7 @@ void PC1600Memory::reset() {
 }
 
 void PC1600Memory::advanceBuzzer(uint32_t tstates) {
+    updateBuzzerLine(); // the cassette input may have moved since (the recorder's last tick)
     if ((m_fReg & 0x40) == 0) {
         m_piezo.advance(tstates);
         return;

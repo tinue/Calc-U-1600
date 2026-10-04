@@ -467,12 +467,19 @@ private:
     // (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md pin 75: PC6 = NAND(..., SD0)). So the
     // audible level is (b6 && b7) && SDO. The recording agrees: the
     // whistle runs on unchanged through the noise routine's OPC writes, and
-    // BEEP OFF (b6 low) silences both.
+    // BEEP OFF (b6 low) silences both. PB2, the cassette input, is the
+    // gate's fourth input, so a tape playing into CLOAD sounds too (a real
+    // unit is audible on CSAVE and CLOAD); it counts as high (its pull-up)
+    // while no tape interface drives it.
     static constexpr int64_t kModulatorHz = kPC1600PhiOsHz / 4;   // phi of the F-register dividers
     uint8_t m_fReg{0};
     bool    m_sdo{true};
     int64_t m_sdoAccum{0};  // T-states * kModulatorHz into the current SDO half period
-    void updateBuzzerLine() { m_piezo.setLevel((m_opc & 0xC0) == 0xC0 && m_sdo); }
+    void updateBuzzerLine() {
+        bool cmtIn = true;
+        if (!m_ce1600pBus.cmtIn(cmtIn)) cmtIn = true;
+        m_piezo.setLevel((m_opc & 0xC0) == 0xC0 && m_sdo && cmtIn);
+    }
     // Sampled in SC-7852 T-states.
     PiezoSampler m_piezo{double(kPC1600TStateHz), PiezoSampler::Transducer::PC1600};
     // Live PB *pin* levels for the bits driven from outside the CPU, kept

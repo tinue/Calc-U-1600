@@ -94,7 +94,11 @@ void test_cload_bin2wav_tape() {
     std::string error;
     CHECK(m.tapePlay(kFixtureWav, error));
     CHECK(!m.tapeStatus().motor); // nothing runs the tape before CLOAD
+    const uint64_t buzzerEdges = m.memory().piezo().edgeCount();
     type(m, "CLOAD");
+    // The tape sounds on the buzzer through its gate (PB2), as on a real
+    // unit.
+    CHECK(m.memory().piezo().edgeCount() - buzzerEdges > 10000);
     const std::string lcd = screen(m);
     CHECK(lcd.find("TAPEFIX") != std::string::npos);
     CHECK(lcd.find("ERROR") == std::string::npos);

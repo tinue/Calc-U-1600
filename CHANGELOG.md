@@ -13,6 +13,8 @@
   The WAVs work with Pocket Tools' `bin2wav` / `wav2bin` (give `bin2wav`
   `-s 3` or `-l 0x400`); the headless CLIs take `--tape-in` / `--tape-out`. Not yet:
   the PC-1600 reading PC-1500 tapes in MODE 1, and the CE-150 on a PC-1600.
+  As on the real machines, the buzzer sounds the tape while saving and
+  loading.
 
 ### Fixed
 

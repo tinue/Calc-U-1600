@@ -185,12 +185,11 @@ void PC1500Machine::advancePeripherals(uint32_t cycles) {
     // once per instruction, the same way LH5801's own internal timer
     // advances via tickTimer().
     m_memory.advanceRtc(cycles);
-    m_memory.advancePiezo(cycles); // buzzer time, same clock as the RTC
     advanceKeyQueue(cycles);
     // Per-step hook for an attached CE-150 (no-op today -- the plotter is
     // fully reactive; see Ce150Card::tick()).
     if (m_ce150Card) m_ce150Card->tick(cycles);
-    m_memory.advanceSerial(cycles); // SDO -> CMTOUT, and the cassette recorder's time
+    m_memory.advanceSerial(cycles); // SDO -> CMTOUT, the buzzer, and the cassette recorder's time
     m_ce158.tick(cycles); // the UART's own clock keeps running
 }
 

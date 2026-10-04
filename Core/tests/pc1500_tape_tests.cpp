@@ -101,8 +101,12 @@ void test_cload_bin2wav_tape() {
     std::string error;
     CHECK(m.tapePlay(kFixtureWav, error));
     CHECK(!m.tapeStatus().motor);
+    const uint64_t buzzerEdges = m.memory().piezo().edgeCount();
     type(m, "CLOAD");
     CHECK(screen(m).find("ERROR") == std::string::npos);
+    // The tape sounds on the buzzer through its gate (CMT IN), as on a
+    // real unit.
+    CHECK(m.memory().piezo().edgeCount() - buzzerEdges > 10000);
     CHECK(programIs(m, image));
     CHECK(!m.tapeStatus().motor); // REMOTE off again
     CHECK(m.tapeStatus().position > 10.0);
@@ -120,7 +124,9 @@ void test_csave_cload_round_trip() {
     CHECK(a.tapePlay(kFixtureWav, error));
     type(a, "CLOAD");
     a.tapeRecord("");
+    const uint64_t buzzerEdges = a.memory().piezo().edgeCount();
     type(a, "CSAVE \"ROUNDTRIP\"");
+    CHECK(a.memory().piezo().edgeCount() - buzzerEdges > 10000); // SDO through the buzzer gate
     CHECK(screen(a).find("ERROR") == std::string::npos);
     const std::vector<int16_t> recording = a.tapeDeck().recording();
     CHECK(recording.size() > 10 * TapeDeck::kRecordSampleRate);

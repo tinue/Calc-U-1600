@@ -51,11 +51,11 @@ void PC1500Memory::reset() {
     // to keep. Clearing RAM is clearRam()'s job (power-up, ALL RESET).
     m_dda = m_opa = m_ddb = m_opb = 0;
     m_opc = 0;
-    m_piezo.setLevel(false);
+    m_serial.reset();
+    updateBuzzerLine(m_serial.sdo());
     m_if = 0;
     m_rtc = Upd1990ac{}; // fresh chip state -- TP un-configured until the ROM issues a rate-select, same as real power-on
     m_ioScratchRegs.fill(0);
-    m_serial.reset();
     // Keyboard/ON-key state deliberately untouched -- a CPU reset doesn't
     // release physically-held keys.
 }
@@ -244,8 +244,8 @@ void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
                 m_rtc.setControlPins((value & 0x01) != 0, (value & 0x02) != 0,
                                       (value & 0x04) != 0, (value & 0x08) != 0,
                                       (value & 0x10) != 0, (value & 0x20) != 0);
-                // PC6 drives the piezo buzzer; the BEEP loop toggles it.
-                m_piezo.setLevel((value & 0x40) != 0);
+                // PC6 is one input of the buzzer gate; the BEEP loop toggles it.
+                updateBuzzerLine(m_serial.sdo());
                 return;
             case 0xB: m_if = value; return;
             case 0x4: m_serial.resetDivider(); return;

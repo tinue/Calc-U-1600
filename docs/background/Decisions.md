@@ -62,10 +62,13 @@ hardware. The ROM never writes LOCK ($79FF) on reset or CL. Don't
 it on commands. On the real unit, BEEP repeats are whole 64ths of a second.
 
 ### Buzzer audio follows the drive line
-`PiezoSampler` follows the drive line that the ROM toggles (PC-1500 OPC b6;
-PC-1600 port 18H b6 && b7 && SDO). It doesn't synthesize BEEP tones, because
-the user wants the actual square wave. New sound sources drive
-`PiezoSampler::setLevel` from their emulated signal.
+`PiezoSampler` follows the drive line that the ROM toggles, through each
+machine's buzzer gate: PC-1500 NAND(SD0, PC6 · CMT IN) (Service Manual
+p.16), PC-1600 18H b6 && b7 && SDO && PB2. So tape traffic sounds as on
+the real units (confirmed audible on CSAVE and CLOAD, 2026-10-04); CMT IN
+counts as high while no tape interface drives it. It doesn't synthesize
+BEEP tones, because the user wants the actual square wave. New sound
+sources drive `PiezoSampler::setLevel` from their emulated signal.
 
 ### The cassette tape moves only while the remote relay runs it
 `TapeDeck` advances by emulated CPU cycles, and only while the interface's
