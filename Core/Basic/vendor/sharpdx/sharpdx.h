@@ -634,7 +634,8 @@ int32_t sde_wav_decode(const uint8_t *input,
 
 /*
  Encode a serial image (CE-158 or PC-1600 header + payload: BASIC, machine code, or
- PC-1500 reserve) as a cassette WAV (16-bit mono) in `*out` / `*out_len` (free with
+ PC-1500 reserve) as a cassette WAV (16-bit mono, `sample_rate` at least 16000) in
+ `*out` / `*out_len` (free with
  `sde_buf_free`). The tape format follows the header: CE-158 → PC-1500 / CE-150,
  PC-1600 → CE-1600P. `name` (may be NULL) overrides the file name on the tape;
  `leader_ms` is the lead-in length (`SDE_WAV_LEADER_DEFAULT`, `SDE_WAV_LEADER_ROM`,
