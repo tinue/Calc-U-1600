@@ -343,7 +343,7 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
         // 64Hz square wave alive across the ROM's own read-modify-write of
         // this port -- see setTimer64Bit()'s comment for the trace evidence.
         case 0x1F: return static_cast<uint8_t>((m_opb & m_ddb) |
-                                                (m_pbIn & static_cast<uint8_t>(~m_ddb)));
+                                                (pbPins() & static_cast<uint8_t>(~m_ddb)));
         case 0x37: {
             // PB6 is a key strobe for CTRL/KBII/BS. Per the PC-1600 service
             // manual's PB6 description it drives the strobe low only while
@@ -409,6 +409,9 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
             // wave the BEEP loop toggles. See m_opc.
             m_opc = value;
             updateBuzzerLine();
+            // b7 is also SD0, the cassette-write line out to the 60-pin
+            // bus (bank 5 CMTONE0/1 bit-bangs it).
+            m_ce1600pBus.setCmtOut((value & 0x80) != 0);
             return;
         // 14H: divider reset -- restart the modulation clocks' phase.
         case 0x14: m_sdoAccum = 0; return;

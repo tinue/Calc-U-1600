@@ -46,6 +46,15 @@ public:
     virtual bool respondsToRead(const PC1600BusPins& pins, uint8_t& outValue) const = 0;
     /// Return true if this card claims (and thus acts on) this write.
     virtual bool respondsToWrite(const PC1600BusPins& pins, uint8_t value) = 0;
+
+    /// Cassette lines (60-pin CMTOUT / CMTIN). The main unit drives
+    /// CMTOUT; a card with a tape interface passes it to its MIC jack.
+    virtual void cmtOut(bool /*level*/) {}
+    /// Return true and set `level` if this card drives CMTIN.
+    virtual bool cmtIn(bool& /*level*/) const { return false; }
+    /// Elapsed SC-7852 T-states, for cards with their own time base (the
+    /// cassette recorder behind the CE-1600P).
+    virtual void tick(uint32_t /*tstates*/) {}
 };
 
 class PC1600SystemBus {
@@ -82,6 +91,20 @@ public:
         pins.io = true;
         pins.forWrite = true;
         return m_chain.write(pins, value);
+    }
+
+    /// The main unit's cassette-write line (SC-7852 SD0, OPC 18H b7).
+    void setCmtOut(bool level) {
+        for (PC1600ExpansionCard* card : m_chain.cards()) card->cmtOut(level);
+    }
+    /// The cassette-read line as a card drives it; false if none does.
+    bool cmtIn(bool& level) const {
+        for (PC1600ExpansionCard* card : m_chain.cards())
+            if (card->cmtIn(level)) return true;
+        return false;
+    }
+    void tick(uint32_t tstates) {
+        for (PC1600ExpansionCard* card : m_chain.cards()) card->tick(tstates);
     }
 
 private:

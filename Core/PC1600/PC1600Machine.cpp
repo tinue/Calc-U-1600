@@ -90,6 +90,7 @@ bool PC1600Machine::attachCE1600P(const uint8_t* rom1, size_t rom1Size,
     detachCE1600PLocked();
     detachCE150Locked(); // one plotter on the bus at a time
     detachCE158Locked(); // the CE-158 cannot be used with the CE-1600P
+    card->connectRecorder(&m_tapeDeck);
     m_z80Mem.ce1600pBus().attach(card.get());
     m_z80Mem.ce1600pBus().attach(floppy.get());
     m_ce1600pCard = std::move(card);
@@ -231,6 +232,28 @@ void PC1600Machine::ce1600fSetSide(int side) {
 bool PC1600Machine::ce1600fMotorOn() const {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_ce1600fCard && m_ce1600fCard->motorOn();
+}
+
+// ── Cassette recorder ─────────────────────────────────────────────────
+
+bool PC1600Machine::tapePlay(const std::string& path, std::string& error) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.loadForPlay(path, error);
+}
+
+void PC1600Machine::tapeRecord(const std::string& path) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_tapeDeck.armRecord(path);
+}
+
+bool PC1600Machine::tapeEject(std::string* error) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.eject(error);
+}
+
+TapeDeck::Status PC1600Machine::tapeStatus() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.status();
 }
 
 // ── CE-150 plotter (LH5803 side) ──────────────────────────────────────
@@ -449,6 +472,7 @@ void PC1600Machine::advanceSharedClocks(int tstates) {
     m_z80Mem.subCpu().tickByTStates(tstates);
     m_z80Mem.display().tick(tstates);
     m_ce158.tick(static_cast<uint64_t>(tstates)); // the CE-158's own UART clock
+    m_z80Mem.ce1600pBus().tick(static_cast<uint32_t>(tstates)); // the cassette recorder
 }
 
 uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {

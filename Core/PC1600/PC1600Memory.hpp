@@ -509,6 +509,13 @@ private:
     /// is a physical input, not a reset-latched line.
     static constexpr uint8_t kPbInOnKey = 0x80;
     uint8_t m_pbIn{kPbInResetLevels};
+    // PB2 = the cassette-read line (CMTIN), driven from the 60-pin bus by
+    // a tape interface (CE-1600P, CMT-in enabled); 0 when none drives it.
+    static constexpr uint8_t kPbInCmtIn = 0x04;
+    uint8_t pbPins() const {
+        bool cmt = false;
+        return static_cast<uint8_t>(m_pbIn | (m_ce1600pBus.cmtIn(cmt) && cmt ? kPbInCmtIn : 0));
+    }
     // MSK (1AH) -- interrupt mask bits 0-3 (IRQ, PB7, RD, TD enables; PC-1500
     // TRM p.71). Stored only: nothing in this core raises those causes.
     uint8_t m_msk{0};

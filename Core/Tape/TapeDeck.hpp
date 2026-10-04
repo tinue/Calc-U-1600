@@ -94,6 +94,16 @@ public:
         return ok;
     }
 
+    /// A snapshot for the GUI's tape counter.
+    struct Status {
+        Mode mode = Mode::Empty;
+        bool motor = false;
+        double position = 0.0; // seconds
+        double length = 0.0;   // seconds; for a recording, recorded so far
+        std::string path;
+    };
+    Status status() const { return {m_mode, m_motor, positionSeconds(), lengthSeconds(), m_path}; }
+
     Mode mode() const { return m_mode; }
     const std::string& path() const { return m_path; }
     const std::vector<int16_t>& recording() const { return m_recording; }

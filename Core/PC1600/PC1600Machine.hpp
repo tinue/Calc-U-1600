@@ -21,8 +21,10 @@
 #include "../CPU/DebugStop.hpp"
 #include "../CPU/SC7852/SC7852.hpp"
 #include "../PC1500/PC1500TraceFile.hpp"
+#include "../Tape/TapeDeck.hpp"
 #include "PC1600Bank.hpp"
 #include "PC1600BusArbiter.hpp"
+#include "PC1600Clocks.hpp"
 #include "PC1600Memory.hpp"
 
 /// A genuine value-type snapshot of PC1600Display's pixel state, copied
@@ -210,6 +212,19 @@ public:
     /// The "green lamp" (drive-active indicator) -- see CE1600FCard::
     /// motorOn(). False when no floppy is attached.
     bool ce1600fMotorOn() const;
+
+    // ── Cassette recorder (CE-152 on the CE-1600P's jacks) ──────────────
+    //
+    // The recorder outlives attach/detach of the interface: arm it with a
+    // WAV to play (CLOAD) or a file to record into (CSAVE); it moves only
+    // while the interface's remote relay runs it, in emulated time. A
+    // recording is written on tapeEject(). All GUI-safe (take m_mutex).
+    bool tapePlay(const std::string& path, std::string& error);
+    void tapeRecord(const std::string& path);
+    bool tapeEject(std::string* error = nullptr);
+    TapeDeck::Status tapeStatus() const;
+    /// Unlocked direct access -- headless/tests only.
+    TapeDeck& tapeDeck() { return m_tapeDeck; }
 
     // ── Host-directory drive S3: / Y: (60-pin system bus, page-1 bank 7) ─
     //
@@ -502,6 +517,7 @@ private:
     LH5803 m_lh5803;
     PC1600BusArbiter m_arbiter;
 
+    TapeDeck m_tapeDeck{double(kPC1600TStateHz)}; // see tapePlay()
     std::unique_ptr<CE1600PCard> m_ce1600pCard; // see attachCE1600P()
     std::unique_ptr<CE1600FCard> m_ce1600fCard; // union-attached with m_ce1600pCard
     std::unique_ptr<PC1600HostDriveCard> m_hostDriveCard; // see attachHostDrive()

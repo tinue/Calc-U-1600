@@ -6,7 +6,7 @@
 //
 // Usage: pc1600_cli <romI-0-file> <romII-0-file> [maxCycles]
 //        pc1600_cli --check-preset <preset-file>...
-//        pc1600_cli --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--modules-dir <dir>] [--save-dir <dir>] [--wav <out.wav>] [--rom new|old] [--ce1600p-rom new|old] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
+//        pc1600_cli --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--modules-dir <dir>] [--save-dir <dir>] [--wav <out.wav>] [--tape-in <in.wav>] [--tape-out <out.wav>] [--rom new|old] [--ce1600p-rom new|old] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
 //
 // --check-preset parses each preset (any model) and reports ok / the error,
 // without booting anything; tools/check_presets.sh runs it over the repo.
@@ -43,6 +43,13 @@
 // --wav <out.wav> (--preset only) records the buzzer (OPC 18H, see
 // PiezoSampler.hpp) while the preset script runs, as 48 kHz mono 16-bit
 // PCM -- as the host hears it, i.e. through the PC-1600 transducer model.
+//
+// --tape-in <in.wav> / --tape-out <out.wav> (--preset only) put a cassette
+// into the recorder behind the CE-1600P (Core/Tape/TapeDeck.hpp) before the
+// preset runs: a WAV to play for the preset's CLOAD, or a blank tape whose
+// recording (the preset's CSAVE) is written to <out.wav> afterwards. The
+// tape moves only while the CE-1600P's remote relay runs it. The preset
+// needs `plotter: CE-1600P`.
 
 #include <array>
 #include <cstdio>
@@ -72,7 +79,7 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
               const std::string& wavPath, const std::string& romOverride,
               const std::string& ce1600pRomOverride, const std::string& saveDir,
               Ce158CliPeer& ce158Peer, uint64_t runAfter, const std::string& lcdPng,
-              const std::string& lcdTextPath) {
+              const std::string& lcdTextPath, const std::string& tapeIn, const std::string& tapeOut) {
     (void)maxCycles;
     PresetFile preset;
     std::string error;
@@ -110,6 +117,15 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
     };
     if (!wavPath.empty()) machine.setYieldHook(drainWav, PC1600Machine::kTStateHz / 20);
     if (!ce158Peer.attach(machine)) return 1; // before the preset attaches the card
+    if (!tapeIn.empty()) {
+        std::string tapeError;
+        if (!machine.tapePlay(tapeIn, tapeError)) {
+            std::fprintf(stderr, "--tape-in: %s\n", tapeError.c_str());
+            return 1;
+        }
+    } else if (!tapeOut.empty()) {
+        machine.tapeRecord(tapeOut);
+    }
     // `saveas:` -- the file form always works; a by-name save needs
     // --save-dir. Cards splice into the file the loader attached them from
     // (reported by onArmed, before any step runs).
@@ -167,6 +183,16 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
     }
     cli::printCe150Report(machine);
     if (!ce158Peer.report(machine)) return 1;
+    if (!tapeIn.empty() || !tapeOut.empty()) {
+        const TapeDeck::Status tape = machine.tapeStatus();
+        std::printf("Tape: %.2f s of %.2f s, motor %s\n", tape.position, tape.length, tape.motor ? "on" : "off");
+        std::string tapeError;
+        if (!machine.tapeEject(&tapeError)) {
+            std::fprintf(stderr, "--tape-out: %s\n", tapeError.c_str());
+            return 1;
+        }
+        if (!tapeOut.empty()) std::printf("Wrote %.2f s of tape to %s\n", tape.length, tapeOut.c_str());
+    }
 
     if (!wavPath.empty()) {
         machine.setYieldHook({}, 0);
@@ -249,6 +275,8 @@ int main(int argc, char** argv) {
         uint64_t runAfter = 0;
         std::string lcdPng;
         std::string lcdTextPath;
+        std::string tapeIn;
+        std::string tapeOut;
         std::string moduleDir = "Qt6/resources/cards";
         std::vector<std::string> extraModuleDirs;  // 2nd+ `--modules-dir`, searched after `moduleDir`
         bool moduleDirSet = false;
@@ -261,6 +289,8 @@ int main(int argc, char** argv) {
             else if (std::strcmp(argv[i], "--run-after") == 0 && i + 1 < argc) runAfter = std::strtoull(argv[++i], nullptr, 10);
             else if (std::strcmp(argv[i], "--lcd-png") == 0 && i + 1 < argc) lcdPng = argv[++i];
             else if (std::strcmp(argv[i], "--lcd-text") == 0 && i + 1 < argc) lcdTextPath = argv[++i];
+            else if (std::strcmp(argv[i], "--tape-in") == 0 && i + 1 < argc) tapeIn = argv[++i];
+            else if (std::strcmp(argv[i], "--tape-out") == 0 && i + 1 < argc) tapeOut = argv[++i];
             else if (ce158Peer.parseArg(argc, argv, i)) {}
             else if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
                 if (!moduleDirSet) { moduleDir = argv[++i]; moduleDirSet = true; }
@@ -269,12 +299,12 @@ int main(int argc, char** argv) {
             else maxCycles = std::strtoull(argv[i], nullptr, 10);
         }
         return runPreset(argv[2], maxCycles, dumpBasic, moduleDir, extraModuleDirs, wavPath, romOverride,
-                         ce1600pRomOverride, saveDir, ce158Peer, runAfter, lcdPng, lcdTextPath);
+                         ce1600pRomOverride, saveDir, ce158Peer, runAfter, lcdPng, lcdTextPath, tapeIn, tapeOut);
     }
     if (argc < 3) {
         std::fprintf(stderr, "usage: %s <romI-0-file> <romII-0-file> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       %s --check-preset <preset-file>...\n", argv[0]);
-        std::fprintf(stderr, "       %s --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--wav <out.wav>] [--rom new|old] [--ce1600p-rom new|old] [--lcd-png <out.png>] [--lcd-text <out.txt|->]\n", argv[0]);
+        std::fprintf(stderr, "       %s --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--wav <out.wav>] [--tape-in <in.wav>] [--tape-out <out.wav>] [--rom new|old] [--ce1600p-rom new|old] [--lcd-png <out.png>] [--lcd-text <out.txt|->]\n", argv[0]);
         return 1;
     }
     uint64_t maxCycles = 2'000'000ull;
