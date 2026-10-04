@@ -46,16 +46,11 @@ public:
     // silently switch the user to another machine.
     bool loadDefaultPreset(const QString& path, Model model, QString* error);
 
-    // Loads a plain `.bas` listing directly into the *currently running*
-    // machine -- no preset wrapper, no model/ROM/module rebuild (only a
-    // reset). Runs the same "reset, reach PRO mode, NEW0, poke the
-    // tokenized payload in" choreography a preset's BASIC `program: file:`
-    // section relies on its own `keys:` block for (see
-    // PC1500BasicLoader.hpp/PC1600BasicLoader.hpp's own doc comments), just
-    // driven here instead of by preset steps. Synchronous on the calling
-    // thread, same caller contract as loadPreset() (stop the frame timer
-    // first). Resets the machine and destroys the current program (NEW0).
-    bool loadBasicProgramLive(const QString& path, QString* error);
+    // Loads `file` (a listing or tokenized BASIC) into the *currently
+    // running* machine, like LOAD: no reset, MODE change or NEW0. Errors
+    // name `path`. Synchronous on the calling thread, same caller contract
+    // as loadPreset() (stop the frame timer first).
+    bool loadBasicProgramLive(const std::vector<uint8_t>& file, const QString& path, QString* error);
 
     // Writes a machine-code block (File > Load Machine Code…) into the
     // *currently running* machine -- no reset, no BASIC involvement, just

@@ -436,15 +436,19 @@ void MainWindow::loadPresetFile(const QString& path) {
     m_sync->loadPreset(path);
 }
 
-QString MainWindow::pickTapeFile(const QString& path, const QString& title) {
+std::optional<std::vector<uint8_t>> MainWindow::readProgramFile(const QString& path, const QString& title) {
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) return path;  // the loader reports it
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::warning(this, title, tr("Could not read %1: %2").arg(path, file.errorString()));
+        return std::nullopt;
+    }
     const QByteArray raw = file.readAll();
-    const std::vector<uint8_t> bytes(raw.begin(), raw.end());
-    const programfile::ProgramFile pf = programfile::classify(bytes);
-    if (!pf.fromTape || pf.tapeFiles < 2) return path;  // the loaders decode a single file themselves
+    std::vector<uint8_t> bytes(raw.begin(), raw.end());
+    // A tape that can't be read stays a WAV: the loader says why.
+    std::vector<programfile::TapeFile> files = programfile::tapeFiles(bytes, nullptr);
+    if (files.empty()) return bytes;
+    if (files.size() == 1) return std::move(files[0].image);
 
-    const std::vector<programfile::TapeFile> files = programfile::tapeFiles(bytes, nullptr);
     QStringList names;
     for (size_t i = 0; i < files.size(); i++) {
         const QString name = QString::fromStdString(files[i].name);
@@ -456,26 +460,17 @@ QString MainWindow::pickTapeFile(const QString& path, const QString& title) {
                                                      .arg(QFileInfo(path).fileName())
                                                      .arg(files.size()),
                                                  names, 0, false, &ok);
-    if (!ok) return {};
-    const auto index = static_cast<size_t>(names.indexOf(choice));
-    if (!m_tapeFileDir) m_tapeFileDir = std::make_unique<QTemporaryDir>();
-    const QString image = m_tapeFileDir->filePath(QStringLiteral("tape-file-%1.bin").arg(index + 1));
-    QFile out(image);
-    if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate) ||
-        out.write(reinterpret_cast<const char*>(files[index].image.data()),
-                  static_cast<qint64>(files[index].image.size())) != static_cast<qint64>(files[index].image.size())) {
-        QMessageBox::warning(this, title, tr("Could not write a temporary file: %1").arg(out.errorString()));
-        return {};
-    }
-    return image;
+    if (!ok) return std::nullopt;
+    return std::move(files[static_cast<size_t>(names.indexOf(choice))].image);
 }
 
 void MainWindow::loadBasicProgramFile(const QString& path) {
+    const QString title = tr("Load BASIC Program");
     AppSettings::rememberOpenFile(AppSettings::OpenFolder::Basic, path);
-    const QString source = pickTapeFile(path, tr("Load BASIC Program"));
-    if (source.isEmpty()) return;
-    m_sync->run(tr("Load BASIC Program"), [this, source](QString* error) {
-        return m_presetController->loadBasicProgramLive(source, error);
+    std::optional<std::vector<uint8_t>> bytes = readProgramFile(path, title);
+    if (!bytes) return;
+    m_sync->run(title, [this, &bytes, &path](QString* error) {
+        return m_presetController->loadBasicProgramLive(*bytes, path, error);
     });
 }
 
@@ -483,16 +478,9 @@ void MainWindow::loadMachineCodeFile(const QString& path) {
     const QString title = tr("Load Machine Code");
     AppSettings::rememberOpenFile(AppSettings::OpenFolder::Assembly, path);
 
-    const QString source = pickTapeFile(path, title);
-    if (source.isEmpty()) return;
-    QFile file(source);
-    if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox::warning(this, title, tr("Could not read %1: %2").arg(path, file.errorString()));
-        return;
-    }
-    const QByteArray raw = file.readAll();
-    const machinecode::File code =
-        machinecode::readFile(std::vector<uint8_t>(raw.begin(), raw.end()));
+    const std::optional<std::vector<uint8_t>> bytes = readProgramFile(path, title);
+    if (!bytes) return;
+    const machinecode::File code = machinecode::readFile(*bytes);
 
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     const machinecode::Target target = isPC1600 ? machinecode::Target::PC1600 : machinecode::Target::PC1500;

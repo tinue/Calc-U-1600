@@ -236,7 +236,7 @@ PresetLoadResult PresetController::runPC1600Preset(const PresetFile& preset, con
                              onArmed, env.onSaveAs);
 }
 
-bool PresetController::loadBasicProgramLive(const QString& path, QString* error) {
+bool PresetController::loadBasicProgramLive(const std::vector<uint8_t>& file, const QString& path, QString* error) {
     // Live-machine LOAD, like LOAD on the real machine: no reset, MODE
     // change or NEW0 -- the user has prepared the machine (memory cards,
     // `NEW`, MODE, TITLE) as they would before typing LOAD. A listing or a
@@ -250,7 +250,7 @@ bool PresetController::loadBasicProgramLive(const QString& path, QString* error)
             return false;
         }
         const ScopedYieldHook<PC1600Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
-        loaded = loadBasicProgramFile(*machine, path.toStdString());
+        loaded = loadBasicProgram(*machine, file);
     } else {
         PC1500Machine* machine = m_controller->pc1500();
         if (!machine) {
@@ -258,8 +258,8 @@ bool PresetController::loadBasicProgramLive(const QString& path, QString* error)
             return false;
         }
         const ScopedYieldHook<PC1500Machine> yieldHook(*machine, m_yieldHook, m_controller->clockHz());
-        loaded = loadBasicProgramFile(*machine, path.toStdString());
+        loaded = loadBasicProgram(*machine, file);
     }
-    if (!loaded.ok) *error = QString::fromStdString(loaded.error);
+    if (!loaded.ok) *error = path + ": " + QString::fromStdString(loaded.error);
     return loaded.ok;
 }

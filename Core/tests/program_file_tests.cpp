@@ -286,12 +286,12 @@ void test_cassette_wav() {
         CHECK(ok);
         const auto f = classify(wav);
         CHECK(f.kind == c.kind);
-        CHECK(f.fromTape && f.tapeFiles == 1 && f.tapeName.rfind("TAPEFIX", 0) == 0);  // bin2wav adds .BAS on the PC-1600
-        CHECK(!f.damaged && !f.lengthMismatch);
+        CHECK(f.fromTape && !f.damaged && !f.lengthMismatch);
         CHECK(f.payload == img);
         CHECK(dropfile::classify(wav, "tape.wav") == dropfile::Target::BasicProgram);
         const auto files = programfile::tapeFiles(wav, nullptr);
         CHECK(files.size() == 1 && classify(files[0].image).payload == img);
+        CHECK(files[0].name.rfind("TAPEFIX", 0) == 0);  // bin2wav adds .BAS on the PC-1600
     }
 
     // A WAV with no tape on it (here: one second of silence) is Other but

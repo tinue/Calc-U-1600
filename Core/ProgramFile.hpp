@@ -57,8 +57,6 @@ struct ProgramFile {
     /// above then describes the first file on it that decodes safely; with
     /// none, the kind is Other and `token` says why.
     bool fromTape = false;
-    std::string tapeName;  // the file's name on the tape
-    size_t tapeFiles = 0;  // files on the tape that decode safely
 };
 
 ProgramFile classify(const std::vector<uint8_t>& bytes);
