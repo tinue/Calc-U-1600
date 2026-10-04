@@ -256,6 +256,11 @@ TapeDeck::Status PC1600Machine::tapeStatus() const {
     return m_tapeDeck.status();
 }
 
+std::string PC1600Machine::tapeTakeLastError() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.takeLastError();
+}
+
 // ── CE-150 plotter (LH5803 side) ──────────────────────────────────────
 
 bool PC1600Machine::attachCE150(const uint8_t* rom, size_t romSize) {

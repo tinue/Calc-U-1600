@@ -72,6 +72,11 @@ TapeDeck::Status PC1500Machine::tapeStatus() const {
     return m_tapeDeck.status();
 }
 
+std::string PC1500Machine::tapeTakeLastError() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.takeLastError();
+}
+
 void PC1500Machine::detachCE150() {
     std::lock_guard<std::mutex> lock(m_mutex);
     detachCE150Locked();

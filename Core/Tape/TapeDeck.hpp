@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../Audio/WavFile.hpp"
@@ -35,7 +36,9 @@
 // of the line -- the ROM parking it for a gap, or switching it on before
 // the motor -- records as a ~1.8x spike that dies away within ~30 ms, as
 // on the real tape. The interfaces' low-pass and level aren't modelled.
-// Only motor-on time is recorded, as on a real tape.
+// Only motor-on time is recorded, as on a real tape, and the WAV is saved
+// (whole) each time the motor stops, so a finished CSAVE is on disk at once
+// and the next CSAVE on the same tape appends.
 //
 // Not thread-safe on its own -- the owning machine serializes access under
 // its own mutex.
@@ -68,26 +71,26 @@ public:
         m_levels = conditionInput(samples, sampleRate);
     }
 
-    /// Inserts a blank tape for recording (CSAVE). `path` is where eject()
-    /// writes the WAV; empty keeps the recording in memory only (tests).
+    /// Inserts a blank tape for recording (CSAVE). The WAV goes to `path`
+    /// each time the motor stops (see setMotor()); empty keeps the
+    /// recording in memory only (tests).
     void armRecord(const std::string& path) {
         eject();
         m_recording.clear();
+        m_savedSamples = 0;
         m_mode = Mode::Record;
         m_rate = kRecordSampleRate;
         m_path = path;
         m_cyclesPerSample = m_cpuHz / kRecordSampleRate;
     }
 
-    /// Takes the tape out. A recording is written to its file first; false
-    /// with a reason in `error` if that fails. The recorded samples stay
-    /// readable through recording() until the next arming.
+    /// Takes the tape out. A recording is normally saved already (at each
+    /// motor stop); anything not yet saved -- Eject while the motor still
+    /// runs -- is written first, false with a reason in `error` if that
+    /// fails. The recorded samples stay readable through recording() until
+    /// the next arming.
     bool eject(std::string* error = nullptr) {
-        bool ok = true;
-        if (m_mode == Mode::Record && !m_path.empty() && !writeWavMono16(m_path, m_recording, m_rate)) {
-            ok = false;
-            if (error) *error = "cannot write " + m_path;
-        }
+        const bool ok = saveRecording(error);
         m_mode = Mode::Empty;
         m_path.clear();
         m_levels.clear();
@@ -110,14 +113,27 @@ public:
     };
     Status status() const { return {m_mode, m_motor, positionSeconds(), lengthSeconds(), m_path}; }
 
+    /// The reason the last automatic save (at a motor stop) failed, once;
+    /// empty if it didn't. The save happens inside emulation, where there
+    /// is no one to return it to.
+    std::string takeLastError() { return std::exchange(m_lastError, std::string()); }
+
     Mode mode() const { return m_mode; }
     const std::string& path() const { return m_path; }
     const std::vector<int16_t>& recording() const { return m_recording; }
 
     // ── Signals from the interface ───────────────────────────────────────
 
-    /// Remote relay: the tape moves only while it is closed.
-    void setMotor(bool on) { m_motor = on; }
+    /// Remote relay: the tape moves only while it is closed. When it opens
+    /// on a recording, the WAV is saved (whole), so a finished CSAVE is on
+    /// disk at once; a later CSAVE on the same tape appends and saves again.
+    void setMotor(bool on) {
+        if (m_motor && !on && m_mode == Mode::Record) {
+            std::string error;
+            if (!saveRecording(&error)) m_lastError = error;
+        }
+        m_motor = on;
+    }
     bool motorOn() const { return m_motor; }
 
     /// Cassette-output line (MIC). Takes effect from the next advance().
@@ -168,6 +184,20 @@ private:
     double m_area = 0.0;  // cycles of it spent high
     double m_hpIn = 0.0, m_hpOut = 0.0;
     std::vector<int16_t> m_recording;
+    size_t m_savedSamples = 0; // how much of m_recording is on disk
+    std::string m_lastError;   // see takeLastError()
+
+    // Writes the recording if it has samples not on disk yet; true if there
+    // was nothing to do.
+    bool saveRecording(std::string* error) {
+        if (m_mode != Mode::Record || m_path.empty() || m_recording.size() == m_savedSamples) return true;
+        if (!writeWavMono16(m_path, m_recording, m_rate)) {
+            if (error) *error = "cannot write " + m_path;
+            return false;
+        }
+        m_savedSamples = m_recording.size();
+        return true;
+    }
 
     // Playback input coupling: far below the 1-3 kHz tape tones, so it
     // follows any recording's DC drift without touching the tones.

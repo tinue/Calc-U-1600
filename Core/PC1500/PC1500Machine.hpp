@@ -241,11 +241,14 @@ public:
     // The recorder outlives attach/detach of the interface: arm it with a
     // WAV to play (CLOAD) or a file to record into (CSAVE); it moves only
     // while a CE-150 REMOTE relay runs it, in emulated time. A recording is
-    // written on tapeEject(). All GUI-safe (take m_mutex).
+    // saved each time the motor stops. All GUI-safe (take m_mutex).
     bool tapePlay(const std::string& path, std::string& error);
     void tapeRecord(const std::string& path);
     bool tapeEject(std::string* error = nullptr);
     TapeDeck::Status tapeStatus() const;
+    /// Why the last automatic save (at a motor stop) failed, once; empty if
+    /// it didn't (TapeDeck::takeLastError()).
+    std::string tapeTakeLastError();
     /// Unlocked direct access -- headless/tests only.
     TapeDeck& tapeDeck() { return m_tapeDeck; }
 

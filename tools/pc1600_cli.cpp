@@ -47,7 +47,7 @@
 // --tape-in <in.wav> / --tape-out <out.wav> (--preset only) put a cassette
 // into the recorder behind the CE-1600P (Core/Tape/TapeDeck.hpp) before the
 // preset runs: a WAV to play for the preset's CLOAD, or a blank tape whose
-// recording (the preset's CSAVE) is written to <out.wav> afterwards. The
+// recording (the preset's CSAVE) is saved to <out.wav> when the motor stops. The
 // tape moves only while the CE-1600P's remote relay runs it. The preset
 // needs `plotter: CE-1600P`.
 //

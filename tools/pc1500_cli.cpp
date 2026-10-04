@@ -34,7 +34,7 @@
 // --tape-in <in.wav> / --tape-out <out.wav> put a cassette into the
 // recorder behind the CE-150 (Core/Tape/TapeDeck.hpp) before the run: a
 // WAV to play for the preset's CLOAD, or a blank tape whose recording (the
-// preset's CSAVE) is written to <out.wav> at the end. The tape moves only
+// preset's CSAVE) is saved to <out.wav> when the motor stops. The tape moves only
 // while a CE-150 REMOTE relay runs it. The preset needs `plotter: CE-150`.
 // --dump-mem <addr>,<len> (repeatable) prints memory as hex at the end.
 //

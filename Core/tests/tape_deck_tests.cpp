@@ -7,6 +7,7 @@
 // Build & run: see tools/run_tests.sh
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -256,12 +257,60 @@ void testRecord() {
     CHECK(wav.samples.size() == deck.recording().size());
     std::filesystem::remove(path);
 
-    // A recording that can't be written reports it.
+    // A recording that can't be written reports it: at eject, and from a
+    // motor stop through takeLastError(), once.
     TapeDeck bad(kCpuHz);
     bad.armRecord("/nonexistent-dir/x.wav");
+    bad.setMotor(true);
+    driveTone(bad, 1200.0, 0.1);
     std::string why;
     CHECK(!bad.eject(&why));
     CHECK(!why.empty());
+    bad.armRecord("/nonexistent-dir/x.wav");
+    bad.setMotor(true);
+    driveTone(bad, 1200.0, 0.1);
+    bad.setMotor(false);
+    CHECK(!bad.takeLastError().empty());
+    CHECK(bad.takeLastError().empty());
+}
+
+// The WAV is saved whenever the motor stops; a later CSAVE on the same tape
+// appends and saves again; Eject then only un-arms.
+void testAutoSaveOnMotorOff() {
+    const std::string path = tempPath("calcu_tape_autosave.wav");
+    std::filesystem::remove(path);
+    TapeDeck deck(kCpuHz);
+    deck.armRecord(path);
+    deck.setMotor(true);
+    driveTone(deck, 3000.0, 0.25);
+    CHECK(!std::filesystem::exists(path)); // still recording
+    deck.setMotor(false);
+    WavData wav;
+    std::string error;
+    CHECK(readWav(path, wav, error));
+    const size_t first = wav.samples.size();
+    CHECK(first > 11000 && first == deck.recording().size());
+
+    // No new data: a motor stop doesn't rewrite the file.
+    const auto stamp = std::filesystem::last_write_time(path);
+    std::filesystem::last_write_time(path, stamp - std::chrono::hours(1));
+    deck.setMotor(true);
+    deck.setMotor(false);
+    CHECK(std::filesystem::last_write_time(path) == stamp - std::chrono::hours(1));
+
+    // The next CSAVE appends.
+    deck.setMotor(true);
+    driveTone(deck, 1200.0, 0.25);
+    deck.setMotor(false);
+    CHECK(readWav(path, wav, error));
+    CHECK(wav.samples.size() > first + 11000 && wav.samples.size() == deck.recording().size());
+
+    // Eject only un-arms: nothing left to write.
+    std::filesystem::last_write_time(path, stamp - std::chrono::hours(2));
+    CHECK(deck.eject());
+    CHECK(std::filesystem::last_write_time(path) == stamp - std::chrono::hours(2));
+    CHECK(deck.takeLastError().empty());
+    std::filesystem::remove(path);
 }
 
 // A line already parked high (or low) when the motor starts records as
@@ -419,6 +468,7 @@ int run_tape_deck_tests() {
     testMotorGating();
     testRecord();
     testRecordStartsQuiet();
+    testAutoSaveOnMotorOff();
     testRecordThenPlay();
     testSerialClockAndDividerReset();
     testTransmitFrames();
