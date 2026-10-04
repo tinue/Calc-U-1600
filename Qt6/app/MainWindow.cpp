@@ -180,6 +180,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         m_floppyManager->selectDisk(diskNameOrEmpty);
         refreshFloppyCombo();
     });
+    connect(m_tapePlayAction, &QAction::triggered, this, &MainWindow::playTape);
+    connect(m_tapeRecordAction, &QAction::triggered, this, &MainWindow::recordTape);
+    connect(m_tapeEjectAction, &QAction::triggered, this, &MainWindow::ejectTape);
+    m_controlBar->setTapeActions({m_tapePlayAction, m_tapeRecordAction, m_tapeEjectAction});
     connect(m_controlBar, &ControlBar::floppySideToggleRequested, this, [this] {
         m_floppyManager->toggleSide();
         m_controlBar->setFloppySide(m_floppyManager->side());
@@ -313,6 +317,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     AppSettings::setWindowSize(size());
     m_moduleManager->flushPendingPersist();
     m_floppyManager->flushPendingPersist();
+    ejectTape(); // a recording goes to its file
     QMainWindow::closeEvent(event);
 }
 
@@ -372,6 +377,46 @@ void MainWindow::unmountHostDirectory() {
         return m_presetController->powerCycleLive([this] { m_controller->detachHostDrive(); }, error);
     });
     syncHostDriveActions();
+}
+
+// Tape > Play…: the WAV waits in the recorder; CLOAD starts the motor
+// through the remote relay. Any tape already in comes out first (a
+// recording is written).
+void MainWindow::playTape() {
+    const QString path = QFileDialog::getOpenFileName(this, tr("Play Tape"),
+                                                      AppSettings::openStartDir(AppSettings::OpenFolder::Tape),
+                                                      tr("WAV Audio (*.wav);;All Files (*)"));
+    if (path.isEmpty()) return;
+    AppSettings::rememberOpenFile(AppSettings::OpenFolder::Tape, path);
+    ejectTape();
+    QString error;
+    if (!m_controller->tapePlay(path, &error)) QMessageBox::warning(this, tr("Play Tape"), error);
+}
+
+// Tape > Record…: a blank tape that CSAVE records onto; the WAV is
+// written on Eject (or when the tape comes out any other way).
+void MainWindow::recordTape() {
+    const QString start = QDir(AppSettings::openStartDir(AppSettings::OpenFolder::Tape)).filePath(tr("tape.wav"));
+    QString path = QFileDialog::getSaveFileName(this, tr("Record Tape"), start, tr("WAV Audio (*.wav)"));
+    if (path.isEmpty()) return;
+    if (QFileInfo(path).suffix().isEmpty()) path += QStringLiteral(".wav");
+    AppSettings::rememberOpenFile(AppSettings::OpenFolder::Tape, path);
+    ejectTape();
+    m_controller->tapeRecord(path);
+}
+
+// Play / Record need a tape interface (CE-150, CE-1600P); Eject follows the
+// tape (the frame tick keeps it current).
+void MainWindow::syncTapeActions() {
+    const bool attached = m_controller->tapeInterfaceAttached();
+    m_tapePlayAction->setEnabled(attached);
+    m_tapeRecordAction->setEnabled(attached);
+    m_tapeEjectAction->setEnabled(m_controller->tapeStatus().mode != TapeDeck::Mode::Empty);
+}
+
+void MainWindow::ejectTape() {
+    QString error;
+    if (!m_controller->tapeEject(&error)) QMessageBox::warning(this, tr("Eject Tape"), error);
 }
 
 void MainWindow::syncHostDriveActions() {
@@ -514,6 +559,8 @@ void MainWindow::syncPeripherals() {
     if (ce150Attached || ce1600pAttached)
         m_plotterPaper->setKind(ce150Attached ? PlotterPaperWidget::Kind::CE150 : PlotterPaperWidget::Kind::CE1600P);
     setDockedPane(m_plotterPaper, ce150Attached || ce1600pAttached);
+    m_controlBar->setTapeVisible(m_controller->tapeInterfaceAttached());
+    syncTapeActions();
     setDockedPane(m_ce158Printer, ce158Attached);
 }
 
@@ -899,6 +946,9 @@ void MainWindow::refreshViewsAfterAdvance() {
     m_moduleManager->markDirtyAndSchedulePersist();
     m_floppyManager->markDirtyAndSchedulePersist();
     m_controlBar->setFloppyMotorOn(m_floppyManager->motorOn());
+    const TapeDeck::Status tape = m_controller->tapeStatus();
+    m_controlBar->setTapeStatus(tape);
+    m_tapeEjectAction->setEnabled(tape.mode != TapeDeck::Mode::Empty);
     m_debugPanel->onFrameTick();
     if (m_debugRowLayout->indexOf(m_plotterPaper) >= 0) m_plotterPaper->onFrameTick();
     if (m_debugRowLayout->indexOf(m_ce158Printer) >= 0) m_ce158Printer->onFrameTick();
@@ -923,6 +973,11 @@ void MainWindow::buildMenuBar() {
     fileMenu->addSeparator();
     m_mountDirectoryAction = fileMenu->addAction(tr("Mount Directory…"));
     m_unmountDirectoryAction = fileMenu->addAction(tr("Unmount Directory"));
+    fileMenu->addSeparator();
+    QMenu* tapeMenu = fileMenu->addMenu(tr("Tape"));
+    m_tapePlayAction = tapeMenu->addAction(tr("Play…"));
+    m_tapeRecordAction = tapeMenu->addAction(tr("Record…"));
+    m_tapeEjectAction = tapeMenu->addAction(tr("Eject"));
     fileMenu->addSeparator();
     QAction* quitAction = fileMenu->addAction(tr("Quit"));
     quitAction->setMenuRole(QAction::QuitRole);

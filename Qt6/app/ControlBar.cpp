@@ -1,7 +1,9 @@
 #include "ControlBar.hpp"
 
 #include <QComboBox>
+#include <QFileInfo>
 #include <QFrame>
+#include <QMenu>
 #include <QLabel>
 #include <QPushButton>
 #include <QHBoxLayout>
@@ -216,6 +218,30 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     setFloppyEnabled(false);
     setFloppySaveEnabled(false);
 
+    // Cassette recorder -- the tape follows the interface's remote relay,
+    // so arming it is all the user does; CLOAD / CSAVE start the motor.
+    m_tapeSeparator = addSeparator(layout, this);
+    m_tapeButton = new QPushButton(tr("Tape"), this);
+    m_tapeButton->setFocusPolicy(Qt::NoFocus);
+    m_tapeButton->setToolTip(tr("Cassette recorder: put in a WAV to CLOAD, or a blank tape to CSAVE onto"));
+    m_tapeButton->setObjectName(QStringLiteral("controlbar.tape"));
+    m_tapeButton->setMenu(new QMenu(m_tapeButton)); // filled by setTapeActions()
+    layout->addWidget(m_tapeButton);
+
+    m_tapeLabel = new QLabel(QStringLiteral("–"), this);
+    m_tapeLabel->setObjectName(QStringLiteral("controlbar.tape.counter"));
+    m_tapeLabel->setMinimumWidth(m_tapeLabel->fontMetrics().horizontalAdvance(QStringLiteral("● 00:00 ")));
+    layout->addWidget(m_tapeLabel);
+
+    m_tapeLampLabel = new QLabel(QStringLiteral("●"), this);
+    m_tapeLampLabel->setFixedWidth(14);
+    m_tapeLampLabel->setAlignment(Qt::AlignCenter);
+    m_tapeLampLabel->setObjectName(QStringLiteral("controlbar.tape.lamp"));
+    m_tapeLampLabel->setToolTip(tr("Tape motor (switched by the remote relay)"));
+    m_tapeLampLabel->setStyleSheet(QStringLiteral("color: #888888;"));
+    layout->addWidget(m_tapeLampLabel);
+    setTapeVisible(false);
+
     connect(m_modelCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
         emit modelSelected(static_cast<Model>(m_modelCombo->itemData(index).toInt()));
     });
@@ -355,4 +381,41 @@ void ControlBar::setFloppyMotorOn(bool on) {
 void ControlBar::applyFloppyLampStyle() {
     m_floppyLampLabel->setStyleSheet(m_floppyMotorOn ? QStringLiteral("color: #2ecc40;")
                                                      : QStringLiteral("color: #888888;"));
+}
+
+void ControlBar::setTapeActions(const QList<QAction*>& actions) {
+    m_tapeButton->menu()->clear();
+    m_tapeButton->menu()->addActions(actions);
+}
+
+void ControlBar::setTapeVisible(bool visible) {
+    m_tapeSeparator->setVisible(visible);
+    m_tapeButton->setVisible(visible);
+    m_tapeLabel->setVisible(visible);
+    m_tapeLampLabel->setVisible(visible);
+}
+
+// "▶ 0:12" playing (position on the tape), "● 0:03" recording (recorded so
+// far), "–" empty. The file name goes in the tooltip.
+void ControlBar::setTapeStatus(const TapeDeck::Status& status) {
+    QString text = QStringLiteral("–");
+    if (status.mode != TapeDeck::Mode::Empty) {
+        const int seconds = static_cast<int>(status.position);
+        text = QStringLiteral("%1 %2:%3")
+                   .arg(status.mode == TapeDeck::Mode::Play ? QStringLiteral("▶") : QStringLiteral("●"))
+                   .arg(seconds / 60)
+                   .arg(seconds % 60, 2, 10, QLatin1Char('0'));
+    }
+    if (text != m_tapeLabel->text()) {
+        m_tapeLabel->setText(text);
+        const QString name = QFileInfo(QString::fromStdString(status.path)).fileName();
+        m_tapeLabel->setToolTip(status.mode == TapeDeck::Mode::Play     ? tr("Playing %1").arg(name)
+                                : status.mode == TapeDeck::Mode::Record ? tr("Recording into %1").arg(name)
+                                                                        : tr("No tape"));
+    }
+    if (status.motor != m_tapeMotorOn) {
+        m_tapeMotorOn = status.motor;
+        m_tapeLampLabel->setStyleSheet(m_tapeMotorOn ? QStringLiteral("color: #2ecc40;")
+                                                     : QStringLiteral("color: #888888;"));
+    }
 }

@@ -210,7 +210,9 @@ bool parseStep(const YamlNode& node, const QDir& baseDir, const ShotScenario& sc
         out->kind = K::ChooseFile;
         if (!needText(&out->text)) return false;
         out->text = QDir::cleanPath(baseDir.absoluteFilePath(out->text));
-        if (!QFileInfo::exists(out->text)) {
+        // A file to open must exist; one to save (Tape > Record…) only
+        // needs its folder.
+        if (!QFileInfo::exists(out->text) && !QFileInfo(QFileInfo(out->text).absolutePath()).isDir()) {
             *error = lineError(node.line, QStringLiteral("file not found: %1").arg(out->text));
             return false;
         }

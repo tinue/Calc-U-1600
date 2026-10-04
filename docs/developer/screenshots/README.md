@@ -94,7 +94,7 @@ captures the whole window. More captures can go in `steps:` as
 | `action: Menu > … > Item` | Trigger a menu item. `&` mnemonics are ignored, and `...` matches `…`. |
 | `menu: Menu > Submenu` | Open a menu and leave it open. See the macOS note below. |
 | `close` | Close the topmost popup, dialog, or native menu. |
-| `choose-file: <path>` | Pick that file (relative to the scenario) in the open file dialog and accept it, e.g. after `action: File > Load Machine Code…`. |
+| `choose-file: <path>` | Pick that file (relative to the scenario) in the open file dialog and accept it, e.g. after `action: File > Load Machine Code…`. In a Save dialog (`File > Tape > Record…`) the file may not exist yet; its folder must. |
 | `enter-text: <text>` | Type into the text field of the open dialog, e.g. a name in Name & Save. |
 | `capture: …` | Write an image; see below. |
 

@@ -16,6 +16,7 @@
 #include "PC1500/PC1500Variant.hpp"
 #include "Serial/LazySerialLink.hpp"
 #include "Serial/PtySerialLink.hpp"
+#include "Tape/TapeDeck.hpp"
 #include "TraceTypes.hpp"
 
 class PC1500Machine;
@@ -365,6 +366,18 @@ public:
     void detachHostDrive();
     bool hostDriveAttached() const;
     QString hostDriveDirectory() const; // empty = no host drive
+
+    // Cassette recorder on the tape interface's jacks: the CE-150 on a
+    // PC-1500(A), the CE-1600P on a PC-1600 (the CE-150 on a PC-1600 has no
+    // tape path yet). Arm it with a WAV to play (CLOAD) or a file to record
+    // into (CSAVE); the ROM's remote relay runs it, in emulated time. A
+    // recording is written on tapeEject() -- and whenever the machine is
+    // replaced (model / ROM switch, preset), which ejects the tape.
+    bool tapeInterfaceAttached() const;
+    bool tapePlay(const QString& path, QString* error = nullptr);
+    void tapeRecord(const QString& path);
+    bool tapeEject(QString* error = nullptr);
+    TapeDeck::Status tapeStatus() const;
 
     // CE-158 RS-232C / parallel interface: PC1500(A), or a PC-1600's LH5803
     // side (MODE 1). Same live power-cycled attach as the plotters; it

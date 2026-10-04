@@ -534,6 +534,8 @@ bool MachineController::traceActive() const {
 
 void MachineController::discardMachine() {
     if (m_debug) m_debug->machineAboutToChange();
+    QString tapeError;
+    if (!tapeEject(&tapeError)) qWarning("Tape: %s", qPrintable(tapeError)); // a recording goes to its file
     endTrace();
     m_paste.cancel({}); // the machine it was typing into is going away
     m_liveTyping = false;
@@ -541,6 +543,35 @@ void MachineController::discardMachine() {
     m_pc1600.reset();
 }
 
+
+// ---- Cassette recorder ----
+
+bool MachineController::tapeInterfaceAttached() const {
+    if (m_pc1600) return m_pc1600->ce1600pAttached();
+    return m_pc1500 && m_pc1500->ce150Attached();
+}
+
+bool MachineController::tapePlay(const QString& path, QString* error) {
+    std::string err;
+    const bool ok = withMachine(false, [&](auto& machine) { return machine.tapePlay(path.toStdString(), err); });
+    if (!ok && error) *error = QString::fromStdString(err);
+    return ok;
+}
+
+void MachineController::tapeRecord(const QString& path) {
+    withMachine([&](auto& machine) { machine.tapeRecord(path.toStdString()); });
+}
+
+bool MachineController::tapeEject(QString* error) {
+    std::string err;
+    const bool ok = withMachine(true, [&](auto& machine) { return machine.tapeEject(&err); });
+    if (!ok && error) *error = QString::fromStdString(err);
+    return ok;
+}
+
+TapeDeck::Status MachineController::tapeStatus() const {
+    return withMachine(TapeDeck::Status{}, [](auto& machine) { return machine.tapeStatus(); });
+}
 
 // ---- Plotter support ----
 

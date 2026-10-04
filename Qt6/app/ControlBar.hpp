@@ -5,6 +5,7 @@
 #include "MemoryModuleManager.hpp"
 #include "FloppyDiskManager.hpp"
 
+class QAction;
 class QComboBox;
 class QLabel;
 class QPushButton;
@@ -73,6 +74,15 @@ public:
     // manual's own cue for when it's safe to eject and flip the disk.
     void setFloppyMotorOn(bool on);
 
+    // Cassette recorder (CE-150 / CE-1600P jacks): a "Tape" menu button,
+    // the tape counter, and the motor lamp. The button's menu holds
+    // MainWindow's File > Tape actions (setTapeActions). Shown only while a
+    // tape interface is attached. setTapeStatus() is polled every frame; it
+    // only touches widgets whose text changed.
+    void setTapeActions(const QList<QAction*>& actions);
+    void setTapeVisible(bool visible);
+    void setTapeStatus(const TapeDeck::Status& status);
+
 signals:
     void modelSelected(Model model);
     void romRevisionSelected(PC1500RomRevision revision);
@@ -102,6 +112,12 @@ private:
     QLabel* m_floppyLampLabel = nullptr;
     bool m_floppyMotorOn = false;
     void applyFloppyLampStyle();
+
+    QWidget* m_tapeSeparator = nullptr;
+    QPushButton* m_tapeButton = nullptr;
+    QLabel* m_tapeLabel = nullptr;
+    QLabel* m_tapeLampLabel = nullptr;
+    bool m_tapeMotorOn = false;
 
     struct SlotWidgets {
         QLabel* label = nullptr;           // "1:" / "2:", hidden together with the slot

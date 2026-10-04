@@ -46,7 +46,7 @@ inline void setInstanceDirOverride(const QString& dir) {
 //   Basic    -- "Load BASIC Program…" (.bas listings)
 //   Assembly -- "Load Machine Code…" (.bin files)
 //   HostDrive -- "Mount Directory…" (PC-1600 host drive S3:)
-enum class OpenFolder { Samples, Basic, Assembly, HostDrive };
+enum class OpenFolder { Samples, Basic, Assembly, HostDrive, Tape };
 
 // Key group per folder. Samples keeps the original "preset/" keys so a
 // folder configured before the split carries over.
@@ -56,6 +56,7 @@ inline QString openFolderKeyGroup(OpenFolder folder) {
         case OpenFolder::Basic: return QStringLiteral("basic/");
         case OpenFolder::Assembly: return QStringLiteral("assembly/");
         case OpenFolder::HostDrive: return QStringLiteral("hostDrive/");
+        case OpenFolder::Tape: return QStringLiteral("tape/");
     }
     return QStringLiteral("preset/");
 }

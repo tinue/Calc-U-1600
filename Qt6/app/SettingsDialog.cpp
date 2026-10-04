@@ -223,6 +223,8 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
                      AppSettings::OpenFolder::Assembly);
     addOpenFolderRow(general, 4, this, sections, tr("Host drive folder:"), tr("Choose Host Drive Folder"),
                      AppSettings::OpenFolder::HostDrive);
+    addOpenFolderRow(general, 5, this, sections, tr("Tape folder:"), tr("Choose Tape Folder"),
+                     AppSettings::OpenFolder::Tape);
 
     // ── Default presets ──────────────────────────────────────────────────
     // Applied whenever that model gets selected (including at startup) --
