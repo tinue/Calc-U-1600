@@ -16,8 +16,6 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstdio>
-#include <fstream>
-#include <iterator>
 #include <string>
 #include <vector>
 
@@ -40,8 +38,9 @@ const char* kFixtureWav = "Core/tests/fixtures/tape/pc1600_tape.wav";
 const char* kFixtureImg = "Core/tests/fixtures/tape/pc1600_tape.img";
 
 std::vector<uint8_t> readFile(const char* path) {
-    std::ifstream in(path, std::ios::binary);
-    return std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::vector<uint8_t> bytes;
+    CHECK(readRomImage(path, &bytes));
+    return bytes;
 }
 
 bool bootWithCE1600P(PC1600Machine& m) {
@@ -63,11 +62,7 @@ void type(PC1600Machine& m, const std::string& line) {
     waitIdle(m, kSecond);
 }
 
-std::string screen(PC1600Machine& m) {
-    std::string all;
-    for (const std::string& row : pc1600LcdText(m).plainRows) all += row + "\n";
-    return all;
-}
+std::string screen(PC1600Machine& m) { return pc1600LcdText(m).plainText(); }
 
 bool programIs(PC1600Machine& m, const std::vector<uint8_t>& image) {
     for (size_t i = 0; i < image.size(); ++i)

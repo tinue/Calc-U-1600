@@ -119,7 +119,6 @@ public:
     std::string takeLastError() { return std::exchange(m_lastError, std::string()); }
 
     Mode mode() const { return m_mode; }
-    const std::string& path() const { return m_path; }
     const std::vector<int16_t>& recording() const { return m_recording; }
 
     // ── Signals from the interface ───────────────────────────────────────
@@ -134,7 +133,6 @@ public:
         }
         m_motor = on;
     }
-    bool motorOn() const { return m_motor; }
 
     /// Cassette-output line (MIC). Takes effect from the next advance().
     void setOutputLevel(bool high) { m_out = high; }

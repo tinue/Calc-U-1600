@@ -114,7 +114,7 @@ private:
     QPushButton* m_floppySideButton = nullptr;
     QLabel* m_floppyLampLabel = nullptr;
     bool m_floppyMotorOn = false;
-    void applyFloppyLampStyle();
+    static void applyLampStyle(QLabel* lamp, bool on);
 
     QWidget* m_tapeSeparator = nullptr;
     QLabel* m_tapeTitle = nullptr;

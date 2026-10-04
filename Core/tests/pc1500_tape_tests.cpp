@@ -14,8 +14,6 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <fstream>
-#include <iterator>
 #include <string>
 #include <vector>
 
@@ -39,8 +37,9 @@ const char* kFixtureWav = "Core/tests/fixtures/tape/pc1500_tape.wav";
 const char* kFixtureImg = "Core/tests/fixtures/tape/pc1500_tape.img";
 
 std::vector<uint8_t> readFile(const char* path) {
-    std::ifstream in(path, std::ios::binary);
-    return std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::vector<uint8_t> bytes;
+    CHECK(readRomImage(path, &bytes));
+    return bytes;
 }
 
 // A04 ROM + CE-150, cold boot, NEW0.
@@ -69,11 +68,7 @@ void type(PC1500Machine& m, const std::string& line) {
     waitIdle(m, kSecond);
 }
 
-std::string screen(PC1500Machine& m) {
-    std::string all;
-    for (const std::string& row : pc1500LcdText(m).plainRows) all += row + "\n";
-    return all;
-}
+std::string screen(PC1500Machine& m) { return pc1500LcdText(m).plainText(); }
 
 // The program area, from BASPRG_ST (7865H, big-endian).
 bool programIs(PC1500Machine& m, const std::vector<uint8_t>& image) {

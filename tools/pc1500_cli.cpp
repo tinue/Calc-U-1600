@@ -77,8 +77,8 @@ int main(int argc, char** argv) {
     std::string wavPath;
     std::string lcdPng;
     std::string lcdTextPath;
-    std::string tapeIn, tapeOut;
-    std::vector<std::pair<uint32_t, uint32_t>> memDumps;
+    cli::TapeOptions tape;
+    cli::MemDumps memDumps;
     Ce158CliPeer ce158Peer;
     {
         std::vector<char*> kept;
@@ -95,23 +95,9 @@ int main(int argc, char** argv) {
                 lcdTextPath = argv[++i];
                 continue;
             }
-            if (std::strcmp(argv[i], "--tape-in") == 0 && i + 1 < argc) {
-                tapeIn = argv[++i];
-                continue;
-            }
-            if (std::strcmp(argv[i], "--tape-out") == 0 && i + 1 < argc) {
-                tapeOut = argv[++i];
-                continue;
-            }
+            if (tape.parseArg(argc, argv, i)) continue;
             if (std::strcmp(argv[i], "--dump-mem") == 0 && i + 1 < argc) {
-                char* rest = nullptr;
-                const uint32_t start = static_cast<uint32_t>(std::strtoul(argv[++i], &rest, 0));
-                const uint32_t length = (rest && *rest == ',') ? static_cast<uint32_t>(std::strtoul(rest + 1, nullptr, 0)) : 0;
-                if (length == 0) {
-                    std::fprintf(stderr, "--dump-mem wants <addr>,<len>\n");
-                    return 1;
-                }
-                memDumps.emplace_back(start, length);
+                if (!cli::parseMemDump(argv[++i], &memDumps)) return 1;
                 continue;
             }
             if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
@@ -182,15 +168,7 @@ int main(int argc, char** argv) {
     // The CE-158's serial peer. Set before the preset attaches the card --
     // attachCE158() picks up whatever link the machine already holds.
     if (!ce158Peer.attach(machine)) return 1;
-    if (!tapeIn.empty()) {
-        std::string tapeError;
-        if (!machine.tapePlay(tapeIn, tapeError)) {
-            std::fprintf(stderr, "--tape-in: %s\n", tapeError.c_str());
-            return 1;
-        }
-    } else if (!tapeOut.empty()) {
-        machine.tapeRecord(tapeOut);
-    }
+    if (!tape.arm(machine)) return 1;
 
     if (usingPreset) {
         std::string presetPath = argv[2];
@@ -254,25 +232,8 @@ int main(int argc, char** argv) {
     }
 
     std::printf("Ran %llu instructions, %llu cycles\n", (unsigned long long)steps, (unsigned long long)consumed);
-    if (!tapeIn.empty() || !tapeOut.empty()) {
-        const TapeDeck::Status tape = machine.tapeStatus();
-        std::printf("Tape: %.2f s of %.2f s, motor %s\n", tape.position, tape.length, tape.motor ? "on" : "off");
-        std::string tapeError;
-        if (!machine.tapeEject(&tapeError)) {
-            std::fprintf(stderr, "--tape-out: %s\n", tapeError.c_str());
-            return 1;
-        }
-        if (!tapeOut.empty()) std::printf("Wrote %.2f s of tape to %s\n", tape.length, tapeOut.c_str());
-    }
-    for (const auto& [start, length] : memDumps) {
-        std::printf("--- memory $%04X+%u ---\n", start, length);
-        for (uint32_t a = start; a < start + length && a <= 0xFFFF; a += 16) {
-            std::printf("%04X:", a);
-            for (uint32_t i = a; i < a + 16 && i < start + length && i <= 0xFFFF; ++i)
-                std::printf(" %02X", machine.debugPeek(static_cast<uint16_t>(i)));
-            std::printf("\n");
-        }
-    }
+    if (!tape.finish(machine)) return 1;
+    cli::printMemDumps(machine, memDumps);
     if (!lcdPng.empty()) {
         std::string pngError;
         if (!writeLcdScreenshotPng(pc1500LcdBitmap(machine), kPC1500ScreenMm, lcdPng, &pngError)) {

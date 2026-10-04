@@ -204,8 +204,8 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
                 // compatible block reads 1 = pressed (Baum p.92). The system
                 // ROM itself only sees the IF1 latch.
                 if (m_onKeyPressed) v |= 0x80; else v &= uint8_t(~0x80);
-                bool cmt = false; // PB2 = CMTIN, while a tape interface drives it
-                if (m_systemBus.cmtIn(cmt)) v = cmt ? uint8_t(v | 0x04) : uint8_t(v & ~0x04);
+                // PB2 = CMTIN, while a tape interface drives it
+                if (m_systemBus.cmtIn((v & 0x04) != 0)) v |= 0x04; else v &= uint8_t(~0x04);
                 return v;
             }
             case 0x8: return m_opc;

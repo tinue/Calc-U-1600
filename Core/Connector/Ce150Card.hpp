@@ -81,7 +81,6 @@ public:
         m_recorder = deck;
         updateMotor();
     }
-    bool remoteRelay(int n) const { return m_relay[n & 1]; }
 
     void cmtOut(bool level) override {
         if (m_recorder) m_recorder->setOutputLevel(level);

@@ -206,7 +206,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_floppyLampLabel->setToolTip(tr("Drive active -- wait for this to go dark before turning the disk over"));
     m_floppyLampLabel->setText(QStringLiteral("●"));  // filled circle
     layout->addWidget(m_floppyLampLabel);
-    applyFloppyLampStyle();
+    applyLampStyle(m_floppyLampLabel, false);
 
     connect(m_floppyCombo, &QComboBox::currentIndexChanged, this,
             [this](int index) { emit floppyDiskSelected(m_floppyCombo->itemData(index).toString()); });
@@ -254,7 +254,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     m_tapeLampLabel->setAlignment(Qt::AlignCenter);
     m_tapeLampLabel->setObjectName(QStringLiteral("controlbar.tape.lamp"));
     m_tapeLampLabel->setToolTip(tr("Tape motor (switched by the remote relay)"));
-    m_tapeLampLabel->setStyleSheet(QStringLiteral("color: #888888;"));
+    applyLampStyle(m_tapeLampLabel, false);
     layout->addWidget(m_tapeLampLabel);
     setTapeVisible(false);
 
@@ -391,12 +391,12 @@ void ControlBar::setFloppySide(int side) {
 void ControlBar::setFloppyMotorOn(bool on) {
     if (on == m_floppyMotorOn) return;
     m_floppyMotorOn = on;
-    applyFloppyLampStyle();
+    applyLampStyle(m_floppyLampLabel, on);
 }
 
-void ControlBar::applyFloppyLampStyle() {
-    m_floppyLampLabel->setStyleSheet(m_floppyMotorOn ? QStringLiteral("color: #2ecc40;")
-                                                     : QStringLiteral("color: #888888;"));
+// A motor lamp: green while the motor runs, grey otherwise.
+void ControlBar::applyLampStyle(QLabel* lamp, bool on) {
+    lamp->setStyleSheet(on ? QStringLiteral("color: #2ecc40;") : QStringLiteral("color: #888888;"));
 }
 
 void ControlBar::setTapeCombo(const QStringList& names, const QString& selectedOrEmpty) {
@@ -434,7 +434,6 @@ void ControlBar::setTapeStatus(const TapeDeck::Status& status) {
     }
     if (status.motor != m_tapeMotorOn) {
         m_tapeMotorOn = status.motor;
-        m_tapeLampLabel->setStyleSheet(m_tapeMotorOn ? QStringLiteral("color: #2ecc40;")
-                                                     : QStringLiteral("color: #888888;"));
+        applyLampStyle(m_tapeLampLabel, m_tapeMotorOn);
     }
 }

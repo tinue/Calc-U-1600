@@ -83,8 +83,7 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
               const std::string& wavPath, const std::string& romOverride,
               const std::string& ce1600pRomOverride, const std::string& saveDir,
               Ce158CliPeer& ce158Peer, uint64_t runAfter, const std::string& lcdPng,
-              const std::string& lcdTextPath, const std::string& tapeIn, const std::string& tapeOut,
-              const std::vector<std::pair<uint32_t, uint32_t>>& memDumps) {
+              const std::string& lcdTextPath, const cli::TapeOptions& tape, const cli::MemDumps& memDumps) {
     (void)maxCycles;
     PresetFile preset;
     std::string error;
@@ -122,15 +121,7 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
     };
     if (!wavPath.empty()) machine.setYieldHook(drainWav, PC1600Machine::kTStateHz / 20);
     if (!ce158Peer.attach(machine)) return 1; // before the preset attaches the card
-    if (!tapeIn.empty()) {
-        std::string tapeError;
-        if (!machine.tapePlay(tapeIn, tapeError)) {
-            std::fprintf(stderr, "--tape-in: %s\n", tapeError.c_str());
-            return 1;
-        }
-    } else if (!tapeOut.empty()) {
-        machine.tapeRecord(tapeOut);
-    }
+    if (!tape.arm(machine)) return 1;
     // `saveas:` -- the file form always works; a by-name save needs
     // --save-dir. Cards splice into the file the loader attached them from
     // (reported by onArmed, before any step runs).
@@ -188,16 +179,7 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
     }
     cli::printCe150Report(machine);
     if (!ce158Peer.report(machine)) return 1;
-    if (!tapeIn.empty() || !tapeOut.empty()) {
-        const TapeDeck::Status tape = machine.tapeStatus();
-        std::printf("Tape: %.2f s of %.2f s, motor %s\n", tape.position, tape.length, tape.motor ? "on" : "off");
-        std::string tapeError;
-        if (!machine.tapeEject(&tapeError)) {
-            std::fprintf(stderr, "--tape-out: %s\n", tapeError.c_str());
-            return 1;
-        }
-        if (!tapeOut.empty()) std::printf("Wrote %.2f s of tape to %s\n", tape.length, tapeOut.c_str());
-    }
+    if (!tape.finish(machine)) return 1;
 
     if (!wavPath.empty()) {
         machine.setYieldHook({}, 0);
@@ -210,15 +192,7 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
                     static_cast<double>(wav.size()) / machine.audioSampleRate(), wavPath.c_str());
     }
 
-    for (const auto& [start, length] : memDumps) {
-        std::printf("--- memory $%04X+%u ---\n", start, length);
-        for (uint32_t a = start; a < start + length && a <= 0xFFFF; a += 16) {
-            std::printf("%04X:", a);
-            for (uint32_t i = a; i < a + 16 && i < start + length && i <= 0xFFFF; ++i)
-                std::printf(" %02X", machine.debugPeek(static_cast<uint16_t>(i)));
-            std::printf("\n");
-        }
-    }
+    cli::printMemDumps(machine, memDumps);
 
     if (dumpBasic) {
         auto be16 = [&](uint16_t a) {
@@ -290,9 +264,8 @@ int main(int argc, char** argv) {
         uint64_t runAfter = 0;
         std::string lcdPng;
         std::string lcdTextPath;
-        std::string tapeIn;
-        std::string tapeOut;
-        std::vector<std::pair<uint32_t, uint32_t>> memDumps;
+        cli::TapeOptions tape;
+        cli::MemDumps memDumps;
         std::string moduleDir = "Qt6/resources/cards";
         std::vector<std::string> extraModuleDirs;  // 2nd+ `--modules-dir`, searched after `moduleDir`
         bool moduleDirSet = false;
@@ -305,17 +278,9 @@ int main(int argc, char** argv) {
             else if (std::strcmp(argv[i], "--run-after") == 0 && i + 1 < argc) runAfter = std::strtoull(argv[++i], nullptr, 10);
             else if (std::strcmp(argv[i], "--lcd-png") == 0 && i + 1 < argc) lcdPng = argv[++i];
             else if (std::strcmp(argv[i], "--lcd-text") == 0 && i + 1 < argc) lcdTextPath = argv[++i];
-            else if (std::strcmp(argv[i], "--tape-in") == 0 && i + 1 < argc) tapeIn = argv[++i];
-            else if (std::strcmp(argv[i], "--tape-out") == 0 && i + 1 < argc) tapeOut = argv[++i];
+            else if (tape.parseArg(argc, argv, i)) {}
             else if (std::strcmp(argv[i], "--dump-mem") == 0 && i + 1 < argc) {
-                char* rest = nullptr;
-                const uint32_t start = static_cast<uint32_t>(std::strtoul(argv[++i], &rest, 0));
-                const uint32_t length = (rest && *rest == ',') ? static_cast<uint32_t>(std::strtoul(rest + 1, nullptr, 0)) : 0;
-                if (length == 0) {
-                    std::fprintf(stderr, "--dump-mem wants <addr>,<len>\n");
-                    return 1;
-                }
-                memDumps.emplace_back(start, length);
+                if (!cli::parseMemDump(argv[++i], &memDumps)) return 1;
             }
             else if (ce158Peer.parseArg(argc, argv, i)) {}
             else if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
@@ -325,7 +290,7 @@ int main(int argc, char** argv) {
             else maxCycles = std::strtoull(argv[i], nullptr, 10);
         }
         return runPreset(argv[2], maxCycles, dumpBasic, moduleDir, extraModuleDirs, wavPath, romOverride,
-                         ce1600pRomOverride, saveDir, ce158Peer, runAfter, lcdPng, lcdTextPath, tapeIn, tapeOut, memDumps);
+                         ce1600pRomOverride, saveDir, ce158Peer, runAfter, lcdPng, lcdTextPath, tape, memDumps);
     }
     if (argc < 3) {
         std::fprintf(stderr, "usage: %s <romI-0-file> <romII-0-file> [maxCycles]\n", argv[0]);

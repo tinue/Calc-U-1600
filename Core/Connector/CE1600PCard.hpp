@@ -84,7 +84,6 @@ public:
         m_recorder = deck;
         if (m_recorder) m_recorder->setMotor(m_relayClosed);
     }
-    bool relayClosed() const { return m_relayClosed; }
 
     bool respondsToRead(const PC1600BusPins& pins, uint8_t& outValue) const override {
         if (pins.io) {

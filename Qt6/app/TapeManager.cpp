@@ -33,17 +33,16 @@ bool TapeManager::selectForPlay(const QString& nameOrEmpty, QString* error) {
 }
 
 bool TapeManager::recordNew(const QString& name, QString* error) {
-    if (name.trimmed().isEmpty()) {
+    const QString trimmed = name.trimmed();
+    if (trimmed.isEmpty()) {
         *error = tr("Name cannot be empty.");
         return false;
     }
-    m_controller->tapeEject(error);
-    m_controller->tapeRecord(AppPaths::tapePathFor(name.trimmed()));
+    m_controller->tapeRecord(AppPaths::tapePathFor(trimmed)); // ejects what was in
     return true;
 }
 
-void TapeManager::onFrameTick() {
-    const TapeDeck::Status status = m_controller->tapeStatus();
+void TapeManager::onFrameTick(const TapeDeck::Status& status) {
     const bool recordingMotor = status.mode == TapeDeck::Mode::Record && status.motor;
     if (m_recordingMotor && !recordingMotor) emit tapesChanged(); // saved at the motor stop
     m_recordingMotor = recordingMotor;

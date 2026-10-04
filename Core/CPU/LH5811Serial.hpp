@@ -53,7 +53,6 @@ public:
         m_phiAccum = 0;
         m_holding = false;
         m_shiftBits = 0;
-        m_sxo = true;
         m_td = false;
     }
 
@@ -62,7 +61,6 @@ public:
     void writeG(uint8_t v) { m_g = v; }        // register 9
     uint8_t g() const { return m_g; }
     void writeF(uint8_t v) { m_f = v; }        // register 7
-    uint8_t f() const { return m_f; }
     void writeL(uint8_t v) {                   // register 6
         m_td = false;
         if (m_shiftBits == 0) {
@@ -80,8 +78,8 @@ public:
     bool cl0() const { return (m_g & 0x18) == 0x10 && serialClock(); }
     /// The cassette / serial output.
     bool sdo() const {
-        if (!(m_f & 0x40)) return m_sxo;
-        return tap(modulationDivider(m_sxo ? (m_f & 0x07) : ((m_f >> 3) & 0x07)));
+        if (!(m_f & 0x40)) return sxo();
+        return tap(modulationDivider(sxo() ? (m_f & 0x07) : ((m_f >> 3) & 0x07)));
     }
 
     /// Credits `cycles` CPU cycles. `onSegment(cycles, sdo)` is called for
@@ -89,6 +87,14 @@ public:
     /// recorder or buzzer sees every SDO edge at its exact time.
     template <class OnSegment>
     void advance(uint32_t cycles, OnSegment&& onSegment) {
+        if (cycles == 0) return;
+        if (!(m_f & 0x40) && m_shiftBits == 0) {
+            // SDO is the idle SXO (mark) and nothing can change it: credit
+            // the divider in one go.
+            creditPhi(cycles);
+            onSegment(cycles, true);
+            return;
+        }
         uint32_t pending = 0; // CPU cycles at the current SDO level not yet reported
         bool level = sdo();
         while (cycles > 0) {
@@ -103,22 +109,11 @@ public:
             // CPU cycles until that many phi ticks have elapsed.
             const uint64_t need = toBoundary * m_cpuHz - m_phiAccum;
             const uint64_t cyclesToBoundary = (need + m_phiHz - 1) / m_phiHz;
-            if (cyclesToBoundary > cycles) {
-                m_phiAccum += uint64_t(cycles) * m_phiHz;
-                const uint64_t ticks = m_phiAccum / m_cpuHz;
-                m_phiAccum -= ticks * m_cpuHz;
-                m_count += ticks;
-                if (m_shiftBits > 0) m_txPhase += ticks;
-                pending += cycles;
-                break;
-            }
-            m_phiAccum += cyclesToBoundary * m_phiHz;
-            const uint64_t ticks = m_phiAccum / m_cpuHz;
-            m_phiAccum -= ticks * m_cpuHz;
-            m_count += ticks;
+            const auto step = static_cast<uint32_t>(std::min<uint64_t>(cyclesToBoundary, cycles));
+            const uint64_t ticks = creditPhi(step);
             if (m_shiftBits > 0 && (m_txPhase += ticks) >= bitPeriod()) endBit();
-            pending += static_cast<uint32_t>(cyclesToBoundary);
-            cycles -= static_cast<uint32_t>(cyclesToBoundary);
+            pending += step;
+            cycles -= step;
             const bool now = sdo();
             if (now != level) {
                 onSegment(pending, level);
@@ -138,30 +133,36 @@ private:
     uint16_t m_shift = 0;    // the frame being sent, next bit in bit 0
     uint64_t m_txPhase = 0;  // phi ticks into the current bit
     int m_shiftBits = 0;     // bits of it still to send
-    bool m_sxo = true;
     bool m_td = false;
 
     // Bit k-1 of the count is the ÷2^k output.
     bool tap(int log2Divider) const { return log2Divider <= 0 || ((m_count >> (log2Divider - 1)) & 1) != 0; }
 
     static int modulationDivider(int code) { return code >= 4 ? 10 : 6 + code; } // ÷64..÷1024
-    bool serialClock() const {
-        static constexpr int kLog2[8] = {0, 1, 7, 8, 9, 10, 11, 12}; // ÷1, 2, 128 .. 4096
-        return tap(kLog2[m_g & 0x07]);
-    }
+    static constexpr int kSerialLog2[8] = {0, 1, 7, 8, 9, 10, 11, 12}; // G0-2: ÷1, 2, 128 .. 4096
+    bool serialClock() const { return tap(kSerialLog2[m_g & 0x07]); }
 
     void startFrame(uint8_t v) {
         m_shift = static_cast<uint16_t>((uint16_t(v) << 1) | 0x600); // start 0, data, 2 stop
         m_shiftBits = 11;
         m_txPhase = 0;
-        m_count = 0;   // the divider restarts with the frame
-        m_sxo = false; // the start bit, from now
+        m_count = 0; // the divider restarts with the frame
     }
 
     // One serial-clock period in phi ticks: a bit's length.
-    uint64_t bitPeriod() const {
-        static constexpr int kLog2[8] = {0, 1, 7, 8, 9, 10, 11, 12};
-        return uint64_t{1} << kLog2[m_g & 0x07];
+    uint64_t bitPeriod() const { return uint64_t{1} << kSerialLog2[m_g & 0x07]; }
+
+    // SXO: the bit being sent, mark (1) while idle.
+    bool sxo() const { return m_shiftBits == 0 || (m_shift & 1) != 0; }
+
+    // Credits `cycles` CPU cycles to the divider; returns the whole phi
+    // ticks they completed.
+    uint64_t creditPhi(uint64_t cycles) {
+        m_phiAccum += cycles * m_phiHz;
+        const uint64_t ticks = m_phiAccum / m_cpuHz;
+        m_phiAccum -= ticks * m_cpuHz;
+        m_count += ticks;
+        return ticks;
     }
 
     // The current bit has lasted a serial-clock period.
@@ -176,6 +177,5 @@ private:
             }
             m_td = true;
         }
-        m_sxo = m_shiftBits > 0 ? (m_shift & 1) != 0 : true;
     }
 };

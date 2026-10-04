@@ -37,7 +37,7 @@ public:
 
     /// Once per frame: reports a failed automatic save, and tapesChanged()
     /// when a recording has just been saved (its file may be new).
-    void onFrameTick();
+    void onFrameTick(const TapeDeck::Status& status);
 
 signals:
     void tapesChanged();

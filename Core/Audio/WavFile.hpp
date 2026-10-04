@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "../FileIO.hpp"
+
 // Minimal RIFF/WAVE writer for PiezoSampler and TapeDeck output (mono,
 // 16-bit PCM) -- used by the headless CLIs' --wav flag to capture buzzer
 // audio for offline inspection, and for cassette recordings.
@@ -33,7 +35,7 @@ inline bool writeWavMono16(const std::string& path, const std::vector<int16_t>& 
     u16(16);                                     // bits per sample
     std::fwrite("data", 1, 4, f);
     u32(dataBytes);
-    for (int16_t s : samples) u16(static_cast<uint16_t>(s));
+    std::fwrite(samples.data(), 2, samples.size(), f); // little-endian host, as readWav assumes
     return std::fclose(f) == 0;
 }
 
@@ -49,13 +51,8 @@ struct WavData {
 // WAVE_FORMAT_EXTENSIBLE with a PCM or float subformat). Returns false
 // with a reason in `error` for anything else.
 inline bool readWav(const std::string& path, WavData& out, std::string& error) {
-    FILE* f = std::fopen(path.c_str(), "rb");
-    if (!f) { error = "cannot open " + path; return false; }
     std::vector<uint8_t> bytes;
-    uint8_t buf[65536];
-    size_t n;
-    while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) bytes.insert(bytes.end(), buf, buf + n);
-    std::fclose(f);
+    if (!readWholeFile(path, &bytes)) { error = "cannot open " + path; return false; }
 
     auto u16 = [&](size_t at) { return uint16_t(bytes[at] | bytes[at + 1] << 8); };
     auto u32 = [&](size_t at) { return uint32_t(u16(at)) | uint32_t(u16(at + 2)) << 16; };

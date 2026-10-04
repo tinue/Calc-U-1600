@@ -159,7 +159,6 @@ public:
             m_systemBus.advanceCassette(n);
         });
     }
-    const LH5811Serial& serial() const { return m_serial; }
 
     /// Seed the uPD1990AC's calendar from the host clock (see
     /// PC1500Machine::seedClock). month is 1-12, dow 0-6 (Sunday=0), the
@@ -267,9 +266,7 @@ private:
     // a real unit is audible on both. CMT IN counts as high (the pull-up)
     // while no tape interface drives it.
     void updateBuzzerLine(bool sdo) {
-        bool cmtIn = true;
-        if (!m_systemBus.cmtIn(cmtIn)) cmtIn = true;
-        m_piezo.setLevel(!(sdo && (m_opc & 0x40) != 0 && cmtIn));
+        m_piezo.setLevel(!(sdo && (m_opc & 0x40) != 0 && m_systemBus.cmtIn(true)));
     }
 
     // The serial block behind registers 4 (divider reset), 6 (L), 7 (F)

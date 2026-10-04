@@ -94,15 +94,9 @@ public:
     }
 
     /// The main unit's cassette-write line (SC-7852 SD0, OPC 18H b7).
-    void setCmtOut(bool level) {
-        for (PC1600ExpansionCard* card : m_chain.cards()) card->cmtOut(level);
-    }
-    /// The cassette-read line as a card drives it; false if none does.
-    bool cmtIn(bool& level) const {
-        for (PC1600ExpansionCard* card : m_chain.cards())
-            if (card->cmtIn(level)) return true;
-        return false;
-    }
+    void setCmtOut(bool level) { m_chain.setCmtOut(level); }
+    /// The cassette-read line as a card drives it; `idle` if none does.
+    bool cmtIn(bool idle) const { return m_chain.cmtIn(idle); }
     void tick(uint32_t tstates) {
         for (PC1600ExpansionCard* card : m_chain.cards()) card->tick(tstates);
     }

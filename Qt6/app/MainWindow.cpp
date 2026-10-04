@@ -939,8 +939,9 @@ void MainWindow::refreshViewsAfterAdvance() {
     m_moduleManager->markDirtyAndSchedulePersist();
     m_floppyManager->markDirtyAndSchedulePersist();
     m_controlBar->setFloppyMotorOn(m_floppyManager->motorOn());
-    m_tapeManager->onFrameTick();
-    m_controlBar->setTapeStatus(m_controller->tapeStatus());
+    const TapeDeck::Status tapeStatus = m_controller->tapeStatus();
+    m_tapeManager->onFrameTick(tapeStatus);
+    m_controlBar->setTapeStatus(tapeStatus);
     m_debugPanel->onFrameTick();
     if (m_debugRowLayout->indexOf(m_plotterPaper) >= 0) m_plotterPaper->onFrameTick();
     if (m_debugRowLayout->indexOf(m_ce158Printer) >= 0) m_ce158Printer->onFrameTick();
