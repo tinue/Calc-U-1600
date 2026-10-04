@@ -353,30 +353,36 @@ void testSerialClockAndDividerReset() {
     CHECK(!s.cl0());
 }
 
-// L sends start, 8 data bits LSB first, 2 stop bits, one per serial clock
-// period; TD goes high once L is free again, and a byte written then
-// follows without a gap.
+// L sends start, 8 data bits LSB first, 2 stop bits; the start bit begins
+// at the write, each serial clock rise ends a bit. TD comes once the
+// second stop bit is done, and a byte written then follows without a gap.
 void testTransmitFrames() {
     LH5811Serial s(kPhi, kPhi);
     s.reset();
     s.writeG(0x17); // bit time 4096 phi
     s.writeF(0x00); // no modulation: SDO = the serial data
     s.resetDivider();
+    auto ignore = [](uint32_t, bool) {};
+    s.advance(2048, ignore); // to a rising clock edge
     CHECK(s.sdo());
+    auto bitsOf = [](const std::vector<std::pair<bool, uint64_t>>& runs) {
+        std::string out;
+        for (const auto& [level, n] : runs)
+            for (uint64_t k = 0; k < (n + 2048) / 4096; ++k) out += level ? '1' : '0';
+        return out;
+    };
     s.writeL(0xA5);
     CHECK(!s.td());
-    auto ignore = [](uint32_t, bool) {};
-    s.advance(2048, ignore); // first rising clock edge: the frame starts
+    CHECK(!s.sdo()); // the start bit, at once
+    const auto first = sdoRuns(s, 10 * 4096 + 4095, 1);
+    CHECK(!s.td()); // the second stop bit is still going
+    s.advance(1, ignore);
     CHECK(s.td());
+    CHECK(bitsOf(first) == "01010010111"); // 0 10100101 11
     s.writeL(0xF3);
     CHECK(!s.td());
-    const auto runs = sdoRuns(s, 24 * 4096);
-    // Expected bits: 0 10100101 11 0 11001111 11, then idle mark.
-    const std::string expect = "0101001011101100111111";
-    std::string got;
-    for (const auto& [level, n] : runs)
-        for (uint64_t k = 0; k < (n + 2048) / 4096; ++k) got += level ? '1' : '0';
-    CHECK(got.compare(0, expect.size(), expect) == 0);
+    const auto second = sdoRuns(s, 13 * 4096);
+    CHECK(bitsOf(second).compare(0, 13, "0110011111111") == 0); // 0 11001111 11, then mark
     CHECK(s.td());
     CHECK(s.sdo());
 }

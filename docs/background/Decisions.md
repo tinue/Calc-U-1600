@@ -91,13 +91,24 @@ keeps the 2x steps from clipping; the priming keeps sample 0 silent. The
 real leader also starts ~1.6x louder and settles over ~1.5 s; that may be
 the recording input's automatic gain, so it isn't modelled.
 
-### LH5811 L is a holding register; TD means "L is empty"
-`LH5811Serial` moves a byte from L into the shift register at a rising
-serial-clock edge and sets TD then. The TRM only says TD is set "upon
-completion of serial data transmission". With TD set at the end of the
-second stop bit, every PC-1500 nibble frame would carry an extra idle bit.
-This model gives the "start + 4 data + 6 stop" frames that `bin2wav` writes
-and real tapes carry; the emulator's CSAVE matches `bin2wav` bit for bit.
+### LH5811 transmitter: an L write restarts the divider; TD means "sent"
+`LH5811Serial` starts a frame at the L write: it restarts the divider and
+begins a full start bit at once, and TD is set when the second stop bit is
+done. All three come from a real PC-1500 (A01) + CE-150 `CSAVE`
+(2026-10-04):
+- Back-to-back nibble frames carry exactly 6 mark bits (4 data + 2 stop),
+  no extra idle bit: the next frame must start at the write, not at the
+  next clock edge.
+- The pauses after the header and around the end byte (`TIME_DELAY`, 17
+  TP periods) are 78-80 bits of mark. With TD = "L empty" the last frame
+  was still being sent during the delay and the pauses came out 11 bits
+  (one frame) short.
+- The first frame after a pause starts with a whole start bit, its tones
+  in phase with the bit. A start bit cut short by a free-running bit clock
+  gives the CE-150 reader ERROR 44; tones out of phase give `wav2bin`
+  glitches the real tape doesn't have.
+The CL1 timer (MSK b7) uses the same divider, but the CE-150 only reads it
+while loading, when it doesn't transmit.
 
 ### PC-1500 PB7 reads high while ON is pressed
 The CE-150's tape reader (LOAD_NIBBLE &BE2F) takes PB7 = 1 as BREAK, IF1

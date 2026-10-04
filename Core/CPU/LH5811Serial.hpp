@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cstdint>
 
 // ── LH5811 / LH5810 serial block: divider, G/F registers, transmitter ────
@@ -23,15 +24,22 @@
 //     first, two stop bits, one bit per serial clock period, and clears TD
 //     (IF bit 3). SXO idles at mark (1).
 //
-// Not documented, chosen so that frames sent back to back (the CE-150
-// waits for TD, then writes L) follow each other without an extra idle
-// bit -- the "start + 4 data + 6 stop" nibble frames PC-1500 tapes carry:
-// L is a holding register in front of the shift register. TD means "L is
-// empty"; at each rising edge of the serial clock a finished (or idle)
-// shift register takes the next byte from L, setting TD. Also not
-// documented: what TD reads at power-on (taken as 0 -- the CE-150 sends
-// its first byte without waiting for TD), and the receive side (SD1, U,
-// RD), which nothing here uses.
+// Timing, from a real PC-1500 (A01) + CE-150 CSAVE (2026-10-04): TD is set
+// when the second stop bit is done ("upon completion of serial data
+// transmission"), and a write to an idle transmitter restarts the divider
+// and starts a full start bit at once, so the bits and the FX/FY tones
+// start in phase -- one serial-clock period per bit, whole tone cycles in
+// each. So frames the CE-150 sends back to back (it waits for TD, then
+// writes L) follow each other with exactly two stop bits -- the "start +
+// 4 data + 6 stop" nibble frames real tapes carry -- a delay the ROM
+// starts after the last TD (TIME_DELAY) is all idle mark on the tape, and
+// the frame after it still starts with a whole, clean start bit, which
+// the CE-150's reader needs (a start bit cut short gives ERROR 44, and
+// tones out of phase with the bits give wav2bin glitches the real tape
+// doesn't have). A byte written while a frame is still going waits and
+// follows it (not seen from the ROMs). Not documented: what TD reads at power-on (taken as 0 --
+// the CE-150 sends its first byte without waiting for TD), and the
+// receive side (SD1, U, RD), which nothing here uses.
 //
 // Time comes in CPU cycles; `phiHz` / `cpuHz` converts (the PC-1500's φOS
 // is the CPU clock, 1:1).
@@ -56,9 +64,13 @@ public:
     void writeF(uint8_t v) { m_f = v; }        // register 7
     uint8_t f() const { return m_f; }
     void writeL(uint8_t v) {                   // register 6
-        m_l = v;
-        m_holding = true;
         m_td = false;
+        if (m_shiftBits == 0) {
+            startFrame(v);
+        } else {
+            m_l = v;
+            m_holding = true;
+        }
     }
     bool td() const { return m_td; }
 
@@ -84,7 +96,10 @@ public:
             // next tick that can change anything (any tap we use toggles
             // on a multiple of 32 phi: ÷64 is the fastest modulation tap,
             // and the serial clock ÷1/÷2 isn't used for tape).
-            const uint64_t toBoundary = 32 - (m_count & 31);
+            // The transmitter's bit ends are timed from the write, so they
+            // are a boundary too.
+            uint64_t toBoundary = 32 - (m_count & 31);
+            if (m_shiftBits > 0) toBoundary = std::min<uint64_t>(toBoundary, bitPeriod() - m_txPhase);
             // CPU cycles until that many phi ticks have elapsed.
             const uint64_t need = toBoundary * m_cpuHz - m_phiAccum;
             const uint64_t cyclesToBoundary = (need + m_phiHz - 1) / m_phiHz;
@@ -93,15 +108,15 @@ public:
                 const uint64_t ticks = m_phiAccum / m_cpuHz;
                 m_phiAccum -= ticks * m_cpuHz;
                 m_count += ticks;
+                if (m_shiftBits > 0) m_txPhase += ticks;
                 pending += cycles;
                 break;
             }
             m_phiAccum += cyclesToBoundary * m_phiHz;
             const uint64_t ticks = m_phiAccum / m_cpuHz;
             m_phiAccum -= ticks * m_cpuHz;
-            const bool clockBefore = serialClock();
             m_count += ticks;
-            if (!clockBefore && serialClock()) onSerialClockRise();
+            if (m_shiftBits > 0 && (m_txPhase += ticks) >= bitPeriod()) endBit();
             pending += static_cast<uint32_t>(cyclesToBoundary);
             cycles -= static_cast<uint32_t>(cyclesToBoundary);
             const bool now = sdo();
@@ -121,6 +136,7 @@ private:
     uint8_t m_g = 0, m_f = 0, m_l = 0;
     bool m_holding = false;  // L holds a byte the shift register hasn't taken
     uint16_t m_shift = 0;    // the frame being sent, next bit in bit 0
+    uint64_t m_txPhase = 0;  // phi ticks into the current bit
     int m_shiftBits = 0;     // bits of it still to send
     bool m_sxo = true;
     bool m_td = false;
@@ -134,16 +150,30 @@ private:
         return tap(kLog2[m_g & 0x07]);
     }
 
-    // A rising serial-clock edge ends the current bit.
-    void onSerialClockRise() {
-        if (m_shiftBits > 0) {
-            m_shift >>= 1;
-            --m_shiftBits;
-        }
-        if (m_shiftBits == 0 && m_holding) {
-            m_shift = static_cast<uint16_t>((uint16_t(m_l) << 1) | 0x600); // start 0, data, 2 stop
-            m_shiftBits = 11;
-            m_holding = false;
+    void startFrame(uint8_t v) {
+        m_shift = static_cast<uint16_t>((uint16_t(v) << 1) | 0x600); // start 0, data, 2 stop
+        m_shiftBits = 11;
+        m_txPhase = 0;
+        m_count = 0;   // the divider restarts with the frame
+        m_sxo = false; // the start bit, from now
+    }
+
+    // One serial-clock period in phi ticks: a bit's length.
+    uint64_t bitPeriod() const {
+        static constexpr int kLog2[8] = {0, 1, 7, 8, 9, 10, 11, 12};
+        return uint64_t{1} << kLog2[m_g & 0x07];
+    }
+
+    // The current bit has lasted a serial-clock period.
+    void endBit() {
+        m_txPhase = 0;
+        m_shift >>= 1;
+        if (--m_shiftBits == 0) {
+            if (m_holding) {
+                m_holding = false;
+                startFrame(m_l);
+                return;
+            }
             m_td = true;
         }
         m_sxo = m_shiftBits > 0 ? (m_shift & 1) != 0 : true;

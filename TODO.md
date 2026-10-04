@@ -351,10 +351,11 @@ CE-1600P (docs/background/plans/Cassette-Tape-Plan.md, dev/tape-matrix/).
   the PC-1500 buzzer follows PC6 only (CSAVE is silent), and the PC-1600's
   follows 18H b6/b7 and SDO (CSAVE audible, CLOAD silent). Listen to a real
   unit during CSAVE and CLOAD, then model what it does.
-- **Real-hardware cross-check** (both machines): `CLOAD` an emulator
-  `CSAVE` WAV on the real unit, and `CLOAD` a real `CSAVE` recording in the
-  emulator. It also checks the LH5811 transmitter model (Decisions.md: "L
-  is a holding register").
+- **Real-hardware cross-check, remaining half:** `CLOAD` an emulator
+  `CSAVE` WAV on the real units (PC-1500 + CE-150, PC-1600 + CE-1600P).
+  The other half is done (2026-10-04): real `CSAVE` recordings of both
+  machines load in the emulator, and their timing set the recorder's 12 Hz
+  coupling and the LH5811 transmitter model (Decisions.md).
 
 ## Feature ideas
 
