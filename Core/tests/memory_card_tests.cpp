@@ -582,9 +582,6 @@ void test_rom_reads_and_ignores_every_write() {
     w.direct = true;
     CHECK(card->respondsToWrite(w, 0x22));
     CHECK(card->respondsToRead(p, v) && v == 0xC5);
-    // Nor can the debug/program-loader backing-store path.
-    const uint8_t b = 0x33;
-    CHECK(!card->debugImageWrite(0x0003, &b, 1));
     CHECK(card->debugImage()[3] == 0xC5);
 }
 
@@ -654,67 +651,10 @@ void test_rom_by_bank_mixed_with_regular() {
     CHECK(card != nullptr);
     if (!card) return;
     CHECK(!card->definition().isRom());
-    const uint8_t b = 0x5A;
-    CHECK(!card->debugImageWrite(0x0002, &b, 1));  // bank 0: ROM
-    CHECK(card->debugImageWrite(0x0012, &b, 1));   // bank 1: RAM
-    CHECK(card->debugImage()[0x02] == 0xA2 && card->debugImage()[0x12] == 0x5A);
-}
-
-// ── debugImageWrite(): the write side of debugImage() ──────────────────
-//
-// The PC-1600 fast BASIC loader scatters a tokenised program straight into
-// a card's backing store, bypassing the bus. debugImageWrite() must be the
-// exact inverse of debugImage() (same concatenated address space), land
-// bytes that a normal bus read then sees, and reject an out-of-range range
-// without a partial write.
-void test_debug_image_write_roundtrip() {
-    // SoftwareDefinedCard (CE-1600M: one 0x8000 unbanked region).
-    auto sd = buildCard(kCe1600mYaml, CardHost::PC1600Slot1);
-    CHECK(sd != nullptr);
-    if (sd) {
-        std::vector<uint8_t> patch(0x40);
-        for (size_t i = 0; i < patch.size(); ++i) patch[i] = static_cast<uint8_t>(0xC5 + i);
-        CHECK(sd->debugImageWrite(0x00C5, patch.data(), patch.size()));
-        auto img = sd->debugImage();
-        CHECK(img.size() == 0x8000);
-        CHECK(std::equal(patch.begin(), patch.end(), img.begin() + 0x00C5));
-
-        // Visible through an ordinary bus read (PVOUT low -> low half).
-        PinState p;
-        p.address = 0x80C5;
-        p.pin[4] = true;
-        uint8_t v = 0;
-        CHECK(sd->respondsToRead(p, v) && v == 0xC5);
-
-        // High half (card offset 0x4000+) -> PVOUT high.
-        uint8_t hi = 0x99;
-        CHECK(sd->debugImageWrite(0x4000, &hi, 1));
-        PinState ph;
-        ph.address = 0x8000;
-        ph.pin[4] = true;
-        ph.pin[5] = true;
-        CHECK(sd->respondsToRead(ph, v) && v == 0x99);
-
-        // Out of range: nothing written.
-        auto before = sd->debugImage();
-        uint8_t x = 0x11;
-        CHECK(!sd->debugImageWrite(0x8000, &x, 1));
-        CHECK(!sd->debugImageWrite(0x7FFF, patch.data(), 2));
-        CHECK(sd->debugImage() == before);
-    }
-
-    // A second definition (plain 32 KB RAM, built inline).
-    auto ram = plainRamCard(0x8000);
-    CHECK(ram != nullptr);
-    if (!ram) return;
-    uint8_t bytes[4] = {1, 2, 3, 4};
-    CHECK(ram->debugImageWrite(0x10, bytes, 4));
-    CHECK(ram->debugImage()[0x11] == 2);
-    CHECK(!ram->debugImageWrite(0x7FFE, bytes, 4));
-    CHECK(ram->debugImage()[0x11] == 2);  // unchanged by the failed write
-
-    // Base ExpansionCard default: no writable backing.
-    CHECK(!ram->ExpansionCard::debugImageWrite(0, bytes, 4));
+    const Region& r = card->definition().regions[0];
+    CHECK(r.contentForBank(0).kind == ContentKind::Rom);
+    CHECK(r.contentForBank(1).kind == ContentKind::Regular);
+    CHECK(card->debugImage()[0x02] == 0xA2);
 }
 
 // ── CE-1601M trigger-based banking ─────────────────────────────────────
@@ -1640,7 +1580,6 @@ int run_memory_card_tests() {
 
     test_compat_gate_inline();
     test_compat_gate_via_file_if_present();
-    test_debug_image_write_roundtrip();
     test_ce1601m_trigger_banking_direct();
     test_debug_bank_count();
     test_superram_16way_vertical_banking_direct();

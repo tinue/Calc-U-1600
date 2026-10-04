@@ -37,7 +37,7 @@ bool loadPC1600MachineCode(PC1600Machine& machine, int slot, uint32_t addr, cons
     }
     // Past $BFFF the code continues in internal RAM, as BLOAD / CLOAD M write it.
     const size_t inWindow = std::min<size_t>(len, 0xC000 - addr);
-    if (!machine.debugSlotBusWritable(bank, static_cast<uint16_t>(addr), inWindow)) {
+    if (!machine.debugWriteSlotBus(bank, static_cast<uint16_t>(addr), data, inWindow)) {
         char b[160];
         std::snprintf(b, sizeof(b),
                       "no RAM for $%04X + %zu bytes in slot %s, bank %d (empty slot, or a module with no writable "
@@ -46,7 +46,6 @@ bool loadPC1600MachineCode(PC1600Machine& machine, int slot, uint32_t addr, cons
         *error = b;
         return false;
     }
-    machine.debugWriteSlotBus(bank, static_cast<uint16_t>(addr), data, inWindow);
     if (inWindow < len && !machine.debugWriteInternalRam(0, data + inWindow, len - inWindow)) {
         *error = "internal-RAM write failed";
         return false;

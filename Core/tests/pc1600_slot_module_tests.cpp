@@ -37,6 +37,20 @@ std::unique_ptr<SoftwareDefinedCard> card(const char* file, CardHost host) {
     return c;
 }
 
+// A PC-1600 booted to the prompt with module `file` in `slot` (1/2), or
+// with empty slots for a null `file`; null when the ROMs are missing.
+std::unique_ptr<PC1600Machine> bootWithCard(int slot, const char* file) {
+    auto m = std::make_unique<PC1600Machine>();
+    if (file && slot == 1) m->attachSlot1Card(card(file, CardHost::PC1600Slot1));
+    if (file && slot == 2) m->attachSlot2Card(card(file, CardHost::PC1600Slot2));
+    if (!bootPC1600(*m)) return nullptr;
+    return m;
+}
+
+uint16_t rd16(PC1600Machine& m, uint16_t a) {
+    return uint16_t(m.memory().read(a) | (m.memory().read(uint16_t(a + 1)) << 8));
+}
+
 // Select which page-C (8000-BFFF) bank the SC7852 sees: value 0/1 -> Slot 1,
 // 2/3 -> Slot 2 (Port 31H bits 4-6).
 void selectPageCBank(PC1600Machine& m, uint8_t bank) {
@@ -222,22 +236,11 @@ void test_boot_with_ce155_in_slot1_is_stable() {
 // documented CE-159 figure -- Ref/PC-1600/PC-1600-Memory-Architecture.md), i.e. every
 // RAM-base/size work-area pointer moves by exactly 8192.
 void test_ce155_contributes_full_8k_to_mem() {
-    auto boot = [](bool withCard) -> std::unique_ptr<PC1600Machine> {
-        auto m = std::make_unique<PC1600Machine>();
-        if (!loadPC1600Roms(*m)) return nullptr;
-        if (withCard) m->attachSlot1Card(card("ce155.card.yaml", CardHost::PC1600Slot1));
-        m->allReset();
-        m->runCycles(PC1600Machine::kTStateHz * 4);
-        return m;
-    };
-    auto m0 = boot(false), m1 = boot(true);
+    auto m0 = bootWithCard(1, nullptr), m1 = bootWithCard(1, "ce155.card.yaml");
     if (!m0 || !m1) {
         std::fprintf(stderr, "SKIP test_ce155_contributes_full_8k_to_mem: PC-1600 ROM images not found\n");
         return;
     }
-    auto rd16 = [](PC1600Machine& m, uint16_t a) {
-        return uint16_t(m.memory().read(a) | (m.memory().read(uint16_t(a + 1)) << 8));
-    };
     // F5CFH holds the BASIC RAM base pointer (C0C5H stock).
     CHECK(rd16(*m0, 0xF5CF) == 0xC0C5);
     CHECK(rd16(*m1, 0xF5CF) == 0xA0C5); // stock - 8192, program area start A0C5H
@@ -251,22 +254,12 @@ void test_ce155_contributes_full_8k_to_mem() {
 // were taped off (electrically a CE-151). The probe picks 1BH with an empty
 // slot and 5BH for a CE-155.
 void test_ce151_fills_b000_bfff_in_slot1() {
-    auto boot = [](const char* file) -> std::unique_ptr<PC1600Machine> {
-        auto m = std::make_unique<PC1600Machine>();
-        if (!loadPC1600Roms(*m)) return nullptr;
-        if (file) m->attachSlot1Card(card(file, CardHost::PC1600Slot1));
-        m->allReset();
-        m->runCycles(PC1600Machine::kTStateHz * 4);
-        return m;
-    };
-    auto m0 = boot(nullptr), m1 = boot("ce151.card.yaml"), m5 = boot("ce155.card.yaml");
+    auto m0 = bootWithCard(1, nullptr), m1 = bootWithCard(1, "ce151.card.yaml"),
+         m5 = bootWithCard(1, "ce155.card.yaml");
     if (!m0 || !m1 || !m5) {
         std::fprintf(stderr, "SKIP test_ce151_fills_b000_bfff_in_slot1: PC-1600 ROM images not found\n");
         return;
     }
-    auto rd16 = [](PC1600Machine& m, uint16_t a) {
-        return uint16_t(m.memory().read(a) | (m.memory().read(uint16_t(a + 1)) << 8));
-    };
     CHECK(m0->memory().read(0xF08D) == 0x1B);
     CHECK(m1->memory().read(0xF08D) == 0x1A);
     CHECK(m5->memory().read(0xF08D) == 0x5B);
@@ -289,23 +282,12 @@ void test_ce151_fills_b000_bfff_in_slot1() {
 // credits +16384 (MEM 11834 + 16384, Ref/PC-1600/PC-1600-Memory-Architecture.md),
 // BASIC RAM base C0C5H -> 80C5H.
 void test_ce161_contributes_full_16k_in_both_slots() {
-    auto boot = [](int slot) -> std::unique_ptr<PC1600Machine> {
-        auto m = std::make_unique<PC1600Machine>();
-        if (!loadPC1600Roms(*m)) return nullptr;
-        if (slot == 1) m->attachSlot1Card(card("ce161.card.yaml", CardHost::PC1600Slot1));
-        if (slot == 2) m->attachSlot2Card(card("ce161.card.yaml", CardHost::PC1600Slot2));
-        m->allReset();
-        m->runCycles(PC1600Machine::kTStateHz * 4);
-        return m;
-    };
-    auto m0 = boot(0), m1 = boot(1), m2 = boot(2);
+    auto m0 = bootWithCard(1, nullptr), m1 = bootWithCard(1, "ce161.card.yaml"),
+         m2 = bootWithCard(2, "ce161.card.yaml");
     if (!m0 || !m1 || !m2) {
         std::fprintf(stderr, "SKIP test_ce161_contributes_full_16k_in_both_slots: PC-1600 ROM images not found\n");
         return;
     }
-    auto rd16 = [](PC1600Machine& m, uint16_t a) {
-        return uint16_t(m.memory().read(a) | (m.memory().read(uint16_t(a + 1)) << 8));
-    };
     CHECK(rd16(*m1, 0xF5CF) == 0x80C5);
     CHECK(rd16(*m2, 0xF5CF) == 0x80C5);
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m1, 0xF89D)) == 16384);
@@ -407,9 +389,6 @@ void test_trigger_latch_modules_in_slot2_contribute_full_16k() {
         m->allReset();
         m->runCycles(PC1600Machine::kTStateHz * 4);
         return m;
-    };
-    auto rd16 = [](PC1600Machine& m, uint16_t a) {
-        return uint16_t(m.memory().read(a) | (m.memory().read(uint16_t(a + 1)) << 8));
     };
     auto m0 = boot(nullptr);
     auto c1 = card("ce1638.card.yaml", CardHost::PC1600Slot2);

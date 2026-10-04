@@ -228,24 +228,24 @@ void LH5801::serviceInterrupt() {
 
 // ── Trace ─────────────────────────────────────────────────────────────────
 
-void LH5801::fillTraceRegisters(uint32_t tf) {
-    CpuFrame& f = m_traceRegisters;
-    f.a = A; f.xl = XL; f.xh = XH; f.yl = YL; f.yh = YH; f.ul = UL; f.uh = UH;
-    f.s = S; f.t = T;
-    if (tf & TRACE_REGS_FULL) {
-        f.pu = PU; f.pv = PV; f.disp = DISP; f.tm = TM;
-    } else {
-        f.pu = f.pv = f.disp = 0; f.tm = 0;
-    }
-}
-
 void LH5801::pushTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord, uint8_t cycles) {
-    CpuFrame f = (tf & (TRACE_REGS_LIGHT | TRACE_REGS_FULL)) ? m_traceRegisters : CpuFrame{};
+    CpuFrame f{};
     f.seqno = m_traceSeqno++;
     f.pc = pcAtStart;
     f.opcode = opcodeWord;
     f.cycles = cycles;
     f.cpuId = m_cpuIdTag;
+    const LH5801HistoryFrame& h = m_history.next(); // this instruction's registers, not yet committed
+    if (tf & (TRACE_REGS_LIGHT | TRACE_REGS_FULL)) {
+        f.a = h.a;
+        f.xl = uint8_t(h.x); f.xh = uint8_t(h.x >> 8);
+        f.yl = uint8_t(h.y); f.yh = uint8_t(h.y >> 8);
+        f.ul = uint8_t(h.u); f.uh = uint8_t(h.u >> 8);
+        f.s = h.s; f.t = h.t;
+    }
+    if (tf & TRACE_REGS_FULL) {
+        f.pu = h.pu; f.pv = h.pv; f.disp = h.disp; f.tm = h.tm;
+    }
 
     m_trace.push(f);
 }
@@ -253,7 +253,7 @@ void LH5801::pushTraceFrame(uint32_t tf, uint16_t pcAtStart, uint16_t opcodeWord
 void LH5801::captureHistory() {
     LH5801HistoryFrame& h = m_history.next(); // bytes[] are filled by fetch8() afterwards
     h.a = A; h.x = x(); h.y = y(); h.u = u(); h.s = S; h.t = T;
-    h.pu = PU; h.pv = PV;
+    h.pu = PU; h.pv = PV; h.disp = DISP; h.tm = TM;
 }
 
 void LH5801::commitHistory(uint16_t pcAtStart, bool interrupt) {
@@ -319,7 +319,6 @@ int LH5801::step() {
     }
 
     uint32_t tf = traceFlags();
-    captureTraceRegisters(tf);
     captureHistory();
 
     uint16_t pcAtStart = P;

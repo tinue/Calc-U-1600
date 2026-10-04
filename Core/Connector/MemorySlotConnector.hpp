@@ -71,13 +71,13 @@ public:
     /// slot: ignored / false.
     WriteResult writeInBank(int bank, uint16_t addr, uint8_t value) {
         if (!servesBank(bank, addr)) return WriteResult::ignored();
-        PinState pins = decode(addr, /*forWrite=*/true, bankPort31(bank));
+        PinState pins = decode(addr, /*forWrite=*/true, bank);
         pins.direct = true;
         return m_card.write(pins, value);
     }
     bool readInBank(int bank, uint16_t addr, uint8_t& out) const {
         if (!servesBank(bank, addr)) return false;
-        return m_card.read(decode(addr, /*forWrite=*/false, bankPort31(bank)), out);
+        return m_card.read(decode(addr, /*forWrite=*/false, bank), out);
     }
 
     /// A SLOT2MAP (or SLOT1MAP) gate-array remap access -- see
@@ -137,10 +137,6 @@ private:
     bool servesBank(int bank, uint16_t addr) const {
         return !m_card.empty() && ownsBank(bank) && addr >= 0x8000 && addr < 0xC000;
     }
-    // The Port 31H value that maps global `bank` to page C: b6:b5:b4 is the
-    // bank number (PT:PU:PVOUT), all decode() reads of it.
-    static uint8_t bankPort31(int bank) { return static_cast<uint8_t>((bank & 0x07) << 4); }
-
     // PinState for a gate-array remap access (readRemapped/writeRemapped):
     // only the two pins a Slot-2 RAM module actually decodes -- pin 4
     // (RAM1# chip select) and pin 5 (PVOUT / A14 half-select) -- plus the
@@ -155,8 +151,8 @@ private:
         return p;
     }
 
-    PinState decode(uint16_t addr, bool forWrite) const { return decode(addr, forWrite, m_bank.readPort31()); }
-    PinState decode(uint16_t addr, bool forWrite, uint8_t port31) const {
+    PinState decode(uint16_t addr, bool forWrite) const { return decode(addr, forWrite, m_bank.pageCBank()); }
+    PinState decode(uint16_t addr, bool forWrite, int bank) const {
         PinState p;
         p.address = addr;
         p.forWrite = forWrite;
@@ -166,15 +162,15 @@ private:
         // Port 31H table: for an 8000-BFFF access PT:PU:PVOUT == b6:b5:b4).
         // For a slot access that is the page-C bank number -- 000 = Slot 1a,
         // 001 = Slot 1b, so PVOUT (b4) is the 16KB half-select.
-        p.pin[19] = (port31 & 0x40) != 0; // PT    = Port 31H b6
-        p.pin[3]  = (port31 & 0x20) != 0; // PU    = Port 31H b5
-        p.pin[5]  = (port31 & 0x10) != 0; // PVOUT = Port 31H b4
+        p.pin[19] = (bank & 4) != 0; // PT    = Port 31H b6
+        p.pin[3]  = (bank & 2) != 0; // PU    = Port 31H b5
+        p.pin[5]  = (bank & 1) != 0; // PVOUT = Port 31H b4
 
         // Only reached via selected() (read()/write() gate on it), so this
         // slot's chip select is asserted by definition.
         p.pin[4] = true; // RAM2# (Slot 1) / RAM1# (Slot 2) chip select
 
-        if (m_slot == Slot::Slot1 && ((port31 >> 4) & 0x07) == 0) { // page-C bank 0
+        if (m_slot == Slot::Slot1 && bank == 0) {
             // Pins 16/17/18 carry S1/S2/S3, the gate array's buffered copies
             // of the SC7852's LHS strobes. They select 2KB blocks of bank 0
             // only, remapped by Port 3CH b6 (TRM SC7852 pins 46-48), and

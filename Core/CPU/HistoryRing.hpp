@@ -24,6 +24,8 @@ struct LH5801HistoryFrame {
     uint16_t x{}, y{}, u{}, s{};
     uint8_t  t{};
     bool     pu{}, pv{};
+    bool     disp{};  ///< for TRACE frames only (see LH5801::pushTraceFrame)
+    uint16_t tm{};    ///< for TRACE frames only
 };
 
 /// One retired SC7852 (Z-80) instruction (or interrupt entry).

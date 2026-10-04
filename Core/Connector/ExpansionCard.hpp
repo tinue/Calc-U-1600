@@ -135,27 +135,10 @@ public:
     virtual std::vector<uint8_t> debugImage() const { return {}; }
 
     /// Bumped whenever debugImage()'s content changes -- a stored byte that
-    /// took a new value, a flash erase, a debugImageWrite() -- so a host
+    /// took a new value, a flash erase -- so a host
     /// that persists the card compares one number instead of the whole
     /// image. Stays 0 for a card with no writable storage.
     virtual uint64_t contentRevision() const { return 0; }
-
-    /// The write counterpart of debugImage(): overwrite `n` bytes of the
-    /// backing store starting at concatenated offset `off` (same address
-    /// space debugImage() returns). For a host-side debug / program-loader
-    /// path that must land bytes in a card's RAM regardless of the current
-    /// bank-register / pin state -- e.g. the PC-1600 fast BASIC loader
-    /// injecting a tokenised program into a slot-RAM program area the
-    /// emulated bus does not currently map for writes. Returns false,
-    /// writing nothing, when the card has no writable backing or the range
-    /// would run past its end. Default: no writable backing.
-    virtual bool debugImageWrite(size_t /*off*/, const uint8_t* /*data*/, size_t /*n*/) {
-        return false;
-    }
-
-    /// Whether debugImageWrite() would accept `n` bytes at `off`: the range
-    /// is inside the backing store and all of it is RAM. Writes nothing.
-    virtual bool debugImageWritable(size_t /*off*/, size_t /*n*/) const { return false; }
 
     /// The module's name (a definition's `module-name:`, e.g. "CE-1600M"),
     /// so the GUI can read what sits in a slot from the slot itself.
