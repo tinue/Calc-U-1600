@@ -26,10 +26,10 @@
 # as the real firmware's unlock cycle interleaves writes to the module's
 # bank-select port with the flash-address writes.
 #
-# Power-up fill differs by bank kind, purely as an analysis aid: RAM banks
-# fill 0x00 (CMOS RAM after a power loss); FLASH banks fill 0xAA, so a memory dump can tell
-# "never-touched flash" apart from both an erased sector (0xFF) and
-# freshly powered-up RAM.
+# `initial-content` below defines every byte of every bank: RAM banks 0x00
+# and FLASH banks erased (0xFF), each with the small stub at &0056 and
+# &00C5-&0112. The `power-up-fill` values (RAM 0x00, FLASH 0xAA) therefore
+# never show in this card; they only fill bytes a definition leaves out.
 #
 # PC-1600 slot / Slot-1 caveat: same as ce1638.card.yaml -- see that
 # file's doc comment and MinorIssues.md.
