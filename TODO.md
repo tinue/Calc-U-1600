@@ -102,6 +102,47 @@ obligations.
   open-bus read, e.g. the RAM-sizing probes and the empty-slot checks in
   the tests.
 
+## PC-1600 LH-5803 / SC-7852 interface: still open
+
+Background: Ref/PC-1600/PC-1600-CPU-LH5803-Compat.md §2a and §6.1,
+docs/developer/PC1600-Core-Limitations.md (LH5803 section).
+
+- **9400H trap decode (LHNMIO, SC-7852 pin 92).** Modelled as the opcode
+  fetch at exactly 9400H with PU = PV = 1. The Service Manual says
+  "94\*\*H"; open whether it is that one address or the step from 93FFH
+  into 9400H, and whether port 30H b0 gates it. Hardware test in MODE 1
+  without a CE-158: an LH-5803 routine `SPU`, `SPV`, jump to 9400H vs.
+  9401H; again with `RPU`; again with port 30H b0 cleared. A marker byte
+  written by C440H's path shows whether the NMI ran.
+- **NMI edge vs. level.** The TRM (pin 15) reads like a level input; the
+  core takes one NMI per request (edge). Works because the handler
+  acknowledges at port 36H. Confirm or model the level.
+- **Trap path timing.** In the emulator the per-byte display mirror is
+  free, so the trapped scroll (handler + full `LCD1500_ALL` redraw, ~28k
+  LH-5803 cycles) runs about one character behind the untrapped one in a
+  TERMINAL session. The real cost of the mirror, and what port 30H b0
+  really switches, are unknown.
+- **LH-5803 maskable interrupt not driven.** MI (vector FFF8H) from the
+  SC-7852's LHMIO (pin 91), and the PC-1500 peripheral IRQ (pin 80,
+  "interrupt to the CPU (Z-80, LH-5803)") with IF/MSK at ME1 F00BH/F00AH,
+  are not modelled. Nothing found so far needs them; the CE-158 ROM
+  polls its UART.
+- **ME1 wait states** (LHWAIT: `**0*H` and 8000H–FFFFH of ME1; IOE:
+  `**00H–**0FH`) not modelled. The card decode also offers every ME1
+  8000H–FFFFH access to the 60-pin cards, wider than IOE's window.
+- **IN0–IN7 bit order.** The F.P.C. diagram (TRM p.264) puts the LH-5803's
+  IN lines on the KIN net, but the photo doesn't resolve which IN goes to
+  which KIN; INn = KINn is assumed. The TERMINAL menu's F4 decodes right,
+  which fits, but one key is weak evidence. Check on the diagram or with a
+  key test in MODE 1 (`INKEY$`-style ML via `ITA`).
+- **CE-158 terminal: the first received byte is lost** (both TERMINAL and
+  DTE show "B…" for a peer sending "AB…", with `--ce158-rx-hold`).
+  Probably the receiver flush when the terminal starts; compare with a
+  real unit.
+- **PC-1500A: `DTE` / `TERMINAL` give ERROR 51** in the emulator, even
+  after `NEW` (the manual: more than 570 bytes must be free). Not looked
+  into; the PC-1600 path works.
+
 ## PC-1600 serial port
 
 - **RS-232C / SIO connector mux.** PRIME (the PRIM select) is tracked in
