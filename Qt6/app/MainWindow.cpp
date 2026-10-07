@@ -562,16 +562,15 @@ void MainWindow::syncPeripherals() {
     const bool ce158Attached = m_controller->ce158Attached();
     // The CE-1600P excludes both the CE-150 and (on a PC-1600) the CE-158
     // -- the CE-158 does not connect to the CE-1600P: gray out whichever
-    // buttons the attached peripherals rule out.
-    m_controlBar->setCe150State(ce150Attached, !ce1600pAttached);
-    m_controlBar->setCe1600pState(ce1600pAttached, !ce150Attached && !ce158Attached);
-    m_controlBar->setCe158State(ce158Attached, !ce1600pAttached);
-    m_ce150Action->setChecked(ce150Attached);
-    m_ce150Action->setEnabled(!ce1600pAttached);
-    m_ce1600pAction->setChecked(ce1600pAttached);
-    m_ce1600pAction->setEnabled(!ce150Attached && !ce158Attached);
-    m_ce158Action->setChecked(ce158Attached);
-    m_ce158Action->setEnabled(!ce1600pAttached);
+    // buttons and menu items the attached peripherals rule out.
+    auto sync = [this](QAction* action, void (ControlBar::*setState)(bool, bool), bool attached, bool enabled) {
+        (m_controlBar->*setState)(attached, enabled);
+        action->setChecked(attached);
+        action->setEnabled(enabled);
+    };
+    sync(m_ce150Action, &ControlBar::setCe150State, ce150Attached, !ce1600pAttached);
+    sync(m_ce1600pAction, &ControlBar::setCe1600pState, ce1600pAttached, !ce150Attached && !ce158Attached);
+    sync(m_ce158Action, &ControlBar::setCe158State, ce158Attached, !ce1600pAttached);
     // CE-1600F attaches as a union with CE-1600P (PC1600Machine::
     // attachCE1600P()); whoever attached it (PlotterController or a
     // preset) already put its disk in. Gray the picker in/out alongside

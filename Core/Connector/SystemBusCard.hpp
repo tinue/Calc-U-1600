@@ -82,10 +82,9 @@ public:
     /// Return true and set `level` if this card drives CMTIN.
     virtual bool cmtIn(bool& /*level*/) const { return false; }
 
-    /// Elapsed time for a card's recorder, in the units each host has always
-    /// sent: the PC-1500 LH5801 cycles (advanceCassette), the PC-1600 SC7852
-    /// T-states (advanceTStates). Two hooks so a card only runs on the host whose clock
-    /// it knows (TODO.md, "Expansion connectors").
-    virtual void advanceCassette(uint32_t /*cycles*/) {}
-    virtual void advanceTStates(uint32_t /*tstates*/) {}
+    /// Elapsed host CPU clocks (LH5801 cycles on the PC-1500, SC7852
+    /// T-states on the PC-1600), for the recorder behind a tape interface.
+    /// The card only passes them on: the machine's TapeDeck is built with
+    /// that host's clock rate.
+    virtual void advanceCassette(uint32_t /*clocks*/) {}
 };

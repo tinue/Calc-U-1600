@@ -138,7 +138,7 @@ public:
         level = m_recorder && m_recorder->inputLevel();
         return true;
     }
-    void advanceTStates(uint32_t tstates) override {
+    void advanceCassette(uint32_t tstates) override {
         if (m_recorder) m_recorder->advance(tstates);
     }
 

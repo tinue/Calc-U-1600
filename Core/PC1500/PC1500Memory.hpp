@@ -291,6 +291,15 @@ private:
     SystemBusPins busPins(uint16_t addr, bool forWrite, bool me1) const {
         return PC1500SignalDecode::systemBusPins(addr, forWrite, me1, m_pu, m_pv);
     }
+    /// Offers a cycle to the 60-pin cards; the contacts are built only when
+    /// a card is plugged in (every ME1 access comes through here).
+    bool busRead(uint16_t addr, bool me1, uint8_t& value) const {
+        return !m_systemBus.empty() && m_systemBus.read(busPins(addr, /*forWrite=*/false, me1), value);
+    }
+    WriteResult busWrite(uint16_t addr, bool me1, uint8_t value) {
+        if (m_systemBus.empty()) return WriteResult::ignored();
+        return m_systemBus.write(busPins(addr, /*forWrite=*/true, me1), value);
+    }
 
     // True if any card on either connector is pulling INHIBIT low --
     // suppresses the system ROM (see resolve()'s ROM branch). With nothing

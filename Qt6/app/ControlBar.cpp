@@ -49,6 +49,9 @@ QStringList namesOf(const QVector<Entry>& entries, NameOf nameOf) {
     return out;
 }
 
+// A running motor's lamp colour (floppy lamp, tape counter).
+QString motorOnStyle() { return QStringLiteral("color: #2ecc40;"); }
+
 } // namespace
 
 ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
@@ -340,7 +343,7 @@ void ControlBar::setFloppyMotorOn(bool on) {
 
 // A motor lamp: green while the motor runs, grey otherwise.
 void ControlBar::applyLampStyle(QLabel* lamp, bool on) {
-    lamp->setStyleSheet(on ? QStringLiteral("color: #2ecc40;") : QStringLiteral("color: #888888;"));
+    lamp->setStyleSheet(on ? motorOnStyle() : QStringLiteral("color: #888888;"));
 }
 
 void ControlBar::setTapeCombo(const QStringList& names, const QString& selectedOrEmpty) {
@@ -380,6 +383,6 @@ void ControlBar::setTapeStatus(const TapeDeck::Status& status) {
     // Off is the default text color, not the lamps' grey, which would read as disabled.
     if (status.motor != m_tapeMotorOn) {
         m_tapeMotorOn = status.motor;
-        m_tapeLabel->setStyleSheet(m_tapeMotorOn ? QStringLiteral("color: #2ecc40;") : QString());
+        m_tapeLabel->setStyleSheet(m_tapeMotorOn ? motorOnStyle() : QString());
     }
 }

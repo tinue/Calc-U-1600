@@ -28,7 +28,7 @@
 // shared ALPS mechanism (see its header) -- this card only does the bus
 // decode and the LH5810 latch/feedback model.
 //
-// Bus decode (60-pin contacts, `decodeAccess()`): the ROM answers reads
+// Bus decode (60-pin contacts, isRomRead() / isLh5810()): the ROM answers reads
 // with DME0 asserted, PV (16) low and A000-BFFF; the LH5810 answers ME1
 // (59; IOE on the PC-1600, the LH5803's ME1 strobe) at B008-B00F.
 // Ref/PC-1500/Peripherals/CE-150-Hardware.md §3. Nothing else is decoded,
@@ -102,48 +102,31 @@ public:
     void tick(uint64_t /*cycles*/) {}
 
     bool respondsToRead(const SystemBusPins& pins, uint8_t& outValue) const override {
-        const Access a = decodeAccess(pins);
-        if (a.me1) {
-            if (a.addr >= kIoBase && a.addr <= kIoEnd) {
-                const uint8_t sel = static_cast<uint8_t>(a.addr & 0x0F);
-                outValue = readReg(sel);
-                return true;
-            }
-            return false;
+        if (isLh5810(pins)) {
+            outValue = readReg(static_cast<uint8_t>(pins.address & 0x0F));
+            return true;
         }
-        if (!a.dme0 || a.forWrite || a.pv) return false;   // ROM: read-only, PV = 0 only
-        if (a.addr < kRomBase || a.addr > kRomEnd) return false;
-        if (!m_romLoaded) return false;
-        outValue = m_rom[a.addr - kRomBase];
+        if (!isRomRead(pins) || !m_romLoaded) return false;
+        outValue = m_rom[pins.address - kRomBase];
         return true;
     }
 
     WriteResult respondsToWrite(const SystemBusPins& pins, uint8_t value) override {
-        const Access a = decodeAccess(pins);
-        if (a.me1 && a.addr >= kIoBase && a.addr <= kIoEnd) {
-            const uint8_t sel = static_cast<uint8_t>(a.addr & 0x0F);
-            writeReg(sel, value);
-            return WriteResult::taken();
-        }
-        return WriteResult::ignored();                     // ROM window read-only
+        if (!isLh5810(pins)) return WriteResult::ignored(); // ROM window read-only
+        writeReg(static_cast<uint8_t>(pins.address & 0x0F), value);
+        return WriteResult::taken();
     }
 
     /// The LH5810 registers: a debugger must not read them as memory.
-    bool readHasSideEffects(const SystemBusPins& pins) const override {
-        const Access a = decodeAccess(pins);
-        return a.me1 && a.addr >= kIoBase && a.addr <= kIoEnd;
-    }
+    bool readHasSideEffects(const SystemBusPins& pins) const override { return isLh5810(pins); }
 
 private:
-    struct Access {
-        uint16_t addr = 0;
-        bool pv = false;
-        bool me1 = false;
-        bool dme0 = false;
-        bool forWrite = false;
-    };
-    static Access decodeAccess(const SystemBusPins& p) {
-        return Access{p.address, p.pin[Contact60::kPV], p.pin[Contact60::kMe1], p.pin[Contact60::kDme0], p.forWrite};
+    static bool isLh5810(const SystemBusPins& p) {
+        return p.pin[Contact60::kMe1] && p.address >= kIoBase && p.address <= kIoEnd;
+    }
+    static bool isRomRead(const SystemBusPins& p) {
+        return p.pin[Contact60::kDme0] && !p.forWrite && !p.pin[Contact60::kPV] && // PV = 0 only
+               p.address >= kRomBase && p.address <= kRomEnd;
     }
 
     // LH5810 Port B read: the raw latch with the CE-150's live input bits

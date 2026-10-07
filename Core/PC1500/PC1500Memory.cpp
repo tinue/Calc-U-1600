@@ -109,7 +109,7 @@ uint8_t PC1500Memory::readOpenBus(uint16_t addr) const {
     // shortcut.
     uint8_t v;
     if (m_expansionConnector.read(addr, m_pu, m_pv, v)) return v;
-    if (m_systemBus.read(busPins(addr, /*forWrite=*/false, /*me1=*/false), v)) return v;
+    if (busRead(addr, /*me1=*/false, v)) return v;
     return 0xFF;
 }
 
@@ -121,7 +121,7 @@ uint8_t PC1500Memory::readME0(uint16_t addr) {
 void PC1500Memory::writeME0(uint16_t addr, uint8_t value) {
     if (uint8_t* p = resolve(addr, /*forWrite=*/true)) { *p = value; return; }
     if (m_expansionConnector.write(addr, m_pu, m_pv, value)) return;
-    if (m_systemBus.write(busPins(addr, /*forWrite=*/true, /*me1=*/false), value)) return;
+    if (busWrite(addr, /*me1=*/false, value)) return;
 }
 
 uint8_t PC1500Memory::peek(uint16_t addr) const {
@@ -147,7 +147,7 @@ bool PC1500Memory::poke(uint16_t addr, uint8_t value) {
         return r.stored;
     // The 60-pin plug carries no lock-gating card, so a plain write is
     // enough.
-    return m_systemBus.write(busPins(addr, /*forWrite=*/true, /*me1=*/false), value).stored;
+    return busWrite(addr, /*me1=*/false, value).stored;
 }
 
 uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
@@ -186,7 +186,7 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
     // card on the chain this falls straight through.
     {
         uint8_t v;
-        if (m_systemBus.read(busPins(addr, /*forWrite=*/false, /*me1=*/true), v)) return v;
+        if (busRead(addr, /*me1=*/true, v)) return v;
     }
     if (isIoChipAddress(addr)) {
         switch (addr & 0xF) { // RS0-3 = AD0-3
@@ -227,7 +227,7 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
 
 void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
     // See readME1(): a 60-pin card gets first refusal on every ME1 access.
-    if (m_systemBus.write(busPins(addr, /*forWrite=*/true, /*me1=*/true), value)) return;
+    if (busWrite(addr, /*me1=*/true, value)) return;
     if (isIoChipAddress(addr)) {
         switch (addr & 0xF) {
             case 0xC: m_dda = value; return;

@@ -471,7 +471,7 @@ void PC1600Machine::advanceSharedClocks(int tstates) {
     m_z80Mem.subCpu().tickByTStates(tstates);
     m_z80Mem.display().tick(tstates);
     m_ce158.tick(static_cast<uint64_t>(tstates)); // the CE-158's own UART clock
-    m_z80Mem.systemBus().advanceTStates(static_cast<uint32_t>(tstates)); // the cassette recorder
+    m_z80Mem.systemBus().advanceCassette(static_cast<uint32_t>(tstates)); // the cassette recorder
 }
 
 uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {

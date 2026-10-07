@@ -27,21 +27,16 @@ public:
     void attachFirst(SystemBusCard* card) { m_chain.attachFirst(card); }
     void detach(SystemBusCard* card) { m_chain.detach(card); }
     const std::vector<SystemBusCard*>& chain() const { return m_chain.cards(); }
+    /// Hosts check this before building a cycle's contacts: with no card
+    /// plugged in (the usual case) there is nothing to offer it to.
     bool empty() const { return m_chain.empty(); }
 
-    bool read(const SystemBusPins& pins, uint8_t& outValue) const {
-        return !m_chain.empty() && m_chain.read(pins, outValue);
-    }
-    WriteResult write(const SystemBusPins& pins, uint8_t value) {
-        if (m_chain.empty()) return WriteResult::ignored();
-        return m_chain.write(pins, value);
-    }
+    bool read(const SystemBusPins& pins, uint8_t& outValue) const { return m_chain.read(pins, outValue); }
+    WriteResult write(const SystemBusPins& pins, uint8_t value) { return m_chain.write(pins, value); }
 
     /// Whether a card says reading this cycle would disturb it -- debugger
     /// peeks only.
-    bool readHasSideEffects(const SystemBusPins& pins) const {
-        return !m_chain.empty() && m_chain.readHasSideEffects(pins);
-    }
+    bool readHasSideEffects(const SystemBusPins& pins) const { return m_chain.readHasSideEffects(pins); }
 
     // Queried on every host-ROM fetch; see InhibitSource.
     bool inhibitAsserted() const { return m_chain.inhibitAsserted(); }
@@ -50,12 +45,9 @@ public:
     void setCmtOut(bool level) { m_chain.setCmtOut(level); }
     /// CMTIN as a card drives it; `idle` if none does.
     bool cmtIn(bool idle) const { return m_chain.cmtIn(idle); }
-    /// See SystemBusCard::advanceCassette / advanceTStates.
-    void advanceCassette(uint32_t cycles) {
-        for (SystemBusCard* card : m_chain.cards()) card->advanceCassette(cycles);
-    }
-    void advanceTStates(uint32_t tstates) {
-        for (SystemBusCard* card : m_chain.cards()) card->advanceTStates(tstates);
+    /// See SystemBusCard::advanceCassette.
+    void advanceCassette(uint32_t clocks) {
+        for (SystemBusCard* card : m_chain.cards()) card->advanceCassette(clocks);
     }
 
 private:

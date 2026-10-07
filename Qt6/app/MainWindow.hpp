@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-#include "MachineController.hpp" // Model, PC1500RomRevision (menu<->ControlBar sync)
+#include "MachineController.hpp" // Model, PC1500RomRevision
 
 class QTimer;
 class QKeyEvent;
@@ -47,10 +47,11 @@ class EmulationPacer;
 // both advances emulation and repaints the LCD. Also owns physical-keyboard
 // capture -- see PC1500KeyboardMap.hpp.
 //
-// The menu bar (buildMenuBar()) duplicates ControlBar's model/ROM-revision
-// pickers and Reset/Reset All as QActions, and adds File/Help entries
-// (Load Preset/Load BASIC Program/Settings/Quit, About) -- see
-// applyModelSelection()/applyRomRevisionSelection() and the
+// The menu bar (buildMenuBar()) duplicates ControlBar's model picker,
+// peripheral toggles and Reset/Reset All as QActions; the ROM pickers and
+// the peripherals that aren't the model's own live in the Machine menu
+// only. It adds File/Help entries (Load Preset/Load BASIC Program/
+// Settings/Quit, About) -- see applyModelSelection() and the
 // syncMachineMenuFrom*() pair for how the two views of the same
 // MachineController state stay in sync without fighting each other.
 class MainWindow : public QMainWindow {
@@ -135,9 +136,9 @@ private:
     void pasteClipboardText();
     QAction* m_pasteAction = nullptr;
 
-    // Shared by both ControlBar's combo-box signal and the Machine menu's
-    // QActions, so either source of a model/ROM-revision change drives the
-    // exact same rebuild + resync path.
+    // The model change is shared by ControlBar's combo box and the Machine
+    // menu's QActions, so either source drives the exact same rebuild +
+    // resync path; ROM-revision changes come from the menu only.
     void applyModelSelection(Model model);
     void applyRomRevisionSelection(PC1500RomRevision revision);
     void applyPC1600RomVersionSelection(PC1600RomVersion version);

@@ -183,10 +183,6 @@ Decisions.md, "One 60-pin connector per machine".
   bank decode (Ref/PC-1600/PC-1600-Expansion-Bus.md §1).
 - The PU drive handover between the SC7852 and the LH5803 (one shared line)
   is not measured.
-- The cards' recorders still get two clocks, `advanceCassette` (LH5801
-  cycles, PC-1500) and `advanceTStates` (SC7852 T-states, PC-1600). They can
-  merge into one φOS-based clock once the CE-150 has a tape path on the
-  PC-1600 (see "Cassette tape").
 
 ## Cassette tape: still open
 

@@ -9,7 +9,6 @@
 #include "../Audio/PiezoSampler.hpp"
 #include "../CPU/SC7852/SC7852.hpp"
 #include "../Connector/ExpansionCard.hpp"
-#include "../Connector/CardChain.hpp"
 #include "../Connector/MemorySlotConnector.hpp"
 #include "../Connector/SystemBus.hpp"
 #include "PC1600BusDrive.hpp"
