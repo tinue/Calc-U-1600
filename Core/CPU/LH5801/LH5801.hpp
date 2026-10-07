@@ -144,19 +144,24 @@ public:
     void powerOn() { reset(); }
 
     /// Request a maskable interrupt (the LH5801's timer/general-IRQ class;
-    /// its separate, always-unmasked NMI line at vector 0xFFFC is not
-    /// modeled by this core -- see requestMaskableInterrupt()'s .cpp
-    /// comment). Both waking from HLT and actually being serviced by the
+    /// the NMI line at vector 0xFFFC is requestNonMaskableInterrupt()).
+    /// Both waking from HLT and actually being serviced by the
     /// next step() call require IE to already be set. When serviced, the
     /// CPU pushes T and P, resets IE (so the handler isn't re-entered;
     /// unlike RTN, RTI restores T and with it IE) then jumps to the vector
     /// at 0xFFFA, the CPU's internal timer vector.
     void requestMaskableInterrupt();
 
-    /// Unconditional HLT wake, independent of IE -- for the ON key (see
-    /// requestMaskableInterrupt()'s own comment on the LH5801's separate,
-    /// genuinely-non-maskable line this models). Does not push state or
-    /// vector anywhere; see the .cpp comment for why.
+    /// Raise the NMI line: the next step() pushes T and P, resets IE and
+    /// jumps to the vector at 0xFFFC, whatever IE is; it also ends a HLT.
+    /// Edge-triggered: one call is one service. The PC-1500 never raises
+    /// it (its A04 handler is a bare RTI); on the PC-1600 the SC7852's
+    /// LHNMIO trap does (PC1600Machine).
+    void requestNonMaskableInterrupt();
+
+    /// Unconditional HLT wake, independent of IE -- for the ON key. Unlike
+    /// requestNonMaskableInterrupt() it does not push state or vector
+    /// anywhere; see the .cpp comment for why.
     void wakeFromHalt();
 
     // ── Trace / debug API ─────────────────────────────────────────────────
@@ -241,6 +246,7 @@ private:
     bool     m_halted{false};
     bool     m_poweredOff{false};
     bool     m_irqPending{false};
+    bool     m_nmiPending{false};
 
     void setFlagBit(uint8_t mask, bool v) { if (v) T |= mask; else T &= uint8_t(~mask); }
 
@@ -291,6 +297,8 @@ private:
     uint16_t pop16();
     void vectorCall(uint8_t index); // pushes P, jumps to ME0[0xFF00+index] (16-bit, big-endian)
     void serviceInterrupt();
+    void serviceNonMaskableInterrupt();
+    void enterInterrupt(uint16_t vector); // push T and P, IE := 0, P := (vector)
     void tickTimer(int cycles); // advances TM through its LFSR sequence by elapsed cycles/kCyclesPerTick; requests a timer interrupt on reaching 0x1FF
     uint32_t m_timerCycleAccumulator{0}; // cycles accumulated toward the next LFSR step
 

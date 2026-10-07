@@ -417,6 +417,20 @@ int PC1600Machine::stepLocked(uint64_t* tstates) {
         maybeDrainTrace();
         return c;
     }
+    // SC7852 LHNMIO (pin 92): the opcode fetch at 9400H with PU = PV = 1
+    // -- inside the CE-158 high bank's display shift (93F9H-9439H) --
+    // raises the LH5803's NMI. Its handler (C440H) runs a copy of that
+    // routine, redraws the LCD once, acknowledges at port 36H and resumes
+    // the CE-158 at 943AH. Raised before the fetch: the handler redoes
+    // 9400H-9403H itself. The Service Manual says "94**H"; the CE-158 runs
+    // on through 943AH-94xxH with the trap re-armed, so only the 9400H
+    // fetch is decoded here (that and whether port 30H b0 gates the trap
+    // are open). Ref/PC-1600/PC-1600-CPU-LH5803-Compat.md §6.1.
+    if (m_lh5803.pc() == 0x9400 && m_lh5803.pu() && m_lh5803.pv() && !m_lh5803.halted() &&
+        !m_z80Mem.lhNmiLatched()) {
+        m_z80Mem.latchLhNmi();
+        m_lh5803.requestNonMaskableInterrupt();
+    }
     int c = m_lh5803.step();
     if (c == 0 && m_lh5803.breakpointsEnabled() && m_lh5803.consumeBreakpointHit()) {
         m_debugStop.latch(DebugStop::Breakpoint, 2);

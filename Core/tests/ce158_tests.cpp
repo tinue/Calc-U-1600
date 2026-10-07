@@ -515,6 +515,76 @@ void test_pc1600_rom_mode1_rinkey() {
     machine.setCE158SerialLink(nullptr);
 }
 
+// The SC7852's LHNMIO trap (pin 92): the LH5803 fetching 9400H with PU = PV
+// = 1 -- the CE-158 high bank's display shift, 93F9H-9439H -- raises its
+// NMI; the LH5803 ROM's handler (C440H) runs a copy of the shift, redraws
+// the LCD through ME1 A058H/A059H, acknowledges at port 36H and resumes at
+// 943AH. Ref/PC-1600/PC-1600-CPU-LH5803-Compat.md §6.1.
+void test_pc1600_lhnmio_trap_runs_ce158_shift() {
+    if (!havePC1600Roms(__func__)) return;
+    PC1600Machine m;
+    std::string err;
+    CHECK(BundledRoms::loadPC1600RomSet(m, {"roms"}, "new", &err));
+    CHECK(BundledRoms::attachCE158(m, {"roms"}, &err));
+    m.allReset();
+    m.runCycles(PC1600Machine::kTStateHz); // LCD on
+    auto& mem = m.lh5803Memory();
+    auto& cpu = m.lh5803();
+    // Runs the LH5803 from `pc` with the given PU/PV until it reaches
+    // `stop` (or gives up); returns whether the handler (C440H) ran.
+    auto runFrom = [&](uint16_t pc, bool pu, bool pv, uint16_t stop) {
+        m.busArbiter().switchToLH5803();
+        cpu.setPU(pu); cpu.setPV(pv);
+        mem.updatePUPV(pu, pv);
+        cpu.setStatusReg(0);
+        cpu.setSP(0x7840);
+        cpu.setUL(5); cpu.setUH(0); cpu.setA(0);
+        cpu.setPC(pc);
+        bool handler = false;
+        for (int i = 0; i < 20000 && cpu.pc() != stop; ++i) {
+            if (cpu.pc() == 0xC440) handler = true;
+            m.step();
+        }
+        return handler;
+    };
+
+    // The trap: handler, LCD redraw, back at 943AH with the frame dropped,
+    // interrupts on (SIE) and the latch acknowledged.
+    CHECK(runFrom(0x93F9, true, true, 0x943A));
+    CHECK(cpu.pc() == 0x943A);
+    CHECK(cpu.sp() == 0x7840);
+    CHECK(cpu.flagIE());
+    CHECK(!m.memory().lhNmiLatched());
+    // Re-armed by that port 36H write: it fires again.
+    CHECK(runFrom(0x93F9, true, true, 0x943A));
+
+    // Not at PU = 0 (the CE-158 low bank runs other code there), not at
+    // PV = 0, and not at 9401H: one instruction later, still no handler.
+    CHECK(!runFrom(0x9400, false, true, 0x9401));
+    CHECK(!runFrom(0x9400, true, false, 0x9401));
+    CHECK(!runFrom(0x9401, true, true, 0x9402));
+    CHECK(!m.memory().lhNmiLatched());
+
+    // While the latch is set (no acknowledge yet) there is no second NMI.
+    m.memory().latchLhNmi();
+    CHECK(!runFrom(0x9400, true, true, 0x9401));
+    m.memory().writeIO(0x36, 0x00);
+    CHECK(!m.memory().lhNmiLatched());
+}
+
+// ME1 A040H-A05FH is Z-80 ports 40H-5FH for the LH5803 (LCD1500_ALL polls
+// the HD61102 busy bit at #(A058H)/#(A059H)): not open bus.
+void test_pc1600_lh5803_me1_reaches_lcd_ports() {
+    PC1600Machine m;
+    auto& mem = m.lh5803Memory();
+    CHECK(mem.readME1(0xA058) == m.memory().readIO(0x58));
+    CHECK(mem.readME1(0xA05B) == m.memory().readIO(0x5B));
+    CHECK(mem.readME1(0xA058) != 0xFF);
+    bool readable = true;
+    mem.debugPeek(0xA059, /*me1=*/true, &readable);
+    CHECK(!readable); // a data read would advance the HD61102's address
+}
+
 } // namespace
 
 int run_ce158_tests() {
@@ -533,6 +603,8 @@ int run_ce158_tests() {
     test_pc1600_ce158_and_ce1600p_exclusive();
     test_pc1600_rom_mode1_printing();
     test_pc1600_rom_mode1_rinkey();
+    test_pc1600_lhnmio_trap_runs_ce158_shift();
+    test_pc1600_lh5803_me1_reaches_lcd_ports();
 
     std::printf("ce158_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

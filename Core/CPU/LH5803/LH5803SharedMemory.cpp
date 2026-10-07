@@ -64,7 +64,8 @@ uint8_t LH5803SharedMemory::debugPeek(uint16_t addr, bool me1, bool* readable) c
     *readable = true;
     if (me1) {
         uint8_t reg; bool answer;
-        if (isUartShadow(addr, &reg, &answer) || (addr >= 0x8000 && addr < kRomBase)) {
+        // isLcdPort(): an HD61102 data read advances its address counter.
+        if (isUartShadow(addr, &reg, &answer) || isLcdPort(addr) || (addr >= 0x8000 && addr < kRomBase)) {
             *readable = false;
             return 0xFF;
         }
@@ -98,8 +99,9 @@ uint8_t LH5803SharedMemory::readME1(uint16_t addr) {
                       : m_shared.uart().readRegister(reg);
     }
     // SC7852 control-port block 30H-3FH at ME1 A030-A03F, e.g. the bank
-    // register save `LDA #(P_BANK)` at rom1500 DC85/DC9A. See writeME1().
-    if (isControlPort(addr)) return m_shared.readIO(static_cast<uint8_t>(addr));
+    // register save `LDA #(P_BANK)` at rom1500 DC85/DC9A, and the LCD ports
+    // at A040-A05F (LCD1500_ALL's busy poll). See writeME1().
+    if (isControlPort(addr) || isLcdPort(addr)) return m_shared.readIO(static_cast<uint8_t>(addr));
     // LH5803 on-chip LH5811-compat PIO, ME1 0xF000-0xF00F. Unconditional
     // (CPU-internal, present with or without a CE-150). Without this, an
     // ME1 read here falls through to readME0() and 0xF00B >= kRomBase
@@ -138,11 +140,11 @@ void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
         return;
     }
     // SC7852 control-port block 30H-3FH at ME1 A030-A03F (A038 is the
-    // handoff, above). rom1500 writes P_MOD/P_BANK/P_LHMSK2/P_CL1 here; the
+    // handoff, above), and the LCD ports at A040-A05F. rom1500 writes P_MOD/P_BANK/P_LHMSK2/P_CL1 here; the
     // one that matters today is P_MAPPRG's `STA #(P_BANK)` (E652 -> DC94),
     // which maps the BASIC program bank into page C for MODE 1 PEEK/XPEEK.
     // Dropping it left page C on whatever the Z-80 had set (bank 0).
-    if (isControlPort(addr)) {
+    if (isControlPort(addr) || isLcdPort(addr)) {
         m_shared.writeIO(static_cast<uint8_t>(addr), value);
         return;
     }

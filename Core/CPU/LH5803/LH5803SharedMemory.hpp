@@ -57,7 +57,13 @@ class PC1600BusArbiter;
 //     (31H), P_INT (32H), P_LHMSK2 (34H), P_CL1 (36H) in rom1500. P_BANK
 //     is what MODE 1 PEEK/XPEEK depend on (P_MAPPRG, rom1500 E63C). The
 //     32H read clears the cause as on the Z-80 side; only the LH5803 ISR
-//     (E6B9) reads it, and no LH5803 interrupt is raised yet.
+//     (E6B9) reads it, and no LH5803 interrupt is raised yet. A 36H write
+//     acknowledges the SC7852's LHNMIO trap (the NMI handler, C491H).
+//   * ME1 0xA040-0xA05F: Z-80 ports 40H-5FH, the HD61102 LCD drivers
+//     (50H/58H/5BH), the same way. The LH5803 ROM drives the LCD directly
+//     there: LCD1500_ALL (E84AH, the PC-1500 window redraw the NMI handler
+//     calls) polls the busy bit with `BII #(Y),80H` at Y = A058H/A059H and
+//     writes commands and data through it; LCD1500_CLR (E8BFH) likewise.
 //   * ME1 0xF000-0xF00F: the LH5803's own on-chip LH5811-compat PIO port
 //     controller -- the analogue of the chip PC1500Memory models for the
 //     PC-1500's LH5801 (see that file's top comment / its `case 0xB`).
@@ -139,6 +145,8 @@ private:
     /// them (rom1500's P_MOD..P_CPUSW). A033 is caught by isUartShadow()
     /// first and A038 by the handoff check; the rest go to readIO/writeIO.
     static bool isControlPort(uint16_t addr) { return (addr & 0xFFF0) == 0xA030; }
+    /// ME1 A040-A05F: Z-80 ports 40H-5FH (the LCD), also via readIO/writeIO.
+    static bool isLcdPort(uint16_t addr) { return (addr & 0xFFE0) == 0xA040; }
 
     /// The 60-pin contacts of an LH5803 cycle (PC1600BusDrive::lh5803Pins).
     SystemBusPins busPins(uint16_t addr, bool forWrite, bool me1) const {

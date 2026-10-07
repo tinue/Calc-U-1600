@@ -71,6 +71,7 @@ void LH5801::reset() {
     m_halted = false;
     m_poweredOff = false;
     m_irqPending = false;
+    m_nmiPending = false;
     m_history.clear();
     m_breakpoints.clearHit();
     m_skipBreakpointAt = -1;
@@ -189,22 +190,26 @@ void LH5801::doBranch(bool forward, uint8_t e) {
 void LH5801::requestMaskableInterrupt() {
     m_irqPending = true;
     // Both waking from HLT and actually servicing (see step()) require IE
-    // for this class of interrupt (timer/general maskable). The LH5801
-    // also has a separate, genuinely-non-maskable NMI line (vector 0xFFFC)
-    // that this core does not model, since nothing exercised so far
-    // requires it.
+    // for this class of interrupt (timer/general maskable). The NMI line
+    // is requestNonMaskableInterrupt().
     if (flagIE()) m_halted = false;
+}
+
+void LH5801::requestNonMaskableInterrupt() {
+    // Serviced by the next step() whatever IE is, and ends a HLT. One
+    // request is one service: the source raises it on its signal's rising
+    // edge (on the PC-1600 the SC7852's LHNMIO latch, see PC1600Machine).
+    m_nmiPending = true;
+    m_halted = false;
 }
 
 void LH5801::wakeFromHalt() {
     // The unconditional counterpart to requestMaskableInterrupt() above --
     // for the LH5801's genuinely-non-maskable class of wake (the ON key's
     // real wiring: straight to a power-on latch/BFI pin, not the ordinary
-    // IE-gated maskable-IRQ line). No vector jump here: this core has no
-    // confirmed ISR address for the LH5801's own NMI line (0xFFFC, not
-    // modeled -- see requestMaskableInterrupt()'s own comment), and
-    // jumping to an unconfirmed address risks landing worse than simply
-    // resuming normal fetch right after the HLT, which is what an
+    // IE-gated maskable-IRQ line). No vector jump here: the ON key does
+    // not reach the NMI line (0xFFFC, requestNonMaskableInterrupt()), so
+    // fetch simply resumes right after the HLT, which is what an
     // interrupt-driven HLT wake looks like when nothing ends up servicing
     // it.
     m_halted = false;
@@ -212,6 +217,15 @@ void LH5801::wakeFromHalt() {
 
 void LH5801::serviceInterrupt() {
     m_irqPending = false;
+    enterInterrupt(0xFFFA);
+}
+
+void LH5801::serviceNonMaskableInterrupt() {
+    m_nmiPending = false;
+    enterInterrupt(0xFFFC);
+}
+
+void LH5801::enterInterrupt(uint16_t vector) {
     // RTI pops P (high,low) then T last, so T must be pushed first here —
     // push16(P) pushes low-then-high, leaving PH as the most recent (first-
     // popped) byte, with T deepest (popped last), mirroring RTI exactly.
@@ -221,8 +235,8 @@ void LH5801::serviceInterrupt() {
     // MI handler at E171 pushes A/X/Y/U before clearing the level-held
     // request at F00B, which only works if IE is already off on entry.
     setFlagBit(0x02, false);
-    uint8_t hi = dataME0(0xFFFA);
-    uint8_t lo = dataME0(0xFFFB);
+    uint8_t hi = dataME0(vector);
+    uint8_t lo = dataME0(uint16_t(vector + 1));
     P = (uint16_t(hi) << 8) | lo;
 }
 
@@ -285,10 +299,13 @@ int LH5801::step() {
     // request made while IE=0 sits pending (a HLT stays halted) until IE
     // is later set (e.g. by SIE or RTI) and a subsequent step() call
     // finally consumes it.
-    if (m_irqPending && flagIE()) {
+    // The NMI comes first and ignores IE; otherwise the same entry event.
+    const bool nmi = m_nmiPending;
+    if (nmi || (m_irqPending && flagIE())) {
         const uint16_t interruptedP = P;
         captureHistory();
-        serviceInterrupt();
+        if (nmi) serviceNonMaskableInterrupt();
+        else     serviceInterrupt();
         commitHistory(interruptedP, true);
         // Interrupt acknowledge consumes this step() call on its own —
         // the handler's first instruction executes on the *next* step(),

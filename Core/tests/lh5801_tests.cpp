@@ -242,8 +242,8 @@ void test_hlt_and_interrupt_wake() {
 
     // IE is off: requestMaskableInterrupt() must NOT wake HLT at all for
     // this interrupt class (timer/general maskable); only an IE-gated
-    // dispatch clears the halted state (an NMI-class line would be
-    // different, but this core doesn't model one -- see the .cpp comment).
+    // dispatch clears the halted state (the NMI line is different, see
+    // test_nmi_ignores_ie_and_vectors_fffc()).
     // The CPU must stay halted, ticking the timer but making no other
     // progress, until IE is actually set.
     CHECK(!r.cpu.flagIE());
@@ -265,6 +265,38 @@ void test_hlt_and_interrupt_wake() {
     CHECK(!r2.cpu.halted());
     CHECK(r2.cpu.pc() == 0x9000);
     CHECK(r2.cpu.a() != 0x99); // vectored away -- "ldi a,0x99" did NOT execute
+}
+
+// The NMI line (the PC-1600's SC7852 LHNMIO trap drives it): serviced
+// whatever IE is, ends a HLT, vectors through FFFC, pushes T then P like
+// the maskable entry and resets IE. One request is one service.
+void test_nmi_ignores_ie_and_vectors_fffc() {
+    Rig r({0xFD, 0xB1, 0xB5, 0x99}); // hlt (0x8000-01) ; ldi a,0x99 (0x8002-03)
+    r.bus.mem[0xFFFC] = 0xC4;
+    r.bus.mem[0xFFFD] = 0x40; // NMI vector -> 0xC440
+    r.bus.mem[0xFFFA] = 0x90;
+    r.bus.mem[0xFFFB] = 0x00; // maskable vector -> 0x9000 (must not be taken)
+    r.cpu.setSP(0x7000);
+    r.cpu.step(); // hlt
+    CHECK(r.cpu.halted());
+    r.cpu.setStatusReg(0x01); // IE=0, C=1: T is pushed as it is
+    r.cpu.requestMaskableInterrupt(); // pending, but IE is off
+    r.cpu.requestNonMaskableInterrupt();
+    CHECK(!r.cpu.halted());
+    int c = r.cpu.step(); // services the NMI, not the maskable request
+    CHECK(c > 0);
+    CHECK(r.cpu.pc() == 0xC440);
+    CHECK(!r.cpu.flagIE());
+    CHECK(r.cpu.sp() == 0x7000 - 3);
+    CHECK(r.bus.mem[0x7000] == 0x01); // T, pushed first
+    CHECK(r.bus.mem[0x6FFF] == 0x02); // PL of 0x8002, the instruction after HLT
+    CHECK(r.bus.mem[0x6FFE] == 0x80); // PH, popped first by RTI
+    CHECK(r.cpu.a() != 0x99);
+    // Serviced once: the next step executes at the vector (here 0x00 bytes,
+    // a plain instruction), it does not enter the NMI again.
+    r.cpu.step();
+    CHECK(r.cpu.pc() != 0xC440);
+    CHECK(r.cpu.sp() == 0x7000 - 3);
 }
 
 // wakeFromHalt() is the unconditional counterpart to
@@ -1516,6 +1548,7 @@ int main() {
     test_sjp_rtn_stack_roundtrip();
     test_psh_pop_pair_roundtrip();
     test_hlt_and_interrupt_wake();
+    test_nmi_ignores_ie_and_vectors_fffc();
     test_wake_from_halt_ignores_ie();
     test_off_instruction_powers_down_until_power_on();
     test_rti_restores_flags_and_pc();

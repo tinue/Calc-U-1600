@@ -197,6 +197,15 @@ public:
     /// INT is what ends the parked SC7852's HALT.
     void latchLh5803InterruptCause() { m_intCause |= 0x08; }
 
+    /// The SC7852's LHNMIO output (pin 92, wired to the LH5803's NMI): set
+    /// by PC1600Machine when the LH5803 fetches 9400H with PU = PV = 1
+    /// (the CE-158 high bank's display shift, which the LH5803 ROM's NMI
+    /// handler at C440H replaces), cleared by any port 36H write -- the
+    /// handler's `ANI #(A036H),00H` acknowledge.
+    /// Ref/PC-1600/PC-1600-CPU-LH5803-Compat.md §6.1.
+    bool lhNmiLatched() const { return m_lhNmiLatch; }
+    void latchLhNmi() { m_lhNmiLatch = true; }
+
     /// Port 32H as read: the latched causes plus two live levels, bit 0
     /// the TC8576F's INT output (INT0, pin 81) and bit 6 the sub-CPU's Z7
     /// (INT6, pin 84). Neither is latched: bit 0 follows the chip until the
@@ -417,6 +426,7 @@ private:
                                 // Bits 0 (comm) and 6 (sub-CPU) are live levels, see intCause().
                                 // INT = intCause() & mask (interruptLevel())
     uint8_t m_intMask{0};       // Port 35H
+    bool m_lhNmiLatch{false};   // LHNMIO, see latchLhNmi(); a port 36H write clears it
     uint8_t m_im2VectorLow{0xFF}; // Port 39H
 
     // Keyboard/display I/O. LH5810-style port block:

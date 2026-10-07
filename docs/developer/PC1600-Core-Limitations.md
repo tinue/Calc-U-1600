@@ -25,9 +25,13 @@ entry when a primary source or a ROM trace disagrees with it.
 
 - **`CDV` (`FD 8E`) clock divider not modelled** — an 8-cycle no-op.
   `LH5801.cpp` (`executeFD`)
-- **NMI line not implemented** — the non-maskable interrupt (vector
-  `0xFFFC`) has no source; nothing found so far needs it. The ON key's
-  BFI wake doesn't jump to a vector. `LH5801::requestMaskableInterrupt()`,
+- **NMI is edge-triggered and resets IE** — `requestNonMaskableInterrupt()`
+  is serviced once through `0xFFFC`, whatever IE is, pushing T and P like
+  the maskable entry. No document says whether the real input is edge- or
+  level-sensitive or whether it clears IE; the PC-1600's only NMI user
+  (the CE-158 trap below) acknowledges its source late and ends in `SIE`,
+  which fits this model. The PC-1500 never raises it. The ON key's BFI
+  wake doesn't jump to a vector. `LH5801::requestNonMaskableInterrupt()`,
   `LH5801::wakeFromHalt()`
 - **Undocumented opcodes execute as no-ops** — their real-hardware
   behaviour isn't sourced. They don't halt, but the trace marks them
@@ -68,6 +72,18 @@ entry when a primary source or a ROM trace disagrees with it.
   actually uses** (`rom1500 E538`: literal `0x0021`/`0x0033` vs. the
   `0xA03x` shadow) is unconfirmed — both are routed the same way for
   safety. `LH5803SharedMemory.hpp`
+- **CE-158 display-shift trap decodes 9400H only** — the SC7852's LHNMIO
+  (pin 92) raises the LH5803's NMI on the opcode fetch at 9400H with
+  PU = PV = 1; the ROM's handler (C440H) runs its copy of the CE-158's
+  93F9H–9439H, redraws the LCD and resumes at 943AH. The Service Manual
+  says "94\*\*H", but the CE-158 keeps running in 94xxH with the trap
+  re-armed, so only 9400H is decoded. Whether port 30H b0 gates the trap
+  is open (port 30H is not modelled). A port 36H write clears the latch.
+  `PC1600Machine::stepLocked()`, `PC1600Memory::latchLhNmi()`
+- **ME1 A040H–A05FH is Z-80 ports 40H–5FH** (the HD61102s), routed like
+  A030H–A03FH. The ROM's own LCD routines need it (`LCD1500_ALL` E84AH
+  polls `#(A058H)`/`#(A059H)`). Other ME1 A0xxH shadows are not routed.
+  `LH5803SharedMemory::isLcdPort()`
 - **Standalone `LH5803Memory` uses a private 16 KB RAM array**, for
   testing the LH5803 on its own; the machine shares RAM between the CPUs
   through `LH5803SharedMemory`. `LH5803Memory.hpp`

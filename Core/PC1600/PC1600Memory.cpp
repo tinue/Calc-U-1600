@@ -52,6 +52,7 @@ void PC1600Memory::reset() {
     // Interrupt cause/mask start clear; the boot ROM programs 35H itself.
     m_intCause = 0;
     m_intMask = 0;
+    m_lhNmiLatch = false;
     m_uart.reset();
     // Port 37H bit 4 (CK0, the LCD base clock) is 0 after reset until the
     // boot ROM enables it. The LCD controllers themselves are not reset:
@@ -437,9 +438,10 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
         // PC1600-P1-B3-new.bin 4197H, immediately after the `IN A,(32H)` cause
         // read at 40FFH -- i.e. an interrupt acknowledge/re-arm -- and
         // interrupts keep arriving with it ignored, so nothing in this
-        // core needs the register's contents yet. Recorded here so it
-        // stops reading as an unidentified port.
-        case 0x36: return;
+        // core needs the register's contents. The one effect modelled: the
+        // LH5803 ROM's NMI handler acknowledges the SC7852's LHNMIO trap
+        // here (`ANI #(A036H),00H`, C491H), so a write clears that latch.
+        case 0x36: m_lhNmiLatch = false; return;
         default:   return; // open bus -- see class comment for scope
     }
 }
