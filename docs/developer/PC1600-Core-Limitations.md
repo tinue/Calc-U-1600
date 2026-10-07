@@ -315,15 +315,14 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   through it — the `SoftwareDefinedCard`, built from a `.card.yaml`
   definition and wired by `PC1500PresetLoader`. The GUI reads the
   attached module's name from the slot (`ExpansionCard::moduleName()`).
-- **60-pin `SystemBus`: CMTIN / CMTOUT (cassette FSK audio), WEX / W1
-  (external WAIT), INT, BFO / φOS** are named-but-unwired placeholder pins
-  — "genuinely analog, out of scope until cassette support is built".
-  Nothing consults them; they exist only so the pin model stays honest
-  about all 60 pins. `SystemBus.hpp`
+- **60-pin `SystemBus`: WEX / W1 / WAIT, INT / IRQ, BFO / φOS, RSTE** are
+  not driven or read. A contact whose level isn't documented (DME0 on Z-80
+  cycles, M1 on memory cycles, PT/PU/PVOUT on I/O cycles) stays inactive
+  (TODO.md, "Expansion connectors"). `SystemBusCard.hpp`,
+  `PC1600BusDrive.hpp`
 - **Assumption, not independently confirmed**: the 60-pin connector's
-  pinout is identical between PC-1500 and PC-1500A, so all S1-S4 route
-  unconditionally on both. Worth confirming against a second TRM scan.
-  `SystemBus.hpp`
+  pinout is identical between PC-1500 and PC-1500A. Worth confirming
+  against a second TRM scan. `PC1500SignalDecode::systemBusPins`
 - **CE-1638 / CE-163F only work in Slot 2 on a PC-1600, not Slot 1.**
   Both cards decode a banked Y0 window from pin 4; on a PC-1600 they act
   as a plain unbanked 16K module (the boot ROM sizes them as +16384 and
@@ -367,8 +366,8 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   PC-1600 has its own native `SETDEV` (KI = F14EH b0), which likely takes
   the command; not yet checked against real hardware.
   `Core/Connector/Ce158Card.hpp`, `LH5803SharedMemory.cpp`
-- **Cassette (CMT)** — connector pins exist, no FSK / audio path.
-  `SystemBus.hpp`
+- **Cassette (CMT) through a CE-150 on the PC-1600** — no tape path
+  (TODO.md, "Cassette tape"). `LH5803SharedMemory.cpp`
 - **Buzzer: partial.** Modelled: the PC-1500 OPC/PC6 line, the PC-1600 OPC
   b7/b6 line, and the PC-1600 F-register (17H) modulator in its idle case
   (SDO = FX, phi = 1.3 MHz / 4, measured). The PC-1600 also has an

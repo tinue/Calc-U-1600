@@ -426,17 +426,35 @@ authentic speed for the span that matters.
 
 ### Expansion bus
 - **Cards know only the bus.** A peripheral card (CE-150, CE-158, memory
-  modules, ...) reacts to the connector signals in its `PinState`: address,
-  ME0/ME1, R/W, PU, PV and chip selects. It never knows which calculator it
-  is attached to. Host differences belong in the host's bus model, which
+  modules, ...) reacts to the contacts of its plug: `PinState` (40-pin) or
+  `SystemBusPins` (60-pin, `Contact60::k…`), with address, R/W, PU, PV and
+  the strobes/chip selects. It never knows which calculator it is attached to. Host differences belong in the host's bus model, which
   decides what reaches each pin. Don't give a card host-specific hooks or
   shortcuts. `makeSoftwareDefinedCard(path, host)` doesn't break this: the
   host only checks the file's `compatible-hosts` at load time, like the
   label on the box, and the built card keeps no host.
+- **One 60-pin connector per machine, and each card decodes the contacts
+  of its own CPU family.** The PC-1600's plug is a single `SystemBus` that
+  both CPUs drive (`PC1600BusDrive`). PC-1500-family cards (CE-150, CE-158,
+  `BusRomCard`) select on DME0 (56) and ME1/IOE (59); the SC7852-family
+  cards (CE-1600P, CE-1600F, host drive, `PC1600BusRomCard`) on MREQ/IORQ and
+  the bank bits PT/PU/PVOUT (14/15/16), and ignore every cycle while ELH̄
+  (58) is asserted. Don't give the host a per-CPU card list again: which
+  card answers which CPU follows from the contacts.
+  - DME0 is driven for LH5803 ME0 cycles only. The TRM names contact 56
+    DME0, as on the PC-1500, and the CE-150/CE-158 need it; on Z-80 cycles
+    its level is unknown and it stays low. Assumed, not measured.
+  - The SC7852-family cards' ELH̄ gate is documented for the CE-1600P's ROM
+    select (CSNO) only. For their I/O decode it is an assumption that keeps
+    the LH5803's ME1 cycles (which drive IORQ) away from ports 70H-9FH. It
+    is what blocks a CE-158 + CE-1600P combination (TODO.md).
+  - Where a contact's level is unknown (M1 on memory cycles, PT/PU/PVOUT on
+    I/O cycles, DME0 on Z-80 cycles), the drive leaves it inactive. Don't
+    make a card depend on one of those.
 - **Peripheral-ROM fetches take the generic open-bus path. This is fine as
   is.** Every fetch from a card ROM (CE-150 at 0xA000-0xBFFF, CE-158 at
   0x8000-0x9FFF) on the PC-1500 goes through `resolve()` → `readOpenBus()`
-  → `SystemBus` decode → each card's `respondsToRead`. It costs a few calls
+  → `SystemBus` → each card's `respondsToRead`. It costs a few calls
   and compares of host time per fetch. It costs no emulated time: LH5801
   cycles come from the opcode tables, and the memory path adds none. The
   ~1.3 MHz guest leaves plenty of host headroom. Don't add a per-card ROM

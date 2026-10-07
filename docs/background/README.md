@@ -28,8 +28,8 @@ with a status note on how the implementation differed. New plans go into
 | [Code cleanup backlog (low-risk part)](plans/Code-Cleanup-Plan.md) | 2026-09-26 | Implemented; the rest stays in TODO.md |
 | [Clean up `examples/`](plans/Examples-Cleanup-Plan.md) | 2026-09-26 | Implemented |
 | [Preset review: one naming rule, presets up to date](plans/Preset-Review-Plan.md) | 2026-09-30 | Implemented |
-| [Expansion connectors: mechanical groundwork](plans/Expansion-Connectors-Plan.md) | 2026-09-26 | Implemented; signal work open in TODO.md |
-| [60-pin / 40-pin connectors: real contacts](plans/Sixty-Pin-Connector-Plan.md) | 2026-10-07 | In progress |
+| [Expansion connectors: mechanical groundwork](plans/Expansion-Connectors-Plan.md) | 2026-09-26 | Implemented; signal work done in the 60-pin plan |
+| [60-pin / 40-pin connectors: real contacts](plans/Sixty-Pin-Connector-Plan.md) | 2026-10-07 | Implemented; hardware questions open in TODO.md |
 | [PC-1600 LCD: HD61102/HD61203 datasheet facts](plans/PC1600-LCD-Datasheet-Plan.md) | 2026-09-26 | Implemented |
 | [PC-1600 sub-CPU, TC8576F CPC and RTC/wake-up](plans/PC1600-SubCpu-CPC-Plan.md) | 2026-09-26 | Implemented |
 | [PC-1600: type KBII accented characters](plans/KBII-Typing-Plan.md) | 2026-09-27 | Implemented |

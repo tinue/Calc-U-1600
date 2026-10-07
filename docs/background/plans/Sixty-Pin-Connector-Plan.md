@@ -1,6 +1,7 @@
 # 60-pin / 40-pin connectors: model the real contacts
 
-**Status:** in progress 2026-10-07.
+**Status:** implemented 2026-10-07 (5f8ed70, 6523cff, 6f362ad). Open hardware questions in TODO.md. Verified: plot point hashes of every `examples/plotter` preset identical before/after (`headless/plotcheck`), tape matrices 38/38 (PC-1600) and 26/26 (PC-1500), Qt6 app builds.
+
 ## Context
 
 TODO.md § "Expansion connectors: one model on both machines". The groundwork from 2026-09-26

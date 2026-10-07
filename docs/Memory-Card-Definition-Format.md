@@ -56,8 +56,9 @@ This table is the source-of-truth pin dictionary from
 `Core/Connector/ExpansionCard.hpp` (the `pin[]` role comment): each name
 resolves, once at parse time, to one physical 40-pin contact
 (`Y0`/`RAM2`/`RAM1` → pin 4, `S4`/`PVOUT` → pin 5, `S1`/`S3`/`K0` → pin
-16, `S2`/`S4`/`K1` → pin 17, `S3`/`S5`/`K2` → pin 18, `Y2`/`PT` → pin 19,
-`PU` → pin 3, `PV` → pin 2).
+16, `S2`/`S4`/`K1` → pin 17, `S3`/`S5`/`K2` → pin 18, `Y2`/`PT` → pin 19;
+`PU` → pin 2 and `PV` → pin 3 on the PC-1500/1500A, as measured on a real
+unit (the TRM prints them swapped), `PU` → pin 3 on the PC-1600 slots).
 
 Whether a name resolves to a live pin or a dormant one on a *particular*
 compatible host is not checked here — that is the author's dormant

@@ -159,171 +159,34 @@ The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, 
 
 ## Expansion connectors: one model on both machines
 
-**Goal:** the connectors are fundamentally the same on the PC-1500 and the
-PC-1600, so software models them the same way. Each physical connector is
-one connector object. The host drives the signals, and a card sees only
-those signals, never the host (docs/background/Decisions.md, "Cards know only the
-bus"). The 60-pin connector extends the 40-pin one. They stay two plugs,
-but share one signal vocabulary and one connector/chain shell.
+Done 2026-10-07 (docs/background/plans/Sixty-Pin-Connector-Plan.md, after the
+2026-09-26 groundwork in Expansion-Connectors-Plan.md): each plug is numbered by
+its real contacts. The 40-pin cards decode `PinState` (PC-1500: 2 = PU, 3 = PV, as
+measured). The 60-pin cards decode `SystemBusPins` (`Contact60`: PT 14, PU 15, PV 16,
+IORQ 26, MREQ 49, DME0 56, DME1/ELH̄ 58, ME1/IOE 59). There is one `SystemBus` per
+machine. On the PC-1600 both CPUs drive it (`PC1600BusDrive`), and every
+peripheral sits on it: CE-150, CE-158, CE-1600P/F, the host drive and bus ROMs.
+Decisions.md, "One 60-pin connector per machine".
 
-**Requirement: every peripheral eventually goes through the emulated
-60-pin connector, with no shortcuts.** This covers the CE-150, CE-158,
-CE-1600P and CE-1600F, and anything added later. A card gets its signals
-only from the connector's contacts, numbered as the real 60-pin plug
-numbers them. The host never builds a `PinState` by hand, never holds a
-typed card pointer, and never decodes a card's address ranges. **The
-connector must be modelled properly on the PC-1600 too.** That means one
-60-pin connector object, driven by whichever CPU owns the bus (the LH5803
-while ELH is low, otherwise the SC7852 through its gate array), carrying
-what the real SC7852 puts on each contact (PVOUT, PU, PT, IORQ/IOE, ...).
-It is not a copy of the PC-1500's signals.
-
-**Shortcuts in place today** (each one must go):
-- 60-pin PU/PV sit on `pin[3]`/`pin[2]`, their **40-pin** contact
-  numbers (`PC1500SignalDecode::basePinState`). The CE-150 and CE-158
-  read them from there. Measured 2026-10-03: 60-pin 15 = PU, 16 = PV on
-  both machines, and the PC-1500's 40-pin pins are 2 = PU, 3 = PV, not
-  the TRM's 2 = PV, 3 = PU (see below).
-- On the PC-1600, `LH5803SharedMemory::peripheralPins` hands the
-  LH5803's own PU and PV flip-flops straight to the cards. On real
-  hardware PV goes out through the SC7852 as PVOUT. The LH5803's PU has
-  no documented path to the connector, because the SC7852's PU output is
-  a Port 31H bit.
-- The rest of the list follows below: `PC1600BusPins` and two separate
-  60-pin paths on the PC-1600. (Typed `Ce150Card*`/`Ce158Card*`,
-  `isCe158Io` and the PC-1500's `kCe150IoBase` are gone, see below.)
-
-**Hardware facts** ([Ref/Shared/Expansion-Connectors.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/Shared/Expansion-Connectors.md) §2, §4):
-- Both connectors carry the address bus, data bus, PU/PV, INHIBIT, DME0,
-  R/W and OD.
-- The 60-pin one adds ME1/DME1, INT, WAIT (WEX/W1), CMTIN/CMTOUT, VBAT, BFO
-  and φOS.
-- The PC-1500's 40-pin connector also carries decoded chip selects
-  (Y0, Y2, S1–S4) that aren't on the 60-pin one, so neither signal set
-  strictly contains the other. The PC-1600's 40-pin slots carry
-  RAM1/RAM2, PVOUT, PT, K0–K2/S1–S3 and MREQ instead.
-- The PC-1600's 60-pin connector matches the PC-1500's on every common
-  signal and pin. The CPU-specific pins differ: PT/PU/PVOUT, RD/WR, IORQ,
-  MREQ, M1, ELH, IOE. That's what the host drives, not what the card
-  sees.
-
-**Done 2026-09-26 (mechanical groundwork, docs/background/plans/Expansion-Connectors-Plan.md;
-the pins reaching the cards are unchanged):**
-- One card-chain shell, `CardChain` (attach/detach, InhibitSource cache,
-  first-responder read/write), behind all four connector classes. The
-  40-pin plugs are chains of one. The debug/name virtuals moved to
-  `CardBase` so a later 60-pin card interface can share them.
-- `PC1500Memory` owns its `ExpansionConnector` and `SystemBus` by value;
-  the raw-pointer setters are gone.
-- The hosts don't know which card sits where. `LH5803SharedMemory`
-  offers its peripheral accesses to one chain,
-  `PC1600Memory::lh5803PeripheralBus()`, instead of typed pointers and
-  `isCe158Io`. `PC1500Memory` gives the 60-pin bus first refusal on every
-  ME1 access instead of hard-coding the CE-150's LH5810 window. Debug
-  peeks ask `ExpansionCard::readHasSideEffects()`.
-- The PC-1600's two 60-pin halves (`lh5803PeripheralBus()` and
-  `ce1600pBus()`) now sit side by side in `PC1600Memory`, ready to become
-  one object once the signals are settled.
-
-**Paths before the groundwork above (five, not two):**
-
-| Connector | Code | Card interface |
-|---|---|---|
-| PC-1500 40-pin | `ExpansionConnector` | `ExpansionCard` / `PinState` |
-| PC-1600 40-pin slots | `MemorySlotConnector` | `ExpansionCard` / `PinState` ✓ |
-| PC-1500 60-pin | `SystemBus` | `ExpansionCard` / `PinState` |
-| PC-1600 60-pin, LH5803 side (CE-150, CE-158) | `LH5803SharedMemory::peripheralPins` / `cardRead` | `PinState` built by hand |
-| PC-1600 60-pin, SC7852 side (CE-1600P, CE-1600F) | `PC1600SystemBus` | its own `PC1600ExpansionCard` / `PC1600BusPins` |
-
-What's wrong with that:
-- **`PinState` numbers signals by 40-pin contact.** `SystemBus` reuses
-  it for the 60-pin connector and sets Y0/Y2 and S-block pins (via
-  `PC1500SignalDecode::basePinState` and `sBlockPin`) that the 60-pin
-  connector doesn't carry. On the 60-pin connector, contacts 16–18 are
-  PU/D7/D6. It's harmless today because the CE-150 and CE-158 read only
-  address, ME1 and PV/PU, but the model is wrong.
-- ~~**The PC-1600 has no 60-pin connector object on the LH5803 side.**
-  `LH5803SharedMemory` holds typed `Ce150Card*`/`Ce158Card*` pointers
-  with a fixed order and knows the CE-158's address ranges (`isCe158Io`).
-  So the host knows the card.~~ Done: a card chain, but still separate
-  from the SC7852 side and still fed hand-built `PinState`s.
-- **`PC1600BusPins` isn't a pin model.** It's a ROM offset plus a
-  `bank5` flag. On real hardware, bank 4/5 at 4000–7FFF reaches the
-  CE-1600P via the Port 31H page-B field on the PT/PU/PVOUT pins.
-- Because of this split, the same physical 60-pin connector exists twice
-  on the PC-1600. That's why the CE-158 and the CE-1600P can't be
-  attached together (see Feature ideas).
-- ~~`MemorySlotConnector` and `ExpansionConnector` share ~25 lines of
-  copy-pasted dispatch. `PC1500Memory` gets its `ExpansionConnector` and
-  `SystemBus` by raw pointer from `PC1500Machine`, while `PC1600Memory`
-  owns its connectors by value.~~ Done.
-
-**Direction** (to confirm in the analysis below):
-- Keep the physical-contact principle (docs/Memory-Card-Definition-Spec.md:
-  "the loader operates on physical pin numbers, full stop"), but number
-  each plug by its own real contacts. A 40-pin card sees 40-pin contacts.
-  A 60-pin card sees 60-pin contacts (e.g. PV 15, PU 16, ME1 59) instead
-  of today's 40-pin numbers plus a `me1` flag. Each connector class maps
-  host state onto the contacts it physically has, and the signals both
-  plugs share get one piece of mapping code.
-- One connector/chain shell (attach/detach, INHIBIT, read/write) for both
-  plug types. A 40-pin slot is a chain of one.
-- One 60-pin connector object per machine. On the PC-1600, both CPUs drive
-  it: the LH5803 side when it owns the bus (ELH), and the SC7852 side. The
-  CE-150, CE-158, CE-1600P and CE-1600F all become `ExpansionCard`s on it.
-
-**Before fixing:**
-- Research the PC-1600 60-pin connector signals that the cards need.
-  **Mostly settled 2026-09-26** from the Service Manual's SC7852 pin table
-  (printed pp. 20–21) and memory map (§5-3):
-  - When the LH5803 owns the bus, the SC7852 pins turn into inputs that
-    carry the LH5803's signals: IORQ = ME1, MREQ = ME0, RD = OD,
-    WR = R/W, M1/RFSH made from OPF. So on the connector, IORQ (26) *is*
-    LH5803 ME1 while ELH (58) is low.
-  - IOE (59) is not raw ME1. It is a decoded strobe the SC7852 raises
-    only for LH5803 ME1 accesses to `xx00–xx0F` and `8000–FFFF`, with
-    one wait (LHWAIT), half a clock after ME1. It never fires for the
-    Z-80.
-  - ELH (58) low = LH5803 running: the ownership signal.
-  - PV: "the PV signal of the LH-5803 is directly sent by PVOUT"; ME1
-    `8000–BFFF` is the CE-150 at PVOUT = 0, the CE-158 at PVOUT = 1.
-  - **Settled 2026-10-03 by measurement: 60-pin contact 15 = PU, 16 = PV
-    on both machines** (PVOUT on the PC-1600, which carries the LH5803's
-    PV). On the PC-1500, LH5801 pin 60 (PV) beeps to contact 16 and pin 61
-    (PU) to 15, and the **40-pin connector has pin 2 = PU, pin 3 = PV**.
-    Both PC-1500 TRM tables have PU/PV swapped. Contact 44 is F-GND, not
-    VBAT. Details in [Ref/Shared/Expansion-Connectors.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/Shared/Expansion-Connectors.md) §2.2b.
-  - PC-1600 nets (SM schematic): LH5803 PU shares one line with the
-    SC7852's PU output (slot pin 3, 60-pin 15); LH5803 PV goes SC7852
-    PVIN → PVOUT (slot pin 5, 60-pin 16). Slot pin 2 ("PVIN" in the TRM)
-    is VCC (the CE-1620M's EPROM Vpp); the model leaves `pin[2]` low there.
-  - **Model numbering is off on the PC-1500:** hosts and cards agree
-    on `pin[3]` = PU and `pin[2]` = PV, so behaviour is right, but the
-    real 40-pin contacts are 2 = PU and 3 = PV (`SystemBus`,
-    `PC1500SignalDecode::basePinState`, `resolveSignalPin`, the CE-150/
-    CE-158/bus-ROM cards, `LH5803SharedMemory::peripheralPins`). The
-    PC-1600 slot's `pin[3]` = PU is correct.
-  - Not yet looked at: which pins tell bank 4 from bank 5 for the
-    CE-1600P ROM, and how its I/O ports show up (the CE-1600P PDF).
-- ~~Why `PC1500Memory` gets its `ExpansionConnector` and `SystemBus` by
-  raw pointer.~~ Settled 2026-09-26: no reason survives. The setters date
-  from the squashed v0.1.0 import. `PC1500Machine` wires them right after
-  constructing `m_memory` (declared before the connectors, which is why
-  they can't be constructor arguments today). The bare `PC1500Memory`
-  instances in `lh5801_tests.cpp` never attach a card, so empty owned
-  connectors behave the same as the null pointers. Converge on
-  `PC1600Memory`'s pattern (owned by value, `ExpansionConnector(variant)`
-  / `SystemBus(variant)` built from the memory's own variant), with the
-  machine's `expansionConnector()`/`systemBus()` forwarding. On the
-  PC-1600, the single 60-pin connector has to be reachable from both
-  `PC1600Memory` and `LH5803SharedMemory`. Done for the PC-1500. On the
-  PC-1600 both halves now live in `PC1600Memory`, which
-  `LH5803SharedMemory` already reaches (as it does for `uart()`), so the
-  merged object can stay there with no machine-level wiring.
-- `.card.yaml` files and `SoftwareDefinedCard` use 40-pin contact numbers,
-  and that stays. Check that nothing in the 40-pin path changes when the
-  60-pin side moves to its own contact numbering (the memory-card tests
-  should pass unchanged).
+**Still open (hardware questions; the drive leaves these contacts inactive):**
+- **Does the CE-1600P's I/O decode see LH5803 ME1 cycles?** While ELH̄ is
+  asserted, IORQ carries the LH5803's ME1, so an access such as ME1 D070H
+  puts 70H on A0-A7. The SC7852-side cards ignore every ELH̄ cycle. The
+  Service Manual documents that for the ROM select CSNO; for IO7N and
+  80H-83H it is assumed. This decides whether a CE-158 (registers at ME1
+  D000-D3FF) and a CE-1600P can share the bus. **Before fixing:** probe
+  IO7N (CE-1600P gate array pin 42) on a real unit while a MODE 1 program
+  does `PEEK#` at an ME1 address with low byte 70H.
+- DME0 (56) on Z-80 cycles, M1 (10) on memory cycles, PT/PU/PVOUT on I/O
+  cycles: not documented. A logic probe on the 60-pin plug while stepping
+  Port 31H through the page-1 banks would also confirm the PT/PU/PVOUT
+  bank decode (Ref/PC-1600/PC-1600-Expansion-Bus.md §1).
+- The PU drive handover between the SC7852 and the LH5803 (one shared line)
+  is not measured.
+- The cards' recorders still get two clocks, `advanceCassette` (LH5801
+  cycles, PC-1500) and `advanceTStates` (SC7852 T-states, PC-1600). They can
+  merge into one φOS-based clock once the CE-150 has a tape path on the
+  PC-1600 (see "Cassette tape").
 
 ## Cassette tape: still open
 
@@ -388,9 +251,9 @@ CE-1600P (docs/background/plans/Cassette-Tape-Plan.md, dev/tape-matrix/).
 - CE-158 together with the CE-1600P. The real CE-1600P has its own
   connector at the back (like the CE-150), so both can be attached at
   once; today `PC1600Machine::attachCE1600P`/`attachCE158` detach each
-  other and the preset parser rejects the pair (blocked on "Expansion
-  connectors: one model on both machines"; User Guide says "not yet
-  supported").
+  other and the preset parser rejects the pair. Both now sit on the one
+  60-pin `SystemBus`. Blocked on the IO7N question in "Expansion connectors"
+  (User Guide says "not yet supported").
 - **Review the Debug panel's content against the full ROM disassembly.** The
   pointer dump and the other views were built before the ROM was fully
   commented. Go through the disassembly's work-area symbols and pick what
