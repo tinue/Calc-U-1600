@@ -9,37 +9,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-/*
- Low 16 bits of a PC-1600 header's run address meaning "no auto-start" (`BSAVE`'s
- default `&FFFF`). The bank byte is taken from the load address; a bank-0 `BSAVE` in
- Calc-U-1600 writes exactly this header (`… C5 C0 00 FF FF 00 …`).
- */
-#define PC1600_NO_AUTORUN 65535
-
-/*
- Bytes per side (16 tracks × 8 sectors × 512 bytes).
- */
-#define SIDE_SIZE 65536
-
-#define FORMAT_VERSION 1
-
-/*
- Attribute of a newly written file (bit 5 is always set; nothing else).
- */
-#define NEW_FILE_ATTR 32
-
-#define ATTR_PROTECTED 1
-
-#define ATTR_UNKNOWN_I 2
-
-#define ATTR_HIDDEN 4
-
-/*
- Year field of a new file: the PC-1600 ROM writes 6 whatever the date (checked in
- Calc-U-1600 with `DATE$ = "09/22"`, and on `dw.img`).
- */
-#define NEW_FILE_YEAR_FIELD 6
-
 #define SDE_OK 0
 
 #define SDE_ERR -1
@@ -311,12 +280,6 @@ typedef enum {
 } SdeTapeKind;
 
 /*
- Volume geometry. Only the CE-1600F floppy side is implemented; a RAM-disk card would
- read these values from its boot sector instead.
- */
-typedef struct Geometry Geometry;
-
-/*
  One directory entry.
  */
 typedef struct {
@@ -464,7 +427,7 @@ int32_t sde_detect(const uint8_t *input, size_t in_len, SdeContent *out_kind);
 /*
  ASCII BASIC bytes -> tokenized payload. `with_header != 0` prepends the serial
  header. `segment_marker` selects how a `#SEGMENT` line renders -- see
- [`SdeSegmentMarker`]; pass `SDE_SEGMENT_MARKER_WIRE` for the previous behavior.
+ [`SdeSegmentMarker`] (`SDE_SEGMENT_MARKER_WIRE` is what `SAVE "COM1:"` sends).
 
  # Safety
  Pointer/length pairs must describe readable buffers; `name` is NULL or a C string;

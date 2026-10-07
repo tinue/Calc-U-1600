@@ -155,19 +155,6 @@ The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, 
   the TRM doesn't); `SAVE`/`LOAD "CAS:"` in MODE 1; whether the CE-158's own
   `SETDEV` is reachable on the PC-1600; CE-150/CE-158 `PRINT#`/`INPUT#` in
   MODE 0.
-- **libsharpdx's PC-1600 keyword set has `MOOE` for `MODE`** (F2B3H), so a
-  `.bas` line `10 MODE 0` loads as `10 MOD E0`; LIST shows the wrong program
-  and RUN runs it. The ROM table (P2-B6 `B6DEH`, NEW and OLD) says `MODE`;
-  the source marks it "possibly MODE; pending verification" (SharpBasicShared
-  `Pc1600Keywords.java`, also in SharpCommunicator's
-  `SharpPc1600BasicKeywords.java`). Also: `WIDTH` (F087H) is in the set, but
-  the ROM has it only masked (`W\0DTH`, NEW) or not at all (OLD), so a real
-  PC-1600 can't type it; drop it. Everything else matches the ROM tables in
-  both directions (code -> name, name -> code), for the PC-1500 set too.
-  Fixed upstream (SharpBasicShared d9bad75, SharpDataExchange 93cbb2e on
-  dev-0.3.4; SharpCommunicator 353c7b4); waiting for the libsharpdx 0.3.4
-  release, then refresh the vendored copy and the CI version. Check: a
-  `.bas` with `10 MODE 0` loads and lists as `10 MODE 0`.
 - **Guide screenshots write into the real saves folder:** the chapter-5
   preset (`docs/developer/screenshots/presets/pc1600-modules.pc1600`) uses
   `saveas: live slot-1:My programs`, so every `tools/make_screenshots.sh`
