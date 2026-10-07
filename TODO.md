@@ -171,16 +171,6 @@ The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, 
   preset (`docs/developer/screenshots/presets/pc1600-modules.pc1600`) uses
   `saveas: live slot-1:My programs`, so every `tools/make_screenshots.sh`
   run writes a live "My programs" card into the Battery-card saves folder.
-- **`examples/memory/flashtest_ce163f.pc1500a` stops with ERROR 1 IN 10.**
-  The lines are stored, but with
-  the CE-163F in the slot, BASIC's program area starts at &00C5 inside the
-  banked window, and line 10 (`POKE &6809,0`) switches that bank away
-  from under the running program. The startup presets move BASIC up with
-  `NEW&112`, which doesn't help here: the program pokes into the bank it
-  lives in. **Before fixing:** decide whether the demo becomes direct-mode
-  `type:` steps (as in its header comment) or a program placed outside
-  &0000-&3FFF.
-
 ## Expansion connectors: one model on both machines
 
 Done 2026-10-07 (docs/background/plans/Sixty-Pin-Connector-Plan.md, after the
