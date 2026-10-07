@@ -164,9 +164,10 @@ The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, 
   the ROM has it only masked (`W\0DTH`, NEW) or not at all (OLD), so a real
   PC-1600 can't type it; drop it. Everything else matches the ROM tables in
   both directions (code -> name, name -> code), for the PC-1500 set too.
-  Fix in SharpBasicShared, regenerate `SharpDataExchange/src/keywords.rs`
-  (`tools/extract_keywords.py`), then a libsharpdx release for the vendored
-  copy and CI. Check: a `.bas` with `10 MODE 0` loads and lists as `10 MODE 0`.
+  Fixed upstream (SharpBasicShared d9bad75, SharpDataExchange 93cbb2e on
+  dev-0.3.4; SharpCommunicator 353c7b4); waiting for the libsharpdx 0.3.4
+  release, then refresh the vendored copy and the CI version. Check: a
+  `.bas` with `10 MODE 0` loads and lists as `10 MODE 0`.
 - **Guide screenshots write into the real saves folder:** the chapter-5
   preset (`docs/developer/screenshots/presets/pc1600-modules.pc1600`) uses
   `saveas: live slot-1:My programs`, so every `tools/make_screenshots.sh`
