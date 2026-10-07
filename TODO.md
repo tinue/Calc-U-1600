@@ -489,18 +489,22 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
     `config.port`.
   - `tools/dap_smoke.py`: each run repeats Dap/initialize/attach/
     disconnect; a `session(port, **attach)` context manager.
-- **PC-1600 module window base is guessed from the card image size.**
-  `PC1600ProgramPlacement.cpp` (`windowContent`/`windowBase`) and
-  `pc1600SlotGeometry` (`PC1600MachineCodeLoader.cpp`) take the image as
-  top-justified in &8000-&BFFF (4 KB = &B000, 8 KB = &A000), while the
-  writes go through the slot pins. CE-151 and CE-155 only agree because
-  their sizes match their decode; a module whose RAM isn't top-justified
-  would get its program written where the pins hold no RAM. Fix: derive
-  the base from what the card answers through the pins
-  (`pc1600LoadState`'s `bankRamPages` already scans that), and drop
-  `SlotGeometry::imageSize`/`bankSize`. *(behaviour)* **Before fixing:**
-  check every bundled PC-1600 card gives the same base both ways, and what
-  the `windowContent(g) < 0x1000` check becomes.
+- **PC-1600 module window base: follow the ROM's probe, not the image
+  size.** `PC1600ProgramPlacement.cpp` (`windowContent`/`windowBase`) and
+  `pc1600SlotGeometry` (`PC1600MachineCodeLoader.cpp`) take the base as
+  &C000 minus the card image's (bank) size. The ROM's module map (rom3b
+  67B2-6892) instead takes the first of 8000H / A000H / B000H in Slot 1,
+  8000H / A000H in Slot 2, where `MEMORYCHK` finds RAM, and always runs the
+  area to BFFFH (Decisions.md, "A PC-1600 module window starts at 8000H,
+  A000H or B000H"). Both give the same base for every real and bundled
+  module (4 KB B000H, 8 KB A000H, 16/32 KB 8000H); they would differ only
+  for a module that never existed (e.g. 12 KB at 9000H: ROM A000H, loader
+  9000H). Odd banks (2nd half of a 32 KB module) are mapped at 8000H only
+  (`SMAPPAIR` 6898H). Low priority, no behaviour change for existing cards. Fix: probe
+  the three bases through the slot pins like the ROM (`pc1600LoadState`'s
+  `bankRamPages` already scans what the pins answer) and drop
+  `SlotGeometry::imageSize`/`bankSize`; the `windowContent(g) < 0x1000`
+  check becomes "no RAM at any base".
 - **The PC-1600 loaders route page C / page D themselves.**
   `PC1600BasicLoader.cpp` (`writeAt`) and `PC1600MachineCodeLoader.cpp`
   each pick slot bus vs. `debugWriteInternalRam(addr - 0xC000)` and split

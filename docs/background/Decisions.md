@@ -314,6 +314,16 @@ authentic speed for the span that matters.
   address order: a CE-155 keeps A000H (S1) at 0800H and B800H (its own
   decoder) at 0000H. Found by the loader matrix (dev/loader-matrix/).
   Don't bring back image-offset writes.
+- **A PC-1600 module window starts at 8000H, A000H or B000H, nothing
+  else.** The ROM's module map (rom3b 67B2-6892) takes the first of
+  8000H / A000H / B000H in Slot 1, 8000H / A000H in Slot 2, where
+  `MEMORYCHK` finds RAM, and always runs the area up to BFFFH. A module
+  whose RAM isn't top-justified (e.g. 8000-9FFF only) is one the ROM can't
+  use either, so the loaders need no other geometry. A PC-1500 module using
+  YO and S1-S3 together can't work in the PC-1600 at all: pin 4 is RAM2,
+  the whole 8000-BFFF window, and with 3CH = 5BH S1-S3 land inside it.
+  The CE-151 / CE-155 fit comes from the Slot 1 remap (see "PC-1600 Slot 1
+  S1-S3 follow Port 3CH b6").
 - **Machine code may run from a module window on past &BFFF** into
   internal RAM, as `BLOAD` and `CLOAD M` write it. In MODE 1 that is one
   LH5803 range, where PC-1500 machine code naturally lives.
