@@ -14,6 +14,7 @@
 
 #include "../Connector/CE1600FCard.hpp"
 #include "../Connector/FloppyImageFile.hpp"
+#include "../PC1600/PC1600BusDrive.hpp"
 
 namespace {
 
@@ -25,12 +26,8 @@ int g_fail = 0;
     else { g_fail++; std::fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } \
 } while (0)
 
-PC1600BusPins ioPins(uint8_t port, bool forWrite) {
-    PC1600BusPins pins;
-    pins.address = port;
-    pins.io = true;
-    pins.forWrite = forWrite;
-    return pins;
+SystemBusPins ioPins(uint8_t port, bool forWrite) {
+    return PC1600BusDrive::z80IoPins(port, forWrite);
 }
 
 uint8_t readReg(CE1600FCard& card, uint8_t port) {
@@ -386,8 +383,10 @@ void test_claims_only_its_own_ports() {
     CE1600FCard card;
     card.insertBlankDisk();
     uint8_t v = 0;
-    PC1600BusPins romPins;  // io=false: ROM window, not this card's concern
-    CHECK(!card.respondsToRead(romPins, v));
+    // A page-1 ROM read (bank 5, the CE-1600P's half) is not this card's.
+    CHECK(!card.respondsToRead(PC1600BusDrive::z80MemPins(0x4000, false, 5), v));
+    // Nor is an LH5803 ME1 cycle whose low byte matches (ELH̄ asserted).
+    CHECK(!card.respondsToRead(PC1600BusDrive::lh5803Pins(0xD070, false, /*me1=*/true, false, false), v));
     CHECK(!card.respondsToRead(ioPins(0x81, false), v));  // read side is CE1600PCard's
     CHECK(!card.respondsToWrite(ioPins(0x82, true), 0));
     CHECK(!card.respondsToRead(ioPins(0x90, false), v));

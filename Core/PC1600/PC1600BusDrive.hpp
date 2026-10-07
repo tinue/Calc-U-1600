@@ -41,4 +41,30 @@ inline SystemBusPins lh5803Pins(uint16_t addr, bool forWrite, bool me1, bool pu,
     return pins;
 }
 
+/// A Z-80 memory cycle: MREQ, and the bank number of the page being
+/// accessed on PT / PU / PVOUT, MSB first (TRM §7.2.1; for page 1 Port 31H
+/// b3/b2/b1). Not driven: M1 (instruction fetches look like data reads) and
+/// DME0 -- unknown on Z-80 cycles.
+inline SystemBusPins z80MemPins(uint16_t addr, bool forWrite, uint8_t bank) {
+    SystemBusPins pins;
+    pins.address = addr;
+    pins.forWrite = forWrite;
+    pins.pin[Contact60::kMreq] = true;
+    pins.pin[Contact60::kPT] = (bank & 4) != 0;
+    pins.pin[Contact60::kPU] = (bank & 2) != 0;
+    pins.pin[Contact60::kPV] = (bank & 1) != 0;
+    return pins;
+}
+
+/// A Z-80 I/O cycle (`IN`/`OUT`): IORQ, the port on A0-A7. A8-A15 carry the
+/// B register on a real Z-80 and stay 0 here; PT / PU / PVOUT are unknown
+/// on I/O cycles and stay low.
+inline SystemBusPins z80IoPins(uint8_t port, bool forWrite) {
+    SystemBusPins pins;
+    pins.address = port;
+    pins.forWrite = forWrite;
+    pins.pin[Contact60::kIorq] = true;
+    return pins;
+}
+
 } // namespace PC1600BusDrive

@@ -91,8 +91,8 @@ bool PC1600Machine::attachCE1600P(const uint8_t* rom1, size_t rom1Size,
     detachCE150Locked(); // one plotter on the bus at a time
     detachCE158Locked(); // the CE-158 cannot be used with the CE-1600P
     card->connectRecorder(&m_tapeDeck);
-    m_z80Mem.ce1600pBus().attach(card.get());
-    m_z80Mem.ce1600pBus().attach(floppy.get());
+    m_z80Mem.systemBus().attach(card.get());
+    m_z80Mem.systemBus().attach(floppy.get());
     m_ce1600pCard = std::move(card);
     m_ce1600fCard = std::move(floppy);
     return true;
@@ -105,11 +105,11 @@ void PC1600Machine::detachCE1600P() {
 
 void PC1600Machine::detachCE1600PLocked() {
     if (m_ce1600fCard) {
-        m_z80Mem.ce1600pBus().detach(m_ce1600fCard.get());
+        m_z80Mem.systemBus().detach(m_ce1600fCard.get());
         m_ce1600fCard.reset();
     }
     if (!m_ce1600pCard) return;
-    m_z80Mem.ce1600pBus().detach(m_ce1600pCard.get());
+    m_z80Mem.systemBus().detach(m_ce1600pCard.get());
     m_ce1600pCard.reset();
 }
 
@@ -119,21 +119,15 @@ bool PC1600Machine::attachHostDrive(const uint8_t* rom, size_t romSize, const st
     card->drive().setDirectory(dir);
     std::lock_guard<std::mutex> lock(m_mutex);
     detachHostDriveLocked();
-    m_z80Mem.ce1600pBus().attach(card.get());
+    m_z80Mem.systemBus().attach(card.get());
     m_hostDriveCard = std::move(card);
     return true;
 }
 
-void PC1600Machine::attachBusRom(std::unique_ptr<PC1600BusRomCard> card) {
+void PC1600Machine::attachBusRom(std::unique_ptr<SystemBusCard> card) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_z80Mem.ce1600pBus().attachFirst(card.get());
-    m_systemBusRoms.push_back(std::move(card));
-}
-
-void PC1600Machine::attachBusRom(std::unique_ptr<BusRomCard> card) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_z80Mem.lh5803PeripheralBus().attachFirst(card.get());
-    m_lh5803BusRoms.push_back(std::move(card));
+    m_z80Mem.systemBus().attachFirst(card.get());
+    m_busRoms.push_back(std::move(card));
 }
 
 void PC1600Machine::detachHostDrive() {
@@ -143,7 +137,7 @@ void PC1600Machine::detachHostDrive() {
 
 void PC1600Machine::detachHostDriveLocked() {
     if (!m_hostDriveCard) return;
-    m_z80Mem.ce1600pBus().detach(m_hostDriveCard.get());
+    m_z80Mem.systemBus().detach(m_hostDriveCard.get());
     m_hostDriveCard.reset();
 }
 
@@ -271,7 +265,7 @@ bool PC1600Machine::attachCE150(const uint8_t* rom, size_t romSize) {
     detachCE150Locked();
     detachCE1600PLocked(); // one plotter on the bus at a time
     card->reset();
-    m_z80Mem.lh5803PeripheralBus().attach(card.get());
+    m_z80Mem.systemBus().attach(card.get());
     m_ce150Card = std::move(card);
     return true;
 }
@@ -283,7 +277,7 @@ void PC1600Machine::detachCE150() {
 
 void PC1600Machine::detachCE150Locked() {
     if (!m_ce150Card) return;
-    m_z80Mem.lh5803PeripheralBus().detach(m_ce150Card.get());
+    m_z80Mem.systemBus().detach(m_ce150Card.get());
     m_ce150Card.reset();
 }
 
@@ -295,7 +289,7 @@ bool PC1600Machine::attachCE158(const uint8_t* rom, size_t romSize) {
     if (!card) return false;
     detachCE158Locked();
     detachCE1600PLocked(); // not usable together with the CE-1600P
-    m_z80Mem.lh5803PeripheralBus().attach(card.get());
+    m_z80Mem.systemBus().attach(card.get());
     m_ce158.install(std::move(card));
     return true;
 }
@@ -307,7 +301,7 @@ void PC1600Machine::detachCE158() {
 
 void PC1600Machine::detachCE158Locked() {
     if (!m_ce158.attached()) return;
-    m_z80Mem.lh5803PeripheralBus().detach(m_ce158.card());
+    m_z80Mem.systemBus().detach(m_ce158.card());
     m_ce158.remove();
 }
 
@@ -477,7 +471,7 @@ void PC1600Machine::advanceSharedClocks(int tstates) {
     m_z80Mem.subCpu().tickByTStates(tstates);
     m_z80Mem.display().tick(tstates);
     m_ce158.tick(static_cast<uint64_t>(tstates)); // the CE-158's own UART clock
-    m_z80Mem.ce1600pBus().tick(static_cast<uint32_t>(tstates)); // the cassette recorder
+    m_z80Mem.systemBus().advanceTStates(static_cast<uint32_t>(tstates)); // the cassette recorder
 }
 
 uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {

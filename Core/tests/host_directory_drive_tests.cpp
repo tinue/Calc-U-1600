@@ -16,6 +16,7 @@
 
 #include "../Connector/HostDirectoryDrive.hpp"
 #include "../Connector/PC1600HostDriveCard.hpp"
+#include "../PC1600/PC1600BusDrive.hpp"
 
 namespace {
 
@@ -551,18 +552,11 @@ void test_card_mep_commands() {
     PC1600HostDriveCard card;
     card.drive().setDirectory(dir.path);
     auto out = [&card](uint8_t port, uint8_t value) {
-        PC1600BusPins pins;
-        pins.io = true;
-        pins.forWrite = true;
-        pins.address = port;
-        CHECK(card.respondsToWrite(pins, value));
+        CHECK(card.respondsToWrite(PC1600BusDrive::z80IoPins(port, /*forWrite=*/true), value));
     };
     auto in = [&card]() {
-        PC1600BusPins pins;
-        pins.io = true;
-        pins.address = PC1600HostDriveCard::kDataPort;
         uint8_t v = 0;
-        CHECK(card.respondsToRead(pins, v));
+        CHECK(card.respondsToRead(PC1600BusDrive::z80IoPins(PC1600HostDriveCard::kDataPort, /*forWrite=*/false), v));
         return v;
     };
     auto cdir = [&](const std::string& path, uint8_t& status, uint8_t& erl, std::string& prompt) {

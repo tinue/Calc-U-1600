@@ -4,7 +4,7 @@
 #include <cstring>
 #include <vector>
 
-#include "PC1600SystemBus.hpp"
+#include "SystemBusCard.hpp"
 
 // ── CE-1600F floppy drive, docked onto the CE-1600P's 50-pin sub-port ────
 //
@@ -57,7 +57,7 @@
 // "which physical side is currently facing the head" -- setSide() is the
 // software analogue of the user ejecting, flipping, and reinserting the
 // disk.
-class CE1600FCard : public PC1600ExpansionCard {
+class CE1600FCard : public SystemBusCard {
 public:
     static constexpr size_t kSectorSize = 512;
     static constexpr size_t kTracksPerSide = 16;
@@ -159,26 +159,28 @@ public:
     /// off, eject the disk, turn it over").
     bool motorOn() const { return m_motorOn; }
 
-    bool respondsToRead(const PC1600BusPins& pins, uint8_t& outValue) const override {
-        if (!pins.io) return false;
-        if (pins.address >= 0x70 && pins.address <= 0x7F) {
-            outValue = readRegister(pins.address);
+    bool respondsToRead(const SystemBusPins& pins, uint8_t& outValue) const override {
+        if (!Sc7852Decode::io(pins)) return false;
+        const uint8_t port = Sc7852Decode::port(pins);
+        if (port >= 0x70 && port <= 0x7F) {
+            outValue = readRegister(port);
             return true;
         }
         return false;
     }
 
-    bool respondsToWrite(const PC1600BusPins& pins, uint8_t value) override {
-        if (!pins.io) return false;
-        if (pins.address == 0x81) {
+    WriteResult respondsToWrite(const SystemBusPins& pins, uint8_t value) override {
+        if (!Sc7852Decode::io(pins)) return WriteResult::ignored();
+        const uint8_t port = Sc7852Decode::port(pins);
+        if (port == 0x81) {
             if (!(value & 0x01)) resetLatchedState();  // active-low FD reset
-            return true;
+            return WriteResult::taken();
         }
-        if (pins.address >= 0x70 && pins.address <= 0x7F) {
-            writeRegister(pins.address, value);
-            return true;
+        if (port >= 0x70 && port <= 0x7F) {
+            writeRegister(port, value);
+            return WriteResult::taken();
         }
-        return false;
+        return WriteResult::ignored();
     }
 
 private:

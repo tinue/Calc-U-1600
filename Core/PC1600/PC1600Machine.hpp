@@ -161,8 +161,8 @@ public:
     //
     // `PC1600-P1-B4-CE1600P-{new,old}.bin`/`PC1600-P1-B5-CE1600P-OR-F-{new,old}.bin` are confirmed CE-1600P ROM (see
     // roms/README.md) -- `attachCE1600P` builds a card, loads both halves,
-    // and attaches it to `m_z80Mem.ce1600pBus()`; PC1600Memory routes Page B
-    // banks 4-7 and I/O ports 0x70-0x9F to that bus once attached.
+    // and attaches it to `m_z80Mem.systemBus()`; PC1600Memory offers Page B
+    // banks 4-7 and I/O ports 0x70-0x9F to that bus.
     //
     // The CE-1600F floppy docks onto the CE-1600P and cannot run
     // standalone (its driver lives in the CE-1600P's own bank-5 ROM), so
@@ -243,12 +243,12 @@ public:
 
     // ── Bus ROMs (preset `bus-rom:`, Connector/BusRomCard.hpp) ───────────
     //
-    // A plain ROM on the system bus (a page B bank) or on the LH5803 side,
-    // in front of every other card there, so a rebuilt ROM shadows a
-    // bundled one (e.g. the host drive's bank 7). Kept for the machine's
+    // A plain ROM on the 60-pin connector, decoded like the Z-80's page-B
+    // banks (PC1600BusRomCard) or like the LH5803's peripherals
+    // (BusRomCard), in front of every other card, so a rebuilt ROM shadows
+    // a bundled one (e.g. the host drive's bank 7). Kept for the machine's
     // lifetime; a preset builds a fresh machine.
-    void attachBusRom(std::unique_ptr<PC1600BusRomCard> card);
-    void attachBusRom(std::unique_ptr<BusRomCard> card);
+    void attachBusRom(std::unique_ptr<SystemBusCard> card);
     bool hostDriveAttached() const;
     void setHostDriveDirectory(const std::filesystem::path& dir);
     std::filesystem::path hostDriveDirectory() const;
@@ -258,10 +258,10 @@ public:
     // The PC-1500's CE-150 attached to the PC-1600's LH5803 compatibility
     // CPU: its ROM window (LH5803 0xA000-0xBFFF, PV=0) and LH5810 block
     // (LH5803 ME1 0xB008-0xB00F) are served by the same Ce150Card the
-    // PC-1500 uses, plugged into PC1600Memory::lh5803PeripheralBus() (the
-    // LH5803 side of the 60-pin connector). Mutually exclusive
-    // with the CE-1600P on the shared 60-pin bus concept -- attaching one
-    // detaches the other. A chip/machine reset re-anchors the card but
+    // PC-1500 uses, plugged into PC1600Memory::systemBus() (the 60-pin
+    // connector, where it answers the LH5803's cycles). Mutually exclusive
+    // with the CE-1600P (one plotter at a time) -- attaching one detaches
+    // the other. A chip/machine reset re-anchors the card but
     // leaves it attached (like the CE-1600P).
     bool attachCE150(const uint8_t* rom, size_t romSize); // 8192 bytes
     void detachCE150();
@@ -525,8 +525,7 @@ private:
     std::unique_ptr<CE1600PCard> m_ce1600pCard; // see attachCE1600P()
     std::unique_ptr<CE1600FCard> m_ce1600fCard; // union-attached with m_ce1600pCard
     std::unique_ptr<PC1600HostDriveCard> m_hostDriveCard; // see attachHostDrive()
-    std::vector<std::unique_ptr<PC1600BusRomCard>> m_systemBusRoms; // see attachBusRom()
-    std::vector<std::unique_ptr<BusRomCard>> m_lh5803BusRoms;
+    std::vector<std::unique_ptr<SystemBusCard>> m_busRoms; // see attachBusRom()
     std::unique_ptr<Ce150Card> m_ce150Card;     // see attachCE150() -- LH5803-side plotter (MODE 1)
     Ce158Port m_ce158;                          // see attachCE158() -- LH5803-side interface (MODE 1)
 

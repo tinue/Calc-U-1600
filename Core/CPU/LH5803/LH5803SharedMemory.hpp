@@ -32,7 +32,7 @@ class PC1600BusArbiter;
 //              drawn on the LCD (the gate array's mirror, see
 //              mirrorPc1500Display())
 //   8000-BFFF  peripheral ROM window, offered to the cards on
-//              PC1600Memory::lh5803PeripheralBus(): CE-150 ROM (PV=0,
+//              PC1600Memory::systemBus(): CE-150 ROM (PV=0,
 //              A000-BFFF) or CE-158 ROM (PV=1, 8000-9FFF, PU picks its
 //              8 KB bank). Open bus where no attached card answers. The
 //              LH5803 ROM sets PV itself from CALLH's PARBAN (E224: RPV,
@@ -157,7 +157,7 @@ private:
     /// the LCD, as the gate array does: see PC1600Display::mirrorPc1500Column().
     /// ME1 writes there only reach the RAM.
     void mirrorPc1500Display(uint16_t addr);
-    /// Offers an access to the cards on PC1600Memory::lh5803PeripheralBus().
+    /// Offers an access to the cards on PC1600Memory::systemBus().
     /// True (with *value set, for a read) when a card claims it.
     bool cardRead(uint16_t addr, bool me1, uint8_t* value) const;
     bool cardWrite(uint16_t addr, bool me1, uint8_t value);

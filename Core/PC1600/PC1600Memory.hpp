@@ -11,8 +11,8 @@
 #include "../Connector/ExpansionCard.hpp"
 #include "../Connector/CardChain.hpp"
 #include "../Connector/MemorySlotConnector.hpp"
-#include "../Connector/PC1600SystemBus.hpp"
 #include "../Connector/SystemBus.hpp"
+#include "PC1600BusDrive.hpp"
 #include "PC1600Bank.hpp"
 #include "PC1600BusArbiter.hpp"
 #include "PC1600Display.hpp"
@@ -237,20 +237,14 @@ public:
     /// loadBank6Rom() -- read-only, so safe from any thread.
     const uint8_t* bank6Rom() const { return m_bank6Loaded ? m_bank6Rom.data() : nullptr; }
 
-    /// The 60-pin system bus (Page B banks 4-7 ROM window + I/O ports
-    /// 0x70-0x9F) -- CE-1600P and the host drive plug in here, not the memory slots. See
-    /// PC1600SystemBus.hpp for why this bus has its own pin model rather
-    /// than reusing ExpansionCard::PinState.
-    PC1600SystemBus& ce1600pBus() { return m_ce1600pBus; }
-
-    /// The same 60-pin connector as seen from the LH5803 side: the cards
-    /// the LH5803 reaches (CE-150, CE-158). LH5803SharedMemory builds the
-    /// pins and offers its peripheral accesses here; the cards decode them.
-    /// This and ce1600pBus() are still two paths for one physical plug --
-    /// merging them waits on the open 60-pin signal questions (TODO.md,
-    /// "Expansion connectors: one model on both machines").
-    SystemBus& lh5803PeripheralBus() { return m_lh5803PeripheralBus; }
-    const SystemBus& lh5803PeripheralBus() const { return m_lh5803PeripheralBus; }
+    /// The 60-pin connector: the PC-1600's one system-bus plug, driven by
+    /// whichever CPU owns the bus (PC1600BusDrive builds each cycle's
+    /// contacts). The Z-80 side offers its page-1 banks 4-7 and I/O
+    /// 70H-9FH here, LH5803SharedMemory the LH5803's peripheral window and
+    /// ME1 8000H up. CE-150, CE-158, CE-1600P/F, the host drive and bus
+    /// ROMs all sit on it; each decodes the contacts itself.
+    SystemBus& systemBus() { return m_systemBus; }
+    const SystemBus& systemBus() const { return m_systemBus; }
 
     /// Plugs a card into Slot 1 / Slot 2 -- the connector-level path, taking
     /// ownership of the card (mirrors PC1500Machine::attachExpansionCard).
@@ -416,8 +410,7 @@ private:
     MemorySlotConnector m_slot2Conn;
     std::unique_ptr<ExpansionCard> m_slot1Card; // null = slot empty
     std::unique_ptr<ExpansionCard> m_slot2Card;
-    PC1600SystemBus m_ce1600pBus; // Page B banks 4-7 + I/O 0x70-0x9F; see ce1600pBus()
-    SystemBus m_lh5803PeripheralBus; // see lh5803PeripheralBus()
+    SystemBus m_systemBus; // the 60-pin connector; see systemBus()
     PC1600BusArbiter* m_arbiter{nullptr};
     SC7852* m_cpu{nullptr};
     uint8_t m_intCause{0};      // Port 32H latched causes, whatever the mask -- bit 3 LH5803
@@ -477,7 +470,7 @@ private:
     bool    m_sdo{true};
     int64_t m_sdoAccum{0};  // T-states * kModulatorHz into the current SDO half period
     void updateBuzzerLine() {
-        m_piezo.setLevel((m_opc & 0xC0) == 0xC0 && m_sdo && m_ce1600pBus.cmtIn(true));
+        m_piezo.setLevel((m_opc & 0xC0) == 0xC0 && m_sdo && m_systemBus.cmtIn(true));
     }
     // Sampled in SC-7852 T-states.
     PiezoSampler m_piezo{double(kPC1600TStateHz), PiezoSampler::Transducer::PC1600};
@@ -519,7 +512,7 @@ private:
     // a tape interface (CE-1600P, CMT-in enabled); 0 when none drives it.
     static constexpr uint8_t kPbInCmtIn = 0x04;
     uint8_t pbPins() const {
-        return static_cast<uint8_t>(m_pbIn | (m_ce1600pBus.cmtIn(false) ? kPbInCmtIn : 0));
+        return static_cast<uint8_t>(m_pbIn | (m_systemBus.cmtIn(false) ? kPbInCmtIn : 0));
     }
     // MSK (1AH) -- interrupt mask bits 0-3 (IRQ, PB7, RD, TD enables; PC-1500
     // TRM p.71). Stored only: nothing in this core raises those causes.

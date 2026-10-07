@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "HostDirectoryDrive.hpp"
-#include "PC1600SystemBus.hpp"
+#include "SystemBusCard.hpp"
 
 // ── Host-directory drive, attached to the PC-1600's 60-pin system bus ─────
 //
@@ -31,7 +31,7 @@
 //     (lo/hi each). Reads past the end, or with nothing pending, give FFH.
 //   - I/O port 0x91 read: 00H (the host is always ready -- each call
 //     completes within the OUT that ends its request).
-class PC1600HostDriveCard : public PC1600ExpansionCard {
+class PC1600HostDriveCard : public SystemBusCard {
 public:
     static constexpr size_t kRomSize = 0x4000;
     static constexpr uint8_t kRomBank = 7;
@@ -52,28 +52,31 @@ public:
     HostDirectoryDrive& drive() { return m_drive; }
     const HostDirectoryDrive& drive() const { return m_drive; }
 
-    bool respondsToRead(const PC1600BusPins& pins, uint8_t& outValue) const override {
-        if (!pins.io) {
-            if (!m_romLoaded || pins.bank != kRomBank) return false;
+    bool respondsToRead(const SystemBusPins& pins, uint8_t& outValue) const override {
+        if (Sc7852Decode::page1Memory(pins)) {
+            if (!m_romLoaded || pins.forWrite || Sc7852Decode::bank(pins) != kRomBank) return false;
             outValue = m_rom[pins.address & 0x3FFF];
             return true;
         }
-        if (pins.address == kCommandPort) {
+        if (!Sc7852Decode::io(pins)) return false;
+        const uint8_t port = Sc7852Decode::port(pins);
+        if (port == kCommandPort) {
             outValue = 0x00;
             return true;
         }
-        if (pins.address != kDataPort) return false;
+        if (port != kDataPort) return false;
         outValue = m_txPos < m_tx.size() ? m_tx[m_txPos++] : 0xFF;
         return true;
     }
 
-    bool respondsToWrite(const PC1600BusPins& pins, uint8_t value) override {
-        if (!pins.io) return false;  // ROM window: read-only
-        if (pins.address == kCommandPort) {
+    WriteResult respondsToWrite(const SystemBusPins& pins, uint8_t value) override {
+        if (!Sc7852Decode::io(pins)) return WriteResult::ignored();  // ROM window: read-only
+        const uint8_t port = Sc7852Decode::port(pins);
+        if (port == kCommandPort) {
             begin(value);
-            return true;
+            return WriteResult::taken();
         }
-        if (pins.address != kDataPort) return false;
+        if (port != kDataPort) return WriteResult::ignored();
         if (m_rx.size() < m_rxExpected) {
             m_rx.push_back(value);
             if (m_function == kChangeDirCommand && m_rx.size() == 1) m_rxExpected += value;  // the path length
@@ -84,7 +87,7 @@ public:
                 m_txPos = 0;
             }
         }
-        return true;
+        return WriteResult::taken();
     }
 
 private:

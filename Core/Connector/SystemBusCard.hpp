@@ -42,6 +42,28 @@ struct SystemBusPins {
     bool pin[61] = {}; // 1-indexed (index 0 unused)
 };
 
+/// How the cards built for the PC-1600's SC7852 (CE-1600P, CE-1600F, a
+/// page-1 ROM module) read the contacts. They ignore every cycle while ELH̄
+/// is asserted: the CE-1600P gate array qualifies its ROM select CSNO with
+/// ELH (Ref/PC-1600/PC-1600-Peripherals-Hardware.md §1.2.2); that its I/O
+/// decode does the same is assumed (TODO.md, "Expansion connectors").
+namespace Sc7852Decode {
+/// A Z-80 memory cycle in page 1 (4000-7FFF), where peripheral ROMs sit.
+inline bool page1Memory(const SystemBusPins& p) {
+    return p.pin[Contact60::kMreq] && !p.pin[Contact60::kElh] && (p.address & 0xC000) == 0x4000;
+}
+/// The page's bank number on PT / PU / PVOUT, MSB first.
+inline int bank(const SystemBusPins& p) {
+    return (p.pin[Contact60::kPT] ? 4 : 0) | (p.pin[Contact60::kPU] ? 2 : 0) | (p.pin[Contact60::kPV] ? 1 : 0);
+}
+/// A Z-80 I/O cycle (not an interrupt acknowledge); the port is the low
+/// address byte.
+inline bool io(const SystemBusPins& p) {
+    return p.pin[Contact60::kIorq] && !p.pin[Contact60::kM1] && !p.pin[Contact60::kElh];
+}
+inline uint8_t port(const SystemBusPins& p) { return uint8_t(p.address); }
+} // namespace Sc7852Decode
+
 /// A card on the 60-pin plug.
 class SystemBusCard : public CardBase {
 public:

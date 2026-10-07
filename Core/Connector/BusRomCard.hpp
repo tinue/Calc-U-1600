@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "SystemBusCard.hpp"
-#include "PC1600SystemBus.hpp"
 
 // ── A plain ROM module on a 60-pin expansion bus (preset `bus-rom:`) ──────
 //
@@ -47,20 +46,23 @@ private:
     int m_pv, m_pu;
 };
 
-/// PC-1600 60-pin system bus: a ROM in page-1 bank `bank` (4-7), Z-80
-/// 4000H up, like the CE-1600P (4/5) and the host drive (7).
-class PC1600BusRomCard final : public PC1600ExpansionCard {
+/// A ROM decoded like the PC-1600's own peripherals: page-1 bank `bank`
+/// (4-7) on PT / PU / PVOUT, Z-80 4000H up, like the CE-1600P (4/5) and the
+/// host drive (7).
+class PC1600BusRomCard final : public SystemBusCard {
 public:
     static constexpr size_t kBankSize = 0x4000;
 
     PC1600BusRomCard(std::vector<uint8_t> rom, uint8_t bank) : m_rom(std::move(rom)), m_bank(bank) {}
 
-    bool respondsToRead(const PC1600BusPins& pins, uint8_t& outValue) const override {
-        if (pins.io || pins.forWrite || pins.bank != m_bank || pins.address >= m_rom.size()) return false;
-        outValue = m_rom[pins.address];
+    bool respondsToRead(const SystemBusPins& pins, uint8_t& outValue) const override {
+        if (pins.forWrite || !Sc7852Decode::page1Memory(pins) || Sc7852Decode::bank(pins) != m_bank) return false;
+        const size_t offset = pins.address & 0x3FFF;
+        if (offset >= m_rom.size()) return false;
+        outValue = m_rom[offset];
         return true;
     }
-    bool respondsToWrite(const PC1600BusPins&, uint8_t) override { return false; }
+    WriteResult respondsToWrite(const SystemBusPins&, uint8_t) override { return WriteResult::ignored(); }
 
 private:
     std::vector<uint8_t> m_rom;

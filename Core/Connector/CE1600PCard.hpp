@@ -5,14 +5,16 @@
 #include <vector>
 
 #include "AlpsPlotterMechanism.hpp"
-#include "PC1600SystemBus.hpp"
+#include "SystemBusCard.hpp"
 #include "../Tape/TapeDeck.hpp"
 
 // ── CE-1600P plotter, attached to the PC-1600's 60-pin system bus ───────
 //
-// This card claims:
-//   - Page B banks 4/5 ROM read window (4000-7FFF, banked by PC1600BusPins
-//     ::bank) -- both 16 KB halves of the new or old ROM version
+// This card claims (decoding the 60-pin contacts like the LR38045 gate
+// array, Ref/PC-1600/PC-1600-Peripherals-Hardware.md §1.2.2; nothing while
+// ELH̄ is asserted, see Sc7852Decode):
+//   - The ROM select CSNO: MREQ, PT high, PU low, 4000-7FFF -- banks 4/5,
+//     PVOUT picks the half -- both 16 KB halves of the new or old ROM version
 //     (PC1600-P1-B4-CE1600P-<ver>.bin + PC1600-P1-B5-CE1600P-OR-F-<ver>.bin),
 //     loaded contiguously.
 //   - I/O port 0x82 write: Z-motor phase (low nibble) -- pen lift +
@@ -31,7 +33,7 @@
 //     correct answer with no on-screen plotter keypad.
 //   - Ports 0x70-0x7F (CE-1600F floppy) and the write side of port 0x81
 //     (FD reset) are claimed by a separate CE1600FCard, chained onto the
-//     same PC1600SystemBus -- CE-1600F/P attach as a union
+//     60-pin connector -- CE-1600F/P attach as a union
 //     (PC1600Machine::attachCE1600P()), so the two cards are always
 //     present together.
 //   - The cassette interface (CE-152 jacks): CMTOUT from the main unit
@@ -40,7 +42,7 @@
 //     timing is the PC-1600's own (bank-5 CMTONE0/1, CMBITIN). The
 //     recorder is the machine's TapeDeck, plugged in with
 //     connectRecorder().
-class CE1600PCard : public PC1600ExpansionCard {
+class CE1600PCard : public SystemBusCard {
 public:
     static constexpr size_t kRomHalfSize = 0x4000;
     static constexpr size_t kRomSize = 2 * kRomHalfSize;
@@ -85,29 +87,33 @@ public:
         if (m_recorder) m_recorder->setMotor(m_relayClosed);
     }
 
-    bool respondsToRead(const PC1600BusPins& pins, uint8_t& outValue) const override {
-        if (pins.io) {
-            if (pins.address == 0x81) {
+    bool respondsToRead(const SystemBusPins& pins, uint8_t& outValue) const override {
+        if (Sc7852Decode::io(pins)) {
+            const uint8_t port = Sc7852Decode::port(pins);
+            if (port == 0x81) {
                 bool cmt = false;
                 outValue = static_cast<uint8_t>((m_mechanism.penX() <= 0 ? 0x20 : 0x00) |
                                                 (cmtIn(cmt) && cmt ? 0x80 : 0x00));
                 return true;
             }
-            if (pins.address == 0x82) {
+            if (port == 0x82) {
                 outValue = m_port82;
                 return true;
             }
             return false;
         }
-        if (!m_romLoaded || (pins.bank != 4 && pins.bank != 5)) return false;
-        const size_t offset = (pins.bank == 5 ? kRomHalfSize : 0) + (pins.address & 0x3FFF);
+        // CSNO: MREQ, ELH and PT high, PU low, 4000-7FFF; PV picks the half
+        // (banks 4 and 5).
+        if (!m_romLoaded || !Sc7852Decode::page1Memory(pins) || pins.forWrite) return false;
+        if (!pins.pin[Contact60::kPT] || pins.pin[Contact60::kPU]) return false;
+        const size_t offset = (pins.pin[Contact60::kPV] ? kRomHalfSize : 0) + (pins.address & 0x3FFF);
         outValue = m_rom[offset];
         return true;
     }
 
-    bool respondsToWrite(const PC1600BusPins& pins, uint8_t value) override {
-        if (!pins.io) return false; // ROM window: read-only
-        switch (pins.address) {
+    WriteResult respondsToWrite(const SystemBusPins& pins, uint8_t value) override {
+        if (!Sc7852Decode::io(pins)) return WriteResult::ignored(); // ROM window: read-only
+        switch (Sc7852Decode::port(pins)) {
             case 0x82:
                 m_port82 = value;
                 m_mechanism.writeMotorZ(value & 0x0F);
@@ -115,12 +121,12 @@ public:
                 // between pulses (bank 5 CASMOTOR 642EH pulses ~10 ms).
                 if ((value & kRemoteOn) && !(value & kRemoteOff)) setRelay(true);
                 if ((value & kRemoteOff) && !(value & kRemoteOn)) setRelay(false);
-                return true;
+                return WriteResult::taken();
             case 0x83:
                 m_mechanism.writeMotorX(value & 0x0F);
                 m_mechanism.writeMotorY((value >> 4) & 0x0F);
-                return true;
-            default: return false;
+                return WriteResult::taken();
+            default: return WriteResult::ignored();
         }
     }
 
@@ -132,7 +138,7 @@ public:
         level = m_recorder && m_recorder->inputLevel();
         return true;
     }
-    void tick(uint32_t tstates) override {
+    void advanceTStates(uint32_t tstates) override {
         if (m_recorder) m_recorder->advance(tstates);
     }
 

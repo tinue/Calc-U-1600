@@ -51,12 +51,12 @@ bool LH5803SharedMemory::isUartShadow(uint16_t addr, uint8_t* reg, bool* isSubCp
 }
 
 bool LH5803SharedMemory::cardRead(uint16_t addr, bool me1, uint8_t* value) const {
-    const auto& bus = m_shared.lh5803PeripheralBus();
+    const auto& bus = m_shared.systemBus();
     return !bus.empty() && bus.read(busPins(addr, /*forWrite=*/false, me1), *value);
 }
 
 bool LH5803SharedMemory::cardWrite(uint16_t addr, bool me1, uint8_t value) {
-    auto& bus = m_shared.lh5803PeripheralBus();
+    auto& bus = m_shared.systemBus();
     return !bus.empty() && bus.write(busPins(addr, /*forWrite=*/true, me1), value);
 }
 
@@ -74,7 +74,7 @@ uint8_t LH5803SharedMemory::debugPeek(uint16_t addr, bool me1, bool* readable) c
             // upper half; one whose register a read would disturb stays
             // unread.
             const SystemBusPins p = busPins(addr, /*forWrite=*/false, /*me1=*/true);
-            const auto& bus = m_shared.lh5803PeripheralBus();
+            const auto& bus = m_shared.systemBus();
             if (bus.readHasSideEffects(p)) {
                 *readable = false;
                 return 0xFF;

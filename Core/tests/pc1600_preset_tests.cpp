@@ -1017,7 +1017,8 @@ void test_parser_bus_rom_forms() {
 // The cards on their buses: a bus ROM attached first answers before a card
 // at the same place, and only inside its window and gates.
 void test_bus_rom_cards_shadow_and_gate() {
-    PC1600SystemBus bus;
+    using PC1600BusDrive::z80MemPins;
+    SystemBus bus;
     PC1600HostDriveCard drive;
     std::vector<uint8_t> hostRom(0x4000, 0x11);
     CHECK(drive.loadRom(hostRom.data(), hostRom.size()));
@@ -1025,10 +1026,13 @@ void test_bus_rom_cards_shadow_and_gate() {
     PC1600BusRomCard ext(std::vector<uint8_t>(0x100, 0x22), 7);
     bus.attachFirst(&ext);
     uint8_t v = 0;
-    CHECK(bus.readRom(0x0000, 7, v) && v == 0x22);   // shadowed
-    CHECK(bus.readRom(0x0100, 7, v) && v == 0x11);   // past the bus ROM: the drive's
-    CHECK(!bus.readRom(0x0000, 6, v));               // other bank: nobody
-    CHECK(bus.readIO(0x91, v) && v == 0x00);         // the drive's I/O is untouched
+    CHECK(bus.read(z80MemPins(0x4000, false, 7), v) && v == 0x22);   // shadowed
+    CHECK(bus.read(z80MemPins(0x4100, false, 7), v) && v == 0x11);   // past the bus ROM: the drive's
+    CHECK(!bus.read(z80MemPins(0x4000, false, 6), v));               // other bank: nobody
+    CHECK(bus.read(PC1600BusDrive::z80IoPins(0x91, false), v) && v == 0x00); // the drive's I/O is untouched
+    // The LH5803's cycles (ELH̄ asserted) never reach the Z-80-side cards.
+    CHECK(!bus.read(PC1600BusDrive::lh5803Pins(0x4000, false, false, true, true), v));
+    CHECK(!bus.read(PC1600BusDrive::lh5803Pins(0xD091, false, /*me1=*/true, false, false), v));
 
     std::vector<uint8_t> bytes(0x2000);
     for (size_t i = 0; i < bytes.size(); i++) bytes[i] = uint8_t(i);

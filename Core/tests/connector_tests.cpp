@@ -14,7 +14,9 @@
 #include <functional>
 #include <vector>
 
+#include "../Connector/CE1600PCard.hpp"
 #include "../Connector/CardChain.hpp"
+#include "../Connector/Ce150Card.hpp"
 #include "../Connector/ExpansionCard.hpp"
 #include "../Connector/SystemBusCard.hpp"
 #include "../PC1500/PC1500Machine.hpp"
@@ -281,6 +283,43 @@ void test_systembus_contacts_lh5803() {
     CHECK(PC1600BusDrive::lh5803Pins(0x1213, false, true, false, false).pin[kIorq]); // still an I/O cycle
 }
 
+void test_systembus_contacts_z80() {
+    // A Z-80 cycle on the PC-1600 plug: page bank on PT/PU/PVOUT (MSB
+    // first), MREQ or IORQ, ELH̄ not asserted.
+    using namespace Contact60;
+    SystemBusPins b5 = PC1600BusDrive::z80MemPins(0x4000, false, 5);
+    CHECK(b5.pin[kMreq] && b5.pin[kPT] && !b5.pin[kPU] && b5.pin[kPV] && !b5.pin[kElh] && !b5.pin[kDme0]);
+    SystemBusPins b6 = PC1600BusDrive::z80MemPins(0x4000, false, 6);
+    CHECK(b6.pin[kPT] && b6.pin[kPU] && !b6.pin[kPV]);
+    SystemBusPins io = PC1600BusDrive::z80IoPins(0x82, true);
+    CHECK(io.forWrite && io.pin[kIorq] && !io.pin[kMreq] && !io.pin[kElh] && !io.pin[kIoe] && io.address == 0x82);
+}
+
+void test_each_card_answers_its_own_cpu() {
+    // One plug, two CPUs: the CE-1600P (built for the SC7852) never answers
+    // an LH5803 cycle, the CE-150 (built for the LH5801) never a Z-80 one.
+    std::vector<uint8_t> lo(CE1600PCard::kRomHalfSize, 0x44), hi(CE1600PCard::kRomHalfSize, 0x55);
+    CE1600PCard printer;
+    CHECK(printer.loadRom(lo.data(), lo.size(), hi.data(), hi.size()));
+    uint8_t v = 0;
+    CHECK(printer.respondsToRead(PC1600BusDrive::z80MemPins(0x4000, false, 4), v) && v == 0x44);
+    CHECK(printer.respondsToRead(PC1600BusDrive::z80MemPins(0x7FFF, false, 5), v) && v == 0x55);
+    CHECK(!printer.respondsToRead(PC1600BusDrive::z80MemPins(0x4000, false, 6), v)); // PU high
+    CHECK(!printer.respondsToRead(PC1600BusDrive::z80MemPins(0x8000, false, 4), v)); // not page 1
+    CHECK(printer.respondsToRead(PC1600BusDrive::z80IoPins(0x82, false), v));
+    CHECK(!printer.respondsToRead(PC1600BusDrive::lh5803Pins(0x4000, false, false, false, true), v));
+    CHECK(!printer.respondsToRead(PC1600BusDrive::lh5803Pins(0xD082, false, /*me1=*/true, false, false), v));
+    CHECK(!printer.respondsToWrite(PC1600BusDrive::lh5803Pins(0xD083, true, /*me1=*/true, false, false), 0x11));
+
+    std::vector<uint8_t> rom(Ce150Card::kRomSize, 0x66);
+    Ce150Card plotter;
+    CHECK(plotter.loadRom(rom.data(), rom.size()));
+    CHECK(plotter.respondsToRead(PC1600BusDrive::lh5803Pins(0xA000, false, false, false, false), v) && v == 0x66);
+    CHECK(plotter.readHasSideEffects(PC1600BusDrive::lh5803Pins(0xB00F, false, /*me1=*/true, false, false)));
+    CHECK(!plotter.respondsToRead(PC1600BusDrive::z80MemPins(0xA000, false, 0), v));
+    CHECK(!plotter.respondsToRead(PC1600BusDrive::z80IoPins(0x0F, false), v));
+}
+
 } // namespace
 
 // Returns the number of failed checks (0 = all passed), so the shared
@@ -296,6 +335,8 @@ int run_connector_tests() {
     test_systembus_daisy_chain();
     test_systembus_contacts_pc1500();
     test_systembus_contacts_lh5803();
+    test_systembus_contacts_z80();
+    test_each_card_answers_its_own_cpu();
     test_expansion_connector_single_slot_replaces_not_chains();
     test_two_independent_ports();
     test_card_chain_shell();

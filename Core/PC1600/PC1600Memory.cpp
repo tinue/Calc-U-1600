@@ -252,11 +252,11 @@ uint8_t PC1600Memory::read(uint16_t addr) const {
         // Page B banks 4-7: peripheral ROM on the 60-pin system bus -- 4/5
         // CE-1600P, 7 the host-directory drive (where the MEP module sits
         // on real hardware) -- see PC1600Memory.hpp's class comment and
-        // ce1600pBus().
+        // systemBus(). The bank goes out on PT / PU / PVOUT.
         const uint8_t bank = m_bank.pageBBank();
         if (bank >= 4) {
             uint8_t v;
-            if (m_ce1600pBus.readRom(static_cast<uint16_t>(addr - 0x4000), bank, v))
+            if (m_systemBus.read(PC1600BusDrive::z80MemPins(addr, /*forWrite=*/false, bank), v))
                 return trace(v, 6);
         }
     }
@@ -316,7 +316,7 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
     // port, same convention as the rest of this function.
     if (port >= 0x70 && port <= 0x9F) {
         uint8_t v;
-        return m_ce1600pBus.readIO(port, v) ? v : 0xFF;
+        return m_systemBus.read(PC1600BusDrive::z80IoPins(port, /*forWrite=*/false), v) ? v : 0xFF;
     }
     switch (port) {
         case 0x31: return m_bank.readPort31();
@@ -378,7 +378,7 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
     // registers), 0x80-0x8F (0x81 FD reset, 0x82 Z-motor, 0x83 X/Y-motor;
     // see CE1600PCard/CE1600FCard) and 0x90-0x9F (PC1600HostDriveCard).
     // No-op when unattached.
-    if (port >= 0x70 && port <= 0x9F) { m_ce1600pBus.writeIO(port, value); return; }
+    if (port >= 0x70 && port <= 0x9F) { m_systemBus.write(PC1600BusDrive::z80IoPins(port, /*forWrite=*/true), value); return; }
     // Slot-2 I/O range (28-2FH, PC-1600 TRM §9): a module whose bank latch
     // triggers on a port write (CE-1601M: OUT (28H) sampling the data bus)
     // sees it here -- the card now owns that decode. The mainboard's own
@@ -412,7 +412,7 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
             updateBuzzerLine();
             // b7 is also SD0, the cassette-write line out to the 60-pin
             // bus (bank 5 CMTONE0/1 bit-bangs it).
-            m_ce1600pBus.setCmtOut((value & 0x80) != 0);
+            m_systemBus.setCmtOut((value & 0x80) != 0);
             return;
         // 14H: divider reset -- restart the modulation clocks' phase.
         case 0x14: m_sdoAccum = 0; return;
