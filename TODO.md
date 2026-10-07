@@ -10,13 +10,21 @@ obligations.
   the recorder reads 0.22% slow, calibrated from the F-register whistle).
   Every BASIC program is ~0.65% short:
 
-  | Program | Real | Emulator (dev-0.5.0) | Emulator (2026-09-26) |
-  |---|---|---|---|
-  | A: `FOR I=1 TO 2000:NEXT I` | 6.275 s | 6.235 s (−0.65%) | 6.251 s (−0.38%) |
-  | B: 100 scrolling `PRINT`s | 5.894 s | 5.854 s (−0.68%) | 5.868 s (−0.44%) |
-  | C: A with sub-CPU interrupt masked (`OUT 53,&1F`) | 6.230 s | 6.189 s (−0.65%) | 6.191 s (−0.63%) |
-  | D: A with all interrupts masked (`OUT 53,0`) | 6.011 s | 5.974 s (−0.62%) | 5.974 s (−0.62%) |
-  | dampflok.bas, whistle 1→9 | 65.281 s | 64.843 s (−0.67%) | not re-run |
+  | Program | Real | Emulator (dev-0.5.0) | Emulator (2026-09-26) | Emulator (2026-10-07) |
+  |---|---|---|---|---|
+  | A: `FOR I=1 TO 2000:NEXT I` | 6.275 s | 6.235 s (−0.65%) | 6.251 s (−0.38%) | 6.250 s (−0.39%) |
+  | B: 100 scrolling `PRINT`s | 5.894 s | 5.854 s (−0.68%) | 5.868 s (−0.44%) | 5.869 s (−0.43%) |
+  | C: A with sub-CPU interrupt masked (`OUT 53,&1F`) | 6.230 s | 6.189 s (−0.65%) | 6.191 s (−0.63%) | 6.190 s (−0.64%) |
+  | D: A with all interrupts masked (`OUT 53,0`) | 6.011 s | 5.974 s (−0.62%) | 5.974 s (−0.62%) | 5.974 s (−0.62%) |
+  | dampflok.bas, whistle 1→9 | 65.281 s | 64.843 s (−0.67%) | not re-run | 65.229 s (−0.08%) |
+
+  2026-10-07: dampflok is timed from the F-register whistle onsets (port
+  17H bit 6 rising, `headless/beep/whistleprobe.cpp`). The same probe on
+  the dev-0.5.0 tree gives 64.847 s, so it matches the audio method. Of
+  dampflok's move, 8858e75 (64 Hz timer under the LH5803) is only +10 ms
+  (65.219 s just before it); the rest came with the dev-0.6.0 sub-CPU work.
+  So a program with LH5803 calls, machine code and sound is now within
+  0.1%, while the pure `FOR/NEXT` benchmarks A-D are unchanged.
 
   C and D still carry ~70 T (~19 µs) per `FOR/NEXT` pass, i.e. a fixed cost
   per statement/pass rather than a percentage, with no sub-CPU involvement.
@@ -71,25 +79,27 @@ obligations.
 
   MODE 1 (LH-5803) hasn't been re-measured since the host-pacing fix; the
   old "~7% fast" figure predates it.
-- **Parameterless `- wait:` in a preset can inflate a program's own
-  `TIME` measurement** (~2.3x observed) in the GUI, while `- wait: <n>`
-  and no wait agree with each other and with headless runs. Working
-  hypothesis: while a BASIC program runs, the LH5803 owns the bus and the
-  SC7852's 64 Hz/0.5 s timer accumulators are frozen, so a pure headless
-  `FOR/NEXT` sees no timer-ISR overhead; the GUI's parameterless-`wait:`
-  handback path appears to let the SC7852 step during the loop, so the
-  timer ISR runs every iteration and `TIME` reports the (arguably more
-  realistic) larger cost. If so, this is a "timers freeze under LH5803
-  ownership" gap, not a `wait:`-specific bug.
-  **What the ROM says (2026-09-27):** BASIC runs on the Z-80 in both MODEs.
-  The LH5803 gets the bus only through `CALLH`, but that happens often:
-  every relational operator (`CMPNUM`/`CMPSTR`, P1-B3 5D3FH), `^`,
-  `AND`/`OR` and the functions. An integer `FOR/NEXT` never calls it (Z-80
-  add, inline compare at P1-B0 5AA1H). So the premise holds only for
-  programs that compare or call functions in their loop, and then only
-  for the length of each call. Check which program showed the 2.3x, and
-  what the emulator does differently on the headless and `- wait: <n>`
-  paths.
+- **Since 8858e75: an 8 s long-key-scan phase after the LH5803 ran; boot
+  +20 s.** After a program that calls the LH5803 (`IF` with a comparison,
+  `SIN`), the 1/64 s `KEYSCAN` (P2-B6 90D1H -> P1-B3 `KEYMATRIX` 4768H)
+  takes its long path through `KBANYKEY` (486FH) on every tick for 8 s
+  (512 ticks), so the SC7852 leaves the command loop (~$92B3) four times a
+  second at 60 frames/s sampling. `waitUntilBasicIdle` needs 20 frames in a
+  row and only finishes when the phase ends: a parameterless `- wait:`
+  returns ~8 s late (ifonly loop: 9 s by `TIME`, 17.1 s waited; 7.3 s
+  before 8858e75). The boot's own `waitUntilBasicIdle` (cap 20 s in
+  `runBootToPrompt`) now runs into its cap: `TIME` right after boot reads
+  0:23 instead of 0:03, in every PC-1600 preset, test and GUI preset load.
+  A plain `FOR/NEXT` program (no LH5803 call) shows none of it.
+  Not the cause: the interrupt mask (35H = 5FH), F0B6H, and the PIO state
+  (1FH = 28H, DDB = 00H, DDA = 00H, OPA = FFH) are the same in both
+  phases, sampled once a second. **Before fixing:** find which input
+  `KEYMATRIX` sees as a key during the phase (trace one tick's port 1FH /
+  37H reads), and which 8858e75 change feeds it (ME1 F000H-F00FH as ports
+  10H-1FH, Port 37H honouring DDA, or the 64 Hz pulse under the LH5803).
+  Probes: `headless/beep/idleprobe.cpp`, `cntprobe.cpp`.
+  (Replaces the old "parameterless `wait:` inflates `TIME`" item: `TIME`
+  agrees with `wait: <n>` and with emulated time on all paths.)
 - **Open bus reads as a constant FFH; real hardware returns the last byte
   on the data bus. To decide.** PC-1600 MODE 0, CE-163F in Slot 2:
   `XPEEK&C5` returns 37 on a real unit and 255 in the emulator. In MODE 0
