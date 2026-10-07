@@ -169,7 +169,7 @@ void test_port3d_hidden_rom_latch() {
     CHECK(!bank.hiddenBasicRomSelected());
 }
 
-void test_reset_zeroes_all_bank_registers() {
+void test_reset_zeroes_bank_registers_and_sets_port3d() {
     PC1600Bank bank;
     bank.writePort31(0xBB);
     bank.writePort28(7);
@@ -180,7 +180,8 @@ void test_reset_zeroes_all_bank_registers() {
     CHECK(bank.slot2VerticalBank() == 0);
     CHECK(bank.readPort3C() == 0);
     CHECK(bank.slot2MapMode() == 0);
-    CHECK(bank.hiddenBasicRomSelected()); // port3D==0 -> bit2 clear -> hidden selected
+    CHECK(bank.port3DLatch() == 0x05);    // reset forces A16A=1, A15A=0, A14A=1
+    CHECK(!bank.hiddenBasicRomSelected()); // A16A high -> normal Bank 3
 }
 
 // ── PC1600Memory: page A always resident regardless of pageABank() ──────
@@ -336,7 +337,7 @@ int run_pc1600_bank_tests() {
     test_port3c_slot1map_active();
     test_port3c_slot1map_wins_tie();
     test_port3d_hidden_rom_latch();
-    test_reset_zeroes_all_bank_registers();
+    test_reset_zeroes_bank_registers_and_sets_port3d();
     test_page_a_always_resident_regardless_of_port31_bit0();
     test_page_b_bank0_is_system_rom_upper_half();
     test_page_b_unbacked_banks_are_open_bus();

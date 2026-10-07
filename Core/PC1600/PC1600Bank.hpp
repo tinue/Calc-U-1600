@@ -153,25 +153,26 @@ public:
     /// normal Bank 3 ROM at page B (Port 3DH bit 2 clear).
     bool hiddenBasicRomSelected() const { return (m_port3d & 0x04) == 0; }
 
-    /// Resets all four registers to 0 — the documented reset-state bank
-    /// configuration (A13A high/A15A low/A14A high per
-    /// Ref/PC-1600/PC-1600-Machine-Overview.md §6) corresponds to an all-zero register
-    /// bank: page A/B/C/D all select bank 0, hidden ROM not selected.
+    /// Resets Ports 31H/28H/3CH to 0 (pages A/B/C/D all select bank 0) and
+    /// Port 3DH to 05H: the gate array's reset input forces A16A high, A15A
+    /// low and A14A high (TRM §7.8, Service Manual §9-4), i.e. latched
+    /// D2..D0 = 1,0,1 -- normal Bank 3, hidden ROM not selected.
     void reset() {
         m_port31 = 0;
         m_port28 = 0;
         m_port3c = 0;
-        m_port3d = 0;
+        m_port3d = kPort3DReset;
         m_port3cSeq = 0;
         m_slot1MapChangeSeq = 0;
         m_slot2MapChangeSeq = 0;
     }
 
 private:
+    static constexpr uint8_t kPort3DReset = 0x05;
     uint8_t m_port31{0};
     uint8_t m_port28{0};
     uint8_t m_port3c{0};
-    uint8_t m_port3d{0};
+    uint8_t m_port3d{kPort3DReset};
     // "Last call wins" bookkeeping for the SLOT1MAP/SLOT2MAP collision at
     // page-B bank 1 — see writePort3C()/slot1MapWinsTie().
     uint32_t m_port3cSeq{0};
