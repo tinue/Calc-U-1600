@@ -167,20 +167,6 @@ The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, 
   the TRM doesn't); `SAVE`/`LOAD "CAS:"` in MODE 1; whether the CE-158's own
   `SETDEV` is reachable on the PC-1600; CE-150/CE-158 `PRINT#`/`INPUT#` in
   MODE 0.
-- **MODE 1 + CE-155: the fast loader writes the program to the wrong
-  place.** With a CE-155 in slot 1 and `MODE1` + `NEW0`, the ROM's area
-  starts at LH5803 &20C5, and typed lines land at CE-155 backing offset
-  0x08C5; `loadBasicProgram` puts them at 0x00C5 (it takes the slot window
-  &A000 as backing offset 0). The work-area pointers match the typed ones,
-  so LIST looks right, but RUN doesn't run the program. Found when the
-  "MODE 1, CE-155" case of `test_work_area_matches_typed`
-  (`Core/tests/pc1600_basicloader_tests.cpp`) was made to run: it had
-  silently returned early since it was written (an 8 KB `plainRamCard` is
-  not a valid definition). The case is commented out there until this is
-  fixed. **Before fixing:** check how `PC1600ProgramPlacement` maps a
-  module segment to the card's backing store -- the CE-155's 2K/6K chip
-  split in the PC-1500 map is the likely mismatch -- and whether MODE 0
-  with a CE-155 has the same problem.
 - **Guide screenshots write into the real saves folder:** the chapter-5
   preset (`docs/developer/screenshots/presets/pc1600-modules.pc1600`) uses
   `saveas: live slot-1:My programs`, so every `tools/make_screenshots.sh`
@@ -242,13 +228,6 @@ CE-1600P (docs/background/plans/Cassette-Tape-Plan.md, dev/tape-matrix/).
   the LH5803 and drives ME1 F004H-F00FH, which `LH5803SharedMemory` keeps
   as a plain latch. How that block reaches the SC-7852's SD0/PB2 (pin 76:
   `SD0 = OR(SD0', PC7')`, SD0' = "CE-150 cassette output") is undocumented.
-- **Control bar too wide with a tape interface.** With a CE-150 or
-  CE-1600P attached, the cassette bay (Tape picker, save button, counter,
-  lamp) widens the PC-1600's control bar to ~1758 px (1430 without it), more
-  than a 13-14" MacBook screen (1440-1512 points). Dropping the "Tape:"
-  label and narrowing the picker only gets to ~1690. Options: a second row
-  for the media (Disk, Tape) while one is attached; or narrower pickers
-  everywhere. Undecided.
 - **Real-hardware cross-check, remaining half:** `CLOAD` an emulator
   `CSAVE` WAV on the real units (PC-1500 + CE-150, PC-1600 + CE-1600P).
   The other half is done (2026-10-04): real `CSAVE` recordings of both
@@ -345,15 +324,13 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
   shape, and `MainWindow::syncPeripherals()` hard-codes the exclusion rules
   ("CE-1600P excludes CE-150 and CE-158").
 
-  **Order: do this after "Expansion connectors: one model on both
-  machines".** The exclusions come from today's split 60-pin model (the
-  same plug exists twice on the PC-1600), and the connector work changes
-  both the rules (CE-158 + CE-1600P become possible) and the attach API
-  (cards on one 60-pin chain). Unifying the buttons first would bake the
-  current pairwise rules into the shared setter. Target afterwards: one
-  button setter and one attach/detach path per peripheral kind, with
-  "enabled" derived from what the connector chain can take instead of
-  hard-coded pairs.
+  The connector work this waited for is done (2026-10-07): every
+  peripheral sits on the one 60-pin `SystemBus`. Target: one button setter
+  and one attach/detach path per peripheral kind, with "enabled" derived
+  from what the bus can take instead of hard-coded pairs. The CE-158 +
+  CE-1600P exclusion stays until the IO7N question ("Expansion
+  connectors") is answered, so keep it as data the shared path reads, not
+  as another pairwise rule.
 - **Card/floppy template-vs-instance rules are written twice and re-parse
   files.** `MemoryModuleManager` (`moduleLists`, `classifySlot`,
   `userTemplateNames`, `saveSlotAs`) and `FloppyDiskManager` (`diskLists`,
