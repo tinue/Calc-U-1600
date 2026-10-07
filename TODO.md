@@ -514,5 +514,4 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
     `CoreDebug::readPC1600ProgramAreas(peek).memS0`
     (`Core/Debug/BasicPointerTable.cpp`, add it to the build script).
   - `snapshot()` peeks C000-FFFF byte by byte:
-    `PC1600Machine::debugCopyInternalRam()` (note that a peek at F07DH
-    returns the Port 3DH mirror, not the RAM byte).
+    `PC1600Machine::debugCopyInternalRam()`.

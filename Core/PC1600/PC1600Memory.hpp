@@ -47,8 +47,10 @@
 //   Page D  C000-FFFF  Port 31H bit 7: bank 0 = internal 16KB RAM (RAM3);
 //                      bank 1 is undocumented and open bus.
 //
-// F07DH reads back Port 3DH's last-written value (the port itself isn't
-// readable); read() handles it.
+// F07DH is ordinary RAM: the firmware's own copy of the write-only Port
+// 3DH, written next to every OUT (3DH). Its interrupt entry and bank calls
+// restore the port from it, so a bare OUT (3DH) is undone by the next
+// interrupt -- as on the real machine.
 //
 // As an SC7852Bus, readIO/writeIO decode the PIO and keyboard (14H,
 // 17H-1FH), the TC8576F (20H-27H), the Slot 2 card latch (28H-2FH), the
@@ -67,9 +69,6 @@ public:
     static constexpr uint16_t kBankJump  = 0x019C;
     static constexpr uint16_t kBankCall  = 0x019F;
     static constexpr uint16_t kSlotSt    = 0x00E8;
-
-    // Read-side mirror of Port 3DH (see class comment).
-    static constexpr uint16_t kPort3DMirrorAddr = 0xF07D;
 
     static constexpr size_t kBankSize = 0x4000; // 16384B, one Z-80 "bank"
 

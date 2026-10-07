@@ -33,8 +33,7 @@
 //
 //   Port 3DH (write-only) — bit 2 clear selects the hidden Bank 3b BASIC
 //   ROM at page B (4000-7FFF) in place of the normal Bank 3 ROM. Not
-//   readable via IN — mirrored at system memory address F07DH instead (see
-//   PC1600Memory). D0-D2 additionally latch into gate-array outputs
+//   readable via IN; the firmware keeps a copy in RAM at F07DH. D0-D2 additionally latch into gate-array outputs
 //   A14A-A16A; A16A extends CS24's 16KB window into 32KB by sub-banking
 //   Bank 3 into two 8KB halves, which is a memory-decode detail
 //   (PC1600Memory), not something this register class needs to interpret.
@@ -146,8 +145,7 @@ public:
 
     // ── Port 3DH ──────────────────────────────────────────────────────
     void    writePort3D(uint8_t value) { m_port3d = value; }
-    /// Last value written to Port 3DH — PC1600Memory derives the hidden-ROM
-    /// latch and F07DH mirror from this directly.
+    /// Last value written to Port 3DH (the A14A-A16A latch).
     uint8_t port3DLatch() const { return m_port3d; }
     /// True when the hidden Bank 3b BASIC ROM is selected in place of the
     /// normal Bank 3 ROM at page B (Port 3DH bit 2 clear).

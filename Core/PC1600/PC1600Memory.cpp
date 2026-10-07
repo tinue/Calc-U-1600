@@ -217,9 +217,6 @@ bool PC1600Memory::slot1MapTarget(uint16_t addr, bool* pvoutHigh, uint16_t* offs
 }
 
 uint8_t PC1600Memory::read(uint16_t addr) const {
-    if (addr == kPort3DMirrorAddr) {
-        return m_bank.port3DLatch();
-    }
 #ifdef PC1600_POWER_PROBE
     // Report which branch served the read, so a probe can tell a genuine
     // card hit from a ROM/open-bus miss (see PC1600PowerProbe's onSlotRead).
@@ -396,10 +393,9 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
         case 0x24: case 0x25: case 0x26: case 0x27:
             m_uart.writeRegister(port & 0x03, value); return;
         case 0x31: m_bank.writePort31(value); return;
-        // 3CH = SLOT1MAP/SLOT2MAP gate-array control. The firmware keeps a
-        // RAM shadow at F08DH (ordinary internal RAM -- no mirror needed
-        // here, unlike Port 3DH's F07DH); slot2MapTarget() reads the
-        // authoritative b5:b4 from this latch.
+        // 3CH = SLOT1MAP/SLOT2MAP control. The firmware keeps a RAM copy
+        // at F08DH (ordinary internal RAM, like Port 3DH's F07DH);
+        // slot2MapTarget() reads the authoritative b5:b4 from this latch.
         case 0x3C: m_bank.writePort3C(value); return;
         case 0x3D: m_bank.writePort3D(value); return;
         case 0x35: m_intMask = value; return;
