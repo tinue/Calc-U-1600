@@ -139,9 +139,6 @@ docs/developer/PC1600-Core-Limitations.md (LH5803 section).
   DTE show "B…" for a peer sending "AB…", with `--ce158-rx-hold`).
   Probably the receiver flush when the terminal starts; compare with a
   real unit.
-- **PC-1500A: `DTE` / `TERMINAL` give ERROR 51** in the emulator, even
-  after `NEW` (the manual: more than 570 bytes must be free). Not looked
-  into; the PC-1600 path works.
 
 ## PC-1600 serial port
 
