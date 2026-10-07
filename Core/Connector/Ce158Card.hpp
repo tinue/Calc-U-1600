@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "ExpansionCard.hpp"
+#include "SystemBusCard.hpp"
 #include "../PC1500/PC1500Clocks.hpp"
 #include "../Serial/SerialLink.hpp"
 
@@ -19,9 +19,10 @@
 // windows never overlap, so SystemBus attach order does not matter.
 // On the PC-1600 the same card serves the LH5803 (MODE 1): its ROM half of
 // the LH5803's 8000-BFFF peripheral window is PVOUT = 1, the CE-150's is
-// PVOUT = 0 (LH5803SharedMemory routes both).
+// PVOUT = 0. The card decodes 60-pin contacts: DME0 / PV (16) / PU (15)
+// for the ROM, ME1 (59; IOE on the PC-1600) for the registers.
 //
-//   * ME0 read, guest 0x8000-0x9FFF, PV = 1  -> CE-158 ROM, PU picks the
+//   * DME0 read, guest 0x8000-0x9FFF, PV = 1  -> CE-158 ROM, PU picks the
 //     8 KB bank: PU = 0 the low half of CE-158.ROM, PU = 1 the high half
 //     (Jeff Birt's Sharp_CE-158 dumps `CE-158_ROM_SPV_RPU_LOW` /
 //     `_SPV_SPU_HIGH` are byte-identical to the two halves of our file).
@@ -68,7 +69,7 @@
 //     already gates every send.
 //   - The PE/FE/OE status bits are never set (a byte stream has no line
 //     errors); a control-register write clears them anyway.
-class Ce158Card final : public ExpansionCard {
+class Ce158Card final : public SystemBusCard {
 public:
     static constexpr size_t   kBankSize = 0x2000;      // 8 KB per PU bank
     static constexpr size_t   kRomSize  = 2 * kBankSize; // CE-158.ROM, 16384 B
@@ -179,9 +180,9 @@ public:
     /// Decoded from PC0-4 + PA7; 0 when the code is not one the ROM uses.
     int baudRate() const { return decodeBaud(); }
 
-    bool respondsToRead(const PinState& pins, uint8_t& outValue) const override {
+    bool respondsToRead(const SystemBusPins& pins, uint8_t& outValue) const override {
         const uint16_t addr = pins.address;
-        if (pins.me1) {
+        if (pins.pin[Contact60::kMe1]) {
             if (addr >= kPioBase && addr <= kPioEnd) {
                 outValue = readPio(uint8_t(addr & 0x0F));
                 return true;
@@ -196,24 +197,22 @@ public:
             }
             return false;
         }
-        // PV/PU read from their 40-pin contacts 2/3 -- a shortcut until the
-        // 60-pin connector is modelled (TODO.md, "Expansion connectors").
-        if (pins.forWrite || !pins.pin[2] /*PV*/) return false;
+        if (!pins.pin[Contact60::kDme0] || pins.forWrite || !pins.pin[Contact60::kPV]) return false;
         if (addr < kRomBase || addr > kRomEnd || !m_romLoaded) return false;
-        const size_t bank = pins.pin[3] /*PU*/ ? kBankSize : 0;
+        const size_t bank = pins.pin[Contact60::kPU] ? kBankSize : 0;
         outValue = m_rom[bank + (addr - kRomBase)];
         return true;
     }
 
     /// The ME1 register blocks (a UART RX read clears status flags): a
     /// debugger must not read them as memory.
-    bool readHasSideEffects(const PinState& pins) const override {
+    bool readHasSideEffects(const SystemBusPins& pins) const override {
         const uint16_t addr = pins.address;
-        return pins.me1 && ((addr >= kPioBase && addr <= kUartEnd) || (addr >= kIntIdBase && addr <= kIntIdEnd));
+        return pins.pin[Contact60::kMe1] && ((addr >= kPioBase && addr <= kUartEnd) || (addr >= kIntIdBase && addr <= kIntIdEnd));
     }
 
-    WriteResult respondsToWrite(const PinState& pins, uint8_t value) override {
-        if (!pins.me1) return WriteResult::ignored(); // ROM window is read-only
+    WriteResult respondsToWrite(const SystemBusPins& pins, uint8_t value) override {
+        if (!pins.pin[Contact60::kMe1]) return WriteResult::ignored(); // ROM window is read-only
         const uint16_t addr = pins.address;
         if (addr >= kPioBase && addr <= kPioEnd) {
             writePio(uint8_t(addr & 0x0F), value);
@@ -285,7 +284,7 @@ private:
 
     uint8_t readRxData() const {
         // Reading the receiver holding register resets DA. This is a
-        // const bus read in the ExpansionCard interface, so the flag is
+        // const bus read in the SystemBusCard interface, so the flag is
         // mutable.
         m_uartStatus &= uint8_t(~kStatusDA);
         return m_rxData;

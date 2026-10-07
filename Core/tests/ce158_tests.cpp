@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "../Connector/Ce158Card.hpp"
+#include "../Connector/PC1500SignalDecode.hpp"
 #include "../PC1500/PC1500Machine.hpp"
 #include "../PC1500/PC1500PresetLoader.hpp"
 #include "../Preset/PresetFile.hpp"
@@ -32,14 +33,12 @@ int g_fail = 0;
     else { g_fail++; std::fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } \
 } while (0)
 
-PinState me1(uint16_t addr, bool forWrite) {
-    PinState p; p.address = addr; p.forWrite = forWrite; p.me1 = true; return p;
+// Cycles as the PC-1500 drives the 60-pin contacts.
+SystemBusPins me1(uint16_t addr, bool forWrite) {
+    return PC1500SignalDecode::systemBusPins(addr, forWrite, /*me1=*/true, false, false);
 }
-PinState me0Read(uint16_t addr, bool pu, bool pv) {
-    PinState p; p.address = addr; p.forWrite = false;
-    p.pin[2] = pv; // PV
-    p.pin[3] = pu; // PU
-    return p;
+SystemBusPins me0Read(uint16_t addr, bool pu, bool pv) {
+    return PC1500SignalDecode::systemBusPins(addr, /*forWrite=*/false, /*me1=*/false, pu, pv);
 }
 
 uint8_t rd(Ce158Card& c, uint16_t addr) {
@@ -102,7 +101,7 @@ void test_rom_window_pv_gated_and_pu_banked() {
     CHECK(!card.respondsToRead(me0Read(0x8000, false, /*pv=*/false), v));
     CHECK(!card.respondsToRead(me0Read(0xA000, false, true), v));
     CHECK(!card.respondsToRead(me0Read(0x7FFF, false, true), v));
-    PinState w = me0Read(0x8000, false, true); w.forWrite = true;
+    SystemBusPins w = me0Read(0x8000, false, true); w.forWrite = true;
     CHECK(!card.respondsToWrite(w, 0x55));
 }
 

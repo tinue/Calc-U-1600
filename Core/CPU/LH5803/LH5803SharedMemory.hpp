@@ -6,7 +6,7 @@
 
 #include "../LH5801/LH5801.hpp"
 #include "LH5803Rom.hpp"
-#include "../../Connector/ExpansionCard.hpp"
+#include "../../PC1600/PC1600BusDrive.hpp"
 
 class PC1600Memory;
 class PC1600BusArbiter;
@@ -106,7 +106,7 @@ public:
 
     /// Debugger view of the LH5803's ME0/ME1 without bus side effects.
     /// The UART / sub-CPU block, ME1 8000-BFFF and any card register a read
-    /// would disturb (ExpansionCard::readHasSideEffects) can't be read
+    /// would disturb (SystemBusCard::readHasSideEffects) can't be read
     /// without side effects: `*readable` is false there and 0xFF is
     /// returned. The internal PIO reads as its
     /// latched register file.
@@ -140,22 +140,9 @@ private:
     /// first and A038 by the handoff check; the rest go to readIO/writeIO.
     static bool isControlPort(uint16_t addr) { return (addr & 0xFFF0) == 0xA030; }
 
-    /// Build the PinState the 60-pin peripheral cards decode on (address,
-    /// forWrite, me1, PV, PU) -- no S-block/Y strobe, so no
-    /// PC1500SignalDecode dependency here. See Ce150Card.hpp's "Bus
-    /// dependency" note.
-    /// Shortcut: hands the LH5803's own PU/PV to the cards on their 40-pin
-    /// contacts. Real hardware routes PV out as SC7852 PVOUT, and the
-    /// LH5803's PU has no documented path to the connector (TODO.md,
-    /// "Expansion connectors").
-    PinState peripheralPins(uint16_t addr, bool forWrite, bool me1) const {
-        PinState p;
-        p.address = addr;
-        p.forWrite = forWrite;
-        p.me1 = me1;
-        p.pin[2] = m_pv; // PV
-        p.pin[3] = m_pu; // PU
-        return p;
+    /// The 60-pin contacts of an LH5803 cycle (PC1600BusDrive::lh5803Pins).
+    SystemBusPins busPins(uint16_t addr, bool forWrite, bool me1) const {
+        return PC1600BusDrive::lh5803Pins(addr, forWrite, me1, m_pu, m_pv);
     }
 
     /// The SC7852's LHA90 pin (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md,

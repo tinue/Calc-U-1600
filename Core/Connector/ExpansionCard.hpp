@@ -4,9 +4,9 @@
 #include <string>
 #include <vector>
 
-// Shared card interface + pin-state type for the 40-pin connector family
+// Card interface + pin-state type for the 40-pin connector family
 // (ExpansionConnector on the PC-1500/1500A, MemorySlotConnector on the
-// PC-1600) and the 60-pin SystemBus.
+// PC-1600). The 60-pin plug has its own contacts: SystemBusCard.hpp.
 //
 // The governing principle (docs/Memory-Card-Definition-Spec.md §1/§4, and
 // the project owner's own framing): a real module plugged into a slot wires
@@ -31,8 +31,6 @@ struct PinState {
     //   pin[3]  PC-1500 PV        / PC-1600 PU
     //   (PC-1500 as measured; the TRM prints 2 = PV, 3 = PU.
     //   Ref/Shared/Expansion-Connectors.md §2.2b.)
-    //   (The 60-pin cards CE-150/CE-158 also read PV/PU here, a shortcut:
-    //   on the 60-pin plug they are contacts 15/16. TODO.md.)
     //   pin[4]  PC-1500 Y0 (CS &0000-&3FFF) / PC-1600 RAM2 (Slot 1) or RAM1 (Slot 2) CS
     //   pin[5]  PC-1500 S4        / PC-1600 PVOUT
     //   pin[6]  PC-1500 DME0      / PC-1600 MREQ
@@ -42,12 +40,6 @@ struct PinState {
     //   pin[18] PC-1500 S3 (PC-1500A S5) / PC-1600 S3 (Slot 1) or K2 (Slot 2)
     //   pin[19] PC-1500 Y2 (CS &8000-&BFFF) / PC-1600 PT
     bool pin[41] = {};
-
-    // True only for an access SystemBus routed via its ME1 path (DME1/ME1,
-    // pins 58/59 -- the 40-pin connectors have no equivalent). ME1's own
-    // sub-decode into named chip-select blocks isn't documented/modeled, so
-    // a card wanting ME1 space must key off `me1 && address` directly.
-    bool me1 = false;
 
     // True when this write originates from a host poke() -- the
     // debug/preset-loader path -- rather than a guest-CPU store. A card that
@@ -85,7 +77,7 @@ struct WriteResult {
 };
 
 // A card that can drive INHIBIT (Ref/Shared/Expansion-Connectors.md's INHIBIT/INH
-// pin, pin 15) to suppress the host's internal ROM and substitute its own
+// pin: 40-pin contact 15, 60-pin contact 25) to suppress the host's internal ROM and substitute its own
 // content derives from this too. Connectors look for it once, when the
 // card is attached, so the (usual) cards without it cost nothing on each
 // host-ROM fetch -- and a card can't answer assertsInhibit() without
@@ -162,13 +154,4 @@ public:
     /// must not read it. Lets a host's debug peek skip such addresses
     /// without knowing which card sits where. Default: reads are harmless.
     virtual bool readHasSideEffects(const PinState& /*pins*/) const { return false; }
-
-    /// Cassette lines of the 60-pin connector (CMTOUT pin 29, CMTIN pin
-    /// 27; the 40-pin connector has neither). The main unit drives CMTOUT;
-    /// a card with a tape interface (the CE-150) passes it to its MIC jack.
-    virtual void cmtOut(bool /*level*/) {}
-    /// Return true and set `level` if this card drives CMTIN.
-    virtual bool cmtIn(bool& /*level*/) const { return false; }
-    /// Elapsed CPU cycles, for the recorder behind a tape interface.
-    virtual void advanceCassette(uint32_t /*cycles*/) {}
 };

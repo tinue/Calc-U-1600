@@ -3,133 +3,61 @@
 #include <vector>
 
 #include "CardChain.hpp"
-#include "ExpansionCard.hpp"
-#include "PC1500SignalDecode.hpp"
-#include "../PC1500/PC1500Variant.hpp"
+#include "SystemBusCard.hpp"
 
-// ── PC-1500/1500A 60-pin connector (I/O expansion bus) ───────────────────
+// ── The 60-pin connector (system / I/O expansion bus), both machines ─────
 //
-// Models the 60-pin connector (TRM §4-3-2) -- the port the CE-150 plugs
-// into with its own 60-pin male
-// connector, itself exposing a 64-pin female connector on its rear panel so
-// a second peripheral (typically a CE-158) can daisy-chain behind it.
-// Unlike the 40-pin ExpansionConnector (exactly one slot), this connector
-// is a CHAIN: any number of cards can be attached, and each independently
-// decides whether it responds to a given access via its own chip-select
-// logic (PinState) -- exactly like real hardware, where two devices on the
-// chain never both claim the same address.
+// One object per machine: PC1500Memory owns the PC-1500's, PC1600Memory the
+// PC-1600's (driven by whichever CPU owns the bus). The CE-150 plugs into it
+// and has a rear connector a second peripheral (typically a CE-158) chains
+// onto; the CE-1600P likewise passes the bus on. So this is a CHAIN: every
+// card sees every cycle and decides from the contacts whether it answers.
+// Two cards answering the same cycle would be a bus conflict on real
+// hardware; here the first one wins.
 //
-// Exposes signals the 40-pin connector doesn't: ME1-space access (DME1/ME1,
-// pins 58/59 -- the LH5801's second bank; see readME1/writeME1 and
-// PinState::me1's own doc comment for why this path doesn't reuse the
-// Y0/Y2/S-block decode), and the cassette lines CMTOUT/CMTIN (pins 29/27:
-// the LH5811's SDO out, its PB2 in; see setCmtOut()/cmtIn()). Named but
-// unwired: WEX/W1 (external WAIT), INT, BFO/φOS (sub-timing signals) --
-// they exist only so the connector's pin model stays honest about the
-// full 60 pins.
-//
-// Assumption, not yet independently confirmed: the 60-pin connector's
-// pinout is identical between PC-1500 and PC-1500A. Ref/Shared/Expansion-Connectors.md
-// documents a pin-reassignment table for the 40-pin connector's S1-S4/S5
-// pins (§3.1) but no equivalent table for the 60-pin connector, so all
-// S1-S4 route unconditionally here on both models. Worth confirming against
-// a second TRM scan if one surfaces (matching that document's own "worth
-// double-checking" callouts elsewhere).
+// The connector does no decoding of its own. The host builds the contacts
+// of each cycle (SystemBusPins: PC1500SignalDecode::systemBusPins,
+// PC1600BusDrive) and offers the cycle here; which cycles reach the plug at
+// all is the host's address decode.
 class SystemBus {
 public:
-    explicit SystemBus(PC1500Variant variant) : m_variant(variant) {}
+    /// Appends to the chain (no-op if already attached).
+    void attach(SystemBusCard* card) { m_chain.attach(card); }
+    /// First in the chain: a bus ROM that shadows a bundled one (BusRomCard.hpp).
+    void attachFirst(SystemBusCard* card) { m_chain.attachFirst(card); }
+    void detach(SystemBusCard* card) { m_chain.detach(card); }
+    const std::vector<SystemBusCard*>& chain() const { return m_chain.cards(); }
+    bool empty() const { return m_chain.empty(); }
 
-    PC1500Variant variant() const { return m_variant; }
-
-    /// Appends to the chain (no-op if already attached). Order doesn't
-    /// affect correctness in practice -- each card's own chip-select decode
-    /// is address/PU/PV-specific, so "first responder" and "the one whose
-    /// decode actually matches" should always coincide; two cards
-    /// responding to the same access is a real hardware bus conflict, not
-    /// something this phase resolves.
-    void attach(ExpansionCard* card) { m_chain.attach(card); }
-    void attachFirst(ExpansionCard* card) { m_chain.attachFirst(card); }
-    void detach(ExpansionCard* card) { m_chain.detach(card); }
-    const std::vector<ExpansionCard*>& chain() const { return m_chain.cards(); }
-
-    /// Consulted by PC1500Memory only for ME0 addresses whose own decode
-    /// already determined are open bus, or ROM-with-INHIBIT-asserted.
-    bool read(uint16_t addr, bool pu, bool pv, uint8_t& outValue) const {
-        if (m_chain.empty()) return false; // common case: no card on this bus
-        return m_chain.read(decode(addr, /*forWrite=*/false, pu, pv), outValue);
+    bool read(const SystemBusPins& pins, uint8_t& outValue) const {
+        return !m_chain.empty() && m_chain.read(pins, outValue);
     }
-
-    WriteResult write(uint16_t addr, bool pu, bool pv, uint8_t value) {
+    WriteResult write(const SystemBusPins& pins, uint8_t value) {
         if (m_chain.empty()) return WriteResult::ignored();
-        return m_chain.write(decode(addr, /*forWrite=*/true, pu, pv), value);
+        return m_chain.write(pins, value);
     }
 
-    /// ME1-space access -- only the 60-pin connector exposes DME1/ME1, so
-    /// only SystemBus offers this; ExpansionConnector has no equivalent.
-    /// `addr` is the full ME1-space address; callers (PC1500Memory) are
-    /// responsible for excluding the LH5811 I/O-chip's own decode window
-    /// before consulting this. Deliberately does NOT reuse the ME0-side
-    /// Y0/Y2/S-block decode -- ME1's own sub-decode into named chip-select
-    /// blocks isn't documented, so a card claiming ME1 space must key off
-    /// `me1 && address` directly (see PinState::me1's doc comment).
-    bool readME1(uint16_t addr, bool pu, bool pv, uint8_t& outValue) const {
-        if (m_chain.empty()) return false;
-        return m_chain.read(decodeME1(addr, /*forWrite=*/false, pu, pv), outValue);
-    }
-    bool writeME1(uint16_t addr, bool pu, bool pv, uint8_t value) {
-        if (m_chain.empty()) return false;
-        return m_chain.write(decodeME1(addr, /*forWrite=*/true, pu, pv), value);
-    }
-
-    /// Whether a card on the chain says reading this ME1 address would
-    /// disturb it -- PC1500Memory::debugPeekME1() only.
-    bool me1ReadHasSideEffects(uint16_t addr, bool pu, bool pv) const {
-        return !m_chain.empty() && m_chain.readHasSideEffects(decodeME1(addr, /*forWrite=*/false, pu, pv));
+    /// Whether a card says reading this cycle would disturb it -- debugger
+    /// peeks only.
+    bool readHasSideEffects(const SystemBusPins& pins) const {
+        return !m_chain.empty() && m_chain.readHasSideEffects(pins);
     }
 
     // Queried on every host-ROM fetch; see InhibitSource.
     bool inhibitAsserted() const { return m_chain.inhibitAsserted(); }
 
-    /// CMTOUT: the main unit's cassette-write line (LH5811 SDO).
+    /// CMTOUT: the main unit's cassette-write line.
     void setCmtOut(bool level) { m_chain.setCmtOut(level); }
     /// CMTIN as a card drives it; `idle` if none does.
     bool cmtIn(bool idle) const { return m_chain.cmtIn(idle); }
+    /// See SystemBusCard::advanceCassette / advanceTStates.
     void advanceCassette(uint32_t cycles) {
-        for (ExpansionCard* card : m_chain.cards()) card->advanceCassette(cycles);
+        for (SystemBusCard* card : m_chain.cards()) card->advanceCassette(cycles);
+    }
+    void advanceTStates(uint32_t tstates) {
+        for (SystemBusCard* card : m_chain.cards()) card->advanceTStates(tstates);
     }
 
 private:
-    PC1500Variant m_variant;
-    CardChain<ExpansionCard, PinState> m_chain;
-
-    // S-block -> physical-pin routing. The 60-pin connector's own S-pin
-    // positions aren't transcribed in the research corpus, so this assumes
-    // the same contacts the 40-pin connector uses (S1/S2/S3 on 16/17/18,
-    // S4 on 5) -- the same "assumed identical to the 40-pin" posture the
-    // class comment already takes for the rest of this pinout, and no
-    // per-variant routing gap is documented here, so it applies to both
-    // models. S5 has no documented contact on either connector.
-    static int sBlockPin(int s) {
-        switch (s) { case 1: return 16; case 2: return 17; case 3: return 18; case 4: return 5; }
-        return 0;
-    }
-
-    PinState decode(uint16_t addr, bool forWrite, bool pu, bool pv) const {
-        PinState pins = PC1500SignalDecode::basePinState(addr, forWrite, pu, pv);
-        pins.pin[3] = pu; // PU: the 60-pin cards still read the old numbers
-        pins.pin[2] = pv; // PV
-        int pin = sBlockPin(PC1500SignalDecode::sBlockIndex(addr));
-        if (pin != 0) pins.pin[pin] = true;
-        return pins;
-    }
-
-    PinState decodeME1(uint16_t addr, bool forWrite, bool pu, bool pv) const {
-        PinState pins;
-        pins.address = addr;
-        pins.forWrite = forWrite;
-        pins.pin[3] = pu; // PU
-        pins.pin[2] = pv; // PV
-        pins.me1 = true;  // pin[] chip-selects deliberately left false -- see PinState::me1
-        return pins;
-    }
+    CardChain<SystemBusCard, SystemBusPins> m_chain;
 };

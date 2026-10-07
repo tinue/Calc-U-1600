@@ -3,7 +3,7 @@
 #include <utility>
 #include <vector>
 
-#include "ExpansionCard.hpp"
+#include "SystemBusCard.hpp"
 #include "PC1600SystemBus.hpp"
 
 // ── A plain ROM module on a 60-pin expansion bus (preset `bus-rom:`) ──────
@@ -19,27 +19,26 @@
 // real hardware two ROMs at one address would be a bus conflict; here it is
 // how a rebuilt ROM replaces a bundled one.
 
-/// PC-1500 60-pin connector (also the PC-1600's LH5803 half, which carries
-/// the same signals): `base`..`base + size - 1` in ME0 or ME1, optionally
-/// only for one PV / PU state (-1 = either), like the CE-150 (PV = 0) and
-/// CE-158 (PV = 1, PU banked) ROMs.
-class BusRomCard final : public ExpansionCard {
+/// A ROM decoded like the PC-1500's peripherals (also reached by the
+/// PC-1600's LH5803, whose cycles drive the same contacts):
+/// `base`..`base + size - 1` on DME0 (ME0) or ME1/IOE (59), optionally only
+/// for one PV (16) / PU (15) level (-1 = either), like the CE-150 (PV = 0)
+/// and CE-158 (PV = 1, PU banked) ROMs.
+class BusRomCard final : public SystemBusCard {
 public:
     BusRomCard(std::vector<uint8_t> rom, uint16_t base, bool me1, int pv, int pu)
         : m_rom(std::move(rom)), m_base(base), m_me1(me1), m_pv(pv), m_pu(pu) {}
 
-    bool respondsToRead(const PinState& pins, uint8_t& outValue) const override {
-        if (pins.forWrite || pins.me1 != m_me1) return false;
-        // PV/PU from their 40-pin contacts 2/3, the shortcut the CE-150 and
-        // CE-158 use until the 60-pin connector is modelled (TODO.md).
-        if (m_pv >= 0 && pins.pin[2] != (m_pv != 0)) return false;
-        if (m_pu >= 0 && pins.pin[3] != (m_pu != 0)) return false;
+    bool respondsToRead(const SystemBusPins& pins, uint8_t& outValue) const override {
+        if (pins.forWrite || !pins.pin[m_me1 ? Contact60::kMe1 : Contact60::kDme0]) return false;
+        if (m_pv >= 0 && pins.pin[Contact60::kPV] != (m_pv != 0)) return false;
+        if (m_pu >= 0 && pins.pin[Contact60::kPU] != (m_pu != 0)) return false;
         const uint32_t offset = uint32_t(pins.address) - m_base;
         if (pins.address < m_base || offset >= m_rom.size()) return false;
         outValue = m_rom[offset];
         return true;
     }
-    WriteResult respondsToWrite(const PinState&, uint8_t) override { return WriteResult::ignored(); }
+    WriteResult respondsToWrite(const SystemBusPins&, uint8_t) override { return WriteResult::ignored(); }
 
 private:
     std::vector<uint8_t> m_rom;

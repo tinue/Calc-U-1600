@@ -19,6 +19,7 @@
 
 #include "../Connector/CE1600FCard.hpp"
 #include "../Connector/FloppyImageFile.hpp"
+#include "../PC1600/PC1600BusDrive.hpp"
 #include "../PC1600/PC1600Machine.hpp"
 #include "../PC1600/PC1600PresetLoader.hpp"
 #include "../PC1600/PC1600PresetMedia.hpp"
@@ -1032,27 +1033,18 @@ void test_bus_rom_cards_shadow_and_gate() {
     std::vector<uint8_t> bytes(0x2000);
     for (size_t i = 0; i < bytes.size(); i++) bytes[i] = uint8_t(i);
     BusRomCard rom(bytes, 0x8000, /*me1=*/false, /*pv=*/1, /*pu=*/0);
-    PinState pins;
-    pins.address = 0x8010;
-    pins.pin[2] = true;  // PV
-    pins.pin[3] = false; // PU
-    CHECK(rom.respondsToRead(pins, v) && v == 0x10);
-    pins.pin[3] = true;
-    CHECK(!rom.respondsToRead(pins, v));             // PU gate
-    pins.pin[3] = false;
-    pins.pin[2] = false;
-    CHECK(!rom.respondsToRead(pins, v));             // PV gate
-    pins.pin[2] = true;
-    pins.me1 = true;
-    CHECK(!rom.respondsToRead(pins, v));             // ME1
-    pins.me1 = false;
-    pins.address = 0xA000;
-    CHECK(!rom.respondsToRead(pins, v));             // past the end
-    pins.address = 0x7FFF;
-    CHECK(!rom.respondsToRead(pins, v));             // below the base
-    pins.address = 0x8000;
-    pins.forWrite = true;
-    CHECK(!rom.respondsToRead(pins, v) && !rom.respondsToWrite(pins, 0).claimed);
+    // An LH5803 ME0 read: the contacts it drives (PU, PV, MREQ/DME0, ELH).
+    auto lh = [](uint16_t addr, bool me1, bool pu, bool pv, bool forWrite = false) {
+        return PC1600BusDrive::lh5803Pins(addr, forWrite, me1, pu, pv);
+    };
+    CHECK(rom.respondsToRead(lh(0x8010, false, false, true), v) && v == 0x10);
+    CHECK(!rom.respondsToRead(lh(0x8010, false, true, true), v));   // PU gate
+    CHECK(!rom.respondsToRead(lh(0x8010, false, false, false), v)); // PV gate
+    CHECK(!rom.respondsToRead(lh(0x8010, true, false, true), v));   // ME1
+    CHECK(!rom.respondsToRead(lh(0xA000, false, false, true), v));  // past the end
+    CHECK(!rom.respondsToRead(lh(0x7FFF, false, false, true), v));  // below the base
+    const SystemBusPins write = lh(0x8000, false, false, true, /*forWrite=*/true);
+    CHECK(!rom.respondsToRead(write, v) && !rom.respondsToWrite(write, 0).claimed);
 }
 
 int run_pc1600_preset_tests() {

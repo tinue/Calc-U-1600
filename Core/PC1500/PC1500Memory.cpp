@@ -8,8 +8,7 @@ PC1500Memory::PC1500Memory(PC1500Variant variant)
     : m_variant(variant),
       m_userRamSize(variant == PC1500Variant::PC1500A ? kUserRamSizeA : kUserRamSizePlain),
       m_systemRamAddrMask(variant == PC1500Variant::PC1500A ? 0x7FF : 0x3FF),
-      m_expansionConnector(variant),
-      m_systemBus(variant) {
+      m_expansionConnector(variant) {
     m_rom.fill(0xFF);  // open until a ROM is loaded
     // Power-up: user CMOS RAM that has lost its supply comes back (mostly)
     // zero on real hardware, not 0xFF -- modelled as all 0x00. The 1.5K at
@@ -110,7 +109,7 @@ uint8_t PC1500Memory::readOpenBus(uint16_t addr) const {
     // shortcut.
     uint8_t v;
     if (m_expansionConnector.read(addr, m_pu, m_pv, v)) return v;
-    if (m_systemBus.read(addr, m_pu, m_pv, v)) return v;
+    if (m_systemBus.read(busPins(addr, /*forWrite=*/false, /*me1=*/false), v)) return v;
     return 0xFF;
 }
 
@@ -122,7 +121,7 @@ uint8_t PC1500Memory::readME0(uint16_t addr) {
 void PC1500Memory::writeME0(uint16_t addr, uint8_t value) {
     if (uint8_t* p = resolve(addr, /*forWrite=*/true)) { *p = value; return; }
     if (m_expansionConnector.write(addr, m_pu, m_pv, value)) return;
-    if (m_systemBus.write(addr, m_pu, m_pv, value)) return;
+    if (m_systemBus.write(busPins(addr, /*forWrite=*/true, /*me1=*/false), value)) return;
 }
 
 uint8_t PC1500Memory::peek(uint16_t addr) const {
@@ -146,22 +145,22 @@ bool PC1500Memory::poke(uint16_t addr, uint8_t value) {
     if (uint8_t* p = resolve(addr, /*forWrite=*/true)) { *p = value; return true; }
     if (const WriteResult r = m_expansionConnector.write(addr, m_pu, m_pv, value, /*direct=*/true))
         return r.stored;
-    // SystemBus (60-pin) carries no lock-gating card today, so a plain
-    // write is enough -- PinState::direct defaults false, matching the
-    // pre-`direct` behavior.
-    return m_systemBus.write(addr, m_pu, m_pv, value).stored;
+    // The 60-pin plug carries no lock-gating card, so a plain write is
+    // enough.
+    return m_systemBus.write(busPins(addr, /*forWrite=*/true, /*me1=*/false), value).stored;
 }
 
 uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
     *readable = true;
     // Same order as readME1(); a card register a read would disturb stays
-    // unread (see ExpansionCard::readHasSideEffects).
+    // unread (see SystemBusCard::readHasSideEffects).
     uint8_t v;
-    if (m_systemBus.me1ReadHasSideEffects(addr, m_pu, m_pv)) {
+    const SystemBusPins pins = busPins(addr, /*forWrite=*/false, /*me1=*/true);
+    if (m_systemBus.readHasSideEffects(pins)) {
         *readable = false;
         return 0xFF;
     }
-    if (m_systemBus.readME1(addr, m_pu, m_pv, v)) return v;
+    if (m_systemBus.read(pins, v)) return v;
     if (isIoChipAddress(addr)) {
         switch (addr & 0xF) {
             case 0xC: return m_dda;
@@ -177,7 +176,7 @@ uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
 }
 
 uint8_t PC1500Memory::readME1(uint16_t addr) {
-    // Only the 60-pin SystemBus carries ME1 (the 40-pin connector has no
+    // Only the 60-pin plug carries ME1 (the 40-pin connector has no
     // equivalent), and a card there gets first refusal on every ME1
     // access. A card register inside the internal LH5811's broad decode
     // (isIoChipAddress() matches any ME1 address with bits 12-13 set)
@@ -187,7 +186,7 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
     // card on the chain this falls straight through.
     {
         uint8_t v;
-        if (m_systemBus.readME1(addr, m_pu, m_pv, v)) return v;
+        if (m_systemBus.read(busPins(addr, /*forWrite=*/false, /*me1=*/true), v)) return v;
     }
     if (isIoChipAddress(addr)) {
         switch (addr & 0xF) { // RS0-3 = AD0-3
@@ -228,7 +227,7 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
 
 void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
     // See readME1(): a 60-pin card gets first refusal on every ME1 access.
-    if (m_systemBus.writeME1(addr, m_pu, m_pv, value)) return;
+    if (m_systemBus.write(busPins(addr, /*forWrite=*/true, /*me1=*/true), value)) return;
     if (isIoChipAddress(addr)) {
         switch (addr & 0xF) {
             case 0xC: m_dda = value; return;

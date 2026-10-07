@@ -7,7 +7,7 @@
 
 #include "AlpsPlotterMechanism.hpp"
 #include "../Tape/TapeDeck.hpp"
-#include "ExpansionCard.hpp"
+#include "SystemBusCard.hpp"
 
 // ── CE-150 printer / plotter / cassette interface (PC-1500 60-pin bus) ──
 //
@@ -28,11 +28,11 @@
 // shared ALPS mechanism (see its header) -- this card only does the bus
 // decode and the LH5810 latch/feedback model.
 //
-// Bus dependency -- deliberately narrow: `respondsToRead/Write` read only
-// `pins.address`, `pins.forWrite`, `pins.me1` and `pins.pin[2]` (PV) via
-// `decodeAccess()`. Nothing else. The PC-1500 `SystemBus` fills those four
-// (`decode`/`decodeME1`); on the PC-1600, `LH5803SharedMemory::
-// peripheralPins()` builds the same four with no S-block/Y-strobe decode.
+// Bus decode (60-pin contacts, `decodeAccess()`): the ROM answers reads
+// with DME0 asserted, PV (16) low and A000-BFFF; the LH5810 answers ME1
+// (59; IOE on the PC-1600, the LH5803's ME1 strobe) at B008-B00F.
+// Ref/PC-1500/Peripherals/CE-150-Hardware.md §3. Nothing else is decoded,
+// so the card is silent on PC-1600 Z-80 cycles, which assert neither.
 //
 // Cassette: the bit stream is the main unit's (its LH5811 SDO drives
 // CMTOUT, its PB2 reads CMTIN); the CE-150 conditions it to and from the
@@ -43,7 +43,7 @@
 // relay is closed -- one recorder, plugged into whichever jack the command
 // uses (`CLOAD -1` / `RMT ON` select REMOTE 1). CMTIN is driven only while
 // a tape is playing, so the plotter's tests and boot see PB2 unchanged.
-class Ce150Card final : public ExpansionCard {
+class Ce150Card final : public SystemBusCard {
 public:
     static constexpr size_t   kRomSize = 0x2000;   // 8192 B
     static constexpr uint16_t kRomBase = 0xA000;
@@ -101,7 +101,7 @@ public:
     /// a second edit then.
     void tick(uint64_t /*cycles*/) {}
 
-    bool respondsToRead(const PinState& pins, uint8_t& outValue) const override {
+    bool respondsToRead(const SystemBusPins& pins, uint8_t& outValue) const override {
         const Access a = decodeAccess(pins);
         if (a.me1) {
             if (a.addr >= kIoBase && a.addr <= kIoEnd) {
@@ -111,14 +111,14 @@ public:
             }
             return false;
         }
-        if (a.forWrite || a.pv) return false;              // ROM: read-only, PV = 0 only
+        if (!a.dme0 || a.forWrite || a.pv) return false;   // ROM: read-only, PV = 0 only
         if (a.addr < kRomBase || a.addr > kRomEnd) return false;
         if (!m_romLoaded) return false;
         outValue = m_rom[a.addr - kRomBase];
         return true;
     }
 
-    WriteResult respondsToWrite(const PinState& pins, uint8_t value) override {
+    WriteResult respondsToWrite(const SystemBusPins& pins, uint8_t value) override {
         const Access a = decodeAccess(pins);
         if (a.me1 && a.addr >= kIoBase && a.addr <= kIoEnd) {
             const uint8_t sel = static_cast<uint8_t>(a.addr & 0x0F);
@@ -129,7 +129,7 @@ public:
     }
 
     /// The LH5810 registers: a debugger must not read them as memory.
-    bool readHasSideEffects(const PinState& pins) const override {
+    bool readHasSideEffects(const SystemBusPins& pins) const override {
         const Access a = decodeAccess(pins);
         return a.me1 && a.addr >= kIoBase && a.addr <= kIoEnd;
     }
@@ -139,10 +139,11 @@ private:
         uint16_t addr = 0;
         bool pv = false;
         bool me1 = false;
+        bool dme0 = false;
         bool forWrite = false;
     };
-    static Access decodeAccess(const PinState& p) {
-        return Access{p.address, p.pin[2] /*PV*/, p.me1, p.forWrite};
+    static Access decodeAccess(const SystemBusPins& p) {
+        return Access{p.address, p.pin[Contact60::kPV], p.pin[Contact60::kMe1], p.pin[Contact60::kDme0], p.forWrite};
     }
 
     // LH5810 Port B read: the raw latch with the CE-150's live input bits

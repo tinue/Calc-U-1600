@@ -12,6 +12,7 @@
 #include "../Connector/CardChain.hpp"
 #include "../Connector/MemorySlotConnector.hpp"
 #include "../Connector/PC1600SystemBus.hpp"
+#include "../Connector/SystemBus.hpp"
 #include "PC1600Bank.hpp"
 #include "PC1600BusArbiter.hpp"
 #include "PC1600Display.hpp"
@@ -248,8 +249,8 @@ public:
     /// This and ce1600pBus() are still two paths for one physical plug --
     /// merging them waits on the open 60-pin signal questions (TODO.md,
     /// "Expansion connectors: one model on both machines").
-    CardChain<ExpansionCard, PinState>& lh5803PeripheralBus() { return m_lh5803PeripheralBus; }
-    const CardChain<ExpansionCard, PinState>& lh5803PeripheralBus() const { return m_lh5803PeripheralBus; }
+    SystemBus& lh5803PeripheralBus() { return m_lh5803PeripheralBus; }
+    const SystemBus& lh5803PeripheralBus() const { return m_lh5803PeripheralBus; }
 
     /// Plugs a card into Slot 1 / Slot 2 -- the connector-level path, taking
     /// ownership of the card (mirrors PC1500Machine::attachExpansionCard).
@@ -416,7 +417,7 @@ private:
     std::unique_ptr<ExpansionCard> m_slot1Card; // null = slot empty
     std::unique_ptr<ExpansionCard> m_slot2Card;
     PC1600SystemBus m_ce1600pBus; // Page B banks 4-7 + I/O 0x70-0x9F; see ce1600pBus()
-    CardChain<ExpansionCard, PinState> m_lh5803PeripheralBus; // see lh5803PeripheralBus()
+    SystemBus m_lh5803PeripheralBus; // see lh5803PeripheralBus()
     PC1600BusArbiter* m_arbiter{nullptr};
     SC7852* m_cpu{nullptr};
     uint8_t m_intCause{0};      // Port 32H latched causes, whatever the mask -- bit 3 LH5803

@@ -287,6 +287,10 @@ private:
     SystemBus          m_systemBus;
     bool m_pu{false};
     bool m_pv{false};
+    /// The 60-pin contacts of an LH5801 cycle (PC1500SignalDecode::systemBusPins).
+    SystemBusPins busPins(uint16_t addr, bool forWrite, bool me1) const {
+        return PC1500SignalDecode::systemBusPins(addr, forWrite, me1, m_pu, m_pv);
+    }
 
     // True if any card on either connector is pulling INHIBIT low --
     // suppresses the system ROM (see resolve()'s ROM branch). With nothing

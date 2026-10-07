@@ -66,7 +66,7 @@ public:
     }
 
     /// True when any card says reading this access would disturb it (see
-    /// ExpansionCard::readHasSideEffects) -- for debugger peeks only.
+    /// the card interface's readHasSideEffects) -- for debugger peeks only.
     bool readHasSideEffects(const Pins& pins) const {
         for (const Card* card : m_cards)
             if (card->readHasSideEffects(pins)) return true;

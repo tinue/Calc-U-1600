@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "../Connector/Ce150Card.hpp"
+#include "../Connector/PC1500SignalDecode.hpp"
 #include "../PC1500/PC1500Machine.hpp"
 #include "../PC1500/PC1500PresetLoader.hpp"
 #include "../Preset/PresetFile.hpp"
@@ -31,17 +32,15 @@ int g_fail = 0;
 // adjacent entries are a half-step (+/-1) in the X motor's own convention.
 constexpr uint8_t kRing[8] = {0x9, 0x8, 0xc, 0x4, 0x6, 0x2, 0x3, 0x1};
 
-PinState me1Read(uint16_t addr) {
-    PinState p; p.address = addr; p.forWrite = false; p.me1 = true; return p;
+// Cycles as the PC-1500 drives the 60-pin contacts (PU low).
+SystemBusPins me1Read(uint16_t addr) {
+    return PC1500SignalDecode::systemBusPins(addr, /*forWrite=*/false, /*me1=*/true, false, false);
 }
-PinState me1Write(uint16_t addr) {
-    PinState p; p.address = addr; p.forWrite = true; p.me1 = true; return p;
+SystemBusPins me1Write(uint16_t addr) {
+    return PC1500SignalDecode::systemBusPins(addr, /*forWrite=*/true, /*me1=*/true, false, false);
 }
-PinState me0Read(uint16_t addr, bool pv = false) {
-    PinState p; p.address = addr; p.forWrite = false; p.me1 = false;
-    p.pin[2] = pv;                 // PV
-    p.pin[19] = (addr >= 0x8000 && addr < 0xC000); // Y2, as SystemBus::decode sets it
-    return p;
+SystemBusPins me0Read(uint16_t addr, bool pv = false) {
+    return PC1500SignalDecode::systemBusPins(addr, /*forWrite=*/false, /*me1=*/false, false, pv);
 }
 
 std::vector<uint8_t> fakeRom() {
@@ -59,7 +58,7 @@ void test_rom_window_decode_and_negatives() {
     CHECK(!card.loadRom(rom.data(), rom.size() - 1)); // wrong size rejected
 
     uint8_t v = 0;
-    PinState p = me0Read(0xA000);
+    SystemBusPins p = me0Read(0xA000);
     CHECK(card.respondsToRead(p, v) && v == rom[0]);
     p = me0Read(0xBFFF);
     CHECK(card.respondsToRead(p, v) && v == rom[0x1FFF]);
@@ -85,28 +84,28 @@ void test_lh5810_latches_and_direction_masking() {
     // G / MSK / IF / DDA / DDB are plain read/write latches.
     for (uint16_t addr : {uint16_t(0xB009), uint16_t(0xB00A), uint16_t(0xB00B),
                           uint16_t(0xB00C), uint16_t(0xB00D)}) {
-        PinState w = me1Write(addr);
+        SystemBusPins w = me1Write(addr);
         CHECK(card.respondsToWrite(w, 0x5A));
-        PinState r = me1Read(addr);
+        SystemBusPins r = me1Read(addr);
         CHECK(card.respondsToRead(r, v) && v == 0x5A);
     }
 
     // OPA read returns input bits only (GetReg(OPA) = r_opa & ~r_dda): the
     // output bits it wrote (incl. the latched-but-ignored RMT bits) read
     // back as 0, and the CE-150 injects no OPA input level.
-    { PinState w = me1Write(0xB00C); card.respondsToWrite(w, 0x06); }     // DDA: bits 1,2 (RMT) = output
-    { PinState w = me1Write(0xB00E); card.respondsToWrite(w, 0xFF); }     // OPA := 0xFF (only bits 1,2 stick)
-    { PinState r = me1Read(0xB00E); card.respondsToRead(r, v); CHECK(v == 0x00); }
+    { SystemBusPins w = me1Write(0xB00C); card.respondsToWrite(w, 0x06); }     // DDA: bits 1,2 (RMT) = output
+    { SystemBusPins w = me1Write(0xB00E); card.respondsToWrite(w, 0xFF); }     // OPA := 0xFF (only bits 1,2 stick)
+    { SystemBusPins r = me1Read(0xB00E); card.respondsToRead(r, v); CHECK(v == 0x00); }
 
     // Unclaimed neighbours: 0xB007 (below the block) is not ours.
-    PinState r = me1Read(0xB007);
+    SystemBusPins r = me1Read(0xB007);
     CHECK(!card.respondsToRead(r, v));
 }
 
 // ── steppers via OPC ──────────────────────────────────────────────────
 
 void writeOpc(Ce150Card& card, uint8_t value) {
-    PinState w = me1Write(0xB008);
+    SystemBusPins w = me1Write(0xB008);
     card.respondsToWrite(w, value);
 }
 
@@ -144,10 +143,10 @@ void test_pen_signals_trace_a_stroke() {
     Ce150Card card;
     writeOpc(card, 0x99); // anchor
 
-    { PinState w = me1Write(0xB00D); card.respondsToWrite(w, 0x03); } // DDB: PB0/PB1 output
+    { SystemBusPins w = me1Write(0xB00D); card.respondsToWrite(w, 0x03); } // DDB: PB0/PB1 output
     CHECK(!card.mechanism().penDown());
 
-    { PinState w = me1Write(0xB00F); card.respondsToWrite(w, 0x02); } // PB1 descending -> pen down
+    { SystemBusPins w = me1Write(0xB00F); card.respondsToWrite(w, 0x02); } // PB1 descending -> pen down
     CHECK(card.mechanism().penDown());
     CHECK(card.mechanism().strokes().size() == 1);
 
@@ -156,7 +155,7 @@ void test_pen_signals_trace_a_stroke() {
     for (int i = 0; i < 3; ++i) { pos = (pos + 1) % 8; writeOpc(card, uint8_t(0x90 | kRing[pos])); }
     CHECK(card.mechanism().strokes().back().points.size() == 4); // pen-down point + 3 moves
 
-    { PinState w = me1Write(0xB00F); card.respondsToWrite(w, 0x01); } // PB0 ascending -> pen up
+    { SystemBusPins w = me1Write(0xB00F); card.respondsToWrite(w, 0x01); } // PB0 ascending -> pen up
     CHECK(!card.mechanism().penDown());
 }
 
@@ -205,8 +204,8 @@ void test_left_stop_advances_colour_every_third_arrival() {
 void test_reset_rehomes_but_keeps_ink() {
     Ce150Card card;
     writeOpc(card, 0x99);
-    { PinState w = me1Write(0xB00D); card.respondsToWrite(w, 0x03); }
-    { PinState w = me1Write(0xB00F); card.respondsToWrite(w, 0x02); } // pen down -> opens a stroke
+    { SystemBusPins w = me1Write(0xB00D); card.respondsToWrite(w, 0x03); }
+    { SystemBusPins w = me1Write(0xB00F); card.respondsToWrite(w, 0x02); } // pen down -> opens a stroke
     int pos = 0;
     for (int i = 0; i < 5; ++i) { pos = (pos + 1) % 8; writeOpc(card, uint8_t(0x90 | kRing[pos])); }
     CHECK(card.mechanism().penX() == 5);
@@ -218,7 +217,7 @@ void test_reset_rehomes_but_keeps_ink() {
     CHECK(card.mechanism().strokes().size() == 1); // ink stays on the paper
 
     uint8_t v = 0;
-    PinState r = me1Read(0xB00D);
+    SystemBusPins r = me1Read(0xB00D);
     CHECK(card.respondsToRead(r, v) && v == 0x00); // DDB latch cleared
 }
 
