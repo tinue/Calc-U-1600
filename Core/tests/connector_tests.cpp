@@ -118,7 +118,7 @@ void test_expansion_connector_pu_pv_gating() {
     // visible in Y2 (&8000-&BFFF). A card gated on "PU=1, PV=0" should only
     // respond in exactly that state.
     PC1500Machine machine(PC1500Variant::PC1500A);
-    StubCard card = makeReadStub(0x99, [](const PinState& p) { return p.pin[19] && p.pin[3] && !p.pin[2]; });
+    StubCard card = makeReadStub(0x99, [](const PinState& p) { return p.pin[19] && p.pin[2] && !p.pin[3]; });
     machine.expansionConnector().attach(&card);
 
     machine.memory().updatePUPV(false, false);

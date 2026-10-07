@@ -116,6 +116,8 @@ private:
 
     PinState decode(uint16_t addr, bool forWrite, bool pu, bool pv) const {
         PinState pins = PC1500SignalDecode::basePinState(addr, forWrite, pu, pv);
+        pins.pin[3] = pu; // PU: the 60-pin cards still read the old numbers
+        pins.pin[2] = pv; // PV
         int pin = sBlockPin(PC1500SignalDecode::sBlockIndex(addr));
         if (pin != 0) pins.pin[pin] = true;
         return pins;

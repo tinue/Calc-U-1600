@@ -215,8 +215,8 @@ inline int resolveSignalPin(CardHost t, const std::string& n) {
             if (n == "S2") return 17;
             if (n == "S3") return 18;
             if (n == "S4") return 5;
-            if (n == "PU") return 3;
-            if (n == "PV") return 2;
+            if (n == "PU") return 2;
+            if (n == "PV") return 3;
             return -1;
         case CardHost::PC1500A:
             if (n == "Y0") return 4;
@@ -224,8 +224,8 @@ inline int resolveSignalPin(CardHost t, const std::string& n) {
             if (n == "S3") return 16;
             if (n == "S4") return 17;
             if (n == "S5") return 18;
-            if (n == "PU") return 3;
-            if (n == "PV") return 2;
+            if (n == "PU") return 2;
+            if (n == "PV") return 3;
             return -1;
         case CardHost::PC1600Slot1:
             if (n == "RAM2") return 4;

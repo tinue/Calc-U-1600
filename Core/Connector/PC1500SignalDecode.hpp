@@ -33,17 +33,14 @@ inline int sBlockIndex(uint16_t addr) {
 // the sBlockIndex()-derived S-block strobe is deliberately left to the
 // caller, since S-block-to-pin routing is the one thing that actually
 // differs between ExpansionConnector and SystemBus (see their decode()).
-// Shortcut: SystemBus reuses this, so on the 60-pin connector PU/PV sit on
-// 3/2, not on 60-pin 15 (PU) / 16 (PV). Measured on a real PC-1500, the
-// 40-pin contacts are 2 = PU, 3 = PV (the TRM prints them swapped), so the
-// numbers below are swapped too; hosts and cards agree, so behaviour is
-// right. TODO.md, "Expansion connectors".
+// PU/PV as measured on a real PC-1500: contact 2 = PU, 3 = PV (both PC-1500
+// TRM tables print them swapped; Ref/Shared/Expansion-Connectors.md §2.2b).
 inline PinState basePinState(uint16_t addr, bool forWrite, bool pu, bool pv) {
     PinState pins;
     pins.address = addr;
     pins.forWrite = forWrite;
-    pins.pin[3] = pu;          // PU
-    pins.pin[2] = pv;          // PV
+    pins.pin[2] = pu;          // PU
+    pins.pin[3] = pv;          // PV
     pins.pin[4] = isY0(addr);  // Y0 chip select, &0000-&3FFF
     pins.pin[19] = isY2(addr); // Y2 chip select, &8000-&BFFF
     return pins;

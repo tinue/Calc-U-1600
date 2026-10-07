@@ -27,10 +27,10 @@ struct PinState {
     // `address`, the read return value, and `forWrite` respectively.
     //
     // Pin roles per host (a card must not care which):
-    //   pin[2]  PC-1500 PV        / PC-1600 VCC (TRM: PVIN; measured tied to VCC)
-    //   pin[3]  PC-1500 PU        / PC-1600 PU
-    //   (PC-1500 per the TRM; measured, the real contacts are 2 = PU,
-    //   3 = PV. TODO.md, "Expansion connectors".)
+    //   pin[2]  PC-1500 PU        / PC-1600 VCC (TRM: PVIN; measured tied to VCC, left low)
+    //   pin[3]  PC-1500 PV        / PC-1600 PU
+    //   (PC-1500 as measured; the TRM prints 2 = PV, 3 = PU.
+    //   Ref/Shared/Expansion-Connectors.md §2.2b.)
     //   (The 60-pin cards CE-150/CE-158 also read PV/PU here, a shortcut:
     //   on the 60-pin plug they are contacts 15/16. TODO.md.)
     //   pin[4]  PC-1500 Y0 (CS &0000-&3FFF) / PC-1600 RAM2 (Slot 1) or RAM1 (Slot 2) CS
