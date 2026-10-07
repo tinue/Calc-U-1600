@@ -230,6 +230,10 @@ public:
     /// stream at the GUI/tooling layer.
     void setCpuIdTag(uint8_t tag) { m_cpuIdTag = tag; }
 
+protected:
+    /// Set by LH5803: SDP, RDP and OFF execute as NOPs (TRM §7.1.2).
+    bool m_lh5803Variant{false};
+
 private:
     LH5801Bus& bus;
 

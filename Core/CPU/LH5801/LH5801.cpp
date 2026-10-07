@@ -903,15 +903,16 @@ int LH5801::executeFD(uint8_t op) {
         // ── CPU control / I/O ────────────────────────────────────────────
         case 0x81: setFlagBit(0x02, true); return 8;
         case 0xBE: setFlagBit(0x02, false); return 8;
-        case 0xC1: DISP = true; bus.setDisplayEnabled(true); return 9; // 9 cycles per the LH5801 instruction reference
-        case 0xC0: DISP = false; bus.setDisplayEnabled(false); return 8;
+        // SDP / RDP / OFF are NOPs on the LH5803 (m_lh5803Variant).
+        case 0xC1: if (m_lh5803Variant) return 9; DISP = true; bus.setDisplayEnabled(true); return 9; // 9 cycles per the LH5801 instruction reference
+        case 0xC0: if (m_lh5803Variant) return 8; DISP = false; bus.setDisplayEnabled(false); return 8;
         case 0xCE: setTimer(A); return 9; // AM0: bit8 forced 0 (A alone, since A is 8-bit)
         case 0xDE: setTimer(uint16_t(A | 0x100)); return 9;
         case 0xCC: bus.writeOutputPort(A); return 9;
         case 0xBA: A = bus.readInputPort(); setZFlagFrom(A); return 9;
         case 0x8E: return 8; // cdv — clock divider not modeled
         case 0xB1: m_halted = true; return 9;
-        case 0x4C: m_poweredOff = true; return 8; // off -- BF flip-flop reset, real power-down (see poweredOff())
+        case 0x4C: if (!m_lh5803Variant) m_poweredOff = true; return 8; // off -- BF flip-flop reset, real power-down (see poweredOff())
 
         // ── Undocumented "V" opcodes, ME1 forms (see the V block in execute()) ──
         case 0x31: { uint16_t p = vPtr(); A = aluSub(A, dataME1(p), T & 1); return 11; }  // sbc #(v)
