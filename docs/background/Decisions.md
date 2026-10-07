@@ -303,6 +303,14 @@ authentic speed for the span that matters.
 - **Hardcoding the PC-1600 idle PC ($92xx)** in `waitUntilBasicIdle` is fine,
   because the ROM set is fixed. "Small stable PC span" alone isn't enough:
   INPUT, plot and FOR/NEXT waits are tight loops too.
+- **`waitUntilBasicIdle` judges a frame by its share in the command loop**
+  (32 PC samples per frame, idle at 3/4), not by one end-of-frame sample.
+  The 1/64 s ISR runs at the prompt too; one sample per 60 fps frame hits
+  or misses it depending on how the 64 Hz timer lines up with the frame
+  grid, and that drifts. After 8858e75 the single sample kept "busy" going
+  for 8 s after LH5803 use and made every boot hit its 20 s cap. Don't go
+  back to one sample per frame. The prompt is the Z-80 loop in MODE 1 too
+  (the LH5803 idles there), so the LH5803 needs no part in the test.
 - **The PC-1600 fast loader finishes like the ROM's `LOAD`.** Besides the
   program bytes it writes F867/F02C (or an S1/S2 descriptor end and module
   header), the VARIABLE POINTER check, PRGADR (FE3C-FE41), F89E and F1C1

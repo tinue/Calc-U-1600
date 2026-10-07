@@ -79,27 +79,6 @@ obligations.
 
   MODE 1 (LH-5803) hasn't been re-measured since the host-pacing fix; the
   old "~7% fast" figure predates it.
-- **Since 8858e75: an 8 s long-key-scan phase after the LH5803 ran; boot
-  +20 s.** After a program that calls the LH5803 (`IF` with a comparison,
-  `SIN`), the 1/64 s `KEYSCAN` (P2-B6 90D1H -> P1-B3 `KEYMATRIX` 4768H)
-  takes its long path through `KBANYKEY` (486FH) on every tick for 8 s
-  (512 ticks), so the SC7852 leaves the command loop (~$92B3) four times a
-  second at 60 frames/s sampling. `waitUntilBasicIdle` needs 20 frames in a
-  row and only finishes when the phase ends: a parameterless `- wait:`
-  returns ~8 s late (ifonly loop: 9 s by `TIME`, 17.1 s waited; 7.3 s
-  before 8858e75). The boot's own `waitUntilBasicIdle` (cap 20 s in
-  `runBootToPrompt`) now runs into its cap: `TIME` right after boot reads
-  0:23 instead of 0:03, in every PC-1600 preset, test and GUI preset load.
-  A plain `FOR/NEXT` program (no LH5803 call) shows none of it.
-  Not the cause: the interrupt mask (35H = 5FH), F0B6H, and the PIO state
-  (1FH = 28H, DDB = 00H, DDA = 00H, OPA = FFH) are the same in both
-  phases, sampled once a second. **Before fixing:** find which input
-  `KEYMATRIX` sees as a key during the phase (trace one tick's port 1FH /
-  37H reads), and which 8858e75 change feeds it (ME1 F000H-F00FH as ports
-  10H-1FH, Port 37H honouring DDA, or the 64 Hz pulse under the LH5803).
-  Probes: `headless/beep/idleprobe.cpp`, `cntprobe.cpp`.
-  (Replaces the old "parameterless `wait:` inflates `TIME`" item: `TIME`
-  agrees with `wait: <n>` and with emulated time on all paths.)
 - **Open bus reads as a constant FFH; real hardware returns the last byte
   on the data bus. To decide.** PC-1600 MODE 0, CE-163F in Slot 2:
   `XPEEK&C5` returns 37 on a real unit and 255 in the emulator. In MODE 0

@@ -214,13 +214,27 @@ uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates) {
     // is generous and the hold long, so a transient BREAK-poll visit during
     // a run doesn't count.
     // The address window itself lives in pc1600AtBasicPrompt().
-    constexpr int kFramesNeeded = 20;  // ~0.33 s continuously in the command loop
+    //
+    // A frame counts as idle by the share of it spent in the loop, not by
+    // where the PC is at its end: the 1/64 s ISR (~0.7 ms) runs at the
+    // prompt too, and a single end-of-frame sample hits or misses it
+    // depending on how the 64 Hz timer lines up with the 60 fps grid. That
+    // alignment drifts, so a lone sample could keep "not idle" going for
+    // seconds after a program had ended (8858e75 shifted the timer phase and
+    // made the boot hit its idle cap).
+    constexpr int kFramesNeeded = 20;  // ~0.33 s mostly in the command loop
+    constexpr int kSamplesPerFrame = 32;
+    constexpr int kIdleSamplesNeeded = kSamplesPerFrame * 3 / 4;
 
     uint64_t spent = 0;
     int inLoop = 0;
     while (inLoop < kFramesNeeded && spent < maxTStates) {
-        spent += machine.runCycles(kFrameTStates);
-        if (pc1600AtBasicPrompt(machine)) inLoop++;
+        int idleSamples = 0;
+        for (int i = 0; i < kSamplesPerFrame; ++i) {
+            spent += machine.runCycles(kFrameTStates / kSamplesPerFrame);
+            if (pc1600AtBasicPrompt(machine)) idleSamples++;
+        }
+        if (idleSamples >= kIdleSamplesNeeded) inLoop++;
         else inLoop = 0;
     }
     return spent;
