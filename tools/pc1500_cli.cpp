@@ -46,7 +46,8 @@
 //                     receives, in order.
 //   --ce158-rx-hold <n> start sending the --ce158-rx bytes only after n
 //                     character times (the ROM flushes the receiver when
-//                     e.g. SETDEV runs, so a byte sent too early is lost).
+//                     e.g. SETDEV, TERMINAL or DTE starts, so a byte sent
+//                     too early is lost).
 //   --ce158-tx <file> write every byte the CE-158 sends to <file>.
 // Anything printed on the Centronics port is dumped after the run.
 

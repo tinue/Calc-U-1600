@@ -124,11 +124,6 @@ docs/developer/PC1600-Core-Limitations.md (LH5803 section).
   which KIN; INn = KINn is assumed. The TERMINAL menu's F4 decodes right,
   which fits, but one key is weak evidence. Check on the diagram or with a
   key test in MODE 1 (`INKEY$`-style ML via `ITA`).
-- **CE-158 terminal: the first received byte is lost** (both TERMINAL and
-  DTE show "B…" for a peer sending "AB…", with `--ce158-rx-hold`).
-  Probably the receiver flush when the terminal starts; compare with a
-  real unit.
-
 ## PC-1600 serial port
 
 - **RS-232C / SIO connector mux.** PRIME (the PRIM select) is tracked in

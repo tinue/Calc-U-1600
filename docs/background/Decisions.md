@@ -263,6 +263,14 @@ CE-151 then lands at A800-B7FF.
 - **`MEM` ignores `TITLE`.** `MEM` / `STATUS 0` always reports the S0 area
   (LH5803 $CC30 reads only the S0 pointers), even with `TITLE "S1:"`. The free
   space of an S1/S2 program module is `STATUS 259` / `260`.
+- **CE-158 `TERMINAL` / `DTE` drop a byte that arrived before they
+  started.** On entry both call `RXCOM` (CE-158 8CBDH) and ignore the
+  result; `RXCOM` (81E6H) reads the UART data register on every path, so
+  the byte waiting in the receiver is consumed. A peer that sends "AB..."
+  before `TERMINAL` runs shows "B..."; bytes that arrive after the call,
+  menu phase included, all appear. Same on the PC-1500 and the PC-1600 in
+  MODE 1 (checked 2026-10-07 with `--ce158-rx-hold`; the order of events
+  traced). In headless runs, hold the peer until `TERMINAL` has started.
 
 ## Accepted limitations: won't fix
 
