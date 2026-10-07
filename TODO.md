@@ -149,13 +149,24 @@ docs/developer/PC1600-Core-Limitations.md (LH5803 section).
 The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, done). Left:
 
 - **The open questions of the load/save matrix**
-  ([Ref/PC-1600/PC-1600-Load-Save-Matrix.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-Load-Save-Matrix.md) §6), to be discussed: are all tokens
-  the PC-1500 and PC-1600 share identical (the MODE 1 listing rule assumes
-  so; a table comparison of libsharpdx's two tables against the ROM's would
-  settle it); `INPUT#-1` in MODE 1 through the CE-1600P (the ROM allows it,
+  ([Ref/PC-1600/PC-1600-Load-Save-Matrix.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1600/PC-1600-Load-Save-Matrix.md) §6), to be discussed
+  (the shared tokens are settled: identical by code, §6 item 2):
+  `INPUT#-1` in MODE 1 through the CE-1600P (the ROM allows it,
   the TRM doesn't); `SAVE`/`LOAD "CAS:"` in MODE 1; whether the CE-158's own
   `SETDEV` is reachable on the PC-1600; CE-150/CE-158 `PRINT#`/`INPUT#` in
   MODE 0.
+- **libsharpdx's PC-1600 keyword set has `MOOE` for `MODE`** (F2B3H), so a
+  `.bas` line `10 MODE 0` loads as `10 MOD E0`; LIST shows the wrong program
+  and RUN runs it. The ROM table (P2-B6 `B6DEH`, NEW and OLD) says `MODE`;
+  the source marks it "possibly MODE; pending verification" (SharpBasicShared
+  `Pc1600Keywords.java`, also in SharpCommunicator's
+  `SharpPc1600BasicKeywords.java`). Also: `WIDTH` (F087H) is in the set, but
+  the ROM has it only masked (`W\0DTH`, NEW) or not at all (OLD), so a real
+  PC-1600 can't type it; drop it. Everything else matches the ROM tables in
+  both directions (code -> name, name -> code), for the PC-1500 set too.
+  Fix in SharpBasicShared, regenerate `SharpDataExchange/src/keywords.rs`
+  (`tools/extract_keywords.py`), then a libsharpdx release for the vendored
+  copy and CI. Check: a `.bas` with `10 MODE 0` loads and lists as `10 MODE 0`.
 - **Guide screenshots write into the real saves folder:** the chapter-5
   preset (`docs/developer/screenshots/presets/pc1600-modules.pc1600`) uses
   `saveas: live slot-1:My programs`, so every `tools/make_screenshots.sh`
