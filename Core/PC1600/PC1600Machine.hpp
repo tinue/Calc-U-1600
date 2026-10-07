@@ -569,9 +569,9 @@ private:
     // T-state accumulator against the SC-7852's own 3.58 MHz crystal
     // (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md §2.1) since that's the domain the ROM's
     // polling loop actually observes it in -- accumulates only SC7852
-    // T-states (not LH5803 cycles, a different clock domain entirely), so
-    // the pulse effectively pauses while the SC7852 is parked, a real but
-    // small deviation from true hardware's always-running crystal.
+    // T-states; while the LH5803 owns the bus its cycles are converted to
+    // T-states (toTStates()) and advance it the same way, so the pulse runs
+    // on as it does on the hardware. advanceTimer64().
     // The half period is kTStateHz / 128 = 27968.75 T-states. The
     // accumulator counts quarter T-states so it can hold that exactly.
     // Rounding it to 27969 made the 64 Hz signal drift against anything
@@ -581,6 +581,9 @@ private:
     static_assert(kTStateHz * kTimer64AccumScale % 128 == 0, "64 Hz half period must be exact");
     int m_timer64Accum{0};
     bool m_timer64State{false};
+    /// Advances the 64 Hz pulse (PB5, the INT4 cause, the sub-CPU's 0.5 s
+    /// tick) by `tstates`, from either bus-ownership branch of step().
+    void advanceTimer64(int tstates);
     // System power (SubCpu doc §4) is the sub-CPU's systemOn(). While it
     // has VCC off, step() advances only the always-on clocks,
     // kOffSliceTStates at a time, until a power-on source fires; power-on

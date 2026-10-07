@@ -80,10 +80,20 @@ entry when a primary source or a ROM trace disagrees with it.
   re-armed, so only 9400H is decoded. Whether port 30H b0 gates the trap
   is open (port 30H is not modelled). A port 36H write clears the latch.
   `PC1600Machine::stepLocked()`, `PC1600Memory::latchLhNmi()`
-- **ME1 A040H–A05FH is Z-80 ports 40H–5FH** (the HD61102s), routed like
-  A030H–A03FH. The ROM's own LCD routines need it (`LCD1500_ALL` E84AH
-  polls `#(A058H)`/`#(A059H)`). Other ME1 A0xxH shadows are not routed.
+- **ME1 A040H–A05FH and 8040H–805FH are Z-80 ports 40H–5FH** (the
+  HD61102s), routed like A030H–A03FH. The ROM's own LCD routines need them
+  (`LCD1500_ALL` E84AH polls `#(A058H)`/`#(A059H)`, `LCD1500_BYTE` E7E1H
+  `#(8059H)`). Only the forms the ROM uses are routed.
   `LH5803SharedMemory::isLcdPort()`
+- **ME1 F000H–F00FH is Z-80 ports 10H–1FH**, the SC-7852's LH-5810-
+  compatible block (TRM pin 78 PCSTB: "LH-5803 is F008H of the ME1" = port
+  18H; pin 4 φOS syncs that port). Not stated as an address map anywhere.
+- **SDP, RDP and OFF are NOPs on the LH-5803** (TRM §7.1.2). `LH5803.hpp`
+- **The LH-5803's MI input (vector FFF8H) is not driven**: the SC-7852's
+  LHMIO (pin 91) and the PC-1500 peripheral IRQ path to the LH-5803 are
+  not modelled; nothing found so far needs them.
+- **ME1 wait states** (LHWAIT, IOE: one wait for `**0*H` and 8000H–FFFFH
+  of ME1) are not modelled.
 - **Standalone `LH5803Memory` uses a private 16 KB RAM array**, for
   testing the LH5803 on its own; the machine shares RAM between the CPUs
   through `LH5803SharedMemory`. `LH5803Memory.hpp`
@@ -164,10 +174,11 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   levels, bit 3 (LH-5803 hand-back) and bit 4 (1/64 s timer) are latched and
   cleared by the 32H read. The other bits have no source.
 - **Timer clock domain**: the 1/64 s signal and the sub-CPU's 0.5 s tick
-  accumulate only SC-7852 T-states, so they pause while the LH-5803 owns
-  the bus (MODE 1, the OFF sequence) and while the system is off. On
-  hardware both come from the sub-CPU and never stop. The calendar clock
-  and the timers don't have this gap: they run in every state.
+  run whichever CPU owns the bus (LH-5803 cycles converted to T-states;
+  the LH-5803 ROM counts the pulse on PB5 too), but pause while the system
+  is off. On hardware both come from the sub-CPU and never stop. The
+  calendar clock and the timers don't have this gap: they run in every
+  state. `PC1600Machine::advanceTimer64()`
 - **Power**: modelled as on hardware (Decisions.md). The sub-CPU cuts power
   after the system-off command once the bus owner halts; the ON key, the
   wake-up timer (SWPON bit 1) and CI (SWPON bit 0) power on through a
@@ -238,11 +249,11 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   28H-2FH (Slot 2 card), 31H-3DH (banks, interrupts, sub-CPU, LCD clock,
   CPU switch), 50H-5BH (LCD) and 70H-9FH (60-pin bus).
   `PC1600Memory::readIO()` / `writeIO()`
-- **Keyboard strobe direction registers (DDA/DDB) not fully consulted** —
-  KS0-7 are treated as "active when the OPA bit reads 0" regardless of
-  DDA, the same simplification the PC-1500 side carries. (The PB6 strobe
-  *does* consult DDB.6.) `PC1600Memory.hpp` (`m_dda` comment),
-  `PC1600Keyboard.hpp`
+- **Keyboard strobes consult DDA/DDB**: a KS line counts as strobed only
+  while its PA bit is an output (DDA = 1) driven low; PB6 likewise. Both
+  ROMs select a column through DDA. The LH-5803 reads the same matrix with
+  `ITA` (its IN0-IN7 share the KIN net, TRM §9.1(1) p.264).
+  `PC1600Memory::readIO()` (37H), `LH5803SharedMemory::readInputPort()`
 
 ---
 

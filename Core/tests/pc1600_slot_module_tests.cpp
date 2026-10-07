@@ -51,6 +51,16 @@ uint16_t rd16(PC1600Machine& m, uint16_t a) {
     return uint16_t(m.memory().read(a) | (m.memory().read(uint16_t(a + 1)) << 8));
 }
 
+// The start of the S0 program area: F029H (the base page the boot ROM's
+// memory sizing sets) : C5H, the first byte after the 197-byte reserve --
+// C0C5H stock, lower by what a slot module adds to S0.
+// Ref/PC-1600/PC-1600-Work-Area-Map.md (F029H, and INIT's `(F029H AND
+// 7FH):C5H`). F5CFH, which these tests used to read, is a Z-80 stack slot:
+// the half-second sub-CPU interrupt routine overwrites it.
+uint16_t programStart(PC1600Machine& m) {
+    return uint16_t((m.memory().read(0xF029) << 8) | 0xC5);
+}
+
 // Select which page-C (8000-BFFF) bank the SC7852 sees: value 0/1 -> Slot 1,
 // 2/3 -> Slot 2 (Port 31H bits 4-6).
 void selectPageCBank(PC1600Machine& m, uint8_t bank) {
@@ -241,9 +251,9 @@ void test_ce155_contributes_full_8k_to_mem() {
         std::fprintf(stderr, "SKIP test_ce155_contributes_full_8k_to_mem: PC-1600 ROM images not found\n");
         return;
     }
-    // F5CFH holds the BASIC RAM base pointer (C0C5H stock).
-    CHECK(rd16(*m0, 0xF5CF) == 0xC0C5);
-    CHECK(rd16(*m1, 0xF5CF) == 0xA0C5); // stock - 8192, program area start A0C5H
+    // The BASIC program start (C0C5H stock).
+    CHECK(programStart(*m0) == 0xC0C5);
+    CHECK(programStart(*m1) == 0xA0C5); // stock - 8192, program area start A0C5H
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m1, 0xF89D)) == 8192);
 }
 
@@ -263,7 +273,7 @@ void test_ce151_fills_b000_bfff_in_slot1() {
     CHECK(m0->memory().read(0xF08D) == 0x1B);
     CHECK(m1->memory().read(0xF08D) == 0x1A);
     CHECK(m5->memory().read(0xF08D) == 0x5B);
-    CHECK(rd16(*m1, 0xF5CF) == 0xB0C5);
+    CHECK(programStart(*m1) == 0xB0C5);
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m1, 0xF89D)) == 4096);
 
     PC1600Machine& m = *m1;
@@ -288,8 +298,8 @@ void test_ce161_contributes_full_16k_in_both_slots() {
         std::fprintf(stderr, "SKIP test_ce161_contributes_full_16k_in_both_slots: PC-1600 ROM images not found\n");
         return;
     }
-    CHECK(rd16(*m1, 0xF5CF) == 0x80C5);
-    CHECK(rd16(*m2, 0xF5CF) == 0x80C5);
+    CHECK(programStart(*m1) == 0x80C5);
+    CHECK(programStart(*m2) == 0x80C5);
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m1, 0xF89D)) == 16384);
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m2, 0xF89D)) == 16384);
 }
@@ -400,9 +410,9 @@ void test_trigger_latch_modules_in_slot2_contribute_full_16k() {
         std::fprintf(stderr, "SKIP test_trigger_latch_modules_in_slot2_contribute_full_16k: PC-1600 ROM images not found\n");
         return;
     }
-    CHECK(rd16(*m0, 0xF5CF) == 0xC0C5);
-    CHECK(rd16(*m1, 0xF5CF) == 0x80C5); // CE-1638:  stock - 16384
-    CHECK(rd16(*m2, 0xF5CF) == 0x80C5); // CE-163F:  stock - 16384
+    CHECK(programStart(*m0) == 0xC0C5);
+    CHECK(programStart(*m1) == 0x80C5); // CE-1638:  stock - 16384
+    CHECK(programStart(*m2) == 0x80C5); // CE-163F:  stock - 16384
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m1, 0xF89D)) == 16384);
     CHECK(int(rd16(*m0, 0xF89D)) - int(rd16(*m2, 0xF89D)) == 16384);
 }

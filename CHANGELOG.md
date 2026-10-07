@@ -28,6 +28,15 @@
 
 ### Fixed
 
+- **PC-1600: the CE-158 terminal works in MODE 1.** `TERMINAL` and `DTE`
+  now show their menu, take the soft keys (F4 = Ent) and display received
+  text, scrolling long lines as the real machine does. They used to stop
+  after a character or two. The LH-5803 now reaches the LCD, the 1/64 s
+  pulse and the keyboard the way the PC-1600's wiring connects them.
+
+- **PC-1600: an OFF in PC-1500 machine code no longer freezes MODE 1.** On
+  the LH-5803, OFF (and SDP/RDP) does nothing, as the TRM states.
+
 - **PC-1500: the ON key reads high on PB7 while pressed.** The CE-150's
   tape reader saw BREAK all the time before.
 

@@ -25,7 +25,7 @@ void PC1600Machine::resetLocked() {
     // m_rtcAccum is the sub-CPU's divider, which runs on the always-on rail:
     // no reset or power cycle touches it (seedClock() sets its phase).
     m_z80Mem.setTimer64Bit(false);
-    m_lh5803Mem.reset();                  // clear the internal-PIO register file (0xF00x)
+    m_lh5803Mem.reset();
     m_lh5803Mem.updatePUPV(false, false); // match the just-reset LH5803 CPU
     if (m_ce150Card) m_ce150Card->reset(); // re-anchor, keep it attached (like the CE-1600P)
     m_ce158.reset();
@@ -381,28 +381,7 @@ int PC1600Machine::stepLocked(uint64_t* tstates) {
         // to wake it: the boot reaches a genuine HALT waiting on this
         // interrupt, so the timer must keep advancing once it gets there.
         const int cost = (c > 0 ? c : SC7852::kHaltTickCycles);
-        m_timer64Accum += cost * kTimer64AccumScale;
-        while (m_timer64Accum >= kTimer64HalfPeriodScaled) {
-            m_timer64Accum -= kTimer64HalfPeriodScaled;
-            m_timer64State = !m_timer64State;
-            m_z80Mem.setTimer64Bit(m_timer64State); // PB5 raw level only, see its own comment
-            // TRM pin table (INT4, pin 83): "an interrupt is sent to the
-            // CPU on a falling edge." Each high->low transition latches
-            // port 32H bit 4, separately from PB5's raw level (the real ISR
-            // reads 32H right after waking and needs the bit still set --
-            // see latchTimer64InterruptCause()). It latches whatever 35H
-            // says (the ROM's ISR filters the 32H byte with 35H itself,
-            // P1-B3 4102H/4112H); the mask only gates the INT level -- see
-            // PC1600Memory::interruptLevel().
-            if (!m_timer64State) m_z80Mem.latchTimer64InterruptCause();
-            // The sub-CPU's 0.5 s tick comes from the same divider as this
-            // 64 Hz signal, see kTimer64EdgesPerHalfSecond. It raises SRIRQ
-            // bit 1, and INT6 when the mask enables it.
-            if (++m_timer64EdgeCount == kTimer64EdgesPerHalfSecond) {
-                m_timer64EdgeCount = 0;
-                m_z80Mem.subCpu().halfSecondTick();
-            }
-        }
+        advanceTimer64(cost);
         advanceSharedClocks(cost);
         *tstates = static_cast<uint64_t>(cost);
         if (m_ce1600fCard) m_ce1600fCard->advance(static_cast<uint32_t>(cost));
@@ -446,6 +425,7 @@ int PC1600Machine::stepLocked(uint64_t* tstates) {
     // running while it owns the bus -- see advanceSharedClocks(). A halted
     // step returns 0 and is charged LH5801::kHaltTickCycles.
     *tstates = toTStates(static_cast<uint64_t>(c > 0 ? c : LH5801::kHaltTickCycles), /*sc7852Owned=*/false);
+    advanceTimer64(static_cast<int>(*tstates));
     advanceSharedClocks(static_cast<int>(*tstates));
     // LH5803->SC7852: the STA #(0A038H) store is the whole handoff, so the
     // switch happens immediately after this step(). It raises cause bit 3,
@@ -464,6 +444,34 @@ int PC1600Machine::stepLocked(uint64_t* tstates) {
     }
     maybeDrainTrace();
     return c;
+}
+
+void PC1600Machine::advanceTimer64(int tstates) {
+    // The sub-CPU's 64 Hz square wave runs whichever CPU owns the bus: the
+    // LH5803 ROM counts it too (DELAY64, EEB2H/EEECH, polls PB5 at
+    // #(F00FH) -- the CE-158 terminal's menu waits there).
+    m_timer64Accum += tstates * kTimer64AccumScale;
+    while (m_timer64Accum >= kTimer64HalfPeriodScaled) {
+        m_timer64Accum -= kTimer64HalfPeriodScaled;
+        m_timer64State = !m_timer64State;
+        m_z80Mem.setTimer64Bit(m_timer64State); // PB5 raw level only, see its own comment
+        // TRM pin table (INT4, pin 83): "an interrupt is sent to the
+        // CPU on a falling edge." Each high->low transition latches
+        // port 32H bit 4, separately from PB5's raw level (the real ISR
+        // reads 32H right after waking and needs the bit still set --
+        // see latchTimer64InterruptCause()). It latches whatever 35H
+        // says (the ROM's ISR filters the 32H byte with 35H itself,
+        // P1-B3 4102H/4112H); the mask only gates the INT level -- see
+        // PC1600Memory::interruptLevel().
+        if (!m_timer64State) m_z80Mem.latchTimer64InterruptCause();
+        // The sub-CPU's 0.5 s tick comes from the same divider as this
+        // 64 Hz signal, see kTimer64EdgesPerHalfSecond. It raises SRIRQ
+        // bit 1, and INT6 when the mask enables it.
+        if (++m_timer64EdgeCount == kTimer64EdgesPerHalfSecond) {
+            m_timer64EdgeCount = 0;
+            m_z80Mem.subCpu().halfSecondTick();
+        }
+    }
 }
 
 void PC1600Machine::advanceSharedClocks(int tstates) {

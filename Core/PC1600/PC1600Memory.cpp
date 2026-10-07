@@ -354,7 +354,11 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
             // if the ROM releases by flipping to input without the courtesy
             // high write, colliding with MODE (also KS6/KIN1).
             bool pb6Strobing = (m_ddb & 0x40) != 0 && (m_opb & 0x40) == 0;
-            return m_keyboard.scan(m_opa, pb6Strobing);
+            // The PA strobes likewise: a line is driven low only while it
+            // is an output (DDA = 1) with OPA = 0; an input floats high.
+            // Both ROMs strobe one column through DDA with OPA = 0 (Z-80:
+            // P1-B3 47D8H; LH5803: ISKEY E41AH, the PC-1500 way).
+            return m_keyboard.scan(static_cast<uint8_t>(m_opa | ~m_dda), pb6Strobing);
         }
         // TC8576F UART register file (20H-27H, A1:A0 = port & 3): 20H RxD,
         // 21H PIN, 22H SSR, 23H PSR. The sub-CPU answer at 33H is a

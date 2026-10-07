@@ -431,11 +431,10 @@ private:
 
     // Keyboard/display I/O. LH5810-style port block:
     // DDA(1CH)/DDB(1DH) direction registers (bit i: 1 = output, 0 = input).
-    // The KS0-7 strobes on OPA are treated as simply "active when OPA bit
-    // reads 0" -- DDA not consulted, the same simplification PC1500Memory's
-    // own comment flags (PC-1500 KEYSCAN_NOWAIT DDA nuance not mattering
-    // here). The PB6 strobe (CTRL/KBII/BS) *does* consult DDB.6: it is
-    // asserted only while PB6 is an output driven low -- see readIO(0x37).
+    // A KS0-7 strobe is active only while its PA bit is an output (DDA = 1)
+    // driven low (OPA = 0); the PB6 strobe (CTRL/KBII/BS) likewise with
+    // DDB.6 / OPB.6 -- see readIO(0x37). The LH5803 reaches the same block
+    // at ME1 F000H-F00FH (LH5803SharedMemory).
     uint8_t m_dda{0}, m_opa{0}, m_ddb{0}, m_opb{0};
     // OPC (18H), the PC-port output buffer. The BEEP loop (P1-B3 5EC5)
     // toggles bit 7 with `IN A,(18H)` / OR 80H or AND 7FH / `OUT (18H),A`,

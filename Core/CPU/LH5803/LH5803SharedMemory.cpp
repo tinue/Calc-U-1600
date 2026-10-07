@@ -42,6 +42,10 @@ void LH5803SharedMemory::mirrorPc1500Display(uint16_t addr) {
         display.mirrorPc1500Column(pc1500ram::columnOf(pair, block), pc1500ram::columnDots(first, second, block));
 }
 
+uint8_t LH5803SharedMemory::readInputPort() {
+    return m_shared.readIO(0x37);
+}
+
 bool LH5803SharedMemory::isUartShadow(uint16_t addr, uint8_t* reg, bool* isSubCpuAnswer) {
     const uint16_t off = addr & 0x00FF; // 0xA0xx shadow and the bare form share the low byte
     if ((addr & 0xFF00) != 0x0000 && (addr & 0xFF00) != 0xA000) return false;
@@ -69,7 +73,8 @@ uint8_t LH5803SharedMemory::debugPeek(uint16_t addr, bool me1, bool* readable) c
             *readable = false;
             return 0xFF;
         }
-        if ((addr & 0xFFF0) == 0xF000) return m_ioRegs[addr & 0x0F];
+        // Ports 10H-1FH have no read side effects.
+        if ((addr & 0xFFF0) == 0xF000) return m_shared.readIO(uint8_t(0x10 | (addr & 0x0F)));
         if (addr >= 0x8000) {
             // Same order as readME1(): a card gets the rest of the ME1
             // upper half; one whose register a read would disturb stays
@@ -100,19 +105,13 @@ uint8_t LH5803SharedMemory::readME1(uint16_t addr) {
     }
     // SC7852 control-port block 30H-3FH at ME1 A030-A03F, e.g. the bank
     // register save `LDA #(P_BANK)` at rom1500 DC85/DC9A, and the LCD ports
-    // at A040-A05F (LCD1500_ALL's busy poll). See writeME1().
+    // at A040-A05F / 8040-805F (the ROM's LCD busy polls). See writeME1().
     if (isControlPort(addr) || isLcdPort(addr)) return m_shared.readIO(static_cast<uint8_t>(addr));
-    // LH5803 on-chip LH5811-compat PIO, ME1 0xF000-0xF00F. Unconditional
-    // (CPU-internal, present with or without a CE-150). Without this, an
-    // ME1 read here falls through to readME0() and 0xF00B >= kRomBase
-    // returns a PC1600-LH5803-C000-FFFF-new.bin byte (0x27) -- bit 1 set -- so the CE-150 plot
-    // loop's `BII #(0xF00B),0x02` pacing poll takes the wrong arm and
-    // LPRINT/TEST draw one glyph then unwind. IF (0xB) is software-only: no
-    // clear-on-read (firmware clears bit 1 with `ani #(0xF00B),0xFD`), and
-    // no PC-1600 TP/RTC edge feeds it yet. Cf. PC1500Memory's `case 0xB`.
-    if ((addr & 0xFFF0) == 0xF000) {
-        return m_ioRegs[addr & 0x0F];
-    }
+    // ME1 0xF000-0xF00F: the SC7852's LH5810-compatible block, Z-80 ports
+    // 10H-1FH (see the class comment). Before the card decode: falling
+    // through to readME0() would serve LH5803 ROM bytes, and the CE-150
+    // plot loop's `BII #(0xF00B),0x02` pacing poll would take the wrong arm.
+    if ((addr & 0xFFF0) == 0xF000) return m_shared.readIO(uint8_t(0x10 | (addr & 0x0F)));
     // 8000-FFFF: offered to the cards as ME1, terminal when one claims it
     // (the CE-150's LH5810 at B008-B00F, the CE-158's register blocks at
     // D000-D3FF / DE00-DFFF). A claimed read in C000-FFFF must not fall
@@ -140,7 +139,7 @@ void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
         return;
     }
     // SC7852 control-port block 30H-3FH at ME1 A030-A03F (A038 is the
-    // handoff, above), and the LCD ports at A040-A05F. rom1500 writes P_MOD/P_BANK/P_LHMSK2/P_CL1 here; the
+    // handoff, above), and the LCD ports at A040-A05F / 8040-805F. rom1500 writes P_MOD/P_BANK/P_LHMSK2/P_CL1 here; the
     // one that matters today is P_MAPPRG's `STA #(P_BANK)` (E652 -> DC94),
     // which maps the BASIC program bank into page C for MODE 1 PEEK/XPEEK.
     // Dropping it left page C on whatever the Z-80 had set (bank 0).
@@ -148,10 +147,9 @@ void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
         m_shared.writeIO(static_cast<uint8_t>(addr), value);
         return;
     }
-    // Internal LH5811-compat PIO, ME1 0xF000-0xF00F -- straight-through
-    // latch (IF at 0xB included). See readME1() for the rationale.
+    // ME1 0xF000-0xF00F: Z-80 ports 10H-1FH, see readME1().
     if ((addr & 0xFFF0) == 0xF000) {
-        m_ioRegs[addr & 0x0F] = value;
+        m_shared.writeIO(uint8_t(0x10 | (addr & 0x0F)), value);
         return;
     }
     // 8000-FFFF: an ME1 I/O cycle for the cards, see readME1(). Unclaimed
