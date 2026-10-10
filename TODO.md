@@ -244,9 +244,6 @@ CE-1600P (docs/background/plans/Cassette-Tape-Plan.md, dev/tape-matrix/).
   `BMODE`, `BINTREQ`/`F1CF`–`F1D4`, TRON state, `OPNDV`, the logical banks
   F1C1–F1CE, PRGADR FE3C–FE41. Also check every existing label and note for
   accuracy (address space, byte order, meaning).
-- Allow saving a diskette or memory module into a preset after it has been
-  set up (e.g. formatted / populated in a session), so the preset carries
-  that media state.
 - Allow viewing a memory module's or diskette's binary file contents in the
   debug area, without having to save them out first. For memory modules
   this means the disk part (the RAM-disk filesystem), not the RAM-extension
@@ -334,9 +331,9 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
     leaving the managers only Qt glue;
   - one directory scan per refresh.
 
-  **Do this before** the feature ideas that build on this layer: saving a
-  diskette/module into a preset, viewing their contents, and watching
-  `.floppy.yaml` for outside changes.
+  **Do this before** the feature ideas that build on this layer: viewing
+  a module's or diskette's contents, and watching `.floppy.yaml` for
+  outside changes.
 - **PC-1600 live typing rides on the paste feeder.** `MachineController`
   runs PC-1600 live keys through the paste `KeyPasteFeeder` with a
   `m_liveTyping` flag that changes what `pasteActive()` means; every paste
