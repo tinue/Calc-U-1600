@@ -123,6 +123,10 @@ set(PC1500_CLI_SOURCES
   ${CORE_ROOT}/Audio/PiezoSampler.cpp
   ${CORE_ROOT}/PC1500/PC1500Memory.cpp
   ${CORE_ROOT}/PC1500/PC1500Machine.cpp
+  ${CORE_ROOT}/Debug/Inspect/Inspector.cpp
+  ${CORE_ROOT}/Debug/Inspect/TextTable.cpp
+  ${CORE_ROOT}/Debug/Inspect/HexDump.cpp
+  ${CORE_ROOT}/Debug/Inspect/PC1500Inspector.cpp
   ${CORE_ROOT}/PC1500/PC1500Keyboard.cpp
   ${CORE_ROOT}/PC1500/PC1500Display.cpp
   ${CORE_ROOT}/PC1500/Upd1990ac.cpp
@@ -165,6 +169,11 @@ set(PC1600_CLI_SOURCES
   ${CORE_ROOT}/PC1600/PC1600Display.cpp
   ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
   ${CORE_ROOT}/PC1600/PC1600Machine.cpp
+  ${CORE_ROOT}/Debug/BasicPointerTable.cpp
+  ${CORE_ROOT}/Debug/Inspect/Inspector.cpp
+  ${CORE_ROOT}/Debug/Inspect/TextTable.cpp
+  ${CORE_ROOT}/Debug/Inspect/HexDump.cpp
+  ${CORE_ROOT}/Debug/Inspect/PC1600Inspector.cpp
   ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
   ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
   ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
