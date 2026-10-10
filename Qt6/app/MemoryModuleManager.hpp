@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "MachineController.hpp"
+#include "Connector/ExpansionCard.hpp"
 #include "Connector/MemoryCardDefinition.hpp"  // CardHost
 
 // Owns all memory-module selection/attach/battery-save state for the
@@ -125,10 +126,6 @@ private:
     // the already-saved and name-collision checks.
     bool saveSlotAs(int slot, const QString& instanceName, bool fromPreset, QString* error,
                     const QString& filePath = QString(), bool asTemplate = false);
-    // Every template's module-name in the storage folder (all hosts), and
-    // every bundled card's module-name.
-    QSet<QString> userTemplateNames() const;
-    QSet<QString> bundledNames() const;
     bool nameCollides(const QString& instanceName) const;
 
     MachineController* m_controller;  // not owned
@@ -154,18 +151,9 @@ private:
     QTimer* m_debounceTimer = nullptr;  // single-shot, 500ms, restarted while dirty
 
     CardHost hostFor(int slot) const;
-    bool currentSlotImage(int slot, int* bankCount, std::vector<uint8_t>* image) const;
+    const ExpansionCard* slotCard(int slot) const;  // the live machine's card in `slot`, null if none
     uint64_t currentSlotRevision(int slot) const;  // the attached card's contentRevision()
     void writeInstance(int slot);  // re-splice + rewrite slot's instance file, if the card changed
-
-    // Reads `sourcePath`, splices the card `image` (`bankCount` banks) into it as
-    // `targetName` (attributed to `sourceModuleName` for the template
-    // lookup), and returns the spliced text via `*spliced`. Shared by
-    // nameAndSave() (surfaces failures via `error`) and writeInstance()
-    // (best-effort re-splice; pass `error` as nullptr to fail silently).
-    bool spliceCardImageInto(int bankCount, const std::vector<uint8_t>& image, const QString& sourcePath,
-                             const QString& sourceModuleName, const QString& targetName, std::string* spliced,
-                             QString* error, bool asTemplate = false);
 
     // The name of the module in `slot` of the live machine, "" when empty.
 

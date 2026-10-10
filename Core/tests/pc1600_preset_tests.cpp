@@ -867,7 +867,7 @@ void test_parser_floppy_file_and_host_drive() {
 
 // End to end with the ROMs: `floppy-file:` loads the disk, `host-drive:`
 // mounts S3: before the boot, and `saveas: template ... file:` writes
-// template files through PC1600PresetMedia.hpp.
+// template files through savePresetMedia() (Core/Preset/PresetMedia.hpp).
 void test_loader_host_drive_floppy_file_and_template_saves() {
     char tmpl[] = "/tmp/pc1600_preset_media_XXXXXX";
     const char* dir = mkdtemp(tmpl);
@@ -903,7 +903,7 @@ void test_loader_host_drive_floppy_file_and_template_saves() {
     PresetLoadResult armedResult;
     const PresetArmedFn onArmed = [&](const PresetLoadResult& r) { armedResult = r; };
     const PresetSaveAsFn onSaveAs = [&](const PresetSaveAsRequest& request, std::string* e) {
-        return savePC1600PresetMedia(m, request, "", armedResult.slot1ResolvedPath, armedResult.slot2ResolvedPath, e);
+        return savePresetMedia(request, {"Qt6/resources/cards", ""}, pc1600PresetMedia(m, armedResult), e);
     };
     PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "Qt6/resources/cards", {},
                                            {"roms", "firmware/pc1600-hostdrive"}, {}, onArmed, onSaveAs);

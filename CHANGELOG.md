@@ -39,6 +39,11 @@
   replaces the bytes of the module's ROM, read again at every clean start.
   Card files no longer take `encoding: file`; the card keeps a placeholder
   ROM (`$0000: FF...`). docs/Debugger.md has the example.
+- **`saveas:` follows the same rules everywhere.** The app and the
+  headless tools save cards and floppies through one set of rules:
+  `pc1500_cli` now runs `saveas:` too (`--save-dir` for a by-name save),
+  and the CLIs refuse a bundled or template name and never overwrite a
+  template file, as the app always did.
 
 ### Fixed
 

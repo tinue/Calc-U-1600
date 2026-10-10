@@ -304,32 +304,21 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
   CE-1600P exclusion stays until the IO7N question ("Expansion
   connectors") is answered, so keep it as data the shared path reads, not
   as another pairwise rule.
-- **Card/floppy template-vs-instance rules are written twice and re-parse
-  files.** `MemoryModuleManager` (`moduleLists`, `classifySlot`,
-  `userTemplateNames`, `saveSlotAs`) and `FloppyDiskManager` (`diskLists`,
-  `classifySource`, `saveDiskAs`) each hold bundled-first shadowing, the
-  template/instance split, the Name & Save checks and the "never
+- **Card/floppy lists and classification are written twice and re-parse
+  files.** The save rules are shared since the format freeze
+  (`Core/Connector/MediaSave.hpp`: names, template refusals, the target
+  path). Still twice: `MemoryModuleManager` (`moduleLists`, `classifySlot`)
+  and `FloppyDiskManager` (`diskLists`, `classifySource`) each hold
+  bundled-first shadowing, the template/instance split and the "never
   autosave under the bundle" rule. They also re-read files Core just
   parsed: `classifySlot` fully parses the `.card.yaml` again (MB of
   `initial-content` hex for superRAM 512K) on every rebuild and twice per
-  preset load; `saveSlotAs` parses the instance dir 3x; and
-  `refreshModuleCombos` scans + parses both dirs once per slot. The name
-  lookup itself is the biggest cost: `resolveModuleSpecByName` scans and
-  *fully* parses every `.card.yaml` in both dirs to find one name. So
-  attaching one module parses every card file, then the chosen one twice
-  more (`makeSoftwareDefinedCard`, `classifySlot` via
-  `readMemoryCardCatalogEntry`, which is a full parse too).
+  preset load, `refreshModuleCombos` scans + parses both dirs once per
+  slot, and a save's name checks (`planMediaSave`) scan both dirs. The
+  name lookup itself is the biggest cost: `resolveModuleSpecByName` scans
+  and *fully* parses every `.card.yaml` in both dirs to find one name.
 
-  **Dependencies (checked 2026-09-26):** none on the expansion-connector
-  chapter. This is file-catalogue logic, `.card.yaml` keeps 40-pin contact
-  numbers, and `compatible-hosts` is only a load-time gate (the built card
-  keeps no host). The planned `{path, isTemplate, battery}` result matches
-  the reserved `batteryBacked` flag (docs/background/Decisions.md). **Do this before**
-  the feature ideas that build on this layer: saving a diskette/module
-  into a preset, viewing their contents, and watching `.floppy.yaml` for
-  outside changes.
-
-  **Parser analysis (done 2026-09-26).** `isRom()` needs only each
+  **Parser analysis (done 2026-09-26).** A catalogue entry needs only each
   region's content kind, `by-bank` ranges and bank count, which
   `parseRegion()` has before it reaches `initial-content`. Measured on a
   synthetic superRAM 512K instance (`headless/cardparse/`): 2.2 MB of
@@ -344,20 +333,13 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
   it:
   - `PresetLoadResult` / the attach path return `{path, isTemplate,
     battery}`, not a bare path;
-  - a shared `NamedFileCatalog`-level helper for lists / classify /
-    save-name validation, leaving the managers only Qt glue;
+  - a shared `NamedFileCatalog`-level helper for lists and classify,
+    leaving the managers only Qt glue;
   - one directory scan per refresh.
-- **`saveas:` media is written by two pipelines.** The GUI managers
-  (`MemoryModuleManager::saveSlotAs`, `FloppyDiskManager::saveDiskAs`)
-  and `Core/PC1600/PC1600PresetMedia.hpp` for the CLIs each splice the card
-  / format the floppy and write it. They share `namedFileName()` since
-  04d83d3, nothing else. The Core copy is PC-1600 only, although
-  `saveas: s1:` is valid on the PC-1500, and `pc1500_cli` has no saveas.
-  Fix: one model-neutral Core function (card image + source text, or disk
-  image, plus the request → text and path); the managers keep only the
-  name/template policy and retargeting the autosave. Goes with the
-  template-vs-instance entry above. The two managers' identical
-  explicit-file / template refusal checks fold into it too.
+
+  **Do this before** the feature ideas that build on this layer: saving a
+  diskette/module into a preset, viewing their contents, and watching
+  `.floppy.yaml` for outside changes.
 - **PC-1600 live typing rides on the paste feeder.** `MachineController`
   runs PC-1600 live keys through the paste `KeyPasteFeeder` with a
   `m_liveTyping` flag that changes what `pasteActive()` means; every paste

@@ -9,7 +9,7 @@
 //   - a demonstration of the trace ring buffer.
 //
 // Usage: pc1500_cli <rom-file> [maxCycles]
-//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--wav <out.wav>] [--tape-in <in.wav>] [--tape-out <out.wav>] [--dump-mem <addr>,<len>] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
+//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--save-dir <dir>] [--wav <out.wav>] [--tape-in <in.wav>] [--tape-out <out.wav>] [--dump-mem <addr>,<len>] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
 //
 // The --preset form parses and applies a `.pc1500` scenario file
 // (PresetFile.hpp/PC1500PresetLoader.hpp) instead of a bare ROM --
@@ -22,6 +22,10 @@
 // cwd-relative convention as `roms/`). Repeat it to add fallback
 // directories, searched in the order given after the first. A
 // `slot-1-file: <path>` reference ignores it.
+//
+// `- saveas:` steps write the card like the GUI (Core/Preset/
+// PresetMedia.hpp): the `file:<path>` form writes that file; a by-name save
+// goes to --save-dir <dir> (<dir>/<name>.card.yaml) and fails without it.
 //
 // --lcd-png <out.png> writes the LCD, as Copy Screen does, at the end of
 // the run. --lcd-text <out.txt> (or - for stdout) writes it as text at the
@@ -62,6 +66,7 @@
 #include "../Core/Audio/WavFile.hpp"
 #include "../Core/PC1500/PC1500Machine.hpp"
 #include "../Core/Preset/PresetFile.hpp"
+#include "../Core/Preset/PresetMedia.hpp"
 #include "../Core/PC1500/PC1500PresetLoader.hpp"
 #include "../Core/PC1500/PC1500LcdText.hpp"
 #include "../Core/PC1500/PC1500Screenshot.hpp"
@@ -74,6 +79,7 @@ int main(int argc, char** argv) {
     std::string moduleDir = "Qt6/resources/cards";
     std::vector<std::string> extraModuleDirs;  // 2nd+ `--modules-dir`, searched after `moduleDir`
     bool moduleDirSet = false;
+    std::string saveDir;
     bool dumpBasic = false;
     std::string wavPath;
     std::string lcdPng;
@@ -106,6 +112,10 @@ int main(int argc, char** argv) {
                 else               { extraModuleDirs.push_back(argv[++i]); }
                 continue;
             }
+            if (std::strcmp(argv[i], "--save-dir") == 0 && i + 1 < argc) {
+                saveDir = argv[++i];
+                continue;
+            }
             if (ce158Peer.parseArg(argc, argv, i)) continue;
             if (std::strcmp(argv[i], "--dump-basic") == 0) {
                 dumpBasic = true; // read-only BASIC program-area / pointer dump
@@ -119,7 +129,7 @@ int main(int argc, char** argv) {
     if (argc < 2) {
         std::fprintf(stderr, "usage: %s <rom-file> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       %s --preset <preset-file.pc1500> [maxCycles]\n", argv[0]);
-        std::fprintf(stderr, "       options: --modules-dir <dir>  --dump-basic  --wav <out.wav>  --tape-in <in.wav>  --tape-out <out.wav>  --dump-mem <addr>,<len>  --lcd-png <out.png>  --lcd-text <out.txt|->\n");
+        std::fprintf(stderr, "       options: --modules-dir <dir>  --save-dir <dir>  --dump-basic  --wav <out.wav>  --tape-in <in.wav>  --tape-out <out.wav>  --dump-mem <addr>,<len>  --lcd-png <out.png>  --lcd-text <out.txt|->\n");
         std::fprintf(stderr, "                %s\n", Ce158CliPeer::kUsage);
         return 1;
     }
@@ -173,11 +183,20 @@ int main(int argc, char** argv) {
 
     if (usingPreset) {
         std::string presetPath = argv[2];
+        // `saveas:` -- the card the loader attached, spliced into its file.
+        PresetLoadResult armedResult;
+        const auto onArmed = [&armedResult](const PresetLoadResult& r) { armedResult = r; };
+        const PresetSaveAsFn onSaveAs = [&](const PresetSaveAsRequest& request, std::string* err) {
+            PresetMedia media;
+            media.slots[0] = {machine.expansionConnector().attachedCard(), armedResult.slot1ResolvedPath,
+                              armedResult.slot1RomFile};
+            return savePresetMedia(request, {moduleDir, saveDir}, media, err);
+        };
         PresetLoadResult loaded = applyPC1500Preset(
             machine, preset,
             [](const std::string& line) { std::fprintf(stderr, "[preset] %s\n", line.c_str()); },
             /*traceDir=*/".",  // a `- trace: name.bin` step writes ./name.bin (same cwd convention as roms/)
-            moduleDir, /*onBooted=*/{}, /*romDirs=*/{"roms"}, extraModuleDirs);
+            moduleDir, /*onBooted=*/{}, /*romDirs=*/{"roms"}, extraModuleDirs, onArmed, onSaveAs);
         for (const std::string& rejected : loaded.rejectedBasicLines) {
             std::fprintf(stderr, "preset: ROM rejected BASIC line: %s\n", rejected.c_str());
         }

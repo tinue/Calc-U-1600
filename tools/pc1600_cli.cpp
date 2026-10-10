@@ -23,10 +23,11 @@
 // --ce1600p-rom new|old (--preset only) overrides the preset's CE-1600P ROM
 // version (`plotter: CE-1600P:new|old`, default new); independent of --rom.
 //
-// `- saveas:` steps write cards and floppies like the GUI (Core/PC1600/
-// PC1600PresetMedia.hpp): the `file:<path>` form writes that file; a by-name
+// `- saveas:` steps write cards and floppies like the GUI (Core/Preset/
+// PresetMedia.hpp): the `file:<path>` form writes that file; a by-name
 // save goes to --save-dir <dir> (<dir>/<name>.card.yaml / .floppy.yaml) and
-// fails without it.
+// fails without it. A by-name save refuses a name of the first
+// --modules-dir (the bundled cards) and never overwrites a template.
 //
 // CE-158 (--preset only, a preset with `interface: CE-158`): --ce158-pty,
 // --ce158-rx <file>, --ce158-rx-hold <n>, --ce158-tx <file> -- same as
@@ -127,10 +128,9 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
     // (reported by onArmed, before any step runs).
     PresetLoadResult armedResult;
     const auto onArmed = [&armedResult](const PresetLoadResult& r) { armedResult = r; };
-    const PresetSaveAsFn onSaveAs = [&machine, &saveDir, &armedResult](const PresetSaveAsRequest& request,
+    const PresetSaveAsFn onSaveAs = [&machine, &moduleDir, &saveDir, &armedResult](const PresetSaveAsRequest& request,
                                                                        std::string* err) {
-        return savePC1600PresetMedia(machine, request, saveDir, armedResult.slot1ResolvedPath,
-                                     armedResult.slot2ResolvedPath, err);
+        return savePresetMedia(request, {moduleDir, saveDir}, pc1600PresetMedia(machine, armedResult), err);
     };
     PresetLoadResult loaded = applyPC1600Preset(
         machine, preset,

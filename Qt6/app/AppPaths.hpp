@@ -2,6 +2,8 @@
 #include <QString>
 #include <string>
 
+#include "Connector/MediaSave.hpp"
+
 // Path resolution for bundled resources and the memory-module feature --
 // the one place that knows where bundled resources (*.card.yaml templates
 // AND ROM images, side by side) and user-writable battery-card instances
@@ -61,6 +63,13 @@ QString floppyInstancePathFor(const QString& diskName);
 // named `tapeName` is "<tapeName>.wav" there (namedFileName()'s rules).
 QString tapeDir();
 QString tapePathFor(const QString& tapeName);
+
+// The saves of a card or a floppy under a name (Name & Save, a preset's
+// `saveas:`) by the shared rules (Connector/MediaSave.hpp), for the
+// managers: where the file goes, or -- false -- the refusal in the GUI's
+// words.
+bool planNamedSave(MediaKind kind, const QString& name, const QString& explicitPath, bool asTemplate,
+                   QString* path, QString* error);
 
 // True if `path` resolves to somewhere inside `dir` (both canonicalized;
 // false if either doesn't exist).

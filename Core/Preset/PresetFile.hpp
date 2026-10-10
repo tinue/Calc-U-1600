@@ -78,7 +78,7 @@ struct PresetSaveAsRequest {
 /// Fired for a `- saveas:` step (see the top-of-file doc comment) -- WHERE a
 /// by-name save goes, and how to splice/format it, are environment-specific
 /// (Qt6/app's AppPaths/MemoryModuleManager/FloppyDiskManager, or
-/// PC1600PresetMedia.hpp for the headless tools), so Core only calls out
+/// Core/Preset/PresetMedia.hpp for the headless tools), so Core only calls out
 /// here, mirroring onArmed/onBooted. `request.target` is always S1 on a
 /// PC-1500/1500A (the parser rejects the others). Returns true on success,
 /// or false with `*error` filled in -- a failure stops the preset exactly

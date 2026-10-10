@@ -111,4 +111,35 @@ bool atomicWriteFile(const QString& path, const std::string& text) {
     return f.commit();
 }
 
+bool planNamedSave(MediaKind kind, const QString& name, const QString& explicitPath, bool asTemplate,
+                   QString* path, QString* error) {
+    std::string planned;
+    const MediaSaveRefusal refusal =
+        planMediaSave(kind, name.toStdString(), explicitPath.toStdString(), asTemplate,
+                      {bundledResourcesDir().toStdString(), instanceDir().toStdString()}, &planned);
+    *path = QString::fromStdString(planned);
+    switch (refusal) {
+        case MediaSaveRefusal::None: return true;
+        case MediaSaveRefusal::EmptyName:
+            *error = QCoreApplication::translate("AppPaths", "Name cannot be empty.");
+            break;
+        case MediaSaveRefusal::QuoteInName:
+            *error = QCoreApplication::translate("AppPaths", "Name cannot contain '\"'.");
+            break;
+        case MediaSaveRefusal::NoSaveFolder:
+            *error = QCoreApplication::translate("AppPaths", "There is no save folder.");
+            break;
+        case MediaSaveRefusal::TemplateName:
+            *error = QCoreApplication::translate("AppPaths", "\"%1\" is a template's name. Choose a different name.")
+                         .arg(name);
+            break;
+        case MediaSaveRefusal::TemplateFile:
+            *error = QCoreApplication::translate(
+                         "AppPaths", "\"%1\" is a template file and is never overwritten. Choose a different name.")
+                         .arg(*path);
+            break;
+    }
+    return false;
+}
+
 }  // namespace AppPaths

@@ -14,6 +14,11 @@
 #include "../Connector/FloppyImageFile.hpp"
 #include "../Connector/MemoryCardCatalog.hpp"
 #include "../Connector/MemoryCardDefinition.hpp"
+#include "../Connector/SoftwareDefinedCard.hpp"
+#include "../Preset/PresetMedia.hpp"
+
+#include <filesystem>
+#include <unistd.h>  // mkdtemp
 
 namespace {
 
@@ -398,6 +403,115 @@ void test_splice_roundtrip_through_real_bundled_file_if_present() {
     CHECK(spliced.find("\nformat-version: 1\n") != std::string::npos);
 }
 
+// ── saving under a name (Core/Connector/MediaSave.hpp) ──
+
+std::string scratchDir() {
+    char tmpl[] = "/tmp/media_save_XXXXXX";
+    const char* dir = mkdtemp(tmpl);
+    return dir ? dir : "";
+}
+
+std::string cardText(const std::string& name, bool isTemplate) {
+    return "format-version: 1\nmodule-name: \"" + name + "\"\n" + (isTemplate ? "template: true\n" : "") +
+           "compatible-hosts: [PC-1500]\ndefinition-terminology: PC-1500\nregions:\n"
+           "  - name: r\n    capacity: 0x10\n    banking: none\n    content: regular\n"
+           "    addressing: { chip-select: Y0, span: 0x10 }\n";
+}
+
+// Where a save goes, and every refusal -- the same for a card and a disk.
+void test_plan_media_save() {
+    const std::string d = scratchDir();
+    CHECK(!d.empty());
+    if (d.empty()) return;
+    const MediaSaveFolders folders{d + "/bundled", d + "/saves"};
+    std::filesystem::create_directories(folders.bundled);
+    std::filesystem::create_directories(folders.saves);
+    std::ofstream(folders.bundled + "/b.card.yaml") << cardText("Bundled", true);
+    std::ofstream(folders.saves + "/t.card.yaml") << cardText("Mine", true);
+    std::ofstream(folders.saves + "/Odd.card.yaml") << cardText("Other", true);  // file name != module-name
+    std::ofstream(folders.bundled + "/f.floppy.yaml") << formatFloppyFile("Disk", std::vector<uint8_t>(0x20000, 0), true);
+
+    std::string path;
+    const auto plan = [&](MediaKind kind, const std::string& name, bool asTemplate, const std::string& file = {}) {
+        path.clear();
+        return planMediaSave(kind, name, file, asTemplate, folders, &path);
+    };
+    CHECK(plan(MediaKind::Card, "", false) == MediaSaveRefusal::EmptyName);
+    CHECK(plan(MediaKind::Card, "a\"b", false) == MediaSaveRefusal::QuoteInName);
+    CHECK(planMediaSave(MediaKind::Card, "X", "", false, {folders.bundled, ""}, &path) ==
+          MediaSaveRefusal::NoSaveFolder);
+    CHECK(plan(MediaKind::Card, "Bundled", false) == MediaSaveRefusal::TemplateName);
+    CHECK(plan(MediaKind::Card, "Bundled", true) == MediaSaveRefusal::TemplateName);
+    CHECK(plan(MediaKind::Card, "Mine", false) == MediaSaveRefusal::TemplateName);
+    CHECK(plan(MediaKind::Card, "Mine", true) == MediaSaveRefusal::None);  // a preset re-making its template
+    CHECK(plan(MediaKind::Card, "Odd", false) == MediaSaveRefusal::TemplateFile);
+    CHECK(plan(MediaKind::Card, "My/card", false) == MediaSaveRefusal::None);
+    CHECK(path == folders.saves + "/My-card.card.yaml");
+    CHECK(plan(MediaKind::Card, "Bundled", false, "/x/y.card.yaml") == MediaSaveRefusal::None);  // file: form
+    CHECK(path == "/x/y.card.yaml");
+    CHECK(plan(MediaKind::Floppy, "Disk", false) == MediaSaveRefusal::TemplateName);
+    CHECK(plan(MediaKind::Floppy, "Bundled", false) == MediaSaveRefusal::None);  // a card's name, not a disk's
+    CHECK(path == folders.saves + "/Bundled.floppy.yaml");
+    std::filesystem::remove_all(d);
+}
+
+// A preset `saveas:` without the GUI, for any model: the card is spliced
+// into the file it came from (keeping `format-version`), a slot whose ROM
+// came from `slot-N-rom:` is refused.
+void test_save_preset_media() {
+    const std::string d = scratchDir();
+    CHECK(!d.empty());
+    if (d.empty()) return;
+    const MediaSaveFolders folders{d + "/bundled", d + "/saves"};
+    std::filesystem::create_directories(folders.bundled);
+    std::filesystem::create_directories(folders.saves);
+    const std::string source = folders.bundled + "/ram.card.yaml";
+    std::ofstream(source) << cardText("RAM", true);
+    std::string err;
+    auto card = makeSoftwareDefinedCard(source, CardHost::PC1500, &err);
+    CHECK(card != nullptr);
+    if (!card) return;
+    PinState p;
+    p.pin[4] = true;
+    card->respondsToWrite(p, 0x5A);
+
+    PresetMedia media;
+    media.slots[0] = {card.get(), source, ""};
+    PresetSaveAsRequest request;
+    request.name = "My RAM";
+    CHECK(savePresetMedia(request, folders, media, &err));
+    MemoryCardDefinition saved;
+    std::string text;
+    CHECK(named_file_detail::readTextFile(folders.saves + "/My RAM.card.yaml", &text));
+    CHECK(text.find("\nformat-version: 1\n") != std::string::npos);
+    CHECK(parseMemoryCardDefinition(text, &saved, &err));
+    CHECK(saved.moduleName == "My RAM" && !saved.isTemplate);
+    CHECK(saved.regions[0].initialContentByBank[0][0] == 0x5A);
+
+    request.name = "RAM";  // the bundled name
+    CHECK(!savePresetMedia(request, folders, media, &err));
+    CHECK(err == "'RAM' is a template's name");
+
+    media.slots[0].romFile = "build/rom.bin";
+    request.name = "Other";
+    CHECK(!savePresetMedia(request, folders, media, &err));
+    CHECK(err == "slot 1: the ROM comes from build/rom.bin, not from the module file, so it can't be saved");
+
+    request.target = PresetStep::SaveAsTarget::Slot2;
+    CHECK(!savePresetMedia(request, folders, media, &err));
+    CHECK(err == "slot 2 has no card file to save from");
+
+    request.target = PresetStep::SaveAsTarget::Floppy;
+    CHECK(!savePresetMedia(request, folders, media, &err));
+    CHECK(err == "there's no disk in the drive");
+    media.floppyImage = std::vector<uint8_t>(0x20000, 0xE5);
+    request.name = "Data";
+    CHECK(savePresetMedia(request, folders, media, &err));
+    FloppyCatalogEntry disk;
+    CHECK(readFloppyCatalogEntry(folders.saves + "/Data.floppy.yaml", &disk, &err) && disk.diskName == "Data");
+    std::filesystem::remove_all(d);
+}
+
 }  // namespace
 
 int run_battery_card_instance_tests() {
@@ -418,6 +532,8 @@ int run_battery_card_instance_tests() {
     test_splice_fails_without_module_name();
     test_splice_fails_without_regions();
     test_splice_roundtrip_through_real_bundled_file_if_present();
+    test_plan_media_save();
+    test_save_preset_media();
 
     std::printf("battery_card_instance_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

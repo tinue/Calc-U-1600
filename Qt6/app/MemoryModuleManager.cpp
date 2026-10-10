@@ -8,7 +8,7 @@
 
 #include <algorithm>
 
-#include "Connector/BatteryCardInstance.hpp"
+#include "Connector/MediaSave.hpp"
 #include "Connector/MemoryCardCatalog.hpp"
 #include "Connector/SoftwareDefinedCard.hpp"
 #include "FileIO.hpp"
@@ -165,44 +165,10 @@ void MemoryModuleManager::syncFromPresetLoad(int slot, const QString& resolvedPa
     emit moduleChanged(slot);
 }
 
-bool MemoryModuleManager::currentSlotImage(int slot, int* bankCount, std::vector<uint8_t>* image) const {
-    if (auto* m1500 = m_controller->pc1500()) {
-        auto* card = m1500->expansionConnector().attachedCard();
-        if (!card) return false;
-        *image = card->debugImage();
-        // Passed through unchanged (not collapsed to 1) --
-        // formatBatteryCardInitialContentBlock() itself distinguishes a
-        // genuinely banked region from an unbanked one by this sign, per
-        // ExpansionCard::debugBankCount()'s own -1-means-no-bank-concept
-        // convention.
-        *bankCount = card->debugBankCount();
-        return !image->empty();
-    }
-    if (auto* m1600 = m_controller->pc1600()) {
-        if (slot == 1) {
-            *image = m1600->memory().slot1CardImage();
-            *bankCount = m1600->memory().slot1CardBankCount();
-        } else {
-            *image = m1600->memory().slot2CardImage();
-            *bankCount = m1600->memory().slot2CardBankCount();
-        }
-        return !image->empty();
-    }
-    return false;
-}
-
-QSet<QString> MemoryModuleManager::userTemplateNames() const {
-    QSet<QString> names;
-    for (const auto& e : scanMemoryCardDirectory(AppPaths::instanceDir().toStdString(), nullptr))
-        if (e.isTemplate) names.insert(QString::fromStdString(e.moduleName));
-    return names;
-}
-
-QSet<QString> MemoryModuleManager::bundledNames() const {
-    QSet<QString> names;
-    for (const auto& e : scanMemoryCardDirectory(AppPaths::bundledResourcesDir().toStdString(), nullptr))
-        names.insert(QString::fromStdString(e.moduleName));
-    return names;
+const ExpansionCard* MemoryModuleManager::slotCard(int slot) const {
+    if (auto* m1500 = m_controller->pc1500()) return slot == 1 ? m1500->expansionConnector().attachedCard() : nullptr;
+    if (auto* m1600 = m_controller->pc1600()) return m1600->memory().slotCard(slot);
+    return nullptr;
 }
 
 bool MemoryModuleManager::nameCollides(const QString& instanceName) const {
@@ -213,28 +179,6 @@ bool MemoryModuleManager::nameCollides(const QString& instanceName) const {
     for (const auto& e : entries)
         if (QString::fromStdString(e.moduleName) == instanceName) return true;
     return false;
-}
-
-bool MemoryModuleManager::spliceCardImageInto(int bankCount, const std::vector<uint8_t>& image,
-                                               const QString& sourcePath, const QString& sourceModuleName,
-                                               const QString& targetName, std::string* spliced, QString* error,
-                                               bool asTemplate) {
-    QFile srcFile(sourcePath);
-    if (!srcFile.open(QIODevice::ReadOnly)) {
-        if (error) *error = tr("Couldn't read \"%1\".").arg(sourcePath);
-        return false;
-    }
-    const std::string sourceText = srcFile.readAll().toStdString();
-
-    const auto contentLines = formatBatteryCardInitialContentBlock(bankCount, image);
-
-    std::string splErr;
-    if (!spliceBatteryCardInstance(sourceText, targetName.toStdString(), sourceModuleName.toStdString(),
-                                   contentLines, spliced, &splErr, currentIso8601Timestamp(), asTemplate)) {
-        if (error) *error = tr("Couldn't generate the instance file: %1").arg(QString::fromStdString(splErr));
-        return false;
-    }
-    return true;
 }
 
 bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QString* error) {
@@ -271,46 +215,26 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
         *error = tr("\"%1\" has no source file to save from.").arg(st.moduleName);
         return false;
     }
-    if (name.contains(QLatin1Char('"'))) {
-        *error = tr("Name cannot contain '\"'.");
-        return false;
-    }
-    // An explicit file (a preset's `saveas: ... file:`) is exactly what the
-    // preset asked for: no catalog-name or template-file checks.
-    const bool explicitFile = !filePath.isEmpty();
-    // A bundled name is always refused (the bundled card would shadow the
-    // saved one). One of the user's own templates may only be replaced by
-    // another template save -- a preset re-making its template.
-    if (!explicitFile &&
-        (bundledNames().contains(name) || (!asTemplate && userTemplateNames().contains(name)))) {
-        *error = tr("\"%1\" is a template's name. Choose a different name.").arg(name);
-        return false;
-    }
+    QString newPath;
+    if (!AppPaths::planNamedSave(MediaKind::Card, name, filePath, asTemplate, &newPath, error)) return false;
     if (!fromPreset && nameCollides(name)) {
         *error = tr("A card named \"%1\" already exists. Choose a different name.").arg(name);
-        return false;
-    }
-    const QString newPath = explicitFile ? filePath : AppPaths::instancePathFor(name);
-    MemoryCardCatalogEntry existing;
-    if (!explicitFile && !asTemplate && readMemoryCardCatalogEntry(newPath.toStdString(), &existing, nullptr) &&
-        existing.isTemplate) {
-        *error = tr("\"%1\" is a template file and is never overwritten. Choose a different name.").arg(newPath);
         return false;
     }
 
     // Splice from the file the card was loaded from -- a template, or (a
     // preset save-as) an instance; either way its layout is the card's.
-    int bankCount = 0;
-    std::vector<uint8_t> image;
-    const uint64_t revision = currentSlotRevision(slot);
-    if (!currentSlotImage(slot, &bankCount, &image)) {
+    const ExpansionCard* card = slotCard(slot);
+    if (!card) {
         *error = tr("Couldn't read the live card contents.");
         return false;
     }
-    std::string spliced;
-    if (!spliceCardImageInto(bankCount, image, st.sourcePath, st.moduleName, name, &spliced, error, asTemplate))
+    const uint64_t revision = card->contentRevision();
+    std::string spliced, splErr;
+    if (!formatCardSave(*card, st.sourcePath.toStdString(), name.toStdString(), asTemplate, &spliced, &splErr)) {
+        *error = tr("Couldn't generate the instance file: %1").arg(QString::fromStdString(splErr));
         return false;
-
+    }
     if (!AppPaths::atomicWriteFile(newPath, spliced)) {
         *error = tr("Couldn't write \"%1\".").arg(newPath);
         return false;
@@ -335,27 +259,20 @@ void MemoryModuleManager::writeInstance(int slot) {
     // Runs on every debounce: skip the image copy, file read and rewrite
     // unless the card's content changed since it was last attached from or
     // written to the file.
-    const uint64_t revision = currentSlotRevision(slot);
+    const ExpansionCard* card = slotCard(slot);
+    if (!card) return;
+    const uint64_t revision = card->contentRevision();
     if (st.persistedRevision == revision) return;
-    int bankCount = 0;
-    std::vector<uint8_t> image;
-    if (!currentSlotImage(slot, &bankCount, &image)) return;
 
-    std::string spliced;
-    if (!spliceCardImageInto(bankCount, image, st.instanceFilePath, st.moduleName, st.moduleName, &spliced,
-                             nullptr))
+    std::string spliced, err;
+    if (!formatCardSave(*card, st.instanceFilePath.toStdString(), st.moduleName.toStdString(), false, &spliced, &err))
         return;
     if (AppPaths::atomicWriteFile(st.instanceFilePath, spliced)) st.persistedRevision = revision;
 }
 
 uint64_t MemoryModuleManager::currentSlotRevision(int slot) const {
-    if (auto* m1500 = m_controller->pc1500()) {
-        auto* card = m1500->expansionConnector().attachedCard();
-        return card ? card->contentRevision() : 0;
-    }
-    if (auto* m1600 = m_controller->pc1600())
-        return slot == 1 ? m1600->memory().slot1CardRevision() : m1600->memory().slot2CardRevision();
-    return 0;
+    const ExpansionCard* card = slotCard(slot);
+    return card ? card->contentRevision() : 0;
 }
 
 void MemoryModuleManager::markDirtyAndSchedulePersist() {

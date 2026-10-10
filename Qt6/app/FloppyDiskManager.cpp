@@ -46,12 +46,6 @@ FloppyDiskManager::DiskLists FloppyDiskManager::diskLists() const {
     return lists;
 }
 
-bool FloppyDiskManager::isUserTemplateName(const QString& diskName) const {
-    for (const auto& e : scanFloppyDirectory(AppPaths::instanceDir().toStdString(), nullptr))
-        if (e.isTemplate && QString::fromStdString(e.diskName) == diskName) return true;
-    return false;
-}
-
 void FloppyDiskManager::classifySource(const QString& resolvedPathOrEmpty, bool isTemplate) {
     m_isTemplate = isTemplate;
     m_instanceFilePath.clear();
@@ -143,33 +137,13 @@ bool FloppyDiskManager::saveDiskAs(const QString& diskName, bool fromPreset, QSt
         *error = tr("\"%1\" is already saved; changes are saved automatically.").arg(m_diskName);
         return false;
     }
-    if (name.contains(QLatin1Char('"'))) {
-        *error = tr("Name cannot contain '\"'.");
-        return false;
-    }
-    // An explicit file (a preset's `saveas: ... file:`) is exactly what the
-    // preset asked for: no catalog-name or template-file checks.
-    const bool explicitFile = !filePath.isEmpty();
-    // A bundled name is always refused (the bundled disk would shadow the
-    // saved one). One of the user's own templates may only be replaced by
-    // another template save -- a preset re-making its template.
-    if (!explicitFile && (containsName(entriesFor(AppPaths::bundledResourcesDir()), name) ||
-                          (!asTemplate && isUserTemplateName(name)))) {
-        *error = tr("\"%1\" is a template's name. Choose a different name.").arg(name);
-        return false;
-    }
+    QString newPath;
+    if (!AppPaths::planNamedSave(MediaKind::Floppy, name, filePath, asTemplate, &newPath, error)) return false;
     if (!fromPreset && nameCollides(name)) {
         *error = tr("A disk named \"%1\" already exists. Choose a different name.").arg(name);
         return false;
     }
 
-    const QString newPath = explicitFile ? filePath : AppPaths::floppyInstancePathFor(name);
-    FloppyCatalogEntry existing;
-    if (!explicitFile && !asTemplate && readFloppyCatalogEntry(newPath.toStdString(), &existing, nullptr) &&
-        existing.isTemplate) {
-        *error = tr("\"%1\" is a template file and is never overwritten. Choose a different name.").arg(newPath);
-        return false;
-    }
     if (!AppPaths::atomicWriteFile(newPath,
                                    formatFloppyFile(name.toStdString(), m1600->ce1600fDiskImage(), asTemplate))) {
         *error = tr("Couldn't write \"%1\".").arg(newPath);
