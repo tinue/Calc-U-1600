@@ -582,6 +582,15 @@ authentic speed for the span that matters.
   it fails like any other unreadable file: a saved card without the line
   drops out of the module picker without a message, on purpose (no
   migration before 1.0).
+- **From 1.0 on, the previous format version keeps working** (at least
+  one version back). A file the app writes itself (a named card instance,
+  a floppy) is read transparently and upgraded in place at its next save.
+  A file the app doesn't usually write (a preset) still loads, with an
+  information pop-up that it uses an older format. The files that ship
+  with the app (bundled cards and disks, `examples/`, the VS Code
+  templates) are updated in the repository with every format change, so
+  the release package always carries the current version. Until 1.0, old
+  forms just fail (see "Preset format").
 - **Floppies are `.floppy.yaml` only.** `.floppy.img` isn't read, and no
   backward compatibility is wanted. Any format change bumps `format-version`.
 - **Cards and floppies resolve bundled-first**, then the configured save
