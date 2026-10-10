@@ -885,7 +885,11 @@ debugger ([Debugger.md](Debugger.md)).
     with the bank registers and SLOTMAP.
   - **LH5803 View** / **LH5801 View:** the LH5803's (PC-1600) or LH5801's
     (PC-1500) address space at the moment: RAM, display RAM, the peripheral
-    ROM window at the current PU/PV, and the I/O in ME1.
+    ROM window at the current PU/PV, and the I/O in ME1. On the PC-1600 it
+    also shows what the LH5803 sees at 0000–3FFF while it runs a PC-1500
+    statement: in MODE 1 the program's bank, in MODE 0 whatever the Z-80
+    left mapped. Under the table it says whether `MODE 1` would be accepted
+    right now, or why it would get ERROR 110.
   - **BASIC Area:** the BASIC area from bottom to top: on the PC-1600 the
     banks it is made of, in `ADTBL` order, with the header, machine-language
     reserve, program, free space and variables in each bank.

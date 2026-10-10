@@ -253,6 +253,35 @@ void test_pc1600_z80_and_lh_views_on_a_booted_machine() {
     CHECK(view1600(m, inspect::View::DumpMlArea).size() == 1);  // a PC-1500 view: one line saying so
 }
 
+// The LH5803's 0000H-3FFFH during a PC-1500 statement, and whether MODE 1
+// is possible: P_MAPPRG maps the program bank in MODE 1 only; PC15MAP
+// refuses MODE 1 when S0 spans more than one module bank.
+void test_pc1600_lh_view_mode1_rows() {
+    {
+        PC1600Machine m;
+        if (!preset1600(m, "format-version: 1\nmodel: PC-1600\nslot-1: CE-161\nkeys:\n  - type: MODE 1\n")) return;
+        const auto lh = view1600(m, inspect::View::LhView);
+        CHECK(row(lh, {"in a PC-1500 statement", "Slot 1 — CE-161, bank 0", "P_MAPPRG"}));
+        CHECK(has(lh, "MODE 1 is on."));
+    }
+    {
+        PC1600Machine m;
+        if (!preset1600(m, "format-version: 1\nmodel: PC-1600\nslot-1: CE-1600M\nslot-2: CE-1600M\n")) return;
+        const auto lh = view1600(m, inspect::View::LhView);
+        CHECK(row(lh, {"in a PC-1500 statement", "as now", "MODE 0"}));
+        CHECK(has(lh, "MODE 1 would be refused with ERROR 110"));
+    }
+    {
+        PC1600Machine m;
+        if (!preset1600(m, "format-version: 1\nmodel: PC-1600\nslot-1: CE-1600M\n"
+                           "keys:\n  - type: POKE &F1BC,PEEK(&F1BC) OR 64\n"))
+            return;
+        const auto lh = view1600(m, inspect::View::LhView);
+        CHECK(row(lh, {"in a PC-1500 statement", "CE-1600M, bank 0"}));
+        CHECK(has(lh, "MODE 1 is forced"));
+    }
+}
+
 void test_pc1500_views() {
     PC1500Machine m(PC1500Variant::PC1500A);
     PresetFile p;
@@ -298,6 +327,7 @@ int run_inspector_tests() {
     test_pc1600_views_split_ce1601m();
     test_pc1600_views_program_module();
     test_pc1600_z80_and_lh_views_on_a_booted_machine();
+    test_pc1600_lh_view_mode1_rows();
     test_pc1500_views();
 
     std::printf("inspector_tests: %d passed, %d failed\n", g_pass, g_fail);

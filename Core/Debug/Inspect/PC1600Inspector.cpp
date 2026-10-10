@@ -492,21 +492,64 @@ std::vector<Run> scanBus(const Ctx& c, uint32_t lo, uint32_t hi, bool me1, uint3
     return runs;
 }
 
-std::string pageCSource(const Ctx& c) {
-    const auto& bs = c.bs;
-    switch (bs.target[2]) {
-        case PT::Slot1: return c.slot[1].label(1) + fmt(", bank %u", bs.pageCBank);
-        case PT::Slot2: return c.slot[2].label(2) + fmt(", bank %u", bs.pageCBank);
-        case PT::Bank6Rom: return "ROM IV (bank 6)";
-        default: return fmt("open bus (page C bank %u)", bs.pageCBank);
-    }
+/// What Z-80 page C shows with `bank` selected (PC1600Memory::read()'s
+/// page-C branches, SLOTMAP mode 1 included): the LH5803's 0000H-3FFFH.
+std::string pageCSourceFor(const Ctx& c, unsigned bank) {
+    auto slot = [&](int s, bool high) {
+        const SlotInfo& i = c.slot[s];
+        std::string x = i.label(s) + fmt(", bank %u, %s 16K", bank, high ? "upper" : "lower");
+        if (s == 2 && i.portBanked()) x += fmt(", vertical bank %d", i.bank);
+        return x;
+    };
+    if (c.bs.slot2MapMode == 1 && bank == 1 && c.slot[2].card) return slot(2, false) + " (SLOT2MAP mode 1)";
+    if (bank <= 1 && c.slot[1].card) return slot(1, bank & 1);
+    if ((bank == 2 || bank == 3) && c.slot[2].card) return slot(2, bank & 1);
+    if (bank == 6) return "ROM IV (bank 6)";
+    return fmt("open bus (page C bank %u)", bank);
+}
+
+/// Page C's bank while the LH5803 runs a PC-1500 statement. In MODE 1,
+/// P_MAPPRG (LH5803 E63CH) sets port 31H to (the first non-zero ADTBL entry
+/// AND 70H) OR 06H for the statement and restores it afterwards; in MODE 0
+/// (or with no ADTBL entry) page C stays as the Z-80 left it. -1 = unchanged.
+int statementPageCBank(const Ctx& c) {
+    if (!(c.wa(0xF1BC) & 0x40)) return -1;
+    for (uint16_t a = 0xF1D6; a <= 0xF1DA; ++a)
+        if (const uint8_t e = c.wa(a)) return ((e & 0x70) | 0x06) >> 4 & 7;
+    return -1;
+}
+
+/// Whether `MODE 1` would be accepted now: PC15MAP (P0-B0 1676H) refuses
+/// (ERROR 110) unless S0MTB (F02AH) is 5, i.e. S0 spans at most one module
+/// bank. Bit 6 of BMODE set without that is the POKE-forced MODE 1
+/// (PC-1600-MODE0-MODE1.md §6).
+std::string mode1Line(const Ctx& c) {
+    const bool on = c.wa(0xF1BC) & 0x40;
+    const uint8_t mtb = c.wa(0xF02A);
+    if (on && mtb == 5) return "MODE 1 is on.";
+    if (on)
+        return fmt("MODE 1 is forced (BMODE b6 set, e.g. POKE &F1BC): S0MTB = %02XH, so the memory layout is "
+                   "MODE 0's and the LH5803 sees only the first program bank.", mtb);
+    if (mtb == 5) return "MODE 0. MODE 1 would be accepted (S0MTB = 05H: S0 spans at most one module bank).";
+    return fmt("MODE 0. MODE 1 would be refused with ERROR 110: S0 spans more than one module bank "
+               "(S0MTB = %02XH, not 05H; PC15MAP 1676H). The CE-150 / CE-158 still run here statement by "
+               "statement, except CSAVE, CLOAD, MERGE, CHAIN, LLIST, TERMINAL and DTE.", mtb);
 }
 
 std::vector<std::string> lhView(const Ctx& c) {
     const LH5803SharedMemory& lh = c.m.lh5803Memory();
     TextTable t({"Space", "LH5803", "Answers", "Note"});
     t.addSpan("ME0");
-    t.addRow({"ME0", "0000–3FFF", "Z80 8000–BFFF: " + pageCSource(c), "whatever page C maps now"});
+    t.addRow({"ME0", "0000–3FFF", "Z80 8000–BFFF: " + pageCSourceFor(c, c.bs.pageCBank), "now: page C as mapped"});
+    {
+        const int b = statementPageCBank(c);
+        const bool mode1 = c.wa(0xF1BC) & 0x40;
+        t.addRow({"", "  in a PC-1500 statement",
+                  b < 0 ? "as now" : "Z80 8000–BFFF: " + pageCSourceFor(c, unsigned(b)),
+                  b >= 0 ? "MODE 1: P_MAPPRG maps the program bank"
+                  : mode1 ? "MODE 1, no ADTBL entry: page C unchanged"
+                          : "MODE 0: page C stays as the Z-80 left it"});
+    }
     t.addRow({"ME0", "4000–7FFF", "Internal RAM (Z80 C000–FFFF)", ""});
     t.addRow({"", "  7400–744F", "→ 7600–764F", "LHA90 alias"});
     t.addRow({"", "  7500–754F", "→ 7700–774F", "LHA90 alias"});
@@ -527,6 +570,7 @@ std::vector<std::string> lhView(const Ctx& c) {
     std::vector<std::string> out = t.render();
     out.push_back(fmt("PU = %d, PV = %d (the LH5803's flip-flops; the ROM sets PV from CALLH's PARBAN)", lh.pu(), lh.pv()));
     out.push_back(c.m.sc7852Owns() ? "Bus owner: the SC7852 (the LH5803 waits)" : "Bus owner: the LH5803");
+    out.push_back(mode1Line(c));
     return out;
 }
 
