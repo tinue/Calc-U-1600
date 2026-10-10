@@ -17,7 +17,6 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
-#include <cstdarg>
 #include <cstdio>
 
 #include "AppPaths.hpp"
@@ -30,14 +29,7 @@
 
 namespace {
 
-std::string fmt(const char* format, ...) {
-    char buf[512];
-    va_list args;
-    va_start(args, format);
-    std::vsnprintf(buf, sizeof(buf), format, args);
-    va_end(args);
-    return buf;
-}
+using inspect::fmt;
 
 std::string joinLines(const std::vector<std::string>& lines) {
     std::string joined;
@@ -344,8 +336,7 @@ void DebugPanel::showView(inspect::View view) {
 // ── Dump Card YAML ──────────────────────────────────────────────────────
 
 bool DebugPanel::batteryCardImage(int slot, int* bankCount, std::vector<std::uint8_t>* image) {
-    *bankCount = m_controller->debugSlotCardBankCount(slot);
-    *image = m_controller->debugSlotCardImage(slot);
+    *image = m_controller->debugSlotCardImage(slot, bankCount);
     // bankCount <= 0 is an unbanked card (e.g. CE-1600M): one implicit bank,
     // which formatBatteryCardInitialContentBlock() writes without a `bank:` key.
     if (image->empty()) return false;

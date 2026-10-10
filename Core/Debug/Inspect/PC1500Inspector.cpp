@@ -4,7 +4,7 @@
 
 #include "../../Connector/PC1500SignalDecode.hpp"
 #include "../../PC1500/PC1500Machine.hpp"
-#include "HexDump.hpp"
+#include "InspectCommon.hpp"
 #include "TextTable.hpp"
 
 namespace inspect {
@@ -15,18 +15,6 @@ using R = TextTable::Align;
 constexpr uint16_t kUserRam = 0x4000;
 constexpr uint16_t kSystemRam = 0x7800;
 constexpr uint16_t kMlArea = 0x7C00;
-
-std::string range(uint32_t lo, uint32_t hi) { return fmt("%04X–%04X", unsigned(lo), unsigned(hi)); }
-
-const char* kindName(CardMemory::Kind k) {
-    switch (k) {
-        case CardMemory::Kind::Rom: return "ROM";
-        case CardMemory::Kind::Ram: return "RAM";
-        case CardMemory::Kind::Flash: return "flash";
-        case CardMemory::Kind::Mixed: return "mixed";
-    }
-    return "?";
-}
 
 struct Ctx {
     const PC1500Machine& m;
@@ -55,36 +43,9 @@ struct Ctx {
     }
 };
 
-/// Runs of `[lo, hi]` in `step`-byte blocks that `answer(addr)` names the
-/// same: {lo, hi, name}.
-struct Run {
-    uint32_t lo, hi;
-    std::string name;
-};
-
-template <class F>
-std::vector<Run> scan(uint32_t lo, uint32_t hi, uint32_t step, F answer) {
-    std::vector<Run> runs;
-    for (uint32_t a = lo; a <= hi; a += step) {
-        const std::string name = answer(uint16_t(a));
-        if (!runs.empty() && runs.back().name == name && runs.back().hi + 1 == a)
-            runs.back().hi = a + step - 1;
-        else
-            runs.push_back({a, a + step - 1, name});
-    }
-    return runs;
-}
-
-/// The 60-pin card that answers an LH5801 cycle, "" for none (a register a
-/// read would disturb counts as answering, without being read).
-std::string busCardAt(const Ctx& c, uint16_t addr, bool me1, bool pu, bool pv) {
-    const SystemBusPins pins = PC1500SignalDecode::systemBusPins(addr, false, me1, pu, pv);
-    for (const SystemBusCard* card : c.m.memory().systemBus().chain()) {
-        uint8_t v;
-        if (card->readHasSideEffects(pins) || card->respondsToRead(pins, v))
-            return card->moduleName().empty() ? "card" : card->moduleName();
-    }
-    return {};
+/// The 60-pin card that answers an LH5801 cycle, null for none.
+const SystemBusCard* busCardAt(const Ctx& c, uint16_t addr, bool me1, bool pu, bool pv) {
+    return c.m.memory().systemBus().debugResponder(PC1500SignalDecode::systemBusPins(addr, false, me1, pu, pv));
 }
 
 // ── Pointers ─────────────────────────────────────────────────────────────
@@ -106,14 +67,8 @@ struct Group {
     bool (*shown)(const PC1500Machine&) = nullptr;  // null: always
 };
 
-std::string decodeOnOff(uint8_t v) { return v ? "on" : "off"; }
 std::string decodeLock(uint8_t v) { return v == 0xFF ? "unlocked" : "locked: the MODE key is blocked"; }
-std::string decodeMode(uint8_t v) {
-    std::string s;
-    for (const auto& [bit, name] : {std::pair<int, const char*>{6, "RUN"}, {5, "PRO"}, {4, "RESERVE"}})
-        if (v & (1u << bit)) s += (s.empty() ? "" : " ") + std::string(name);
-    return s.empty() ? "—" : s;
-}
+std::string decodeMode(uint8_t v) { return bits(v, {{6, "RUN"}, {5, "PRO"}, {4, "RESERVE"}}); }
 std::string decodeOpn(uint8_t v) {
     switch (v) {
         case 0x60: return "LCD";
@@ -235,10 +190,11 @@ std::vector<std::string> pointersView(const Ctx& c) {
 
 // ── Inventory ────────────────────────────────────────────────────────────
 
-std::string runsText(const std::vector<Run>& runs, const std::string& name) {
+/// The ranges of the runs where the module answers.
+std::string runsText(const std::vector<Run<bool>>& runs) {
     std::string s;
-    for (const Run& r : runs)
-        if (r.name == name) s += (s.empty() ? "" : ", ") + range(r.lo, r.hi);
+    for (const Run<bool>& r : runs)
+        if (r.who) s += (s.empty() ? "" : ", ") + range(r.lo, r.hi);
     return s;
 }
 
@@ -254,10 +210,8 @@ std::vector<std::string> inventoryView(const Ctx& c) {
     if (!c.card) {
         t.addRow({"Module slot", "empty"});
     } else {
-        const std::vector<Run> runs = scan(0x0000, 0xBFFF, 0x400, [&](uint16_t a) {
-            return c.m.memory().debugSlotResponds(a) ? std::string("x") : std::string();
-        });
-        const std::string seen = runsText(runs, "x");
+        const std::string seen =
+            runsText(scan(0x0000, 0xBFFF, 0x400, [&](uint16_t a) { return c.m.memory().debugSlotResponds(a); }));
         const std::vector<CardMemory> mems = c.card->debugMemories();
         if (mems.empty()) t.addRow({c.moduleLabel(), "I/O only", "", "", seen});
         for (size_t k = 0; k < mems.size(); ++k) {
@@ -272,20 +226,10 @@ std::vector<std::string> inventoryView(const Ctx& c) {
     const auto& cards = c.m.memory().systemBus().chain();
     if (cards.empty()) t.addRow({"(nothing attached)"});
     for (const SystemBusCard* card : cards) {
-        const std::string name = card->moduleName().empty() ? "card" : card->moduleName();
-        std::string seen;
-        for (uint16_t base : {uint16_t(0x8000), uint16_t(0xA000)}) {
-            bool pvHit[2] = {false, false};
-            for (int pv = 0; pv < 2; ++pv)
-                for (int pu = 0; pu < 2; ++pu) {
-                    uint8_t v;
-                    if (card->respondsToRead(PC1500SignalDecode::systemBusPins(base, false, false, pu, pv), v))
-                        pvHit[pv] = true;
-                }
-            if (!pvHit[0] && !pvHit[1]) continue;
-            seen += (seen.empty() ? "" : " · ") + range(base, base + 0x1FFFu) +
-                    (pvHit[0] != pvHit[1] ? fmt(" (PV=%d)", pvHit[1] ? 1 : 0) : "");
-        }
+        const std::string name = cardName(*card);
+        const std::string seen = joinDots(romWindowSeenAt(*card, [](uint16_t a, bool pu, bool pv) {
+            return PC1500SignalDecode::systemBusPins(a, false, false, pu, pv);
+        }));
         const std::vector<CardMemory> mems = card->debugMemories();
         if (mems.empty()) t.addRow({name, "I/O only"});
         for (size_t k = 0; k < mems.size(); ++k)
@@ -302,24 +246,22 @@ std::vector<std::string> lhView(const Ctx& c) {
     TextTable t({"Space", "LH5801", "Answers", "Note"});
     t.addSpan("ME0");
     auto moduleRuns = [&](uint32_t lo, uint32_t hi) {
-        for (const Run& r : scan(lo, hi, 0x400, [&](uint16_t a) {
-                 return mem.debugSlotResponds(a) ? c.moduleLabel() : std::string("open bus");
-             }))
-            t.addRow({"ME0", range(r.lo, r.hi), r.name, "module area"});
+        for (const auto& r : scan(lo, hi, 0x400, [&](uint16_t a) { return mem.debugSlotResponds(a); }))
+            t.addRow({"ME0", range(r.lo, r.hi), r.who ? c.moduleLabel() : "open bus", "module area"});
     };
     moduleRuns(0x0000, 0x3FFF);
     t.addRow({"ME0", range(kUserRam, c.userRamEnd - 1), "User RAM (built in)", ""});
     moduleRuns(c.userRamEnd, 0x6FFF);
     t.addRow({"ME0", "7000–77FF", "Display RAM", "512 B, four times; LCD at 7600–764F / 7700–774F"});
     t.addRow({"ME0", "7800–7FFF", "System RAM", c.a ? "" : "1K: 7C00–7FFF is 7800–7BFF again"});
-    for (const Run& r : scan(0x8000, 0xBFFF, 0x400, [&](uint16_t a) { return busCardAt(c, a, false, mem.pu(), mem.pv()); }))
-        t.addRow({"ME0", range(r.lo, r.hi), r.name.empty() ? "open bus" : r.name + " ROM",
+    for (const auto& r : scan(0x8000, 0xBFFF, 0x400, [&](uint16_t a) { return busCardAt(c, a, false, mem.pu(), mem.pv()); }))
+        t.addRow({"ME0", range(r.lo, r.hi), r.who ? cardName(*r.who) + " ROM" : "open bus",
                   fmt("60-pin bus, PU=%d PV=%d", mem.pu(), mem.pv())});
     t.addRow({"ME0", "C000–FFFF", "System ROM", ""});
 
     t.addSpan("ME1 (open bus, FFH, except below)");
-    for (const Run& r : scan(0x8000, 0xFFFF, 8, [&](uint16_t a) { return busCardAt(c, a, true, mem.pu(), mem.pv()); }))
-        if (!r.name.empty()) t.addRow({"ME1", range(r.lo, r.hi), r.name, "card I/O"});
+    for (const auto& r : scan(0x8000, 0xFFFF, 8, [&](uint16_t a) { return busCardAt(c, a, true, mem.pu(), mem.pv()); }))
+        if (r.who) t.addRow({"ME1", range(r.lo, r.hi), cardName(*r.who), "card I/O"});
     t.addRow({"ME1", "F000–F00F", "LH5811 I/O ports", "registers F004–F00F; again all through F0xx–FFxx"});
     std::vector<std::string> out = t.render();
     addNote(out, fmt("PU = %d, PV = %d (the LH5801's flip-flops)", mem.pu(), mem.pv()));
@@ -353,13 +295,13 @@ std::vector<std::string> basicAreaView(const Ctx& c) {
     const Figures f = figures(c);
     TextTable t({"Address", "Size", "RAM", "Holds"}, {R::Left, R::Right, R::Left, R::Left});
     for (const Piece& p : basicPieces(c)) {
-        // Split a piece where the RAM behind it changes (module / built-in).
-        uint32_t lo = p.lo;
-        for (uint32_t a = p.lo; a <= p.hi; ++a)
-            if (a == p.hi || c.sourceOf(a + 1) != c.sourceOf(lo)) {
-                t.addRow({range(lo, a), sizeLabel(a - lo + 1), c.sourceOf(lo), p.what});
-                lo = a + 1;
-            }
+        // Split a piece where the RAM behind it changes (sourceOf()'s bounds).
+        for (uint32_t lo = p.lo, hi; lo <= p.hi; lo = hi + 1) {
+            hi = p.hi;
+            for (uint32_t b : {uint32_t(kUserRam), c.userRamEnd, 0x7000u, uint32_t(kSystemRam)})
+                if (b > lo && b <= hi) hi = b - 1;
+            t.addRow({range(lo, hi), sizeLabel(hi - lo + 1), c.sourceOf(lo), p.what});
+        }
     }
     std::vector<std::string> out = t.render();
     addNote(out, fmt("RAM_ST:00 = %04X, RAM_END:00 = %04X; MEM %d bytes free.", f.ramSt, f.ramEnd,
@@ -385,12 +327,12 @@ std::vector<std::string> physicalRamView(const Ctx& c) {
     };
     // The RAM below the display RAM in address order: the module's windows
     // around the built-in user RAM.
-    for (const Run& r : scan(0x0000, 0x6FFF, 0x400, [&](uint16_t a) {
-             if (a >= kUserRam && a < c.userRamEnd) return std::string("u");
-             return c.card && c.m.memory().debugSlotResponds(a) ? std::string("m") : std::string();
+    for (const auto& r : scan(0x0000, 0x6FFF, 0x400, [&](uint16_t a) {
+             if (a >= kUserRam && a < c.userRamEnd) return 'u';
+             return c.card && c.m.memory().debugSlotResponds(a) ? 'm' : ' ';
          })) {
-        if (r.name == "m") chip(c.moduleLabel() + ", " + range(r.lo, r.hi), r.lo, r.hi);
-        if (r.name == "u") chip(fmt("User RAM (%s built in)", c.a ? "6K" : "2K"), r.lo, r.hi);
+        if (r.who == 'm') chip(c.moduleLabel() + ", " + range(r.lo, r.hi), r.lo, r.hi);
+        if (r.who == 'u') chip(fmt("User RAM (%s built in)", c.a ? "6K" : "2K"), r.lo, r.hi);
     }
     t.addSpan("Display RAM (512 B)");
     t.addRow({"7600–764F", "80 B", "LCD columns, first half"});
@@ -413,6 +355,7 @@ std::vector<std::string> physicalRamView(const Ctx& c) {
 
 std::vector<std::string> dumpRange(const Ctx& c, uint32_t lo, uint32_t hi) {
     std::vector<uint8_t> bytes;
+    bytes.reserve(hi - lo + 1);
     for (uint32_t a = lo; a <= hi; ++a) bytes.push_back(c.peek(uint16_t(a)));
     return hexDump(bytes, lo);
 }
@@ -421,11 +364,7 @@ std::vector<std::string> dumpRange(const Ctx& c, uint32_t lo, uint32_t hi) {
 
 std::vector<std::string> pc1500View(const PC1500Machine& m, View v) {
     const Ctx c(m);
-    std::vector<std::string> out = {fmt("── %s ──", viewTitle(v, true))};
-    auto body = [&](std::vector<std::string> lines) {
-        out.insert(out.end(), lines.begin(), lines.end());
-        return out;
-    };
+    auto body = [&](std::vector<std::string> lines) { return titled(v, true, std::move(lines)); };
     switch (v) {
         case View::Pointers: return body(pointersView(c));
         case View::Inventory: return body(inventoryView(c));
@@ -435,12 +374,15 @@ std::vector<std::string> pc1500View(const PC1500Machine& m, View v) {
         case View::DumpBasicArea: {
             const Figures f = figures(c);
             if (f.ramEnd <= f.ramSt) return body({"RAM_ST / RAM_END not set"});
-            out[0] = fmt("── BASIC area %s ──", range(f.ramSt, f.ramEnd - 1u).c_str());
-            return body(dumpRange(c, f.ramSt, f.ramEnd - 1u));
+            std::vector<std::string> out = dumpRange(c, f.ramSt, f.ramEnd - 1u);
+            out.insert(out.begin(), fmt("── BASIC area %s ──", range(f.ramSt, f.ramEnd - 1u).c_str()));
+            return out;
         }
-        case View::DumpMlArea:
-            out[0] = c.a ? "── Machine-language area 7C00–7FFF ──" : "── 7C00–7FFF (the 1K system RAM again) ──";
-            return body(dumpRange(c, kMlArea, 0x7FFF));
+        case View::DumpMlArea: {
+            std::vector<std::string> out = dumpRange(c, kMlArea, 0x7FFF);
+            out.insert(out.begin(), c.a ? "── Machine-language area 7C00–7FFF ──" : "── 7C00–7FFF (the 1K system RAM again) ──");
+            return out;
+        }
         default: break;
     }
     return {fmt("%s: not on the PC-1500", viewTitle(v, true))};

@@ -157,40 +157,6 @@ public:
         return m_cpu.pc();
     }
 
-    /// The attached expansion module's own current bank (-1 if no card is
-    /// attached, or the card has no bank concept) -- for the "Dump Mem"
-    /// panel's per-region label. See ExpansionCard::debugCurrentBank().
-    int debugSlotCardBank() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_attachedExpansionCard ? m_attachedExpansionCard->debugCurrentBank() : -1;
-    }
-
-    /// The attached expansion module's total bank count (-1 if no card is
-    /// attached, or the card has no bank concept). See
-    /// ExpansionCard::debugBankCount().
-    int debugSlotCardBankCount() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_attachedExpansionCard ? m_attachedExpansionCard->debugBankCount() : -1;
-    }
-
-    /// The attached expansion module's whole backing image (every bank
-    /// concatenated), read directly off the card rather than through the
-    /// CPU-visible, single-bank-at-a-time address space -- for a "dump
-    /// whole card" debug feature that needs every bank in one pass, not
-    /// just whichever one is currently latched in. See
-    /// ExpansionCard::debugImage(). Empty if no card is attached.
-    std::vector<uint8_t> debugSlotCardImage() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_attachedExpansionCard ? m_attachedExpansionCard->debugImage() : std::vector<uint8_t>{};
-    }
-
-    /// Whether the attached module actually decodes `addr` -- see
-    /// PC1500Memory::debugSlotResponds().
-    bool debugSlotResponds(uint16_t addr) const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_memory.debugSlotResponds(addr);
-    }
-
     LH5801&       cpu() { return m_cpu; }
     const LH5801& cpu() const { return m_cpu; }
     PC1500Memory&       memory() { return m_memory; }

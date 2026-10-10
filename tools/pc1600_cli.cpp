@@ -132,7 +132,7 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
     const auto onArmed = [&armedResult](const PresetLoadResult& r) { armedResult = r; };
     const PresetSaveAsFn onSaveAs = [&machine, &moduleDir, &saveDir, &armedResult](const PresetSaveAsRequest& request,
                                                                        std::string* err) {
-        return savePresetMedia(request, {moduleDir, saveDir}, pc1600PresetMedia(machine, armedResult), err);
+        return savePresetMedia(request, {moduleDir, saveDir}, pc1600PresetMedia(machine, armedResult, request), err);
     };
     PresetLoadResult loaded = applyPC1600Preset(
         machine, preset,

@@ -486,10 +486,6 @@ public:
         return view(*this);
     }
 
-    /// The cards on the 60-pin system bus, in chain order (the first
-    /// responder wins). For the inspector, under debugInspect().
-    const std::vector<SystemBusCard*>& inspectBusCards() const { return m_z80Mem.systemBus().chain(); }
-
     // ── Trace: both CPUs' rings drain into one TRACE.bin, tagged by cpuId ──
     //
     // beginCpuTrace()/endCpuTrace() capture a full instruction trace to a

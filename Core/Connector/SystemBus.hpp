@@ -38,6 +38,17 @@ public:
     /// peeks only.
     bool readHasSideEffects(const SystemBusPins& pins) const { return m_chain.readHasSideEffects(pins); }
 
+    /// The card that answers this cycle, null for none -- debugger views
+    /// only. A register a read would disturb is still the card's: it says
+    /// so without being read.
+    const SystemBusCard* debugResponder(const SystemBusPins& pins) const {
+        for (const SystemBusCard* card : m_chain.cards()) {
+            uint8_t v;
+            if (card->readHasSideEffects(pins) || card->respondsToRead(pins, v)) return card;
+        }
+        return nullptr;
+    }
+
     // Queried on every host-ROM fetch; see InhibitSource.
     bool inhibitAsserted() const { return m_chain.inhibitAsserted(); }
 

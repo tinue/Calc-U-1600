@@ -25,7 +25,6 @@ void PC1600Machine::resetLocked() {
     // m_rtcAccum is the sub-CPU's divider, which runs on the always-on rail:
     // no reset or power cycle touches it (seedClock() sets its phase).
     m_z80Mem.setTimer64Bit(false);
-    m_lh5803Mem.reset();
     m_lh5803Mem.updatePUPV(false, false); // match the just-reset LH5803 CPU
     if (m_ce150Card) m_ce150Card->reset(); // re-anchor, keep it attached (like the CE-1600P)
     m_ce158.reset();
@@ -678,16 +677,10 @@ PC1600Machine::DebugBankState PC1600Machine::inspectBankState() const {
             default: {
                 // Banks 4-7 go out on the 60-pin bus (PC1600Memory::read()):
                 // whichever card answers the page's first byte owns it.
-                const SystemBusPins pins = PC1600BusDrive::z80MemPins(0x4000, /*forWrite=*/false, s.pageBBank);
-                s.target[1] = PT::OpenBus;
-                for (const SystemBusCard* card : m_z80Mem.systemBus().chain()) {
-                    uint8_t v;
-                    if (!card->readHasSideEffects(pins) && card->respondsToRead(pins, v)) {
-                        s.target[1] = PT::BusCard;
-                        s.busCard = card->moduleName();
-                        break;
-                    }
-                }
+                const SystemBusCard* card = m_z80Mem.systemBus().debugResponder(
+                    PC1600BusDrive::z80MemPins(0x4000, /*forWrite=*/false, s.pageBBank));
+                s.target[1] = card ? PT::BusCard : PT::OpenBus;
+                if (card) s.busCard = card->moduleName();
                 break;
             }
         }

@@ -28,8 +28,7 @@ inline bool readRom(const PresetBusRom& rom, size_t maxSize, std::vector<uint8_t
 
 /// The card's name in the inspector: the ROM's file name.
 inline std::string fileName(const PresetBusRom& rom) {
-    const size_t slash = rom.path.find_last_of('/');
-    return slash == std::string::npos ? rom.path : rom.path.substr(slash + 1);
+    return std::filesystem::path(rom.path).filename().string();
 }
 
 /// An `address` ROM: the PC-1500 connector, or the PC-1600's LH5803 side.

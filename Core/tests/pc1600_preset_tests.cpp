@@ -903,7 +903,7 @@ void test_loader_host_drive_floppy_file_and_template_saves() {
     PresetLoadResult armedResult;
     const PresetArmedFn onArmed = [&](const PresetLoadResult& r) { armedResult = r; };
     const PresetSaveAsFn onSaveAs = [&](const PresetSaveAsRequest& request, std::string* e) {
-        return savePresetMedia(request, {"Qt6/resources/cards", ""}, pc1600PresetMedia(m, armedResult), e);
+        return savePresetMedia(request, {"Qt6/resources/cards", ""}, pc1600PresetMedia(m, armedResult, request), e);
     };
     PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "Qt6/resources/cards", {},
                                            {"roms", "firmware/pc1600-hostdrive"}, {}, onArmed, onSaveAs);

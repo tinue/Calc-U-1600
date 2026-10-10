@@ -452,17 +452,18 @@ std::vector<inspect::MenuEntry> MachineController::inspectorMenu(bool dumps) con
     return {};
 }
 
-std::vector<std::uint8_t> MachineController::debugSlotCardImage(int slot) const {
-    if (m_pc1600) return m_pc1600->debugSlotImage(slot);
-    return m_pc1500 ? m_pc1500->debugSlotCardImage() : std::vector<std::uint8_t>{};
-}
-
-int MachineController::debugSlotCardBankCount(int slot) const {
-    if (m_pc1600) {
-        const PC1600Machine::DebugBankState bs = m_pc1600->debugBankState();
-        return slot == 2 ? bs.slot2CardBankCount : bs.slot1CardBankCount;
-    }
-    return m_pc1500 ? m_pc1500->debugSlotCardBankCount() : -1;
+std::vector<std::uint8_t> MachineController::debugSlotCardImage(int slot, int* bankCount) const {
+    auto read = [&](const ExpansionCard* card) {
+        *bankCount = card ? card->debugBankCount() : -1;
+        return card ? card->debugImage() : std::vector<std::uint8_t>{};
+    };
+    if (m_pc1600)
+        return m_pc1600->debugInspect([&](const PC1600Machine& m) { return read(m.memory().slotCard(slot)); });
+    if (m_pc1500)
+        return m_pc1500->debugInspect(
+            [&](const PC1500Machine& m) { return read(m.memory().expansionConnector().attachedCard()); });
+    *bankCount = -1;
+    return {};
 }
 
 bool MachineController::beginTrace(const QString& path) {

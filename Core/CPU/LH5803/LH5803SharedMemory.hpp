@@ -102,22 +102,15 @@ public:
     bool pv() const { return m_pv; }
     bool pu() const { return m_pu; }
     bool romLoaded() const { return m_rom.loaded(); }
-    /// The cards on the 60-pin bus that answer an LH5803 read of `addr` in
-    /// ME0 / ME1 at PU/PV `pu`/`pv`, for the inspector's LH5803 view. Asks
-    /// each card from its contacts (SystemBusCard::respondsToRead), without
-    /// reading a register that a read would disturb (readHasSideEffects()
-    /// counts as answering); "" when none answers.
-    std::string debugBusCardAt(uint16_t addr, bool me1, bool pu, bool pv) const;
+    /// The 60-pin card that answers an LH5803 read of `addr` in ME0 / ME1
+    /// at PU/PV `pu`/`pv`, for the inspector's LH5803 view
+    /// (SystemBus::debugResponder()); null when none answers.
+    const SystemBusCard* debugBusCardAt(uint16_t addr, bool me1, bool pu, bool pv) const;
 
     /// Loads the LH5803-private internal ROM at C000-FFFF (PC1600-LH5803-C000-FFFF-new.bin).
     /// Returns false (untouched) if `size` isn't exactly 16384 bytes.
     bool loadROM(const uint8_t* data, size_t size) { return m_rom.load(data, size); }
     bool loadROMFile(const std::string& path) { return m_rom.loadFile(path); }
-
-    /// Nothing volatile of its own: the ME1 F000-F00F port block lives in
-    /// PC1600Memory (ports 10H-1FH) and resets there. ROM/PV/card
-    /// attachment are untouched. Called from PC1600Machine::reset*().
-    void reset() {}
 
     /// Debugger view of the LH5803's ME0/ME1 without bus side effects.
     /// The UART / sub-CPU block, ME1 8000-BFFF and any card register a read

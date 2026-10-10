@@ -107,15 +107,8 @@ uint8_t LH5803SharedMemory::debugPeek(uint16_t addr, bool me1, bool* readable) c
     return m_rom.read(addr);
 }
 
-std::string LH5803SharedMemory::debugBusCardAt(uint16_t addr, bool me1, bool pu, bool pv) const {
-    const SystemBusPins pins = PC1600BusDrive::lh5803Pins(addr, /*forWrite=*/false, me1, pu, pv);
-    for (const SystemBusCard* card : m_shared.systemBus().chain()) {
-        uint8_t v;
-        // A register a read would disturb is still the card's: it says so
-        // without being read.
-        if (card->readHasSideEffects(pins) || card->respondsToRead(pins, v)) return card->moduleName();
-    }
-    return {};
+const SystemBusCard* LH5803SharedMemory::debugBusCardAt(uint16_t addr, bool me1, bool pu, bool pv) const {
+    return m_shared.systemBus().debugResponder(PC1600BusDrive::lh5803Pins(addr, /*forWrite=*/false, me1, pu, pv));
 }
 
 uint8_t LH5803SharedMemory::readME1(uint16_t addr) {

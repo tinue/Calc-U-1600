@@ -290,10 +290,10 @@ public:
     // The Memory ▾ (`dumps` false) / Dump ▾ (`dumps` true) menu entries.
     std::vector<inspect::MenuEntry> inspectorMenu(bool dumps) const;
 
-    // Card YAML: the module's whole image and bank count (-1 = unbanked).
+    // Card YAML: the module's whole image (empty for no card) and its bank
+    // count (-1 = unbanked), from one locked snapshot.
     // PC1500(A): the one slot (`slot` ignored); PC1600: Slot 1 or 2.
-    std::vector<std::uint8_t> debugSlotCardImage(int slot) const;
-    int debugSlotCardBankCount(int slot) const;
+    std::vector<std::uint8_t> debugSlotCardImage(int slot, int* bankCount) const;
 
     // TRACE (DebugPanel): a full instruction trace of the live machine to
     // `path`, captured inside Core -- runCycles() drains the CPU ring(s)

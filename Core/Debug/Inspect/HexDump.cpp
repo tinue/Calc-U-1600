@@ -40,17 +40,23 @@ std::vector<std::string> hexDump(const uint8_t* data, size_t n, uint32_t base, i
             continue;
         }
         flush(row);
-        std::string hex, ascii;
+        // The hex digits by table: a big RAM disk dumps tens of thousands of
+        // rows under the machine lock.
+        static const char kHex[] = "0123456789ABCDEF";
+        std::string line = fmt("%0*X: ", addrDigits, unsigned(base + start));
+        std::string ascii;
         for (size_t i = start; i < start + 16; ++i) {
-            if (i - start == 8) hex += ' ';
+            if (i - start == 8) line += ' ';
             if (i < end) {
-                hex += fmt("%02X ", data[i]);
+                line += kHex[data[i] >> 4];
+                line += kHex[data[i] & 0x0F];
+                line += ' ';
                 ascii += (data[i] >= 0x20 && data[i] < 0x7F) ? char(data[i]) : '.';
             } else {
-                hex += "   ";
+                line += "   ";
             }
         }
-        out.push_back(fmt("%0*X: ", addrDigits, unsigned(base + start)) + hex + " " + ascii);
+        out.push_back(line + " " + ascii);
     }
     return out;
 }

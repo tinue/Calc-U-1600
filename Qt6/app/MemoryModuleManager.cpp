@@ -14,6 +14,7 @@
 #include "FileIO.hpp"
 #include "PC1500/PC1500Machine.hpp"
 #include "PC1600/PC1600Machine.hpp"
+#include "Preset/PresetRunner.hpp"
 
 namespace {
 
@@ -70,13 +71,9 @@ void MemoryModuleManager::attachOneSlot(int slotIndex, CardHost host, AttachFn a
     if (!st.romFile.isEmpty()) {
         // A preset's ROM module under development: the same file and ROM
         // again (read anew), never autosaved.
-        std::string err;
-        std::vector<uint8_t> rom;
-        std::unique_ptr<ExpansionCard> card;
-        if (!readWholeFile(st.romFile.toStdString(), &rom))
-            err = "could not read " + st.romFile.toStdString();
-        else
-            card = makeSoftwareDefinedCard(st.sourcePath.toStdString(), host, &err, &rom);
+        std::string resolved, err;
+        std::unique_ptr<ExpansionCard> card = makePresetModuleCard(st.sourcePath.toStdString(), {},
+                                                                   st.romFile.toStdString(), {}, host, &resolved, &err);
         if (card) {
             attach(std::move(card));
             return;

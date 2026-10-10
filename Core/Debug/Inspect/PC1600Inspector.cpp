@@ -6,7 +6,7 @@
 #include "../../PC1600/PC1600Machine.hpp"
 #include "../../PC1600/PC1600ProgramPlacement.hpp"
 #include "../BasicPointerTable.hpp"
-#include "HexDump.hpp"
+#include "InspectCommon.hpp"
 #include "TextTable.hpp"
 
 namespace inspect {
@@ -17,20 +17,6 @@ using R = TextTable::Align;
 
 constexpr uint16_t kWorkArea = 0xF000;
 constexpr uint32_t kBank = 0x4000;
-
-const char* kindName(CardMemory::Kind k) {
-    switch (k) {
-        case CardMemory::Kind::Rom: return "ROM";
-        case CardMemory::Kind::Ram: return "RAM";
-        case CardMemory::Kind::Flash: return "flash";
-        case CardMemory::Kind::Mixed: return "mixed";
-    }
-    return "?";
-}
-
-std::string range(uint32_t lo, uint32_t hi, int digits = 4) {
-    return fmt("%0*X–%0*X", digits, unsigned(lo), digits, unsigned(hi));
-}
 
 // ── One snapshot of what every view reads ────────────────────────────────
 
@@ -124,15 +110,7 @@ struct Group {
     std::vector<Ptr> ptrs;
 };
 
-std::string bits(uint8_t v, std::initializer_list<std::pair<int, const char*>> names) {
-    std::string s;
-    for (const auto& [bit, name] : names)
-        if (v & (1u << bit)) s += (s.empty() ? "" : " ") + std::string(name);
-    return s.empty() ? "—" : s;
-}
-
 std::string decodeTitle(uint8_t v) { return v <= 2 ? fmt("S%u", v) : "?"; }
-std::string decodeOnOff(uint8_t v) { return v ? "on" : "off"; }
 std::string decodeBmode(uint8_t v) {
     std::string s = v & 0x40 ? "MODE 1" : "MODE 0";
     if (v & 0x02) s += ", BREAK OFF";
@@ -346,23 +324,11 @@ std::string busCardSeenAt(const SystemBusCard* card) {
         if (card->respondsToRead(pins, v)) z80 += (z80.empty() ? "" : "/") + fmt("%u", bank);
     }
     if (!z80.empty()) where.push_back("Z80 4000–7FFF (B bank " + z80 + ")");
-    for (uint16_t base : {uint16_t(0x8000), uint16_t(0xA000)}) {
-        std::string cond;
-        int hits = 0;
-        bool pvHit[2] = {false, false};
-        for (int pv = 0; pv < 2; ++pv)
-            for (int pu = 0; pu < 2; ++pu) {
-                const SystemBusPins pins = PC1600BusDrive::lh5803Pins(base, false, false, pu, pv);
-                uint8_t v;
-                if (card->respondsToRead(pins, v)) { ++hits; pvHit[pv] = true; }
-            }
-        if (!hits) continue;
-        if (pvHit[0] != pvHit[1]) cond = fmt(" (PV=%d)", pvHit[1] ? 1 : 0);
-        where.push_back("LH5803 " + range(base, base + 0x1FFFu) + cond);
-    }
-    std::string s;
-    for (const std::string& w : where) s += (s.empty() ? "" : " · ") + w;
-    return s.empty() ? "I/O only" : s;
+    for (const std::string& w : romWindowSeenAt(*card, [](uint16_t a, bool pu, bool pv) {
+             return PC1600BusDrive::lh5803Pins(a, false, false, pu, pv);
+         }))
+        where.push_back("LH5803 " + w);
+    return where.empty() ? "I/O only" : joinDots(where);
 }
 
 std::vector<std::string> inventoryView(const Ctx& c) {
@@ -398,10 +364,10 @@ std::vector<std::string> inventoryView(const Ctx& c) {
     }
 
     t.addSpan("60-pin bus");
-    const auto& cards = c.m.inspectBusCards();
+    const auto& cards = mem.systemBus().chain();
     if (cards.empty()) t.addRow({"(nothing attached)"});
     for (const SystemBusCard* card : cards) {
-        const std::string name = card->moduleName().empty() ? "card" : card->moduleName();
+        const std::string name = cardName(*card);
         const std::vector<CardMemory> mems = card->debugMemories();
         if (mems.empty()) {
             t.addRow({name, "I/O only"});
@@ -472,24 +438,10 @@ std::vector<std::string> z80View(const Ctx& c) {
 
 // ── LH5803 view ──────────────────────────────────────────────────────────
 
-/// The cards answering an LH5803 window, scanned in `step`-byte blocks and
-/// merged into runs: {lo, hi, card}.
-struct Run {
-    uint32_t lo, hi;
-    std::string card;
-};
-
-std::vector<Run> scanBus(const Ctx& c, uint32_t lo, uint32_t hi, bool me1, uint32_t step) {
+/// The cards answering an LH5803 window, in `step`-byte runs.
+auto scanBus(const Ctx& c, uint32_t lo, uint32_t hi, bool me1, uint32_t step) {
     const LH5803SharedMemory& lh = c.m.lh5803Memory();
-    std::vector<Run> runs;
-    for (uint32_t a = lo; a <= hi; a += step) {
-        const std::string card = lh.debugBusCardAt(uint16_t(a), me1, lh.pu(), lh.pv());
-        if (!runs.empty() && runs.back().card == card && runs.back().hi + 1 == a)
-            runs.back().hi = a + step - 1;
-        else
-            runs.push_back({a, a + step - 1, card});
-    }
-    return runs;
+    return scan(lo, hi, step, [&](uint16_t a) { return lh.debugBusCardAt(a, me1, lh.pu(), lh.pv()); });
 }
 
 /// What Z-80 page C shows with `bank` selected (PC1600Memory::read()'s
@@ -560,8 +512,8 @@ std::vector<std::string> lhView(const Ctx& c) {
     t.addRow({"", "  7400–744F", "→ 7600–764F", "LHA90 alias"});
     t.addRow({"", "  7500–754F", "→ 7700–774F", "LHA90 alias"});
     t.addRow({"", "  7600–764F", "PC-1500 display RAM", "ME0 writes also drawn on the LCD"});
-    for (const Run& r : scanBus(c, 0x8000, 0xBFFF, false, 0x400))
-        t.addRow({"ME0", range(r.lo, r.hi), r.card.empty() ? "open bus" : r.card + " ROM",
+    for (const auto& r : scanBus(c, 0x8000, 0xBFFF, false, 0x400))
+        t.addRow({"ME0", range(r.lo, r.hi), r.who ? cardName(*r.who) + " ROM" : "open bus",
                   fmt("peripheral window, PU=%d PV=%d", lh.pu(), lh.pv())});
     t.addRow({"ME0", "C000–FFFF", "LH5803 ROM", ""});
 
@@ -569,8 +521,8 @@ std::vector<std::string> lhView(const Ctx& c) {
     t.addRow({"ME1", "0020–0027, 0033", "UART TC8576F / sub-CPU answer", "also A020–A027, A033"});
     t.addRow({"ME1", "A030–A03F", "SC7852 ports 30H–3FH", "A038 = bus handoff to the SC7852"});
     t.addRow({"ME1", "8040–805F, A040–A05F", "LCD ports 40H–5FH", ""});
-    for (const Run& r : scanBus(c, 0x8000, 0xFFFF, true, 8))
-        if (!r.card.empty()) t.addRow({"ME1", range(r.lo, r.hi), r.card, "card I/O"});
+    for (const auto& r : scanBus(c, 0x8000, 0xFFFF, true, 8))
+        if (r.who) t.addRow({"ME1", range(r.lo, r.hi), cardName(*r.who), "card I/O"});
     t.addRow({"ME1", "F000–F00F", "SC7852 ports 10H–1FH", "the LH5810-compatible block"});
     std::vector<std::string> out = t.render();
     addNote(out, fmt("PU = %d, PV = %d (the LH5803's flip-flops; the ROM sets PV from CALLH's PARBAN)", lh.pu(), lh.pv()));
@@ -878,6 +830,7 @@ std::vector<std::string> dumpSegments(const Ctx& c, const std::vector<pc1600::Pr
         const uint16_t lo = s.windowBase, hi = internal ? uint16_t(kWorkArea - 1) : s.top;
         out.push_back(fmt("── %s, Z80 %s ──", segmentName(c, s).c_str(), range(lo, hi).c_str()));
         std::vector<uint8_t> bytes;
+        bytes.reserve(hi - lo + 1u);
         for (uint32_t a = lo; a <= hi; ++a) bytes.push_back(c.read(s.adtblBank, uint16_t(a)));
         const auto rows = hexDump(bytes, lo);
         out.insert(out.end(), rows.begin(), rows.end());
@@ -911,21 +864,16 @@ std::vector<std::string> dumpDisk(const Ctx& c, int slot) {
 
 std::vector<std::string> pc1600View(const PC1600Machine& m, View v) {
     const Ctx c(m);
-    std::vector<std::string> out;
-    auto titled = [&](std::vector<std::string> body) {
-        out.push_back(fmt("── %s ──", viewTitle(v)));
-        out.insert(out.end(), body.begin(), body.end());
-        return out;
-    };
+    auto body = [&](std::vector<std::string> lines) { return titled(v, false, std::move(lines)); };
     switch (v) {
-        case View::Pointers: return titled(pointersView(c));
-        case View::Inventory: return titled(inventoryView(c));
-        case View::Z80View: return titled(z80View(c));
-        case View::LhView: return titled(lhView(c));
-        case View::BasicArea: return titled(basicAreaView(c));
-        case View::ProgramAreas: return titled(programAreasView(c));
-        case View::DiskAreas: return titled(diskAreasView(c));
-        case View::PhysicalRam: return titled(physicalRamView(c));
+        case View::Pointers: return body(pointersView(c));
+        case View::Inventory: return body(inventoryView(c));
+        case View::Z80View: return body(z80View(c));
+        case View::LhView: return body(lhView(c));
+        case View::BasicArea: return body(basicAreaView(c));
+        case View::ProgramAreas: return body(programAreasView(c));
+        case View::DiskAreas: return body(diskAreasView(c));
+        case View::PhysicalRam: return body(physicalRamView(c));
         case View::DumpBasicArea: {
             const pc1600::PlacementResult plan = pc1600::planS0Placement(c.placementInput(), {});
             if (!plan.ok) return {"BASIC area: " + plan.error};

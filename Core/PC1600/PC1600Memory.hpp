@@ -303,13 +303,9 @@ public:
         return c ? c->debugImage() : std::vector<uint8_t>{};
     }
 
-    /// The Slot 1 / Slot 2 card's contentRevision(); 0 for an empty slot.
+    /// The Slot 1 card's contentRevision(); 0 for an empty slot.
     uint64_t slot1CardRevision() const {
         auto* c = m_slot1Conn.attachedCard();
-        return c ? c->contentRevision() : 0;
-    }
-    uint64_t slot2CardRevision() const {
-        auto* c = m_slot2Conn.attachedCard();
         return c ? c->contentRevision() : 0;
     }
 
