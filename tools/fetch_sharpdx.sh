@@ -15,7 +15,7 @@
 #
 # Usage: tools/fetch_sharpdx.sh
 # Env vars:
-#   SHARPDX_TAG       release tag to fetch (default: v0.3.4)
+#   SHARPDX_TAG       release tag to fetch (default: v0.3.5)
 #   SHARPDX_PLATFORM  override auto-detected platform: linux-x86_64,
 #                     linux-aarch64, windows-x86_64, or windows-aarch64
 #                     (the release archive names' spelling)
@@ -49,7 +49,7 @@ set -eu
 cd "$(dirname "$0")/.."
 REPO_ROOT=$(pwd)
 DST="$REPO_ROOT/Core/Basic/vendor/sharpdx"
-TAG=${SHARPDX_TAG:-v0.3.4}
+TAG=${SHARPDX_TAG:-v0.3.5}
 
 detect_platform() {
   os=$(uname -s)

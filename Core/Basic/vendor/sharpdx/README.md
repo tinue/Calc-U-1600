@@ -2,7 +2,7 @@
 
 `libsharpdx.a` + `sharpdx.h` are the prebuilt static library and generated C
 header of [`SharpDataExchange`](../../../../SharpDataExchange) (crate `sharpdx`,
-version 0.3.4). Every program loader uses it: `sde_file_info` tells what a
+version 0.3.5). Every program loader uses it: `sde_file_info` tells what a
 file is (BASIC listing, tokenized BASIC, machine code with or without a
 header, cassette WAV) and where its payload is (`Core/ProgramFile.cpp`,
 which decodes a WAV with `sde_wav_count` / `sde_wav_decode`), and `sde_tokenize`
