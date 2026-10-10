@@ -69,6 +69,9 @@ DebugPanel::DebugPanel(MachineController* controller, QWidget* parent)
     m_output = new QPlainTextEdit(this);
     m_output->setReadOnly(true);
     m_output->setLineWrapMode(QPlainTextEdit::NoWrap);
+    // Tables don't wrap; a table wider than the panel needs a scroll bar the
+    // user can see (macOS hides overlay scroll bars until one scrolls).
+    m_output->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     // Never take keyboard focus from MainWindow (which owns physical-
     // keyboard typing for the calculator) -- same convention as
     // ControlBar's widgets.
@@ -233,9 +236,13 @@ void DebugPanel::refreshDebugDisplay() {
         text += QString::fromStdString(m_ringBuf[(startPos + i) % kRingBufCap]);
     }
     m_output->setPlainText(text);
+    // To the last line's start, not its end: a wide table or dump line would
+    // otherwise scroll the view sideways to its right edge.
     QTextCursor cursor = m_output->textCursor();
     cursor.movePosition(QTextCursor::End);
+    cursor.movePosition(QTextCursor::StartOfBlock);
     m_output->setTextCursor(cursor);
+    m_output->horizontalScrollBar()->setValue(0);
     m_clearButton->setEnabled(true);
 }
 

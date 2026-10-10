@@ -18,6 +18,26 @@ std::string padTo(const std::string& s, size_t width, bool right) {
     return right ? fill + s : s + fill;
 }
 
+void addNote(std::vector<std::string>& out, const std::string& text) {
+    const size_t width = std::max<size_t>(60, out.empty() ? 0 : displayWidth(out.front()));
+    std::string line, word;
+    auto flushWord = [&] {
+        if (word.empty()) return;
+        if (!line.empty() && displayWidth(line) + 1 + displayWidth(word) > width) {
+            out.push_back(line);
+            line.clear();
+        }
+        line += (line.empty() ? "" : " ") + word;
+        word.clear();
+    };
+    for (char ch : text) {
+        if (ch == ' ') flushWord();
+        else word += ch;
+    }
+    flushWord();
+    if (!line.empty()) out.push_back(line);
+}
+
 TextTable::TextTable(std::vector<std::string> headers, std::vector<Align> align)
     : m_headers(std::move(headers)), m_align(std::move(align)) {
     m_align.resize(m_headers.size(), Align::Left);

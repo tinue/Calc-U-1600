@@ -456,16 +456,16 @@ std::vector<std::string> z80View(const Ctx& c) {
         t.addRow({std::string(1, pages[p]), range(p * 0x4000u, p * 0x4000u + 0x3FFF), fmt("%u", bank[p]), src, kind});
     }
     std::vector<std::string> out = t.render();
-    out.push_back(fmt("Port 31H = %02X (bank select)   28H = %02X (Slot 2 vertical bank)   3CH = %02X (SLOTMAP)",
+    addNote(out, fmt("Port 31H = %02X (bank select), 28H = %02X (Slot 2 vertical bank), 3CH = %02X (SLOTMAP)",
                       bs.port31, bs.port28, bs.port3c));
-    out.push_back(std::string("Port 3DH b2 = ") + (bs.hiddenBasicRom ? "0: page B bank 3 is the hidden BASIC ROM 3b"
+    addNote(out, std::string("Port 3DH b2 = ") + (bs.hiddenBasicRom ? "0: page B bank 3 is the hidden BASIC ROM 3b"
                                                                       : "1: page B bank 3 is BASIC ROM 3"));
-    out.push_back(bs.slot1MapRemapped ? "SLOT1MAP on: Slot 1's upper 16K also answers at page B bank 1"
+    addNote(out, bs.slot1MapRemapped ? "SLOT1MAP on: Slot 1's upper 16K also answers at page B bank 1"
                                       : "SLOT1MAP off: Slot 1 only at page C banks 0/1");
     switch (bs.slot2MapMode) {
-        case 1: out.push_back("SLOT2MAP mode 1: Slot 2's lower 16K also answers at page C bank 1"); break;
-        case 2: out.push_back("SLOT2MAP mode 2: Slot 2 also at page B bank 1 (lower 16K) and page A bank 1 (upper 16K)"); break;
-        default: out.push_back("SLOT2MAP mode 0: Slot 2 only at page C banks 2/3"); break;
+        case 1: addNote(out, "SLOT2MAP mode 1: Slot 2's lower 16K also answers at page C bank 1"); break;
+        case 2: addNote(out, "SLOT2MAP mode 2: Slot 2 also at page B bank 1 (lower 16K) and page A bank 1 (upper 16K)"); break;
+        default: addNote(out, "SLOT2MAP mode 0: Slot 2 only at page C banks 2/3"); break;
     }
     return out;
 }
@@ -568,9 +568,9 @@ std::vector<std::string> lhView(const Ctx& c) {
     t.addRow({"ME1", "8000–BFFF", "open bus elsewhere", "an I/O cycle, never the ROM window"});
     t.addRow({"ME1", "F000–F00F", "SC7852 ports 10H–1FH", "the LH5810-compatible block"});
     std::vector<std::string> out = t.render();
-    out.push_back(fmt("PU = %d, PV = %d (the LH5803's flip-flops; the ROM sets PV from CALLH's PARBAN)", lh.pu(), lh.pv()));
-    out.push_back(c.m.sc7852Owns() ? "Bus owner: the SC7852 (the LH5803 waits)" : "Bus owner: the LH5803");
-    out.push_back(mode1Line(c));
+    addNote(out, fmt("PU = %d, PV = %d (the LH5803's flip-flops; the ROM sets PV from CALLH's PARBAN)", lh.pu(), lh.pv()));
+    addNote(out, c.m.sc7852Owns() ? "Bus owner: the SC7852 (the LH5803 waits)" : "Bus owner: the LH5803");
+    addNote(out, mode1Line(c));
     return out;
 }
 
@@ -649,7 +649,7 @@ std::vector<std::string> basicAreaView(const Ctx& c) {
     t.addRow({range(kWorkArea, 0xFFFF), range(0x7000, 0x7FFF), "4K", "BASIC / IOCS work area, stacks, buffers"});
     std::vector<std::string> out = t.render();
     const CoreDebug::PC1600ProgramAreas areas = CoreDebug::readPC1600ProgramAreas([&](uint16_t a) { return c.wa(a); });
-    out.push_back(fmt("Program %d bytes, MEM %d bytes free. A program never straddles a module bank: each bank's "
+    addNote(out, fmt("Program %d bytes, MEM %d bytes free. A program never straddles a module bank: each bank's "
                       "part ends with a 00 00 mark.",
                       f.programBytes, areas.memS0));
     return out;
@@ -687,7 +687,7 @@ std::vector<std::string> programAreasView(const Ctx& c) {
                   areas.title == i + 1 ? mark : ""});
     }
     std::vector<std::string> out = t.render();
-    out.push_back("Addresses are Z-80; [n] is the ADTBL index. S1/S2 are program modules (INIT \"Sn:\",\"P\"); "
+    addNote(out, "Addresses are Z-80; [n] is the ADTBL index. S1/S2 are program modules (INIT \"Sn:\",\"P\"); "
                   "TITLE picks the one RUN / LIST / LOAD work on, MEM counts S0 only.");
     return out;
 }
@@ -769,10 +769,10 @@ std::vector<std::string> diskAreasView(const Ctx& c) {
     std::vector<std::string> out = t.render();
     const SlotInfo& s2 = c.slot[2];
     if (s2.portBanked())
-        out.push_back(fmt("Slot 2 switches its vertical banks with OUT (28H); latched now: %d (last OUT 28H = %u). "
+        addNote(out, fmt("Slot 2 switches its vertical banks with OUT (28H); latched now: %d (last OUT 28H = %u). "
                           "Only the file system switches them; vertical bank 0 is the one BASIC sees.",
                           s2.bank, c.bs.port28));
-    out.push_back("A RAM disk is the module above its RAM part (F055H / F05BH): INIT \"Sn:\",\"F\" makes the whole "
+    addNote(out, "A RAM disk is the module above its RAM part (F055H / F05BH): INIT \"Sn:\",\"F\" makes the whole "
                   "module a disk, \"M\" / \"P\" give the lower 32K back to BASIC.");
     return out;
 }
@@ -859,7 +859,7 @@ std::vector<std::string> physicalRamView(const Ctx& c) {
         chip(title + ")", chips[s], uint32_t(si.image.size()), si.image.size() > 0x10000 ? 5 : 4);
     }
     std::vector<std::string> out = t.render();
-    out.push_back("Offsets into each RAM; a slot module's are into its image (16K halves by PVOUT, vertical banks above). "
+    addNote(out, "Offsets into each RAM; a slot module's are into its image (16K halves by PVOUT, vertical banks above). "
                   "\"unused\" is RAM no area claims.");
     return out;
 }

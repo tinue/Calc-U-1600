@@ -25,6 +25,11 @@ size_t displayWidth(const std::string& utf8);
 /// `s` padded with spaces to `width` code points (never truncated).
 std::string padTo(const std::string& s, size_t width, bool right = false);
 
+/// Appends `text` to `out` broken at spaces to the width of `out`'s first
+/// line (a rendered table's top border), at least 60 columns: the notes
+/// under a table, so they are never wider than the table.
+void addNote(std::vector<std::string>& out, const std::string& text);
+
 class TextTable {
 public:
     enum class Align { Left, Right };

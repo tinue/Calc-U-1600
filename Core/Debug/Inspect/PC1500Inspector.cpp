@@ -322,7 +322,7 @@ std::vector<std::string> lhView(const Ctx& c) {
         if (!r.name.empty()) t.addRow({"ME1", range(r.lo, r.hi), r.name, "card I/O"});
     t.addRow({"ME1", "F000–F00F", "LH5811 I/O ports", "any ME1 address with A12 = A13 = 1"});
     std::vector<std::string> out = t.render();
-    out.push_back(fmt("PU = %d, PV = %d (the LH5801's flip-flops)", mem.pu(), mem.pv()));
+    addNote(out, fmt("PU = %d, PV = %d (the LH5801's flip-flops)", mem.pu(), mem.pv()));
     return out;
 }
 
@@ -362,7 +362,7 @@ std::vector<std::string> basicAreaView(const Ctx& c) {
             }
     }
     std::vector<std::string> out = t.render();
-    out.push_back(fmt("RAM_ST:00 = %04X, RAM_END:00 = %04X; MEM %d bytes free.", f.ramSt, f.ramEnd,
+    addNote(out, fmt("RAM_ST:00 = %04X, RAM_END:00 = %04X; MEM %d bytes free.", f.ramSt, f.ramEnd,
                       int(f.ramEnd) - int(f.end) - 1));
     return out;
 }
