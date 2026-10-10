@@ -69,12 +69,12 @@ void test_lh5803_me1_block_and_motor_writes() {
     mem.writeME1(0xB00C, 0x3C);
     CHECK(mem.readME1(0xB00C) == 0x3C);
 
-    // The whole 0xB000-0xB00F ME1 block is the CE-150's LH5810 chip-select:
-    // the non-register part (0xB000-0xB007) must read back as open bus, not
-    // fall through to readME0() and get mis-served as CE-150 *ROM* bytes,
-    // which would desync LPRINT's inter-step LH5810 poll after one glyph.
+    // ME1 0xB000-0xB007 (no LH5810 register there) is never served the
+    // CE-150 *ROM* bytes: an ME1 cycle is I/O, so with nothing answering the
+    // bus floats and keeps its last byte.
     mem.updatePUPV(false, /*pv=*/false); // ROM window would be live at PV=0
-    for (uint16_t a = 0xB000; a <= 0xB007; ++a) CHECK(mem.readME1(a) == 0xFF);
+    mem.writeME1(0x0100, 0x5A);          // nothing there: only the bus carries it
+    for (uint16_t a = 0xB000; a <= 0xB007; ++a) CHECK(mem.readME1(a) == 0x5A);
     // ...while the ROM itself is still readable in the *ME0* window.
     CHECK(mem.readME0(0xB005) == rom[0xB005 - 0xA000]);
 

@@ -565,13 +565,12 @@ std::vector<std::string> lhView(const Ctx& c) {
                   fmt("peripheral window, PU=%d PV=%d", lh.pu(), lh.pv())});
     t.addRow({"ME0", "C000–FFFF", "LH5803 ROM", ""});
 
-    t.addSpan("ME1 (aliases ME0 except below)");
+    t.addSpan("ME1 (floats except below: keeps the bus's last byte)");
     t.addRow({"ME1", "0020–0027, 0033", "UART TC8576F / sub-CPU answer", "also A020–A027, A033"});
     t.addRow({"ME1", "A030–A03F", "SC7852 ports 30H–3FH", "A038 = bus handoff to the SC7852"});
     t.addRow({"ME1", "8040–805F, A040–A05F", "LCD ports 40H–5FH", ""});
     for (const Run& r : scanBus(c, 0x8000, 0xFFFF, true, 8))
         if (!r.card.empty()) t.addRow({"ME1", range(r.lo, r.hi), r.card, "card I/O"});
-    t.addRow({"ME1", "8000–BFFF", "open bus elsewhere", "an I/O cycle, never the ROM window"});
     t.addRow({"ME1", "F000–F00F", "SC7852 ports 10H–1FH", "the LH5810-compatible block"});
     std::vector<std::string> out = t.render();
     addNote(out, fmt("PU = %d, PV = %d (the LH5803's flip-flops; the ROM sets PV from CALLH's PARBAN)", lh.pu(), lh.pv()));

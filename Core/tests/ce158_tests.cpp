@@ -296,15 +296,15 @@ void test_debug_peek_skips_card_registers() {
     PC1600Machine pc1600;
     auto& lh = pc1600.lh5803Memory();
     lh.debugPeek(0xD200, /*me1=*/true, &readable);
-    CHECK(readable);                                   // no CE-158: LH5803 ROM alias
+    CHECK(!readable);                                  // no CE-158: nothing answers, the bus floats
+    lh.debugPeek(0xF00C, /*me1=*/true, &readable);
+    CHECK(readable);                                   // the port block 10H-1FH
     CHECK(pc1600.attachCE158(rom.data(), rom.size()));
     lh.debugPeek(0xD200, /*me1=*/true, &readable);
-    CHECK(!readable);
+    CHECK(!readable);                                  // its UART: a read would disturb it
     lh.debugPeek(0xD400, /*me1=*/true, &readable);
-    CHECK(readable);                                   // just past the CE-158's blocks
+    CHECK(!readable);                                  // just past the CE-158's blocks: floats
     pc1600.detachCE158();
-    lh.debugPeek(0xD200, /*me1=*/true, &readable);
-    CHECK(readable);
 }
 
 const char* kSysRom = "roms/PC-1500_A04.ROM";
@@ -423,12 +423,14 @@ void test_pc1600_lh5803_window_and_io_routing() {
     CHECK(mem.readME1(0xDE00) == 0x80);
 
     // ME1 8000-BFFF is an I/O cycle: never a card ROM byte, whatever PV is.
+    // Nothing answers there, so the bus floats and keeps its last byte.
+    mem.writeME1(0x0100, 0x5A); // nothing there: only the bus carries it
     mem.updatePUPV(false, /*pv=*/true);
-    CHECK(mem.readME1(0x8000) == 0xFF);
+    CHECK(mem.readME1(0x8000) == 0x5A);
     mem.updatePUPV(false, /*pv=*/false);
-    CHECK(mem.readME1(0xA000) == 0xFF);
-    CHECK(mem.readME1(0xB010) == 0xFF);
-    CHECK(mem.readME1(0xB000) == 0xFF); // B000-B007: LH5810 select, no register
+    CHECK(mem.readME1(0xA000) == 0x5A);
+    CHECK(mem.readME1(0xB010) == 0x5A);
+    CHECK(mem.readME1(0xB000) == 0x5A); // B000-B007: LH5810 select, no register
 
     m.detachCE158();
     CHECK(mem.readME1(0xD00C) != 0x3C || mem.readME0(0xD00C) == 0x3C); // falls back to the ROM alias

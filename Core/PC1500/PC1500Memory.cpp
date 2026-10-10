@@ -172,7 +172,7 @@ uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
             default: return m_ioScratchRegs[addr & 0xF];
         }
     }
-    return peek(addr);
+    return 0xFF; // open bus, as readME1()
 }
 
 uint8_t PC1500Memory::readME1(uint16_t addr) {
@@ -222,7 +222,11 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
             default: return m_ioScratchRegs[addr & 0xF]; // not modeled, but read back what was written
         }
     }
-    return readME0(addr); // no other documented ME1 wiring -- conservative mirror
+    // Nothing else answers in ME1: the RAMs, the display RAM and the ROM
+    // decode ME0 only (TRM chip-select table: "S0-S7, V2, V3 are applicable
+    // only for the ME0 area"), and a real PC-1500A reads 255 there --
+    // PEEK# &111, &7C02 and &C000 (2026-10-10, docs/background/Decisions.md).
+    return 0xFF;
 }
 
 void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
@@ -254,7 +258,7 @@ void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
             default: m_ioScratchRegs[addr & 0xF] = value; return; // not modeled, but not discarded either
         }
     }
-    writeME0(addr, value);
+    // Unclaimed ME1: no chip takes the write (see readME1()).
 }
 
 uint8_t PC1500Memory::readInputPort() {

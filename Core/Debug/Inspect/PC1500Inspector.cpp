@@ -317,7 +317,7 @@ std::vector<std::string> lhView(const Ctx& c) {
                   fmt("60-pin bus, PU=%d PV=%d", mem.pu(), mem.pv())});
     t.addRow({"ME0", "C000–FFFF", "System ROM", ""});
 
-    t.addSpan("ME1 (aliases ME0 except below)");
+    t.addSpan("ME1 (open bus, FFH, except below)");
     for (const Run& r : scan(0x8000, 0xFFFF, 8, [&](uint16_t a) { return busCardAt(c, a, true, mem.pu(), mem.pv()); }))
         if (!r.name.empty()) t.addRow({"ME1", range(r.lo, r.hi), r.name, "card I/O"});
     t.addRow({"ME1", "F000–F00F", "LH5811 I/O ports", "any ME1 address with A12 = A13 = 1"});

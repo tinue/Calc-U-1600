@@ -419,6 +419,29 @@ void test_debug_bank_state_resolves_the_live_address_map() {
     CHECK(s.slotmapRedirect[2]);
 }
 
+// LH5803 ME1 where nothing answers: no RAM or ROM (an ME1 cycle is the
+// SC7852's IORQ); the bus keeps its last byte. A real PC-1600 in MODE 1:
+// XPOKE &4100,85 -> XPEEK &4100 = 85, XPEEK# &4100 / &C000 / &1000 = 37,
+// the 25H of XPEEK#'s LDA #(U) (FD 25H).
+void test_lh5803_unclaimed_me1_floats() {
+    PC1600Machine m;
+    LH5803SharedMemory& lh = m.lh5803Memory();
+    m.memory().write(0xC100, 85);                 // LH5803 4100H
+    m.memory().write(0xC200, 0xFD);               // an LDA #(U) at LH5803 4200H
+    m.memory().write(0xC201, 0x25);
+    CHECK(lh.readME0(0x4100) == 85);
+    lh.readME0(0x4200);                           // the fetch: FD, 25
+    lh.readME0(0x4201);
+    CHECK(lh.readME1(0x4100) == 0x25);            // not 85: the RAM isn't there in ME1
+    CHECK(lh.readME1(0xC000) == 0x25);            // nor the LH5803 ROM
+    CHECK(lh.readME1(0x1000) == 0x25);
+    lh.writeME1(0x4100, 0x11);                    // goes nowhere
+    CHECK(lh.readME0(0x4100) == 85);
+    bool readable = true;
+    lh.debugPeek(0x4100, /*me1=*/true, &readable);
+    CHECK(!readable);                             // a floating byte has no value to show
+}
+
 // The ROM's OFF sequence in miniature: the SC-7852 hands the bus to the
 // LH-5803 (OUT (38H) ; HALT), which sends the system-off command raw as
 // 15H (= ~EAH) and halts (rom1500 E527H-E553H).
@@ -972,6 +995,7 @@ int run_pc1600_machine_tests() {
     test_debug_write_slot_bus_follows_card_wiring();
     test_debug_bank_state_reports_registers_and_card_bank();
     test_debug_bank_state_resolves_the_live_address_map();
+    test_lh5803_unclaimed_me1_floats();
     test_reset_starts_on_sc7852();
     test_sc7852_to_lh5803_handoff();
     test_lh5803_to_sc7852_handoff();

@@ -46,6 +46,19 @@ TP/RTC edge. The firmware clears the bit itself, and a stray edge in the
 middle of a loop breaks CE-150 LPRINT/TEST on the PC-1600. The user chose this
 over a live edge (a34f57d).
 
+### Unclaimed ME1 is not a mirror of ME0
+An ME1 address that no chip or card claims doesn't reach the RAM or the ROM.
+**PC-1500/1500A:** it reads FFH, writes go nowhere (`PC1500Memory::readME1`):
+on a real PC-1500A `PEEK# &111`, `&7C02` and `&C000` read 255 while `PEEK`
+reads the RAM / ROM, and a CE-163F decodes ME0 too. **PC-1600:** the LH5803's
+ME1 is the SC7852's IORQ, nothing drives the data bus, and a read returns the
+last byte the bus carried (`LH5803SharedMemory::readME1`): `XPEEK# &4100`,
+`&C000`, `&1000` read 37 = 25H, the second byte of `XPEEK#`'s `LDA #(U)`
+(FD 25H), while `XPEEK &4100` reads the 85 poked there (measured 2026-10-10).
+Don't reinstate the alias. Still open: the PC-1500's internal LH5811 is
+modelled to answer every ME1 address with A12 = A13 = 1, which makes
+`PEEK# &7C02` read register 2 (0) instead of the measured 255.
+
 ### SC7852 adds one wait state per M1
 `kM1WaitStates` (`Core/CPU/SC7852/SC7852.cpp`) looks like an arbitrary
 slowdown. It is measured: BEEP pitch on the real unit matches to 0.22%, and it

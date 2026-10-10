@@ -555,7 +555,7 @@ void test_pc1600_mirror_real_rom() {
     CHECK(lcdColumn(scrolled, 2, 78) == 0x87); // dots 0-2 and the old 7601H's dot 7
 }
 
-// ME0 writes drive the mirror; ME1 writes reach only the RAM.
+// ME0 writes drive the mirror; ME1 writes reach neither the LCD nor the RAM.
 void test_pc1600_mirror_me0_only() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
@@ -564,7 +564,7 @@ void test_pc1600_mirror_me0_only() {
     lh.writeME0(0x764F, 0x46);
     CHECK(statusWords(mem.display().statusLine()) == (std::vector<std::string>{"GRAD", "RUN"}));
     lh.writeME1(0x764F, 0x44);
-    CHECK(mem.read(0xF64F) == 0x44);
+    CHECK(mem.read(0xF64F) == 0x46);
     CHECK(statusWords(mem.display().statusLine()) == (std::vector<std::string>{"GRAD", "RUN"}));
 }
 

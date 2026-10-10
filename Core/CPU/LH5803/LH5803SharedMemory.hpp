@@ -38,15 +38,14 @@ class PC1600BusArbiter;
 //              then SPV if (700EH) bit 0).
 //   C000-FFFF  LH5803-private internal ROM (PC1600-LH5803-C000-FFFF-new.bin), fixed, loadable
 //
-// ME1 defaults to aliasing ME0, EXCEPT:
+// ME1 reaches neither the RAM nor any ROM (an ME1 cycle is the SC7852's
+// IORQ); an ME1 read nothing answers returns the last byte the bus carried
+// (measured, see readME1()). What does answer:
 //   * ME1 0x8000-0xFFFF (after the mainboard decodes below): offered to the
 //     cards with me1=true, terminal when one claims it -- the CE-150's
 //     LH5810 at 0xB008-0xB00F, the CE-158's LH5811 / UART / interrupt-ID
 //     blocks at 0xD000-0xD3FF / 0xDE00-0xDFFF. This host doesn't know
 //     which card sits where.
-//   * ME1 0x8000-0xBFFF that no card claims: an I/O cycle on the bus (the
-//     LH5803's ME1 is the SC7852's IORQ), so it never selects the ME0
-//     peripheral-ROM window -- open bus.
 //   * 0xA038: `STA #(0A038H)` is the LH5803-side handoff trigger (the
 //     LH5803-side alias of the SC7852's Port 38H, since the LH5803 has no
 //     I/O space of its own) -- forwarded to a PC1600BusArbiter via
@@ -123,7 +122,8 @@ public:
     /// Debugger view of the LH5803's ME0/ME1 without bus side effects.
     /// The UART / sub-CPU block, ME1 8000-BFFF and any card register a read
     /// would disturb (SystemBusCard::readHasSideEffects) can't be read
-    /// without side effects: `*readable` is false there and 0xFF is
+    /// without side effects, and an unclaimed ME1 address has no value of
+    /// its own (it floats): `*readable` is false there and 0xFF is
     /// returned. The F000-F00F port block reads as Z-80 ports 10H-1FH.
     uint8_t debugPeek(uint16_t addr, bool me1, bool* readable) const;
 
@@ -187,8 +187,15 @@ private:
     bool cardRead(uint16_t addr, bool me1, uint8_t* value) const;
     bool cardWrite(uint16_t addr, bool me1, uint8_t value);
 
+    /// The bytes the LH5803's bus really carries; readME1() returns the
+    /// last one where nothing drives the bus.
+    uint8_t onBus(uint8_t v) { m_dataBus = v; return v; }
+    uint8_t readME0Driven(uint16_t addr);
+    bool readME1Driven(uint16_t addr, uint8_t* out);
+
     PC1600Memory& m_shared;
     PC1600BusArbiter* m_arbiter{nullptr};
+    uint8_t m_dataBus{0xFF};
     LH5803Rom m_rom;
     bool m_pv{false};
     bool m_pu{false};

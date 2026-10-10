@@ -725,9 +725,13 @@ void test_io_chip_keyboard_wiring_through_memory() {
     CHECK(mem.readInputPort() == 0xFF);
 
     // An ME1 address outside the I/O-chip's decode window (bits 12-13 not
-    // both set) mirrors ME0.
+    // both set) is open bus: the RAM decodes ME0 only (a real PC-1500A
+    // reads PEEK# &111 = 255), so an ME1 write doesn't reach it.
+    mem.writeME0(0x4100, 0x11);
     mem.writeME1(0x4100, 0x77);
-    CHECK(mem.readME0(0x4100) == 0x77);
+    CHECK(mem.readME0(0x4100) == 0x11);
+    CHECK(mem.readME1(0x4100) == 0xFF);
+    CHECK(mem.readME1(0xC000) == 0xFF); // the ROM too (PEEK# &C000 = 255)
 }
 
 void test_rtc_tp_rate_and_gating() {

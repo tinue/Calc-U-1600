@@ -54,9 +54,9 @@
 // m_piezo (see PiezoSampler.hpp) so the sound comes from that square wave
 // itself. The serial block (divider, serial clock, F-register modulation,
 // transmitter) is the cassette path -- see LH5811Serial.hpp; serial
-// receive is out of scope. Any ME1 address outside the
-// I/O-chip's decode window mirrors ME0: nothing else is documented as
-// living there.
+// receive is out of scope. An ME1 address outside the I/O-chip's decode
+// window that no card claims is open bus (FFH): the RAMs, the display RAM
+// and the ROM decode ME0 only, as a real PC-1500A shows (PEEK# reads 255).
 class PC1500Memory : public LH5801Bus {
 public:
     explicit PC1500Memory(PC1500Variant variant = PC1500Variant::PC1500A);

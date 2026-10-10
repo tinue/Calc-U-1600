@@ -167,10 +167,10 @@ void test_systembus_me1_access() {
     // Only the 60-pin connector's DME1/ME1 pins expose ME1-space access at
     // all (Ref/Shared/Expansion-Connectors.md §2.2) -- ExpansionConnector has no
     // equivalent method. 0x2000 is outside the LH5811 I/O-chip's own
-    // decode window (addr & 0x3000 == 0x3000), so without a card it must
-    // still fall through to the ME0 mirror (today's placeholder behavior).
+    // decode window (addr & 0x3000 == 0x3000), so without a card it is
+    // open bus.
     PC1500Machine machine(PC1500Variant::PC1500A);
-    CHECK(machine.memory().readME1(0x2000) == machine.memory().readME0(0x2000)); // mirror, no card
+    CHECK(machine.memory().readME1(0x2000) == 0xFF); // no card
 
     BusStub card = makeReadStub<BusStub>(0x64, [](const SystemBusPins& p) {
         return p.pin[Contact60::kMe1] && p.pin[Contact60::kDme1] && !p.pin[Contact60::kDme0] && p.address == 0x2000;
