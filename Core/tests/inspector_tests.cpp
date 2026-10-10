@@ -263,14 +263,15 @@ void test_pc1600_lh_view_mode1_rows() {
         PC1600Machine m;
         if (!preset1600(m, "format-version: 1\nmodel: PC-1600\nslot-1: CE-161\nkeys:\n  - type: MODE 1\n")) return;
         const auto lh = view1600(m, inspect::View::LhView);
-        CHECK(row(lh, {"in a PC-1500 statement", "Slot 1 — CE-161, bank 0", "P_MAPPRG"}));
+        CHECK(row(lh, {"statements, XPEEK", "Slot 1 — CE-161, bank 0", "P_MAPPRG"}));
         CHECK(has(lh, "MODE 1 is on."));
+        CHECK(row(lh, {"functions, arithmetic", "ROM IV (bank 6)", "always page C as it is"}));
     }
     {
         PC1600Machine m;
         if (!preset1600(m, "format-version: 1\nmodel: PC-1600\nslot-1: CE-1600M\nslot-2: CE-1600M\n")) return;
         const auto lh = view1600(m, inspect::View::LhView);
-        CHECK(row(lh, {"in a PC-1500 statement", "ROM IV (bank 6)", "MODE 0"}));
+        CHECK(row(lh, {"statements, XPEEK", "ROM IV (bank 6)", "MODE 0"}));
         CHECK(has(lh, "MODE 1 would be refused with ERROR 110"));
     }
     {
@@ -279,7 +280,7 @@ void test_pc1600_lh_view_mode1_rows() {
                            "keys:\n  - type: POKE &F1BC,PEEK(&F1BC) OR 64\n"))
             return;
         const auto lh = view1600(m, inspect::View::LhView);
-        CHECK(row(lh, {"in a PC-1500 statement", "CE-1600M, bank 0"}));
+        CHECK(row(lh, {"statements, XPEEK", "CE-1600M, bank 0"}));
         CHECK(has(lh, "MODE 1 is forced"));
     }
 }

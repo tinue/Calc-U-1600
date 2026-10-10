@@ -540,16 +540,22 @@ std::vector<std::string> lhView(const Ctx& c) {
     const LH5803SharedMemory& lh = c.m.lh5803Memory();
     TextTable t({"Space", "LH5803", "Answers", "Note"});
     t.addSpan("ME0");
-    t.addRow({"ME0", "0000–3FFF", "Z80 8000–BFFF: " + pageCSourceFor(c, c.bs.pageCBank), "now: page C as mapped"});
+    // What the LH5803 finds at 0000H-3FFFH depends on what it runs: only a
+    // PC-1500 statement (X_EXCOMM_GO, DC8BH) and XPEEK (DCA0H) call
+    // P_MAPPRG; functions, comparisons, arithmetic and the power-off path
+    // see page C as the Z-80 left it.
+    t.addRow({"ME0", "0000–3FFF", "", ""});
     {
         const int b = statementPageCBank(c);
         const bool mode1 = c.wa(0xF1BC) & 0x40;
-        t.addRow({"", "  in a PC-1500 statement",
+        t.addRow({"", "  statements, XPEEK",
                   "Z80 8000–BFFF: " + pageCSourceFor(c, b < 0 ? c.bs.pageCBank : unsigned(b)),
                   b >= 0 ? "MODE 1: P_MAPPRG maps the program bank"
-                  : mode1 ? "MODE 1, no ADTBL entry: page C unchanged"
-                          : "MODE 0: page C stays as the Z-80 left it"});
+                  : mode1 ? "MODE 1, no ADTBL entry: page C as it is"
+                          : "MODE 0: page C as it is"});
     }
+    t.addRow({"", "  functions, arithmetic", "Z80 8000–BFFF: " + pageCSourceFor(c, c.bs.pageCBank),
+              "always page C as it is"});
     t.addRow({"ME0", "4000–7FFF", "Internal RAM (Z80 C000–FFFF)", ""});
     t.addRow({"", "  7400–744F", "→ 7600–764F", "LHA90 alias"});
     t.addRow({"", "  7500–754F", "→ 7700–774F", "LHA90 alias"});
