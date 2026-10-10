@@ -322,23 +322,29 @@ CE-1600P (docs/background/plans/Cassette-Tape-Plan.md, dev/tape-matrix/).
   new optional top-level key `dirty` (boolean) in `.floppy.yaml`. A tool
   that writes the image (sde) sets `dirty: true`. The emulator checks the
   inserted disk's file periodically; when it finds `dirty: true` it
-  unloads the floppy, writes the file back with `dirty: false` (or drops
-  the key), and loads it again. It has to land before 1.0, because from
-  1.0 on the format only changes compatibly (docs/background/Decisions.md,
-  "From 1.0 on, the previous format version keeps working"). Work:
-  - Format: `dirty` in `floppy_detail::parseCatalogEntry`'s key list and
-    `formatFloppyFile` (written only when true, or always?), the
-    canonical key order and the key table in Floppy-Image-Format.md;
-    decide whether it bumps `format-version`.
+  unloads the floppy, writes the file back without the key, and loads it
+  again. It has to land before 1.0, because from 1.0 on the format only
+  changes compatibly (docs/background/Decisions.md, "From 1.0 on, the
+  previous format version keeps working"). Settled (2026-10-10):
+  - **Written only when dirty.** `dirty: true` or no key at all; a clean
+    file never carries `dirty: false`. The reader accepts `false` as clean.
+  - **`format-version` stays 1** (pre-1.0, no bump).
+  - **Conflicts: the emulator wins.** If the emulator has its own writes
+    to the disk that aren't saved yet when it finds `dirty: true`, it
+    doesn't reload: its autosave writes the image as usual (without the
+    key), and the outside change is lost.
+  - **Templates can't be dirty.** `dirty` together with `template: true`
+    is a parse error.
+  Work:
+  - Format: `dirty` in `floppy_detail::parseCatalogEntry`'s key list (with
+    the template check) and `formatFloppyFile`, the canonical key order
+    and the key table in Floppy-Image-Format.md.
   - Emulator: a cheap periodic check of the inserted disk (mtime first,
-    then the header only, not the 1 MB of sector hex), the
-    unload/clear/reload in `FloppyDiskManager`, and what happens to a
-    pending autosave of the emulator's own writes (the outside change
-    wins; the emulator's unsaved writes are lost, or refused?).
-  - Templates: a bundled or template disk is never written, so a `dirty`
-    template is reloaded without clearing the flag.
-  - SharpDataExchange (separate repo): `sde put`/`del` set `dirty: true`,
-    and libsharpdx's reader accepts the key.
+    then the header only, not the 1 MB of sector hex) and the
+    unload/clear/reload in `FloppyDiskManager`, skipped while an autosave
+    is pending.
+  - SharpDataExchange (separate repo): `sde put`/`del` set `dirty: true`
+    (and refuse a template), and libsharpdx's reader accepts the key.
 
 ## Code cleanup backlog
 
