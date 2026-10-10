@@ -38,10 +38,13 @@
 // ME1 (the LH5801's second bank, accessed via `#(addr)` forms) hosts the
 // LH5811 I/O-port controller, confirmed by live hardware testing on a
 // real PC-1500. The chip is selected by
-// any ME1 address with bits 12-13 both set (confirmed on real hardware
-// that bits 4-11 and 14-15 don't matter — 0xF000-0xF00F is just the
-// conventional address the ROM uses, not the only one that works); the
-// low 4 bits select one of its registers (RS0-3 = AD0-3). Only the
+// ME1 0xF000-0xFFFF: 1Y3 (A14/A15, C000-FFFF, TRM chip-select circuit)
+// with A12/A13 set; bits 4-11 don't matter (0xF000-0xF00F is just the
+// conventional address the ROM uses). A real PC-1500A reads 255 at ME1
+// 700CH and 8 at F00CH (2026-10-10), so the A14/A15 half matters. The
+// low 4 bits select one of its registers (RS0-3 = AD0-3); 0-3 have no
+// register (the first is F004H, the divider reset) and read open bus
+// (PEEK# &F002 = 255). Only the
 // registers a stock PC-1500 actually needs are modeled — DDA/OPA (drives
 // the keyboard's column strobe; keyboard *rows* are read directly off the
 // CPU's IN0-IN7 pins via ITA, bypassing this chip entirely) and DDB/OPB
@@ -310,7 +313,9 @@ private:
     // attached, always false (today's unconditional ROM behavior).
     bool inhibitAsserted() const;
 
-    static bool isIoChipAddress(uint16_t addr) { return (addr & 0x3000) == 0x3000; }
+    static bool isIoChipAddress(uint16_t addr) { return (addr & 0xF000) == 0xF000; }
+    /// Register slots 0-3 of the LH5811: no register there.
+    static bool isNoRegister(uint16_t addr) { return (addr & 0xF) < 4; }
 
     // Single source of truth for the address decode, shared by
     // readME0/writeME0/peek/poke. Returns nullptr for an open-bus address,

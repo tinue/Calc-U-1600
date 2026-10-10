@@ -55,9 +55,14 @@ ME1 is the SC7852's IORQ, nothing drives the data bus, and a read returns the
 last byte the bus carried (`LH5803SharedMemory::readME1`): `XPEEK# &4100`,
 `&C000`, `&1000` read 37 = 25H, the second byte of `XPEEK#`'s `LDA #(U)`
 (FD 25H), while `XPEEK &4100` reads the 85 poked there (measured 2026-10-10).
-Don't reinstate the alias. Still open: the PC-1500's internal LH5811 is
-modelled to answer every ME1 address with A12 = A13 = 1, which makes
-`PEEK# &7C02` read register 2 (0) instead of the measured 255.
+Don't reinstate the alias. The PC-1500's internal LH5811 answers ME1
+F000H–FFFFH only (1Y3 = C000–FFFF with A12/A13; bits 4–11 ignored):
+`PEEK# &700C` = 255, `PEEK# &F00C` = 8. Its register slots 0–3 hold no
+register (the first is the divider reset, F004H) and read FFH
+(`PEEK# &F002` = 255). The 40-pin connector is never offered an ME1 cycle:
+it carries only DME0, and every module known gates on it (S-strobe chips
+inherit the mainboard's ME0 check; the CE-155/CE-159 Y0 chip gates on DME0),
+so none appears in ME1.
 
 ### SC7852 adds one wait state per M1
 `kM1WaitStates` (`Core/CPU/SC7852/SC7852.cpp`) looks like an arbitrary

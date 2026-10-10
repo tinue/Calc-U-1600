@@ -709,7 +709,7 @@ void test_io_chip_keyboard_wiring_through_memory() {
     // Exercises the real ROM's own protocol (confirmed against real
     // hardware, see PC1500Memory.hpp's top comment): DDA at register 0xC,
     // OPA (column strobe) at register 0xE, both ME1-mapped and mirrored
-    // across any address with bits 12-13 set.
+    // across ME1 F000-FFFF (bits 4-11 don't matter).
     PC1500Memory mem;
     mem.writeME1(0xF00C, 0xFF); // DDA: PA all-output
     CHECK(mem.readME1(0xF00C) == 0xFF);
@@ -719,13 +719,23 @@ void test_io_chip_keyboard_wiring_through_memory() {
     mem.keyboard().setKeyState(PC1500Keyboard::Key::Digit1, true); // IN0/PA2
     CHECK(mem.readInputPort() == 0xFE);
 
-    // Confirmed mirror: bits 14-15 don't matter, only bits 12-13.
-    CHECK(mem.readME1(0xB00C) == 0xFF);
-    mem.writeME1(0xB00E, 0xFF); // re-strobe nothing via the mirror address
+    // Mirrored across F000-FFFF: bits 4-11 don't matter.
+    CHECK(mem.readME1(0xFA5C) == 0xFF);
+    mem.writeME1(0xFA5E, 0xFF); // re-strobe nothing via the mirror address
     CHECK(mem.readInputPort() == 0xFF);
 
-    // An ME1 address outside the I/O-chip's decode window (bits 12-13 not
-    // both set) is open bus: the RAM decodes ME0 only (a real PC-1500A
+    // Only F000-FFFF: a real PC-1500A reads PEEK# &700C = 255 but
+    // PEEK# &F00C = 8, so A14/A15 matter too.
+    mem.writeME1(0xF00C, 0x08);
+    CHECK(mem.readME1(0x700C) == 0xFF);
+    CHECK(mem.readME1(0xB00C) == 0xFF);
+    CHECK(mem.readME1(0xF00C) == 0x08);
+    // Register slots 0-3 hold no register (the first is the divider reset at
+    // F004H): open bus, PEEK# &F002 = 255.
+    mem.writeME1(0xF002, 0x12);
+    CHECK(mem.readME1(0xF002) == 0xFF);
+
+    // An ME1 address outside the I/O-chip's decode window is open bus: the RAM decodes ME0 only (a real PC-1500A
     // reads PEEK# &111 = 255), so an ME1 write doesn't reach it.
     mem.writeME0(0x4100, 0x11);
     mem.writeME1(0x4100, 0x77);

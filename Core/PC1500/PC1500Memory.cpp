@@ -161,7 +161,7 @@ uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
         return 0xFF;
     }
     if (m_systemBus.read(pins, v)) return v;
-    if (isIoChipAddress(addr)) {
+    if (isIoChipAddress(addr) && !isNoRegister(addr)) {
         switch (addr & 0xF) {
             case 0xC: return m_dda;
             case 0xE: return m_opa;
@@ -178,17 +178,15 @@ uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
 uint8_t PC1500Memory::readME1(uint16_t addr) {
     // Only the 60-pin plug carries ME1 (the 40-pin connector has no
     // equivalent), and a card there gets first refusal on every ME1
-    // access. A card register inside the internal LH5811's broad decode
-    // (isIoChipAddress() matches any ME1 address with bits 12-13 set)
-    // shadows it: the CE-150's LH5810 at 0xB008-0xB00F is exactly such a
-    // clash, which the firmware avoids by addressing its own chip at
-    // 0xF00x. The host doesn't need to know which card sits where; with no
-    // card on the chain this falls straight through.
+    // access. The host doesn't need to know which card sits where; with no
+    // card on the chain this falls straight through. The internal LH5811
+    // answers ME1 F000-FFFF (isIoChipAddress()), the CE-150's LH5810 the
+    // B000-BFFF page, so the two never clash.
     {
         uint8_t v;
         if (busRead(addr, /*me1=*/true, v)) return v;
     }
-    if (isIoChipAddress(addr)) {
+    if (isIoChipAddress(addr) && !isNoRegister(addr)) {
         switch (addr & 0xF) { // RS0-3 = AD0-3
             case 0xC: return m_dda;
             case 0xE: return m_opa;
@@ -232,7 +230,7 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
 void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
     // See readME1(): a 60-pin card gets first refusal on every ME1 access.
     if (busWrite(addr, /*me1=*/true, value)) return;
-    if (isIoChipAddress(addr)) {
+    if (isIoChipAddress(addr) && !isNoRegister(addr)) {
         switch (addr & 0xF) {
             case 0xC: m_dda = value; return;
             case 0xE: m_opa = value; return; // drives the keyboard column strobe -- see readInputPort()

@@ -320,7 +320,7 @@ std::vector<std::string> lhView(const Ctx& c) {
     t.addSpan("ME1 (open bus, FFH, except below)");
     for (const Run& r : scan(0x8000, 0xFFFF, 8, [&](uint16_t a) { return busCardAt(c, a, true, mem.pu(), mem.pv()); }))
         if (!r.name.empty()) t.addRow({"ME1", range(r.lo, r.hi), r.name, "card I/O"});
-    t.addRow({"ME1", "F000–F00F", "LH5811 I/O ports", "any ME1 address with A12 = A13 = 1"});
+    t.addRow({"ME1", "F000–F00F", "LH5811 I/O ports", "registers F004–F00F; again all through F0xx–FFxx"});
     std::vector<std::string> out = t.render();
     addNote(out, fmt("PU = %d, PV = %d (the LH5801's flip-flops)", mem.pu(), mem.pv()));
     return out;
