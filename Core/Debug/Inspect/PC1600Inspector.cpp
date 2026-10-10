@@ -545,7 +545,7 @@ std::vector<std::string> lhView(const Ctx& c) {
         const int b = statementPageCBank(c);
         const bool mode1 = c.wa(0xF1BC) & 0x40;
         t.addRow({"", "  in a PC-1500 statement",
-                  b < 0 ? "as now" : "Z80 8000–BFFF: " + pageCSourceFor(c, unsigned(b)),
+                  "Z80 8000–BFFF: " + pageCSourceFor(c, b < 0 ? c.bs.pageCBank : unsigned(b)),
                   b >= 0 ? "MODE 1: P_MAPPRG maps the program bank"
                   : mode1 ? "MODE 1, no ADTBL entry: page C unchanged"
                           : "MODE 0: page C stays as the Z-80 left it"});

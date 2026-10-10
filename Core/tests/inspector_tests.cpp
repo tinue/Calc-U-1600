@@ -94,13 +94,15 @@ void test_text_table_draws_boxes_and_spans() {
     t.addRow({"RAM", "16K"});
     t.addRow({"Σ", "1"});
     const auto out = t.render();
-    CHECK(out.size() == 7);
+    CHECK(out.size() == 8);
     CHECK(out[0] == "┌──────┬──────┐");
     CHECK(out[1] == "│ Name │ Size │");
+    CHECK(out[2] == "├──────┴──────┤");  // the columns end above a span
     CHECK(out[3] == "│ Built in    │");
-    CHECK(out[4] == "│ RAM  │  16K │");
-    CHECK(out[5] == "│ Σ    │    1 │");  // a multi-byte character counts once
-    CHECK(out[6] == "└──────┴──────┘");
+    CHECK(out[4] == "├──────┬──────┤");  // and start again below it
+    CHECK(out[5] == "│ RAM  │  16K │");
+    CHECK(out[6] == "│ Σ    │    1 │");  // a multi-byte character counts once
+    CHECK(out[7] == "└──────┴──────┘");
     for (const std::string& l : out) CHECK(inspect::displayWidth(l) == 15);
 }
 
@@ -268,7 +270,7 @@ void test_pc1600_lh_view_mode1_rows() {
         PC1600Machine m;
         if (!preset1600(m, "format-version: 1\nmodel: PC-1600\nslot-1: CE-1600M\nslot-2: CE-1600M\n")) return;
         const auto lh = view1600(m, inspect::View::LhView);
-        CHECK(row(lh, {"in a PC-1500 statement", "as now", "MODE 0"}));
+        CHECK(row(lh, {"in a PC-1500 statement", "ROM IV (bank 6)", "MODE 0"}));
         CHECK(has(lh, "MODE 1 would be refused with ERROR 110"));
     }
     {

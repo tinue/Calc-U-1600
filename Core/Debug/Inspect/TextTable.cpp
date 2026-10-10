@@ -92,24 +92,48 @@ std::vector<std::string> TextTable::render() const {
         return s;
     };
 
+    // A rule's junctions follow the rows around it: the column lines end
+    // above a span row (┴), start again below one (┬), cross between two
+    // rows of cells (┼).
+    const char* kLeft = "\xE2\x94\x9C";   // ├
+    const char* kRight = "\xE2\x94\xA4";  // ┤
+    auto rule = [&](bool cellsAbove, bool cellsBelow) {
+        const char* mid = cellsAbove && cellsBelow ? "\xE2\x94\xBC"  // ┼
+                          : cellsAbove             ? "\xE2\x94\xB4"  // ┴
+                                                   : "\xE2\x94\xAC"; // ┬
+        return line(kLeft, mid, kRight);
+    };
+    auto nextIsSpan = [&](size_t k) {
+        for (; k < m_rows.size(); ++k)
+            if (m_rows[k].kind != Kind::Rule) return m_rows[k].kind == Kind::Span;
+        return false;
+    };
+
     std::vector<std::string> out;
     out.push_back(line("\xE2\x94\x8C", "\xE2\x94\xAC", "\xE2\x94\x90")); // ┌ ┬ ┐
     out.push_back(cells(m_headers));
-    out.push_back(line("\xE2\x94\x9C", "\xE2\x94\xBC", "\xE2\x94\xA4")); // ├ ┼ ┤
+    out.push_back(rule(true, !nextIsSpan(0)));
+    bool lastSpan = false;  // the last row drawn was a span
     for (size_t k = 0; k < m_rows.size(); ++k) {
         const Row& r = m_rows[k];
         switch (r.kind) {
-            case Kind::Cells: out.push_back(cells(r.cells)); break;
+            case Kind::Cells:
+                if (lastSpan) out.push_back(rule(false, true));
+                out.push_back(cells(r.cells));
+                lastSpan = false;
+                break;
             case Kind::Rule:
-                if (k > 0 && k + 1 < m_rows.size())
-                    out.push_back(line("\xE2\x94\x9C", "\xE2\x94\xBC", "\xE2\x94\xA4"));
+                if (k > 0 && k + 1 < m_rows.size() && !lastSpan) out.push_back(rule(true, !nextIsSpan(k + 1)));
                 break;
             case Kind::Span:
+                if (lastSpan) out.push_back(line(kLeft, "\xE2\x94\x80", kRight));  // two spans: a plain rule
                 out.push_back("\xE2\x94\x82 " + padTo(r.cells[0], inner - 2) + " \xE2\x94\x82");
+                lastSpan = true;
                 break;
         }
     }
-    out.push_back(line("\xE2\x94\x94", "\xE2\x94\xB4", "\xE2\x94\x98")); // └ ┴ ┘
+    out.push_back(lastSpan ? line("\xE2\x94\x94", "\xE2\x94\x80", "\xE2\x94\x98")    // └ ─ ┘
+                           : line("\xE2\x94\x94", "\xE2\x94\xB4", "\xE2\x94\x98")); // └ ┴ ┘
     return out;
 }
 
