@@ -688,7 +688,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         idx++;
         const std::string at = "line " + std::to_string(line.lineNo) + ": ";
         static const char* const kKeys[] = {"format-version", "model", "plotter", "interface", "floppy", "floppy-file", "host-drive",
-                                            "slot-1", "slot-1-file", "slot-2", "slot-2-file", "program", "keys",
+                                            "slot-1", "slot-1-file", "slot-1-rom", "slot-2", "slot-2-file", "slot-2-rom", "program", "keys",
                                             "debug", "bus-rom"};
         if (std::find(std::begin(kKeys), std::end(kKeys), key) == std::end(kKeys)) {
             *error = at + "unrecognized field '" + key + "'";
@@ -742,6 +742,15 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             seen = true;
             if (key.size() > 6) (slot1 ? out->slot1ModuleSpecFile : out->slot2ModuleSpecFile) = resolvePath(presetDir, value);
             else (slot1 ? out->slot1ModuleSpecName : out->slot2ModuleSpecName) = value;
+        } else if (key == "slot-1-rom" || key == "slot-2-rom") {
+            // `slot-N-rom: <path>` -- the ROM of the ROM module in that
+            // slot, from a file (a ROM module under development).
+            std::string& romFile = key[5] == '1' ? out->slot1RomFile : out->slot2RomFile;
+            if (!romFile.empty()) {
+                *error = at + "'" + key + ":' is given twice";
+                return false;
+            }
+            romFile = resolvePath(presetDir, value);
         } else if (key == "plotter") {
             // `plotter: NAME[:ROM]` -- only the CE-1600P has a ROM choice.
             std::string name;
@@ -813,6 +822,19 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
     if (out->model.empty()) {
         *error = "'model' is required";
         return false;
+    }
+    if (!out->slot2RomFile.empty() && out->model != "PC-1600") {
+        *error = "'slot-2-rom:' is PC-1600 only -- the " + out->model + " has one slot ('slot-1:')";
+        return false;
+    }
+    for (int slot : {1, 2}) {
+        const bool hasRom = !(slot == 1 ? out->slot1RomFile : out->slot2RomFile).empty();
+        if (hasRom && !(slot == 1 ? hasSlot1 : hasSlot2)) {
+            const std::string n = std::to_string(slot);
+            *error = "'slot-" + n + "-rom:' needs a module in slot " + n + " ('slot-" + n + ":' or 'slot-" + n +
+                     "-file:')";
+            return false;
+        }
     }
     out->plotter = plotter;
     out->interfaceName = interfaceName;

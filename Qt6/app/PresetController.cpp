@@ -209,7 +209,8 @@ PresetLoadResult PresetController::runPC1500Preset(const PresetFile& preset, con
     const ScopedYieldHook<PC1500Machine> yieldHook(machine, m_yieldHook, m_controller->clockHz());
     m_controller->finishPresetLoad(modelForPreset(preset));
     const auto onArmed = [this](const PresetLoadResult& armedSoFar) {
-        m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(armedSoFar.slot1ResolvedPath));
+        m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(armedSoFar.slot1ResolvedPath),
+                                            QString::fromStdString(armedSoFar.slot1RomFile));
         m_moduleManager->syncFromPresetLoad(2);
         emit armed();
     };
@@ -225,8 +226,10 @@ PresetLoadResult PresetController::runPC1600Preset(const PresetFile& preset, con
     const ScopedYieldHook<PC1600Machine> yieldHook(machine, m_yieldHook, m_controller->clockHz());
     m_controller->finishPresetLoad(Model::PC1600);
     const auto onArmed = [this](const PresetLoadResult& armedSoFar) {
-        m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(armedSoFar.slot1ResolvedPath));
-        m_moduleManager->syncFromPresetLoad(2, QString::fromStdString(armedSoFar.slot2ResolvedPath));
+        m_moduleManager->syncFromPresetLoad(1, QString::fromStdString(armedSoFar.slot1ResolvedPath),
+                                            QString::fromStdString(armedSoFar.slot1RomFile));
+        m_moduleManager->syncFromPresetLoad(2, QString::fromStdString(armedSoFar.slot2ResolvedPath),
+                                            QString::fromStdString(armedSoFar.slot2RomFile));
         m_floppyManager->syncFromPresetLoad(QString::fromStdString(armedSoFar.floppyImageLabel),
                                             QString::fromStdString(armedSoFar.floppyResolvedPath));
         emit armed();

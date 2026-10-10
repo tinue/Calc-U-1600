@@ -447,6 +447,30 @@ void test_slot_keys() {
     CHECK(!parse("format-version: 1\nmodel: PC-1500\nslot-1:\n  - modulespec: CE-155\n", &p, &err));
 }
 
+// `slot-N-rom: <path>` -- a ROM file for the module in that slot: resolved
+// like a `-file` path, and only next to a module in the same slot.
+void test_slot_rom_keys() {
+    std::string err;
+    const auto parse = [](const std::string& yaml, PresetFile* out, std::string* e) {
+        *out = PresetFile{};  // a fresh result per parse
+        return ::parse(yaml, out, e);
+    };
+    PresetFile p;
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nslot-2-file: rom.card.yaml\nslot-2-rom: build/rom.bin\n", &p,
+                &err));
+    CHECK(p.slot2RomFile == "/tmp/build/rom.bin" && p.slot1RomFile.empty());
+    CHECK(parse("format-version: 1\nmodel: PC-1500\nslot-1: CE-502B\nslot-1-rom: rom.bin\n", &p, &err));
+    CHECK(p.slot1RomFile == "/tmp/rom.bin");
+    CHECK(!parse("format-version: 1\nmodel: PC-1600\nslot-1-rom: rom.bin\n", &p, &err));
+    CHECK(err == "'slot-1-rom:' needs a module in slot 1 ('slot-1:' or 'slot-1-file:')");
+    CHECK(!parse("format-version: 1\nmodel: PC-1600\nslot-1: CE-502B\nslot-2-rom: rom.bin\n", &p, &err));
+    CHECK(err == "'slot-2-rom:' needs a module in slot 2 ('slot-2:' or 'slot-2-file:')");
+    CHECK(!parse("format-version: 1\nmodel: PC-1500A\nslot-2-rom: rom.bin\n", &p, &err));
+    CHECK(err == "'slot-2-rom:' is PC-1600 only -- the PC-1500A has one slot ('slot-1:')");
+    CHECK(!parse("format-version: 1\nmodel: PC-1500\nslot-1: X\nslot-1-rom: a.bin\nslot-1-rom: b.bin\n", &p, &err));
+    CHECK(err == "line 5: 'slot-1-rom:' is given twice");
+}
+
 // `format-version` is required, and checked before the key list: a preset
 // of a newer format names its version, not its first new key.
 void test_format_version() {
@@ -805,6 +829,7 @@ int run_preset_tests() {
     test_wait_step_rejects_negative_value();
     test_wait_step_rejects_trailing_text();
     test_slot_keys();
+    test_slot_rom_keys();
     test_format_version();
     test_old_forms_are_unrecognized();
     test_program_kind_follows_the_file();

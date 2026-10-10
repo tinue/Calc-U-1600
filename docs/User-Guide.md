@@ -807,6 +807,7 @@ This is what it leaves on the LCD:
 | `host-drive:` | a folder mounted as drive `S3:` (PC-1600), relative to the preset or `~/…`; see [A folder as a drive](#a-folder-as-a-drive-pc-1600) |
 | `slot-1:`, `slot-2:` | a module by name; `slot-2:` is PC-1600 only |
 | `slot-1-file:`, `slot-2-file:` | a `.card.yaml` file next to the preset instead |
+| `slot-1-rom:`, `slot-2-rom:` | a ROM file for the ROM module in that slot, replacing the module's own ROM bytes (developing a ROM module; exact size); see [Memory-Card-Definition-Format.md](Memory-Card-Definition-Format.md) §8 |
 | `keys:` | a list of steps (below); may appear any number of times |
 | `program:` | `file:` (with `address:`, `length:` for machine code, or `typed: true` for a listing) or `text: \|`; may appear any number of times |
 | `bus-rom:` | ROM files on the 60-pin bus, for developing a ROM extension: `- file:` with `bank: 4`–`7` (PC-1600 system bus) or `address:` with optional `me:`, `pv:`, `pu:` (each `0` or `1`) (PC-1500, PC-1600 LH5803 side). A bus ROM shadows a bundled ROM at the same place; see the [Debugger](Debugger.md) |

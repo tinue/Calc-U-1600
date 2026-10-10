@@ -200,12 +200,13 @@ PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& pre
     PC1600PresetMachine adapter(machine);
     const std::vector<std::string> moduleDirs = presetModuleDirs(moduleDir, extraModuleDirs);
 
-    auto plug = [&](const std::string& specFile, const std::string& specName, int slot) -> bool {
+    auto plug = [&](const std::string& specFile, const std::string& specName, const std::string& romFile,
+                    int slot) -> bool {
         if (specFile.empty() && specName.empty()) return true;  // empty slot
         CardHost host = (slot == 1) ? CardHost::PC1600Slot1 : CardHost::PC1600Slot2;
         std::string err, specPath;
         std::unique_ptr<ExpansionCard> card =
-            makePresetModuleCard(specFile, specName, moduleDirs, host, &specPath, &err);
+            makePresetModuleCard(specFile, specName, romFile, moduleDirs, host, &specPath, &err);
         if (!card) {
             result.error = "slot-" + std::to_string(slot) + ": " + err;
             return false;
@@ -214,9 +215,11 @@ PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& pre
         if (slot == 1) {
             machine.attachSlot1Card(std::move(card));
             result.slot1ResolvedPath = specPath;
+            result.slot1RomFile = romFile;
         } else {
             machine.attachSlot2Card(std::move(card));
             result.slot2ResolvedPath = specPath;
+            result.slot2RomFile = romFile;
         }
         if (log) log("slot " + std::to_string(slot) + ": " + label + " attached");
         return true;
@@ -227,8 +230,8 @@ PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& pre
     // connect, power on) the plotter and the CE-158 next to (or instead of)
     // the CE-150; the parser already refused the CE-158 with the CE-1600P.
     // Stops at the first failure.
-    const bool armed = plug(preset.slot1ModuleSpecFile, preset.slot1ModuleSpecName, 1) &&
-                       plug(preset.slot2ModuleSpecFile, preset.slot2ModuleSpecName, 2) &&
+    const bool armed = plug(preset.slot1ModuleSpecFile, preset.slot1ModuleSpecName, preset.slot1RomFile, 1) &&
+                       plug(preset.slot2ModuleSpecFile, preset.slot2ModuleSpecName, preset.slot2RomFile, 2) &&
                        attachPresetPlotter(machine, preset.plotter, preset.ce1600pRomVariant, preset.floppy,
                                            preset.floppyFile, preset.floppySide, romDirs, moduleDirs, log, &result) &&
                        attachPresetInterface(machine, preset.interfaceName, romDirs, log, &result) &&

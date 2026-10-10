@@ -642,10 +642,16 @@ authentic speed for the span that matters.
   something the app can load by hand too; `launch.json` only points at it
   (`project`) and says what to build. The app ignores `debug:` when loading
   the preset.
-- **ROM extensions go in through preset keys (`bus-rom:`, `encoding: file`
-  in a card), not app command-line options.** Every clean start re-reads
-  the preset and the files, so Build & Load needs no app restart and the
-  debug session stays attached.
+- **ROM extensions go in through preset keys (`bus-rom:`, `slot-N-rom:`),
+  not app command-line options.** Every clean start re-reads the preset and
+  the files, so Build & Load needs no app restart and the debug session
+  stays attached.
+- **A card file never points at another file.** `encoding: file` is gone:
+  a card is one self-contained file. A ROM module under development keeps
+  a placeholder ROM (`$0000: FF...`) and the preset's `slot-N-rom:`
+  replaces its bytes. That only works for a single-region ROM module of
+  exactly the file's size, and such a card is never saved back (its file
+  doesn't hold that ROM).
 - **A bus ROM shadows a bundled ROM at the same place** (it is attached in
   front of the chain). On real hardware that would be a bus conflict; here
   it is how a rebuilt ROM replaces a bundled one (the host drive's bank 7,

@@ -107,7 +107,7 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
                                                                        : CardHost::PC1500;
             std::string err, specPath;
             auto card = makePresetModuleCard(preset.slot1ModuleSpecFile,
-                                             preset.slot1ModuleSpecName,
+                                             preset.slot1ModuleSpecName, preset.slot1RomFile,
                                              presetModuleDirs(moduleDir, extraModuleDirs), host, &specPath, &err);
             if (!card) {
                 result.error = "slot-1: " + err;
@@ -116,6 +116,7 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
             }
             machine.attachExpansionCard(std::move(card));
             result.slot1ResolvedPath = specPath;
+            result.slot1RomFile = preset.slot1RomFile;
             if (log) log("software-defined module attached: " + specPath);
         }
 

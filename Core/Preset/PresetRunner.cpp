@@ -8,6 +8,7 @@
 
 #include "../Connector/MemoryCardCatalog.hpp"
 #include "../Connector/SoftwareDefinedCard.hpp"
+#include "../FileIO.hpp"
 #include "../TraceTypes.hpp"
 
 std::vector<std::string> presetModuleDirs(const std::string& moduleDir,
@@ -18,12 +19,22 @@ std::vector<std::string> presetModuleDirs(const std::string& moduleDir,
 }
 
 std::unique_ptr<ExpansionCard> makePresetModuleCard(const std::string& specFile, const std::string& specName,
+                                                    const std::string& romFile,
                                                     const std::vector<std::string>& moduleDirs, CardHost host,
                                                     std::string* resolvedPath, std::string* error) {
     std::string specPath = specFile;
     if (specPath.empty() && !resolveModuleSpecByName(moduleDirs, specName, &specPath, error)) return nullptr;
-    std::unique_ptr<ExpansionCard> card = makeSoftwareDefinedCard(specPath, host, error);
-    if (card) *resolvedPath = specPath;
+    std::vector<uint8_t> rom;
+    if (!romFile.empty() && !readWholeFile(romFile, &rom)) {
+        *error = "could not read " + romFile;
+        return nullptr;
+    }
+    std::unique_ptr<ExpansionCard> card = makeSoftwareDefinedCard(specPath, host, error, romFile.empty() ? nullptr : &rom);
+    if (!card) {
+        if (!romFile.empty()) *error = romFile + ": " + *error;
+        return nullptr;
+    }
+    *resolvedPath = specPath;
     return card;
 }
 

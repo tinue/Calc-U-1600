@@ -247,17 +247,26 @@ The *PC-1500 ROM extension* template is a complete extension: it adds `RENUM [ne
 
 How the firmware finds a keyword module, and what each field of the table does, is in [PC1500-Keyword-Modules.md](PC1500-Keyword-Modules.md).
 
-**ROM modules in a memory slot.** A ROM in a memory module (a PC-1500 module slot, or PC-1600 slot S1/S2) is a card definition (`.card.yaml`, see [Memory-Card-Definition-Format.md](Memory-Card-Definition-Format.md)) whose ROM content comes from your `.bin`:
+**ROM modules in a memory slot.** A ROM in a memory module (a PC-1500 module slot, or PC-1600 slot S1/S2) needs two things: a card definition (`.card.yaml`, see [Memory-Card-Definition-Format.md](Memory-Card-Definition-Format.md)) that says how the module decodes, and your `.bin` for what the ROM holds. The card's ROM region carries a placeholder, so the card file loads on its own:
 
 ```yaml
+    content: rom
     initial-content:
       blocks:
         - offset: 0x0000
-          encoding: file
-          path: build/module.bin    # relative to the .card.yaml; read at every load
+          encoding: addressed-hex
+          bytes: |
+            $0000: FF...          # placeholder: the preset's slot-1-rom: replaces it
 ```
 
-Plug it in with `slot-1-file: module.card.yaml` (or `slot-2-file:` on the PC-1600) in the project preset. A ROM's content must cover the whole ROM, so pad the binary to its full size. There is no template for slot modules yet.
+The project preset plugs the card in and puts your build into its ROM:
+
+```yaml
+slot-1-file: module.card.yaml   # or slot-2-file: on the PC-1600
+slot-1-rom: build/module.bin    # read at every clean start
+```
+
+The `.bin` must be exactly the ROM's size, so pad it to the full size. The app never saves such a card back. There is no template for slot modules yet.
 
 ---
 

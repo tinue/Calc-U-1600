@@ -76,8 +76,11 @@ public:
     // to (PresetLoadResult::slot1ResolvedPath / slot2ResolvedPath), empty
     // for an empty slot. The file itself says what it is (classifySlot()):
     // an instance becomes autosave-eligible exactly as if it had been
-    // picked from the GUI dropdown; a template never does.
-    void syncFromPresetLoad(int slot, const QString& resolvedPathOrEmpty = QString());
+    // picked from the GUI dropdown; a template never does. A `slot-N-rom:`
+    // file (`romFile`) makes the slot unsaveable: the card file doesn't
+    // hold that ROM.
+    void syncFromPresetLoad(int slot, const QString& resolvedPathOrEmpty = QString(),
+                            const QString& romFile = QString());
 
     // "Name & Save" flow. A template's name is always refused, whatever
     // host it targets (a bundled card would shadow the saved one on lookup,
@@ -136,6 +139,7 @@ private:
         bool isTemplate = false;   // that file declares `template: true`
         bool battery = false;      // that file declares `battery: true`
         QString instanceFilePath;  // == sourcePath for an instance (autosaved there), else empty
+        QString romFile;           // a preset's `slot-N-rom:` file: never saved, re-read on re-attach
         bool persistPending = false;
         // The card's contentRevision() when it was last attached from /
         // written to instanceFilePath; unset = unknown, so the next persist

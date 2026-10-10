@@ -59,6 +59,11 @@ struct PresetLoadResult {
     /// attached module should autosave.
     std::string slot1ResolvedPath;
     std::string slot2ResolvedPath;  // PC-1600 only
+    /// The `slot-N-rom:` file the slot's ROM came from, empty if none. Such
+    /// a card must never be saved back (autosave or `saveas:`): its file
+    /// doesn't hold that ROM.
+    std::string slot1RomFile;
+    std::string slot2RomFile;  // PC-1600 only
     /// True when the preset had `plotter: CE-150` and the CE-150 was attached
     /// before reset, so the boot ROM's peripheral scan saw it. (PC-1600
     /// `plotter: CE-1600P` is reported via `machine.ce1600pAttached()`.)
@@ -182,9 +187,11 @@ std::vector<std::string> presetModuleDirs(const std::string& moduleDir,
 
 /// Builds the software-defined card a `slot-N-file:` path (`specFile`) or
 /// `slot-N:` name (`specName`, looked up in `moduleDirs`) names, for
-/// `host`. Returns null with `error` set on failure; `resolvedPath` receives
-/// the spec file used.
+/// `host`. A `slot-N-rom:` file (`romFile`, read here on every call) replaces
+/// the ROM of a ROM module. Returns null with `error` set on failure;
+/// `resolvedPath` receives the spec file used.
 std::unique_ptr<ExpansionCard> makePresetModuleCard(const std::string& specFile, const std::string& specName,
+                                                    const std::string& romFile,
                                                     const std::vector<std::string>& moduleDirs, CardHost host,
                                                     std::string* resolvedPath, std::string* error);
 

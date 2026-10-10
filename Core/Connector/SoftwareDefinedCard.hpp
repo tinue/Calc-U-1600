@@ -1,6 +1,5 @@
 #pragma once
 #include <algorithm>
-#include <filesystem>
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -18,9 +17,9 @@
 // MemoryCardDefinition (docs/Memory-Card-Definition-Format.md) -- every
 // memory module in this project is one of these, built from a .card.yaml.
 //
-// v1: Regular or Flash content (a JEDEC-style flash command decoder, see
-// flashWrite()), single-kind or `by-bank`-split; Unbanked or
-// trigger-based Banked. The definition loader still rejects rom/line-based
+// Regular, Flash (a JEDEC-style flash command decoder, see flashWrite())
+// or ROM content, single-kind or `by-bank`-split; Unbanked or
+// trigger-based Banked. The definition loader rejects line-based latches
 // before a card is built.
 
 class SoftwareDefinedCard : public ExpansionCard {
@@ -335,10 +334,12 @@ private:
 /// host. Returns nullptr and fills `error` on a read/parse failure or when
 /// the file's `compatible-hosts` does not list `targetHost`
 /// (Memory-Card-Definition-Spec.md §1/§2). The card reports its
-/// `module-name:` via moduleName().
+/// `module-name:` via moduleName(). `romOverride`, if given, replaces the
+/// ROM of a ROM module (replaceRomContent()).
 inline std::unique_ptr<ExpansionCard> makeSoftwareDefinedCard(const std::string& specPath,
                                                               CardHost targetHost,
-                                                              std::string* error) {
+                                                              std::string* error,
+                                                              const std::vector<uint8_t>* romOverride = nullptr) {
     std::ifstream in(specPath, std::ios::binary);
     if (!in) {
         *error = "cannot open module spec '" + specPath + "'";
@@ -348,7 +349,7 @@ inline std::unique_ptr<ExpansionCard> makeSoftwareDefinedCard(const std::string&
     ss << in.rdbuf();
 
     MemoryCardDefinition def;
-    if (!parseMemoryCardDefinition(ss.str(), &def, error, std::filesystem::path(specPath).parent_path().string())) {
+    if (!parseMemoryCardDefinition(ss.str(), &def, error)) {
         *error = "module spec '" + specPath + "': " + *error;
         return nullptr;
     }
@@ -357,5 +358,6 @@ inline std::unique_ptr<ExpansionCard> makeSoftwareDefinedCard(const std::string&
                  ") is not compatible with " + cardHostToken(targetHost);
         return nullptr;
     }
+    if (romOverride && !replaceRomContent(&def, *romOverride, error)) return nullptr;
     return std::make_unique<SoftwareDefinedCard>(std::move(def));
 }

@@ -26,6 +26,20 @@
   the tape while saving and loading. Not yet: the PC-1600 reading PC-1500
   tapes in MODE 1, and the CE-150 on a PC-1600.
 
+### Changed
+
+- **Presets and memory-card files carry `format-version: 1`**, and it is
+  required: add the line to your own presets and to saved cards
+  (`.card.yaml` in the Battery-card saves folder). A card without it no
+  longer appears in the module picker. Floppies (`.floppy.yaml`) always
+  had it. A file written for a newer format is refused with its version
+  instead of being misread.
+- **A ROM module under development gets its ROM from the preset:**
+  `slot-1-rom: build/module.bin` (or `slot-2-rom:`) next to `slot-1-file:`
+  replaces the bytes of the module's ROM, read again at every clean start.
+  Card files no longer take `encoding: file`; the card keeps a placeholder
+  ROM (`$0000: FF...`). docs/Debugger.md has the example.
+
 ### Fixed
 
 - **PC-1600: the CE-158 terminal works in MODE 1.** `TERMINAL` and `DTE`

@@ -11,6 +11,7 @@
 #include "Connector/BatteryCardInstance.hpp"
 #include "Connector/MemoryCardCatalog.hpp"
 #include "Connector/SoftwareDefinedCard.hpp"
+#include "FileIO.hpp"
 #include "PC1500/PC1500Machine.hpp"
 #include "PC1600/PC1600Machine.hpp"
 
@@ -66,6 +67,24 @@ bool MemoryModuleManager::slotHasInstanceFile(int slot) const {
 template <typename AttachFn>
 void MemoryModuleManager::attachOneSlot(int slotIndex, CardHost host, AttachFn attach) {
     SlotState& st = m_slots[slotIndex];
+    if (!st.romFile.isEmpty()) {
+        // A preset's ROM module under development: the same file and ROM
+        // again (read anew), never autosaved.
+        std::string err;
+        std::vector<uint8_t> rom;
+        std::unique_ptr<ExpansionCard> card;
+        if (!readWholeFile(st.romFile.toStdString(), &rom))
+            err = "could not read " + st.romFile.toStdString();
+        else
+            card = makeSoftwareDefinedCard(st.sourcePath.toStdString(), host, &err, &rom);
+        if (card) {
+            attach(std::move(card));
+            return;
+        }
+        emit errorMessage(tr("Couldn't attach \"%1\": %2").arg(st.moduleName, QString::fromStdString(err)));
+        st = SlotState{};
+        return;
+    }
     const QString bundledDir = AppPaths::bundledResourcesDir();
     const QString instDir = AppPaths::instanceDir();
     std::string path, err;
@@ -134,11 +153,15 @@ QString MemoryModuleManager::attachedModuleName(int slot) const {
     return QString();
 }
 
-void MemoryModuleManager::syncFromPresetLoad(int slot, const QString& resolvedPathOrEmpty) {
+void MemoryModuleManager::syncFromPresetLoad(int slot, const QString& resolvedPathOrEmpty, const QString& romFile) {
     const int idx = slot - 1;
     m_slots[idx] = SlotState{};
     m_slots[idx].moduleName = attachedModuleName(slot);
-    if (!m_slots[idx].moduleName.isEmpty()) classifySlot(m_slots[idx], resolvedPathOrEmpty);
+    if (!m_slots[idx].moduleName.isEmpty()) {
+        classifySlot(m_slots[idx], resolvedPathOrEmpty);
+        m_slots[idx].romFile = romFile;
+        if (!romFile.isEmpty()) m_slots[idx].instanceFilePath.clear();
+    }
     emit moduleChanged(slot);
 }
 
@@ -233,6 +256,11 @@ bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool
     SlotState& st = m_slots[slot - 1];
     if (st.moduleName.isEmpty()) {
         *error = tr("No module attached.");
+        return false;
+    }
+    if (!st.romFile.isEmpty()) {
+        *error = tr("The ROM of \"%1\" comes from %2, not from its module file, so it can't be saved.")
+                     .arg(st.moduleName, st.romFile);
         return false;
     }
     if (!fromPreset && !st.isTemplate) {

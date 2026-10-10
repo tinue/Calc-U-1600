@@ -227,6 +227,11 @@ struct PresetFile {
     std::string slot1ModuleSpecName;
     std::string slot2ModuleSpecFile;
     std::string slot2ModuleSpecName;
+    // `slot-N-rom: <path>`, resolved: replaces the ROM of the ROM module
+    // in that slot (makePresetModuleCard()); read when the preset is
+    // applied, so every clean start sees the latest build. Empty = none.
+    std::string slot1RomFile;
+    std::string slot2RomFile;
 
     // `bus-rom:` -- ROM files plugged into the 60-pin bus before power-on,
     // in front of every other card there, so they shadow a bundled ROM at

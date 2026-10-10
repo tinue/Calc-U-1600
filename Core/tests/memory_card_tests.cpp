@@ -613,45 +613,87 @@ void test_rom_needs_every_byte_covered() {
     CHECK(err.find("0x8") != std::string::npos);
 }
 
-// `encoding: file`: the bytes come from a sidecar next to the definition,
-// read when the definition is loaded -- a rebuilt ROM is picked up by the
-// next load.
-void test_rom_from_a_sidecar_file() {
-    char tmpl[] = "/tmp/card_file_XXXXXX";
+// A preset's `slot-N-rom:` file replaces the ROM of a ROM module: the card
+// file's placeholder (`$0000: FF...`) gives way to the file's bytes, a
+// rebuilt file is picked up by the next build of the card, and only a
+// single-region ROM module of exactly the file's size takes it.
+void test_rom_replaced_from_a_file() {
+    const std::string placeholder = std::string(kMinPrefix) +
+                                    "  - name: r\n    capacity: 0x10\n    banking: none\n    content: rom\n"
+                                    "    addressing: { chip-select: Y0, span: 0x10 }\n"
+                                    "    initial-content:\n      blocks:\n        - offset: 0\n"
+                                    "          encoding: addressed-hex\n          bytes: |\n            $0000: FF...\n";
+    MemoryCardDefinition def;
+    std::string err;
+    CHECK(parseMemoryCardDefinition(placeholder, &def, &err));
+    std::vector<uint8_t> rom(16, 0xEE);
+    rom[0] = 0x55;
+    CHECK(replaceRomContent(&def, rom, &err));
+    CHECK(def.regions[0].initialContentByBank[0] == rom);
+
+    // Through the card factory, read on the bus.
+    char tmpl[] = "/tmp/card_rom_XXXXXX";
     const char* dir = mkdtemp(tmpl);
     CHECK(dir != nullptr);
     if (!dir) return;
-    const std::string d(dir);
-    const std::string yaml = std::string(kMinPrefix) +
-                             "  - name: r\n    capacity: 0x10\n    banking: none\n    content: rom\n"
-                             "    addressing: { chip-select: Y0, span: 0x10 }\n"
-                             "    initial-content:\n      blocks:\n        - offset: 0\n          encoding: file\n"
-                             "          path: build/rom.bin\n";
-    std::ofstream(d + "/rom.card.yaml") << yaml;
-    std::filesystem::create_directories(d + "/build");
-    const auto writeRom = [&](uint8_t first) {
-        std::string bytes(16, char(0xEE));
-        bytes[0] = char(first);
-        std::ofstream(d + "/build/rom.bin", std::ios::binary) << bytes;
-    };
+    const std::string cardPath = std::string(dir) + "/rom.card.yaml";
+    std::ofstream(cardPath) << placeholder;
     PinState p;
     p.pin[4] = true;
     uint8_t v = 0;
-    writeRom(0x55);
-    std::string err;
-    auto card = makeSoftwareDefinedCard(d + "/rom.card.yaml", CardHost::PC1500, &err);
+    auto card = makeSoftwareDefinedCard(cardPath, CardHost::PC1500, &err, &rom);
     CHECK(card && card->respondsToRead(p, v) && v == 0x55);
-    writeRom(0x66);  // rebuilt: the next load has the new bytes
-    card = makeSoftwareDefinedCard(d + "/rom.card.yaml", CardHost::PC1500, &err);
-    CHECK(card && card->respondsToRead(p, v) && v == 0x66);
+    card = makeSoftwareDefinedCard(cardPath, CardHost::PC1500, &err);  // no file: the placeholder
+    CHECK(card && card->respondsToRead(p, v) && v == 0xFF);
+    std::filesystem::remove_all(dir);
 
-    // Without the definition's own file there is nothing to be relative to.
-    MemoryCardDefinition def;
-    CHECK(!parseMemoryCardDefinition(yaml, &def, &err) && err.find("relative") != std::string::npos);
-    // A short file doesn't cover the ROM.
-    std::ofstream(d + "/build/rom.bin", std::ios::binary) << std::string(8, char(0xEE));
-    CHECK(!makeSoftwareDefinedCard(d + "/rom.card.yaml", CardHost::PC1500, &err));
-    std::filesystem::remove_all(d);
+    // A file of the wrong size is refused, shorter or longer.
+    MemoryCardDefinition def2;
+    CHECK(parseMemoryCardDefinition(placeholder, &def2, &err));
+    CHECK(!replaceRomContent(&def2, std::vector<uint8_t>(8, 0), &err));
+    CHECK(err == "8 bytes, the module's ROM is 16 bytes");
+    CHECK(!replaceRomContent(&def2, std::vector<uint8_t>(17, 0), &err));
+
+    // Not a ROM module: RAM, a ROM/RAM by-bank split, two regions.
+    const auto refuses = [&](const std::string& yaml) {
+        MemoryCardDefinition d;
+        std::string e;
+        if (!parseMemoryCardDefinition(yaml, &d, &e)) return false;
+        return !replaceRomContent(&d, std::vector<uint8_t>(16, 0), &e) &&
+               e.find("is not a ROM module") != std::string::npos;
+    };
+    CHECK(refuses(std::string(kMinPrefix) +
+                  "  - name: r\n    capacity: 0x10\n    banking: none\n    content: regular\n"
+                  "    addressing: { chip-select: Y0, span: 0x10 }\n"));
+    CHECK(refuses(std::string(kMinPrefix) +
+                  "  - name: r\n"
+                  "    banking:\n"
+                  "      latch: { type: trigger-based, trigger: { pin: 18 }, sampled-lines: [A0], source-domain: address }\n"
+                  "      bank-count: 2\n      bank-size: 0x8\n"
+                  "      bank-window: { chip-select: Y0, span: 0x8 }\n"
+                  "    content:\n      by-bank:\n"
+                  "        - { banks: \"0\", kind: rom }\n"
+                  "        - { banks: \"1\", kind: regular }\n"
+                  "    addressing: { chip-select: Y0 }\n"
+                  "    initial-content:\n      blocks:\n        - bank: 0\n          offset: 0\n          encoding: hex\n"
+                  "          bytes: \"A0 A1 A2 A3 A4 A5 A6 A7\"\n"));
+    CHECK(refuses(std::string(kMinPrefix) +
+                  "  - name: a\n    capacity: 0x8\n    banking: none\n    content: rom\n"
+                  "    addressing: { chip-select: S1, span: 0x8 }\n"
+                  "    initial-content:\n      blocks:\n        - offset: 0\n"
+                  "          encoding: addressed-hex\n          bytes: |\n            $0000: FF...\n"
+                  "  - name: b\n    capacity: 0x8\n    banking: none\n    content: rom\n"
+                  "    addressing: { chip-select: S2, span: 0x8 }\n"
+                  "    initial-content:\n      blocks:\n        - offset: 0\n"
+                  "          encoding: addressed-hex\n          bytes: |\n            $0000: FF...\n"));
+
+    // `encoding: file` is gone: an unknown key, then an unknown encoding.
+    CHECK(rejects(std::string(kMinPrefix) +
+                      "  - name: r\n    capacity: 0x10\n    banking: none\n    content: rom\n"
+                      "    addressing: { chip-select: Y0, span: 0x10 }\n"
+                      "    initial-content:\n      blocks:\n        - offset: 0\n          encoding: file\n",
+                  &err));
+    CHECK(err.find("unknown encoding 'file'") != std::string::npos);
 }
 
 // ROM and RAM banks in one region: the ROM banks stay read-only, the RAM
@@ -1093,6 +1135,57 @@ void test_ce1601m_end_to_end_through_pc1600() {
                             "/tmp/memory_card_tests_e2e_name.pc1600", &byName, &err));
     CHECK(byName.slot2ModuleSpecName == "CE-1601M");
     run(byName, moduleDir);
+}
+
+// `slot-N-rom:` end to end: the preset's ROM file replaces the module's
+// placeholder ROM, the load result names the file (so the GUI never saves
+// the card), and a rebuilt file is read again by the next load.
+void test_slot_rom_end_to_end_through_pc1600() {
+    char tmpl[] = "/tmp/slot_rom_XXXXXX";
+    const char* dir = mkdtemp(tmpl);
+    CHECK(dir != nullptr);
+    if (!dir) return;
+    const std::string d(dir);
+    std::ofstream(d + "/module.card.yaml")
+        << "format-version: 1\nmodule-name: Dev ROM\ncompatible-hosts: [PC-1600-Slot-1]\n"
+           "definition-terminology: PC-1600-Slot-1\nregions:\n"
+           "  - name: rom\n    capacity: 0x1000\n    banking: none\n    content: rom\n"
+           "    addressing: { chip-select: RAM2, span: 0x1000 }\n"
+           "    initial-content:\n      blocks:\n        - offset: 0\n"
+           "          encoding: addressed-hex\n          bytes: |\n            $0000: FF...\n";
+    std::ofstream(d + "/dev.pc1600") << "format-version: 1\nmodel: PC-1600\n"
+                                        "slot-1-file: module.card.yaml\nslot-1-rom: build/module.bin\n";
+    std::filesystem::create_directories(d + "/build");
+    const auto build = [&](uint8_t first) {
+        std::string bytes(0x1000, char(0x00));
+        bytes[0] = char(first);
+        std::ofstream(d + "/build/module.bin", std::ios::binary) << bytes;
+    };
+    const auto load = [&](PresetLoadResult* r) {
+        PresetFile preset;
+        std::string err;
+        CHECK(parsePresetFile(d + "/dev.pc1600", &preset, &err));
+        auto m = std::make_unique<PC1600Machine>();
+        *r = applyPC1600Preset(*m, preset, {}, ".", ".");
+        return m;
+    };
+
+    PresetLoadResult r;
+    build(0x55);
+    auto m = load(&r);
+    CHECK(r.ok);
+    CHECK(r.slot1RomFile == d + "/build/module.bin");
+    CHECK(m->memory().slot1CardImage().size() == 0x1000 && m->memory().slot1CardImage()[0] == 0x55);
+    build(0x66);  // rebuilt: the next load has the new bytes
+    m = load(&r);
+    CHECK(r.ok && m->memory().slot1CardImage()[0] == 0x66);
+
+    // A ROM file of the wrong size stops the load, naming the file.
+    std::ofstream(d + "/build/module.bin", std::ios::binary) << std::string(0x800, char(0));
+    m = load(&r);
+    CHECK(!r.ok);
+    CHECK(r.error == "slot-1: " + d + "/build/module.bin: 2048 bytes, the module's ROM is 4096 bytes");
+    std::filesystem::remove_all(d);
 }
 
 // The SLOT2MAP gate-array remap (Port 3CH b5:b4): the firmware can make the
@@ -1576,7 +1669,8 @@ void test_reject_unbanked_flash_sector_not_dividing_capacity() {
 }
 
 int run_memory_card_tests() {
-    test_rom_from_a_sidecar_file();
+    test_rom_replaced_from_a_file();
+    test_slot_rom_end_to_end_through_pc1600();
     test_card_content_revision();
     test_power_up_fill_defaults_per_kind();
     test_yaml_block_map_and_scalars();

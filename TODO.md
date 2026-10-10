@@ -442,15 +442,6 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
   (Decisions.md), two isn't. Fix: pass the `PresetFile` from
   `effectiveConfig` down (`DebugController` → `SyncOperations` →
   `PresetController::runPreset(preset)`).
-- **Catalogue scans read `encoding: file` sidecar ROMs.**
-  `MemoryCardCatalog.hpp` `parseEntry` passes `baseDir`, so every scan
-  (`scanMemoryCardDirectory`, `readMemoryCardCatalogEntry`,
-  `resolveModuleSpecByName`, every picker refresh) opens each sidecar just
-  to fill the catalogue entry. No bundled card uses `encoding: file` yet.
-  Fix: part of the catalogue parse mode in the template-vs-instance entry
-  above (skip content). **Before fixing:** today a missing sidecar drops
-  the card from the list; with a metadata-only parse it would be listed
-  and fail on attach -- decide which is wanted.
 - **Small leftovers from the 2026-09-30 simplify pass.** Take them when
   the file is next touched:
   - `--lcd-png` write-and-error block is the same in `pc1500_cli.cpp` and

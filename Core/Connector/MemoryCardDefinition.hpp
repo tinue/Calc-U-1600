@@ -4,13 +4,11 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include "../FileIO.hpp"
 #include "../Yaml.hpp"
 
 // ── Parsed + validated memory-card definition ─────────────────────────
@@ -184,10 +182,14 @@ struct MemoryCardDefinition {
     }
 };
 
-/// `baseDir`: the definition file's own directory, which `encoding: file`
-/// paths are relative to. Empty (text not read from a file) rejects them.
 bool parseMemoryCardDefinition(const std::string& yamlText, MemoryCardDefinition* out,
-                               std::string* error, const std::string& baseDir = {});
+                               std::string* error);
+
+/// Replaces a ROM card's ROM with `bytes` (a preset's `slot-N-rom:`): the
+/// definition still says how the card decodes, the file only says what the
+/// ROM holds. Only a card of one region, all of it `rom`, takes a ROM file,
+/// and `bytes` must be exactly that region's size.
+bool replaceRomContent(MemoryCardDefinition* def, const std::vector<uint8_t>& bytes, std::string* error);
 
 // ── implementation ───────────────────────────────────────────────────────
 
@@ -1068,14 +1070,11 @@ inline bool parseAddressedHex(const std::string& text, uint32_t blockLength,
 // `initial-content` (spec §5a, Format.md §6): resolves each referenced
 // bank (unbanked regions use key 0) into a full bank-size/`capacity`-length
 // byte buffer, starting from that bank's power-up-fill and overlaying each
-// block's bytes at its offset. `encoding: file` reads a sidecar binary,
-// `path` relative to the definition's directory (`baseDir`), at parse time
-// -- so a card reloaded after a rebuild carries the new bytes (a ROM
-// module under development, docs/Debugger.md).
+// block's bytes at its offset.
 inline bool parseInitialContent(const YamlNode& node, const Region& regionSoFar,
                                 std::unordered_map<uint32_t, std::vector<uint8_t>>* out,
                                 std::unordered_map<uint32_t, std::vector<bool>>* coveredOut,
-                                std::string* error, const std::string& baseDir) {
+                                std::string* error) {
     if (!node.isMap() || !node.requireOnlyKeys({"fill", "blocks"}, error)) return false;
 
     bool hasFillOverride = false;
@@ -1099,7 +1098,7 @@ inline bool parseInitialContent(const YamlNode& node, const Region& regionSoFar,
 
     for (const auto& entry : blocksN->seq) {
         if (!entry.isMap() ||
-            !entry.requireOnlyKeys({"bank", "offset", "encoding", "bytes", "path"}, error))
+            !entry.requireOnlyKeys({"bank", "offset", "encoding", "bytes"}, error))
             return false;
 
         uint32_t bank = 0;
@@ -1179,22 +1178,6 @@ inline bool parseInitialContent(const YamlNode& node, const Region& regionSoFar,
                 *error = "line " + std::to_string(bN->line) + ": " + *error;
                 return false;
             }
-        } else if (encoding == "file") {
-            const YamlNode* pN = entry.find("path");
-            std::string rel;
-            if (!pN || !pN->asString(&rel, error)) {
-                *error = "line " + std::to_string(entry.line) + ": 'file' needs 'path'";
-                return false;
-            }
-            if (baseDir.empty() && !std::filesystem::path(rel).is_absolute()) {
-                *error = "line " + std::to_string(pN->line) + ": 'path' needs the definition's own file to be relative to";
-                return false;
-            }
-            const std::filesystem::path file = std::filesystem::path(baseDir) / rel;  // absolute rel wins
-            if (!readWholeFile(file, &bytes)) {
-                *error = "line " + std::to_string(pN->line) + ": cannot read '" + file.string() + "'";
-                return false;
-            }
         } else {
             *error = "line " + std::to_string(encN->line) + ": unknown encoding '" + encoding + "'";
             return false;
@@ -1228,8 +1211,7 @@ inline bool parseInitialContent(const YamlNode& node, const Region& regionSoFar,
     return true;
 }
 
-inline bool parseRegion(const YamlNode& node, CardHost term, Region* out, std::string* error,
-                        const std::string& baseDir) {
+inline bool parseRegion(const YamlNode& node, CardHost term, Region* out, std::string* error) {
     if (!node.isMap() ||
         !node.requireOnlyKeys({"name", "addressing", "content", "banking", "capacity",
                                "initial-content", "pc1600-module-class"},
@@ -1339,7 +1321,7 @@ inline bool parseRegion(const YamlNode& node, CardHost term, Region* out, std::s
     // `content`/`contentByBank` already in place for contentForBank().
     std::unordered_map<uint32_t, std::vector<bool>> covered;
     if (initialContentN) {
-        if (!parseInitialContent(*initialContentN, *out, &out->initialContentByBank, &covered, error, baseDir))
+        if (!parseInitialContent(*initialContentN, *out, &out->initialContentByBank, &covered, error))
             return false;
     }
 
@@ -1365,7 +1347,7 @@ inline bool parseRegion(const YamlNode& node, CardHost term, Region* out, std::s
 }  // namespace mcd_detail
 
 inline bool parseMemoryCardDefinition(const std::string& yamlText, MemoryCardDefinition* out,
-                                      std::string* error, const std::string& baseDir) {
+                                      std::string* error) {
     YamlNode root;
     if (!parseYaml(yamlText, &root, error)) return false;
     if (!root.isMap()) {
@@ -1429,7 +1411,7 @@ inline bool parseMemoryCardDefinition(const std::string& yamlText, MemoryCardDef
     }
     for (const auto& rn : regionsN->seq) {
         Region region;
-        if (!mcd_detail::parseRegion(rn, out->terminology, &region, error, baseDir)) return false;
+        if (!mcd_detail::parseRegion(rn, out->terminology, &region, error)) return false;
         for (const auto& ex : out->regions) {
             if (ex.name == region.name) {
                 *error = "duplicate region name '" + region.name + "'";
@@ -1438,5 +1420,23 @@ inline bool parseMemoryCardDefinition(const std::string& yamlText, MemoryCardDef
         }
         out->regions.push_back(std::move(region));
     }
+    return true;
+}
+
+inline bool replaceRomContent(MemoryCardDefinition* def, const std::vector<uint8_t>& bytes, std::string* error) {
+    if (def->regions.size() != 1 || !def->isRom()) {
+        *error = "module '" + def->moduleName + "' is not a ROM module (one region of rom content)";
+        return false;
+    }
+    Region& region = def->regions.front();
+    if (bytes.size() != region.capacity) {
+        *error = std::to_string(bytes.size()) + " bytes, the module's ROM is " + std::to_string(region.capacity) +
+                 " bytes";
+        return false;
+    }
+    const uint32_t bankSize = region.banking.bankSize;
+    for (uint32_t b = 0; b < region.banking.bankCount; ++b)
+        region.initialContentByBank[b].assign(bytes.begin() + size_t(b) * bankSize,
+                                              bytes.begin() + size_t(b + 1) * bankSize);
     return true;
 }
