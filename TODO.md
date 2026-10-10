@@ -150,10 +150,7 @@ The loaders follow MODE and `TITLE` (docs/background/plans/Loader-Mode-Plan.md, 
   the TRM doesn't); `SAVE`/`LOAD "CAS:"` in MODE 1; whether the CE-158's own
   `SETDEV` is reachable on the PC-1600; CE-150/CE-158 `PRINT#`/`INPUT#` in
   MODE 0.
-- **Guide screenshots write into the real saves folder:** the chapter-5
-  preset (`docs/developer/screenshots/presets/pc1600-modules.pc1600`) uses
-  `saveas: live slot-1:My programs`, so every `tools/make_screenshots.sh`
-  run writes a live "My programs" card into the Battery-card saves folder.
+
 ## Expansion connectors: one model on both machines
 
 Done 2026-10-07 (docs/background/plans/Sixty-Pin-Connector-Plan.md, after the

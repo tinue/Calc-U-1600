@@ -593,9 +593,6 @@ authentic speed for the span that matters.
   same. FILES shows no year. The host file keeps its real time stamp.
 - **The host drive shows only 8.3 names** the ROM's parser accepts, and
   stores bytes unchanged: there is no line-ending conversion.
-- **The slot-record layout stays additive** for the planned battery-backed
-  module split. Reserve the `batteryBacked` flag and keep
-  `ExpansionCard` serialize/deserialize as the single seam for it.
 - **Serial port files are named after their connector:**
   `calcu1600-rs232c.serial`, `calcu1600-ce158.serial`, and later
   `calcu1600-sio.serial`. One file per connector; a file carries data only

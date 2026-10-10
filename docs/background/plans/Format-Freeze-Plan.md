@@ -1,6 +1,19 @@
 # Pre-1.0 format freeze: versions, `slot-N-rom:`, one `saveas:` pipeline
 
-> **Status (2026-10-10): in progress.**
+> **Status (2026-10-10): implemented.** Differences from the plan below:
+> - The saveas code is split in two: the rules in
+>   `Core/Connector/MediaSave.hpp` (`planMediaSave`, `formatCardSave`,
+>   `writeFileAtomically`), the preset step in `Core/Preset/PresetMedia.hpp`
+>   (`savePresetMedia`). `Core/PC1600/PC1600PresetMedia.hpp` stays as the
+>   thin `pc1600PresetMedia()` adapter; the PC-1500 one is inline in
+>   `pc1500_cli`. The GUI words the refusals in one place,
+>   `AppPaths::planNamedSave`.
+> - The load result carries the ROM file's path (`slotNRomFile`), not a
+>   flag: the GUI reads it again when it rebuilds the machine.
+> - 54 tracked presets, not 50.
+> - The "Guide screenshots write into the real saves folder" TODO entry
+>   was stale (`--shots` isolates storage); confirmed with
+>   `tools/make_screenshots.sh 05-modules`, then removed.
 
 
 ## Context
