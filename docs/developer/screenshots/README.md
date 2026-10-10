@@ -171,7 +171,7 @@ Two macOS details:
 | `paper`, `paper.copy`, `paper.cut` | plotter paper panel |
 | `ce158printer`, `ce158printer.save`, `ce158printer.clear` | CE-158 printer panel |
 | `dialog.settings`, `dialog.about`, `dialog.machinecode` | dialogs |
-| `dialog.settings.general`, `.presets`, `.storage`, `.tracing`, `.serial` | one section of Settings |
+| `dialog.settings.general`, `.presets`, `.storage`, `.tracing`, `.serial`, `.debugger` | one section of Settings |
 
 ## Presets
 

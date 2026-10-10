@@ -23,8 +23,9 @@ PR.
 - A **C++17** compiler (the project is plain portable C++, no
   compiler-specific extensions beyond what Qt itself needs).
 - On macOS only: Xcode command-line tools (for the Objective-C++
-  compiler — one file, `MacClipboardImage.mm`, needs it for the
-  plotter-paper clipboard export).
+  compiler — three files need it: `MacClipboardImage.mm` for the
+  plotter-paper clipboard export, `MacAppSupport.mm` and
+  `screenshots/MacShotSupport.mm`).
 
 ### `libsharpdx`
 
@@ -100,7 +101,8 @@ release-packaging concerns — see the `mac-aarch64` job in
 ```sh
 sudo apt-get install -y \
   build-essential cmake ninja-build patchelf \
-  qt6-base-dev qt6-base-dev-tools qt6-multimedia-dev qt6-wayland libgl1-mesa-dev
+  qt6-base-dev qt6-base-dev-tools qt6-multimedia-dev qt6-wayland libgl1-mesa-dev \
+  qt6-gtk-platformtheme qt6ct
 cmake -S Qt6 -B Qt6/build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build Qt6/build
 ```

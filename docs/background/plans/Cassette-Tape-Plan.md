@@ -16,7 +16,7 @@
 > - **CE-1600P port 82H reads back its latch.** The tape driver
 >   read-modify-writes it; open bus (FFH) would have pulsed both relay coils.
 > - **Later replaced** by the cassette bay on the control bar
->   ([Tape-Bay-Plan.md](Tape-Bay-Plan.md)): the File ▸ Tape menu below is
+>   (`TapeManager`, Decisions.md): the File ▸ Tape menu below is
 >   gone.
 > - No separate `TapeController`: `MainWindow` handles File ▸ Tape (Play…,
 >   Record…, Eject), and the control-bar Tape button shows the same actions.
@@ -59,8 +59,10 @@ ultimately, real hardware.
   (TD); in = PB2 (`LOAD_NIBBLE` &BE02) plus divider reset F004 and CL1 (MSK
   b7). Motor = CE-150 LH5810 PA1-4 (`REMOTEON` &BF11 / `REMOTEOFF` &BF43).
   None of serial TX / CL1 is modelled today (`PC1500Memory.cpp` `m_ioScratchRegs`).
-- PC-1600 MODE 1 + CE-150: open research — LH5803 ME1 F00x is a plain latch
-  (`LH5803SharedMemory`), its link to SC7852 PB2/SD0 is undocumented.
+- PC-1600 MODE 1 + CE-150: open research. (Written as "LH5803 ME1 F00x is a
+  plain latch"; since 8858e75 ME1 F000–F00F are the SC7852's ports 10H–1FH.)
+  Still undocumented: how SD0 (pin 76) and PB2 reach the CE-150's jack; port
+  16H (serial TX) and 1AH b7 aren't modelled on the PC-1600 (TODO.md).
 - PC-1600 SDO modulator (F register 17H) already exists, idle-mark only
   (`PC1600Memory.cpp:67-90`); 18H b7 already latched (`m_opc`).
 

@@ -10,7 +10,7 @@
   `.bin` -- no `CLOAD`, no tape time. Real recordings work too: quiet,
   noisy, a little fast or slow. A tape with several files asks which one; a
   damaged file is refused with where it is damaged. Decoding is
-  libsharpdx's (SharpDataExchange 0.3.3).
+  libsharpdx's (SharpDataExchange 0.3.5).
 
 - **Cassette tape: CLOAD and CSAVE.** The CE-150 (PC-1500/1500A) and the
   CE-1600P (PC-1600, MODE 0) now drive a cassette recorder. Its tapes are

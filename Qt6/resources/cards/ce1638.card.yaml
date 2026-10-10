@@ -25,8 +25,8 @@
 # a plain unbanked 16K, sized correctly by the boot ROM. Declared
 # compatible with both slots anyway (spec §1: compatible-hosts is a pin/
 # electrical-compatibility list, not a "works well" guarantee) -- see
-# MinorIssues.md's "CE-1638+ / CE-163F on a PC-1600 belong in Slot 2, not
-# Slot 1" for the full writeup of the same issue on the throwaway card.
+# docs/developer/PC1600-Core-Limitations.md ("CE-1638 / CE-163F only work
+# in Slot 2 on a PC-1600") for the full writeup.
 
 format-version: 1
 module-name: "CE-1638"

@@ -561,8 +561,9 @@ void MainWindow::syncPeripherals() {
     const bool ce1600pAttached = m_controller->ce1600pAttached();
     const bool ce158Attached = m_controller->ce158Attached();
     // The CE-1600P excludes both the CE-150 and (on a PC-1600) the CE-158
-    // -- the CE-158 does not connect to the CE-1600P: gray out whichever
-    // buttons and menu items the attached peripherals rule out.
+    // -- the CE-158 with the CE-1600P isn't supported yet (TODO.md, IO7N):
+    // gray out whichever buttons and menu items the attached peripherals
+    // rule out.
     auto sync = [this](QAction* action, void (ControlBar::*setState)(bool, bool), bool attached, bool enabled) {
         (m_controlBar->*setState)(attached, enabled);
         action->setChecked(attached);

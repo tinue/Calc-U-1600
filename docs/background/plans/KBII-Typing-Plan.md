@@ -1,5 +1,10 @@
 # PC-1600: type KBII accented characters from the host
 
+**Status (2026-09-27): implemented.** The live-key case folding described below was
+dropped afterwards (see the Addendum): every path types what is typed, and
+`pc1600ResolveKbiiChar` has no `foldCase`. A KBII sequence also reads the SHIFT/KBII
+latches first.
+
 ## Context
 
 The PC-1600's KBII key latches, like SML. While it is on, letters and `(` `)` produce the

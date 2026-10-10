@@ -1,7 +1,7 @@
 # PC-1600 emulator core — known limitations
 
-A catalogue of the deliberate shortcuts, "not modelled" scope notes,
-`TODO(trace)` markers, and unconfirmed assumptions in the emulator core
+A catalogue of the deliberate shortcuts, "not modelled" scope notes
+and unconfirmed assumptions in the emulator core
 (`Core/`). Every entry is backed by a comment in the code; the file or
 symbol after it points there.
 
@@ -65,13 +65,14 @@ entry when a primary source or a ROM trace disagrees with it.
 ### LH5803 — `Core/CPU/LH5803/`
 *(PC-1600 sub-processor, PC-1500-compatibility CPU.)*
 
-- **ME0 / ME1 as two distinct 64 KB spaces not modelled** — ME1 aliases
-  ME0 except for the CPU-handoff trigger and the UART/sub-CPU register
-  block. `LH5803Memory.hpp`, `LH5803SharedMemory.hpp`
-- **`TODO(trace)`: which ME1 address form the OFF-path clock-save ROM
-  actually uses** (`rom1500 E538`: literal `0x0021`/`0x0033` vs. the
-  `0xA03x` shadow) is unconfirmed — both are routed the same way for
-  safety. `LH5803SharedMemory.hpp`
+- **ME0 / ME1 are not two separate 64 KB spaces**: ME1 aliases ME0 except
+  for the blocks routed below (the A030H–A03FH control ports with the A038H
+  handoff, the LCD ports, F000H–F00FH, the UART / sub-CPU block, and
+  8000H–FFFFH offered to the 60-pin cards). `LH5803SharedMemory.hpp`
+- **ME1 A020H–A033H** is routed to the UART / sub-CPU block like
+  0020H–0033H, by analogy with the A03xH control-port shadow. rom1500 uses
+  only the literal form (E538H); the shadow is unverified on hardware.
+  `LH5803SharedMemory.hpp`
 - **CE-158 display-shift trap decodes 9400H only** — the SC7852's LHNMIO
   (pin 92) raises the LH5803's NMI on the opcode fetch at 9400H with
   PU = PV = 1; the ROM's handler (C440H) runs its copy of the CE-158's
@@ -91,9 +92,13 @@ entry when a primary source or a ROM trace disagrees with it.
 - **SDP, RDP and OFF are NOPs on the LH-5803** (TRM §7.1.2). `LH5803.hpp`
 - **The LH-5803's MI input (vector FFF8H) is not driven**: the SC-7852's
   LHMIO (pin 91) and the PC-1500 peripheral IRQ path to the LH-5803 are
-  not modelled; nothing found so far needs them.
-- **ME1 wait states** (LHWAIT, IOE: one wait for `**0*H` and 8000H–FFFFH
-  of ME1) are not modelled.
+  not modelled; nothing found so far needs them. Since 8858e75 the IF/MSK
+  registers (F00BH/F00AH = ports 1BH/1AH) are the real ones, but nothing
+  drives MI from them.
+- **ME1 wait states** (LHWAIT: one wait for ME1 `**0*H` and 8000H–FFFFH)
+  are not modelled. IOE (59) is asserted for ME1 `**00H–**0FH` and
+  8000H–FFFFH (`PC1600BusDrive::lh5803Pins`), but the ME1 card decode
+  offers only 8000H–FFFFH to the cards.
 - **Standalone `LH5803Memory` uses a private 16 KB RAM array**, for
   testing the LH5803 on its own; the machine shares RAM between the CPUs
   through `LH5803SharedMemory`. `LH5803Memory.hpp`
@@ -145,10 +150,13 @@ clock, the wake-up and two alarm timers with minute-carry compare and `?`
 wildcards, the interrupt mask/pending bits and INT6, the password, the reset
 / power-on cause, system off/on, and the handshake timing. Remaining gaps:
 
-- **Commands no source explains** (IOCS 0CH–0FH, 16H/17H, 1BH–1FH, 26H, the
-  LH-5803's DCH) are accepted and leave the previous answer standing.
-- **Analog input / external keyboard** — the SWA1A thresholds and the
-  IOCS 1EH mode are stored, but no analog-input interrupt or external-
+- **Commands no source fully explains**: IOCS 0CH–0FH, 26H and the
+  LH-5803's DCH are accepted with no effect; the reads 16H/17H (external
+  keyboard), 1BH, 1DH and 1FH leave the previous answer standing; 1CH
+  (`SINIT`) answers 00H.
+- **Analog input / external keyboard** — the SWA1A thresholds are stored;
+  IOCS 1EH (port-mode select: F12CH b0 analog input, b1 external keyboard)
+  is acknowledged but not stored, and no analog-input interrupt or external-
   keyboard event is generated. The analog port (SRA1) is injected state
   (`setAnalogInput()`); nothing in the core drives it.
 - **Supply voltages** (SRA0 main, SRA2 CE-1600P pack) always read C0H, clear
@@ -229,9 +237,9 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
 - **CS24 8 KB sub-banking of Bank 3 (`A16A`) not separately modelled** —
   both Bank 3 / Bank 3b ROM images load as flat 16 KB blocks and the
   decoder does a whole-16 KB swap. `PC1600Memory.hpp` (class comment)
-- **Page B banks 1, 2 and 6** are open bus. Banks 4-7 go to the 60-pin
-  system bus (4/5 the CE-1600P ROM, 7 the host-directory drive); 6 has no
-  known card. `PC1600Memory::resolveConst()`
+- **Page B banks 1 and 2** are open bus (CS24 decodes internal ROM only).
+  Banks 4-7 go to the 60-pin system bus (4/5 the CE-1600P ROM, 7 the
+  host-directory drive); bank 6 has no known card, so it reads open bus. `PC1600Memory::resolveConst()`
 - **Page C banks 0/1 (Slot 1) and 2/3 (Slot 2)**: open bus only when the
   slot is *empty*; otherwise the attached card answers (software-defined
   cards from `.card.yaml` files, attached by a preset's `slot-N:` key or
@@ -245,9 +253,11 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   undocumented — only bank 0 content is ever loaded. `PC1600Memory.hpp`
   (page-A comment)
 - **Ports without a device read open bus** (`0xFF`) and ignore writes.
-  Decoded: 14H, 17H-1FH (PIO, keyboard, buzzer), 20H-27H (TC8576F),
-  28H-2FH (Slot 2 card), 31H-3DH (banks, interrupts, sub-CPU, LCD clock,
-  CPU switch), 50H-5BH (LCD) and 70H-9FH (60-pin bus).
+  Decoded: 14H, 17H-18H, 1AH-1FH (PIO, keyboard, buzzer), 20H-27H
+  (TC8576F), 28H-2FH (Slot 2 card), 31H-33H, 35H-39H, 3CH-3DH (banks,
+  interrupts, sub-CPU, LCD clock, CPU switch), 50H-5BH (LCD) and 70H-9FH
+  (60-pin bus). Not modelled: 15H-16H, 19H (G), 30H (P_MOD), 34H
+  (P_LHMSK2), 3AH-3BH.
   `PC1600Memory::readIO()` / `writeIO()`
 - **Keyboard strobes consult DDA/DDB**: a KS line counts as strobed only
   while its PA bit is an output (DDA = 1) driven low; PB6 likewise. Both
@@ -261,10 +271,11 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
 
 `Core/PC1600/PC1600Display.*`, `Core/Display/StatusLine.hpp`
 
-- **Controller busy time is fitted, not from a datasheet**: busy (status
-  bit 7) holds until the 4th edge of the 216.7 kHz LCD clock after each
-  write, fitted to a real unit's scrolling-PRINT benchmark
-  (Decisions.md). `PC1600Display.hpp` (`kBusyClocks`)
+- **Controller busy time is fitted**: busy (status bit 7) holds until the
+  4th edge of the 216.7 kHz LCD clock after each write (13.8–18.5 µs),
+  fitted to a real unit's scrolling-PRINT benchmark (Decisions.md) and
+  inside the HD61102 datasheet's bound (9.2–27.7 µs). Datasheet details
+  left out until the re-fit: see the timing item in `TODO.md`. `PC1600Display.hpp` (`kBusyClocks`)
 - **Unrecognised controller commands** are silently dropped.
   `PC1600Display::writeIO()`
 - **Status-symbol line** is read from display RAM (IC3 column 63, pages
@@ -312,15 +323,14 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
 
 - **LH5811 I/O controller: only the registers a stock PC-1500 needs are
   modelled** (DDA/OPA, DDB/OPB, and the uPD1990AC RTC bit-banged via
-  OPC/PC0-PC5), plus the buzzer on OPC/PC6. **Serial transfer and the F
-  register's modulated SDO output are out of scope**: no stock
-  boot-to-idle or BASIC-editing behaviour depends on them. The CE-150 tape
-  code would need them (F = 63H: 2539 / 1270 Hz). `PC1500Memory.hpp`
-- **F / G / MSK registers and the unused register-select codes**: stored
-  as plain read/write bytes defaulting to `0x00`. This does *not* model
-  serial transfer or MSK's real interrupt-masking effect — but a real ROM
-  both writes and reads them, so echoing what was written is a more
-  faithful default than a constant. `PC1500Memory::readIO()` / `writeIO()`
+  OPC/PC0-PC5), plus the buzzer on OPC/PC6 and the serial block the
+  CE-150 cassette uses (divider, G clock, F modulation, L transmitter:
+  `LH5811Serial.hpp`). **Serial receive is out of scope.**
+  `PC1500Memory.hpp`
+- **MSK and the unused register-select codes** are stored as plain
+  read/write bytes (default `0x00`); a MSK read adds CL1 in bit 7. MSK's
+  interrupt-masking effect isn't modelled. `PC1500Memory::readIO()` /
+  `writeIO()`
 - **BREAK via the ON key** is reproduced by a direct write to IF bit 1 on
   the press transition. Real hardware most plausibly has the ON key's IRQ
   line OR-wired onto the same latch TP's rising edge sets — "plausible but
@@ -390,8 +400,9 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   MODE 1 the CE-158 prints (parallel `OPN "LPRT"`, serial `SETDEV PO`)
   and `RINKEY$` reads its UART, but `SETDEV KI` + `INPUT` never reaches
   the CE-158's ROM (no UART access at all; INPUT takes the keyboard). The
-  PC-1600 has its own native `SETDEV` (KI = F14EH b0), which likely takes
-  the command; not yet checked against real hardware.
+  PC-1600 has its own native `SETDEV` (KI = F14EH b0); it passes non-`COM`
+  devices on (`SETDEV PO` reaches the CE-158), yet `INPUT` after
+  `SETDEV KI` still takes the keyboard. Why is open (TODO.md).
   `Core/Connector/Ce158Card.hpp`, `LH5803SharedMemory.cpp`
 - **Cassette (CMT) through a CE-150 on the PC-1600** — no tape path
   (TODO.md, "Cassette tape"). `LH5803SharedMemory.cpp`
@@ -420,8 +431,8 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   per-track formatted/unformatted state (the image holds sector data only,
   so every track answers READ ID with standard IDs -- an unformatted disk
   is recognised at the filesystem level instead: `FILES` gives ERROR 161), and
-  write-protect (`m_writeProtect` exists but nothing ever sets it true —
-  the emulated drive is permanently writable).
+  write-protect (the status always reports "not protected",
+  `CE1600FCard.hpp`).
 
 ---
 

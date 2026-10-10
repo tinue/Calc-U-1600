@@ -1,5 +1,7 @@
 # Pre-execution registers everywhere (history + trace)
 
+**Status: implemented** (453782e, dev-0.7.0).
+
 ## Context
 
 The live debugger (frame 0) shows the registers *before* the instruction at the PC, as every debugger does. The two recorded views do the opposite:

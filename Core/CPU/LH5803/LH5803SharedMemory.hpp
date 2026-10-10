@@ -56,8 +56,9 @@ class PC1600BusArbiter;
 //     (31H), P_INT (32H), P_LHMSK2 (34H), P_CL1 (36H) in rom1500. P_BANK
 //     is what MODE 1 PEEK/XPEEK depend on (P_MAPPRG, rom1500 E63C). The
 //     32H read clears the cause as on the Z-80 side; only the LH5803 ISR
-//     (E6B9) reads it, and no LH5803 interrupt is raised yet. A 36H write
-//     acknowledges the SC7852's LHNMIO trap (the NMI handler, C491H).
+//     (E6B9) reads it, and no LH5803 maskable interrupt is raised yet. A
+//     36H write acknowledges the SC7852's LHNMIO trap (the NMI handler,
+//     C491H).
 //   * ME1 0xA040-0xA05F and 0x8040-0x805F: Z-80 ports 40H-5FH, the
 //     HD61102 LCD drivers (50H/58H/5BH), the same way. The LH5803 ROM
 //     drives the LCD directly through both forms: LCD1500_ALL (E84AH, the

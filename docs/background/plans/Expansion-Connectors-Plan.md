@@ -1,6 +1,9 @@
 # Expansion connectors: mechanical groundwork (no signal-model changes)
 
-**Status:** implemented 2026-09-26 (a9e56f9, db7af2f, ac4dc0a). The signal work stays open in TODO.md.
+**Status:** implemented 2026-09-26 (a9e56f9, db7af2f, ac4dc0a). `CardChain`, `CardBase`,
+`readHasSideEffects` and the PC-1500 owning its connectors remain; the PC-1600 parts
+(`lh5803PeripheralBus()`, `PC1600SystemBus`) were replaced on 2026-10-07 by
+Sixty-Pin-Connector-Plan.md, which also did the signal work.
 
 ## Context
 

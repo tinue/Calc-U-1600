@@ -595,8 +595,8 @@ authentic speed for the span that matters.
   backward compatibility is wanted. Any format change bumps `format-version`.
 - **Cards and floppies resolve bundled-first**, then the configured save
   folder, in both the GUI and the preset loader.
-- **`INIT "S3:"` is refused.** The host-drive ROM has no token table, so INIT
-  finds no handler. A format must never wipe a host folder.
+- **`INIT "S3:"` is refused.** The host-drive ROM's token table (CDIR, LDIR)
+  has no INIT, so INIT finds no handler. A format must never wipe a host folder.
 - **Host-drive directory dates say 1986.** The PC-1600 clock has no year, so
   the ROM's own FATTIME writes year field 6, and the host drive does the
   same. FILES shows no year. The host file keeps its real time stamp.

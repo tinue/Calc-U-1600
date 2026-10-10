@@ -43,8 +43,8 @@ decisions, plans, handoffs — is in [../background/README.md](../background/REA
   host pseudo-terminal: transport, line model, probe tooling.
 - [PC1600-Host-Drive-Internals.md](PC1600-Host-Drive-Internals.md) — the
   host-drive ROM, its I/O protocol and FILE functions.
-- [PC1500-BASIC-Variable-Layout.md](PC1500-BASIC-Variable-Layout.md) — how
-  the PC-1500 ROM BASIC stores variables in RAM.
+- [Debugger-Internals.md](Debugger-Internals.md) — how the DAP debugger is
+  built: transport, run control, where the code is, design rules.
 - [LCD-Text.md](LCD-Text.md) — reading the display as text: the ROM fonts,
   the cursor, the encoding, and where to use it (`--lcd-text`, `expect:`,
   `calcu1600/screen`).

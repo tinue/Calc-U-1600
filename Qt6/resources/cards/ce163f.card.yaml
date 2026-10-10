@@ -32,7 +32,7 @@
 # never show in this card; they only fill bytes a definition leaves out.
 #
 # PC-1600 slot / Slot-1 caveat: same as ce1638.card.yaml -- see that
-# file's doc comment and MinorIssues.md.
+# file's doc comment and docs/developer/PC1600-Core-Limitations.md.
 #
 # Deliberately not modeled: DQ6/DQ7
 # toggle-bit status polling, software-ID/autoselect, and simulated

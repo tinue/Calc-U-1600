@@ -848,8 +848,8 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         }
         out->ce1600pRomVariant = plotterRom.empty() ? "new" : plotterRom;
         if (!interfaceName.empty() && plotter == "ce1600p") {
-            *error = "'interface: CE-158' cannot be combined with 'plotter: CE-1600P' (the CE-158 does "
-                     "not connect to the CE-1600P)";
+            *error = "'interface: CE-158' cannot be combined with 'plotter: CE-1600P' (the CE-158 together "
+                     "with the CE-1600P is not supported yet)";
             return false;
         }
         if (hasFloppy && plotter != "ce1600p") {

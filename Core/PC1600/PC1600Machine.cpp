@@ -89,7 +89,7 @@ bool PC1600Machine::attachCE1600P(const uint8_t* rom1, size_t rom1Size,
     std::lock_guard<std::mutex> lock(m_mutex);
     detachCE1600PLocked();
     detachCE150Locked(); // one plotter on the bus at a time
-    detachCE158Locked(); // the CE-158 cannot be used with the CE-1600P
+    detachCE158Locked(); // CE-158 + CE-1600P not supported yet (TODO.md, IO7N)
     card->connectRecorder(&m_tapeDeck);
     m_z80Mem.systemBus().attach(card.get());
     m_z80Mem.systemBus().attach(floppy.get());
