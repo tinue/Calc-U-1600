@@ -248,6 +248,51 @@ Decisions.md, "One 60-pin connector per machine".
     it; the polarity of the slot's MREQ contact isn't recorded in the
     research.
 
+- **Connector signals not emulated (besides DME0/MREQ above, PVIN above
+  and the "Still open" items below).** Checked 2026-10-10 against
+  Ref/Shared/Expansion-Connectors.md §2.1, §2.2, §4.0-4.3. Power, ground,
+  NC and the unused PB0/PB1/PC7 are left out; RD/WR, R/W and OD are
+  implicit in the read/write calls. None of these is used by a bundled
+  card or by the firmware paths we run, so nothing breaks today; each would
+  matter for a card that uses it.
+  - **INHIBIT / INH on the PC-1600** (60-pin 25, both slots 15). The
+    PC-1500 honours it (`PC1500Memory::inhibitAsserted()`, from both
+    connectors' `InhibitSource` cards); `PC1600Memory` never asks. On the
+    PC-1600 INH suppresses the internal ROMs CS001/CS123 (a module
+    overriding internal memory, e.g. a CE-1620M EPROM), and its polarity is
+    reversed (TRM §7.2.2: INH *high* inhibits; it is the ROM's active-low OE,
+    tied low by default; not reconciled with a second source). No bundled
+    card on either machine implements `InhibitSource` yet. **Plan:** ask
+    `m_systemBus` and both slot connectors in `PC1600Memory::resolveConst()`
+    for the CS001/CS123 ROMs (which pages/banks those are needs the
+    research), then a test card. **Before fixing:** settle the polarity and
+    which ROM banks INH covers.
+  - **Interrupt request lines.** PC-1500 60-pin 30 (INT, to the LH5801);
+    PC-1600 60-pin 9 (INT1̄ = SC7852 pin 82, "interrupts from PC-1600
+    peripherals", IM2 cause 1) and 30 (IRQ). No card can raise one.
+    Today the firmware polls: the CE-158's interrupt-ID register reads 80H
+    ("none"), and the CE-1600P's key-interrupt enables (port 81H) aren't
+    modelled. **Plan:** an interrupt-source interface like `InhibitSource`
+    (level per card, OR'd on the chain); PC1500Machine feeds it to the
+    LH5801's INT, PC1600Machine to the SC7852 interrupt logic as cause 1
+    (Decisions.md, "PC-1600 INT is a level"). Needs a card that uses it
+    (CE-158 receive interrupt, CE-1600P paper-feed key) to be worth it.
+  - **WAIT lines.** PC-1500 60-pin 26 (WEX, external WAIT) and 28 (W1, WAIT
+    condition input); PC-1600 60-pin 28 (WAIT). A card can't stretch a
+    cycle; every card access takes the CPU's normal cycle. Only affects
+    timing (a slow peripheral, cycle-exact measurements). On the PC-1500,
+    WEX together with S6 also forwards a peripheral's interrupt to the I/O
+    port (PC-1500-Address-Decoding.md, S6 · WEX); not modelled either.
+  - **PC-1600 RSTE** (60-pin 13): an external reset line, direction and
+    use not documented in the research. Not modelled.
+  - **BFO / φOS** (60-pin 50/51, both machines): the VCC-on output and the
+    CPU-phase clock. Cards are clocked from emulated time instead
+    (`advanceCassette()`, the cards' own T-state counters), and attach /
+    detach happen only with the machine off. Matters only for a card that
+    counts φOS or watches BFO. Related, PC-1500: BF0 (reset by OFF) gates
+    the whole chip-select tree; while it is reset no select asserts. The
+    emulator makes no bus accesses while off, so it is moot today.
+
 **Still open (hardware questions; the drive leaves these contacts inactive):**
 - **Does the CE-1600P's I/O decode see LH5803 ME1 cycles?** While ELH̄ is
   asserted, IORQ carries the LH5803's ME1, so an access such as ME1 D070H
