@@ -9,7 +9,7 @@
 //   - a demonstration of the trace ring buffer.
 //
 // Usage: pc1500_cli <rom-file> [maxCycles]
-//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--save-dir <dir>] [--wav <out.wav>] [--tape-in <in.wav>] [--tape-out <out.wav>] [--dump-mem <addr>,<len>] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
+//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--save-dir <dir>] [--wav <out.wav>] [--tape-in <in.wav>] [--tape-out <out.wav>] [--dump-mem <addr>,<len>] [--inspect <view>] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
 //
 // The --preset form parses and applies a `.pc1500` scenario file
 // (PresetFile.hpp/PC1500PresetLoader.hpp) instead of a bare ROM --
@@ -64,6 +64,7 @@
 #include <vector>
 
 #include "../Core/Audio/WavFile.hpp"
+#include "../Core/Debug/Inspect/PC1500Inspector.hpp"
 #include "../Core/PC1500/PC1500Machine.hpp"
 #include "../Core/Preset/PresetFile.hpp"
 #include "../Core/Preset/PresetMedia.hpp"
@@ -86,6 +87,7 @@ int main(int argc, char** argv) {
     std::string lcdTextPath;
     cli::TapeOptions tape;
     cli::MemDumps memDumps;
+    cli::InspectViews inspectViews;
     Ce158CliPeer ce158Peer;
     {
         std::vector<char*> kept;
@@ -105,6 +107,10 @@ int main(int argc, char** argv) {
             if (tape.parseArg(argc, argv, i)) continue;
             if (std::strcmp(argv[i], "--dump-mem") == 0 && i + 1 < argc) {
                 if (!cli::parseMemDump(argv[++i], &memDumps)) return 1;
+                continue;
+            }
+            if (std::strcmp(argv[i], "--inspect") == 0 && i + 1 < argc) {
+                if (!cli::parseInspect(argv[++i], &inspectViews)) return 1;
                 continue;
             }
             if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
@@ -129,7 +135,7 @@ int main(int argc, char** argv) {
     if (argc < 2) {
         std::fprintf(stderr, "usage: %s <rom-file> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       %s --preset <preset-file.pc1500> [maxCycles]\n", argv[0]);
-        std::fprintf(stderr, "       options: --modules-dir <dir>  --save-dir <dir>  --dump-basic  --wav <out.wav>  --tape-in <in.wav>  --tape-out <out.wav>  --dump-mem <addr>,<len>  --lcd-png <out.png>  --lcd-text <out.txt|->\n");
+        std::fprintf(stderr, "       options: --modules-dir <dir>  --save-dir <dir>  --dump-basic  --wav <out.wav>  --tape-in <in.wav>  --tape-out <out.wav>  --dump-mem <addr>,<len>  --inspect <view>  --lcd-png <out.png>  --lcd-text <out.txt|->\n");
         std::fprintf(stderr, "                %s\n", Ce158CliPeer::kUsage);
         return 1;
     }
@@ -254,6 +260,7 @@ int main(int argc, char** argv) {
     std::printf("Ran %llu instructions, %llu cycles\n", (unsigned long long)steps, (unsigned long long)consumed);
     if (!tape.finish(machine)) return 1;
     cli::printMemDumps(machine, memDumps);
+    cli::printInspect(machine, inspectViews, inspect::pc1500View);
     if (!lcdPng.empty()) {
         std::string pngError;
         if (!writeLcdScreenshotPng(pc1500LcdBitmap(machine), kPC1500ScreenMm, lcdPng, &pngError)) {

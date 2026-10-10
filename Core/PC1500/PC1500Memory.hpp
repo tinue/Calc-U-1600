@@ -186,7 +186,9 @@ public:
     // open bus. See Core/Connector/ExpansionConnector.hpp and SystemBus.hpp
     // for what these model; PC1500Machine forwards its accessors here.
     ExpansionConnector& expansionConnector() { return m_expansionConnector; }
+    const ExpansionConnector& expansionConnector() const { return m_expansionConnector; }
     SystemBus&          systemBus() { return m_systemBus; }
+    const SystemBus&    systemBus() const { return m_systemBus; }
 
     /// Live LH5801 PU/PV flip-flop state, pushed once per instruction by
     /// PC1500Machine::step()/runCycles() -- PC1500Memory has no CPU
@@ -196,6 +198,8 @@ public:
     /// SPV/RPV) never touch the bus themselves, so updating once per
     /// instruction (rather than mid-instruction) is sufficient.
     void updatePUPV(bool pu, bool pv) { m_pu = pu; m_pv = pv; }
+    bool pu() const { return m_pu; }
+    bool pv() const { return m_pv; }
 
 private:
     static constexpr uint16_t kUserRamBase = 0x4000;

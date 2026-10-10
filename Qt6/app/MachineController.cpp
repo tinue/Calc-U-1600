@@ -9,6 +9,8 @@
 
 #include <algorithm>
 
+#include "Debug/Inspect/PC1500Inspector.hpp"
+#include "Debug/Inspect/PC1600Inspector.hpp"
 #include "PC1500/PC1500BasicTyper.hpp"
 #include "PC1500/PC1500LcdText.hpp"
 #include "PC1500/PC1500Machine.hpp"
@@ -434,80 +436,33 @@ bool MachineController::lcdText(LcdText* out) const {
 
 // ---- Debug panel support ----
 
-std::uint8_t MachineController::debugPeek(std::uint16_t addr) const {
-    return withMachine(std::uint8_t{0}, [&](auto& machine) { return machine.debugPeek(addr); });
+std::vector<std::string> MachineController::inspectorView(inspect::View view) const {
+    if (m_pc1600)
+        return m_pc1600->debugInspect([&](const PC1600Machine& m) { return inspect::pc1600View(m, view); });
+    if (m_pc1500)
+        return m_pc1500->debugInspect([&](const PC1500Machine& m) { return inspect::pc1500View(m, view); });
+    return {};
 }
 
-bool MachineController::debugSlotResponds(std::uint16_t addr) const {
-    return m_pc1500 ? m_pc1500->debugSlotResponds(addr) : false;
+std::vector<inspect::MenuEntry> MachineController::inspectorMenu(bool dumps) const {
+    if (m_pc1600)
+        return m_pc1600->debugInspect([&](const PC1600Machine& m) { return inspect::pc1600Menu(m, dumps); });
+    if (m_pc1500)
+        return m_pc1500->debugInspect([&](const PC1500Machine& m) { return inspect::pc1500Menu(m, dumps); });
+    return {};
 }
 
-int MachineController::debugSlotCardBank() const {
-    return m_pc1500 ? m_pc1500->debugSlotCardBank() : -1;
-}
-
-int MachineController::debugSlotCardBankCount() const {
-    return m_pc1500 ? m_pc1500->debugSlotCardBankCount() : -1;
-}
-
-std::vector<std::uint8_t> MachineController::debugSlotCardImage() const {
+std::vector<std::uint8_t> MachineController::debugSlotCardImage(int slot) const {
+    if (m_pc1600) return m_pc1600->debugSlotImage(slot);
     return m_pc1500 ? m_pc1500->debugSlotCardImage() : std::vector<std::uint8_t>{};
 }
 
-bool MachineController::slot1Attached() const {
-    return m_pc1600 && m_pc1600->slot1Attached();
-}
-
-bool MachineController::slot2Attached() const {
-    return m_pc1600 && m_pc1600->slot2Attached();
-}
-
-std::vector<std::uint8_t> MachineController::debugSlotImagePC1600(int slot) const {
-    return m_pc1600 ? m_pc1600->debugSlotImage(slot) : std::vector<std::uint8_t>{};
-}
-
-std::vector<std::uint8_t> MachineController::debugInternalRamPC1600() const {
-    if (!m_pc1600) return {};
-    std::vector<std::uint8_t> out(PC1600Machine::kInternalRamSize);
-    m_pc1600->debugCopyInternalRam(out.data());
-    return out;
-}
-
-namespace {
-DebugPageTarget toDebugPageTarget(PC1600Machine::PageTarget t) {
-    switch (t) {
-        case PC1600Machine::PageTarget::OpenBus:       return DebugPageTarget::OpenBus;
-        case PC1600Machine::PageTarget::SystemRomLo:   return DebugPageTarget::SystemRomLo;
-        case PC1600Machine::PageTarget::SystemRomHi:   return DebugPageTarget::SystemRomHi;
-        case PC1600Machine::PageTarget::Bank3Rom:      return DebugPageTarget::Bank3Rom;
-        case PC1600Machine::PageTarget::Bank3bRom:     return DebugPageTarget::Bank3bRom;
-        case PC1600Machine::PageTarget::Bank6Rom:      return DebugPageTarget::Bank6Rom;
-        case PC1600Machine::PageTarget::PeripheralRom: return DebugPageTarget::PeripheralRom;
-        case PC1600Machine::PageTarget::InternalRam:   return DebugPageTarget::InternalRam;
-        case PC1600Machine::PageTarget::Slot1:         return DebugPageTarget::Slot1;
-        case PC1600Machine::PageTarget::Slot2:         return DebugPageTarget::Slot2;
+int MachineController::debugSlotCardBankCount(int slot) const {
+    if (m_pc1600) {
+        const PC1600Machine::DebugBankState bs = m_pc1600->debugBankState();
+        return slot == 2 ? bs.slot2CardBankCount : bs.slot1CardBankCount;
     }
-    return DebugPageTarget::OpenBus;
-}
-}  // namespace
-
-DebugBankStateFrame MachineController::debugBankStatePC1600() const {
-    DebugBankStateFrame out;
-    if (!m_pc1600) return out;
-    const PC1600Machine::DebugBankState bs = m_pc1600->debugBankState();
-    out.port31 = bs.port31; out.port28 = bs.port28; out.port3c = bs.port3c;
-    out.pageABank = bs.pageABank; out.pageBBank = bs.pageBBank;
-    out.pageCBank = bs.pageCBank; out.pageDBank = bs.pageDBank;
-    out.slot2MapMode = bs.slot2MapMode;
-    out.slot1MapRemapped = bs.slot1MapRemapped;
-    out.hiddenBasicRom = bs.hiddenBasicRom;
-    out.slot1CardBank = bs.slot1CardBank; out.slot2CardBank = bs.slot2CardBank;
-    out.slot1CardBankCount = bs.slot1CardBankCount; out.slot2CardBankCount = bs.slot2CardBankCount;
-    for (int i = 0; i < 4; ++i) {
-        out.target[i] = toDebugPageTarget(bs.target[i]);
-        out.slotmapRedirect[i] = bs.slotmapRedirect[i];
-    }
-    return out;
+    return m_pc1500 ? m_pc1500->debugSlotCardBankCount() : -1;
 }
 
 bool MachineController::beginTrace(const QString& path) {

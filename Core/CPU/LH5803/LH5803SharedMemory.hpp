@@ -101,6 +101,14 @@ public:
     /// halves of the 8000-BFFF window; PU picks the CE-158's ROM bank.
     void updatePUPV(bool pu, bool pv) { m_pu = pu; m_pv = pv; }
     bool pv() const { return m_pv; }
+    bool pu() const { return m_pu; }
+    bool romLoaded() const { return m_rom.loaded(); }
+    /// The cards on the 60-pin bus that answer an LH5803 read of `addr` in
+    /// ME0 / ME1 at PU/PV `pu`/`pv`, for the inspector's LH5803 view. Asks
+    /// each card from its contacts (SystemBusCard::respondsToRead), without
+    /// reading a register that a read would disturb (readHasSideEffects()
+    /// counts as answering); "" when none answers.
+    std::string debugBusCardAt(uint16_t addr, bool me1, bool pu, bool pv) const;
 
     /// Loads the LH5803-private internal ROM at C000-FFFF (PC1600-LH5803-C000-FFFF-new.bin).
     /// Returns false (untouched) if `size` isn't exactly 16384 bytes.

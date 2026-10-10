@@ -109,7 +109,7 @@ PlotterPaperWidget::PlotterPaperWidget(MachineController* controller, QWidget* p
     outer->setContentsMargins(0, 0, 0, 0);
     outer->setSpacing(0);
 
-    // Header -- matches DebugPanel's "DEBUG LOG" header exactly (same
+    // Header -- matches DebugPanel's "INSPECTOR" header exactly (same
     // ChromeColors, same font/padding), showing which plotter is attached
     // instead of a fixed label.
     m_header = new QLabel(this);

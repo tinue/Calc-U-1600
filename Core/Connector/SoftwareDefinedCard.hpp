@@ -113,6 +113,29 @@ public:
 
     std::string moduleName() const override { return m_def.moduleName; }
 
+    /// One entry per region; a `by-bank:` split of different kinds is Mixed.
+    std::vector<CardMemory> debugMemories() const override {
+        std::vector<CardMemory> out;
+        for (const Region& r : m_def.regions) {
+            CardMemory m;
+            m.name = r.name;
+            m.size = r.capacity;
+            m.banks = r.banking.bankCount ? r.banking.bankCount : 1;
+            m.portBanked = r.banked && r.banking.triggerKind == TriggerKind::IoPort;
+            m.port = r.banking.triggerPort;
+            for (uint32_t b = 0; b < m.banks; ++b) {
+                const RegionContent& c = r.contentForBank(b);
+                const CardMemory::Kind k = c.kind == ContentKind::Flash ? CardMemory::Kind::Flash
+                    : (c.kind == ContentKind::Rom || !c.writable)        ? CardMemory::Kind::Rom
+                                                                          : CardMemory::Kind::Ram;
+                if (b == 0) m.kind = k;
+                else if (k != m.kind) m.kind = CardMemory::Kind::Mixed;
+            }
+            out.push_back(m);
+        }
+        return out;
+    }
+
     uint64_t contentRevision() const override { return m_contentRevision; }
 
     /// First banked region's current bank, for the GUI "Dump Mem" column

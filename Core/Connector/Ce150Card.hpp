@@ -68,6 +68,10 @@ public:
         if (!m_romLoaded) return {};
         return std::vector<uint8_t>(m_rom.begin(), m_rom.end());
     }
+    std::string moduleName() const override { return "CE-150"; }
+    std::vector<CardMemory> debugMemories() const override {
+        return {{"", CardMemory::Kind::Rom, uint32_t(kRomSize)}};
+    }
 
     /// Re-anchor to power-on state: zero the LH5810 latches and reset the
     /// mechanism (which keeps the drawn strokes -- see its reset()).

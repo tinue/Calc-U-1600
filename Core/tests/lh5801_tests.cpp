@@ -1519,6 +1519,8 @@ int run_basic_program_source_tests();
 // Defined in pc1600_program_placement_tests.cpp -- the scattered-bank
 // segment-list + placement logic for the fast BASIC loader.
 int run_pc1600_program_placement_tests();
+// Defined in inspector_tests.cpp -- the debug panel's inspector views.
+int run_inspector_tests();
 // Defined in key_paste_tests.cpp -- the GUI's clipboard-paste feeder.
 int run_key_paste_tests();
 // Defined in lcd_screenshot_tests.cpp -- LCD PNG render + `screenshot:` step.
@@ -1629,6 +1631,7 @@ int main() {
     int pc1600BasicLoaderFailures = run_pc1600_basicloader_tests();
     int basicProgramSourceFailures = run_basic_program_source_tests();
     int pc1600ProgramPlacementFailures = run_pc1600_program_placement_tests();
+    int inspectorFailures = run_inspector_tests();
     int piezoSamplerFailures = run_piezo_sampler_tests();
     int tapeDeckFailures = run_tape_deck_tests();
     int pc1600TapeFailures = run_pc1600_tape_tests();
@@ -1642,7 +1645,7 @@ int main() {
     int debugTargetFailures = run_debug_target_tests();
     int listingFailures = run_listing_tests();
     int runControlFailures = run_run_control_tests();
-    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && tapeDeckFailures == 0 && pc1600TapeFailures == 0 && pc1500TapeFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && lcdTextFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && connectorFailures == 0 && ce151Failures == 0 && ce155Failures == 0 && ce161Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
+    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && tapeDeckFailures == 0 && pc1600TapeFailures == 0 && pc1500TapeFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && lcdTextFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && inspectorFailures == 0 && connectorFailures == 0 && ce151Failures == 0 && ce155Failures == 0 && ce161Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
             ce163fFailures == 0 && memoryCardFailures == 0 && batteryCardInstanceFailures == 0 &&
             presetFailures == 0 &&
             basicTyperFailures == 0 && pc1600BasicTyperFailures == 0 &&

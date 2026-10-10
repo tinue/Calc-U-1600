@@ -114,6 +114,10 @@ public:
         if (!m_romLoaded) return {};
         return std::vector<uint8_t>(m_rom.begin(), m_rom.end());
     }
+    std::string moduleName() const override { return "CE-158"; }
+    std::vector<CardMemory> debugMemories() const override {
+        return {{"", CardMemory::Kind::Rom, uint32_t(kRomSize), 2}};
+    }
 
     /// Attach / detach the RS-232C peer. Non-owning; `nullptr` = no peer
     /// (sent bytes are dropped, nothing is ever received). reset() keeps it.

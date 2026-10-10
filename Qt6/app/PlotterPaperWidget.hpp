@@ -17,7 +17,7 @@ class MachineController;
 // a running machine (Core-enforced), so only one is ever shown at a time --
 // MainWindow calls setKind() when the active plotter changes.
 //
-// Layout: a title header matching DebugPanel's "DEBUG LOG" header (same
+// Layout: a title header matching DebugPanel's "INSPECTOR" header (same
 // size/coloring, showing "CE-150"/"CE-1600P" instead) and a Copy/Cut button
 // row underneath the paper matching DebugPanel's TRACE/LOG row in size and
 // using the exact same ChromeColors -- so this panel reads as a sibling of

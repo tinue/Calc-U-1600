@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "Connector/AlpsPlotterMechanism.hpp"
+#include "Debug/Inspect/Inspector.hpp"
 #include "Display/LcdScreenshot.hpp"
 #include "Display/LcdText.hpp"
 #include "KeyPaste.hpp"
@@ -59,27 +60,6 @@ struct DisplayFrame {
     std::vector<bool> pixels; // row-major, cols*rows entries
     bool poweredOn = true;    // PC1500Machine::isDisplayOn() / PC1600 clockEnabled
     std::vector<std::pair<std::string, bool>> statusSymbols;
-};
-
-// Flat mirror of PC1600Machine::PageTarget/DebugBankState (PC1600Machine.hpp)
-// for the debug panel's "Dump Mem" address-map view -- decoupled from Core's
-// own type the same way DisplayFrame decouples from PC1600DisplaySnapshot, so
-// this header doesn't need PC1600Machine.hpp's full definition.
-enum class DebugPageTarget {
-    OpenBus, SystemRomLo, SystemRomHi, Bank3Rom, Bank3bRom, Bank6Rom,
-    PeripheralRom, InternalRam, Slot1, Slot2,
-};
-
-struct DebugBankStateFrame {
-    uint8_t port31 = 0, port28 = 0, port3c = 0;
-    uint8_t pageABank = 0, pageBBank = 0, pageCBank = 0, pageDBank = 0;
-    uint8_t slot2MapMode = 0;
-    bool slot1MapRemapped = false;
-    bool hiddenBasicRom = false;
-    int slot1CardBank = -1, slot2CardBank = -1;
-    int slot1CardBankCount = -1, slot2CardBankCount = -1;
-    DebugPageTarget target[4]{};
-    bool slotmapRedirect[4]{};
 };
 
 // Facade over PC1500Machine/PC1600Machine -- owns whichever one is active
@@ -303,21 +283,17 @@ public:
     // Thin pass-throughs onto Core's already-existing debug/trace surface
     // (see PC1500Machine.hpp/PC1600Machine.hpp's own "debug reads" blocks).
     bool hasLiveMachine() const { return m_pc1500 || m_pc1600; }
-    std::uint8_t debugPeek(std::uint16_t addr) const;
 
-    // PC1500(A)-only ("Pointers" / "Dump Mem" / "Dump Card YAML"); harmless
-    // no-op defaults (false / -1 / empty) when a PC1600 is active instead.
-    bool debugSlotResponds(std::uint16_t addr) const;
-    int debugSlotCardBank() const;
-    int debugSlotCardBankCount() const;
-    std::vector<std::uint8_t> debugSlotCardImage() const;
+    // INSPECTOR: one view of Core/Debug/Inspect for the active model, built
+    // from a locked snapshot of the machine; empty with no machine.
+    std::vector<std::string> inspectorView(inspect::View view) const;
+    // The Memory ▾ (`dumps` false) / Dump ▾ (`dumps` true) menu entries.
+    std::vector<inspect::MenuEntry> inspectorMenu(bool dumps) const;
 
-    // PC1600-only.
-    bool slot1Attached() const;
-    bool slot2Attached() const;
-    std::vector<std::uint8_t> debugSlotImagePC1600(int slot) const;
-    std::vector<std::uint8_t> debugInternalRamPC1600() const;
-    DebugBankStateFrame debugBankStatePC1600() const;
+    // Card YAML: the module's whole image and bank count (-1 = unbanked).
+    // PC1500(A): the one slot (`slot` ignored); PC1600: Slot 1 or 2.
+    std::vector<std::uint8_t> debugSlotCardImage(int slot) const;
+    int debugSlotCardBankCount(int slot) const;
 
     // TRACE (DebugPanel): a full instruction trace of the live machine to
     // `path`, captured inside Core -- runCycles() drains the CPU ring(s)

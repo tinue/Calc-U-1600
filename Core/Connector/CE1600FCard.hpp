@@ -59,6 +59,8 @@
 // disk.
 class CE1600FCard : public SystemBusCard {
 public:
+    std::string moduleName() const override { return "CE-1600F"; }
+
     static constexpr size_t kSectorSize = 512;
     static constexpr size_t kTracksPerSide = 16;
     static constexpr size_t kSectorsPerTrack = 8;

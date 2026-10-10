@@ -52,6 +52,11 @@ endif()
 # Core sources used by tools and tests
 set(CORE_COMMON_SOURCES
   ${CORE_ROOT}/Debug/BasicPointerTable.cpp
+  ${CORE_ROOT}/Debug/Inspect/Inspector.cpp
+  ${CORE_ROOT}/Debug/Inspect/TextTable.cpp
+  ${CORE_ROOT}/Debug/Inspect/HexDump.cpp
+  ${CORE_ROOT}/Debug/Inspect/PC1500Inspector.cpp
+  ${CORE_ROOT}/Debug/Inspect/PC1600Inspector.cpp
   ${CORE_ROOT}/Debug/Disasm/Disassembly.cpp
   ${CORE_ROOT}/Debug/Disasm/LH5801Disassembler.cpp
   ${CORE_ROOT}/Debug/Disasm/Z80Disassembler.cpp
@@ -300,6 +305,7 @@ set(TEST_SOURCES
   ${CORE_ROOT}/tests/pc1600_basicloader_tests.cpp
   ${CORE_ROOT}/tests/basic_program_source_tests.cpp
   ${CORE_ROOT}/tests/pc1600_program_placement_tests.cpp
+  ${CORE_ROOT}/tests/inspector_tests.cpp
   ${CORE_ROOT}/tests/piezo_sampler_tests.cpp
   ${CORE_ROOT}/tests/tape_deck_tests.cpp
   ${CORE_ROOT}/tests/pc1600_tape_tests.cpp

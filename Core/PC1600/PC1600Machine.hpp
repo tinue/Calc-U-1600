@@ -295,11 +295,13 @@ public:
     LH5803&       lh5803() { return m_lh5803; }
     const LH5803& lh5803() const { return m_lh5803; }
     PC1600Bank&   bank() { return m_bank; }
+    const PC1600Bank& bank() const { return m_bank; }
     PC1600Memory& memory() { return m_z80Mem; }
     const PC1600Memory& memory() const { return m_z80Mem; }
     /// The LH5803's memory view -- its 0000-3FFF window aliases the Z-80's
     /// 8000-BFFF (Slot 1/2), so a slot card is visible through both.
     LH5803SharedMemory& lh5803Memory() { return m_lh5803Mem; }
+    const LH5803SharedMemory& lh5803Memory() const { return m_lh5803Mem; }
     PC1600BusArbiter& busArbiter() { return m_arbiter; }
     bool sc7852Owns() const { return m_arbiter.sc7852Owns(); }
 
@@ -430,10 +432,10 @@ public:
     /// view, which chunks it into 16 KB bank rows.
     std::vector<uint8_t> debugSlotImage(int slot);
 
-    /// What a CPU page currently decodes to, for the debug panel's live
-    /// address-map view. Mirrors PC1600Memory::resolveConst()'s branch set
-    /// plus the two slot windows; `PeripheralRom` is the CE-1600P ROM at
-    /// page-B banks 4/5, which has no backing store yet (shown, not read).
+    /// What a CPU page currently decodes to, for the inspector's Z80 view.
+    /// Mirrors PC1600Memory::read()'s branch set: the fixed ROMs, the two
+    /// slot windows, and `BusCard`, a card on the 60-pin system bus that
+    /// answers page B banks 4-7 (CE-1600P, host drive, a preset bus ROM).
     enum class PageTarget : uint8_t {
         OpenBus = 0,
         SystemRomLo,   // Bank 0 lower 16 KB (page A)
@@ -441,7 +443,7 @@ public:
         Bank3Rom,      // page B bank 3, Port 3DH b2 set
         Bank3bRom,     // page B bank 3, Port 3DH b2 clear (hidden BASIC ROM)
         Bank6Rom,      // ROM IV, page C bank 6
-        PeripheralRom, // CE-1600P, page B banks 4/5 -- not modelled
+        BusCard,       // page B banks 4-7, a 60-pin card (DebugBankState::busCard)
         InternalRam,   // fixed internal 16 KB, page D bank 0
         Slot1,
         Slot2,
@@ -467,8 +469,26 @@ public:
         int     slot2CardBankCount{-1};
         PageTarget target[4]{};       // A,B,C,D -- what each page decodes to right now
         bool    slotmapRedirect[4]{}; // A,B,C,D -- true when a SLOTMAP rewrite is live for that page
+        std::string busCard;          // page B's card when target[1] == BusCard
     };
     DebugBankState debugBankState();
+    /// debugBankState() for a caller that already holds the lock
+    /// (debugInspect()).
+    DebugBankState inspectBankState() const;
+
+    /// Runs `view(*this)` under the machine lock and returns its result: one
+    /// consistent snapshot for the inspector (Core/Debug/Inspect), which
+    /// reads through the const accessors and the inspect*() calls only --
+    /// never a locked debug*() call, which would deadlock.
+    template <class F>
+    auto debugInspect(F&& view) const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return view(*this);
+    }
+
+    /// The cards on the 60-pin system bus, in chain order (the first
+    /// responder wins). For the inspector, under debugInspect().
+    const std::vector<SystemBusCard*>& inspectBusCards() const { return m_z80Mem.systemBus().chain(); }
 
     // ── Trace: both CPUs' rings drain into one TRACE.bin, tagged by cpuId ──
     //

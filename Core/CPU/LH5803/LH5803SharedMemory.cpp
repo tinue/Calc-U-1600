@@ -89,12 +89,24 @@ uint8_t LH5803SharedMemory::debugPeek(uint16_t addr, bool me1, bool* readable) c
             if (bus.read(p, v)) return v;
         }
     }
-    // ME0, and the ME1 addresses readME1() aliases onto it
+    // ME0, and the ME1 addresses readME1() aliases onto it (LHA90 included,
+    // as readME0() applies it)
     uint16_t z80 = 0;
-    if (toZ80Address(addr, &z80)) return m_shared.peek(z80);
+    if (toZ80Address(lha90(addr), &z80)) return m_shared.peek(z80);
     uint8_t v;
     if (addr < kRomBase) return cardRead(addr, /*me1=*/false, &v) ? v : 0xFF;
     return m_rom.read(addr);
+}
+
+std::string LH5803SharedMemory::debugBusCardAt(uint16_t addr, bool me1, bool pu, bool pv) const {
+    const SystemBusPins pins = PC1600BusDrive::lh5803Pins(addr, /*forWrite=*/false, me1, pu, pv);
+    for (const SystemBusCard* card : m_shared.systemBus().chain()) {
+        uint8_t v;
+        // A register a read would disturb is still the card's: it says so
+        // without being read.
+        if (card->readHasSideEffects(pins) || card->respondsToRead(pins, v)) return card->moduleName();
+    }
+    return {};
 }
 
 uint8_t LH5803SharedMemory::readME1(uint16_t addr) {

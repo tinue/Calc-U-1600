@@ -273,7 +273,7 @@ void test_reset_level_reported_to_boot_rom_via_request_5A() {
     CHECK((cause() & 0x20) != 0);
 }
 
-// ── Debug reads (GUI debug panel: "Pointers" / "Dump Mem" buttons) ───────
+// ── Debug reads (the debug panel's inspector) ──────────────────────────
 
 void test_debug_peek_reads_internal_ram_through_current_banks() {
     PC1600Machine m;
@@ -385,11 +385,12 @@ void test_debug_bank_state_resolves_the_live_address_map() {
     using PT = PC1600Machine::PageTarget;
     PC1600Machine m;
 
-    // Reset: A=sys ROM lo, B=sys ROM hi, C=Slot 1 (bank 0), D=internal RAM.
+    // Reset: A=sys ROM lo, B=sys ROM hi, C=Slot 1 (bank 0) -- open bus, the
+    // slot is empty -- D=internal RAM.
     PC1600Machine::DebugBankState s = m.debugBankState();
     CHECK(s.target[0] == PT::SystemRomLo);
     CHECK(s.target[1] == PT::SystemRomHi);
-    CHECK(s.target[2] == PT::Slot1);
+    CHECK(s.target[2] == PT::OpenBus);
     CHECK(s.target[3] == PT::InternalRam);
     CHECK(!s.slotmapRedirect[0] && !s.slotmapRedirect[1] &&
           !s.slotmapRedirect[2] && !s.slotmapRedirect[3]);
@@ -406,7 +407,7 @@ void test_debug_bank_state_resolves_the_live_address_map() {
     m.bank().writePort31(0x00);
     m.bank().writePort3C(0x20);          // b5 set -> mode 1
     s = m.debugBankState();
-    CHECK(s.target[2] == PT::Slot1);
+    CHECK(s.target[2] == PT::OpenBus);
     CHECK(!s.slotmapRedirect[2]);
 
     // Now page C selects bank 1 AND a Slot 2 card is present: the mode-1

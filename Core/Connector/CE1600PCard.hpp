@@ -80,6 +80,10 @@ public:
         if (!m_romLoaded) return {};
         return std::vector<uint8_t>(m_rom.begin(), m_rom.end());
     }
+    std::string moduleName() const override { return "CE-1600P"; }
+    std::vector<CardMemory> debugMemories() const override {
+        return {{"", CardMemory::Kind::Rom, uint32_t(kRomSize), 2}};
+    }
 
     /// The cassette recorder on the CE-152 jacks, or null for none.
     void connectRecorder(TapeDeck* deck) {

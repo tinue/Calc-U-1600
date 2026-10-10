@@ -6,6 +6,9 @@
 #include <string>
 #include <vector>
 
+#include "Debug/Inspect/Inspector.hpp"
+
+class QMenu;
 class QPlainTextEdit;
 class QPushButton;
 class QToolButton;
@@ -13,10 +16,13 @@ class QLabel;
 class MachineController;
 class MemoryModuleManager;
 
-// Docked debug/trace console: a header, a scrolling monospaced output log,
-// and a two-row button bar (Pointers / Dump Mem / Dump Card YAML / Clear,
-// then TRACE / LOG toggle pills). Always visible under the control bar
-// (see MainWindow).
+// INSPECTOR: the docked machine inspector -- a header, a scrolling
+// monospaced output log, and a two-row button bar (Pointers, the Memory ▾
+// and Dump ▾ menus, Card YAML, Clear; then the TRACE / LOG pills). The
+// views themselves are built in Core (Core/Debug/Inspect, via
+// MachineController::inspectorView()); stepping and breakpoints are the
+// debugger's (docs/Debugger.md), not this panel's. Always visible under the
+// control bar (see MainWindow).
 //
 // A plain QWidget (not a QDialog, unlike SettingsDialog) so it docks inline
 // rather than floating -- see MainWindow's m_debugRow, which also reserves
@@ -60,8 +66,9 @@ private:
     QWidget* m_buttonBar = nullptr;
     QPlainTextEdit* m_output = nullptr;
     QPushButton* m_pointersButton = nullptr;
-    QPushButton* m_dumpMemButton = nullptr;
-    QPushButton* m_dumpCardButton = nullptr;
+    QPushButton* m_memoryButton = nullptr; // Memory ▾
+    QPushButton* m_dumpButton = nullptr;   // Dump ▾
+    QPushButton* m_cardButton = nullptr;
     QPushButton* m_clearButton = nullptr;
     QToolButton* m_traceButton = nullptr;
     QToolButton* m_logButton = nullptr;
@@ -94,19 +101,11 @@ private:
     void toggleDebugLevel();
     void updateLogButtonAppearance();
 
-    // ── Dump commands ─────────────────────────────────────────────────
-    void debugDumpPointers();
-    void debugDumpPointersPC1500();
-    void debugDumpPointersPC1600();
-    void debugDumpMemory();
-    void debugDumpMemoryPC1500();
-    void debugDumpMemoryPC1600();
+    // ── Inspector views and Card YAML ─────────────────────────────────
+    void fillMenu(QMenu* menu, bool dumps);
+    void showView(inspect::View view);
     void debugDumpModuleCardAsYaml();
     void clearDebug();
-
-    struct MemRegion { int start; int end; std::string label; bool hasLabel; bool suppressDump = false; };
-    std::vector<std::string> debugDumpMemRegion(const MemRegion& region);
-    static std::string debugSizeLabel(int bytes);
     bool batteryCardImage(int slot, int* bankCount, std::vector<std::uint8_t>* image);
 
     QIcon dotIcon(const QColor& color) const;

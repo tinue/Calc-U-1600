@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -25,8 +26,13 @@
 /// and CE-158 (PV = 1, PU banked) ROMs.
 class BusRomCard final : public SystemBusCard {
 public:
-    BusRomCard(std::vector<uint8_t> rom, uint16_t base, bool me1, int pv, int pu)
-        : m_rom(std::move(rom)), m_base(base), m_me1(me1), m_pv(pv), m_pu(pu) {}
+    BusRomCard(std::vector<uint8_t> rom, uint16_t base, bool me1, int pv, int pu, std::string name = "Bus ROM")
+        : m_rom(std::move(rom)), m_base(base), m_me1(me1), m_pv(pv), m_pu(pu), m_name(std::move(name)) {}
+
+    std::string moduleName() const override { return m_name; }
+    std::vector<CardMemory> debugMemories() const override {
+        return {{"", CardMemory::Kind::Rom, uint32_t(m_rom.size())}};
+    }
 
     bool respondsToRead(const SystemBusPins& pins, uint8_t& outValue) const override {
         if (pins.forWrite || !pins.pin[m_me1 ? Contact60::kMe1 : Contact60::kDme0]) return false;
@@ -44,6 +50,7 @@ private:
     uint16_t m_base;
     bool m_me1;
     int m_pv, m_pu;
+    std::string m_name;
 };
 
 /// A ROM decoded like the PC-1600's own peripherals: page-1 bank `bank`
@@ -53,7 +60,13 @@ class PC1600BusRomCard final : public SystemBusCard {
 public:
     static constexpr size_t kBankSize = 0x4000;
 
-    PC1600BusRomCard(std::vector<uint8_t> rom, uint8_t bank) : m_rom(std::move(rom)), m_bank(bank) {}
+    PC1600BusRomCard(std::vector<uint8_t> rom, uint8_t bank, std::string name = "Bus ROM")
+        : m_rom(std::move(rom)), m_bank(bank), m_name(std::move(name)) {}
+
+    std::string moduleName() const override { return m_name; }
+    std::vector<CardMemory> debugMemories() const override {
+        return {{"", CardMemory::Kind::Rom, uint32_t(m_rom.size())}};
+    }
 
     bool respondsToRead(const SystemBusPins& pins, uint8_t& outValue) const override {
         if (pins.forWrite || !Sc7852Decode::page1Memory(pins) || Sc7852Decode::bank(pins) != m_bank) return false;
@@ -67,4 +80,5 @@ public:
 private:
     std::vector<uint8_t> m_rom;
     uint8_t m_bank;
+    std::string m_name;
 };

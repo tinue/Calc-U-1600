@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "../Core/Debug/Inspect/Inspector.hpp"
 #include "../Core/FileIO.hpp"
 #include "../Core/Resources/BundledRomCatalog.hpp"
 
@@ -108,6 +109,29 @@ inline bool parseMemDump(const char* arg, MemDumps* dumps) {
     }
     dumps->emplace_back(start, length);
     return true;
+}
+
+/// --inspect <view> (repeatable): an inspector view (Core/Debug/Inspect)
+/// printed at the end, by its short name (inspect::viewName()).
+using InspectViews = std::vector<inspect::View>;
+
+inline bool parseInspect(const char* arg, InspectViews* views) {
+    inspect::View v;
+    if (!inspect::viewFromName(arg, &v)) {
+        std::fprintf(stderr, "--inspect: unknown view '%s'\n", arg);
+        return false;
+    }
+    views->push_back(v);
+    return true;
+}
+
+/// Prints each view; `view(machine, v)` builds one (pc1500View / pc1600View)
+/// and runs under the machine lock.
+template <typename Machine, typename ViewFn>
+void printInspect(const Machine& machine, const InspectViews& views, ViewFn view) {
+    for (inspect::View v : views)
+        for (const std::string& line : machine.debugInspect([&](const Machine& m) { return view(m, v); }))
+            std::printf("%s\n", line.c_str());
 }
 
 template <typename Machine>

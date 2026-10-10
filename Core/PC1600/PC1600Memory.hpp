@@ -313,6 +313,26 @@ public:
         return c ? c->contentRevision() : 0;
     }
 
+    /// The fixed internal 16 KB RAM (page D bank 0, Z-80 C000H up), read in
+    /// place -- the inspector, under PC1600Machine::debugInspect().
+    const uint8_t* internalRam() const { return m_internalRam.data(); }
+
+    /// Which of the built-in ROM images are loaded, for the inspector.
+    bool systemRomLoaded() const { return m_bank0Loaded; }
+    bool bank3RomLoaded() const { return m_bank3Loaded; }
+    bool bank3bRomLoaded() const { return m_bank3bLoaded; }
+    bool bank6RomLoaded() const { return m_bank6Loaded; }
+
+    /// A side-effect-free read of the slot card behind global page-C `bank`
+    /// (0/1 = Slot 1, 2/3 = Slot 2) at `addr` ($8000-$BFFF), whichever bank
+    /// is mapped right now (MemorySlotConnector::readInBank); false for an
+    /// empty slot or a byte the card doesn't decode. The card's own latches
+    /// (a vertical bank) stay as they are.
+    bool slotBusRead(int bank, uint16_t addr, uint8_t& out) const {
+        if (bank < 0 || bank > 3 || addr < 0x8000 || addr >= 0xC000) return false;
+        return (bank < 2 ? m_slot1Conn : m_slot2Conn).readInBank(bank, addr, out);
+    }
+
     /// Copy the fixed internal 16 KB RAM (page D bank 0) into `out` (which
     /// must hold kBankSize bytes) -- the live state, read directly with no
     /// bank-register games. GUI debug dump only.

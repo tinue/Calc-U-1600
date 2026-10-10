@@ -17,6 +17,11 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/Debug/RunControl.cpp \
   Core/Debug/ProgramLoader.cpp \
   Core/Debug/BasicPointerTable.cpp \
+  Core/Debug/Inspect/Inspector.cpp \
+  Core/Debug/Inspect/TextTable.cpp \
+  Core/Debug/Inspect/HexDump.cpp \
+  Core/Debug/Inspect/PC1500Inspector.cpp \
+  Core/Debug/Inspect/PC1600Inspector.cpp \
   Core/Debug/Listing/Listing.cpp \
   Core/Debug/Listing/SdasListing.cpp \
   Core/Debug/Listing/ZasmListing.cpp \
@@ -86,6 +91,7 @@ clang++ -std=c++17 -Wall -Wextra -O1 \
   Core/tests/basic_fastloader_tests.cpp \
   Core/tests/pc1600_basicloader_tests.cpp \
   Core/tests/pc1600_program_placement_tests.cpp \
+  Core/tests/inspector_tests.cpp \
   Core/tests/basic_program_source_tests.cpp \
   Core/tests/piezo_sampler_tests.cpp \
   Core/tests/tape_deck_tests.cpp \

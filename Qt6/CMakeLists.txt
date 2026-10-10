@@ -77,6 +77,11 @@ file(CONFIGURE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/generated/Version.iss
 # PC1500Machine.hpp/PC1600Machine.hpp #include several of its headers.
 set(CORE_SOURCES
   ${CORE_ROOT}/Debug/BasicPointerTable.cpp
+  ${CORE_ROOT}/Debug/Inspect/Inspector.cpp
+  ${CORE_ROOT}/Debug/Inspect/TextTable.cpp
+  ${CORE_ROOT}/Debug/Inspect/HexDump.cpp
+  ${CORE_ROOT}/Debug/Inspect/PC1500Inspector.cpp
+  ${CORE_ROOT}/Debug/Inspect/PC1600Inspector.cpp
   ${CORE_ROOT}/Debug/Disasm/Disassembly.cpp
   ${CORE_ROOT}/Debug/Disasm/LH5801Disassembler.cpp
   ${CORE_ROOT}/Debug/Disasm/Z80Disassembler.cpp

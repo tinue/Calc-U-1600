@@ -196,6 +196,16 @@ public:
     PC1500Memory&       memory() { return m_memory; }
     const PC1500Memory& memory() const { return m_memory; }
 
+    /// Runs `view(*this)` under the machine lock and returns its result: one
+    /// consistent snapshot for the inspector (Core/Debug/Inspect), which
+    /// reads through the const accessors only -- never a locked debug*()
+    /// call, which would deadlock.
+    template <class F>
+    auto debugInspect(F&& view) const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return view(*this);
+    }
+
     // The 40-pin (single-slot) and 60-pin (daisy-chain) connectors, owned
     // by m_memory. No card is attached by default -- tests and the app
     // layer attach directly via these accessors.

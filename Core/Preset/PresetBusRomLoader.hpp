@@ -26,18 +26,24 @@ inline bool readRom(const PresetBusRom& rom, size_t maxSize, std::vector<uint8_t
     return true;
 }
 
+/// The card's name in the inspector: the ROM's file name.
+inline std::string fileName(const PresetBusRom& rom) {
+    const size_t slash = rom.path.find_last_of('/');
+    return slash == std::string::npos ? rom.path : rom.path.substr(slash + 1);
+}
+
 /// An `address` ROM: the PC-1500 connector, or the PC-1600's LH5803 side.
 inline std::unique_ptr<BusRomCard> makeCard(const PresetBusRom& rom, std::string* error) {
     std::vector<uint8_t> bytes;
     if (!readRom(rom, 0x10000u - rom.address, &bytes, error)) return nullptr;
-    return std::make_unique<BusRomCard>(std::move(bytes), rom.address, rom.me1, rom.pv, rom.pu);
+    return std::make_unique<BusRomCard>(std::move(bytes), rom.address, rom.me1, rom.pv, rom.pu, fileName(rom));
 }
 
 /// A `bank` ROM on the PC-1600 system bus.
 inline std::unique_ptr<PC1600BusRomCard> makeSystemBusCard(const PresetBusRom& rom, std::string* error) {
     std::vector<uint8_t> bytes;
     if (!readRom(rom, PC1600BusRomCard::kBankSize, &bytes, error)) return nullptr;
-    return std::make_unique<PC1600BusRomCard>(std::move(bytes), uint8_t(rom.bank));
+    return std::make_unique<PC1600BusRomCard>(std::move(bytes), uint8_t(rom.bank), fileName(rom));
 }
 
 /// Attaches `card` (null = its make*Card() failed) to `machine`.

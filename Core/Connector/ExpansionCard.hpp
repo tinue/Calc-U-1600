@@ -90,12 +90,31 @@ public:
     virtual bool assertsInhibit() const = 0;
 };
 
+/// One memory array on a card, as the card describes itself to the
+/// inspector's inventory (CardBase::debugMemories()). Where the host sees
+/// it is the host's business: the inventory finds that out by offering
+/// cycles to the card, never from this.
+struct CardMemory {
+    enum class Kind { Rom, Ram, Flash, Mixed };
+    std::string name;        // region / chip name; empty for a card's only memory
+    Kind kind = Kind::Rom;
+    uint32_t size = 0;       // total bytes, every bank
+    uint32_t banks = 1;      // 1 = unbanked
+    bool portBanked = false; // the bank latch is an I/O port (`port`), not a pin
+    uint8_t port = 0;
+};
+
 // What every card has regardless of which plug it fits: debug views of
 // its storage and its name. The bus-facing half (which pins it decodes)
 // lives in the per-plug interface derived from this.
 class CardBase {
 public:
     virtual ~CardBase() = default;
+
+    /// The card's memories (ROM, RAM, flash), for the inspector's
+    /// inventory. Empty (the default) for a card that has none (an I/O-only
+    /// card such as the CE-1600F controller, test stubs).
+    virtual std::vector<CardMemory> debugMemories() const { return {}; }
 
     /// The bank index this card currently exposes through its main banked
     /// window, for the GUI debug "Dump Mem" panel's per-column labels.

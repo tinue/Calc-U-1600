@@ -6,7 +6,7 @@
 //
 // Usage: pc1600_cli <romI-0-file> <romII-0-file> [maxCycles]
 //        pc1600_cli --check-preset <preset-file>...
-//        pc1600_cli --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--modules-dir <dir>] [--save-dir <dir>] [--wav <out.wav>] [--tape-in <in.wav>] [--tape-out <out.wav>] [--dump-mem <addr>,<len>] [--rom new|old] [--ce1600p-rom new|old] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
+//        pc1600_cli --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--modules-dir <dir>] [--save-dir <dir>] [--wav <out.wav>] [--tape-in <in.wav>] [--tape-out <out.wav>] [--dump-mem <addr>,<len>] [--inspect <view>] [--rom new|old] [--ce1600p-rom new|old] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
 //
 // --check-preset parses each preset (any model) and reports ok / the error,
 // without booting anything; tools/check_presets.sh runs it over the repo.
@@ -66,6 +66,7 @@
 #include "../Core/Audio/WavFile.hpp"
 #include "../Core/Connector/FloppyImageFile.hpp"
 #include "../Core/CPU/SC7852/SC7852.hpp"
+#include "../Core/Debug/Inspect/PC1600Inspector.hpp"
 #include "../Core/PC1600/PC1600Bank.hpp"
 #include "../Core/PC1600/PC1600Machine.hpp"
 #include "../Core/PC1600/PC1600Memory.hpp"
@@ -84,7 +85,8 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
               const std::string& wavPath, const std::string& romOverride,
               const std::string& ce1600pRomOverride, const std::string& saveDir,
               Ce158CliPeer& ce158Peer, uint64_t runAfter, const std::string& lcdPng,
-              const std::string& lcdTextPath, const cli::TapeOptions& tape, const cli::MemDumps& memDumps) {
+              const std::string& lcdTextPath, const cli::TapeOptions& tape, const cli::MemDumps& memDumps,
+              const cli::InspectViews& inspectViews) {
     (void)maxCycles;
     PresetFile preset;
     std::string error;
@@ -193,6 +195,7 @@ int runPreset(const std::string& presetPath, uint64_t maxCycles, bool dumpBasic,
     }
 
     cli::printMemDumps(machine, memDumps);
+    cli::printInspect(machine, inspectViews, inspect::pc1600View);
 
     if (dumpBasic) {
         auto be16 = [&](uint16_t a) {
@@ -266,6 +269,7 @@ int main(int argc, char** argv) {
         std::string lcdTextPath;
         cli::TapeOptions tape;
         cli::MemDumps memDumps;
+        cli::InspectViews inspectViews;
         std::string moduleDir = "Qt6/resources/cards";
         std::vector<std::string> extraModuleDirs;  // 2nd+ `--modules-dir`, searched after `moduleDir`
         bool moduleDirSet = false;
@@ -282,6 +286,9 @@ int main(int argc, char** argv) {
             else if (std::strcmp(argv[i], "--dump-mem") == 0 && i + 1 < argc) {
                 if (!cli::parseMemDump(argv[++i], &memDumps)) return 1;
             }
+            else if (std::strcmp(argv[i], "--inspect") == 0 && i + 1 < argc) {
+                if (!cli::parseInspect(argv[++i], &inspectViews)) return 1;
+            }
             else if (ce158Peer.parseArg(argc, argv, i)) {}
             else if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
                 if (!moduleDirSet) { moduleDir = argv[++i]; moduleDirSet = true; }
@@ -290,12 +297,12 @@ int main(int argc, char** argv) {
             else maxCycles = std::strtoull(argv[i], nullptr, 10);
         }
         return runPreset(argv[2], maxCycles, dumpBasic, moduleDir, extraModuleDirs, wavPath, romOverride,
-                         ce1600pRomOverride, saveDir, ce158Peer, runAfter, lcdPng, lcdTextPath, tape, memDumps);
+                         ce1600pRomOverride, saveDir, ce158Peer, runAfter, lcdPng, lcdTextPath, tape, memDumps, inspectViews);
     }
     if (argc < 3) {
         std::fprintf(stderr, "usage: %s <romI-0-file> <romII-0-file> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       %s --check-preset <preset-file>...\n", argv[0]);
-        std::fprintf(stderr, "       %s --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--wav <out.wav>] [--tape-in <in.wav>] [--tape-out <out.wav>] [--dump-mem <addr>,<len>] [--rom new|old] [--ce1600p-rom new|old] [--lcd-png <out.png>] [--lcd-text <out.txt|->]\n", argv[0]);
+        std::fprintf(stderr, "       %s --preset <preset-file.pc1600> [maxCycles] [--dump-basic] [--wav <out.wav>] [--tape-in <in.wav>] [--tape-out <out.wav>] [--dump-mem <addr>,<len>] [--inspect <view>] [--rom new|old] [--ce1600p-rom new|old] [--lcd-png <out.png>] [--lcd-text <out.txt|->]\n", argv[0]);
         return 1;
     }
     uint64_t maxCycles = 2'000'000ull;

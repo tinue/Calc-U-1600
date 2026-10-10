@@ -49,6 +49,11 @@ public:
         return true;
     }
 
+    std::string moduleName() const override { return "Host drive"; }
+    std::vector<CardMemory> debugMemories() const override {
+        return {{"", CardMemory::Kind::Rom, uint32_t(kRomSize)}};
+    }
+
     HostDirectoryDrive& drive() { return m_drive; }
     const HostDirectoryDrive& drive() const { return m_drive; }
 

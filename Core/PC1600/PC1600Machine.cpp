@@ -620,6 +620,10 @@ std::vector<uint8_t> PC1600Machine::debugSlotImage(int slot) {
 
 PC1600Machine::DebugBankState PC1600Machine::debugBankState() {
     std::lock_guard<std::mutex> lock(m_mutex);
+    return inspectBankState();
+}
+
+PC1600Machine::DebugBankState PC1600Machine::inspectBankState() const {
     DebugBankState s;
     s.port31 = m_bank.readPort31();
     s.port28 = m_bank.slot2VerticalBank();
@@ -669,9 +673,23 @@ PC1600Machine::DebugBankState PC1600Machine::debugBankState() {
         switch (s.pageBBank) {
             case 0:  s.target[1] = PT::SystemRomHi; break;
             case 3:  s.target[1] = s.hiddenBasicRom ? PT::Bank3bRom : PT::Bank3Rom; break;
-            case 4:
-            case 5:  s.target[1] = PT::PeripheralRom; break;
-            default: s.target[1] = PT::OpenBus; break; // banks 1/2/6/7
+            case 1:
+            case 2:  s.target[1] = PT::OpenBus; break;
+            default: {
+                // Banks 4-7 go out on the 60-pin bus (PC1600Memory::read()):
+                // whichever card answers the page's first byte owns it.
+                const SystemBusPins pins = PC1600BusDrive::z80MemPins(0x4000, /*forWrite=*/false, s.pageBBank);
+                s.target[1] = PT::OpenBus;
+                for (const SystemBusCard* card : m_z80Mem.systemBus().chain()) {
+                    uint8_t v;
+                    if (!card->readHasSideEffects(pins) && card->respondsToRead(pins, v)) {
+                        s.target[1] = PT::BusCard;
+                        s.busCard = card->moduleName();
+                        break;
+                    }
+                }
+                break;
+            }
         }
     }
 
@@ -681,9 +699,9 @@ PC1600Machine::DebugBankState PC1600Machine::debugBankState() {
     } else {
         switch (s.pageCBank) {
             case 0:
-            case 1:  s.target[2] = PT::Slot1; break;
+            case 1:  s.target[2] = s1 ? PT::Slot1 : PT::OpenBus; break;
             case 2:
-            case 3:  s.target[2] = PT::Slot2; break;
+            case 3:  s.target[2] = s2 ? PT::Slot2 : PT::OpenBus; break;
             case 6:  s.target[2] = PT::Bank6Rom; break;
             default: s.target[2] = PT::OpenBus; break; // banks 4/5/7
         }

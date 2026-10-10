@@ -24,6 +24,11 @@ clang++ -std=c++17 -Wall -Wextra -O2 \
   Core/PC1600/PC1600Display.cpp \
   Core/PC1600/PC1600Keyboard.cpp \
   Core/PC1600/PC1600Machine.cpp \
+  Core/Debug/BasicPointerTable.cpp \
+  Core/Debug/Inspect/Inspector.cpp \
+  Core/Debug/Inspect/TextTable.cpp \
+  Core/Debug/Inspect/HexDump.cpp \
+  Core/Debug/Inspect/PC1600Inspector.cpp \
   Core/PC1600/PC1600BasicTyper.cpp \
   Core/PC1600/PC1600BasicLoader.cpp \
   Core/PC1600/PC1600ProgramPlacement.cpp \
