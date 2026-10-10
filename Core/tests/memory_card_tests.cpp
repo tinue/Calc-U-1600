@@ -46,7 +46,7 @@ int g_fail = 0;
 // ── inline card definitions (CE-155 / CE-1600M / CE-1601M shapes) ───────
 
 const char* kCe155Yaml =
-    "module-name: CE-155\n"
+    "format-version: 1\nmodule-name: CE-155\n"
     "compatible-hosts: [PC-1500, PC-1500A, PC-1600-Slot-1]\n"
     "definition-terminology: PC-1500\n"
     "regions:\n"
@@ -66,7 +66,7 @@ const char* kCe155Yaml =
     "        - { chip-select: S3, span: 0x0800, maps-to: 0x1800 }\n";
 
 const char* kCe1600mYaml =
-    "module-name: CE-1600M\n"
+    "format-version: 1\nmodule-name: CE-1600M\n"
     "compatible-hosts: [PC-1600-Slot-1, PC-1600-Slot-2]\n"
     "definition-terminology: PC-1600-Slot-1\n"
     "regions:\n"
@@ -85,7 +85,7 @@ const char* kCe1600mYaml =
     "          maps-to: 0x4000\n";
 
 const char* kCe1601mYaml =
-    "module-name: CE-1601M\n"
+    "format-version: 1\nmodule-name: CE-1601M\n"
     "compatible-hosts: [PC-1600-Slot-2]\n"
     "definition-terminology: PC-1600-Slot-2\n"
     "regions:\n"
@@ -115,7 +115,7 @@ const char* kCe1601mYaml =
 // fitted = 512 KB. Same trigger-based OUT (28H) / data-domain latch, same
 // PVOUT half-select nesting.
 const char* kSuperRamYaml =
-    "module-name: superRAM\n"
+    "format-version: 1\nmodule-name: superRAM\n"
     "compatible-hosts: [PC-1600-Slot-2]\n"
     "definition-terminology: PC-1600-Slot-2\n"
     "regions:\n"
@@ -145,7 +145,7 @@ const char* kSuperRamYaml =
 // Same trigger shape as CE-1638/CE-163F (pin 18, address domain), scaled
 // down -- not modeling a real product.
 const char* kFlashByBankYaml =
-    "module-name: T-FLASH\n"
+    "format-version: 1\nmodule-name: T-FLASH\n"
     "compatible-hosts: [PC-1500]\n"
     "definition-terminology: PC-1500\n"
     "regions:\n"
@@ -311,7 +311,7 @@ void test_ce155_definition_shape() {
 // 2-3 Flash) plus `initial-content` on bank 0 (addressed-hex) and bank 2
 // (plain hex, partial coverage -- the rest keeps the flash power-up-fill).
 const char* kInitialContentYaml =
-    "module-name: T-INIT\n"
+    "format-version: 1\nmodule-name: T-INIT\n"
     "compatible-hosts: [PC-1500]\n"
     "definition-terminology: PC-1500\n"
     "regions:\n"
@@ -364,7 +364,7 @@ bool rejects(const std::string& text, std::string* err) {
 }
 
 const char* kMinPrefix =
-    "module-name: T\n"
+    "format-version: 1\nmodule-name: T\n"
     "compatible-hosts: [PC-1500]\n"
     "definition-terminology: PC-1500\n"
     "regions:\n";
@@ -378,9 +378,31 @@ void test_reject_unknown_top_key() {
                   &err));
 }
 
+// A card without `format-version`, or with one this build doesn't know, is
+// refused -- and the version is checked before the key list, so a newer
+// file with new keys still says which version it is.
+void test_reject_missing_or_unknown_format_version() {
+    const std::string body = std::string(kMinPrefix) +
+                             "  - name: r\n    capacity: 0x800\n    banking: none\n"
+                             "    content: regular\n    addressing: { chip-select: Y0, span: 0x800 }\n";
+    std::string err;
+    MemoryCardDefinition def;
+    CHECK(parseMemoryCardDefinition(body, &def, &err));
+
+    std::string noVersion = body;
+    noVersion.erase(0, std::string("format-version: 1\n").size());
+    CHECK(rejects(noVersion, &err));
+    CHECK(err == "missing 'format-version'");
+
+    std::string v2 = body;
+    v2.replace(0, std::string("format-version: 1").size(), "format-version: 2");
+    CHECK(rejects(v2 + "new-key: 1\n", &err));
+    CHECK(err == "unsupported card format-version 2 (this build reads 1)");
+}
+
 void test_reject_terminology_not_in_hosts() {
     std::string err;
-    CHECK(rejects("module-name: T\n"
+    CHECK(rejects("format-version: 1\nmodule-name: T\n"
                   "compatible-hosts: [PC-1500]\n"
                   "definition-terminology: PC-1500A\n"
                   "regions:\n"
@@ -1291,7 +1313,7 @@ std::string makeScratchCardDir() {
     // Not a card file -- must be ignored by the ".card.yaml" tail match.
     put("notes.yaml", "hello: world\n");
     // Malformed card -- must be skipped, not abort the scan.
-    put("broken.card.yaml", "module-name: BROKEN\nbogus-key: 1\n");
+    put("broken.card.yaml", "format-version: 1\nmodule-name: BROKEN\nbogus-key: 1\n");
     return dir;
 }
 
@@ -1357,8 +1379,8 @@ void test_resolve_modulespec_multi_dir() {
     {
         const std::string body = kCe1601mYaml;
         std::ofstream(instances + "/CE-1601M - Programs.card.yaml")
-            << "module-name: \"CE-1601M - Programs\"\n"
-            << body.substr(body.find('\n') + 1);
+            << "format-version: 1\nmodule-name: \"CE-1601M - Programs\"\n"
+            << body.substr(body.find('\n', body.find("module-name:")) + 1);
     }
 
     std::string path, err;
@@ -1474,7 +1496,7 @@ void test_memory_range_offset_counts_from_range_start() {
 }
 
 const char* kUnbankedFlashYaml =
-    "module-name: T-FLASH-U\n"
+    "format-version: 1\nmodule-name: T-FLASH-U\n"
     "compatible-hosts: [PC-1500]\n"
     "definition-terminology: PC-1500\n"
     "regions:\n"
@@ -1569,6 +1591,7 @@ int run_memory_card_tests() {
     test_inline_definitions_parse();
     test_ce155_definition_shape();
     test_reject_unknown_top_key();
+    test_reject_missing_or_unknown_format_version();
     test_reject_terminology_not_in_hosts();
     test_reject_tiling_gap_and_overlap();
     test_reject_rom_flash_bybank_linebased();

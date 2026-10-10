@@ -57,6 +57,12 @@ struct YamlNode {
 
 bool parseYaml(const std::string& text, YamlNode* out, std::string* error);
 
+// The `format-version` every file format of the app carries: required, and
+// a version this build doesn't know is refused rather than guessed. Check it
+// before the key list, so a newer file says "unsupported version" instead of
+// "unknown key". `what` names the format in the message ("card", "floppy").
+bool requireFormatVersion(const YamlNode& root, long expected, const char* what, std::string* error);
+
 // ── implementation ───────────────────────────────────────────────────────
 
 namespace yaml_detail {
@@ -513,6 +519,22 @@ inline bool YamlNode::requireOnlyKeys(std::initializer_list<const char*> allowed
             *error = yaml_detail::errAt(line, "unknown key '" + kv.first + "'");
             return false;
         }
+    }
+    return true;
+}
+
+inline bool requireFormatVersion(const YamlNode& root, long expected, const char* what, std::string* error) {
+    const YamlNode* versionNode = root.find("format-version");
+    if (!versionNode) {
+        *error = "missing 'format-version'";
+        return false;
+    }
+    long version = 0;
+    if (!versionNode->asInt(&version, error)) return false;
+    if (version != expected) {
+        *error = std::string("unsupported ") + what + " format-version " + std::to_string(version) +
+                 " (this build reads " + std::to_string(expected) + ")";
+        return false;
     }
     return true;
 }

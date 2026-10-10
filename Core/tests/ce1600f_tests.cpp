@@ -436,13 +436,13 @@ void test_floppy_file_rejects_missing_or_unknown_version() {
     std::string v2 = good;
     v2.replace(v2.find("format-version: 1"), 17, "format-version: 2");
     CHECK(!parseFloppyFile(v2, &f, &err));
-    CHECK(err.find("format-version 2") != std::string::npos);
+    CHECK(err == "unsupported floppy format-version 2 (this build reads 1)");
 
     std::string noVersion = good;
     noVersion.erase(noVersion.find("format-version: 1\n"), 18);
     err.clear();
     CHECK(!parseFloppyFile(noVersion, &f, &err));
-    CHECK(err.find("format-version") != std::string::npos);
+    CHECK(err == "missing 'format-version'");
 
     std::string wrongFormat = good;
     wrongFormat.replace(wrongFormat.find("ce1600f-floppy"), 14, "something-else");

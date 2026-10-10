@@ -23,6 +23,9 @@
 // Unbanked or trigger-based Banked. `line-based` latches are parsed far
 // enough to report a clear "not supported in v1" error.
 
+// The `format-version` a card file must carry (Format §1).
+constexpr long kCardFormatVersion = 1;
+
 enum class CardHost { PC1500, PC1500A, PC1600Slot1, PC1600Slot2 };
 
 bool cardHostFromToken(const std::string& tok, CardHost* out);
@@ -1369,8 +1372,9 @@ inline bool parseMemoryCardDefinition(const std::string& yamlText, MemoryCardDef
         *error = "card definition must be a mapping";
         return false;
     }
+    if (!requireFormatVersion(root, kCardFormatVersion, "card", error)) return false;
     if (!root.requireOnlyKeys(
-            {"module-name", "compatible-hosts", "definition-terminology", "regions", "notes",
+            {"format-version", "module-name", "compatible-hosts", "definition-terminology", "regions", "notes",
              "battery", "template"},
             error))
         return false;

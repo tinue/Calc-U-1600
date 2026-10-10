@@ -29,6 +29,7 @@ the same directory.
 
 | Key | Required | Value |
 |---|---|---|
+| `format-version` | yes | Integer; this document is version **1**. |
 | `module-name` | yes | Short identifier for the module (e.g. `CE-155`, `CE-1600M`). Shown verbatim in the GUI's control-bar module picker, and the key a preset's `slot-N: <module-name>` resolves against (§8). Unique across the module directory. |
 | `compatible-hosts` | yes | List, non-empty, drawn from `PC-1500`, `PC-1500A`, `PC-1600-Slot-1`, `PC-1600-Slot-2`. The loader's **only** compatibility check (spec §1): a host not on this list is declined; a host on it gets no further test. |
 | `definition-terminology` | yes | Exactly one of the same four identifiers. Names the pin-name vocabulary every `chip-select` / `signal` / `line` field in the file is resolved against, once, at parse time (spec §1). Must appear in `compatible-hosts`. |
@@ -39,6 +40,12 @@ the same directory.
 
 The reset-on-load behaviour (spec §2, last bullet) is a loader invariant,
 not a field — no key can opt out of it.
+
+**Versioning.** A reader rejects a file without `format-version`, or with
+a version it does not know, rather than guess; the version is checked
+before the other keys. Any change a version-1 reader would misread
+requires a new version number. A saved instance keeps the line of the file
+it was saved from.
 
 ### Terminology → signal names
 

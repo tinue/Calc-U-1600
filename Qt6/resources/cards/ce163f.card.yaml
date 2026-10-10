@@ -38,6 +38,7 @@
 # toggle-bit status polling, software-ID/autoselect, and simulated
 # program/erase timing -- none of it is exercised by the real firmware.
 
+format-version: 1
 module-name: "CE-163F"
 template: true   # read-only starting point; Name & Save copies it
 compatible-hosts: [PC-1500, PC-1500A, PC-1600-Slot-1, PC-1600-Slot-2]

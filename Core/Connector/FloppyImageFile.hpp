@@ -66,26 +66,15 @@ inline bool readHeader(const YamlNode& root, std::string* diskName, bool* isTemp
         *error = "not a floppy-disk file (expected a YAML mapping)";
         return false;
     }
-    if (!root.requireOnlyKeys({"format", "format-version", "disk-name", "template", "saved", "sides"}, error))
-        return false;
     std::string format;
     const YamlNode* formatNode = root.find("format");
     if (!formatNode || !formatNode->asString(&format, error) || format != kFormatTag) {
         *error = std::string("not a floppy-disk file (expected 'format: ") + kFormatTag + "')";
         return false;
     }
-    const YamlNode* versionNode = root.find("format-version");
-    long version = 0;
-    if (!versionNode) {
-        *error = "missing 'format-version'";
+    if (!requireFormatVersion(root, kFloppyFormatVersion, "floppy", error)) return false;
+    if (!root.requireOnlyKeys({"format", "format-version", "disk-name", "template", "saved", "sides"}, error))
         return false;
-    }
-    if (!versionNode->asInt(&version, error)) return false;
-    if (version != kFloppyFormatVersion) {
-        *error = "unsupported floppy format-version " + std::to_string(version) + " (this build reads " +
-                 std::to_string(kFloppyFormatVersion) + ")";
-        return false;
-    }
     const YamlNode* nameNode = root.find("disk-name");
     if (!nameNode) {
         *error = "missing 'disk-name'";

@@ -10,6 +10,7 @@
 # Hosts: PC-1500/1500A natively; on the PC-1600 it fills the slot's
 # 8000-BFFF page (pin 4) in Slot 1, or Slot 2 (as a RAM disk).
 
+format-version: 1
 module-name: "CE-161"
 template: true   # read-only starting point; Name & Save copies it
 compatible-hosts: [PC-1500, PC-1500A, PC-1600-Slot-1, PC-1600-Slot-2]

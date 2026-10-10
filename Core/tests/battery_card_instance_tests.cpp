@@ -107,7 +107,7 @@ void test_battery_card_block_keeps_uniform_banks() {
     CHECK(sawBank1);
 
     std::string yaml =
-        "module-name: X\n"
+        "format-version: 1\nmodule-name: X\n"
         "compatible-hosts: [PC-1500]\n"
         "definition-terminology: PC-1500\n"
         "regions:\n"
@@ -138,7 +138,7 @@ void test_battery_card_block_keeps_uniform_banks() {
 // this uses a trivial trigger-based banking with bank-count: 1 to match
 // that shape rather than an unbanked region.
 const char* kSyntheticCardYaml =
-    "module-name: Synthetic\n"
+    "format-version: 1\nmodule-name: Synthetic\n"
     "compatible-hosts: [PC-1500]\n"
     "definition-terminology: PC-1500\n"
     "battery: true\n"
@@ -167,7 +167,7 @@ void test_battery_card_block_never_empty_when_all_banks_uniform() {
     // which is exactly what enforces the *.card.yaml non-empty-blocks
     // requirement.
     std::string yaml =
-        "module-name: X\n"
+        "format-version: 1\nmodule-name: X\n"
         "compatible-hosts: [PC-1500]\n"
         "definition-terminology: PC-1500\n"
         "regions:\n"
@@ -202,7 +202,7 @@ void test_battery_card_block_unbanked_region_omits_bank_key() {
     CHECK(sawOffset);
 
     const char* unbankedCard =
-        "module-name: X\n"
+        "format-version: 1\nmodule-name: X\n"
         "compatible-hosts: [PC-1500]\n"
         "definition-terminology: PC-1500\n"
         "regions:\n"
@@ -357,7 +357,7 @@ void test_splice_fails_without_module_name() {
 
 void test_splice_fails_without_regions() {
     const char* noRegions =
-        "module-name: X\n"
+        "format-version: 1\nmodule-name: X\n"
         "compatible-hosts: [PC-1500]\n"
         "definition-terminology: PC-1500\n";
     std::string outText, err;
@@ -395,6 +395,7 @@ void test_splice_roundtrip_through_real_bundled_file_if_present() {
     CHECK(parseMemoryCardDefinition(spliced, &parsed, &err));
     CHECK(parsed.moduleName == "MyCE1638");
     CHECK(!parsed.isTemplate);
+    CHECK(spliced.find("\nformat-version: 1\n") != std::string::npos);
 }
 
 }  // namespace
