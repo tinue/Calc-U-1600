@@ -315,10 +315,30 @@ CE-1600P (docs/background/plans/Cassette-Tape-Plan.md, dev/tape-matrix/).
 - **PC-1600 auto power-off control.** No Settings toggle to suppress APO
   (the ROM's `KEYWK3` F07BH bit), and no OFF/ON control beyond the
   faceplate keys.
-- Watch an inserted floppy's `.floppy.yaml` for outside changes (e.g.
-  `sde put` while the disk is in the drive) and reload or warn, instead
-  of overwriting them at the next autosave. Until then the rule is
-  "eject first" (`docs/developer/Floppy-Image-Format.md` §8).
+- **Pick up outside changes to an inserted floppy: a `dirty` key**
+  *(pre-1.0: adds a key to the floppy format)*. Today an `sde put` while
+  the disk is in the drive is overwritten at the next autosave; the rule
+  is "eject first" (`docs/developer/Floppy-Image-Format.md` §8). Idea: a
+  new optional top-level key `dirty` (boolean) in `.floppy.yaml`. A tool
+  that writes the image (sde) sets `dirty: true`. The emulator checks the
+  inserted disk's file periodically; when it finds `dirty: true` it
+  unloads the floppy, writes the file back with `dirty: false` (or drops
+  the key), and loads it again. It has to land before 1.0, because from
+  1.0 on the format only changes compatibly (docs/background/Decisions.md,
+  "From 1.0 on, the previous format version keeps working"). Work:
+  - Format: `dirty` in `floppy_detail::parseCatalogEntry`'s key list and
+    `formatFloppyFile` (written only when true, or always?), the
+    canonical key order and the key table in Floppy-Image-Format.md;
+    decide whether it bumps `format-version`.
+  - Emulator: a cheap periodic check of the inserted disk (mtime first,
+    then the header only, not the 1 MB of sector hex), the
+    unload/clear/reload in `FloppyDiskManager`, and what happens to a
+    pending autosave of the emulator's own writes (the outside change
+    wins; the emulator's unsaved writes are lost, or refused?).
+  - Templates: a bundled or template disk is never written, so a `dirty`
+    template is reloaded without clearing the flag.
+  - SharpDataExchange (separate repo): `sde put`/`del` set `dirty: true`,
+    and libsharpdx's reader accepts the key.
 
 ## Code cleanup backlog
 
