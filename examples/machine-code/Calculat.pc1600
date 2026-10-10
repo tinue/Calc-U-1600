@@ -84,6 +84,7 @@
 # &D000 headerless and start it with CALL &D009 (skips the file loading at
 # &D003/&D0AE).
 
+format-version: 1
 model: PC-1600
 
 slot-1: CE-1600M

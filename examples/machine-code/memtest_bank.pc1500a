@@ -2,6 +2,7 @@
 #
 # Runs a memtest over all banks, 2 passes.
 
+format-version: 1
 model: PC-1500A
 
 slot-1: CE-1638

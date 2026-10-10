@@ -1,5 +1,6 @@
 # PC-1500A plotter test -- draws a Lissajous figure on the CE-150.
 
+format-version: 1
 model: PC-1500A
 
 # CE-150 pen-plotter attached.

@@ -3,6 +3,7 @@
 # prints how much of it BASIC sees as free. Companion to
 # docs/User-Guide.md's "Custom YAML memory cards" walkthrough.
 
+format-version: 1
 model: PC-1500
 
 slot-1-file: pc1500-maxed-out.card.yaml

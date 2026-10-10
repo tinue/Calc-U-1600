@@ -1,6 +1,7 @@
 # User-guide screenshots: a PC-1600 with the CE-1600P (its cassette
 # interface) and a short program in memory, back in RUN mode, ready to
 # CSAVE onto a new tape.
+format-version: 1
 model: PC-1600
 plotter: CE-1600P
 keys:

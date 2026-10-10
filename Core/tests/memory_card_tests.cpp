@@ -1018,21 +1018,21 @@ void test_preset_parses_modulespec() {
     // `slot-N-file:` -- a path, resolved relative to the preset dir.
     PresetFile preset;
     std::string err;
-    CHECK(parsePresetString("model: PC-1500\n"
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1500\n"
                             "slot-1-file: /abs/path/foo.card.yaml\n",
                             "/tmp/memory_card_tests_scratch.pc1500", &preset, &err));
     CHECK(preset.slot1ModuleSpecFile == "/abs/path/foo.card.yaml");
     CHECK(preset.slot1ModuleSpecName.empty());
 
     PresetFile p2;
-    CHECK(parsePresetString("model: PC-1600\n"
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1600\n"
                             "slot-2-file: cards/x.card.yaml\n",
                             "/tmp/memory_card_tests_scratch.pc1600", &p2, &err));
     CHECK(p2.slot2ModuleSpecFile == "/tmp/cards/x.card.yaml");  // relative to the scratch dir
 
     // `slot-N:` -- a bundled module-name, stored verbatim (unresolved).
     PresetFile p3;
-    CHECK(parsePresetString("model: PC-1600\n"
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1600\n"
                             "slot-1: CE-155\n",
                             "/tmp/memory_card_tests_scratch3.pc1600", &p3, &err));
     CHECK(p3.slot1ModuleSpecName == "CE-155");
@@ -1042,7 +1042,7 @@ void test_preset_parses_modulespec() {
 void test_preset_rejects_second_modulespec_item() {
     PresetFile preset;
     std::string err;
-    CHECK(!parsePresetString("model: PC-1600\n"
+    CHECK(!parsePresetString("format-version: 1\nmodel: PC-1600\n"
                              "slot-1: CE-155\n"
                              "  - modulespec: CE-155\n",
                              "/tmp/memory_card_tests_scratch2.pc1600", &preset, &err));
@@ -1079,7 +1079,7 @@ void test_ce1601m_end_to_end_through_pc1600() {
     { std::ofstream f(cardPath); f << kCe1601mYaml; }
     PresetFile byFile;
     std::string err;
-    CHECK(parsePresetString(std::string("model: PC-1600\n"
+    CHECK(parsePresetString(std::string("format-version: 1\nmodel: PC-1600\n"
                                         "slot-2-file: ") +
                                 cardPath + "\n",
                             "/tmp/memory_card_tests_e2e.pc1600", &byFile, &err));
@@ -1088,7 +1088,7 @@ void test_ce1601m_end_to_end_through_pc1600() {
 
     const std::string moduleDir = makeScratchCardDir();  // writes ce1601m.card.yaml (module-name CE-1601M)
     PresetFile byName;
-    CHECK(parsePresetString("model: PC-1600\n"
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1600\n"
                             "slot-2: CE-1601M\n",
                             "/tmp/memory_card_tests_e2e_name.pc1600", &byName, &err));
     CHECK(byName.slot2ModuleSpecName == "CE-1601M");

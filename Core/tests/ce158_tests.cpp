@@ -333,13 +333,13 @@ std::string text(const std::vector<uint8_t>& bytes) { return std::string(bytes.b
 
 void test_preset_parse_interface_key() {
     PresetFile p;
-    CHECK(loadPreset("model: PC-1500A\ninterface: CE-158\n", &p));
+    CHECK(loadPreset("format-version: 1\nmodel: PC-1500A\ninterface: CE-158\n", &p));
     CHECK(p.interfaceName == "ce158");
     PresetFile none;
-    CHECK(loadPreset("model: PC-1500\n", &none));
+    CHECK(loadPreset("format-version: 1\nmodel: PC-1500\n", &none));
     CHECK(none.interfaceName.empty());
     PresetFile bad;
-    CHECK(!loadPreset("model: PC-1500A\ninterface: ce-999\n", &bad));
+    CHECK(!loadPreset("format-version: 1\nmodel: PC-1500A\ninterface: ce-999\n", &bad));
 }
 
 // LPRINT to the Centronics port with the CE-150 also on the chain: the
@@ -348,7 +348,7 @@ void test_rom_lprint_centronics_with_ce150_chained() {
     if (!haveRoms(__func__)) return;
     PresetFile preset;
     CHECK(loadPreset(
-        "model: PC-1500A:A04\nplotter: CE-150\ninterface: CE-158\n"
+        "format-version: 1\nmodel: PC-1500A:A04\nplotter: CE-150\ninterface: CE-158\n"
         "keys:\n  - key: cl\n  - type: NEW0\n"
         "program:\n  text: |\n"
         "    10 OPN \"LPRT\"\n    20 LPRINT \"HELLO CE-158\"\n    30 OPN\n    40 LPRINT \"CE150\"\n"
@@ -372,7 +372,7 @@ void test_rom_serial_lprint_and_input() {
     if (!haveRoms(__func__)) return;
     PresetFile preset;
     CHECK(loadPreset(
-        "model: PC-1500A:A04\ninterface: CE-158\n"
+        "format-version: 1\nmodel: PC-1500A:A04\ninterface: CE-158\n"
         "keys:\n  - key: cl\n  - type: NEW0\n"
         "program:\n  text: |\n"
         "    10 SETDEV PO\n    20 OUTSTAT 0\n    30 LPRINT \"SERIAL OUT\"\n"
@@ -447,9 +447,9 @@ void test_pc1600_ce158_and_ce1600p_exclusive() {
     CHECK(m.ce158Attached() && !m.ce1600pAttached());
 
     PresetFile p;
-    CHECK(!loadPreset("model: PC-1600\nplotter: CE-1600P\ninterface: CE-158\n", &p));
+    CHECK(!loadPreset("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\ninterface: CE-158\n", &p));
     PresetFile ok;
-    CHECK(loadPreset("model: PC-1600\nplotter: CE-150\ninterface: CE-158\n", &ok));
+    CHECK(loadPreset("format-version: 1\nmodel: PC-1600\nplotter: CE-150\ninterface: CE-158\n", &ok));
     CHECK(ok.interfaceName == "ce158" && ok.plotter == "ce150");
 }
 
@@ -460,7 +460,7 @@ bool havePC1600Roms(const char* test) {
 }
 
 std::string pc1600Preset(const std::string& program) {
-    return "model: PC-1600\ninterface: CE-158\n"
+    return "format-version: 1\nmodel: PC-1600\ninterface: CE-158\n"
            "keys:\n  - key: mode\n  - type: NEW\n  - type: MODE1\n"
            "program:\n  text: |\n" + program +
            "keys:\n  - key: mode\n  - type: RUN\n";

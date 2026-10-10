@@ -3,6 +3,7 @@
 # table says so). Every clean start (F5, Build & Load) reads the file
 # again, so the machine always runs the latest build. A bus ROM also
 # shadows a bundled ROM at the same place.
+format-version: 1
 model: PC-1500A
 
 bus-rom:

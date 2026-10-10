@@ -3,6 +3,7 @@
 #  CALL &40C5,X
 # When finished, check X for the test result.
 
+format-version: 1
 model: PC-1500
 
 keys:

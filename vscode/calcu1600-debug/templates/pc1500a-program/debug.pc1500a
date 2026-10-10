@@ -1,6 +1,7 @@
 # The machine for {{name}}: a PC-1500A, NEW'd, in RUN mode. The debug:
 # block tells the debugger what to load; loading this preset in the app
 # ignores it.
+format-version: 1
 model: PC-1500A
 
 keys:

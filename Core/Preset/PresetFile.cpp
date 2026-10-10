@@ -627,6 +627,31 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
     std::filesystem::path presetDir = std::filesystem::path(path).parent_path();
     if (presetDir.empty()) presetDir = ".";
 
+    // `format-version` first, before the key list can reject a newer key.
+    bool hasFormatVersion = false;
+    for (const RawLine& line : lines) {
+        std::string key, value;
+        bool hasInline;
+        if (line.indent != 0 || !splitKeyValue(line.content, &key, &value, &hasInline) || key != "format-version")
+            continue;
+        const std::string at = "line " + std::to_string(line.lineNo) + ": ";
+        uint32_t version = 0;
+        if (!parseNumber(value, &version)) {
+            *error = at + "'format-version: " + value + "' is not a number";
+            return false;
+        }
+        if (version != kPresetFormatVersion) {
+            *error = at + "unsupported preset format-version " + std::to_string(version) + " (this build reads " +
+                     std::to_string(kPresetFormatVersion) + ")";
+            return false;
+        }
+        hasFormatVersion = true;
+    }
+    if (!hasFormatVersion) {
+        *error = "'format-version' is required";
+        return false;
+    }
+
     std::string modelRom;    // the ROM suffix of `model: NAME:ROM`, lower-cased ("" = none given)
     std::string plotter;     // "" / "ce1600p" / "ce150", ROM suffix stripped
     std::string plotterRom;  // the ROM suffix of `plotter: NAME:ROM`, lower-cased ("" = none given)
@@ -662,7 +687,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         }
         idx++;
         const std::string at = "line " + std::to_string(line.lineNo) + ": ";
-        static const char* const kKeys[] = {"model", "plotter", "interface", "floppy", "floppy-file", "host-drive",
+        static const char* const kKeys[] = {"format-version", "model", "plotter", "interface", "floppy", "floppy-file", "host-drive",
                                             "slot-1", "slot-1-file", "slot-2", "slot-2-file", "program", "keys",
                                             "debug", "bus-rom"};
         if (std::find(std::begin(kKeys), std::end(kKeys), key) == std::end(kKeys)) {
@@ -678,7 +703,9 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
             *error = at + "'" + key + "' requires a value";
             return false;
         }
-        if (key == "model") {
+        if (key == "format-version") {
+            // checked above
+        } else if (key == "model") {
             // `model: NAME[:ROM]` -- the ROM revision rides on the model
             // (`PC-1500:A01`, `PC-1600:old`); validated per model below.
             std::string name;

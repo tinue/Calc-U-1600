@@ -638,6 +638,7 @@ It runs at full speed, and the window shows "Loading…" while it works.
 ### 8.2 The smallest preset
 
 ```yaml
+format-version: 1
 model: PC-1500A
 keys:
   - key: cl
@@ -646,12 +647,16 @@ keys:
   - type: PRINT "HELLO"
 ```
 
-`model:` is required. `key:` presses one key by name. `type:` types a line,
+`format-version:` and `model:` are required. `format-version: 1` says
+which version of the preset format the file is written in; a newer app
+refuses a version it doesn't know rather than guess. `key:` presses one
+key by name. `type:` types a line,
 followed by ENTER.
 
 ### 8.3 Adding hardware
 
 ```yaml
+format-version: 1
 model: PC-1600:new            # PC-1500[:A01|A03|A04] | PC-1500A | PC-1600[:new|old]
 plotter: CE-1600P:new         # CE-150 (all models) | CE-1600P[:new|old] (PC-1600)
 floppy: Formatted,A           # PC-1600 with the CE-1600P only: a disk by name, side A or B
@@ -671,6 +676,7 @@ slot-2-file: my.card.yaml     # or a module definition file, next to the preset
 ### 8.4 Loading a BASIC program
 
 ```yaml
+format-version: 1
 model: PC-1600
 keys:
   - key: mode
@@ -792,6 +798,7 @@ This is what it leaves on the LCD:
 
 | Key | Values |
 |---|---|
+| `format-version:` | `1` (required) |
 | `model:` | `PC-1500[:A01\|A03\|A04]`, `PC-1500A`, `PC-1600[:new\|old]` (required) |
 | `plotter:` | `CE-150`, `CE-1600P[:new\|old]` (PC-1600) |
 | `interface:` | `CE-158` |

@@ -117,7 +117,7 @@ void test_trace_step_produces_wellformed_file() {
     PresetFile preset;
     std::string err;
     CHECK(parsePresetString(
-        "model: PC-1500A\n"
+        "format-version: 1\nmodel: PC-1500A\n"
         "keys:\n"
         "  - trace: t.bin\n"
         "  - wait: 0.3\n"
@@ -157,7 +157,7 @@ void test_trace_left_open_is_auto_closed() {
     PresetFile preset;
     std::string err;
     CHECK(parsePresetString(
-        "model: PC-1500A\n"
+        "format-version: 1\nmodel: PC-1500A\n"
         "keys:\n"
         "  - trace: t2.bin\n"
         "  - wait: 0.2\n",
@@ -256,7 +256,7 @@ void test_pc1600_trace_step_produces_wellformed_file() {
     // A `type:` step inside the trace window drives the ROM's line editor,
     // which runs on both CPUs -- so the file gets both frame shapes.
     CHECK(parsePresetString(
-        "model: PC-1600\n"
+        "format-version: 1\nmodel: PC-1600\n"
         "keys:\n"
         "  - trace: t.bin\n"
         "  - type: ABC\n"
@@ -299,7 +299,7 @@ void test_pc1600_trace_left_open_is_auto_closed() {
     PresetFile preset;
     std::string err;
     CHECK(parsePresetString(
-        "model: PC-1600\n"
+        "format-version: 1\nmodel: PC-1600\n"
         "keys:\n"
         "  - trace: t2.bin\n"
         "  - type: ABC\n"
@@ -338,7 +338,7 @@ void test_binary_program_outside_ram_fails() {
     auto run = [&](const char* address) {
         PresetFile preset;
         std::string err;
-        CHECK(parsePresetString(std::string("model: PC-1500A\nprogram:\n  file: code.bin\n"
+        CHECK(parsePresetString(std::string("format-version: 1\nmodel: PC-1500A\nprogram:\n  file: code.bin\n"
                                             "  address: ") + address + "\n",
                                 dir + "/scratch.pc1500a", &preset, &err));
         PC1500Machine machine(preset.variant);
@@ -383,7 +383,7 @@ void test_binary_program_ce158_header() {
     auto run = [&](const char* file) {
         PresetFile preset;
         std::string err;
-        CHECK(parsePresetString(std::string("model: PC-1500A\nprogram:\n  file: ") + file + "\n",
+        CHECK(parsePresetString(std::string("format-version: 1\nmodel: PC-1500A\nprogram:\n  file: ") + file + "\n",
                                 dir + "/scratch.pc1500a", &preset, &err));
         PC1500Machine machine(preset.variant);
         PresetLoadResult res = applyPC1500Preset(machine, preset, {}, dir, ".", {}, {"roms"});

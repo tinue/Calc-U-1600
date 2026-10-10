@@ -229,7 +229,8 @@ def project_run(port):
     with tempfile.TemporaryDirectory() as tmp:
         project = os.path.join(tmp, "debug.pc1600")
         with open(project, "w") as f:
-            f.write("model: PC-1600\n"
+            f.write("format-version: 1\n"
+                    "model: PC-1600\n"
                     "keys:\n"
                     "  - key: mode\n"
                     "  - type: NEW0\n"
@@ -276,7 +277,8 @@ def rom_project(tmp, extra):
     shutil.copy(os.path.join(HOSTDRIVE, "PC1600-P1-B7-HOSTDRIVE.bin"), os.path.join(tmp, "hostdrive.bin"))
     project = os.path.join(tmp, "debug.pc1600")
     with open(project, "w") as f:
-        f.write("model: PC-1600\n"
+        f.write("format-version: 1\n"
+                    "model: PC-1600\n"
                 "host-drive: S3\n"
                 "bus-rom:\n"
                 "  - file: hostdrive.bin\n"
@@ -296,7 +298,8 @@ def bus_rom_run(port):
     with tempfile.TemporaryDirectory() as tmp:
         project = os.path.join(tmp, "debug.pc1500a")
         with open(project, "w") as f:
-            f.write("model: PC-1500A\n"
+            f.write("format-version: 1\n"
+                    "model: PC-1500A\n"
                     "bus-rom:\n"
                     f"  - file: {source[:-4]}.bin\n"
                     "    address: 0x8000\n"

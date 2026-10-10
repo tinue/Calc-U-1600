@@ -4,6 +4,7 @@
 #  X=2 (2 passes)
 #  CALL &38C5,X   -> X holds the test result when finished
 
+format-version: 1
 model: PC-1500
 
 slot-1: CE-155

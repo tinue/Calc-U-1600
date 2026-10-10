@@ -348,13 +348,13 @@ void test_pc1500_plain_text() {
 void test_expect_parse() {
     PresetFile p;
     std::string err;
-    CHECK(parsePresetString("model: PC-1600\nkeys:\n  - expect: ERROR 1 # not a comment\n",
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1600\nkeys:\n  - expect: ERROR 1 # not a comment\n",
                             "/tmp/lcd_text_tests_scratch.pc1600", &p, &err));
     CHECK(!p.sections.empty() && !p.sections[0].keys.empty() &&
           p.sections[0].keys[0].kind == PresetStep::Kind::Expect &&
           p.sections[0].keys[0].text == "ERROR 1 # not a comment");
     PresetFile bad;
-    CHECK(!parsePresetString("model: PC-1600\nkeys:\n  - expect:\n", "/tmp/lcd_text_tests_scratch.pc1600", &bad,
+    CHECK(!parsePresetString("format-version: 1\nmodel: PC-1600\nkeys:\n  - expect:\n", "/tmp/lcd_text_tests_scratch.pc1600", &bad,
                              &err));
 }
 
@@ -368,8 +368,8 @@ void test_expect_pc1600() {
     };
     // Without it MEM is 11834: the failing case shows that on screen.
     const Case cases[] = {
-        {"model: PC-1600\nplotter: CE-1600P\nkeys:\n  - type: PRINT MEM\n  - expect: 10810\n", true},
-        {"model: PC-1600\nkeys:\n  - type: PRINT MEM\n  - expect: 10810\n", false},
+        {"format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\nkeys:\n  - type: PRINT MEM\n  - expect: 10810\n", true},
+        {"format-version: 1\nmodel: PC-1600\nkeys:\n  - type: PRINT MEM\n  - expect: 10810\n", false},
     };
     for (const Case& c : cases) {
         PresetFile p;
@@ -394,7 +394,7 @@ void test_expect_pc1600() {
 void test_expect_pc1500() {
     PresetFile p;
     std::string err;
-    CHECK(parsePresetString("model: PC-1500\nkeys:\n  - key: mode\n  - type: PRINT 12345*-2\n  - expect: -24690\n",
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1500\nkeys:\n  - key: mode\n  - type: PRINT 12345*-2\n  - expect: -24690\n",
                             "/tmp/lcd_text_tests_scratch.pc1500", &p, &err));
     PC1500Machine m;
     const PresetLoadResult r = applyPC1500Preset(m, p, {}, "/tmp", ".", {}, {"roms"});

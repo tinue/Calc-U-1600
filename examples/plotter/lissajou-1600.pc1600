@@ -1,5 +1,6 @@
 # PC-1600 plotter test -- draws a Lissajous figure on the CE-1600P.
 
+format-version: 1
 model: PC-1600
 
 # CE-1600P pen-plotter attached.

@@ -11,6 +11,7 @@
 # After this preset loads, in the running app: everything is already
 # lit -- just press ON (BREAK) when done looking, to return to the
 # READY prompt.
+format-version: 1
 model: PC-1500A
 
 keys:

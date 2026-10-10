@@ -3,6 +3,7 @@
 # start, answered below as size 2 / border 1 / font 0).
 # Program found on https://www.sharp-pc-1600.de
 
+format-version: 1
 model: PC-1600
 
 # CE-1600P pen-plotter attached.

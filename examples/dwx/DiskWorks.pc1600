@@ -10,6 +10,7 @@
 #
 # BLOAD starts DiskWorks by itself: DWX.BIN's header runs it at $D000.
 
+format-version: 1
 model: PC-1600
 plotter: CE-1600P
 floppy-file: Progs.floppy.yaml

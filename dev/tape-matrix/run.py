@@ -41,7 +41,7 @@ MODELS = {
         "build": "tools/build_pc1600_cli.sh",
         "pc": "1600",
         "ext": "pc1600",
-        "header": ["model: PC-1600", "plotter: CE-1600P", "keys:", "  - key: mode", "  - type: NEW0"],
+        "header": ["format-version: 1", "model: PC-1600", "plotter: CE-1600P", "keys:", "  - key: mode", "  - type: NEW0"],
         "programs": [
             "Core/tests/fixtures/tape/pc1600_tape.bas",
             "examples/basic/old-vs-new-rom.bas",
@@ -64,7 +64,7 @@ MODELS = {
         "build": "tools/build_cli.sh",
         "pc": "1500",
         "ext": "pc1500a",
-        "header": ["model: PC-1500A", "plotter: CE-150", "keys:", "  - key: cl", "  - type: NEW0"],
+        "header": ["format-version: 1", "model: PC-1500A", "plotter: CE-150", "keys:", "  - key: cl", "  - type: NEW0"],
         "programs": [
             "Core/tests/fixtures/tape/pc1500_tape.bas",
             "examples/plotter/lissajou-1500.bas",

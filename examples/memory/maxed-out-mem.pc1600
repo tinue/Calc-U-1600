@@ -3,6 +3,7 @@
 # sampling the data bus, plus the PVOUT 16 KB half-select nested in the
 # bank window.
 
+format-version: 1
 model: PC-1600
 
 slot-1: CE-1600M

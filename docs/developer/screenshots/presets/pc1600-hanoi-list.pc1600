@@ -1,5 +1,6 @@
 # User-guide screenshots: the Towers of Hanoi program just loaded, listed in
 # PRO mode (the one screenshot that is meant to be in PRO mode).
+format-version: 1
 model: PC-1600
 keys:
   - key: mode

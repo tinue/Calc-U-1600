@@ -4,6 +4,7 @@
 # "Formatted" disk), a CE-1600M in slot 1 and a CE-1601M in slot 2, set up
 # as a RAM disk.
 
+format-version: 1
 model: PC-1600
 
 plotter: CE-1600P

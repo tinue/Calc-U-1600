@@ -927,7 +927,7 @@ void test_rtc_calendar_seed_and_read() {
 void test_preset_syncclock_reseeds_rtc() {
     PresetFile preset;
     std::string err;
-    CHECK(parsePresetString("model: PC-1500A\nkeys:\n  - wait: 1\n  - syncclock:\n",
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1500A\nkeys:\n  - wait: 1\n  - syncclock:\n",
                             "/tmp/lh5801_tests_syncclock.pc1500a", &preset, &err));
     PC1500Machine machine(PC1500Variant::PC1500A);
     auto hostOnBoot = [&machine] {

@@ -1,4 +1,5 @@
 # Debug the Up/Down key issue
+format-version: 1
 model: PC-1500A
 
 keys:

@@ -7,6 +7,7 @@
 # e.g. `screen <folder>/calcu1600-ce158.serial 300`. Headless:
 #   ./headless/pc1500_cli --preset examples/interfaces/ce158_demo.pc1500a 30000000 --ce158-pty
 
+format-version: 1
 model: PC-1500A
 interface: CE-158
 

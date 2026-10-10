@@ -28,6 +28,10 @@
 //   3. the dispatch (peek the model, build the machine, call its loader)
 //      in the GUI's PresetController::loadPreset and in each CLI.
 //
+// Every preset carries `format-version:` (kPresetFormatVersion), checked
+// before any other key: a preset of a newer format says so instead of
+// naming its first unknown key.
+//
 // Where trace, screenshot and by-name `saveas:` files go is the caller's
 // business: Core parses `saveas:` into a PresetSaveAsRequest for
 // PresetSaveAsFn (below); without that callback the step is a logged no-op.
@@ -247,6 +251,8 @@ struct PresetFile {
 /// number when available) on any parse failure or unsupported field; a
 /// preset is parsed all-or-nothing, so a bad preset fails before the
 /// machine is even started.
+constexpr uint32_t kPresetFormatVersion = 1;
+
 bool parsePresetFile(const std::string& path, PresetFile* out, std::string* error);
 
 /// A path in a preset: `~` / `~/...` is the home directory, anything else

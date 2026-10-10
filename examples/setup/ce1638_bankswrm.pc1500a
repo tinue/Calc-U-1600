@@ -1,5 +1,6 @@
 # PC-1500A with the real CE-1638 memory module (128k, 8 banks of 16k).
 
+format-version: 1
 model: PC-1500A
 
 slot-1: CE-1638

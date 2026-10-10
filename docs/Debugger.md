@@ -106,6 +106,7 @@ You work in the program's own folder. *Create Debug Project…* sets it up once,
 The project preset is an ordinary preset, so you can also open it in the app (**File ▸ Load Preset**). The app ignores the `debug:` block when loading it. The PC-1600 one looks like this:
 
 ```yaml
+format-version: 1
 model: PC-1600
 
 keys:
@@ -189,6 +190,7 @@ A ROM extension (like Calc-U-1600's own host-drive ROM) isn't loaded into RAM an
 **Plugging the ROM in.** The project preset's `bus-rom:` puts your `.bin` on the bus:
 
 ```yaml
+format-version: 1
 model: PC-1600
 
 bus-rom:
@@ -208,6 +210,7 @@ On the PC-1500 (or the PC-1600's LH5803 side), a bus ROM has an `address:` inste
 **Replacing a bundled ROM.** A bus ROM takes precedence over a built-in device's ROM at the same place. To work on a new version of the host-drive ROM, for example:
 
 ```yaml
+format-version: 1
 model: PC-1600
 host-drive: files           # the drive itself: its I/O stays the app's
 bus-rom:

@@ -3,6 +3,7 @@
 # Both are saved as templates next to this preset -- "CE-1601M - Progs.card.yaml"
 # and "Progs.floppy.yaml" -- so DiskWorks.pc1600 always starts from them.
 
+format-version: 1
 model: PC-1600
 plotter: CE-1600P
 floppy: Formatted

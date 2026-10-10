@@ -576,6 +576,12 @@ authentic speed for the span that matters.
   draw some ASCII codes as other signs (PC-1500 5BH √, PC-1600 `CGSPEC`).
 
 ### File formats
+- **Every file format the app reads carries a required `format-version`**
+  (cards, floppies, presets). A reader checks it before the key list and
+  refuses a missing or unknown version instead of guessing. A file without
+  it fails like any other unreadable file: a saved card without the line
+  drops out of the module picker without a message, on purpose (no
+  migration before 1.0).
 - **Floppies are `.floppy.yaml` only.** `.floppy.img` isn't read, and no
   backward compatibility is wanted. Any format change bumps `format-version`.
 - **Cards and floppies resolve bundled-first**, then the configured save

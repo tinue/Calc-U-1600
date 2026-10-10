@@ -6,6 +6,7 @@
 # Serial peer: calcu1600-ce158.serial in the serial-port symlink folder
 # (Settings), e.g. `screen <folder>/calcu1600-ce158.serial 300`.
 
+format-version: 1
 model: PC-1600
 interface: CE-158
 

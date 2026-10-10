@@ -34,6 +34,7 @@
 # strobe latch, so the real firmware's interleaved &6808/&6809 writes are
 # not reproduced here -- issue the sequences as pure &1555/&2AAA writes.
 
+format-version: 1
 model: PC-1500A
 
 slot-1: CE-163F
