@@ -38,8 +38,8 @@ decides what reaches the PV pin.
 `LH5803SharedMemory` decodes it with the narrow `(addr & 0xFFF0) == 0xF000`
 mask, before falling through to ME0. Don't use the PC-1500's broad
 `(addr & 0x3000) == 0x3000` chip select: on this bus it would swallow ME1 RAM
-and card accesses. The latch is a plain 16-byte latch and deliberately not the
-full named register block.
+and card accesses. The block is the SC7852's own ports 10H-1FH
+(`PC1600Memory::readIO`/`writeIO`), the same registers the Z-80 reaches.
 
 IF (0xF00B) is software-only. It isn't cleared on read and gets no live
 TP/RTC edge. The firmware clears the bit itself, and a stray edge in the
@@ -555,6 +555,20 @@ authentic speed for the span that matters.
     latch. A self-contained sequence always leaves KBII off.
 
 ### GUI
+- **The INSPECTOR's views are built in Core** (`Core/Debug/Inspect`), from
+  one locked snapshot (`debugInspect()`), not in the panel: they are tested
+  there and the CLIs print them (`--inspect`). Every read in them is free
+  of side effects; a slot read uses `slotBusRead()` (no probe write), and a
+  card register a read would disturb counts as "answers" without being read.
+  A view goes into the log as one entry, so a long dump isn't cut to the
+  last display page.
+- **Inspector: F055H / F05BH are the module's non-disk RAM**, in 2 KB units
+  (P1-B3 4B9A-4BBC: `INIT "F"` leaves 0, "M"/"P" add up to 10H). The
+  RAM disk is the module above that, and the inspector counts it only with
+  its 55H 80H boot sector. The research's "RAM-disk size" reading of these
+  bytes doesn't match the ROM; don't switch to it.
+- **An empty slot reads as open bus in the Z80 View** (`DebugBankState`),
+  as `PC1600Memory::read()` serves it, not as "Slot 1".
 - **Hardware pickers (model, memory modules) live on the control bar**, not
   in Settings. The picks reset on a model switch and aren't saved. Settings
   holds app-level preferences only.

@@ -40,6 +40,7 @@ with a status note on how the implementation differed. New plans go into
 | [Pre-execution snapshots: history and trace](plans/Pre-Execution-Snapshots-Plan.md) | 2026-10-04 | Implemented |
 | [Cassette CLOAD / CSAVE via WAV files](plans/Cassette-Tape-Plan.md) | 2026-10-04 | Implemented for PC-1500 + CE-150 and PC-1600 MODE 0; MODE 1 `CLOAD`, CE-150 on PC-1600 and the real-unit cross-check open in TODO.md |
 | [Pre-1.0 format freeze: versions, `slot-N-rom:`, one `saveas:`](plans/Format-Freeze-Plan.md) | 2026-10-10 | Implemented |
+| [Debug panel → INSPECTOR: pointers, memory views, dumps](plans/Inspector-Panel-Plan.md) | 2026-10-10 | Implemented; RAM-disk directory listing open in TODO.md |
 
 ## Handoffs
 

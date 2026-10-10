@@ -20,7 +20,7 @@ of BASIC programs, write a config file, and so on.
      `floppy-file:`. `examples/dwx/make_diskworks_media.pc1600` does this for
      `examples/dwx/DiskWorks.pc1600`.
 
-   - **Dump the card.** Use the debug **"Dump Card YAML"** action to emit a card
+   - **Dump the card.** Use the debug **"Card YAML"** action to emit a card
      definition, and paste the data it captures into a card definition's
      `initial-content:` (your own copy of a bundled one from
      `Qt6/resources/cards/`, e.g. `ce1601m.card.yaml`). A fresh card from

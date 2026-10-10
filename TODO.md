@@ -276,16 +276,11 @@ CE-1600P (docs/background/plans/Cassette-Tape-Plan.md, dev/tape-matrix/).
   other and the preset parser rejects the pair. Both now sit on the one
   60-pin `SystemBus`. Blocked on the IO7N question in "Expansion connectors"
   (User Guide says "not yet supported").
-- **Review the Debug panel's content against the full ROM disassembly.** The
-  pointer dump and the other views were built before the ROM was fully
-  commented. Go through the disassembly's work-area symbols and pick what
-  helps when debugging. `TITLE`, `PRG_BANKS` (ADTBL index) and the S1/S2
-  slot areas are already shown; candidates: `BMODE`,
-  `BINTREQ`/`F1CF`–`F1D4`, TRON state, `OPNDV`, the logical banks
-  F1C1–F1CE, PRGADR FE3C–FE41. Also check every existing label and note for
-  accuracy (address space, byte order, meaning).
 - Allow viewing a memory module's or diskette's binary file contents in the
-  debug area, without having to save them out first. For memory modules
+  INSPECTOR, without having to save them out first. Disk Areas / Dump ▾
+  already show where a RAM disk sits, its boot sector and its raw bytes
+  (docs/background/plans/Inspector-Panel-Plan.md); what is missing is the
+  directory and the files. For memory modules
   this means the disk part (the RAM-disk filesystem), not the RAM-extension
   part. For a floppy side, the vendored libsharpdx (0.3.5) already has
   `sde_disk_list` / `sde_disk_get`, which decode the directory and files

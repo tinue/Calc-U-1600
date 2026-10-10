@@ -28,6 +28,17 @@
 
 ### Changed
 
+- **The Debug panel is now the INSPECTOR.** Pointers lists many more of
+  the work-area variables, in groups and with flags decoded, checked
+  against the ROM disassembly; three wrong PC-1500 entries are gone
+  (`BREAK_STAT` was the evaluator's type byte, the real BREAK flag is
+  `BREAKPARAM` at 788AH; `WARM_START`/`STK_SAVE` lie in an arithmetic
+  register). Dump Mem is replaced by two menus. **Memory ▾** has tables:
+  Inventory, Z80 View, LH5803/LH5801 View, BASIC Area, Program Areas, Disk
+  Areas and Physical RAM. **Dump ▾** has hex dumps of the BASIC area, the
+  S1/S2 program areas and the S1:/S2: RAM disks. The views are built in Core
+  and the headless CLIs print them with `--inspect <view>`. Dump Card YAML
+  is now Card YAML.
 - **Presets and memory-card files carry `format-version: 1`**, and it is
   required: add the line to your own presets and to saved cards
   (`.card.yaml` in the Battery-card saves folder). A card without it no

@@ -167,7 +167,7 @@ Two macOS details:
 | `controlbar.ce150`, `controlbar.ce158`, `controlbar.ce1600p` | peripheral toggles (CE-150/CE-158 on PC-1500/1500A, CE-1600P on PC-1600) |
 | `controlbar.floppy`, `controlbar.floppy.side`, `controlbar.floppy.save`, `controlbar.floppy.lamp` | CE-1600F disk row |
 | `controlbar.tape`, `controlbar.tape.save`, `controlbar.tape.counter` | cassette bay: tape picker, Save, counter (green while the motor runs; with a CE-150 or CE-1600P) |
-| `debugpanel`, `debugpanel.pointers`, `debugpanel.dumpmem`, `debugpanel.dumpcard`, `debugpanel.clear`, `debugpanel.trace` | Debug panel and its buttons |
+| `debugpanel`, `debugpanel.pointers`, `debugpanel.memory`, `debugpanel.dump`, `debugpanel.card`, `debugpanel.clear`, `debugpanel.trace` | Inspector panel and its buttons (`open:` on `debugpanel.memory` / `debugpanel.dump` shows the menu) |
 | `paper`, `paper.copy`, `paper.cut` | plotter paper panel |
 | `ce158printer`, `ce158printer.save`, `ce158printer.clear` | CE-158 printer panel |
 | `dialog.settings`, `dialog.about`, `dialog.machinecode` | dialogs |
