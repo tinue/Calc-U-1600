@@ -193,6 +193,61 @@ Decisions.md, "One 60-pin connector per machine".
   deasserted. No bundled card decodes it, so nothing breaks today; drive
   it high in the slot pin state.
 
+- **40-pin connector: model DME0 and ME1 cycles instead of the shortcut
+  (low priority, research-enabling).** No real module is known to use ME1;
+  the point is a hardware-faithful bus, so a hypothetical or modern module
+  that ignores DME0 behaves as the real one would.
+  - **Hardware** (Decisions.md, "Unclaimed ME1 is not a mirror of ME0"; TRM
+    chip-select circuit): the mainboard's Y0 (0000-3FFF) and Y2 (8000-BFFF)
+    come from the TC40H139F half that is *not* ME-qualified, so they also
+    assert on ME1 cycles. The S strobes come from the '138 with G1 = ME0, so
+    they never assert in ME1. The 40-pin plug has no ME1 contact; its only
+    ME signal is pin 6 = DME0 (ME0 with WAIT timing, treat as ME0). A Y0/Y2
+    module is ME0-only if it gates on DME0, and answers in ME1 too if it
+    doesn't. Known modules: CE-151 (S strobes only); CE-155/CE-159 (Y0 chip
+    gates on DME0); CE-161 (schematic: on-module TC40H138FP with G1 = DME0,
+    G2A = Y0, A/B/C = AD11-13; G2B unreadable, apparently a supply-fail
+    lock); CE-163F (measured: ME0 only). Unknown: CE-1638, CE-502B.
+  - **Why it works today:** `PC1500Memory::readME1` / `writeME1` /
+    `debugPeekME1` offer ME1 cycles to the 60-pin `SystemBus` only, never to
+    the 40-pin `ExpansionConnector`. That equals "every 40-pin module gates
+    on DME0", which is true for every module whose circuit is known.
+  - **Where it fails:** a 40-pin module that ignores DME0 (a raw-Y0 design,
+    a modern module, possibly the CE-1638 / CE-502B) would answer in ME1 on
+    real hardware but stays silent here. And no card can express a DME0
+    condition today: neither connector drives pin 6
+    (`PC1500SignalDecode::basePinState`, `MemorySlotConnector::decode` /
+    `remapPins` / `readInBank` / `writeInBank`), and `resolveSignalPin` has
+    no name for it.
+  - **Plan:**
+    1. PC-1500: `basePinState` gets an ME0/ME1 flag. Set pin 6 (DME0) on
+       ME0 cycles. On ME1 cycles assert Y0/Y2 as usual, assert no S strobe,
+       leave pin 6 low (`ExpansionConnector::decode`).
+    2. `readME1` / `writeME1` / `debugPeekME1`: after the 60-pin bus, offer
+       the cycle to `m_expansionConnector` before falling back to open bus
+       (FFH).
+    3. `resolveSignalPin`: `DME0` -> 6 for the PC-1500 / PC-1500A
+       terminologies; `MREQ` -> 6 for both PC-1600 slots.
+    4. PC-1600: `MemorySlotConnector` drives pin 6 (MREQ) on every slot
+       memory cycle: `decode()`, `remapPins()`, the bank-addressed host
+       accesses. Not on the Port 28H `ioWrite` (an I/O cycle). **Required:**
+       a PC-1500-terminology card that checks DME0 sees contact 6, which in a
+       PC-1600 slot carries MREQ; without step 4 the CE-155 / CE-161 /
+       CE-163F would vanish from the PC-1600 slots. LH5803 ME1 cycles never
+       reach the slots (they are IORQ), so nothing else changes there.
+    5. Card files: add `- signal: DME0` to the Y0 terms of `ce155`
+       (Y0 chip only; its S-strobe chips need nothing), `ce161`, `ce163f`.
+       Leave `ce1638` / `ce502b` without it until their circuits are known,
+       and note that in the files.
+    6. Tests: PC-1500 + CE-161/CE-155: `PEEK#` in its window reads FFH;
+       a test card without a DME0 term answers in ME1; PC-1600 Slot 1 +
+       CE-155 still loads its full 8 KB; the loader matrix and the CE-150 /
+       CE-158 demos unchanged.
+  - **Open assumption:** "asserted" on contact 6 means a memory cycle on both
+    machines (DME0 / MREQ). The CE-155 working in a PC-1600 Slot 1 supports
+    it; the polarity of the slot's MREQ contact isn't recorded in the
+    research.
+
 **Still open (hardware questions; the drive leaves these contacts inactive):**
 - **Does the CE-1600P's I/O decode see LH5803 ME1 cycles?** While ELH̄ is
   asserted, IORQ carries the LH5803's ME1, so an access such as ME1 D070H
