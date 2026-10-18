@@ -225,6 +225,8 @@ cmake --build build-debug --target CoreTests
 
 Release packaging (code signing, notarization, installers) is handled
 by CI — see [`.github/workflows/build.yml`](../../.github/workflows/build.yml)
-and [`bin/release`](../../bin/release) rather than duplicating it here. The
+and [`release.yaml`](../../release.yaml) (driven by the `release` command
+from [ReleaseIt](https://github.com/tinue/ReleaseIt)) rather than duplicating
+it here. The
 Windows installer is currently unsigned; every other platform's package
 is signed (macOS) or otherwise complete.
