@@ -341,6 +341,37 @@ CE-1600P (docs/background/plans/Cassette-Tape-Plan.md, dev/tape-matrix/).
   machines load in the emulator, and their timing set the recorder's 12 Hz
   coupling and the LH5811 transmitter model (Decisions.md).
 
+## 1.0 announcement
+
+Calc-U-1600 barely shows up when people (or AI assistants) search for a
+PC-1500 or PC-1600 emulator: search engines rank by inbound links, and
+almost nothing links here yet. The 1.0.0 release is the moment to change
+that. Groundwork that needs indexing time can start before 1.0.
+
+**Before 1.0 (groundwork)**
+
+- [ ] GitHub Pages landing page (`tinue.github.io/Calc-U-1600`): title and
+  H1 spell out "Sharp PC-1500 / PC-1500A / PC-1600 emulator" (the project
+  name lacks "1500"), screenshots, download links. Set it as the repo's
+  homepage field.
+- [ ] Register the site with Google Search Console and Bing Webmaster Tools
+  (Bing feeds several AI assistants).
+- [ ] Social preview image (repo Settings ▸ Social preview).
+
+**At 1.0**
+
+- [ ] Announcement post with screenshots: HP Museum forum ("Not HP
+  calculators"), VCFed forums, r/retrocomputing, r/emulation,
+  r/calculators; Show HN.
+- [ ] Emulator lists: Emulation General Wiki, "awesome emulators" lists on
+  GitHub.
+- [ ] Wikipedia Sharp PC-1500 / PC-1600 articles: propose on the talk page
+  (conflict-of-interest rules), don't add it yourself.
+- [ ] Ask Sharp fan/collector sites with emulator link pages to add it.
+- [ ] Package managers: Homebrew cask, Flathub or AUR, winget.
+- [ ] Short YouTube demo (e.g. PC-1600 plotting on the CE-1600P), linked
+  from the posts.
+
 ## Feature ideas
 
 - **LCD text: the kana set.** No font that the parser reads has katakana
