@@ -58,7 +58,10 @@ run `renew-certs apply` in the repo root (team ID from the `certs:` section of
 two `_P12_BASE64` secrets and `APPLE_CERT_P12_PASSWORD`. Run it in
 SharpDataExchange too; it uses the same pair. It also records the uploaded certificates as the repo variables
 `APPLE_CERT_{APPLICATION,INSTALLER}_{SHA1,EXPIRES}`; `renew-certs status`
-reports them and their expiry.
+reports them and their expiry. The `.p12` password is random per
+run and kept nowhere else; if a secret breaks, run `apply` again. Back the
+certificates themselves up with `renew-certs backup` (1Password, Private
+vault; restore by double-clicking the attached `.p12`).
 
 The App Store Connect API key doesn't expire. For a new one, replace the `.p8`
 secret plus `APPLE_API_KEY_ID` / `APPLE_API_ISSUER_ID`.
