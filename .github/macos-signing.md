@@ -49,6 +49,16 @@ printf %s '69a6de7f-1a2b-3c4d-5e6f-70a1b2c3d4e5' | gh secret set APPLE_API_ISSUE
 
 ## Rotating
 
-Certs expire every ~5 years. Re-export the `.p12`, re-run the two
-`gh secret set … _P12_BASE64` commands. For a new API key, replace the `.p8` secret
-plus `APPLE_API_KEY_ID` / `APPLE_API_ISSUER_ID`.
+Developer ID certs from the G2 Sub-CA are valid only ~13 months. Each year:
+create new ones in the developer portal with the **G2 Sub-CA** (not Xcode, which
+issued from the original Sub-CA that expires 2027-02-01). The steps are listed
+by `renew-certs guide` ([ReleaseIt](https://github.com/tinue/ReleaseIt)). Then
+run `renew-certs apply`. It exports them from the keychain, checks them, and
+sets the two `_P12_BASE64` secrets and `APPLE_CERT_P12_PASSWORD` here and in
+SharpDataExchange (repos listed in `~/.config/releaseit/certs.yaml`). It also
+records the uploaded certificates as the repo variables
+`APPLE_CERT_{APPLICATION,INSTALLER}_{SHA1,EXPIRES}`; `renew-certs status`
+reports them and their expiry.
+
+The App Store Connect API key doesn't expire. For a new one, replace the `.p8`
+secret plus `APPLE_API_KEY_ID` / `APPLE_API_ISSUER_ID`.
