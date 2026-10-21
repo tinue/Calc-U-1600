@@ -420,7 +420,13 @@ jobs:
           xcrun notarytool submit "$RUNNER_TEMP/Calc-U-1600.zip" \
             --key "$RUNNER_TEMP/asc_api_key.p8" --key-id "$KEY_ID" --issuer "$ISSUER_ID" \
             --wait --timeout 30m
-          xcrun stapler staple "$APP"
+          # The ticket comes from Apple's CloudKit server; a dropped connection
+          # there (stapler error 68) is transient, so retry before giving up.
+          for i in 1 2 3; do
+            xcrun stapler staple "$APP" && break
+            [ "$i" = 3 ] && exit 1
+            echo "stapler failed, retrying in 30 s…"; sleep 30
+          done
           xcrun stapler validate "$APP"
           spctl -a -vvv "$APP"
 
@@ -445,7 +451,13 @@ jobs:
           xcrun notarytool submit "$DMG" \
             --key "$RUNNER_TEMP/asc_api_key.p8" --key-id "$KEY_ID" --issuer "$ISSUER_ID" \
             --wait --timeout 30m
-          xcrun stapler staple "$DMG"
+          # The ticket comes from Apple's CloudKit server; a dropped connection
+          # there (stapler error 68) is transient, so retry before giving up.
+          for i in 1 2 3; do
+            xcrun stapler staple "$DMG" && break
+            [ "$i" = 3 ] && exit 1
+            echo "stapler failed, retrying in 30 s…"; sleep 30
+          done
           xcrun stapler validate "$DMG"
           spctl -a -vvv -t open --context context:primary-signature "$DMG"
 
