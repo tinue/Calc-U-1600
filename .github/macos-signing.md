@@ -53,10 +53,10 @@ Developer ID certs from the G2 Sub-CA are valid only ~13 months. Each year:
 create new ones in the developer portal with the **G2 Sub-CA** (not Xcode, which
 issued from the original Sub-CA that expires 2027-02-01). The steps are listed
 by `renew-certs guide` ([ReleaseIt](https://github.com/tinue/ReleaseIt)). Then
-run `renew-certs apply`. It exports them from the keychain, checks them, and
-sets the two `_P12_BASE64` secrets and `APPLE_CERT_P12_PASSWORD` here and in
-SharpDataExchange (repos listed in `~/.config/releaseit/certs.yaml`). It also
-records the uploaded certificates as the repo variables
+run `renew-certs apply` in the repo root (team ID from the `certs:` section of
+`release.yaml`). It exports them from the keychain, checks them, and sets the
+two `_P12_BASE64` secrets and `APPLE_CERT_P12_PASSWORD`. Run it in
+SharpDataExchange too; it uses the same pair. It also records the uploaded certificates as the repo variables
 `APPLE_CERT_{APPLICATION,INSTALLER}_{SHA1,EXPIRES}`; `renew-certs status`
 reports them and their expiry.
 

@@ -1,4 +1,4 @@
-# Release configuration for ReleaseIt's `release` command
+# Release configuration for ReleaseIt's `release` and `renew-certs` commands
 # (https://github.com/tinue/ReleaseIt).
 #
 # Nothing is built locally: .github/workflows/build.yml (workflow_dispatch
@@ -33,3 +33,8 @@ build:
       - { artifact: Calc-U-1600-mac-aarch64,    file: Calc-U-1600.dmg,          as: Calc-U-1600-mac-aarch64.dmg }
       - { artifact: Calc-U-1600-windows-x86_64, file: Calc-U-1600-Setup.exe,    as: Calc-U-1600-windows-x86_64.exe }
       - { artifact: Calc-U-1600-windows-arm64,  file: Calc-U-1600-Setup-arm64.exe, as: Calc-U-1600-windows-arm64.exe }
+
+# Developer ID certificates the macOS CI job signs with; rotated yearly with
+# ReleaseIt's `renew-certs` (see .github/macos-signing.md).
+certs:
+  team_id: 7Q3QN9AV9J
