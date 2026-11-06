@@ -1,22 +1,26 @@
 cmake_minimum_required(VERSION 3.21)
 
 # Development / IDE build of the whole repository in one CMake project: the
-# Qt6 GUI app (via add_subdirectory(Qt6)), every headless tool and probe
-# that tools/build_*.sh builds by hand, and the Core/ test suite as a real
-# CTest target. Opening the repo root in CLion (or any CMake-aware IDE)
-# therefore gives run/debug configurations for all of them -- see the
-# shared ones in .run/ and the "CLion / IDE Integration" section of
-# docs/developer/Building.md.
+# calcu_core / calcu_shared libraries (cmake/CalcU.cmake), the Qt6 GUI app
+# (via add_subdirectory(Qt6)), the headless CLIs and probes, and the
+# Core/ + Shared/ test suite as a real CTest target. Opening the repo root
+# in CLion (or any CMake-aware IDE) therefore gives run/debug
+# configurations for all of them -- see the shared ones in .run/ and the
+# "CLion / IDE Integration" section of docs/developer/Building.md.
 #
 # This is NOT the release entry point. Qt6/CMakeLists.txt stays the
-# authoritative app build: build_and_run.sh,
-# docs/developer/Building.md's per-platform recipes and every packaging job in .github/workflows/build.yml configure
-# `-S Qt6`, and this file only pulls that same directory in unchanged.
+# authoritative app build: build_and_run.sh, docs/developer/Building.md's
+# per-platform recipes and every packaging job in .github/workflows/build.yml
+# configure `-S Qt6`, and this file only pulls that same directory in.
 #
-# The tool/probe/test source lists below duplicate the ones hand-maintained
-# in tools/build_*.sh and tools/run_tests.sh, so they can drift. The
-# `core-tests` job in .github/workflows/build.yml configures *this* file and
-# runs CTest to catch that -- if you add a Core/ source, keep both in sync.
+# Core/ and Shared/ sources are globbed by cmake/CalcU.cmake; only the
+# probes (which need PC1600_POWER_PROBE) and tools/build_*.sh still list
+# Core sources by hand.
+#
+# Options:
+#   CALCU_BUILD_QT     build the Qt6 app (default ON); tools/run_tests.sh
+#                      turns it off so the tests need no Qt
+#   CALCU_TESTS_DEBUG  build Core and the tests at -O0 for stepping through
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "15.8" CACHE STRING "Minimum macOS version")
 
@@ -36,157 +40,34 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/Core)
 set(TOOLS_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/tools)
 
-# libsharpdx: every program loader needs it (Core/Basic/vendor/sharpdx/README.md)
-if(WIN32)
-  set(SHARPDX_LIB ${CORE_ROOT}/Basic/vendor/sharpdx/sharpdx.lib)
-elseif(APPLE)
-  set(SHARPDX_LIB ${CORE_ROOT}/Basic/vendor/sharpdx/libsharpdx.a)
-else()
-  set(SHARPDX_LIB ${CORE_ROOT}/Basic/vendor/sharpdx/libsharpdx-linux.a)
+# The suite runs ~3x faster at -O1 than at -O0, so a Debug build compiles
+# Core and the tests at -O1 (CI builds RelWithDebInfo). To step through a
+# failing test, configure a separate full-debug tree:
+#   cmake -S . -B build-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCALCU_TESTS_DEBUG=ON
+option(CALCU_TESTS_DEBUG "Build Core and CoreTests at -O0 for debugging" OFF)
+option(CALCU_BUILD_QT "Build the Qt6 GUI app" ON)
+if(NOT CALCU_TESTS_DEBUG)
+  set(CALCU_CORE_DEBUG_O1 ON)
 endif()
-if(NOT EXISTS ${SHARPDX_LIB})
-  message(FATAL_ERROR "${SHARPDX_LIB} is missing -- run tools/fetch_sharpdx.sh (Linux/Windows) "
-                      "or tools/refresh_sharpdx.sh (macOS)")
-endif()
-
-# Core sources used by tools and tests
-set(CORE_COMMON_SOURCES
-  ${CORE_ROOT}/Debug/BasicPointerTable.cpp
-  ${CORE_ROOT}/Debug/Inspect/Inspector.cpp
-  ${CORE_ROOT}/Debug/Inspect/TextTable.cpp
-  ${CORE_ROOT}/Debug/Inspect/HexDump.cpp
-  ${CORE_ROOT}/Debug/Inspect/PC1500Inspector.cpp
-  ${CORE_ROOT}/Debug/Inspect/PC1600Inspector.cpp
-  ${CORE_ROOT}/Debug/Disasm/Disassembly.cpp
-  ${CORE_ROOT}/Debug/Disasm/LH5801Disassembler.cpp
-  ${CORE_ROOT}/Debug/Disasm/Z80Disassembler.cpp
-  ${CORE_ROOT}/Debug/DebugTarget.cpp
-  ${CORE_ROOT}/Debug/DebugExpression.cpp
-  ${CORE_ROOT}/Debug/CpuRegisters.cpp
-  ${CORE_ROOT}/Debug/MachineDebugTargets.cpp
-  ${CORE_ROOT}/Debug/SourceMap.cpp
-  ${CORE_ROOT}/Debug/BreakpointTable.cpp
-  ${CORE_ROOT}/Debug/RunControl.cpp
-  ${CORE_ROOT}/Debug/ProgramLoader.cpp
-  ${CORE_ROOT}/Debug/Listing/Listing.cpp
-  ${CORE_ROOT}/Debug/Listing/SdasListing.cpp
-  ${CORE_ROOT}/Debug/Listing/ZasmListing.cpp
-  ${CORE_ROOT}/CPU/LH5801/LH5801.cpp
-  ${CORE_ROOT}/CPU/SC7852/SC7852.cpp
-  ${CORE_ROOT}/CPU/LH5803/LH5803Memory.cpp
-  ${CORE_ROOT}/CPU/LH5803/LH5803SharedMemory.cpp
-  ${CORE_ROOT}/Audio/PiezoSampler.cpp
-  ${CORE_ROOT}/PC1500/PC1500Memory.cpp
-  ${CORE_ROOT}/PC1500/PC1500Machine.cpp
-  ${CORE_ROOT}/PC1500/PC1500Keyboard.cpp
-  ${CORE_ROOT}/PC1500/PC1500Display.cpp
-  ${CORE_ROOT}/PC1500/Upd1990ac.cpp
-  ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
-  ${CORE_ROOT}/PC1600/PC1600Memory.cpp
-  ${CORE_ROOT}/PC1600/PC1600SubCpu.cpp
-  ${CORE_ROOT}/PC1600/TC8576F.cpp
-  ${CORE_ROOT}/Serial/PtySerialLink.cpp
-  ${CORE_ROOT}/PC1600/PC1600Display.cpp
-  ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
-  ${CORE_ROOT}/PC1600/PC1600Machine.cpp
-  ${CORE_ROOT}/Display/LcdScreenshot.cpp
-  ${CORE_ROOT}/Display/LcdText.cpp
-  ${CORE_ROOT}/KeyPaste.cpp
-  ${CORE_ROOT}/MachineCodeFile.cpp
-  ${CORE_ROOT}/ProgramFile.cpp
-  ${CORE_ROOT}/DropFile.cpp
-  ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
-  ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
-  ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
-  ${CORE_ROOT}/Preset/PresetFile.cpp
-  ${CORE_ROOT}/Preset/PresetRunner.cpp
-  ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
-  ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
-  ${CORE_ROOT}/Basic/BasicProgramSource.cpp
-)
+include(cmake/CalcU.cmake)
 
 # -----------------------------------------------------------------------------
 # Qt6 GUI Application target
 # -----------------------------------------------------------------------------
-add_subdirectory(Qt6)
+if(CALCU_BUILD_QT)
+  add_subdirectory(Qt6)
+endif()
 
 # -----------------------------------------------------------------------------
 # Headless CLI tools & probes
 # -----------------------------------------------------------------------------
 # pc1500_cli
-set(PC1500_CLI_SOURCES
-  ${CORE_ROOT}/CPU/LH5801/LH5801.cpp
-  ${CORE_ROOT}/Audio/PiezoSampler.cpp
-  ${CORE_ROOT}/PC1500/PC1500Memory.cpp
-  ${CORE_ROOT}/PC1500/PC1500Machine.cpp
-  ${CORE_ROOT}/Debug/Inspect/Inspector.cpp
-  ${CORE_ROOT}/Debug/Inspect/TextTable.cpp
-  ${CORE_ROOT}/Debug/Inspect/HexDump.cpp
-  ${CORE_ROOT}/Debug/Inspect/PC1500Inspector.cpp
-  ${CORE_ROOT}/PC1500/PC1500Keyboard.cpp
-  ${CORE_ROOT}/PC1500/PC1500Display.cpp
-  ${CORE_ROOT}/PC1500/Upd1990ac.cpp
-  ${CORE_ROOT}/Preset/PresetFile.cpp
-  ${CORE_ROOT}/Preset/PresetRunner.cpp
-  ${CORE_ROOT}/MachineCodeFile.cpp
-  ${CORE_ROOT}/ProgramFile.cpp
-  ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
-  ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
-  ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
-  ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
-  ${CORE_ROOT}/Display/LcdScreenshot.cpp
-  ${CORE_ROOT}/Display/LcdText.cpp
-  ${CORE_ROOT}/Basic/BasicProgramSource.cpp
-  ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
-  ${CORE_ROOT}/Serial/PtySerialLink.cpp
-  ${TOOLS_ROOT}/pc1500_cli.cpp
-)
-add_executable(pc1500_cli ${PC1500_CLI_SOURCES})
-target_include_directories(pc1500_cli PRIVATE ${CORE_ROOT})
-target_link_libraries(pc1500_cli PRIVATE ${SHARPDX_LIB})
+add_executable(pc1500_cli ${TOOLS_ROOT}/pc1500_cli.cpp)
+target_link_libraries(pc1500_cli PRIVATE calcu_core)
 
 # pc1600_cli
-set(PC1600_CLI_SOURCES
-  ${CORE_ROOT}/CPU/LH5801/LH5801.cpp
-  ${CORE_ROOT}/CPU/SC7852/SC7852.cpp
-  ${CORE_ROOT}/CPU/LH5803/LH5803Memory.cpp
-  ${CORE_ROOT}/CPU/LH5803/LH5803SharedMemory.cpp
-  ${CORE_ROOT}/Preset/PresetFile.cpp
-  ${CORE_ROOT}/Preset/PresetRunner.cpp
-  ${CORE_ROOT}/MachineCodeFile.cpp
-  ${CORE_ROOT}/ProgramFile.cpp
-  ${CORE_ROOT}/PC1500/PC1500Keyboard.cpp
-  ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
-  ${CORE_ROOT}/Audio/PiezoSampler.cpp
-  ${CORE_ROOT}/PC1600/PC1600Memory.cpp
-  ${CORE_ROOT}/PC1600/PC1600SubCpu.cpp
-  ${CORE_ROOT}/PC1600/TC8576F.cpp
-  ${CORE_ROOT}/Serial/PtySerialLink.cpp
-  ${CORE_ROOT}/PC1600/PC1600Display.cpp
-  ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
-  ${CORE_ROOT}/PC1600/PC1600Machine.cpp
-  ${CORE_ROOT}/Debug/BasicPointerTable.cpp
-  ${CORE_ROOT}/Debug/Inspect/Inspector.cpp
-  ${CORE_ROOT}/Debug/Inspect/TextTable.cpp
-  ${CORE_ROOT}/Debug/Inspect/HexDump.cpp
-  ${CORE_ROOT}/Debug/Inspect/PC1600Inspector.cpp
-  ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
-  ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
-  ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
-  ${CORE_ROOT}/Display/LcdScreenshot.cpp
-  ${CORE_ROOT}/Display/LcdText.cpp
-  ${CORE_ROOT}/Basic/BasicProgramSource.cpp
-  ${TOOLS_ROOT}/pc1600_cli.cpp
-)
-add_executable(pc1600_cli ${PC1600_CLI_SOURCES})
-target_include_directories(pc1600_cli PRIVATE ${CORE_ROOT})
-target_link_libraries(pc1600_cli PRIVATE ${SHARPDX_LIB})
+add_executable(pc1600_cli ${TOOLS_ROOT}/pc1600_cli.cpp)
+target_link_libraries(pc1600_cli PRIVATE calcu_core)
 
 # pc1600_power_probe
 set(PC1600_POWER_PROBE_SOURCES
@@ -232,114 +113,22 @@ target_include_directories(pc1600_uart_probe PRIVATE ${CORE_ROOT})
 target_compile_definitions(pc1600_uart_probe PRIVATE PC1600_POWER_PROBE)
 
 # pc1600_plotter_probe
-set(PC1600_PLOTTER_PROBE_SOURCES
-  ${CORE_ROOT}/CPU/LH5801/LH5801.cpp
-  ${CORE_ROOT}/Audio/PiezoSampler.cpp
-  ${CORE_ROOT}/PC1500/PC1500Memory.cpp
-  ${CORE_ROOT}/PC1500/PC1500Machine.cpp
-  ${CORE_ROOT}/PC1500/PC1500Keyboard.cpp
-  ${CORE_ROOT}/PC1500/PC1500Display.cpp
-  ${CORE_ROOT}/PC1500/Upd1990ac.cpp
-  ${CORE_ROOT}/Preset/PresetFile.cpp
-  ${CORE_ROOT}/Preset/PresetRunner.cpp
-  ${CORE_ROOT}/MachineCodeFile.cpp
-  ${CORE_ROOT}/ProgramFile.cpp
-  ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
-  ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
-  ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
-  ${CORE_ROOT}/PC1600/PC1600Memory.cpp
-  ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
-  ${CORE_ROOT}/PC1600/PC1600Display.cpp
-  ${CORE_ROOT}/PC1600/PC1600SubCpu.cpp
-  ${CORE_ROOT}/PC1600/TC8576F.cpp
-  ${CORE_ROOT}/CPU/SC7852/SC7852.cpp
-  ${CORE_ROOT}/CPU/LH5803/LH5803Memory.cpp
-  ${CORE_ROOT}/CPU/LH5803/LH5803SharedMemory.cpp
-  ${CORE_ROOT}/PC1600/PC1600Machine.cpp
-  ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
-  ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
-  ${CORE_ROOT}/Display/LcdScreenshot.cpp
-  ${CORE_ROOT}/Display/LcdText.cpp
-  ${CORE_ROOT}/Basic/BasicProgramSource.cpp
-  ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
-  ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
-  ${TOOLS_ROOT}/pc1600_plotter_probe.cpp
-)
-add_executable(pc1600_plotter_probe ${PC1600_PLOTTER_PROBE_SOURCES})
-target_include_directories(pc1600_plotter_probe PRIVATE ${CORE_ROOT})
-target_link_libraries(pc1600_plotter_probe PRIVATE ${SHARPDX_LIB})
+add_executable(pc1600_plotter_probe ${TOOLS_ROOT}/pc1600_plotter_probe.cpp)
+target_link_libraries(pc1600_plotter_probe PRIVATE calcu_core)
 
 # -----------------------------------------------------------------------------
 # Test Suite target
 # -----------------------------------------------------------------------------
 find_package(ZLIB REQUIRED)
 
-set(TEST_SOURCES
-  ${CORE_COMMON_SOURCES}
-  ${CORE_ROOT}/tests/lh5801_tests.cpp
-  ${CORE_ROOT}/tests/connector_tests.cpp
-  ${CORE_ROOT}/tests/ce151_tests.cpp
-  ${CORE_ROOT}/tests/ce155_tests.cpp
-  ${CORE_ROOT}/tests/ce161_tests.cpp
-  ${CORE_ROOT}/tests/ce1638_tests.cpp
-  ${CORE_ROOT}/tests/ce502b_tests.cpp
-  ${CORE_ROOT}/tests/ce163f_tests.cpp
-  ${CORE_ROOT}/tests/memory_card_tests.cpp
-  ${CORE_ROOT}/tests/battery_card_instance_tests.cpp
-  ${CORE_ROOT}/tests/preset_tests.cpp
-  ${CORE_ROOT}/tests/basictyper_tests.cpp
-  ${CORE_ROOT}/tests/presetloader_trace_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_basictyper_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_bank_tests.cpp
-  ${CORE_ROOT}/tests/sc7852_tests.cpp
-  ${CORE_ROOT}/tests/tc8576f_tests.cpp
-  ${CORE_ROOT}/tests/lh5803_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_machine_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_phase54_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_keyboard_display_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_slot_ram_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_slot_module_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_preset_tests.cpp
-  ${CORE_ROOT}/tests/ce1600p_tests.cpp
-  ${CORE_ROOT}/tests/ce1600f_tests.cpp
-  ${CORE_ROOT}/tests/host_directory_drive_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_host_drive_tests.cpp
-  ${CORE_ROOT}/tests/ce150_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_ce150_tests.cpp
-  ${CORE_ROOT}/tests/ce158_tests.cpp
-  ${CORE_ROOT}/tests/basic_fastloader_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_basicloader_tests.cpp
-  ${CORE_ROOT}/tests/basic_program_source_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_program_placement_tests.cpp
-  ${CORE_ROOT}/tests/inspector_tests.cpp
-  ${CORE_ROOT}/tests/piezo_sampler_tests.cpp
-  ${CORE_ROOT}/tests/tape_deck_tests.cpp
-  ${CORE_ROOT}/tests/pc1600_tape_tests.cpp
-  ${CORE_ROOT}/tests/pc1500_tape_tests.cpp
-  ${CORE_ROOT}/tests/key_paste_tests.cpp
-  ${CORE_ROOT}/tests/lcd_screenshot_tests.cpp
-  ${CORE_ROOT}/tests/lcd_text_tests.cpp
-  ${CORE_ROOT}/tests/machine_code_file_tests.cpp
-  ${CORE_ROOT}/tests/program_file_tests.cpp
-  ${CORE_ROOT}/tests/disasm_tests.cpp
-  ${CORE_ROOT}/tests/debug_target_tests.cpp
-  ${CORE_ROOT}/tests/listing_tests.cpp
-  ${CORE_ROOT}/tests/run_control_tests.cpp
+file(GLOB TEST_SOURCES CONFIGURE_DEPENDS
+  ${CORE_ROOT}/tests/*.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/Shared/tests/*.cpp
 )
 
 add_executable(CoreTests ${TEST_SOURCES})
-target_include_directories(CoreTests PRIVATE ${CORE_ROOT})
-target_link_libraries(CoreTests PRIVATE ZLIB::ZLIB)
-target_link_libraries(CoreTests PRIVATE ${SHARPDX_LIB})
-
-# The suite runs ~3x faster at -O1 than at -O0, so a Debug build compiles
-# CoreTests at -O1 (as tools/run_tests.sh does); CI builds RelWithDebInfo.
-# To step through a failing test, configure a separate full-debug tree:
-#   cmake -S . -B build-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCALCU_TESTS_DEBUG=ON
-option(CALCU_TESTS_DEBUG "Build CoreTests at -O0 for debugging" OFF)
+target_link_libraries(CoreTests PRIVATE calcu_shared ZLIB::ZLIB)
+target_compile_options(CoreTests PRIVATE ${CALCU_WARNINGS})
 if(NOT CALCU_TESTS_DEBUG AND NOT MSVC)
   target_compile_options(CoreTests PRIVATE $<$<CONFIG:Debug>:-O1>)
 endif()

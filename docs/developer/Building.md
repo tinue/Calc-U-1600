@@ -183,10 +183,15 @@ Run `tools/fetch_roms.sh` (step 2 above) first: `CoreTests` and the
 aren't committed. The configurations use repo-relative paths throughout,
 so they work in any checkout without editing.
 
-CI covers this build too — the `core-tests` job in
+Both CMake files take `Core/` and `Shared/` from
+[`cmake/CalcU.cmake`](../../cmake/CalcU.cmake), which globs the sources into
+two static libraries: `calcu_core` and `calcu_shared` (the frontend-neutral
+layer above Core). A new `.cpp` under either directory needs no list entry;
+re-run CMake (or let Ninja's glob check do it). Only `tools/build_*.sh` and
+the probes in the root file still list Core sources by hand. CI covers the
+root build too: the `core-tests` job in
 [`.github/workflows/build.yml`](../../.github/workflows/build.yml)
-configures the root `CMakeLists.txt` and runs CTest, so a new `Core/`
-source that's only added to `Qt6/CMakeLists.txt` won't silently break it.
+configures the root `CMakeLists.txt` and runs CTest.
 
 ## Running the tests
 
@@ -194,10 +199,12 @@ source that's only added to `Qt6/CMakeLists.txt` won't silently break it.
 tools/run_tests.sh
 ```
 
-Builds and runs the headless `Core/` test suite (no Qt, no GUI) from a
-plain `clang++` invocation — must be run from the repo root, since the
-tests load `roms/PC-1500_A04.ROM` via a relative path. The tests also need
-zlib (`zlib1g-dev` on Ubuntu; macOS has it).
+Builds and runs the headless `Core/` + `Shared/` test suite (no Qt, no
+GUI): it configures the root `CMakeLists.txt` with `-DCALCU_BUILD_QT=OFF`
+into `build-tests/` (Debug, so Core and the tests compile at `-O1`) and runs
+`CoreTests` from the repo root, since the tests load `roms/` via relative
+paths. Arguments are passed on to `CoreTests`. Needs CMake, Ninja and zlib
+(`zlib1g-dev` on Ubuntu; macOS has it).
 
 The same suite is also a `CoreTests` target in the root `CMakeLists.txt`
 (see [CLion / IDE integration](#clion--ide-integration) above), which is
@@ -209,10 +216,10 @@ cmake --build build --target CoreTests
 ctest --test-dir build --output-on-failure
 ```
 
-The tests are always built optimized: `tools/run_tests.sh` uses `-O1`, and
-so does `CoreTests` in a Debug build — the suite runs about three times
+The tests are always built optimized: `CoreTests` and `calcu_core` compile
+at `-O1` in a Debug build (which is what `tools/run_tests.sh` uses) — the suite runs about three times
 faster than at `-O0`. To step through a failing test, build a separate
-full-debug tree with `CALCU_TESTS_DEBUG=ON` (in CLion: add the option to a
+full-debug tree with `CALCU_TESTS_DEBUG=ON` (Core and the tests at `-O0`) (in CLion: add the option to a
 CMake profile's options):
 
 ```sh

@@ -39,11 +39,10 @@ on:
 jobs:
   # The only job that configures the repo-root CMakeLists.txt (every other
   # job builds `-S Qt6`, the release entry point). That root file is the
-  # dev/IDE build -- it re-lists the same Core/ sources as tools/build_*.sh
-  # and tools/run_tests.sh, so without this job a new Core/ source would
-  # keep CI green while breaking the root build, and with it every .run/
-  # configuration, for whoever pulls next. It also gives Core/'s test suite
-  # its only presence in CI: tools/run_tests.sh is never run here.
+  # dev/IDE build: it adds the CLI harnesses, the probes (which still list
+  # Core/ sources by hand, see the root file) and CoreTests on top of the
+  # calcu_core / calcu_shared libraries from cmake/CalcU.cmake. This job is
+  # the only CI run of the Core/ + Shared/ test suite.
   core-tests:
     runs-on: ubuntu-24.04
     steps:

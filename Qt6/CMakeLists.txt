@@ -31,8 +31,6 @@ endif()
 find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia Network)
 qt_standard_project_setup()
 
-set(CORE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../Core)
-
 # ---- App version / build id (About dialog, macOS bundle Info.plist) ----
 # Single source of truth for the version number -- both the generated
 # Version.h below and the MACOSX_BUNDLE_*VERSION* properties further down
@@ -71,96 +69,10 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/app/Version.h.in
 file(CONFIGURE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/generated/Version.iss
      CONTENT "#define APP_VERSION \"@APP_VERSION@\"\n" @ONLY)
 
-# Trimmed from tools/build_cli.sh / tools/build_pc1600_cli.sh's own source
-# lists. Core/Connector/* is header-only (no .cpp files exist there at
-# all), so nothing from it needs to be added to this list even though
-# PC1500Machine.hpp/PC1600Machine.hpp #include several of its headers.
-set(CORE_SOURCES
-  ${CORE_ROOT}/Debug/BasicPointerTable.cpp
-  ${CORE_ROOT}/Debug/Inspect/Inspector.cpp
-  ${CORE_ROOT}/Debug/Inspect/TextTable.cpp
-  ${CORE_ROOT}/Debug/Inspect/HexDump.cpp
-  ${CORE_ROOT}/Debug/Inspect/PC1500Inspector.cpp
-  ${CORE_ROOT}/Debug/Inspect/PC1600Inspector.cpp
-  ${CORE_ROOT}/Debug/Disasm/Disassembly.cpp
-  ${CORE_ROOT}/Debug/Disasm/LH5801Disassembler.cpp
-  ${CORE_ROOT}/Debug/Disasm/Z80Disassembler.cpp
-  ${CORE_ROOT}/Debug/DebugTarget.cpp
-  ${CORE_ROOT}/Debug/DebugExpression.cpp
-  ${CORE_ROOT}/Debug/CpuRegisters.cpp
-  ${CORE_ROOT}/Debug/MachineDebugTargets.cpp
-  ${CORE_ROOT}/Debug/SourceMap.cpp
-  ${CORE_ROOT}/Debug/BreakpointTable.cpp
-  ${CORE_ROOT}/Debug/RunControl.cpp
-  ${CORE_ROOT}/Debug/ProgramLoader.cpp
-  ${CORE_ROOT}/Debug/Listing/Listing.cpp
-  ${CORE_ROOT}/Debug/Listing/SdasListing.cpp
-  ${CORE_ROOT}/Debug/Listing/ZasmListing.cpp
-  ${CORE_ROOT}/CPU/LH5801/LH5801.cpp
-  ${CORE_ROOT}/CPU/SC7852/SC7852.cpp
-  ${CORE_ROOT}/CPU/LH5803/LH5803Memory.cpp
-  ${CORE_ROOT}/CPU/LH5803/LH5803SharedMemory.cpp
-  ${CORE_ROOT}/Audio/PiezoSampler.cpp
-  ${CORE_ROOT}/PC1500/PC1500Memory.cpp
-  ${CORE_ROOT}/PC1500/PC1500Machine.cpp
-  ${CORE_ROOT}/PC1500/PC1500Keyboard.cpp
-  ${CORE_ROOT}/PC1500/PC1500Display.cpp
-  ${CORE_ROOT}/PC1500/Upd1990ac.cpp
-  ${CORE_ROOT}/PC1500/PC1500TraceFile.cpp
-  ${CORE_ROOT}/PC1600/PC1600Memory.cpp
-  ${CORE_ROOT}/PC1600/PC1600SubCpu.cpp
-  ${CORE_ROOT}/PC1600/TC8576F.cpp
-  ${CORE_ROOT}/Serial/PtySerialLink.cpp
-  ${CORE_ROOT}/PC1600/PC1600Display.cpp
-  ${CORE_ROOT}/PC1600/PC1600Keyboard.cpp
-  ${CORE_ROOT}/PC1600/PC1600Machine.cpp
-  ${CORE_ROOT}/Display/LcdScreenshot.cpp
-  ${CORE_ROOT}/Display/LcdText.cpp
-  ${CORE_ROOT}/KeyPaste.cpp
-  # "Load Machine Code…"
-  ${CORE_ROOT}/MachineCodeFile.cpp
-  ${CORE_ROOT}/ProgramFile.cpp
-  ${CORE_ROOT}/DropFile.cpp
-  ${CORE_ROOT}/PC1500/PC1500MachineCodeLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600MachineCodeLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600ProgramPlacement.cpp
-  # Reset's boot-to-prompt (runBootToPrompt)
-  ${CORE_ROOT}/PC1500/PC1500BasicTyper.cpp
-  ${CORE_ROOT}/PC1600/PC1600BasicTyper.cpp
-)
-
-# libsharpdx (Core/Basic/vendor/sharpdx/) classifies and tokenizes every
-# program the loaders read; it is required.
-#  - macOS: Core/Basic/vendor/sharpdx/libsharpdx.a is committed directly
-#    (refreshed via tools/refresh_sharpdx.sh from a local
-#    SharpDataExchange checkout).
-#  - Linux/Windows: fetched at build time from a SharpDataExchange
-#    GitHub release via tools/fetch_sharpdx.sh (see
-#    .github/workflows/build.yml's "Fetch sharpdx" step) into
-#    libsharpdx-linux.a / sharpdx.lib respectively -- deliberately
-#    different filenames from the macOS binary so a fetch here can never
-#    collide with, or dirty the git status of, the committed one.
-if(WIN32)
-  set(SHARPDX_LIB ${CORE_ROOT}/Basic/vendor/sharpdx/sharpdx.lib)
-elseif(APPLE)
-  set(SHARPDX_LIB ${CORE_ROOT}/Basic/vendor/sharpdx/libsharpdx.a)
-else()
-  set(SHARPDX_LIB ${CORE_ROOT}/Basic/vendor/sharpdx/libsharpdx-linux.a)
-endif()
-if(NOT EXISTS ${SHARPDX_LIB})
-  message(FATAL_ERROR "${SHARPDX_LIB} is missing -- run tools/fetch_sharpdx.sh (Linux/Windows) "
-                      "or tools/refresh_sharpdx.sh (macOS)")
-endif()
-
-list(APPEND CORE_SOURCES
-  ${CORE_ROOT}/Preset/PresetFile.cpp
-  ${CORE_ROOT}/Preset/PresetRunner.cpp
-  ${CORE_ROOT}/PC1500/PC1500BasicLoader.cpp
-  ${CORE_ROOT}/PC1500/PC1500PresetLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600BasicLoader.cpp
-  ${CORE_ROOT}/PC1600/PC1600PresetLoader.cpp
-  ${CORE_ROOT}/Basic/BasicProgramSource.cpp
-)
+# Core/ and Shared/ as the calcu_core / calcu_shared static libraries, plus
+# libsharpdx, which classifies and tokenizes every program the loaders read
+# (see the comments in cmake/CalcU.cmake).
+include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/CalcU.cmake)
 
 # MACOSX_BUNDLE: build a real .app on macOS (Contents/MacOS + Contents/
 # Resources), not a bare executable -- needed both for normal macOS app
@@ -205,7 +117,6 @@ qt_add_executable(CalcU1600Qt
   app/screenshots/ShotScenario.cpp
   app/screenshots/ShotCapture.cpp
   app/screenshots/ShotRunner.cpp
-  ${CORE_SOURCES}
   resources/calc-u-1600.qrc
 )
 
@@ -222,48 +133,10 @@ if(WIN32)
   target_sources(CalcU1600Qt PRIVATE resources/windows/calc-u-1600.rc)
 endif()
 
-target_include_directories(CalcU1600Qt PRIVATE ${CORE_ROOT} app ${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_include_directories(CalcU1600Qt PRIVATE app ${CMAKE_CURRENT_BINARY_DIR}/generated)
 target_link_libraries(CalcU1600Qt PRIVATE Qt6::Widgets Qt6::Multimedia Qt6::Network)
 
-target_link_libraries(CalcU1600Qt PRIVATE ${SHARPDX_LIB})
-# The vendored/fetched libs are sharpdx's serial-free build (release
-# archives since v0.2.1, and tools/refresh_sharpdx.sh), so there's no
-# libudev (Linux), IOKit (macOS) or serialport import lib (Windows) to
-# link -- only Rust std's own Windows system libs, below.
-if(WIN32)
-  # `cargo build` links the Windows system import libs Rust's std needs
-  # (sockets, CSPRNG seeding, futex-based sync, ...) into sde.exe
-  # automatically -- consuming the raw sharpdx.lib straight from CMake
-  # doesn't get that for free, so without this the link fails with
-  # unresolved externals like __imp_freeaddrinfo (ws2_32). Rather than
-  # hand-maintain a guessed list here (which silently drifts as
-  # sharpdx's own dependencies change), prefer the authoritative list
-  # rustc itself reported for that exact build -- SharpDataExchange's
-  # release packaging captures it via `rustc --print=native-static-libs`
-  # into native-libs-windows.txt, and tools/fetch_sharpdx.sh vendors it
-  # alongside sharpdx.lib when the release has one (see its own doc
-  # comment). Only fall back to a hardcoded guess for a hand-placed
-  # sharpdx.lib that came without this file.
-  #
-  # On *-pc-windows-msvc rustc's note is MSVC linker syntax --
-  # space-separated bare `name.lib` filenames and the occasional
-  # `/defaultlib:x` flag -- NOT the `-lname` GCC form, so this is passed
-  # to the linker as raw link options (target_link_options), not treated
-  # as a list of plain library names (target_link_libraries would try to
-  # look up a library literally named "/defaultlib:msvcrt" and fail).
-  set(SHARPDX_NATIVE_LIBS_FILE ${CORE_ROOT}/Basic/vendor/sharpdx/native-libs-windows.txt)
-  if(EXISTS ${SHARPDX_NATIVE_LIBS_FILE})
-    file(READ ${SHARPDX_NATIVE_LIBS_FILE} SHARPDX_NATIVE_LIBS_RAW)
-    string(STRIP "${SHARPDX_NATIVE_LIBS_RAW}" SHARPDX_NATIVE_LIBS_RAW)
-    separate_arguments(SHARPDX_NATIVE_LINK_OPTS UNIX_COMMAND "${SHARPDX_NATIVE_LIBS_RAW}")
-    message(STATUS "sharpdx: linking native libs from native-libs-windows.txt: ${SHARPDX_NATIVE_LINK_OPTS}")
-    target_link_options(CalcU1600Qt PRIVATE ${SHARPDX_NATIVE_LINK_OPTS})
-  else()
-    set(SHARPDX_NATIVE_LIBS_FALLBACK ws2_32 userenv advapi32 bcrypt ntdll synchronization)
-    message(STATUS "sharpdx: native-libs-windows.txt not found, using hardcoded fallback: ${SHARPDX_NATIVE_LIBS_FALLBACK}")
-    target_link_libraries(CalcU1600Qt PRIVATE ${SHARPDX_NATIVE_LIBS_FALLBACK})
-  endif()
-endif()
+target_link_libraries(CalcU1600Qt PRIVATE calcu_shared)
 
 # ---- App icon (macOS bundle icon; Windows' equivalent is the WIN32
 # block's calc-u-1600.rc above, Linux's is the AppImage's --icon-file in

@@ -1,114 +1,13 @@
 #!/bin/sh
-# Builds and runs the headless Core test suite. Must be run from the repo
-# root (tests load roms/PC-1500_A04.ROM via a relative path).
+# Builds and runs the headless Core/ + Shared/ test suite (CoreTests) at -O1,
+# from the repo-root CMakeLists.txt without the Qt app, in build-tests/.
+# The source lists come from cmake/CalcU.cmake and the root file's test
+# glob, so there is nothing to keep in sync here. The tests run from the
+# repo root (they load roms/ via relative paths).
 set -e
 cd "$(dirname "$0")/.."
-clang++ -std=c++17 -Wall -Wextra -O1 \
-  Core/CPU/LH5801/LH5801.cpp \
-  Core/Debug/Disasm/Disassembly.cpp \
-  Core/Debug/Disasm/LH5801Disassembler.cpp \
-  Core/Debug/Disasm/Z80Disassembler.cpp \
-  Core/Debug/DebugTarget.cpp \
-  Core/Debug/DebugExpression.cpp \
-  Core/Debug/CpuRegisters.cpp \
-  Core/Debug/MachineDebugTargets.cpp \
-  Core/Debug/SourceMap.cpp \
-  Core/Debug/BreakpointTable.cpp \
-  Core/Debug/RunControl.cpp \
-  Core/Debug/ProgramLoader.cpp \
-  Core/Debug/BasicPointerTable.cpp \
-  Core/Debug/Inspect/Inspector.cpp \
-  Core/Debug/Inspect/TextTable.cpp \
-  Core/Debug/Inspect/HexDump.cpp \
-  Core/Debug/Inspect/PC1500Inspector.cpp \
-  Core/Debug/Inspect/PC1600Inspector.cpp \
-  Core/Debug/Listing/Listing.cpp \
-  Core/Debug/Listing/SdasListing.cpp \
-  Core/Debug/Listing/ZasmListing.cpp \
-  Core/Audio/PiezoSampler.cpp \
-  Core/PC1500/PC1500Memory.cpp \
-  Core/PC1500/PC1500Machine.cpp \
-  Core/PC1500/PC1500Keyboard.cpp \
-  Core/PC1500/PC1500Display.cpp \
-  Core/PC1500/Upd1990ac.cpp \
-  Core/Preset/PresetFile.cpp \
-  Core/Preset/PresetRunner.cpp \
-  Core/PC1500/PC1500BasicTyper.cpp \
-  Core/PC1500/PC1500BasicLoader.cpp \
-  Core/PC1500/PC1500MachineCodeLoader.cpp \
-  Core/PC1500/PC1500PresetLoader.cpp \
-  Core/PC1500/PC1500TraceFile.cpp \
-  Core/PC1600/PC1600Memory.cpp \
-  Core/PC1600/PC1600Keyboard.cpp \
-  Core/PC1600/PC1600Display.cpp \
-  Core/PC1600/PC1600SubCpu.cpp \
-  Core/PC1600/TC8576F.cpp \
-  Core/CPU/SC7852/SC7852.cpp \
-  Core/CPU/LH5803/LH5803Memory.cpp \
-  Core/CPU/LH5803/LH5803SharedMemory.cpp \
-  Core/PC1600/PC1600Machine.cpp \
-  Core/PC1600/PC1600BasicTyper.cpp \
-  Core/PC1600/PC1600BasicLoader.cpp \
-  Core/PC1600/PC1600ProgramPlacement.cpp \
-  Core/PC1600/PC1600MachineCodeLoader.cpp \
-  Core/PC1600/PC1600PresetLoader.cpp \
-  Core/Display/LcdScreenshot.cpp \
-  Core/Display/LcdText.cpp \
-  Core/KeyPaste.cpp \
-  Core/MachineCodeFile.cpp \
-  Core/ProgramFile.cpp \
-  Core/DropFile.cpp \
-  Core/Basic/BasicProgramSource.cpp \
-  Core/tests/lh5801_tests.cpp \
-  Core/tests/connector_tests.cpp \
-  Core/tests/ce151_tests.cpp \
-  Core/tests/ce155_tests.cpp \
-  Core/tests/ce161_tests.cpp \
-  Core/tests/ce1638_tests.cpp \
-  Core/tests/ce502b_tests.cpp \
-  Core/tests/ce163f_tests.cpp \
-  Core/tests/memory_card_tests.cpp \
-  Core/tests/battery_card_instance_tests.cpp \
-  Core/tests/preset_tests.cpp \
-  Core/tests/basictyper_tests.cpp \
-  Core/tests/presetloader_trace_tests.cpp \
-  Core/tests/pc1600_basictyper_tests.cpp \
-  Core/tests/pc1600_bank_tests.cpp \
-  Core/tests/sc7852_tests.cpp \
-  Core/tests/tc8576f_tests.cpp \
-  Core/tests/lh5803_tests.cpp \
-  Core/tests/pc1600_machine_tests.cpp \
-  Core/tests/pc1600_phase54_tests.cpp \
-  Core/tests/pc1600_keyboard_display_tests.cpp \
-  Core/tests/pc1600_slot_ram_tests.cpp \
-  Core/tests/pc1600_slot_module_tests.cpp \
-  Core/tests/pc1600_preset_tests.cpp \
-  Core/tests/ce1600p_tests.cpp \
-  Core/tests/ce1600f_tests.cpp \
-  Core/tests/ce150_tests.cpp \
-  Core/tests/pc1600_ce150_tests.cpp \
-  Core/tests/ce158_tests.cpp \
-  Core/tests/basic_fastloader_tests.cpp \
-  Core/tests/pc1600_basicloader_tests.cpp \
-  Core/tests/pc1600_program_placement_tests.cpp \
-  Core/tests/inspector_tests.cpp \
-  Core/tests/basic_program_source_tests.cpp \
-  Core/tests/piezo_sampler_tests.cpp \
-  Core/tests/tape_deck_tests.cpp \
-  Core/tests/pc1600_tape_tests.cpp \
-  Core/tests/pc1500_tape_tests.cpp \
-  Core/tests/key_paste_tests.cpp \
-  Core/tests/lcd_screenshot_tests.cpp \
-  Core/tests/lcd_text_tests.cpp \
-  Core/tests/machine_code_file_tests.cpp \
-  Core/tests/program_file_tests.cpp \
-  Core/tests/disasm_tests.cpp \
-  Core/tests/debug_target_tests.cpp \
-  Core/tests/listing_tests.cpp \
-  Core/tests/run_control_tests.cpp \
-  Core/tests/host_directory_drive_tests.cpp \
-  Core/tests/pc1600_host_drive_tests.cpp \
-  Core/Basic/vendor/sharpdx/libsharpdx.a \
-  -lz \
-  -o /tmp/lh5801_tests
-/tmp/lh5801_tests
+if [ ! -f build-tests/CMakeCache.txt ]; then
+  cmake -S . -B build-tests -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCALCU_BUILD_QT=OFF >/dev/null
+fi
+cmake --build build-tests --target CoreTests
+build-tests/CoreTests "$@"

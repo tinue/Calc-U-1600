@@ -7,6 +7,8 @@
 
 build/
 build-debug/
+build-tests/
+build-wasm/
 
 # CLion's own out-of-source build directories for the root CMakeLists.txt
 # (cmake-build-debug, cmake-build-release, ...). CLion drops a self-ignoring
