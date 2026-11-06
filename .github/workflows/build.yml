@@ -82,6 +82,38 @@ jobs:
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
 
+  # Core + Shared built for WebAssembly with Emscripten, and a node smoke
+  # test running presets cooperatively through shared::AppSession (no
+  # threads, no blocking) -- keeps the frontend-neutral layers portable to
+  # a web GUI. libsharpdx-wasm.a is committed (tools/build_sharpdx_wasm.sh),
+  # so no Rust toolchain is needed here. Same Emscripten as it was built
+  # with: Rust's wasm32-unknown-emscripten std uses native wasm exceptions.
+  wasm-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 6.0.13
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Fetch ROMs
+        shell: bash
+        run: tools/fetch_roms.sh
+
+      - name: Build and run the WebAssembly smoke test
+        shell: bash
+        run: tools/build_wasm_check.sh
+
   linux-x86_64:
     runs-on: ubuntu-24.04
     steps:

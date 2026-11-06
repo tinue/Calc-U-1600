@@ -52,6 +52,26 @@ endif()
 include(cmake/CalcU.cmake)
 
 # -----------------------------------------------------------------------------
+# WebAssembly check (tools/build_wasm_check.sh: emcmake cmake ...): only
+# Core + Shared and a node smoke test -- no Qt, no CLIs, probes or CoreTests.
+# Proves the frontend-neutral layers build and run for a web GUI.
+# -----------------------------------------------------------------------------
+if(EMSCRIPTEN)
+  # Shared/ reports with exceptions; Core's jobs rethrow through them.
+  # Native wasm exception handling, as Rust's wasm32-unknown-emscripten std
+  # in libsharpdx-wasm.a uses it (Emscripten's JS-based -fexceptions would
+  # leave its __cpp_exception tag unresolved).
+  target_compile_options(calcu_core PUBLIC -fwasm-exceptions)
+  add_executable(wasm_smoke ${CMAKE_CURRENT_SOURCE_DIR}/tools/wasm_smoke.cpp)
+  target_link_libraries(wasm_smoke PRIVATE calcu_shared)
+  # NODERAWFS: the smoke test reads roms/ and the bundled cards straight
+  # from the host file system, run from the repo root under node.
+  target_link_options(wasm_smoke PRIVATE -fwasm-exceptions -sNODERAWFS=1 -sALLOW_MEMORY_GROWTH=1
+                      -sENVIRONMENT=node -sEXIT_RUNTIME=1)
+  return()
+endif()
+
+# -----------------------------------------------------------------------------
 # Qt6 GUI Application target
 # -----------------------------------------------------------------------------
 if(CALCU_BUILD_QT)

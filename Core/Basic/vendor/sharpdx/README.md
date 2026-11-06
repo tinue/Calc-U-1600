@@ -42,3 +42,13 @@ Run `tools/refresh_sharpdx.sh` from the repo root after the sibling
 `SharpDataExchange` checkout changes. It runs
 `cargo build --release --lib --no-default-features` there and copies
 `target/release/libsharpdx.a` + `include/sharpdx.h` over these files. Commit the result.
+
+## WebAssembly
+
+`libsharpdx-wasm.a` is the same crate built for `wasm32-unknown-emscripten`
+by `tools/build_sharpdx_wasm.sh` (needs `rustup target add
+wasm32-unknown-emscripten` and `emcc`), committed so the WebAssembly check
+(`tools/build_wasm_check.sh`, CI job `wasm-check`) needs no Rust toolchain.
+Rust's std for that target uses native wasm exception handling, so the C++
+side is built with `-fwasm-exceptions`, and the Emscripten used to link it
+should match the one it was built with (6.0.13).
