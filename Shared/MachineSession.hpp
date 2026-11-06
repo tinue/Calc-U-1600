@@ -20,6 +20,7 @@
 #include "Tape/TapeDeck.hpp"
 #include "TraceTypes.hpp"
 #include "Shared/AppPaths.hpp"
+#include "Shared/HostKeyMap.hpp"
 #include "Shared/MachineModel.hpp"
 #include "Shared/Settings.hpp"
 
@@ -162,6 +163,22 @@ public:
     // already off just gets `change()`.
     void powerCycleAround(const std::function<void()>& change);
     job::Task<void> powerCycleAroundJob(std::function<void()> change);
+
+    // ---- Host keyboard ----
+    // A host key resolved to a calculator key (Shared/HostKeyMap). Stops a
+    // paste, then types it the way the model needs: on the PC-1600 an
+    // accented character (or any key while one still types) through the
+    // live queue, a shifted character as a Shift tap sequence, a plain
+    // `physical` key as a real press, a committed character as a tap; on
+    // the PC-1500 the cursor keys pressed for real (the ROM's own
+    // auto-repeat), everything else through the keystroke queue. True if
+    // it pressed a key the frontend must release with hostKeyUp() when
+    // the host key comes up.
+    bool hostKeyDown(const ResolvedKey& key, bool physical);
+    void hostKeyUp(const std::string& baseKey) { releaseKey(baseKey); }
+    // A bare Shift press and release: one calculator SHIFT tap (behind a
+    // live sequence still typing). Stops a paste.
+    void hostShiftTap();
 
     // ---- Keys and typing ----
     void pressKey(const std::string& name);

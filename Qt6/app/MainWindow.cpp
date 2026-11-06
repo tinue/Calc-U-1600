@@ -669,61 +669,11 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
         return;
     }
 
-    // A real machine keystroke aborts a paste still typing -- an easy way
-    // out of a long one, and it keeps the two from fighting over the key
-    // matrix. (Checked after resolve() so bare modifiers -- the Cmd of a
-    // second Cmd-V, Cmd-Tab -- don't count.)
-    if (m_controller->pasteActive()) m_controller->interruptPaste();
-
-    typeResolved(*resolved, event);
+    // After resolve(), so bare modifiers -- the Cmd of a second Cmd-V,
+    // Cmd-Tab -- don't stop a paste.
+    if (m_controller->session().hostKeyDown(*resolved, /*physical=*/true))
+        m_physicalKeysDown.insert(physicalKeyId(event), resolved->baseKey);  // released on its .up event
     event->accept();
-}
-
-// Types one resolved key. `event` is the real key press behind it, or null
-// for a character the input method committed, which is always a tap.
-void MainWindow::typeResolved(const shared::ResolvedKey& resolved, QKeyEvent* event) {
-    // A real held press/release, tracked for the matching .up event --
-    // used for any key that bypasses the live-typing queue.
-    auto trackAndPress = [this, event](const std::string& baseKey) {
-        m_controller->pressKey(baseKey);
-        m_physicalKeysDown.insert(physicalKeyId(event), baseKey);
-    };
-
-    if (m_controller->currentModel() == Model::PC1600) {
-        // An accented character is a KBII key sequence, and a key typed
-        // while one is still running must wait behind it (KBII is still
-        // latched) -- both go through the controller's frame-paced queue.
-        // Everything else is unbuffered, as before.
-        if (resolved.needsKbii || m_controller->liveTypingActive()) {
-            m_controller->typeLiveStep(PasteStep{resolved.baseKey, resolved.needsShift, resolved.needsKbii});
-        } else if (resolved.needsShift) {
-            // Self-contained fire-and-forget sequence -- nothing to track
-            // for the matching .up event, so release skips it too.
-            m_controller->tapShiftedKey(resolved.baseKey);
-        } else if (event) {
-            trackAndPress(resolved.baseKey);
-        } else {
-            m_controller->tapKey(resolved.baseKey);
-        }
-        return;
-    }
-
-    // PC-1500: cursor keys bypass the queue so the ROM's own confirmed
-    // real-hardware auto-repeat can engage on a genuine physical hold;
-    // everything else (including shifted keys) is queued so fast typing
-    // can't outrun the key-scan loop and lose keystrokes -- see
-    // MachineController::enqueueKey()/enqueueShiftedKey().
-    if (resolved.needsShift) {
-        // Self-contained: the queue owns shift's whole tap-then-base-key
-        // sequence, nothing to track for the matching .up event.
-        m_controller->enqueueShiftedKey(resolved.baseKey);
-    } else if (event && resolved.isPc1500RepeatKey()) {
-        trackAndPress(resolved.baseKey);
-    } else {
-        // Self-contained: the queue owns the whole press/hold/release/idle
-        // cycle, nothing to track for the matching .up event.
-        m_controller->enqueueKey(resolved.baseKey);
-    }
 }
 
 void MainWindow::inputMethodEvent(QInputMethodEvent* event) {
@@ -735,9 +685,7 @@ void MainWindow::inputMethodEvent(QInputMethodEvent* event) {
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
     for (const QChar c : event->commitString()) {
         auto resolved = PC1500KeyboardMap::resolve(Qt::Key_unknown, Qt::NoModifier, QString(c), isPC1600);
-        if (!resolved) continue;
-        if (m_controller->pasteActive()) m_controller->interruptPaste();
-        typeResolved(*resolved, nullptr);
+        if (resolved) m_controller->session().hostKeyDown(*resolved, /*physical=*/false);
     }
     event->accept();
 }
@@ -813,9 +761,7 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event) {
         const bool tapped = m_shiftTapArmed && m_shiftTapClock.elapsed() <= kShiftTapMaxMs;
         disarmShiftTap();
         if (tapped) {
-            if (m_controller->pasteActive()) m_controller->interruptPaste();
-            if (m_controller->liveTypingActive()) m_controller->typeLiveStep(PasteStep{"shift"});
-            else m_controller->tapKey("shift");
+            m_controller->session().hostShiftTap();
             event->accept();
             return;
         }
@@ -826,7 +772,7 @@ void MainWindow::keyReleaseEvent(QKeyEvent* event) {
         QWidget::keyReleaseEvent(event);
         return;
     }
-    m_controller->releaseKey(it.value());
+    m_controller->session().hostKeyUp(it.value());
     m_physicalKeysDown.erase(it);
     event->accept();
 }
@@ -837,7 +783,7 @@ void MainWindow::changeEvent(QEvent* event) {
 }
 
 void MainWindow::releaseHeldKeys() {
-    for (const std::string& key : std::as_const(m_physicalKeysDown)) m_controller->releaseKey(key);
+    for (const std::string& key : std::as_const(m_physicalKeysDown)) m_controller->session().hostKeyUp(key);
     m_physicalKeysDown.clear();
     disarmShiftTap(); // the Shift release may land elsewhere
 }

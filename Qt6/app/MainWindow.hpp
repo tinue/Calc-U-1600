@@ -106,8 +106,6 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
-    void typeResolved(const shared::ResolvedKey& resolved, QKeyEvent* event);
-
     std::unique_ptr<MachineController> m_controller;
     std::unique_ptr<MemoryModuleManager> m_moduleManager;
     std::unique_ptr<FloppyDiskManager> m_floppyManager;
@@ -246,9 +244,8 @@ private:
     // Keyed by the physical key, not Qt::Key: key() follows the modifier
     // state, so on e.g. a Swiss layout Shift+3 presses as Key_Asterisk but,
     // with Shift let go first, releases as Key_3 -- the release would miss
-    // and leave "*" held in the machine's matrix. Shift-tap (needsShift)
-    // presses are never entered here since they're self-contained (see
-    // MachineController::tapShiftedKey).
+    // and leave "*" held in the machine's matrix. Only the presses
+    // MachineSession::hostKeyDown() asks to release are entered here.
     QHash<quint32, std::string> m_physicalKeysDown;
     // Releases everything in m_physicalKeysDown. Used whenever the window
     // stops receiving key events (deactivation, focus moving to another

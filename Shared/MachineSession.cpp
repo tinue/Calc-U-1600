@@ -332,6 +332,50 @@ void MachineSession::enqueueShiftedKey(const std::string& baseName) {
     enqueueKey(baseName);
 }
 
+bool MachineSession::hostKeyDown(const ResolvedKey& key, bool physical) {
+    // A real machine keystroke aborts a paste still typing -- an easy way
+    // out of a long one, and it keeps the two from fighting over the key
+    // matrix.
+    if (pasteActive()) interruptPaste();
+
+    if (m_model == Model::PC1600) {
+        // An accented character is a KBII key sequence, and a key typed
+        // while one is still running must wait behind it (KBII is still
+        // latched) -- both go through the frame-paced queue. Everything
+        // else is unbuffered.
+        if (key.needsKbii || liveTypingActive()) {
+            typeLiveStep(PasteStep{key.baseKey, key.needsShift, key.needsKbii});
+        } else if (key.needsShift) {
+            tapShiftedKey(key.baseKey);  // self-contained: nothing to release
+        } else if (physical) {
+            pressKey(key.baseKey);
+            return true;
+        } else {
+            tapKey(key.baseKey);
+        }
+        return false;
+    }
+
+    // PC-1500: cursor keys bypass the queue so the ROM's own auto-repeat
+    // can engage on a genuine physical hold; everything else (shifted keys
+    // included) is queued so fast typing can't outrun the key-scan loop.
+    if (key.needsShift) {
+        enqueueShiftedKey(key.baseKey);
+    } else if (physical && key.isPc1500RepeatKey()) {
+        pressKey(key.baseKey);
+        return true;
+    } else {
+        enqueueKey(key.baseKey);
+    }
+    return false;
+}
+
+void MachineSession::hostShiftTap() {
+    if (pasteActive()) interruptPaste();
+    if (liveTypingActive()) typeLiveStep(PasteStep{"shift"});
+    else tapKey("shift");
+}
+
 void MachineSession::pasteText(const std::string& text) { enqueueTyped(text, /*pressEnter=*/false); }
 
 void MachineSession::typeCommand(const std::string& line) { enqueueTyped(line, /*pressEnter=*/true); }

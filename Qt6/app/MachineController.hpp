@@ -71,17 +71,9 @@ public:
     void pressKey(const std::string& name) { session().pressKey(name); }
     void releaseKey(const std::string& name) { session().releaseKey(name); }
     void setOnKeyPressed(bool pressed) { session().setOnKeyPressed(pressed); }
-    void tapShiftedKey(const std::string& baseName) { session().tapShiftedKey(baseName); }
-    void tapKey(const std::string& name) { session().tapKey(name); }
-    void enqueueKey(const std::string& name) { session().enqueueKey(name); }
-    void enqueueShiftedKey(const std::string& baseName) { session().enqueueShiftedKey(baseName); }
     void pasteText(const std::string& text) { session().pasteText(text); }
     void typeCommand(const std::string& line) { session().typeCommand(line); }
-    bool pasteActive() const { return session().pasteActive(); }
     void cancelPaste() { session().cancelPaste(); }
-    void interruptPaste() { session().interruptPaste(); }
-    void typeLiveStep(const PasteStep& step) { session().typeLiveStep(step); }
-    bool liveTypingActive() const { return session().liveTypingActive(); }
 
     GrayImage currentScreenImage() const { return session().currentScreenImage(); }
     DisplayFrame currentDisplay() const { return session().currentDisplay(); }

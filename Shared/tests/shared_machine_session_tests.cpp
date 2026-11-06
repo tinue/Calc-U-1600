@@ -109,6 +109,48 @@ void test_timed_tap_pc1600() {
     CHECK(screen(f.session).find("A'") != std::string::npos);
 }
 
+// hostKeyDown() routes a host key the way the model needs.
+void test_host_keys() {
+    using shared::ResolvedKey;
+    {
+        Fixture f;
+        f.session.switchModel(Model::PC1600);
+        // A plain physical key is a real press the frontend releases.
+        CHECK(f.session.hostKeyDown(ResolvedKey{"a"}, /*physical=*/true));
+        run(f.session, 0.1);
+        f.session.hostKeyUp("a");
+        // A committed character taps; a shifted one is a Shift sequence.
+        CHECK(!f.session.hostKeyDown(ResolvedKey{"b"}, /*physical=*/false));
+        run(f.session, 0.5);
+        CHECK(!f.session.hostKeyDown(ResolvedKey{"1", /*needsShift=*/true}, /*physical=*/true));
+        run(f.session, 1.0);
+        CHECK(screen(f.session).find("AB'") != std::string::npos);
+        // An accent goes through the live queue, and a key typed behind it
+        // waits there too instead of being pressed.
+        CHECK(!f.session.hostKeyDown(ResolvedKey{"e", false, /*needsKbii=*/true}, /*physical=*/true));
+        CHECK(f.session.liveTypingActive());
+        CHECK(!f.session.hostKeyDown(ResolvedKey{"a"}, /*physical=*/true));
+        // A key stops a paste.
+        Fixture g;
+        g.session.switchModel(Model::PC1600);
+        g.session.typeCommand("PRINT 123456789");
+        CHECK(g.session.pasteActive());
+        g.session.hostShiftTap();
+        CHECK(!g.session.pasteActive());
+    }
+    {
+        Fixture f;
+        f.session.switchModel(Model::PC1500A);
+        // Cursor keys are real presses (the ROM's own auto-repeat), the rest
+        // is queued.
+        CHECK(f.session.hostKeyDown(ResolvedKey{"left"}, /*physical=*/true));
+        f.session.hostKeyUp("left");
+        CHECK(!f.session.hostKeyDown(ResolvedKey{"left"}, /*physical=*/false));
+        CHECK(!f.session.hostKeyDown(ResolvedKey{"a"}, /*physical=*/true));
+        CHECK(!f.session.hostKeyDown(ResolvedKey{"1", /*needsShift=*/true}, /*physical=*/true));
+    }
+}
+
 void test_rebuild_keeps_plotter() {
     Fixture f;
     f.session.switchModel(Model::PC1500A);
@@ -130,6 +172,7 @@ int run_shared_machine_session_tests() {
     test_switch_and_paste(Model::PC1500A);
     test_switch_and_paste(Model::PC1600);
     test_timed_tap_pc1600();
+    test_host_keys();
     test_rebuild_keeps_plotter();
     std::printf("shared_machine_session_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
