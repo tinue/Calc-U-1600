@@ -79,6 +79,7 @@ void AppSession::beginOperation() {
 }
 
 void AppSession::endOperation() {
+    frameDuties();  // the bays catch up with whatever the operation changed
     m_machine->discardAudio();
     m_machine->seedClockFromHost();
     m_pacer.restart();
@@ -158,7 +159,8 @@ void AppSession::frameDuties() {
     const double now = nowSeconds();
     m_modules->tick(now);
     m_floppy->tick(now);
-    m_tapes->onFrameTick(m_machine->tapeStatus());
+    m_tapeStatus = m_machine->tapeStatus();
+    m_tapes->onFrameTick(m_tapeStatus);
 }
 
 // ---- Operations ----

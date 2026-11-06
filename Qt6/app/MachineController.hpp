@@ -111,7 +111,6 @@ public:
     std::vector<std::uint8_t> drainCE158PrinterOutput() { return session().drainCE158PrinterOutput(); }
     bool hostDriveAttached() const { return session().hostDriveAttached(); }
     bool tapeInterfaceAttached() const { return session().tapeInterfaceAttached(); }
-    TapeDeck::Status tapeStatus() const { return session().tapeStatus(); }
     std::vector<AlpsPlotterMechanism::FlatPoint> ce150PlotPoints() const { return session().ce150PlotPoints(); }
     std::uint64_t ce150PlotRevision() const { return session().ce150PlotRevision(); }
     void clearCE150Paper() { session().clearCE150Paper(); }

@@ -134,6 +134,25 @@ void test_run_now_and_selection() {
     CHECK(!r.ok && !r.error.empty());
 }
 
+// tapeStatus() is what the tape bay saw at the last frame -- and an
+// operation ends with one, so it is current right after.
+void test_tape_status_follows_frames() {
+    Fixture f;
+    f.settings.setStartupModelPreference("PC1500A");
+    f.app->start();
+    CHECK(f.app->runNow(f.app->togglePeripheralJob(shared::Peripheral::CE150)).ok);
+    CHECK(f.app->machine().tapeInterfaceAttached());
+    CHECK(f.app->tapeStatus().mode == TapeDeck::Mode::Empty);
+    CHECK(f.app->tapes().recordNew("side a"));
+    CHECK(f.app->tapeStatus().mode == TapeDeck::Mode::Empty);  // not seen yet
+    f.app->tick();
+    CHECK(f.app->tapeStatus().mode == TapeDeck::Mode::Record);
+    std::string error;
+    CHECK(f.app->tapes().selectForPlay({}, &error));
+    CHECK(f.app->runNow(f.app->resetJob(false)).ok);
+    CHECK(f.app->tapeStatus().mode == TapeDeck::Mode::Empty);
+}
+
 } // namespace
 
 int run_shared_app_session_tests() {
@@ -143,6 +162,7 @@ int run_shared_app_session_tests() {
     }
     test_cooperative_preset();
     test_run_now_and_selection();
+    test_tape_status_follows_frames();
     std::printf("shared_app_session_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

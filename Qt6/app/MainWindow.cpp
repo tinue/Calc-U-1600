@@ -933,7 +933,7 @@ void MainWindow::refreshViewsAfterAdvance() {
 
     // (Card/disk autosave and the tape bay run in AppSession::frameDuties().)
     m_controlBar->setFloppyMotorOn(m_floppyManager->motorOn());
-    m_controlBar->setTapeStatus(m_controller->tapeStatus());
+    m_controlBar->setTapeStatus(m_controller->app().tapeStatus());
     m_debugPanel->onFrameTick();
     if (m_debugRowLayout->indexOf(m_plotterPaper) >= 0) m_plotterPaper->onFrameTick();
     if (m_debugRowLayout->indexOf(m_ce158Printer) >= 0) m_ce158Printer->onFrameTick();

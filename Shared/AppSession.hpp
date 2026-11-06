@@ -150,7 +150,10 @@ public:
     // if the tick ran turbo (its audio is not real time).
     bool tick();
     // Per-frame bookkeeping: battery-card and disk autosave, the tape bay.
+    // Also runs at the end of every operation.
     void frameDuties();
+    // The tape deck as frameDuties() last read it (what the tape bay saw).
+    const TapeDeck::Status& tapeStatus() const { return m_tapeStatus; }
 
 private:
     // MachineSession::Bays
@@ -177,6 +180,7 @@ private:
     std::unique_ptr<FloppyBay> m_floppy;
     std::unique_ptr<TapeBay> m_tapes;
     Pacer m_pacer;
+    TapeDeck::Status m_tapeStatus;
 
     bool m_busy = false;
     job::Job<OpResult> m_op;
