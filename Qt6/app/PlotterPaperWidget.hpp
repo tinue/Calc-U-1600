@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "Connector/AlpsPlotterMechanism.hpp"
-#include "PaperGeometry.hpp"
+#include "Shared/PlotterPaper.hpp"
 
 class QScrollArea;
 class QPushButton;
@@ -57,7 +57,7 @@ private:
 
     MachineController* m_controller; // not owned
     Kind m_kind = Kind::CE1600P;
-    PaperGeometry m_geometry = PaperGeometry::ce1600p();
+    shared::PaperGeometry m_geometry = shared::PaperGeometry::ce1600p();
 
     QLabel* m_header;
     PlotArea* m_plotArea;

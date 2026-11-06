@@ -5,7 +5,7 @@
 // entry is a key's named-key-vocabulary string (PC1500Keyboard::keyFromName
 // / PC1600Keyboard::keyFromName) plus its hit rectangle in raw
 // source-artwork pixels. The fraction-of-image-size conversion happens in
-// FaceplateWidget at paint/hit-test time (imageWidth/imageHeight below is
+// FaceplateLayout.hpp's fitLayout() (imageWidth/imageHeight below is
 // what to divide by), not baked in here -- kept as raw pixels so this table
 // is a direct, eyeball-checkable transcription of the source artwork's own
 // coordinates.

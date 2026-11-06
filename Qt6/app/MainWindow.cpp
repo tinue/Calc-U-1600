@@ -706,7 +706,7 @@ void MainWindow::keyPressEvent(QKeyEvent* event) {
 
 // Types one resolved key. `event` is the real key press behind it, or null
 // for a character the input method committed, which is always a tap.
-void MainWindow::typeResolved(const PC1500KeyboardMap::ResolvedKey& resolved, QKeyEvent* event) {
+void MainWindow::typeResolved(const shared::ResolvedKey& resolved, QKeyEvent* event) {
     // A real held press/release, tracked for the matching .up event --
     // used for any key that bypasses the live-typing queue.
     auto trackAndPress = [this, event](const std::string& baseKey) {

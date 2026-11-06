@@ -1,10 +1,26 @@
 #pragma once
-#include <QPointF>
 #include <algorithm>
+#include <array>
 #include <cstdint>
+#include <utility>
+#include <vector>
 
-// ── PaperGeometry ─────────────────────────────────────────────────────────
+#include "Connector/AlpsPlotterMechanism.hpp"
+#include "Shared/Rgb.hpp"
+
+// ── Plotter paper: geometry, strokes and export size ─────────────────────
 //
+// What a renderer needs to draw the CE-150 / CE-1600P paper: where a pen
+// position lands on the pane, which polylines to stroke in which colour,
+// and how large a physical-size export may get. The Qt PlotterPaperWidget
+// only turns these into QPainterPaths and a QImage.
+namespace shared {
+
+struct PaperPoint {
+    double x = 0;
+    double y = 0;
+};
+
 // Shared geometry for both plotter papers -- CE-150 and CE-1600P differ
 // only in paperWidthMM/plottableWidthMM, so this is one parameterized
 // struct instead of two hand-duplicated ones.
@@ -35,11 +51,11 @@ struct PaperGeometry {
     // No Y-flip: increasing penY (paper feeding) maps to larger screen Y --
     // newest output further down, matching "paper rolls out downward."
     // Flipping this axis renders every plotted glyph upside down.
-    QPointF canvasPoint(std::int32_t penX, std::int32_t penY, std::int32_t penYLowerBound, double paneWidthPt) const {
+    PaperPoint canvasPoint(std::int32_t penX, std::int32_t penY, std::int32_t penYLowerBound, double paneWidthPt) const {
         const double ppmm = pointsPerMM(paneWidthPt);
         const double x = (sideMarginMM() + penX / kPlotUnitsPerMM) * ppmm;
         const double y = kVerticalInsetPt + (penY - penYLowerBound) / kPlotUnitsPerMM * ppmm;
-        return QPointF(x, y);
+        return PaperPoint{x, y};
     }
 
     // Grows exactly with plotted vertical extent plus insets top+bottom;
@@ -58,3 +74,37 @@ struct PaperGeometry {
     // paper's physical size.
     double physicalPaneWidthPt() const { return paperWidthMM * kPhysicalPointsPerMM; }
 };
+
+// pen[color % 4] -- AlpsPlotterMechanism::PenColor's raw value order:
+// black, blue, dark green, red.
+inline constexpr int kPenCount = 4;
+inline constexpr std::array<Rgb, kPenCount> kPenColors{{{0, 0, 0}, {0, 0, 255}, {0, 128, 0}, {255, 0, 0}}};
+// Strokes are 1pt wide with round caps and joins.
+inline constexpr double kPenWidthPt = 1.0;
+
+using Polyline = std::vector<PaperPoint>;
+// Per pen colour, the polylines to stroke (a new one starts at every
+// FlatPoint::newStroke). Paint colour 0 first, then 1, 2, 3.
+using PaperStrokes = std::array<std::vector<Polyline>, kPenCount>;
+
+PaperStrokes buildPaperStrokes(const PaperGeometry& geom, double paneWidthPt,
+                               const std::vector<AlpsPlotterMechanism::FlatPoint>& points, std::int32_t penYLower);
+
+// Lowest/highest pen Y in `points`, {0, 0} when empty.
+std::pair<std::int32_t, std::int32_t> penYRange(const std::vector<AlpsPlotterMechanism::FlatPoint>& points);
+
+// Size of the physical-size (1200 DPI) export of a sheet with pen Y range
+// [penYLower, penYUpper]: the pane in points and the scale to pixels,
+// backed off below 1200 DPI for long rolls (GPU texture and total-pixel
+// caps). dotsPerMeter carries the real resolution for the image file.
+struct PaperExportSize {
+    double paneWidthPt = 0;
+    double contentHeightPt = 0;
+    double scale = 0;  // pixels per point
+    int widthPx = 0;
+    int heightPx = 0;
+    int dotsPerMeter = 0;
+};
+PaperExportSize paperExportSize(const PaperGeometry& geom, std::int32_t penYLower, std::int32_t penYUpper);
+
+} // namespace shared

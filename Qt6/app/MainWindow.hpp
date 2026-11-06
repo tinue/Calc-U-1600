@@ -14,7 +14,7 @@
 
 class QTimer;
 class QKeyEvent;
-namespace PC1500KeyboardMap { struct ResolvedKey; }
+namespace shared { struct ResolvedKey; }
 class QCloseEvent;
 class QDragEnterEvent;
 class QDragMoveEvent;
@@ -108,7 +108,7 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
-    void typeResolved(const PC1500KeyboardMap::ResolvedKey& resolved, QKeyEvent* event);
+    void typeResolved(const shared::ResolvedKey& resolved, QKeyEvent* event);
 
     std::unique_ptr<MachineController> m_controller;
     std::unique_ptr<MemoryModuleManager> m_moduleManager;

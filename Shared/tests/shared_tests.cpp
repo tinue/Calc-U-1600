@@ -1,0 +1,12 @@
+// Runner for the Shared/ tests, called from Core/tests/lh5801_tests.cpp's
+// main() like every other suite. Build & run: tools/run_tests.sh.
+
+int run_shared_geometry_tests();
+int run_shared_host_key_map_tests();
+
+int run_shared_tests() {
+    int failures = 0;
+    failures += run_shared_geometry_tests();
+    failures += run_shared_host_key_map_tests();
+    return failures;
+}

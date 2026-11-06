@@ -19,6 +19,7 @@
 #include "Serial/PtySerialLink.hpp"
 #include "Tape/TapeDeck.hpp"
 #include "TraceTypes.hpp"
+#include "Shared/MachineModel.hpp"
 
 class PC1500Machine;
 class PC1600Machine;
@@ -26,29 +27,11 @@ class MemoryModuleManager;
 class DebugController;
 class FloppyDiskManager;
 
-namespace MachineControllerNS {
-enum class Model { PC1500, PC1500A, PC1600 };
-// PC-1600 calculator ROM version: New = PEEK #(0,&7FFF) 4/5, Old = 130.
-enum class PC1600RomVersion { New, Old };
-// CE-1600P ROM version: New = PEEK #(5,&7FFE) 5, Old = 4. Independent of the
-// PC-1600 calculator ROM version; the CE-1600F in the same box follows it.
-enum class CE1600PRomVersion { New, Old };
-}
-using MachineControllerNS::Model;
-using MachineControllerNS::PC1600RomVersion;
-using MachineControllerNS::CE1600PRomVersion;
+using shared::Model;
+using shared::PC1600RomVersion;
+using shared::CE1600PRomVersion;
 
-// The per-model settings key ("PC1500"/"PC1500A"/"PC1600") shared by
-// AppSettings::startupModelPreference() and defaultPresetPath(); lowercased,
-// it's also that model's preset file extension.
-inline QString modelSettingsKey(Model model) {
-    switch (model) {
-        case Model::PC1500: return QStringLiteral("PC1500");
-        case Model::PC1500A: return QStringLiteral("PC1500A");
-        case Model::PC1600: return QStringLiteral("PC1600");
-    }
-    return QString();
-}
+inline QString modelSettingsKey(Model model) { return QString::fromLatin1(shared::modelKey(model)); }
 
 // One flat, model-agnostic frame the UI paints from -- deliberately wider
 // than either Core display type (PC1500Display's 156x7 vs

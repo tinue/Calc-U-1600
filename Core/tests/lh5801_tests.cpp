@@ -1550,6 +1550,8 @@ int run_disasm_tests();
 int run_debug_target_tests();
 int run_listing_tests();
 int run_run_control_tests();
+// Shared/tests/shared_tests.cpp -- the Shared/ layer above Core.
+int run_shared_tests();
 
 int main() {
     test_reset_vector();
@@ -1659,7 +1661,8 @@ int main() {
     int debugTargetFailures = run_debug_target_tests();
     int listingFailures = run_listing_tests();
     int runControlFailures = run_run_control_tests();
-    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && tapeDeckFailures == 0 && pc1600TapeFailures == 0 && pc1500TapeFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && lcdTextFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && inspectorFailures == 0 && connectorFailures == 0 && ce151Failures == 0 && ce155Failures == 0 && ce161Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
+    int sharedFailures = run_shared_tests();
+    return (g_fail == 0 && sharedFailures == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && tapeDeckFailures == 0 && pc1600TapeFailures == 0 && pc1500TapeFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && lcdTextFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && inspectorFailures == 0 && connectorFailures == 0 && ce151Failures == 0 && ce155Failures == 0 && ce161Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
             ce163fFailures == 0 && memoryCardFailures == 0 && batteryCardInstanceFailures == 0 &&
             presetFailures == 0 &&
             basicTyperFailures == 0 && pc1600BasicTyperFailures == 0 &&
