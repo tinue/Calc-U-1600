@@ -77,7 +77,7 @@ public:
         return !st.moduleName.empty() && st.isTemplate && st.battery;
     }
 
-    // MachineSession::Listener::attachModulesToFreshMachine().
+    // MachineSession::Bays::attachModulesToFreshMachine().
     void attachAllToFreshMachine();
 
     // After a preset attached its own module(s): match this bay's state to

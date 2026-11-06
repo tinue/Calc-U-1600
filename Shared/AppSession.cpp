@@ -36,8 +36,8 @@ const char* peripheralName(Peripheral p) {
 
 AppSession::AppSession(Settings& settings, AppPaths& paths, Platform& platform)
     : m_settings(settings), m_paths(paths), m_platform(platform) {
-    MachineSession::Listener& listener = *this;
-    m_machine = std::make_unique<MachineSession>(m_settings, m_paths, listener);
+    MachineSession::Bays& bays = *this;
+    m_machine = std::make_unique<MachineSession>(m_settings, m_paths, m_platform, &bays);
     ModuleBay::Events moduleEvents;
     moduleEvents.moduleChanged = [this](int slot) { m_platform.moduleChanged(slot); };
     moduleEvents.error = [this](const std::string& text) { m_platform.bayError(Bay::Modules, text); };

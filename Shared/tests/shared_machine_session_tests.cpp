@@ -22,7 +22,6 @@ using shared::Model;
 struct RecordingListener : MachineSession::Listener {
     int replaced = 0;
     int switched = 0;
-    int modulesAttached = 0;
     Model lastModel = Model::PC1500A;
     std::string missing;
     void romMissing(const std::string& error, const std::string&) override { missing = error; }
@@ -31,7 +30,13 @@ struct RecordingListener : MachineSession::Listener {
         ++switched;
         lastModel = m;
     }
+};
+
+struct CountingBays : MachineSession::Bays {
+    int modulesAttached = 0;
     void attachModulesToFreshMachine() override { ++modulesAttached; }
+    void flushFloppy() override {}
+    void insertSelectedDisk() override {}
 };
 
 bool romsPresent() {
@@ -44,7 +49,8 @@ struct Fixture {
     std::filesystem::path home = std::filesystem::temp_directory_path() / "calcu-shared-session-test";
     shared::AppPaths paths{settings, shared::HostDirs{home.generic_string(), "roms"}};
     RecordingListener listener;
-    MachineSession session{settings, paths, listener};
+    CountingBays bays;
+    MachineSession session{settings, paths, listener, &bays};
     ~Fixture() { std::filesystem::remove_all(home); }
 };
 
@@ -65,7 +71,7 @@ void test_switch_and_paste(Model model) {
     CHECK(f.listener.missing.empty());
     CHECK(f.session.currentModel() == model);
     CHECK(f.listener.switched == 1 && f.listener.lastModel == model);
-    CHECK(f.listener.replaced == 1 && f.listener.modulesAttached == 1);
+    CHECK(f.listener.replaced == 1 && f.bays.modulesAttached == 1);
     CHECK(f.settings.lastUsedModel() == static_cast<int>(model));
     CHECK(f.session.isMachinePoweredOn());
 

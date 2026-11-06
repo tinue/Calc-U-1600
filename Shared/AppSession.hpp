@@ -53,20 +53,12 @@ enum class Bay { Modules, Floppy, Tape };
 //    blocks, pumping its event loop between slices).
 //
 // Single-threaded: everything is called on the frontend's one thread.
-class AppSession : private MachineSession::Listener {
+class AppSession : private MachineSession::Bays {
 public:
-    class Platform {
+    // The machine's events (MachineSession::Listener: ROM missing, model
+    // switched, debugger hooks, ...) plus the app's own.
+    class Platform : public MachineSession::Listener {
     public:
-        virtual ~Platform() = default;
-        // See MachineSession::Listener.
-        virtual void romMissing(const std::string& error, const std::string& searchedIn) = 0;
-        virtual void notice(MachineSession::Notice, const std::string& /*detail*/) {}
-        virtual void machineAboutToChange() {}
-        virtual void machineReplaced() {}
-        virtual void modelSwitched(Model) {}
-        virtual bool runDebuggerSlice(std::uint64_t /*cycles*/) { return false; }
-        virtual void serialLinksRelinked() {}
-
         // A bay changed or failed outside the user's own pick.
         virtual void moduleChanged(int /*slot*/) {}
         virtual void tapesChanged() {}
@@ -161,19 +153,10 @@ public:
     void frameDuties();
 
 private:
-    // MachineSession::Listener
-    void romMissing(const std::string& error, const std::string& searchedIn) override {
-        m_platform.romMissing(error, searchedIn);
-    }
-    void notice(MachineSession::Notice n, const std::string& detail) override { m_platform.notice(n, detail); }
-    void machineAboutToChange() override { m_platform.machineAboutToChange(); }
-    void machineReplaced() override { m_platform.machineReplaced(); }
-    void modelSwitched(Model m) override { m_platform.modelSwitched(m); }
+    // MachineSession::Bays
     void attachModulesToFreshMachine() override { m_modules->attachAllToFreshMachine(); }
     void flushFloppy() override { m_floppy->flushPendingPersist(); }
     void insertSelectedDisk() override { m_floppy->insertSelectedDisk(); }
-    bool runDebuggerSlice(std::uint64_t cycles) override { return m_platform.runDebuggerSlice(cycles); }
-    void serialLinksRelinked() override { m_platform.serialLinksRelinked(); }
 
     // Before an operation: nothing else may drive the machine, and pending
     // card/disk writes go first. After: the flat-out run beeped stale

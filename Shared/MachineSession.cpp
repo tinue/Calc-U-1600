@@ -45,10 +45,11 @@ constexpr double kTapGapSeconds = 0.100;
 
 } // namespace
 
-MachineSession::MachineSession(Settings& settings, const AppPaths& paths, Listener& listener)
+MachineSession::MachineSession(Settings& settings, const AppPaths& paths, Listener& listener, Bays* bays)
     : m_settings(settings),
       m_paths(paths),
       m_listener(listener),
+      m_bays(bays),
       m_ce158SerialLink([this] {
           return std::make_unique<PtySerialLink>(m_paths.serialLinkDir(), PtySerialLink::kCE158LinkName);
       }) {}
@@ -86,7 +87,7 @@ job::Task<void> MachineSession::switchModelJob(Model model, bool keepPlotter) {
         // Attach any currently-selected memory modules before the cold
         // boot -- a module's state must be visible on the very first ROM
         // check.
-        m_listener.attachModulesToFreshMachine();
+        if (m_bays) m_bays->attachModulesToFreshMachine();
         if (restoreCE150) attachCE150();
         if (restoreCE1600P) attachCE1600P();
         if (restoreCE158) attachCE158();
@@ -105,7 +106,7 @@ job::Task<void> MachineSession::switchModelJob(Model model, bool keepPlotter) {
             romMissing(err);
         }
 
-        m_listener.attachModulesToFreshMachine();
+        if (m_bays) m_bays->attachModulesToFreshMachine();
         if (restoreCE150) attachCE150();
         if (restoreCE158) attachCE158();
     }
@@ -537,7 +538,7 @@ std::string MachineSession::tapeTakeLastError() {
 // ---- Peripherals ----
 
 void MachineSession::flushFloppyBeforeDetach() {
-    if (ce1600pAttached()) m_listener.flushFloppy();
+    if (m_bays && ce1600pAttached()) m_bays->flushFloppy();
 }
 
 bool MachineSession::attachCE150(std::string* error) {
@@ -598,7 +599,7 @@ bool MachineSession::attachCE1600P(std::string* error) {
             return false;
         }
     }
-    m_listener.insertSelectedDisk();
+    if (m_bays) m_bays->insertSelectedDisk();
     return true;
 }
 

@@ -37,12 +37,15 @@ bool contains(const std::vector<std::string>& v, const std::string& name) {
     return false;
 }
 
-// The app's wiring of the session's bay hooks.
-struct BayListener : shared::MachineSession::Listener {
-    shared::ModuleBay* modules = nullptr;
-    shared::FloppyBay* floppy = nullptr;
+struct Listener : shared::MachineSession::Listener {
     std::string missing;
     void romMissing(const std::string& error, const std::string&) override { missing = error; }
+};
+
+// The app's wiring of the session's bay hooks.
+struct BayHooks : shared::MachineSession::Bays {
+    shared::ModuleBay* modules = nullptr;
+    shared::FloppyBay* floppy = nullptr;
     void attachModulesToFreshMachine() override {
         if (modules) modules->attachAllToFreshMachine();
     }
@@ -59,7 +62,8 @@ struct Fixture {
     MemorySettingsStore store;
     shared::Settings settings{store};
     std::unique_ptr<shared::AppPaths> paths;
-    BayListener listener;
+    Listener listener;
+    BayHooks bays;
     std::unique_ptr<shared::MachineSession> session;
     std::unique_ptr<shared::ModuleBay> modules;
     std::unique_ptr<shared::FloppyBay> floppy;
@@ -74,12 +78,12 @@ struct Fixture {
                 if (f.is_regular_file()) fs::copy_file(f.path(), bundle / f.path().filename());
         paths = std::make_unique<shared::AppPaths>(
             settings, shared::HostDirs{(root / "home").generic_string(), bundle.generic_string()});
-        session = std::make_unique<shared::MachineSession>(settings, *paths, listener);
+        session = std::make_unique<shared::MachineSession>(settings, *paths, listener, &bays);
         auto onError = [this](const std::string& e) { errors.push_back(e); };
         modules = std::make_unique<shared::ModuleBay>(*session, *paths, shared::ModuleBay::Events{{}, onError});
         floppy = std::make_unique<shared::FloppyBay>(*session, *paths, shared::FloppyBay::Events{onError});
-        listener.modules = modules.get();
-        listener.floppy = floppy.get();
+        bays.modules = modules.get();
+        bays.floppy = floppy.get();
     }
     ~Fixture() {
         floppy.reset();

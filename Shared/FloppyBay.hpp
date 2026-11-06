@@ -56,7 +56,7 @@ public:
     // The "green lamp": the drive motor is spinning.
     bool motorOn() const;
 
-    // MachineSession::Listener::insertSelectedDisk(): loads the selected
+    // MachineSession::Bays::insertSelectedDisk(): loads the selected
     // disk into a just-attached drive.
     void insertSelectedDisk();
     // After a preset's `floppy:` loaded a disk directly on the machine.
@@ -71,7 +71,7 @@ public:
     // Once per frame: notices a changed disk and writes it once the
     // debounce has passed.
     void tick(double nowSeconds);
-    // MachineSession::Listener::flushFloppy(), and before a select / quit.
+    // MachineSession::Bays::flushFloppy(), and before a select / quit.
     void flushPendingPersist();
 
 private:

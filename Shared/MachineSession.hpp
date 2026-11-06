@@ -85,15 +85,6 @@ public:
         // switchModel() or finishPresetLoad() finished.
         virtual void modelSwitched(Model) {}
 
-        // The memory-module bay attaches its selected modules to a machine
-        // just built, ahead of the cold boot.
-        virtual void attachModulesToFreshMachine() {}
-        // The disk drive goes away (CE-1600P detach, machine rebuild, a
-        // CE-150/CE-158 taking the bus): save the disk first.
-        virtual void flushFloppy() {}
-        // A CE-1600P was just attached: put the selected disk in.
-        virtual void insertSelectedDisk() {}
-
         // With a debugger attached, a frame's cycles go through its run
         // control (pause, stepping, breakpoints): return true when it ran
         // them itself.
@@ -103,7 +94,22 @@ public:
         virtual void serialLinksRelinked() {}
     };
 
-    MachineSession(Settings& settings, const AppPaths& paths, Listener& listener);
+    // The bays' part in a rebuild or a bus change (AppSession wires its
+    // ModuleBay and FloppyBay in here; a session without bays has none).
+    class Bays {
+    public:
+        virtual ~Bays() = default;
+        // Attaches the selected modules to a machine just built, ahead of
+        // the cold boot.
+        virtual void attachModulesToFreshMachine() = 0;
+        // The disk drive goes away (CE-1600P detach, machine rebuild, a
+        // CE-150/CE-158 taking the bus): save the disk first.
+        virtual void flushFloppy() = 0;
+        // A CE-1600P was just attached: put the selected disk in.
+        virtual void insertSelectedDisk() = 0;
+    };
+
+    MachineSession(Settings& settings, const AppPaths& paths, Listener& listener, Bays* bays = nullptr);
     ~MachineSession();
     MachineSession(const MachineSession&) = delete;
     MachineSession& operator=(const MachineSession&) = delete;
@@ -322,6 +328,7 @@ private:
     Settings& m_settings;
     const AppPaths& m_paths;
     Listener& m_listener;
+    Bays* m_bays;
 
     Model m_model = Model::PC1500A;
     PC1500RomRevision m_pc1500RomRevision = PC1500RomRevision::A04;
