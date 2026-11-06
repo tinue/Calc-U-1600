@@ -1,6 +1,7 @@
 #include "Shared/AppPaths.hpp"
 
 #include <filesystem>
+#include <fstream>
 #include <system_error>
 
 #include "Shared/Utf8Path.hpp"
@@ -29,6 +30,19 @@ std::string replacePrefix(const std::string& path, const std::string& dir, const
 }
 
 } // namespace
+
+std::string mediaSaveRefusalMessage(MediaSaveRefusal refusal, const std::string& name, const std::string& path) {
+    switch (refusal) {
+        case MediaSaveRefusal::None: return {};
+        case MediaSaveRefusal::EmptyName: return "Name cannot be empty.";
+        case MediaSaveRefusal::QuoteInName: return "Name cannot contain '\"'.";
+        case MediaSaveRefusal::NoSaveFolder: return "There is no save folder.";
+        case MediaSaveRefusal::TemplateName: return "\"" + name + "\" is a template's name. Choose a different name.";
+        case MediaSaveRefusal::TemplateFile:
+            return "\"" + path + "\" is a template file and is never overwritten. Choose a different name.";
+    }
+    return {};
+}
 
 std::string joinPath(const std::string& dir, const std::string& name) {
     return fromPath(toPath(dir) / toPath(name));
@@ -89,6 +103,31 @@ bool isUnderDir(const std::string& path, const std::string& dir) {
     auto ai = a.begin();
     for (auto bi = b.begin(); bi != b.end(); ++bi, ++ai) {
         if (ai == a.end() || *ai != *bi) return false;
+    }
+    return true;
+}
+
+bool atomicWriteFile(const std::string& path, const std::string& text) {
+    const fs::path target = toPath(path);
+    fs::path temp = target;
+    temp += ".tmp-save";
+    {
+        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+        if (!out) return false;
+        out.write(text.data(), static_cast<std::streamsize>(text.size()));
+        out.flush();
+        if (!out) {
+            out.close();
+            std::error_code ec;
+            fs::remove(temp, ec);
+            return false;
+        }
+    }
+    std::error_code ec;
+    fs::rename(temp, target, ec);  // replaces an existing file (MoveFileEx on Windows)
+    if (ec) {
+        fs::remove(temp, ec);
+        return false;
     }
     return true;
 }

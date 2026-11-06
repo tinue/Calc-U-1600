@@ -1,26 +1,15 @@
 #pragma once
 #include <QObject>
 #include <QString>
-#include <QTimer>
 #include <QVector>
-#include <cstdint>
+#include <memory>
 
 #include "MachineController.hpp"
+#include "Shared/FloppyBay.hpp"
 
-// Owns the CE-1600F floppy-disk selection/dirty/autosave state for the
-// control bar's disk picker -- the floppy counterpart to
-// MemoryModuleManager, but simpler: there is no CardHost/slot concept
-// (the floppy isn't CPU-address-mapped; see CE1600FCard.hpp), just one
-// disk image, and attach/detach is entirely PlotterController's job
-// (CE-1600F/P attach as a union -- PC1600Machine::attachCE1600P()) --
-// this class only owns which *disk image* is loaded once the floppy is
-// attached.
-//
-// Persistence is a versioned `<name>.floppy.yaml` (Connector/
-// FloppyImageFile.hpp), found by its `disk-name` -- bundled directory
-// first, then the user's save folder, the same order memory cards use. It
-// is always rewritten whole (no battery-card-style splice: a disk image
-// carries no hand-written prose worth preserving).
+// The control bar's CE-1600F disk picker: shared::FloppyBay
+// (Shared/FloppyBay.hpp has the rules -- selection, side, autosave, Name &
+// Save, preset save-as) with Qt signals and QStrings.
 class FloppyDiskManager : public QObject {
     Q_OBJECT
 public:
@@ -29,98 +18,33 @@ public:
     struct DiskEntry {
         QString diskName;
     };
-
-    // Catalogue for ControlBar's disk combo-box population: `templates`
-    // are the disks declaring `template: true` (every bundled disk plus
-    // any the user dropped into the storage folder), `instances` the
-    // storage folder's other disks. A storage-folder disk sharing a
-    // bundled disk's name is left out: lookup is bundled-first.
     struct DiskLists {
         QVector<DiskEntry> templates;
         QVector<DiskEntry> instances;
     };
     DiskLists diskLists() const;
 
-    // Empty diskNameOrEmpty => no disk (drive empty). A live hot-swap (no power-cycle
-    // needed -- unlike memory-card slots, the floppy isn't sized/scanned
-    // by the boot ROM at reset; a real drive lets you swap diskettes while
-    // powered). No-op if no floppy is currently attached.
-    void selectDisk(const QString& diskNameOrEmpty);
-    QString selectedDiskName() const { return m_diskName; }
-    // Name & Save is offered only for a template disk; an instance is kept
-    // up to date by autosave instead.
-    bool canNameAndSave() const;
-
-    // Side A/B -- the software analogue of ejecting and flipping the
-    // physical disk (CE1600FCard::setSide()'s own comment: this itself
-    // re-arms the drive's changed-disk latch, matching the user manual's
-    // "when the green lamp goes off, eject the disk, turn it over"
-    // instruction). 0 = A, 1 = B; toggleSide() flips between them.
-    int side() const;
-    void toggleSide();
-    // The "green lamp" -- true while the drive motor is spinning, so the
-    // control bar can show the user when it's safe to flip the disk.
-    bool motorOn() const;
-
-    // Loads the currently selected disk into a just-attached CE1600FCard
-    // (or leaves the drive empty for "–empty–"). MachineController::
-    // attachCE1600P() calls this as part of the attach -- the GUI
-    // counterpart of the preset loader loading its `floppy:` at attach.
-    void insertSelectedDisk();
-
-    // Mirrors MemoryModuleManager::syncFromPresetLoad() -- called by
-    // PresetController after a preset's `floppy:` key resolved and loaded
-    // a disk directly on the Core machine, so this manager's bookkeeping
-    // matches without re-attaching anything.
-    void syncFromPresetLoad(const QString& labelOrEmpty, const QString& resolvedPathOrEmpty = QString());
-
-    // "Name & Save" flow, mirroring MemoryModuleManager's. A bundled name
-    // is always refused (the bundled disk would shadow the saved one).
+    void selectDisk(const QString& diskNameOrEmpty) { m_bay->selectDisk(diskNameOrEmpty.toStdString()); }
+    QString selectedDiskName() const { return QString::fromStdString(m_bay->selectedDiskName()); }
+    bool canNameAndSave() const { return m_bay->canNameAndSave(); }
+    int side() const { return m_bay->side(); }
+    void toggleSide() { m_bay->toggleSide(); }
+    bool motorOn() const { return m_bay->motorOn(); }
+    void insertSelectedDisk() { m_bay->insertSelectedDisk(); }
+    void syncFromPresetLoad(const QString& labelOrEmpty, const QString& resolvedPathOrEmpty = QString()) {
+        m_bay->syncFromPresetLoad(labelOrEmpty.toStdString(), resolvedPathOrEmpty.toStdString());
+    }
     bool nameAndSave(const QString& diskName, QString* error);
-
-    // Preset `saveas: template|live floppy:<name>` (PresetController's
-    // PresetSaveAsFn callback). Like nameAndSave(), the drive is then
-    // retargeted at the saved file (shown under that name; a live save
-    // autosaves there, a template doesn't), but unlike it: works even when
-    // the drive's disk is already saved (a "save as" -- the previous
-    // instance file just stops being autosaved), and silently overwrites an
-    // existing file of the same name. A by-name save refuses a bundled name;
-    // a live one also refuses the name of a user template and never
-    // overwrites a template file, a template one may replace a user template.
-    // `filePath` (the `file:` form) writes exactly that file, with no name
-    // checks; empty = the instance directory.
     bool saveAsFromPreset(const QString& diskName, const QString& filePath, bool asTemplate, QString* error);
 
-    void markDirtyAndSchedulePersist();  // called once per frame tick
-    void flushPendingPersist();          // called before select/model-switch/quit
+    // Once per frame tick: notices a changed disk and writes what the
+    // debounce lets through.
+    void markDirtyAndSchedulePersist();
+    void flushPendingPersist() { m_bay->flushPendingPersist(); }
 
 signals:
     void errorMessage(const QString& text);
 
 private:
-    // Shared body of nameAndSave()/saveAsFromPreset(); `fromPreset` skips
-    // the already-saved and name-collision checks.
-    bool saveDiskAs(const QString& diskName, bool fromPreset, QString* error, const QString& filePath = QString(),
-                    bool asTemplate = false);
-    bool nameCollides(const QString& diskName) const;
-    // Records the file the disk came from: a template is never written, an
-    // instance autosaves in place (never into the bundle).
-    void classifySource(const QString& resolvedPathOrEmpty, bool isTemplate);
-
-    MachineController* m_controller;  // not owned
-
-    QString m_diskName;         // empty = no disk in the drive
-    bool m_isTemplate = false;  // the loaded file declares `template: true`
-    QString m_instanceFilePath; // the loaded file if it is an instance (autosaved there), else empty
-    bool m_persistPending = false;
-    uint64_t m_lastSeenRevision = 0;
-
-    // Single-shot, 500ms. Not restarted by further writes, so a long disk
-    // operation still autosaves every 500ms (same as MemoryModuleManager).
-    QTimer* m_debounceTimer = nullptr;
-
-    // Resolves and loads m_diskName into the card; false (after reporting
-    // any error) if it's empty or couldn't be loaded.
-    bool loadSelectedDisk(PC1600Machine* m1600);
-    void writeInstance();  // rewrite m_instanceFilePath from the live image
+    std::unique_ptr<shared::FloppyBay> m_bay;
 };

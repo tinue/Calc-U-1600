@@ -3,7 +3,6 @@
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QSaveFile>
 
 namespace AppPaths {
 
@@ -48,10 +47,7 @@ bool isUnderDir(const QString& path, const QString& dir) {
 }
 
 bool atomicWriteFile(const QString& path, const std::string& text) {
-    QSaveFile f(path);
-    if (!f.open(QIODevice::WriteOnly)) return false;
-    f.write(text.data(), static_cast<qint64>(text.size()));
-    return f.commit();
+    return shared::atomicWriteFile(path.toStdString(), text);
 }
 
 bool planNamedSave(MediaKind kind, const QString& name, const QString& explicitPath, bool asTemplate,
@@ -60,27 +56,8 @@ bool planNamedSave(MediaKind kind, const QString& name, const QString& explicitP
     const MediaSaveRefusal refusal =
         paths().planNamedSave(kind, name.toStdString(), explicitPath.toStdString(), asTemplate, &planned);
     *path = QString::fromStdString(planned);
-    switch (refusal) {
-        case MediaSaveRefusal::None: return true;
-        case MediaSaveRefusal::EmptyName:
-            *error = QCoreApplication::translate("AppPaths", "Name cannot be empty.");
-            break;
-        case MediaSaveRefusal::QuoteInName:
-            *error = QCoreApplication::translate("AppPaths", "Name cannot contain '\"'.");
-            break;
-        case MediaSaveRefusal::NoSaveFolder:
-            *error = QCoreApplication::translate("AppPaths", "There is no save folder.");
-            break;
-        case MediaSaveRefusal::TemplateName:
-            *error = QCoreApplication::translate("AppPaths", "\"%1\" is a template's name. Choose a different name.")
-                         .arg(name);
-            break;
-        case MediaSaveRefusal::TemplateFile:
-            *error = QCoreApplication::translate(
-                         "AppPaths", "\"%1\" is a template file and is never overwritten. Choose a different name.")
-                         .arg(*path);
-            break;
-    }
+    if (refusal == MediaSaveRefusal::None) return true;
+    *error = QString::fromStdString(shared::mediaSaveRefusalMessage(refusal, name.toStdString(), planned));
     return false;
 }
 

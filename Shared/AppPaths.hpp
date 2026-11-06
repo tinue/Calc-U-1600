@@ -67,6 +67,10 @@ private:
     std::string m_isolatedInstanceDir;
 };
 
+// A planNamedSave() refusal as a sentence for the GUI (empty for None);
+// Core's mediaSaveRefusalText() is the CLI/log wording.
+std::string mediaSaveRefusalMessage(MediaSaveRefusal refusal, const std::string& name, const std::string& path);
+
 // "a/b" joined the way every path here is built (forward slashes; an
 // absolute `name` wins).
 std::string joinPath(const std::string& dir, const std::string& name);
@@ -75,5 +79,10 @@ std::string joinPath(const std::string& dir, const std::string& name);
 // false if either doesn't exist). Whole path components only:
 // "<dir>-backup/x" is not under "<dir>".
 bool isUnderDir(const std::string& path, const std::string& dir);
+
+// Writes `text` to `path` atomically: a temp file beside it, renamed into
+// place, so a crash never leaves a half-written card or disk. False on
+// failure.
+bool atomicWriteFile(const std::string& path, const std::string& text);
 
 } // namespace shared

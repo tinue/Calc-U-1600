@@ -75,8 +75,7 @@ bool planNamedSave(MediaKind kind, const QString& name, const QString& explicitP
 // false if either doesn't exist).
 bool isUnderDir(const QString& path, const QString& dir);
 
-// Atomic write via QSaveFile (writes to a temp file beside `path` and
-// renames on commit).
+// shared::atomicWriteFile(): a temp file beside `path`, renamed into place.
 bool atomicWriteFile(const QString& path, const std::string& text);
 
 }  // namespace AppPaths

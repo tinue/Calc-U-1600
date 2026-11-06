@@ -1,302 +1,54 @@
 #include "MemoryModuleManager.hpp"
+
+#include <chrono>
+
 #include "AppPaths.hpp"
-
-#include <QDir>
-#include <QFile>
-#include <QFileInfo>
-#include <QSet>
-
-#include <algorithm>
-
-#include "Connector/MediaSave.hpp"
-#include "Connector/MemoryCardCatalog.hpp"
-#include "Connector/SoftwareDefinedCard.hpp"
-#include "FileIO.hpp"
-#include "PC1500/PC1500Machine.hpp"
-#include "PC1600/PC1600Machine.hpp"
-#include "Preset/PresetRunner.hpp"
 
 namespace {
 
-MemoryModuleManager::ModuleEntry entryFrom(const MemoryCardCatalogEntry& e) {
-    return {QString::fromStdString(e.moduleName), e.battery, e.rom};
+QVector<MemoryModuleManager::ModuleEntry> toQt(const std::vector<shared::ModuleBay::ModuleEntry>& entries) {
+    QVector<MemoryModuleManager::ModuleEntry> out;
+    for (const auto& e : entries) out.push_back({QString::fromStdString(e.moduleName), e.battery, e.rom});
+    return out;
 }
 
-}  // namespace
-
-MemoryModuleManager::MemoryModuleManager(MachineController* controller, QObject* parent)
-    : QObject(parent), m_controller(controller) {
-    m_debounceTimer = new QTimer(this);
-    m_debounceTimer->setSingleShot(true);
-    connect(m_debounceTimer, &QTimer::timeout, this, &MemoryModuleManager::flushPendingPersist);
+bool reportResult(bool ok, const std::string& err, QString* error) {
+    if (!ok && error) *error = QString::fromStdString(err);
+    return ok;
 }
 
-CardHost MemoryModuleManager::hostFor(int slot) const { return hostForModel(slot, m_controller->currentModel()); }
+double monotonicSeconds() {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
-CardHost MemoryModuleManager::hostForModel(int slot, Model model) {
-    if (model == Model::PC1600) return slot == 2 ? CardHost::PC1600Slot2 : CardHost::PC1600Slot1;
-    return model == Model::PC1500A ? CardHost::PC1500A : CardHost::PC1500;
+} // namespace
+
+MemoryModuleManager::MemoryModuleManager(MachineController* controller, QObject* parent) : QObject(parent) {
+    shared::ModuleBay::Events events;
+    events.moduleChanged = [this](int slot) { emit moduleChanged(slot); };
+    events.error = [this](const std::string& text) { emit errorMessage(QString::fromStdString(text)); };
+    m_bay = std::make_unique<shared::ModuleBay>(controller->session(), AppPaths::paths(), std::move(events));
 }
 
 MemoryModuleManager::ModuleLists MemoryModuleManager::moduleLists(CardHost host) const {
-    ModuleLists lists;
-    QSet<QString> bundled;
-    for (const auto& e : scanMemoryCardDirectory(AppPaths::bundledResourcesDir().toStdString(), nullptr)) {
-        bundled.insert(QString::fromStdString(e.moduleName));
-        if (e.compatibleWith(host)) lists.templates.push_back(entryFrom(e));
-    }
-    for (const auto& e : scanMemoryCardDirectory(AppPaths::instanceDir().toStdString(), nullptr)) {
-        if (!e.compatibleWith(host) || bundled.contains(QString::fromStdString(e.moduleName))) continue;
-        (e.isTemplate ? lists.templates : lists.instances).push_back(entryFrom(e));
-    }
-    return lists;
-}
-
-void MemoryModuleManager::selectModule(int slot, const QString& moduleNameOrEmpty) {
-    const int idx = slot - 1;
-    flushPendingPersist();
-    m_slots[idx] = SlotState{};
-    m_slots[idx].moduleName = moduleNameOrEmpty;
-}
-
-QString MemoryModuleManager::selectedModuleName(int slot) const { return m_slots[slot - 1].moduleName; }
-
-bool MemoryModuleManager::slotHasInstanceFile(int slot) const {
-    return !m_slots[slot - 1].instanceFilePath.isEmpty();
-}
-
-template <typename AttachFn>
-void MemoryModuleManager::attachOneSlot(int slotIndex, CardHost host, AttachFn attach) {
-    SlotState& st = m_slots[slotIndex];
-    if (!st.romFile.isEmpty()) {
-        // A preset's ROM module under development: the same file and ROM
-        // again (read anew), never autosaved.
-        std::string resolved, err;
-        std::unique_ptr<ExpansionCard> card = makePresetModuleCard(st.sourcePath.toStdString(), {},
-                                                                   st.romFile.toStdString(), {}, host, &resolved, &err);
-        if (card) {
-            attach(std::move(card));
-            return;
-        }
-        emit errorMessage(tr("Couldn't attach \"%1\": %2").arg(st.moduleName, QString::fromStdString(err)));
-        st = SlotState{};
-        return;
-    }
-    const QString bundledDir = AppPaths::bundledResourcesDir();
-    const QString instDir = AppPaths::instanceDir();
-    std::string path, err;
-    if (resolveModuleSpecByName({bundledDir.toStdString(), instDir.toStdString()}, st.moduleName.toStdString(),
-                                &path, &err)) {
-        auto card = makeSoftwareDefinedCard(path, host, &err);
-        if (card) {
-            classifySlot(st, QString::fromStdString(path));
-            attach(std::move(card));
-            // Freshly loaded from the file -- identical to it until the
-            // machine writes to the card.
-            if (!st.instanceFilePath.isEmpty()) st.persistedRevision = currentSlotRevision(slotIndex + 1);
-            return;
-        }
-    }
-    emit errorMessage(tr("Couldn't attach \"%1\": %2").arg(st.moduleName, QString::fromStdString(err)));
-    st = SlotState{};
-}
-
-void MemoryModuleManager::classifySlot(SlotState& st, const QString& resolvedPath) {
-    st.sourcePath = resolvedPath;
-    st.isTemplate = false;
-    st.battery = false;
-    st.instanceFilePath.clear();
-    if (resolvedPath.isEmpty()) return;
-    MemoryCardCatalogEntry entry;
-    if (readMemoryCardCatalogEntry(resolvedPath.toStdString(), &entry, nullptr)) {
-        st.isTemplate = entry.isTemplate;
-        st.battery = entry.battery;
-    }
-    // An instance autosaves in place, wherever it was loaded from -- but
-    // never into the bundle, even if a bundled file lacked `template: true`.
-    if (!st.isTemplate && !AppPaths::isUnderDir(resolvedPath, AppPaths::bundledResourcesDir()))
-        st.instanceFilePath = resolvedPath;
-}
-
-void MemoryModuleManager::attachAllToFreshMachine() {
-    if (auto* m1500 = m_controller->pc1500()) {
-        m1500->expansionConnector().detach();  // no-op on a fresh machine; defensive/self-documenting
-        if (!m_slots[0].moduleName.isEmpty()) {
-            const CardHost host = hostFor(1);
-            attachOneSlot(0, host,
-                          [&](std::unique_ptr<ExpansionCard> card) { m1500->attachExpansionCard(std::move(card)); });
-        }
-        return;
-    }
-    if (auto* m1600 = m_controller->pc1600()) {
-        m1600->detachSlot1();
-        m1600->detachSlot2();
-        if (!m_slots[0].moduleName.isEmpty())
-            attachOneSlot(0, CardHost::PC1600Slot1,
-                          [&](std::unique_ptr<ExpansionCard> c) { m1600->attachSlot1Card(std::move(c)); });
-        if (!m_slots[1].moduleName.isEmpty())
-            attachOneSlot(1, CardHost::PC1600Slot2,
-                          [&](std::unique_ptr<ExpansionCard> c) { m1600->attachSlot2Card(std::move(c)); });
-        return;
-    }
-}
-
-QString MemoryModuleManager::attachedModuleName(int slot) const {
-    if (auto* m1500 = m_controller->pc1500()) {
-        const ExpansionCard* card = slot == 1 ? m1500->expansionConnector().attachedCard() : nullptr;
-        return card ? QString::fromStdString(card->moduleName()) : QString();
-    }
-    if (auto* m1600 = m_controller->pc1600()) return QString::fromStdString(m1600->memory().slotModuleName(slot));
-    return QString();
-}
-
-void MemoryModuleManager::syncFromPresetLoad(int slot, const QString& resolvedPathOrEmpty, const QString& romFile) {
-    const int idx = slot - 1;
-    m_slots[idx] = SlotState{};
-    m_slots[idx].moduleName = attachedModuleName(slot);
-    if (!m_slots[idx].moduleName.isEmpty()) {
-        classifySlot(m_slots[idx], resolvedPathOrEmpty);
-        m_slots[idx].romFile = romFile;
-        if (!romFile.isEmpty()) m_slots[idx].instanceFilePath.clear();
-    }
-    emit moduleChanged(slot);
-}
-
-const ExpansionCard* MemoryModuleManager::slotCard(int slot) const {
-    if (auto* m1500 = m_controller->pc1500()) return slot == 1 ? m1500->expansionConnector().attachedCard() : nullptr;
-    if (auto* m1600 = m_controller->pc1600()) return m1600->memory().slotCard(slot);
-    return nullptr;
-}
-
-bool MemoryModuleManager::nameCollides(const QString& instanceName) const {
-    const QString path = AppPaths::instancePathFor(instanceName);
-    if (QFile::exists(path)) return true;
-    std::string err;
-    const auto entries = scanMemoryCardDirectory(AppPaths::instanceDir().toStdString(), &err);
-    for (const auto& e : entries)
-        if (QString::fromStdString(e.moduleName) == instanceName) return true;
-    return false;
+    const shared::ModuleBay::ModuleLists lists = m_bay->moduleLists(host);
+    return {toQt(lists.templates), toQt(lists.instances)};
 }
 
 bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QString* error) {
-    return saveSlotAs(slot, instanceName, /*fromPreset=*/false, error);
+    std::string err;
+    return reportResult(m_bay->nameAndSave(slot, instanceName.toStdString(), &err), err, error);
 }
 
 bool MemoryModuleManager::saveAsFromPreset(int slot, const QString& instanceName, const QString& filePath,
                                            bool asTemplate, QString* error) {
-    return saveSlotAs(slot, instanceName, /*fromPreset=*/true, error, filePath, asTemplate);
-}
-
-bool MemoryModuleManager::saveSlotAs(int slot, const QString& instanceName, bool fromPreset, QString* error,
-                                     const QString& filePath, bool asTemplate) {
-    const QString name = instanceName.trimmed();
-    if (name.isEmpty()) {
-        *error = tr("Name cannot be empty.");
-        return false;
-    }
-    SlotState& st = m_slots[slot - 1];
-    if (st.moduleName.isEmpty()) {
-        *error = tr("No module attached.");
-        return false;
-    }
-    if (!st.romFile.isEmpty()) {
-        *error = tr("The ROM of \"%1\" comes from %2, not from its module file, so it can't be saved.")
-                     .arg(st.moduleName, st.romFile);
-        return false;
-    }
-    if (!fromPreset && !st.isTemplate) {
-        *error = tr("\"%1\" is already saved; changes are saved automatically.").arg(st.moduleName);
-        return false;
-    }
-    if (st.sourcePath.isEmpty()) {
-        *error = tr("\"%1\" has no source file to save from.").arg(st.moduleName);
-        return false;
-    }
-    QString newPath;
-    if (!AppPaths::planNamedSave(MediaKind::Card, name, filePath, asTemplate, &newPath, error)) return false;
-    if (!fromPreset && nameCollides(name)) {
-        *error = tr("A card named \"%1\" already exists. Choose a different name.").arg(name);
-        return false;
-    }
-
-    // Splice from the file the card was loaded from -- a template, or (a
-    // preset save-as) an instance; either way its layout is the card's.
-    const ExpansionCard* card = slotCard(slot);
-    if (!card) {
-        *error = tr("Couldn't read the live card contents.");
-        return false;
-    }
-    const uint64_t revision = card->contentRevision();
-    std::string spliced, splErr;
-    if (!formatCardSave(*card, st.sourcePath.toStdString(), name.toStdString(), asTemplate, &spliced, &splErr)) {
-        *error = tr("Couldn't generate the instance file: %1").arg(QString::fromStdString(splErr));
-        return false;
-    }
-    if (!AppPaths::atomicWriteFile(newPath, spliced)) {
-        *error = tr("Couldn't write \"%1\".").arg(newPath);
-        return false;
-    }
-
-    // Retarget the slot at the saved copy: it now shows under its new name
-    // and -- unless it was saved as a template -- autosaves there.
-    st.moduleName = name;
-    st.sourcePath = newPath;
-    st.isTemplate = asTemplate;  // `battery` carries over
-    st.instanceFilePath = asTemplate ? QString() : newPath;
-    st.persistPending = false;
-    st.persistedRevision = revision;
-    emit moduleChanged(slot);
-    return true;
-}
-
-void MemoryModuleManager::writeInstance(int slot) {
-    SlotState& st = m_slots[slot - 1];
-    if (st.instanceFilePath.isEmpty()) return;
-
-    // Runs on every debounce: skip the image copy, file read and rewrite
-    // unless the card's content changed since it was last attached from or
-    // written to the file.
-    const ExpansionCard* card = slotCard(slot);
-    if (!card) return;
-    const uint64_t revision = card->contentRevision();
-    if (st.persistedRevision == revision) return;
-
-    std::string spliced, err;
-    if (!formatCardSave(*card, st.instanceFilePath.toStdString(), st.moduleName.toStdString(), false, &spliced, &err))
-        return;
-    if (AppPaths::atomicWriteFile(st.instanceFilePath, spliced)) st.persistedRevision = revision;
-}
-
-uint64_t MemoryModuleManager::currentSlotRevision(int slot) const {
-    const ExpansionCard* card = slotCard(slot);
-    return card ? card->contentRevision() : 0;
+    std::string err;
+    return reportResult(
+        m_bay->saveAsFromPreset(slot, instanceName.toStdString(), filePath.toStdString(), asTemplate, &err), err,
+        error);
 }
 
 void MemoryModuleManager::markDirtyAndSchedulePersist() {
-    bool anyPending = false;
-    for (auto& st : m_slots) {
-        if (!st.instanceFilePath.isEmpty()) {
-            st.persistPending = true;
-            anyPending = true;
-        }
-    }
-    if (!anyPending) return;
-    if (m_debounceTimer->isActive()) return;  // already pending -- coalesce
-    m_debounceTimer->start(500);
-}
-
-void MemoryModuleManager::flushPendingPersist() {
-    m_debounceTimer->stop();
-    for (int i = 0; i < 2; ++i) {
-        if (!m_slots[i].persistPending) continue;
-        writeInstance(i + 1);
-        m_slots[i].persistPending = false;
-    }
-}
-
-void MemoryModuleManager::onModelChanged() {
-    for (int i = 0; i < 2; ++i) {
-        if (m_slots[i].persistPending) writeInstance(i + 1);
-        m_slots[i] = SlotState{};
-    }
+    m_bay->markDirty();
+    m_bay->tick(monotonicSeconds());
 }
