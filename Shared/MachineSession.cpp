@@ -75,31 +75,18 @@ void MachineSession::romMissing(const std::string& error) {
     throw std::runtime_error(error);
 }
 
-void MachineSession::switchModel(Model model, bool keepPlotter) {
-    job::runToCompletion(switchModelJob(model, keepPlotter));
+void MachineSession::switchModel(Model model, bool keepPeripherals) {
+    job::runToCompletion(switchModelJob(model, keepPeripherals));
 }
 
-job::Task<void> MachineSession::switchModelJob(Model model, bool keepPlotter) {
-    const bool restoreCE150 = keepPlotter && ce150Attached();
-    const bool restoreCE1600P = keepPlotter && ce1600pAttached();
-    const bool restoreCE158 = keepPlotter && ce158Attached();
-    const std::string restoreHostDrive = keepPlotter && model == Model::PC1600 ? hostDriveDirectory() : std::string();
-    flushFloppyBeforeDetach(); // the old machine (and its disk) is going away
-    discardMachine();
+job::Task<void> MachineSession::switchModelJob(Model model, bool keepPeripherals) {
+    const Peripherals restore = keepPeripherals ? attachedPeripherals() : Peripherals{};
+    busChange([this] { discardMachine(); });  // the old machine (and its disk) goes away
     m_model = model;
 
     if (model == Model::PC1600) {
         makePC1600WithRomFallback();
         wireNewMachine();
-
-        // Attach any currently-selected memory modules before the cold
-        // boot -- a module's state must be visible on the very first ROM
-        // check.
-        if (m_bays) m_bays->attachModulesToFreshMachine();
-        if (restoreCE150) attachCE150();
-        if (restoreCE1600P) attachCE1600P();
-        if (restoreCE158) attachCE158();
-        if (!restoreHostDrive.empty()) attachHostDrive(restoreHostDrive);
     } else {
         const auto variant = (model == Model::PC1500A) ? PC1500Variant::PC1500A : PC1500Variant::PC1500;
         // PC-1500A is A04-only (PC1500Variant.hpp) -- clamp regardless of
@@ -113,11 +100,12 @@ job::Task<void> MachineSession::switchModelJob(Model model, bool keepPlotter) {
                                         &err)) {
             romMissing(err);
         }
-
-        if (m_bays) m_bays->attachModulesToFreshMachine();
-        if (restoreCE150) attachCE150();
-        if (restoreCE158) attachCE158();
     }
+    // Attach any currently-selected memory modules before the cold boot --
+    // a module's state must be visible on the very first ROM check -- then
+    // whatever was attached before the rebuild.
+    if (m_bays) m_bays->attachModulesToFreshMachine();
+    reattach(restore);
 
     // Every rebuild is a full cold boot, run flat out to the prompt (incl. a
     // plotter's power-on init); the caller restarts paced emulation after
@@ -137,7 +125,7 @@ void MachineSession::setPC1600RomVersion(PC1600RomVersion version) {
 
 job::Task<void> MachineSession::setPC1600RomVersionJob(PC1600RomVersion version) {
     m_pc1600RomVersion = version;
-    if (m_model == Model::PC1600) co_await switchModelJob(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
+    if (m_model == Model::PC1600) co_await switchModelJob(m_model, /*keepPeripherals=*/true); // rebuild with the new ROM
 }
 
 void MachineSession::setPC1500RomRevision(PC1500RomRevision revision) {
@@ -146,7 +134,7 @@ void MachineSession::setPC1500RomRevision(PC1500RomRevision revision) {
 
 job::Task<void> MachineSession::setPC1500RomRevisionJob(PC1500RomRevision revision) {
     m_pc1500RomRevision = revision;
-    if (m_model != Model::PC1600) co_await switchModelJob(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
+    if (m_model != Model::PC1600) co_await switchModelJob(m_model, /*keepPeripherals=*/true); // rebuild with the new ROM
 }
 
 std::vector<std::string> MachineSession::bundledRomDirs() const { return {m_paths.bundledResourcesDir()}; }
@@ -615,15 +603,24 @@ std::string MachineSession::tapeTakeLastError() {
 
 // ---- Peripherals ----
 
-void MachineSession::flushFloppyBeforeDetach() {
-    if (m_bays && ce1600pAttached()) m_bays->flushFloppy();
+MachineSession::Peripherals MachineSession::attachedPeripherals() const {
+    return {ce150Attached(), ce1600pAttached(), ce158Attached(), hostDriveDirectory()};
+}
+
+void MachineSession::reattach(const Peripherals& p) {
+    // The order the user can build it up in; each attach refuses what the
+    // model can't take (CE-1600P and host drive: PC-1600 only).
+    if (p.ce150) attachCE150();
+    if (p.ce1600p) attachCE1600P();
+    if (p.ce158) attachCE158();
+    if (!p.hostDriveDir.empty()) attachHostDrive(p.hostDriveDir);
 }
 
 bool MachineSession::attachCE150(std::string* error) {
-    flushFloppyBeforeDetach(); // on a PC-1600, Core detaches the CE-1600P/F to make room
     std::string err;
-    const bool ok =
-        withMachine(false, [&](auto& machine) { return BundledRoms::attachCE150(machine, bundledRomDirs(), &err); });
+    const bool ok = busChange([&] {  // on a PC-1600, Core detaches the CE-1600P/F to make room
+        return withMachine(false, [&](auto& machine) { return BundledRoms::attachCE150(machine, bundledRomDirs(), &err); });
+    });
     if (!ok && error) *error = err;
     return ok;
 }
@@ -637,10 +634,10 @@ bool MachineSession::ce150Attached() const {
 }
 
 bool MachineSession::attachCE158(std::string* error) {
-    flushFloppyBeforeDetach(); // on a PC-1600, Core detaches the CE-1600P/F to make room
     std::string err;
-    const bool ok =
-        withMachine(false, [&](auto& machine) { return BundledRoms::attachCE158(machine, bundledRomDirs(), &err); });
+    const bool ok = busChange([&] {  // on a PC-1600, Core detaches the CE-1600P/F to make room
+        return withMachine(false, [&](auto& machine) { return BundledRoms::attachCE158(machine, bundledRomDirs(), &err); });
+    });
     if (!ok && error) *error = err;
     return ok;
 }
@@ -682,9 +679,7 @@ bool MachineSession::attachCE1600P(std::string* error) {
 }
 
 void MachineSession::detachCE1600P() {
-    if (!m_pc1600) return;
-    flushFloppyBeforeDetach();
-    m_pc1600->detachCE1600P();
+    if (m_pc1600) busChange([this] { m_pc1600->detachCE1600P(); });
 }
 
 bool MachineSession::swapCE1600PRom(CE1600PRomVersion version, std::string* error) {

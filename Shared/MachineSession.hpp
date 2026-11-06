@@ -123,13 +123,13 @@ public:
     // called before a model switch, which starts from a default machine.
     void resetRomSelectionsToDefault();
     // Rebuilds the machine for `model` and cold boots it to the prompt.
-    // keepPlotter: re-attach whichever plotter (CE-150 / CE-1600P), CE-158
-    // and (PC-1600) host drive was attached before the rebuild, ahead of
-    // the cold boot, so a rebuild (module, ROM or model change) never
-    // detaches it as a side effect. Default false (model switch, preset
+    // keepPeripherals: re-attach whichever plotter (CE-150 / CE-1600P),
+    // CE-158 and (PC-1600) host drive was attached before the rebuild,
+    // ahead of the cold boot, so a rebuild (module or ROM change) never
+    // detaches them as a side effect. Default false (model switch, preset
     // load: fresh machine, nothing attached).
-    void switchModel(Model model, bool keepPlotter = false);
-    job::Task<void> switchModelJob(Model model, bool keepPlotter = false);
+    void switchModel(Model model, bool keepPeripherals = false);
+    job::Task<void> switchModelJob(Model model, bool keepPeripherals = false);
     Model currentModel() const { return m_model; }
 
     // PC-1500 (plain) only -- PC-1500A is A04-only (see PC1500Variant.hpp)
@@ -401,7 +401,23 @@ private:
     void discardMachine();
     // Hands a just-built machine its serial links and tells the listener.
     void wireNewMachine();
-    void flushFloppyBeforeDetach();
+    // What switchModelJob(keepPeripherals) carries over a rebuild.
+    struct Peripherals {
+        bool ce150 = false;
+        bool ce1600p = false;
+        bool ce158 = false;
+        std::string hostDriveDir;  // empty = none
+    };
+    Peripherals attachedPeripherals() const;
+    void reattach(const Peripherals& p);
+    // Every change that can take the CE-1600P (and its disk drive) off the
+    // bus -- a rebuild, its detach, a CE-150/CE-158 taking its place --
+    // runs through here: the disk is saved first.
+    template <class F>
+    auto busChange(F&& change) {
+        if (m_bays && ce1600pAttached()) m_bays->flushFloppy();
+        return std::forward<F>(change)();
+    }
     // The serial link directory setting, falling back to the save folder.
     [[noreturn]] void romMissing(const std::string& error);
     // Replaces m_pc1600 with a fresh machine holding m_pc1600RomVersion's

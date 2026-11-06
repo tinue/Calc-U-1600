@@ -283,7 +283,7 @@ job::Task<OpResult> AppSession::selectModelJob(Model model) {
 
 job::Task<OpResult> AppSession::selectModuleJob(int slot, std::string moduleNameOrEmpty) {
     m_modules->selectModule(slot, moduleNameOrEmpty);
-    co_await m_machine->switchModelJob(m_machine->currentModel(), /*keepPlotter=*/true);  // rebuild -> re-attach
+    co_await m_machine->switchModelJob(m_machine->currentModel(), /*keepPeripherals=*/true);  // rebuild -> re-attach
     co_return OpResult{};
 }
 

@@ -119,7 +119,7 @@ void test_module_bay() {
     CHECK(!f.modules->nameAndSave(1, "Other", &error));  // already saved: autosave
 
     // A rebuild re-attaches the saved instance from its file.
-    f.session->switchModel(Model::PC1600, /*keepPlotter=*/true);
+    f.session->switchModel(Model::PC1600, /*keepPeripherals=*/true);
     CHECK(f.session->pc1600()->memory().slotModuleName(1) == "My RAM");
     // A model switch clears the slots.
     f.modules->onModelChanged();
@@ -156,6 +156,16 @@ void test_floppy_bay() {
     f.floppy->tick(10.3);
     CHECK(!fs::exists(saved));
     f.floppy->tick(10.6);
+    CHECK(fs::exists(saved));
+
+    // A CE-150 taking the bus drops the CE-1600P: the disk is saved first,
+    // without waiting for the debounce.
+    fs::remove(saved);
+    image[100] ^= 0xFF;
+    m->ce1600fLoadImage(image.data(), image.size());
+    f.floppy->tick(20.0);
+    CHECK(f.session->attachCE150());
+    CHECK(!f.session->ce1600pAttached());
     CHECK(fs::exists(saved));
 }
 

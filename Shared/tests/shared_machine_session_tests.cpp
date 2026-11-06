@@ -156,12 +156,21 @@ void test_host_keys() {
 void test_rebuild_keeps_plotter() {
     Fixture f;
     f.session.switchModel(Model::PC1500A);
-    f.session.powerCycleAround([&] { CHECK(f.session.attachCE150()); });
-    CHECK(f.session.ce150Attached());
-    f.session.setPC1500RomRevision(PC1500RomRevision::A04);  // a rebuild, keepPlotter
-    CHECK(f.session.ce150Attached());
+    f.session.powerCycleAround([&] {
+        CHECK(f.session.attachCE150());
+        CHECK(f.session.attachCE158());
+    });
+    CHECK(f.session.ce150Attached() && f.session.ce158Attached());
+    f.session.setPC1500RomRevision(PC1500RomRevision::A04);  // a rebuild, keepPeripherals
+    CHECK(f.session.ce150Attached() && f.session.ce158Attached());
     f.session.switchModel(Model::PC1600);  // a model switch starts bare
-    CHECK(!f.session.ce150Attached());
+    CHECK(!f.session.ce150Attached() && !f.session.ce158Attached());
+
+    // PC-1600: the CE-1600P survives a ROM rebuild. (The host drive's ROM
+    // isn't in roms/, the bundle here.)
+    f.session.powerCycleAround([&] { CHECK(f.session.attachCE1600P()); });
+    f.session.setPC1600RomVersion(shared::PC1600RomVersion::New);  // a rebuild
+    CHECK(f.session.ce1600pAttached());
 }
 
 } // namespace
