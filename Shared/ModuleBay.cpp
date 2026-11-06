@@ -55,14 +55,13 @@ void ModuleBay::selectModule(int slot, const std::string& moduleNameOrEmpty) {
 void ModuleBay::attachOneSlot(int slot) {
     SlotState& st = m_slots[slot - 1];
     const CardHost host = hostFor(slot);
-    const auto attach = [&](std::unique_ptr<ExpansionCard> card) { m_session.attachSlotCard(slot, std::move(card)); };
     if (!st.romFile.empty()) {
         // A preset's ROM module under development: the same file and ROM
         // again (read anew), never autosaved.
         std::string resolved, err;
         std::unique_ptr<ExpansionCard> card = makePresetModuleCard(st.sourcePath, {}, st.romFile, {}, host, &resolved, &err);
         if (card) {
-            attach(std::move(card));
+            m_session.attachSlotCard(slot, std::move(card));
             return;
         }
         reportError("Couldn't attach " + inQuotes(st.moduleName) + ": " + err);
@@ -74,7 +73,7 @@ void ModuleBay::attachOneSlot(int slot) {
         auto card = makeSoftwareDefinedCard(path, host, &err);
         if (card) {
             classifySlot(st, path);
-            attach(std::move(card));
+            m_session.attachSlotCard(slot, std::move(card));
             // Freshly loaded from the file -- identical to it until the
             // machine writes to the card.
             if (!st.instanceFilePath.empty()) st.persistedRevision = currentSlotRevision(slot);

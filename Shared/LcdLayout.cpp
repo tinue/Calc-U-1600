@@ -3,7 +3,7 @@
 #include <string_view>
 
 #include "Display/LcdText.hpp"
-#include "Shared/MachineSession.hpp"
+#include "Shared/DisplayFrame.hpp"
 
 namespace shared::lcd {
 

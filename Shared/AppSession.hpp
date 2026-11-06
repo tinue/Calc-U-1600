@@ -151,9 +151,6 @@ public:
     // buzzer audio (played if attachAudio() was called, thrown away when
     // the tick wasn't real time: turbo or an operation slice).
     void tick();
-    // Per-frame bookkeeping: battery-card and disk autosave, the tape bay.
-    // Also runs at the end of every operation.
-    void frameDuties();
 
     // Scripted runs (frozen frontends, the --shots runner): `seconds` of
     // emulated time / until the paste queue is empty (false if it still
@@ -180,6 +177,12 @@ private:
     // audio, and its clock is off -- re-seed it and rebase pacing.
     void beginOperation();
     void endOperation();
+    // Per-frame bookkeeping: battery-card and disk autosave, the tape bay.
+    // Runs every tick() and at the end of every operation.
+    void frameDuties();
+    // After a run that wasn't real time (an operation, a scripted run):
+    // frameDuties(), and its audio is thrown away.
+    void finishUnpaced();
     // Steps `j` for one kOperationSliceSeconds slice; true once it's done.
     bool stepSlice(job::Job<OpResult>& j);
     // The finished job's result; a thrown exception becomes a failure.

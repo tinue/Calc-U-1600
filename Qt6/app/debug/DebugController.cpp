@@ -19,6 +19,7 @@ DebugController::DebugController(MachineController* machines, QObject* parent)
     connect(m_server, &DapServer::clientConnected, this, &DebugController::onClientConnected);
     connect(m_server, &DapServer::clientDisconnected, this, &DebugController::onClientDisconnected);
     connect(m_server, &DapServer::messageReceived, this, &DebugController::dispatch);
+    connect(m_machines, &MachineController::appBusyChanged, this, &DebugController::setAppBusy);
 }
 
 void DebugController::dispatch(const QJsonObject& message) {
@@ -41,7 +42,7 @@ void DebugController::drainQueue() {
     finishTeardown();
 }
 
-bool DebugController::appBusy() const { return m_sync && m_sync->busy(); }
+bool DebugController::appBusy() const { return m_machines->app().busy(); }
 
 void DebugController::setAppBusy(bool busy) {
     if (!busy && (!m_queued.empty() || m_teardownPending))
@@ -189,7 +190,6 @@ std::vector<debug::BreakpointStatus> DebugController::rebindListings() {
 
 void DebugController::setSyncOperations(SyncOperations* sync) {
     m_sync = sync;
-    connect(m_machines, &MachineController::appBusyChanged, this, &DebugController::setAppBusy);
 }
 
 bool DebugController::loadPreset(const QString& path, QString* error, bool armOnly) {

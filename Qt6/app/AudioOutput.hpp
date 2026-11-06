@@ -1,7 +1,6 @@
 #pragma once
 #include <QObject>
 #include <cstdint>
-#include <memory>
 
 #include "Shared/AudioPump.hpp"
 

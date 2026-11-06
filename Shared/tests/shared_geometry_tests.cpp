@@ -7,8 +7,8 @@
 #include <vector>
 
 #include "Shared/KeyLayout/FaceplateLayout.hpp"
+#include "Shared/DisplayFrame.hpp"
 #include "Shared/LcdLayout.hpp"
-#include "Shared/MachineSession.hpp"
 #include "Shared/PlotterPaper.hpp"
 #include "SharedTestSupport.hpp"
 

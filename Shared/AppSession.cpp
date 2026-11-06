@@ -79,8 +79,7 @@ void AppSession::beginOperation() {
 }
 
 void AppSession::endOperation() {
-    frameDuties();  // the bays catch up with whatever the operation changed
-    m_machine->discardAudio();
+    finishUnpaced();  // the bays catch up with whatever the operation changed
     m_machine->seedClockFromHost();
     m_pacer.restart();
     m_busy = false;
@@ -158,14 +157,12 @@ void AppSession::tick() {
 
 void AppSession::runFor(double seconds) {
     runEmulatedSeconds(*m_machine, seconds);
-    frameDuties();
-    m_machine->discardAudio();
+    finishUnpaced();
 }
 
 bool AppSession::runUntilPasteDone(double capSeconds) {
     const bool done = shared::runUntilPasteDone(*m_machine, capSeconds);
-    frameDuties();
-    m_machine->discardAudio();
+    finishUnpaced();
     return done;
 }
 
@@ -183,6 +180,11 @@ void AppSession::frameDuties() {
     m_floppy->tick(now);
     m_tapeStatus = m_machine->tapeStatus();
     m_tapes->onFrameTick(m_tapeStatus);
+}
+
+void AppSession::finishUnpaced() {
+    frameDuties();
+    m_machine->discardAudio();
 }
 
 // ---- Operations ----

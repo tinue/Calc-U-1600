@@ -312,7 +312,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 
 void MainWindow::syncControlBarForModel() {
     const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
-    m_controlBar->setSlot2Visible(isPC1600);
+    m_controlBar->setSlot2Visible(m_controller->session().slotCount() >= 2);
     // Each model's own peripherals get a button; all of them (CE-1600P on a
     // PC-1600 only) are in Machine > Peripherals.
     m_controlBar->setCe150Visible(!isPC1600);
@@ -324,8 +324,7 @@ void MainWindow::syncControlBarForModel() {
     // toggle) so the control bar doesn't jump around as the plotter/
     // floppy union attaches and detaches -- syncPeripherals()
     // grays the row out instead via setFloppyEnabled().
-    m_controlBar->setFloppyVisible(isPC1600);
-    if (isPC1600) refreshFloppyCombo();
+    m_controlBar->setFloppyVisible(isPC1600);  // its combo: syncPeripherals()
     // PC-1500A is A04-only (PC1500Variant.hpp), so the picker is only worth
     // showing for the plain PC-1500.
     m_romMenuAction->setVisible(m_controller->currentModel() == Model::PC1500);
@@ -609,7 +608,8 @@ void MainWindow::syncUiFromController() {
 }
 
 void MainWindow::refreshModuleCombos() {
-    for (int slot = 1; slot <= 2; ++slot) {
+    const int slotCount = m_controller->session().slotCount();
+    for (int slot = 1; slot <= slotCount; ++slot) {
         const CardHost host = MemoryModuleManager::hostForModel(slot, m_controller->currentModel());
         const MemoryModuleManager::ModuleLists lists = m_moduleManager->moduleLists(host);
         m_controlBar->setModuleCombos(slot, lists.templates, lists.instances,

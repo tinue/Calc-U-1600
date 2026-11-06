@@ -20,6 +20,7 @@
 #include "Tape/TapeDeck.hpp"
 #include "TraceTypes.hpp"
 #include "Shared/AppPaths.hpp"
+#include "Shared/DisplayFrame.hpp"
 #include "Shared/HostKeyMap.hpp"
 #include "Shared/MachineModel.hpp"
 #include "Shared/Settings.hpp"
@@ -28,18 +29,6 @@ class PC1500Machine;
 class PC1600Machine;
 
 namespace shared {
-
-// One flat, model-agnostic frame a renderer paints from -- deliberately
-// wider than either Core display type (PC1500Display's 156x7 vs
-// PC1600DisplaySnapshot's 156x32, one StatusLine each) so the LCD view
-// never needs to know which model is active.
-struct DisplayFrame {
-    int cols = 0;
-    int rows = 0;
-    std::vector<bool> pixels; // row-major, cols*rows entries
-    bool poweredOn = true;    // PC1500Machine::isDisplayOn() / PC1600 clockEnabled
-    std::vector<std::pair<std::string, bool>> statusSymbols;
-};
 
 // ── MachineSession ───────────────────────────────────────────────────────
 //
@@ -203,14 +192,6 @@ public:
     // One tap of `name`: through the live-typing queue on the PC-1500 (see
     // enqueueKey()), a 30 ms press on the PC-1600.
     void tapKey(const std::string& name);
-    // PC-1500 live-typing keystroke buffer, so fast host typing can't
-    // outrun the ROM's key-scan loop and drop characters --
-    // PC1500Machine::enqueueKey() owns the press/hold/release/idle cycle.
-    // Ignored on the PC-1600.
-    void enqueueKey(const std::string& name);
-    // PC-1500 equivalent of tapShiftedKey(): Shift is a one-shot latch on
-    // real hardware, tapped immediately before the base key.
-    void enqueueShiftedKey(const std::string& baseName);
 
     // Edit > Paste Text: types `text` (UTF-8) at the ROM's own keystroke
     // cadence -- see Core/KeyPaste.hpp. Unmappable characters are skipped;
@@ -224,14 +205,6 @@ public:
     bool pasteActive() const { return m_paste.active() && !m_liveTyping; }
     // Drops the rest of the paste, releasing a key it holds down.
     void cancelPaste();
-    // A live keystroke stops a paste: like cancelPaste(), but an accented
-    // character's KBII sequence under way is finished so KBII isn't left
-    // latched.
-    void interruptPaste();
-    // PC-1600 live host keys that need a key *sequence* (an accented
-    // character, or any key typed while one still runs), queued on the
-    // paste feeder's frame-paced cadence.
-    void typeLiveStep(const PasteStep& step);
     bool liveTypingActive() const { return m_paste.active() && m_liveTyping; }
 
     // ---- Running ----
@@ -354,6 +327,24 @@ public:
     void clearCE1600PPaper();
 
 private:
+    // ---- Live typing (hostKeyDown()/hostShiftTap() route here) ----
+    // PC-1500 live-typing keystroke buffer, so fast host typing can't
+    // outrun the ROM's key-scan loop and drop characters --
+    // PC1500Machine::enqueueKey() owns the press/hold/release/idle cycle.
+    // Ignored on the PC-1600.
+    void enqueueKey(const std::string& name);
+    // PC-1500 equivalent of tapShiftedKey(): Shift is a one-shot latch on
+    // real hardware, tapped immediately before the base key.
+    void enqueueShiftedKey(const std::string& baseName);
+    // A live keystroke stops a paste: like cancelPaste(), but an accented
+    // character's KBII sequence under way is finished so KBII isn't left
+    // latched.
+    void interruptPaste();
+    // PC-1600 live host keys that need a key *sequence* (an accented
+    // character, or any key typed while one still runs), queued on the
+    // paste feeder's frame-paced cadence.
+    void typeLiveStep(const PasteStep& step);
+
     Settings& m_settings;
     const AppPaths& m_paths;
     Listener& m_listener;
