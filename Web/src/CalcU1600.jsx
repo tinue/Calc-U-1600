@@ -12,6 +12,10 @@ const BAR_HEIGHT = 40;
 const PANEL_MIN = 220;          // the panels' row, when there is one
 const INSPECTOR_MIN_WIDTH = 700; // narrower: no inspector
 const SHIFT_TAP_MS = 400;
+// A key's release reaches the engine at least this long after its press:
+// both events can arrive between two 60 Hz frames, and a press that lasts
+// no emulated time is never scanned.
+const MIN_HOLD_MS = 50;
 const MAX_DROP_BYTES = 1 << 20;
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
 
@@ -61,13 +65,16 @@ function CalcU1600(props) {
   const [presets, setPresets] = React.useState([]);
   const dialogs = useDialogs();
   const rootRef = React.useRef(null);
-  const heldKeys = React.useRef(new Map());   // KeyboardEvent.code -> Promise of the base key
+  const heldKeys = React.useRef(new Map());   // KeyboardEvent.code -> {base: Promise of the key to release, down: time}
   const shiftTap = React.useRef(null);        // time the bare Shift went down
   const pendingDrop = React.useRef(null);
 
   React.useEffect(() => {
     const e = createEngine({ workerUrl });
     setEngine(e);
+    // Test hook (docs/developer/Web-Client.md): the root element's
+    // calcuEngine has request(method, ...args) -- e.g. request("lcdText").
+    if (rootRef.current) rootRef.current.calcuEngine = e;
     fetchBesideCalc("presets/manifest.json").then((t) => setPresets(JSON.parse(t))).catch(() => {});
     return () => e.destroy();
   }, []);
@@ -265,7 +272,7 @@ function CalcU1600(props) {
 
   // ── Keyboard (MainWindow::keyPressEvent / keyReleaseEvent) ──────────
   const releaseHeldKeys = () => {
-    for (const p of heldKeys.current.values()) p.then((base) => { if (base) engine.call("hostKeyUp", base); });
+    for (const { base } of heldKeys.current.values()) base.then((b) => { if (b) engine.call("hostKeyUp", b); });
     heldKeys.current.clear();
     shiftTap.current = null;
   };
@@ -291,9 +298,10 @@ function CalcU1600(props) {
     if (/^F([7-9]|1\d)$/.test(e.key)) return;
     e.preventDefault();
     if (heldKeys.current.has(e.code)) return;
+    const down = performance.now();
     const base = engine.request("hostKeyDown", e.code, e.key, e.shiftKey, e.ctrlKey, e.altKey, e.metaKey, IS_MAC)
       .then((b) => (b === "\u0001" ? "" : b), () => "");
-    heldKeys.current.set(e.code, base);
+    heldKeys.current.set(e.code, { base, down });
   };
 
   const onKeyUp = (e) => {
@@ -306,7 +314,8 @@ function CalcU1600(props) {
     const held = heldKeys.current.get(e.code);
     if (!held) return;
     heldKeys.current.delete(e.code);
-    held.then((base) => { if (base) engine.call("hostKeyUp", base); });
+    const wait = Math.max(0, held.down + MIN_HOLD_MS - performance.now());
+    held.base.then((b) => { if (b) setTimeout(() => engine.call("hostKeyUp", b), wait); });
   };
 
   // ── Layout ──────────────────────────────────────────────────────────

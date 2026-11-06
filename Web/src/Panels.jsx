@@ -4,9 +4,9 @@
 // Same chrome on all three: a header strip, the output, a button bar with
 // pill buttons, light or dark with the system.
 
-function Panel({ title, className, children, buttons, panel }) {
+function Panel({ title, className, children, buttons, panel, empty }) {
   return (
-    <section className={`calcu-panel ${className || ""}`} data-panel={panel}>
+    <section className={`calcu-panel ${className || ""}`} data-panel={panel} data-empty={empty ? "true" : "false"}>
       <header className="calcu-panel-header">{title}</header>
       <div className="calcu-panel-body">{children}</div>
       <div className="calcu-panel-buttons">{buttons}</div>
@@ -150,7 +150,7 @@ function PlotterPaper({ engine }) {
   };
 
   return (
-    <Panel title={kind} className="calcu-paper" panel="paper"
+    <Panel title={kind} className="calcu-paper" panel="paper" empty={empty}
       buttons={
         <React.Fragment>
           <button type="button" className="calcu-pill" disabled={empty} title="Copy the paper to the clipboard as an image."
@@ -175,7 +175,7 @@ function Ce158Printer({ engine }) {
   }, [printer.text]);
   const empty = printer.chunks.length === 0;
   return (
-    <Panel title="CE-158" className="calcu-printer" panel="printer"
+    <Panel title="CE-158" className="calcu-printer" panel="printer" empty={empty}
       buttons={
         <React.Fragment>
           <button type="button" className="calcu-pill" disabled={empty} title="Save the printed bytes, exactly as sent, to a file."
