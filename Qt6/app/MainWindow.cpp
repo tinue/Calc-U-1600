@@ -311,25 +311,17 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 }
 
 void MainWindow::syncControlBarForModel() {
-    const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
-    m_controlBar->setSlot2Visible(m_controller->session().slotCount() >= 2);
-    // Each model's own peripherals get a button; all of them (CE-1600P on a
-    // PC-1600 only) are in Machine > Peripherals.
-    m_controlBar->setCe150Visible(!isPC1600);
-    m_controlBar->setCe158Visible(!isPC1600);
-    m_controlBar->setCe1600pVisible(isPC1600);
-    m_ce1600pAction->setVisible(isPC1600);
-    m_ce1600pRomMenuAction->setVisible(isPC1600);
-    // Always shown on a PC-1600 (never hidden alongside the CE-1600P
-    // toggle) so the control bar doesn't jump around as the plotter/
-    // floppy union attaches and detaches -- syncPeripherals()
-    // grays the row out instead via setFloppyEnabled().
-    m_controlBar->setFloppyVisible(isPC1600);  // its combo: syncPeripherals()
-    // PC-1500A is A04-only (PC1500Variant.hpp), so the picker is only worth
-    // showing for the plain PC-1500.
-    m_romMenuAction->setVisible(m_controller->currentModel() == Model::PC1500);
-    m_rom1600MenuAction->setVisible(isPC1600);
-    syncHostDriveActions();
+    const shared::ControlState state = m_controller->app().controlState();
+    m_controlBar->setSlot2Visible(state.slotCount >= 2);
+    m_controlBar->setCe150Visible(state.ce150.onControlBar);
+    m_controlBar->setCe158Visible(state.ce158.onControlBar);
+    m_controlBar->setCe1600pVisible(state.ce1600p.onControlBar);
+    m_ce1600pAction->setVisible(state.ce1600p.offered);
+    m_ce1600pRomMenuAction->setVisible(state.ce1600pRomMenu);
+    m_controlBar->setFloppyVisible(state.floppyShown);  // its combo: syncPeripherals()
+    m_romMenuAction->setVisible(state.pc1500RomMenu);
+    m_rom1600MenuAction->setVisible(state.pc1600RomMenu);
+    syncHostDriveActions(state);
 }
 
 void MainWindow::resetMachine(bool allReset) { m_sync->resetToPrompt(allReset); }
@@ -386,11 +378,10 @@ void MainWindow::refreshTapeCombo() {
     m_controlBar->setTapeCombo(m_tapeManager->tapeNames(), m_tapeManager->currentName());
 }
 
-void MainWindow::syncHostDriveActions() {
-    const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
-    const QString dir = m_controller->hostDriveDirectory();
-    m_mountDirectoryAction->setEnabled(isPC1600);
-    m_unmountDirectoryAction->setEnabled(isPC1600 && !dir.isEmpty());
+void MainWindow::syncHostDriveActions(const shared::ControlState& state) {
+    const QString dir = QString::fromStdString(state.hostDriveDir);
+    m_mountDirectoryAction->setEnabled(state.hostDriveOffered);
+    m_unmountDirectoryAction->setEnabled(state.hostDriveOffered && !dir.isEmpty());
     m_unmountDirectoryAction->setText(dir.isEmpty() ? tr("Unmount Directory")
                                                     : tr("Unmount \"%1\"").arg(QDir(dir).dirName()));
     m_unmountDirectoryAction->setToolTip(dir);
@@ -531,35 +522,28 @@ void MainWindow::togglePeripheral(shared::Peripheral p) {
 }
 
 void MainWindow::syncPeripherals() {
-    const bool ce150Attached = m_controller->ce150Attached();
-    const bool ce1600pAttached = m_controller->ce1600pAttached();
-    const bool ce158Attached = m_controller->ce158Attached();
-    // The CE-1600P excludes both the CE-150 and (on a PC-1600) the CE-158
-    // -- the CE-158 with the CE-1600P isn't supported yet (TODO.md, IO7N):
-    // gray out whichever buttons and menu items the attached peripherals
-    // rule out.
-    auto sync = [this](QAction* action, void (ControlBar::*setState)(bool, bool), bool attached, bool enabled) {
-        (m_controlBar->*setState)(attached, enabled);
-        action->setChecked(attached);
-        action->setEnabled(enabled);
+    const shared::ControlState state = m_controller->app().controlState();
+    auto sync = [this](QAction* action, void (ControlBar::*setState)(bool, bool), const shared::PeripheralState& p) {
+        (m_controlBar->*setState)(p.attached, p.enabled);
+        action->setChecked(p.attached);
+        action->setEnabled(p.enabled);
     };
-    sync(m_ce150Action, &ControlBar::setCe150State, ce150Attached, !ce1600pAttached);
-    sync(m_ce1600pAction, &ControlBar::setCe1600pState, ce1600pAttached, !ce150Attached && !ce158Attached);
-    sync(m_ce158Action, &ControlBar::setCe158State, ce158Attached, !ce1600pAttached);
-    // CE-1600F attaches as a union with CE-1600P (PC1600Machine::
-    // attachCE1600P()); whoever attached it (PlotterController or a
-    // preset) already put its disk in. Gray the picker in/out alongside
-    // it (it stays visible either way -- see syncControlBarForModel()).
-    m_controlBar->setFloppyEnabled(ce1600pAttached);
+    sync(m_ce150Action, &ControlBar::setCe150State, state.ce150);
+    sync(m_ce1600pAction, &ControlBar::setCe1600pState, state.ce1600p);
+    sync(m_ce158Action, &ControlBar::setCe158State, state.ce158);
+    // Whoever attached the CE-1600F (the toggle or a preset) already put
+    // its disk in; the picker only grays in and out.
+    m_controlBar->setFloppyEnabled(state.floppyEnabled);
     refreshFloppyCombo();
     // Re-kind on every sync, not just on a change: it also drops the paper's
     // cached plot revision, which a rebuilt machine's plotter restarts.
-    if (ce150Attached || ce1600pAttached)
-        m_plotterPaper->setKind(ce150Attached ? PlotterPaperWidget::Kind::CE150 : PlotterPaperWidget::Kind::CE1600P);
-    setDockedPane(m_plotterPaper, ce150Attached || ce1600pAttached);
-    m_controlBar->setTapeVisible(m_controller->tapeInterfaceAttached());
+    if (state.paper != shared::PaperKind::None)
+        m_plotterPaper->setKind(state.paper == shared::PaperKind::CE150 ? PlotterPaperWidget::Kind::CE150
+                                                                        : PlotterPaperWidget::Kind::CE1600P);
+    setDockedPane(m_plotterPaper, state.paper != shared::PaperKind::None);
+    m_controlBar->setTapeVisible(state.tapeShown);
     refreshTapeCombo();
-    setDockedPane(m_ce158Printer, ce158Attached);
+    setDockedPane(m_ce158Printer, state.printerShown);
 }
 
 void MainWindow::setDockedPane(QWidget* pane, bool show) {

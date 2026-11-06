@@ -153,6 +153,54 @@ void test_tape_status_follows_frames() {
     CHECK(f.app->tapeStatus().mode == TapeDeck::Mode::Empty);
 }
 
+// controlState(): each model's own peripherals on the bar, the CE-1600P
+// excluding the CE-150 / CE-158, the floppy and tape rows following the
+// attached boxes.
+void test_control_state() {
+    Fixture f;
+    f.settings.setStartupModelPreference("PC1500");
+    f.app->start();
+    shared::ControlState s = f.app->controlState();
+    CHECK(s.model == Model::PC1500 && s.slotCount == 1);
+    CHECK(s.ce150.onControlBar && s.ce158.onControlBar && !s.ce1600p.offered);
+    CHECK(s.ce150.enabled && s.ce158.enabled);
+    CHECK(s.pc1500RomMenu && !s.pc1600RomMenu && !s.ce1600pRomMenu);
+    CHECK(!s.floppyShown && !s.tapeShown && !s.hostDriveOffered);
+    CHECK(s.paper == shared::PaperKind::None && !s.printerShown);
+
+    CHECK(f.app->runNow(f.app->togglePeripheralJob(shared::Peripheral::CE150)).ok);
+    s = f.app->controlState();
+    CHECK(s.ce150.attached && s.tapeShown && s.paper == shared::PaperKind::CE150);
+
+    CHECK(f.app->runNow(f.app->selectModelJob(Model::PC1600)).ok);
+    s = f.app->controlState();
+    CHECK(s.slotCount == 2 && s.floppyShown && !s.floppyEnabled);
+    CHECK(s.ce1600p.offered && s.ce1600p.onControlBar && s.ce1600p.enabled);
+    CHECK(!s.ce150.onControlBar && s.ce150.offered && !s.pc1500RomMenu && s.pc1600RomMenu);
+    CHECK(s.hostDriveOffered && s.hostDriveDir.empty());
+
+    CHECK(f.app->runNow(f.app->togglePeripheralJob(shared::Peripheral::CE1600P)).ok);
+    s = f.app->controlState();
+    CHECK(s.ce1600p.attached && s.floppyEnabled && s.tapeShown && s.paper == shared::PaperKind::CE1600P);
+    CHECK(!s.ce150.enabled && !s.ce158.enabled);
+    CHECK(&s.peripheral(shared::Peripheral::CE158) == &s.ce158);
+}
+
+// A frontend without host directories never offers the host drive.
+void test_control_state_without_host_directories() {
+    struct NoDirsPlatform : RecordingPlatform {
+        bool hostDirectories() const override { return false; }
+    };
+    Fixture f;
+    NoDirsPlatform platform;
+    f.app.reset();
+    f.app = std::make_unique<AppSession>(f.settings, *f.paths, platform);
+    f.settings.setStartupModelPreference("PC1600");
+    f.app->start();
+    CHECK(!f.app->controlState().hostDriveOffered);
+    f.app.reset();
+}
+
 struct CountingSink : shared::AudioSink {
     std::size_t written = 0;
     bool start(int, int) override { return true; }
@@ -193,6 +241,8 @@ int run_shared_app_session_tests() {
     test_run_now_and_selection();
     test_tape_status_follows_frames();
     test_audio_follows_tick();
+    test_control_state();
+    test_control_state_without_host_directories();
     std::printf("shared_app_session_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

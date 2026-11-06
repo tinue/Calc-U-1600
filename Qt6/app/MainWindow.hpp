@@ -233,7 +233,7 @@ private:
     void refreshTapeCombo();
     void selectTape(const QString& nameOrEmpty);
     void saveTape();
-    void syncHostDriveActions();
+    void syncHostDriveActions(const shared::ControlState& state);
     // Reset / Reset All (control bar, Machine menu): see resetMachine() in
     // MainWindow.cpp.
     void resetMachine(bool allReset);

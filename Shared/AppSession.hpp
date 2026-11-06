@@ -8,6 +8,7 @@
 #include "Job.hpp"
 #include "Shared/AppPaths.hpp"
 #include "Shared/AudioPump.hpp"
+#include "Shared/ControlState.hpp"
 #include "Shared/FloppyBay.hpp"
 #include "Shared/MachineSession.hpp"
 #include "Shared/ModuleBay.hpp"
@@ -31,9 +32,6 @@ struct MachineCodeLoadRequest {
     int slot = 0;            // PC-1600: machinecode::Slot (0 = S0, 1 / 2 = memory slots)
     int bank = 0;            // PC-1600 slots: the global bank
 };
-
-// The 60-pin peripherals the control bar toggles.
-enum class Peripheral { CE150, CE1600P, CE158 };
 
 // Which bay a message is about.
 enum class Bay { Modules, Floppy, Tape };
@@ -75,6 +73,10 @@ public:
         virtual void attachFailed(const std::string& /*device*/, const std::string& /*reason*/) {}
         // An operation started / finished (start() and runNow()).
         virtual void busyChanged(bool /*busy*/) {}
+
+        // The host has directories the PC-1600 host drive can mount (a
+        // browser has none): File ▸ Mount Directory is offered.
+        virtual bool hostDirectories() const { return true; }
     };
 
     // `settings` and `paths` are the host's (it may need them before the
@@ -91,6 +93,10 @@ public:
     FloppyBay& floppy() { return *m_floppy; }
     TapeBay& tapes() { return *m_tapes; }
     Pacer& pacer() { return m_pacer; }
+
+    // What the pickers, menus and panels offer for the live machine
+    // (Shared/ControlState.hpp).
+    ControlState controlState() const { return controlStateOf(*m_machine, m_platform.hostDirectories()); }
 
     // Builds the first machine: the startup model from Settings, cold
     // booted. Call once, after the frontend is ready for Platform calls.
