@@ -1,12 +1,13 @@
 # Shared architecture: Core, Shared, frontends
 
-Calc-U-1600 is built in three layers, so the desktop app and a future
-WebAssembly GUI run the same emulator and the same app logic:
+Calc-U-1600 is built in three layers, so the desktop app and the
+WebAssembly client ([Web-Client.md](Web-Client.md)) run the same emulator
+and the same app logic:
 
 ```mermaid
 flowchart TB
     Qt["Qt6/app/ — desktop GUI<br/>(widgets, dialogs, menus, QSettings, QAudioSink, DAP server)"]
-    Web["Web GUI (planned)<br/>(DOM/canvas, localStorage, AudioWorklet)"]
+    Web["Web/ — web client<br/>(React, canvas, localStorage, IndexedDB, AudioWorklet)"]
     Shared["Shared/ — app logic, no GUI<br/>AppSession, MachineSession, bays, Pacer, settings, paths, layouts"]
     Core["Core/ — the hardware<br/>CPUs, machines, cards, loaders, presets, jobs"]
     Qt --> Shared
@@ -119,15 +120,13 @@ cooperatively from `tick()`, typed input. `libsharpdx-wasm.a` is the
 program loaders' Rust library built for `wasm32-unknown-emscripten`
 (`tools/build_sharpdx_wasm.sh`). Native wasm exceptions
 (`-fwasm-exceptions`), no threads; the PTY serial link compiles to its
-inert stub.
+inert stub. The web client builds the same libraries as the `calcu_web`
+target ([Web-Client.md](Web-Client.md)).
 
 ## Not in Shared yet
 
 - The DAP debugger (`Qt6/app/debug/`): its protocol logic is written
   against QJson and needs a JSON value type in Shared first.
-- A few dialog-led flows in `MainWindow`: picking one file of a multi-file
-  tape, the Load Machine Code address dialog and its NEW/CALL advice, and
-  drop dispatch.
 - The CLIs build their own preset environment rather than using
   `AppSession`.
 

@@ -1,6 +1,12 @@
 # Web GUI: a WebAssembly frontend on the Shared layer
 
-> **Status (2026-11-06): in progress.** Written before the work; differences get noted here as phases land.
+> **Status (2026-11-06): implemented** (d3e394f … this commit); developer docs in docs/developer/Web-Client.md. Differences from this plan:
+> - **Phase 0.2:** drop dispatch stays per frontend (Core's `dropfile::classify` decides; holding a drop while busy is event timing). The machine-code flow became one class, `Shared/MachineCodeLoad` (plan, address check, request, loaded advice), with `programChoice()` beside it.
+> - **Phase 0.4 dropped:** IDBFS's `autoPersist` mount option writes every change to IndexedDB itself (Core's tape and preset writes too), so Shared needs no `filesChanged()` hook.
+> - **Added in Phase 0:** `AppSession::pickModelJob()` / `defaultPresetJob()` (model pick + its default preset) and `Shared/CardYamlDump` (the INSPECTOR's Card YAML), both moved out of the Qt app.
+> - **Phase 1:** `Web/build.sh` drives CMake (target `calcu_web`, in `build-wasm/`) instead of calling `em++` directly; the curated presets exclude the CE-158 demos (they wait for serial input).
+> - **Phase 3:** hit-testing and the LCD drawing run in the page (same Shared numbers, no worker round trip). A host key's release is held back to 50 ms after its press: both events could land in one frame and the press was never scanned.
+> - **Phase 5:** `wasm-check` became the `web` job. A minimal developer doc (Web-Client.md) was written since the embed contract needs one; user docs, the parity table and the calc-u.org page stay in TODO.md.
 
 
 ## Context

@@ -27,6 +27,7 @@ decisions, plans, handoffs — is in [../background/README.md](../background/REA
 |---|---|
 | `Core/` | The emulator, free of Qt: CPUs, machines, connectors and cards, loaders, presets, resumable jobs, the debug server core; `Core/tests/` holds the test suite |
 | `Shared/` | The app logic every frontend shares, free of Qt: the live machine and its operations, bays, pacing, settings, paths, layouts ([Shared-Architecture.md](Shared-Architecture.md)); `Shared/tests/` |
+| `Web/` | The web client: WASM bindings, worker, React UI, installable app, Playwright tests ([Web-Client.md](Web-Client.md)) |
 | `Qt6/` | The desktop app (`Qt6/app/`) and its bundled resources: cards, faceplates, platform files (`Qt6/resources/`) |
 | `cmake/` | `CalcU.cmake`: the `calcu_core` / `calcu_shared` libraries for every CMake build |
 | `firmware/` | Our own ROMs, e.g. the host-drive driver ROM (`firmware/pc1600-hostdrive/`) |
@@ -42,6 +43,9 @@ decisions, plans, handoffs — is in [../background/README.md](../background/REA
 - [Shared-Architecture.md](Shared-Architecture.md) — Core, Shared and the
   frontends: the layering rules, `AppSession`, resumable jobs, the
   WebAssembly check.
+- [Web-Client.md](Web-Client.md) — the WebAssembly frontend: worker and
+  bindings, the `dist/` contract for embedding, the installable app,
+  storage, what it leaves out.
 - [PC1600-Core-Limitations.md](PC1600-Core-Limitations.md) — the deliberate
   shortcuts, unmodelled parts and open assumptions in the PC-1600 core.
 - [PC1600-Serial-Port.md](PC1600-Serial-Port.md) — the RS-232C port on a

@@ -240,10 +240,22 @@ and runs `tools/wasm_smoke.cpp` under node from the repo root: both models
 boot through `shared::AppSession` and presets run cooperatively, a slice
 per `tick()`, never blocking -- what a browser GUI will do. It keeps the
 frontend-neutral layers portable ([Shared-Architecture.md](Shared-Architecture.md));
-CI runs it as the `wasm-check` job. Needs `emcc`/`emcmake` (Homebrew
+CI runs it in the `web` job. Needs `emcc`/`emcmake` (Homebrew
 `emscripten`, or an activated emsdk; 6.0.13 matches the committed
 `libsharpdx-wasm.a`, see `Core/Basic/vendor/sharpdx/README.md`), node, and
 the ROMs for the smoke run (without them it only builds).
+
+## Web client
+
+```sh
+Web/build.sh       # the WASM engine (target calcu_web) and Web/dist/
+Web/run-tests.sh   # Playwright tests against Web/dist/
+```
+
+Same Emscripten and ROMs as the WebAssembly check, plus node; the tests
+install Playwright's Chromium and WebKit. Serve `Web/dist/` over HTTP
+(`python3 -m http.server -d Web/dist`) to try it. CI's `web` job runs the
+check, the build and the tests. See [Web-Client.md](Web-Client.md).
 
 ## Packaging
 

@@ -724,6 +724,46 @@ authentic speed for the span that matters.
 - **Settings are stored as strings.** `QSettings` reads back the native
   ints/bools older versions wrote, and older versions read the strings.
 
+- **The UI's rules are Shared's, also the small ones.** Which peripheral a
+  model offers and what excludes what (`ControlState`), the multi-file
+  tape choice and the Load Machine Code plan, hints and advice
+  (`MachineCodeLoad`), a model pick with its default preset
+  (`pickModelJob()`), the Card YAML dump: each was Qt code once and moved
+  when the web client needed it. Drop dispatch stays per frontend: Core's
+  `dropfile::classify` already decides, and holding a drop while busy is
+  event timing.
+- **Media pickers cache by file stamps, not by invalidation calls**
+  (`DirectoryScanCache`). Names, sizes and times are read with no file
+  opened, so a file copied in from outside is noticed too, and no save
+  path can forget to invalidate.
+
+### Web client (docs/background/plans/Web-GUI-Plan.md)
+- **No threads, one worker.** The engine runs in a Web Worker, single
+  threaded, without `-pthread`: SharedArrayBuffer needs COOP/COEP headers a
+  static host (GitHub Pages, a site that embeds the client) can't be relied
+  on to send. The page only draws and forwards input.
+- **IDBFS with `autoPersist`, not OPFS.** WasmFS's OPFS backend needs
+  threads. IDBFS keeps the save folder in memory and writes each change to
+  IndexedDB itself, Core's tape and preset writes included, so Shared needs
+  no "files changed" hook.
+- **One tab writes the storage** (Web Lock `calcu1600-storage`). A second
+  tab works on a copy it doesn't save and says so; two writers would
+  overwrite each other's cards.
+- **The ROMs ship in `dist/`**, as in the desktop release, and the
+  installed app precaches them.
+- **Left out on the web:** the DAP debugger (not in Shared), serial ports
+  (host PTYs), the host drive S3:, TRACE/LOG. The CE-158 demos wait for
+  serial input, so they aren't among the bundled presets.
+- **A host key is held at least 50 ms.** Keydown and keyup are separate
+  worker messages and can land in one 60 Hz frame; a press that lasts no
+  emulated time is never scanned (the PC-1600 presses physical keys for
+  real).
+- **Hit-testing and the LCD drawing are in the page.** They are drawing
+  (the Qt widgets do the same with the same Shared numbers); a round trip to
+  the worker per pointer event would add a frame of latency.
+- **React is vendored, JSX compiled at build time** (as in Calc-U-59): no
+  npm runtime dependencies, no bundler, one global (`CalcU1600`).
+
 ### Debugger IDE integration (docs/background/plans/Debugger-Use-Cases-Plan.md)
 - **Nothing is copied into a project for the generic cases.** The VS Code
   extension carries the "Debug current file" / "Reset and stop"
