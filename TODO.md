@@ -391,6 +391,20 @@ docs/background/plans/Shared-Layer-Plan.md and Shared-Layer-Followup-Plan.md.
   dialog / NEW-CALL advice (`loadMachineCodeFile`) and drop dispatch
   (`openDroppedFile`): move the decisions to Shared behind a
   `Platform::choose()`-style callback, keep the dialogs.
+- **Peripheral availability rules are Qt-only.** Which peripheral fits
+  which model (CE-150/CE-158 on the PC-1500; CE-1600P, floppy, host drive
+  on the PC-1600) and what excludes what (CE-1600P vs CE-150/CE-158) live
+  in `MainWindow::syncControlBarForModel()` / `syncPeripherals()`; Shared
+  only has attaches that silently do nothing. Shared should answer it,
+  e.g. `AppSession::peripheralState(Peripheral) -> {offered, attached,
+  enabled}`, and both frontends render that.
+- **Media lists are rescanned on every UI resync.** Since every operation
+  ends in `syncUiFromController()` (Reset, debugger loads, mounts...), each
+  one rescans and parses the card (`ModuleBay::moduleLists`, bundled +
+  instance per slot), floppy and tape directories on the UI thread --
+  instance `.card.yaml` files carry full RAM contents. Cache the lists in
+  ModuleBay / FloppyBay / TapeBay, invalidated on save-as / name-and-save /
+  directory mtime change, so a resync only refills the combos.
 - **CLIs on Shared.** `tools/pc1500_cli.cpp` / `pc1600_cli.cpp` build their
   own preset environment and both copy the `drainWav` yield hook; they could
   run presets through `AppSession` (headless Platform) instead.
