@@ -94,6 +94,13 @@ add_library(calcu_core STATIC ${CALCU_CORE_SOURCES})
 target_include_directories(calcu_core PUBLIC ${CALCU_CORE_ROOT})
 target_compile_features(calcu_core PUBLIC cxx_std_20)
 target_compile_options(calcu_core PRIVATE ${CALCU_WARNINGS})
+# The sources are UTF-8 without a BOM (U'á' literals, PC1600TypedInput.hpp);
+# MSVC would read them in the ANSI codepage (C2015). Targets linking Qt got
+# /utf-8 from Qt6::Platform; Core and Shared don't link Qt, so set it here --
+# PUBLIC, since everything that includes Core's headers needs it too.
+if(MSVC)
+  target_compile_options(calcu_core PUBLIC /utf-8)
+endif()
 target_link_libraries(calcu_core PUBLIC calcu_sharpdx)
 if(CALCU_CORE_DEBUG_O1 AND NOT MSVC)
   target_compile_options(calcu_core PRIVATE $<$<CONFIG:Debug>:-O1>)
