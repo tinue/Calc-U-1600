@@ -12,6 +12,7 @@
 #include "Debug/Inspect/Inspector.hpp"
 #include "Display/LcdScreenshot.hpp"
 #include "Display/LcdText.hpp"
+#include "Job.hpp"
 #include "KeyPaste.hpp"
 #include "PC1500/PC1500Variant.hpp"
 #include "Serial/LazySerialLink.hpp"
@@ -107,6 +108,10 @@ public:
     MachineSession(const MachineSession&) = delete;
     MachineSession& operator=(const MachineSession&) = delete;
 
+    // The long operations below (a rebuild's cold boot, a reset, a power
+    // cycle) each come as a resumable job (Core/Job.hpp) and as the
+    // blocking call of the same name that runs it straight through.
+
     // Back to the default ROMs (PC-1500 A04, PC-1600 new) without rebuilding;
     // called before a model switch, which starts from a default machine.
     void resetRomSelectionsToDefault();
@@ -117,16 +122,19 @@ public:
     // detaches it as a side effect. Default false (model switch, preset
     // load: fresh machine, nothing attached).
     void switchModel(Model model, bool keepPlotter = false);
+    job::Task<void> switchModelJob(Model model, bool keepPlotter = false);
     Model currentModel() const { return m_model; }
 
     // PC-1500 (plain) only -- PC-1500A is A04-only (see PC1500Variant.hpp)
     // and PC-1600 has its own version picker, so this only records the
     // revision in those cases, but rebuilds when a PC-1500 is active.
     void setPC1500RomRevision(PC1500RomRevision revision);
+    job::Task<void> setPC1500RomRevisionJob(PC1500RomRevision revision);
     PC1500RomRevision pc1500RomRevision() const { return m_pc1500RomRevision; }
     // PC-1600 calculator ROM version (the CE-1600P ROM is independent of
     // it). Rebuilds the machine when a PC-1600 is active.
     void setPC1600RomVersion(PC1600RomVersion version);
+    job::Task<void> setPC1600RomVersionJob(PC1600RomVersion version);
     PC1600RomVersion pc1600RomVersion() const { return m_pc1600RomVersion; }
     // CE-1600P ROM version (the CE-1600F follows it). Only records the
     // choice for the next attach -- see swapCE1600PRom().
@@ -137,6 +145,7 @@ public:
     // level), then run the boot flat out until the ROM waits at the prompt
     // -- including a plotter's power-on init. Synchronous.
     void resetToPrompt(bool allReset);
+    job::Task<void> resetToPromptJob(bool allReset);
     // Sets the live machine's clock from the host. Called when paced
     // emulation (re)starts: every flat-out run before it -- a boot, a
     // preset, a power cycle -- went ahead of (or behind) the host clock.
@@ -146,6 +155,7 @@ public:
     // to the prompt (incl. a plotter's power-on init). A machine that is
     // already off just gets `change()`.
     void powerCycleAround(const std::function<void()>& change);
+    job::Task<void> powerCycleAroundJob(std::function<void()> change);
 
     // ---- Keys and typing ----
     void pressKey(const std::string& name);

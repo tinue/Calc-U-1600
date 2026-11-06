@@ -1,8 +1,5 @@
 #include "FloppyDiskManager.hpp"
 
-#include <chrono>
-
-#include "AppPaths.hpp"
 
 namespace {
 
@@ -19,10 +16,11 @@ bool reportResult(bool ok, const std::string& err, QString* error) {
 
 } // namespace
 
-FloppyDiskManager::FloppyDiskManager(MachineController* controller, QObject* parent) : QObject(parent) {
-    shared::FloppyBay::Events events;
-    events.error = [this](const std::string& text) { emit errorMessage(QString::fromStdString(text)); };
-    m_bay = std::make_unique<shared::FloppyBay>(controller->session(), AppPaths::paths(), std::move(events));
+FloppyDiskManager::FloppyDiskManager(MachineController* controller, QObject* parent)
+    : QObject(parent), m_bay(&controller->app().floppy()) {
+    connect(controller, &MachineController::bayErrorMessage, this, [this](shared::Bay bay, const QString& text) {
+        if (bay == shared::Bay::Floppy) emit errorMessage(text);
+    });
 }
 
 FloppyDiskManager::DiskLists FloppyDiskManager::diskLists() const {
@@ -42,7 +40,3 @@ bool FloppyDiskManager::saveAsFromPreset(const QString& diskName, const QString&
                         err, error);
 }
 
-void FloppyDiskManager::markDirtyAndSchedulePersist() {
-    m_bay->markDirty();
-    m_bay->tick(std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count());
-}

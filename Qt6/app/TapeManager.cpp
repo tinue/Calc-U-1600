@@ -1,12 +1,12 @@
 #include "TapeManager.hpp"
 
-#include "AppPaths.hpp"
 
-TapeManager::TapeManager(MachineController* controller, QObject* parent) : QObject(parent) {
-    shared::TapeBay::Events events;
-    events.tapesChanged = [this] { emit tapesChanged(); };
-    events.error = [this](const std::string& text) { emit errorMessage(QString::fromStdString(text)); };
-    m_bay = std::make_unique<shared::TapeBay>(controller->session(), AppPaths::paths(), std::move(events));
+TapeManager::TapeManager(MachineController* controller, QObject* parent)
+    : QObject(parent), m_bay(&controller->app().tapes()) {
+    connect(controller, &MachineController::tapeListChanged, this, &TapeManager::tapesChanged);
+    connect(controller, &MachineController::bayErrorMessage, this, [this](shared::Bay bay, const QString& text) {
+        if (bay == shared::Bay::Tape) emit errorMessage(text);
+    });
 }
 
 QStringList TapeManager::tapeNames() const {

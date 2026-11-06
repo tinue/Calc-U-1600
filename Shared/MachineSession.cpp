@@ -67,6 +67,10 @@ void MachineSession::romMissing(const std::string& error) {
 }
 
 void MachineSession::switchModel(Model model, bool keepPlotter) {
+    job::runToCompletion(switchModelJob(model, keepPlotter));
+}
+
+job::Task<void> MachineSession::switchModelJob(Model model, bool keepPlotter) {
     const bool restoreCE150 = keepPlotter && ce150Attached();
     const bool restoreCE1600P = keepPlotter && ce1600pAttached();
     const bool restoreCE158 = keepPlotter && ce158Attached();
@@ -111,7 +115,7 @@ void MachineSession::switchModel(Model model, bool keepPlotter) {
     // it, which sets the clock from the host (see seedClockFromHost()).
     // PC1500Machine has only one reset level, so only the PC-1600 gets the
     // ALL RESET; a freshly-constructed machine's RAM is cleared either way.
-    resetToPrompt(/*allReset=*/model == Model::PC1600);
+    co_await resetToPromptJob(/*allReset=*/model == Model::PC1600);
     discardAudio(); // whatever the flat-out boot beeped is stale
 
     m_settings.setLastUsedModel(static_cast<int>(m_model));
@@ -119,13 +123,21 @@ void MachineSession::switchModel(Model model, bool keepPlotter) {
 }
 
 void MachineSession::setPC1600RomVersion(PC1600RomVersion version) {
+    job::runToCompletion(setPC1600RomVersionJob(version));
+}
+
+job::Task<void> MachineSession::setPC1600RomVersionJob(PC1600RomVersion version) {
     m_pc1600RomVersion = version;
-    if (m_model == Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
+    if (m_model == Model::PC1600) co_await switchModelJob(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
 }
 
 void MachineSession::setPC1500RomRevision(PC1500RomRevision revision) {
+    job::runToCompletion(setPC1500RomRevisionJob(revision));
+}
+
+job::Task<void> MachineSession::setPC1500RomRevisionJob(PC1500RomRevision revision) {
     m_pc1500RomRevision = revision;
-    if (m_model != Model::PC1600) switchModel(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
+    if (m_model != Model::PC1600) co_await switchModelJob(m_model, /*keepPlotter=*/true); // rebuild with the new ROM
 }
 
 std::vector<std::string> MachineSession::bundledRomDirs() const { return {m_paths.bundledResourcesDir()}; }
@@ -215,33 +227,54 @@ void MachineSession::seedClockFromHost() {
     withMachine([](auto& machine) { seedClockFromHostTime(machine); });
 }
 
-void MachineSession::resetToPrompt(bool allReset) {
+void MachineSession::resetToPrompt(bool allReset) { job::runToCompletion(resetToPromptJob(allReset)); }
+
+job::Task<void> MachineSession::resetToPromptJob(bool allReset) {
     cancelPaste();
-    withMachine([allReset](auto& machine) {
-        if (allReset) machine.allReset();
-        else machine.reset();
-        runBootToPrompt(machine);
-    });
+    if (m_pc1600) {
+        if (allReset) m_pc1600->allReset();
+        else m_pc1600->reset();
+        co_await runBootToPromptJob(*m_pc1600);
+    } else if (m_pc1500) {
+        if (allReset) m_pc1500->allReset();
+        else m_pc1500->reset();
+        co_await runBootToPromptJob(*m_pc1500);
+    }
 }
 
+namespace {
+
+// The OFF / power-down / change / ON / boot cycle on one machine type.
+template <class Machine>
+job::Task<void> powerCycle(Machine& machine, std::uint64_t frame, std::function<void()> change,
+                           std::function<bool()> poweredOn) {
+    machine.pressKey("off");
+    co_await job::run(machine, frame * kKeyHoldFrames);
+    machine.releaseKey("off");
+    for (int i = 0; i < kPowerOffTimeoutFrames && poweredOn(); ++i) co_await job::run(machine, frame);
+    change();
+    machine.setOnKeyPressed(true);
+    co_await job::run(machine, frame * kKeyHoldFrames);
+    machine.setOnKeyPressed(false);
+    co_await runBootToPromptJob(machine);
+}
+
+} // namespace
+
 void MachineSession::powerCycleAround(const std::function<void()>& change) {
+    job::runToCompletion(powerCycleAroundJob(change));
+}
+
+job::Task<void> MachineSession::powerCycleAroundJob(std::function<void()> change) {
     if (!isMachinePoweredOn()) {
         change();  // already off: no synthetic power cycle needed
-        return;
+        co_return;
     }
     cancelPaste();
     const auto frame = static_cast<std::uint64_t>(clockHz() / 60);
-    withMachine([&](auto& machine) {
-        machine.pressKey("off");
-        machine.runCycles(frame * kKeyHoldFrames);
-        machine.releaseKey("off");
-        for (int i = 0; i < kPowerOffTimeoutFrames && isMachinePoweredOn(); ++i) machine.runCycles(frame);
-        change();
-        machine.setOnKeyPressed(true);
-        machine.runCycles(frame * kKeyHoldFrames);
-        machine.setOnKeyPressed(false);
-        runBootToPrompt(machine);
-    });
+    const auto poweredOn = [this] { return isMachinePoweredOn(); };
+    if (m_pc1600) co_await powerCycle(*m_pc1600, frame, change, poweredOn);
+    else if (m_pc1500) co_await powerCycle(*m_pc1500, frame, change, poweredOn);
 }
 
 // ---- Keys and typing ----

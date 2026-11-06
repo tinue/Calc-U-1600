@@ -2,16 +2,15 @@
 #include <QObject>
 #include <QString>
 #include <QVector>
-#include <memory>
 
 #include "MachineController.hpp"
 #include "Connector/MemoryCardDefinition.hpp"  // CardHost
 #include "Shared/ModuleBay.hpp"
 
-// The control bar's memory-module slots: shared::ModuleBay
+// The control bar's memory-module slots: the session's shared::ModuleBay
 // (Shared/ModuleBay.hpp has the rules -- selection, rebuild-time attach,
 // battery autosave, Name & Save, preset save-as) with Qt signals and
-// QStrings.
+// QStrings. Its autosave runs in AppSession::frameDuties().
 class MemoryModuleManager : public QObject {
     Q_OBJECT
 public:
@@ -41,9 +40,6 @@ public:
     bool saveAsFromPreset(int slot, const QString& instanceName, const QString& filePath, bool asTemplate,
                           QString* error);
 
-    // Once per frame tick: marks the live cards dirty and writes what the
-    // debounce lets through.
-    void markDirtyAndSchedulePersist();
     void flushPendingPersist() { m_bay->flushPendingPersist(); }
     void onModelChanged() { m_bay->onModelChanged(); }
 
@@ -52,5 +48,5 @@ signals:
     void errorMessage(const QString& text);
 
 private:
-    std::unique_ptr<shared::ModuleBay> m_bay;
+    shared::ModuleBay* m_bay;  // the session's
 };

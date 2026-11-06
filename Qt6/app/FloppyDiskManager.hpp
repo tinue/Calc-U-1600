@@ -2,12 +2,11 @@
 #include <QObject>
 #include <QString>
 #include <QVector>
-#include <memory>
 
 #include "MachineController.hpp"
 #include "Shared/FloppyBay.hpp"
 
-// The control bar's CE-1600F disk picker: shared::FloppyBay
+// The control bar's CE-1600F disk picker: the session's shared::FloppyBay
 // (Shared/FloppyBay.hpp has the rules -- selection, side, autosave, Name &
 // Save, preset save-as) with Qt signals and QStrings.
 class FloppyDiskManager : public QObject {
@@ -37,14 +36,11 @@ public:
     bool nameAndSave(const QString& diskName, QString* error);
     bool saveAsFromPreset(const QString& diskName, const QString& filePath, bool asTemplate, QString* error);
 
-    // Once per frame tick: notices a changed disk and writes what the
-    // debounce lets through.
-    void markDirtyAndSchedulePersist();
     void flushPendingPersist() { m_bay->flushPendingPersist(); }
 
 signals:
     void errorMessage(const QString& text);
 
 private:
-    std::unique_ptr<shared::FloppyBay> m_bay;
+    shared::FloppyBay* m_bay;  // the session's
 };

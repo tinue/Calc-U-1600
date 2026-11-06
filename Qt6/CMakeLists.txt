@@ -95,7 +95,6 @@ qt_add_executable(CalcU1600Qt
   app/LcdWidget.cpp
   app/ControlBar.cpp
   app/DebugPanel.cpp
-  app/PlotterController.cpp
   app/PlotterPaperWidget.cpp
   app/Ce158PrinterWidget.cpp
   app/PC1500KeyboardMap.cpp
@@ -107,7 +106,6 @@ qt_add_executable(CalcU1600Qt
   app/SettingsDialog.cpp
   app/MachineCodeLoadDialog.cpp
   app/AboutDialog.cpp
-  app/PresetController.cpp
   app/AudioOutput.cpp
   app/debug/DapServer.cpp
   app/debug/DapSession.cpp

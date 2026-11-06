@@ -26,14 +26,12 @@ class QActionGroup;
 class FaceplateWidget;
 class ControlBar;
 class DebugPanel;
-class PlotterController;
 class SyncOperations;
 class PlotterPaperWidget;
 class Ce158PrinterWidget;
 class MemoryModuleManager;
 class FloppyDiskManager;
 class TapeManager;
-class PresetController;
 class AudioOutput;
 class EmulationPacer;
 
@@ -114,8 +112,6 @@ private:
     std::unique_ptr<MemoryModuleManager> m_moduleManager;
     std::unique_ptr<FloppyDiskManager> m_floppyManager;
     std::unique_ptr<TapeManager> m_tapeManager;
-    std::unique_ptr<PresetController> m_presetController;
-    std::unique_ptr<PlotterController> m_plotterController;
     FaceplateWidget* m_faceplate = nullptr;
     ControlBar* m_controlBar = nullptr;
     DebugPanel* m_debugPanel = nullptr;
@@ -177,7 +173,7 @@ private:
     // File/Help actions whose handlers are wired up in the constructor
     // (alongside the equivalent ControlBar signal), not inside
     // buildMenuBar() itself, so both share one closure over local
-    // constructor state (m_presetController, m_frameTimer, ...).
+    // constructor state (m_sync, m_pacer, ...).
     QAction* m_openPresetAction = nullptr;
     QAction* m_loadBasicProgramAction = nullptr;
     QAction* m_loadMachineCodeAction = nullptr;
@@ -195,14 +191,16 @@ private:
     // (manual, module-driven rebuild, or preset load).
     void syncControlBarForModel();
 
-    // PlotterController::attachStateChanged handler: reads the CE-150/
+    // After a peripheral toggle, a rebuild or a preset: reads the CE-150/
     // CE-1600P/CE-158 attach states from MachineController and matches the
     // control-bar buttons, the floppy picker and the docked panes to them.
     void syncPeripherals();
+    // Attaches or detaches `p` inside the OFF/ON power cycle, then resyncs.
+    void togglePeripheral(shared::Peripheral p);
     // Docks `pane` into (or takes it out of) the debug row.
     void setDockedPane(QWidget* pane, bool show);
 
-    // PresetController::armed handler: the preset has attached its
+    // MachineController::presetWasArmed handler: the preset has attached its
     // model/cards/plotter but the machine is still powered off. Resyncs
     // every GUI element that reflects that state (faceplate/control-bar
     // model, plotter-paper visibility, slot selectors) and forces a repaint

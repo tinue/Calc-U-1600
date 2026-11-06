@@ -1,8 +1,5 @@
 #include "MemoryModuleManager.hpp"
 
-#include <chrono>
-
-#include "AppPaths.hpp"
 
 namespace {
 
@@ -17,17 +14,15 @@ bool reportResult(bool ok, const std::string& err, QString* error) {
     return ok;
 }
 
-double monotonicSeconds() {
-    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
-}
 
 } // namespace
 
-MemoryModuleManager::MemoryModuleManager(MachineController* controller, QObject* parent) : QObject(parent) {
-    shared::ModuleBay::Events events;
-    events.moduleChanged = [this](int slot) { emit moduleChanged(slot); };
-    events.error = [this](const std::string& text) { emit errorMessage(QString::fromStdString(text)); };
-    m_bay = std::make_unique<shared::ModuleBay>(controller->session(), AppPaths::paths(), std::move(events));
+MemoryModuleManager::MemoryModuleManager(MachineController* controller, QObject* parent)
+    : QObject(parent), m_bay(&controller->app().modules()) {
+    connect(controller, &MachineController::bayModuleChanged, this, &MemoryModuleManager::moduleChanged);
+    connect(controller, &MachineController::bayErrorMessage, this, [this](shared::Bay bay, const QString& text) {
+        if (bay == shared::Bay::Modules) emit errorMessage(text);
+    });
 }
 
 MemoryModuleManager::ModuleLists MemoryModuleManager::moduleLists(CardHost host) const {
@@ -48,7 +43,3 @@ bool MemoryModuleManager::saveAsFromPreset(int slot, const QString& instanceName
         error);
 }
 
-void MemoryModuleManager::markDirtyAndSchedulePersist() {
-    m_bay->markDirty();
-    m_bay->tick(monotonicSeconds());
-}

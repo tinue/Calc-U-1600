@@ -9,13 +9,11 @@
 #include "FloppyDiskManager.hpp"
 #include "TapeManager.hpp"
 #include "PC1500KeyboardMap.hpp"
-#include "PlotterController.hpp"
 #include "PlotterPaperWidget.hpp"
 #include "Ce158PrinterWidget.hpp"
 #include "SettingsDialog.hpp"
 #include "AboutDialog.hpp"
 #include "MachineCodeLoadDialog.hpp"
-#include "PresetController.hpp"
 #include "AudioOutput.hpp"
 #include "EmulationPacer.hpp"
 #include "debug/DebugController.hpp"
@@ -79,12 +77,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     m_controller = std::make_unique<MachineController>(this);
     m_moduleManager = std::make_unique<MemoryModuleManager>(m_controller.get(), this);
-    m_controller->setModuleManager(m_moduleManager.get());
     m_floppyManager = std::make_unique<FloppyDiskManager>(m_controller.get(), this);
     m_tapeManager = std::make_unique<TapeManager>(m_controller.get(), this);
-    m_controller->setFloppyManager(m_floppyManager.get());
-    m_presetController = std::make_unique<PresetController>(m_controller.get(), m_moduleManager.get(),
-                                                             m_floppyManager.get(), this);
 
     // QMainWindow takes exactly one central widget; the faceplate, control
     // bar and debug panel live in this wrapper.
@@ -93,7 +87,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_controlBar = new ControlBar(central);
     m_debugPanel = new DebugPanel(m_controller.get(), central);
     m_debugPanel->setModuleManager(m_moduleManager.get());
-    m_plotterController = std::make_unique<PlotterController>(m_controller.get(), this);
     m_plotterPaper = new PlotterPaperWidget(m_controller.get(), central);
     m_plotterPaper->hide(); // added to m_debugRowLayout only once a plotter attaches
     m_ce158Printer = new Ce158PrinterWidget(m_controller.get(), central);
@@ -128,10 +121,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     connect(m_controlBar, &ControlBar::modelSelected, this, &MainWindow::applyModelSelection);
     connect(m_controlBar, &ControlBar::moduleSelected, this, [this](int slot, QString moduleNameOrEmpty) {
-        m_moduleManager->selectModule(slot, moduleNameOrEmpty);
-        m_controller->switchModel(m_controller->currentModel(), /*keepPlotter=*/true); // rebuild -> re-attach
-        m_pacer->restart(); // after the rebuild's flat-out boot
-        m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
+        m_sync->run(tr("Memory Module"), m_controller->app().selectModuleJob(slot, moduleNameOrEmpty.toStdString()));
+        syncPeripherals(); // the plotter survives the rebuild
         refreshModuleCombos();
     });
     connect(m_controlBar, &ControlBar::nameAndSaveRequested, this, [this](int slot) {
@@ -150,7 +141,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         SettingsDialog dialog(m_controller.get(), this);
         dialog.exec();
     };
-    connect(m_presetController.get(), &PresetController::armed, this, &MainWindow::onPresetArmed);
+    connect(m_controller.get(), &MachineController::presetWasArmed, this, &MainWindow::onPresetArmed);
     auto openPresetDialog = [this] {
         const QString path = QFileDialog::getOpenFileName(this, tr("Load Preset"),
                                                             AppSettings::openStartDir(AppSettings::OpenFolder::Samples),
@@ -204,23 +195,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_floppyManager.get(), &FloppyDiskManager::errorMessage, this,
             [this](const QString& text) { QMessageBox::warning(this, tr("Floppy Disk"), text); });
     connect(m_controlBar, &ControlBar::ce150ToggleRequested, this,
-            [this] { m_plotterController->requestToggleCE150(); });
+            [this] { togglePeripheral(shared::Peripheral::CE150); });
     connect(m_controlBar, &ControlBar::ce1600pToggleRequested, this,
-            [this] { m_plotterController->requestToggleCE1600P(); });
-    m_plotterController->setPowerCycleRunner([this](const std::function<void()>& change) {
-        // Flat out, like Reset: the pin header's power-on rotation isn't worth
-        // watching, and the clock is re-injected afterwards.
-        m_sync->run(tr("Plotter"), [this, &change](QString* error) {
-            return m_presetController->powerCycleLive(change, error);
-        });
-    });
-    connect(m_plotterController.get(), &PlotterController::attachStateChanged, this, &MainWindow::syncPeripherals);
+            [this] { togglePeripheral(shared::Peripheral::CE1600P); });
     connect(m_controlBar, &ControlBar::ce158ToggleRequested, this,
-            [this] { m_plotterController->requestToggleCE158(); });
+            [this] { togglePeripheral(shared::Peripheral::CE158); });
     // Queued: the failure is reported from inside the power cycle, and the
     // dialog should appear once the machine is back on, not block it off.
     connect(
-        m_plotterController.get(), &PlotterController::attachFailed, this,
+        m_controller.get(), &MachineController::peripheralAttachFailed, this,
         [this](const QString& device, const QString& reason) {
             QMessageBox::warning(this, tr("Attach %1").arg(device),
                                  reason.isEmpty() ? tr("The %1 could not be attached.").arg(device)
@@ -257,7 +240,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_audio = new AudioOutput(this);
     m_pacer = new EmulationPacer(m_controller.get(), m_audio, [this] { refreshViewsAfterAdvance(); }, this);
     m_sync = new SyncOperations(
-        this, m_controller.get(), m_presetController.get(), m_pacer, m_moduleManager.get(), m_floppyManager.get(),
+        this, m_controller.get(), m_pacer,
         [this] {
             m_faceplate->lcdWidget()->setFrame(m_controller->currentDisplay());
             m_faceplate->lcdWidget()->update();
@@ -360,24 +343,14 @@ void MainWindow::mountHostDirectory() {
         QFileDialog::getExistingDirectory(this, title, AppSettings::openStartDir(AppSettings::OpenFolder::HostDrive));
     if (dir.isEmpty()) return;
     AppSettings::rememberOpenDir(AppSettings::OpenFolder::HostDrive, dir);
-    if (m_controller->hostDriveAttached()) {
-        m_controller->attachHostDrive(dir);
-    } else {
-        m_sync->run(title, [this, &dir](QString* error) {
-            bool attached = false;
-            const bool cycled = m_presetController->powerCycleLive(
-                [this, &dir, &attached, error] { attached = m_controller->attachHostDrive(dir, error); }, error);
-            return cycled && attached;
-        });
-    }
+    // A power cycle if no drive is attached yet, else a live directory swap.
+    m_sync->run(title, m_controller->app().mountHostDriveJob(dir.toStdString()));
     syncHostDriveActions();
 }
 
 void MainWindow::unmountHostDirectory() {
     if (!m_controller->hostDriveAttached()) return;
-    m_sync->run(tr("Unmount Directory"), [this](QString* error) {
-        return m_presetController->powerCycleLive([this] { m_controller->detachHostDrive(); }, error);
-    });
+    m_sync->run(tr("Unmount Directory"), m_controller->app().mountHostDriveJob({}));
     syncHostDriveActions();
 }
 
@@ -468,7 +441,9 @@ void MainWindow::loadBasicProgramFile(const QString& path) {
     std::optional<std::vector<uint8_t>> bytes = readProgramFile(path, title);
     if (!bytes) return;
     m_sync->run(title, [this, &bytes, &path](QString* error) {
-        return m_presetController->loadBasicProgramLive(*bytes, path, error);
+        const shared::OpResult r = m_controller->app().loadBasicProgram(*bytes, path.toStdString());
+        *error = QString::fromStdString(r.error);
+        return r.ok;
     });
 }
 
@@ -493,7 +468,7 @@ void MainWindow::loadMachineCodeFile(const QString& path) {
         return;
     }
 
-    PresetController::MachineCodeLoadRequest request;
+    shared::MachineCodeLoadRequest request;
     request.payload = code.payload;
     uint32_t addr = code.loadAddr & 0xFFFF;  // in the code's CPU's address space (a header's bank is plan.bank)
     request.addr = plan.busAddr;
@@ -512,7 +487,9 @@ void MainWindow::loadMachineCodeFile(const QString& path) {
 
     bool loaded = false;
     m_sync->run(title, [this, &request, &loaded](QString* error) {
-        loaded = m_presetController->loadMachineCodeLive(request, error);
+        const shared::OpResult r = m_controller->app().loadMachineCode(request);
+        *error = QString::fromStdString(r.error);
+        loaded = r.ok;
         return loaded;
     });
     if (!loaded) return;
@@ -554,6 +531,13 @@ void MainWindow::loadMachineCodeFile(const QString& path) {
 
     // Type the proposed CALL, ready to run: the user presses ENTER.
     m_controller->pasteText(advice.callCommand);
+}
+
+void MainWindow::togglePeripheral(shared::Peripheral p) {
+    // Flat out, like Reset: the pin header's power-on rotation isn't worth
+    // watching, and the clock is re-injected afterwards.
+    m_sync->run(tr("Plotter"), m_controller->app().togglePeripheralJob(p));
+    syncPeripherals();
 }
 
 void MainWindow::syncPeripherals() {
@@ -601,7 +585,7 @@ void MainWindow::setDockedPane(QWidget* pane, bool show) {
 
 void MainWindow::onPresetArmed() {
     // The preset attached its plotter directly on the Core machine, bypassing
-    // PlotterController/attachCE150()/attachCE1600P() entirely -- the plotter
+    // the control bar's toggles entirely -- the plotter
     // resync inside this picks that up from the machine's actual state.
     syncUiFromController();
     // Force a repaint of the armed-but-off state now, before control
@@ -630,7 +614,7 @@ void MainWindow::syncUiFromController() {
     syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
     syncMachineMenuFromCE1600PRomVersion(m_controller->ce1600pRomVersion());
     refreshModuleCombos();
-    m_plotterController->syncFromMachineState();
+    syncPeripherals();
 }
 
 void MainWindow::refreshModuleCombos() {
@@ -964,12 +948,9 @@ void MainWindow::refreshViewsAfterAdvance() {
     m_faceplate->lcdWidget()->setFrame(frame);
     m_faceplate->lcdWidget()->update();
 
-    m_moduleManager->markDirtyAndSchedulePersist();
-    m_floppyManager->markDirtyAndSchedulePersist();
+    // (Card/disk autosave and the tape bay run in AppSession::frameDuties().)
     m_controlBar->setFloppyMotorOn(m_floppyManager->motorOn());
-    const TapeDeck::Status tapeStatus = m_controller->tapeStatus();
-    m_tapeManager->onFrameTick(tapeStatus);
-    m_controlBar->setTapeStatus(tapeStatus);
+    m_controlBar->setTapeStatus(m_controller->tapeStatus());
     m_debugPanel->onFrameTick();
     if (m_debugRowLayout->indexOf(m_plotterPaper) >= 0) m_plotterPaper->onFrameTick();
     if (m_debugRowLayout->indexOf(m_ce158Printer) >= 0) m_ce158Printer->onFrameTick();
@@ -1105,17 +1086,17 @@ void MainWindow::buildMenuBar() {
     m_ce1600pRomMenuAction->setVisible(false);
 
     // Peripherals: checkable like the control bar's toggles; syncPeripherals()
-    // resyncs check and enabled state once PlotterController confirms.
+    // resyncs check and enabled state once the toggle has run.
     QMenu* peripheralsMenu = machineMenu->addMenu(tr("Peripherals"));
-    auto addPeripheralAction = [&](const QString& label, void (PlotterController::*toggle)()) {
+    auto addPeripheralAction = [&](const QString& label, shared::Peripheral p) {
         QAction* action = peripheralsMenu->addAction(label);
         action->setCheckable(true);
-        connect(action, &QAction::triggered, this, [this, toggle] { (m_plotterController.get()->*toggle)(); });
+        connect(action, &QAction::triggered, this, [this, p] { togglePeripheral(p); });
         return action;
     };
-    m_ce150Action = addPeripheralAction(tr("CE-150"), &PlotterController::requestToggleCE150);
-    m_ce158Action = addPeripheralAction(tr("CE-158"), &PlotterController::requestToggleCE158);
-    m_ce1600pAction = addPeripheralAction(tr("CE-1600P"), &PlotterController::requestToggleCE1600P);
+    m_ce150Action = addPeripheralAction(tr("CE-150"), shared::Peripheral::CE150);
+    m_ce158Action = addPeripheralAction(tr("CE-158"), shared::Peripheral::CE158);
+    m_ce1600pAction = addPeripheralAction(tr("CE-1600P"), shared::Peripheral::CE1600P);
     m_ce1600pAction->setVisible(false);
 
     machineMenu->addSeparator();
@@ -1136,15 +1117,9 @@ void MainWindow::applyModelSelection(Model model) {
     // The Machine menu's QActionGroup re-emits triggered() for the item
     // that is already checked; re-picking it must not cold-rebuild.
     if (model == m_controller->currentModel()) return;
-    m_moduleManager->flushPendingPersist();
-    m_floppyManager->flushPendingPersist();
-    m_moduleManager->onModelChanged();
-    // A model switch is a fresh default machine: A04 / new ROM, no plotter, no
-    // modules (onModelChanged above), no floppy. A startup preset customises it.
-    m_controller->resetRomSelectionsToDefault();
-    m_controller->switchModel(model);
-    m_pacer->restart(); // after the rebuild's flat-out boot
-    m_floppyManager->selectDisk(QString());
+    // A fresh default machine (AppSession::selectModelJob()); a startup
+    // preset customises it.
+    m_sync->run(tr("Machine"), m_controller->app().selectModelJob(model));
     syncUiFromController();
     applyDefaultPreset(model);
 }
@@ -1157,22 +1132,16 @@ void MainWindow::applyDefaultPreset(Model model) {
 
 void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
     if (revision == m_controller->pc1500RomRevision()) return; // see applyModelSelection()
-    m_moduleManager->flushPendingPersist();
-    m_floppyManager->flushPendingPersist();
-    m_controller->setPC1500RomRevision(revision); // rebuilds the machine
-    m_pacer->restart(); // after the rebuild's flat-out boot
-    m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
+    m_sync->run(tr("ROM"), m_controller->app().selectPC1500RomJob(revision)); // rebuilds the machine
+    syncPeripherals(); // the plotter survives the rebuild
     syncMachineMenuFromRomRevision(revision);
     refreshModuleCombos();
 }
 
 void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
     if (version == m_controller->pc1600RomVersion()) return; // see applyModelSelection()
-    m_moduleManager->flushPendingPersist();
-    m_floppyManager->flushPendingPersist();
-    m_controller->setPC1600RomVersion(version); // rebuilds the machine when a PC-1600 is active
-    m_pacer->restart(); // after the rebuild's flat-out boot
-    m_plotterController->syncFromMachineState(); // the plotter survives the rebuild
+    m_sync->run(tr("ROM"), m_controller->app().selectPC1600RomJob(version)); // rebuilds a PC-1600
+    syncPeripherals(); // the plotter survives the rebuild
     // The controller may have fallen back to New if the old ROM failed to load.
     syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
     syncControlBarForModel();
@@ -1184,8 +1153,8 @@ void MainWindow::applyCE1600PRomVersionSelection(CE1600PRomVersion version) {
     // The ROM is in the CE-1600P box: on an attached one this is a box swap
     // inside an OFF/ON cycle (no rebuild, RAM survives); otherwise it just
     // records the choice for the next attach.
-    if (m_controller->ce1600pAttached()) m_plotterController->requestCE1600PRomSwap(version);
-    else m_controller->setCE1600PRomVersion(version);
+    m_sync->run(tr("Plotter"), m_controller->app().selectCE1600PRomJob(version));
+    syncPeripherals();
     // The controller may have fallen back to New if the old ROM failed to load.
     syncMachineMenuFromCE1600PRomVersion(m_controller->ce1600pRomVersion());
 }

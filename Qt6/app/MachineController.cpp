@@ -2,13 +2,12 @@
 
 #include <cstdlib>
 
+#include <QDebug>
 #include <QMessageBox>
 #include <QtGlobal>
 
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
-#include "FloppyDiskManager.hpp"
-#include "MemoryModuleManager.hpp"
 #include "debug/DebugController.hpp"
 
 namespace {
@@ -22,16 +21,17 @@ bool report(bool ok, const std::string& err, QString* error) {
 } // namespace
 
 MachineController::MachineController(QObject* parent) : QObject(parent) {
-    shared::MachineSession::Listener& listener = *this;
-    m_session = std::make_unique<shared::MachineSession>(AppSettings::settings(), AppPaths::paths(), listener);
+    shared::AppSession::Platform& platform = *this;
+    m_app = std::make_unique<shared::AppSession>(AppSettings::settings(), AppPaths::paths(), platform);
     m_debug = std::make_unique<DebugController>(this);
-    m_session->switchModel(AppSettings::settings().startupModel());
+    m_app->start();
     m_debug->refreshServer();
 }
 
 MachineController::~MachineController() {
     // The debugger goes first: its target refers to the live machine.
     m_debug.reset();
+    m_app.reset();
 }
 
 // A missing/unreadable bundled ROM means the install is broken -- there's
@@ -85,16 +85,16 @@ void MachineController::machineReplaced() {
     if (m_debug) m_debug->machineReplaced();
 }
 
-void MachineController::attachModulesToFreshMachine() {
-    if (m_moduleManager) m_moduleManager->attachAllToFreshMachine();
+void MachineController::bayError(shared::Bay bay, const std::string& text) {
+    emit bayErrorMessage(bay, QString::fromStdString(text));
 }
 
-void MachineController::flushFloppy() {
-    if (m_floppyManager) m_floppyManager->flushPendingPersist();
+void MachineController::presetLog(const std::string& line) {
+    qDebug().noquote() << "[preset]" << QString::fromStdString(line);
 }
 
-void MachineController::insertSelectedDisk() {
-    if (m_floppyManager) m_floppyManager->insertSelectedDisk();
+void MachineController::attachFailed(const std::string& device, const std::string& reason) {
+    emit peripheralAttachFailed(QString::fromStdString(device), QString::fromStdString(reason));
 }
 
 bool MachineController::runDebuggerSlice(std::uint64_t cycles) {
@@ -107,35 +107,35 @@ void MachineController::refreshDebugServer() { m_debug->refreshServer(); }
 
 bool MachineController::attachCE150(QString* error) {
     std::string err;
-    return report(m_session->attachCE150(&err), err, error);
+    return report(session().attachCE150(&err), err, error);
 }
 
 bool MachineController::attachCE1600P(QString* error) {
     std::string err;
-    return report(m_session->attachCE1600P(&err), err, error);
+    return report(session().attachCE1600P(&err), err, error);
 }
 
 bool MachineController::swapCE1600PRom(CE1600PRomVersion version, QString* error) {
     std::string err;
-    return report(m_session->swapCE1600PRom(version, &err), err, error);
+    return report(session().swapCE1600PRom(version, &err), err, error);
 }
 
 bool MachineController::attachCE158(QString* error) {
     std::string err;
-    return report(m_session->attachCE158(&err), err, error);
+    return report(session().attachCE158(&err), err, error);
 }
 
 bool MachineController::attachHostDrive(const QString& dir, QString* error) {
     std::string err;
-    return report(m_session->attachHostDrive(dir.toStdString(), &err), err, error);
+    return report(session().attachHostDrive(dir.toStdString(), &err), err, error);
 }
 
 bool MachineController::tapePlay(const QString& path, QString* error) {
     std::string err;
-    return report(m_session->tapePlay(path.toStdString(), &err), err, error);
+    return report(session().tapePlay(path.toStdString(), &err), err, error);
 }
 
 bool MachineController::tapeEject(QString* error) {
     std::string err;
-    return report(m_session->tapeEject(&err), err, error);
+    return report(session().tapeEject(&err), err, error);
 }
