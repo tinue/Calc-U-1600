@@ -6,26 +6,14 @@
 #include <QDebug>
 #include <QIODevice>
 #include <QMediaDevices>
-#include <QTimer>
 #include <algorithm>
 
-#include "MachineController.hpp"
 
 namespace {
 constexpr int kBytesPerSample = 2;
 } // namespace
 
-AudioOutput::AudioOutput(QObject* parent) : QObject(parent) {
-    shared::AudioSink& sink = *this;
-    m_pump = std::make_unique<shared::AudioPump>(
-        sink, [](const std::string& text) { qWarning().noquote() << QString::fromStdString(text); });
-    // Pay the audio backend's first-start cost right after startup.
-    QTimer::singleShot(0, this, [this] { m_pump->warmUp(); });
-}
-
-AudioOutput::~AudioOutput() { m_pump.reset(); }
-
-void AudioOutput::pump(MachineController& controller, bool discard) { m_pump->pump(controller.session(), discard); }
+AudioOutput::AudioOutput(QObject* parent) : QObject(parent) {}
 
 bool AudioOutput::start(int sampleRate, int bufferMs) {
     const QAudioDevice device = QMediaDevices::defaultAudioOutput();

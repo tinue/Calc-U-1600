@@ -29,6 +29,7 @@
 #include <QHBoxLayout>
 #include <QInputMethodEvent>
 #include <QVBoxLayout>
+#include <QDebug>
 #include <QTimer>
 #include <QElapsedTimer>
 #include <QKeyEvent>
@@ -235,8 +236,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         setWindowTitle(paused ? tr("Calc-U-1600 — Paused (debugger)") : tr("Calc-U-1600"));
     });
 
+    // The sink is a child of the window, so it outlives m_controller (and
+    // with it the session's audio pump).
     m_audio = new AudioOutput(this);
-    m_pacer = new EmulationPacer(m_controller.get(), m_audio, [this] { refreshViewsAfterAdvance(); }, this);
+    m_controller->app().attachAudio(m_audio->sink(), [](const std::string& text) {
+        qWarning().noquote() << QString::fromStdString(text);
+    });
+    // Pay the audio backend's first-start cost right after startup.
+    QTimer::singleShot(0, this, [this] { m_controller->app().warmUpAudio(); });
+    m_pacer = new EmulationPacer(m_controller.get(), [this] { refreshViewsAfterAdvance(); }, this);
     m_sync = new SyncOperations(
         this, m_controller.get(), m_pacer,
         [this] {

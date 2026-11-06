@@ -7,6 +7,7 @@
 
 #include "Job.hpp"
 #include "Shared/AppPaths.hpp"
+#include "Shared/AudioPump.hpp"
 #include "Shared/FloppyBay.hpp"
 #include "Shared/MachineSession.hpp"
 #include "Shared/ModuleBay.hpp"
@@ -146,12 +147,25 @@ public:
 
     // ---- Frame ----
     // The frontend's frame tick: a slice of the running operation, or
-    // paced emulation (turbo if set on pacer()); then frameDuties(). True
-    // if the tick ran turbo (its audio is not real time).
-    bool tick();
+    // paced emulation (turbo if set on pacer()); then frameDuties() and the
+    // buzzer audio (played if attachAudio() was called, thrown away when
+    // the tick wasn't real time: turbo or an operation slice).
+    void tick();
     // Per-frame bookkeeping: battery-card and disk autosave, the tape bay.
     // Also runs at the end of every operation.
     void frameDuties();
+
+    // Scripted runs (frozen frontends, the --shots runner): `seconds` of
+    // emulated time / until the paste queue is empty (false if it still
+    // types after `capSeconds`), then frameDuties(). Not real time, so the
+    // audio is thrown away.
+    void runFor(double seconds);
+    bool runUntilPasteDone(double capSeconds);
+
+    // The host's audio output; it must outlive the session. Without one
+    // the audio is drained and dropped. warmUpAudio(): AudioPump::warmUp().
+    void attachAudio(AudioSink& sink, AudioPump::Warn warn);
+    void warmUpAudio();
     // The tape deck as frameDuties() last read it (what the tape bay saw).
     const TapeDeck::Status& tapeStatus() const { return m_tapeStatus; }
 
@@ -181,6 +195,7 @@ private:
     std::unique_ptr<TapeBay> m_tapes;
     Pacer m_pacer;
     TapeDeck::Status m_tapeStatus;
+    std::unique_ptr<AudioPump> m_audio;
 
     bool m_busy = false;
     job::Job<OpResult> m_op;

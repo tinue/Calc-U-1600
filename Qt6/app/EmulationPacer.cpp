@@ -3,7 +3,6 @@
 #include <QTimer>
 #include <utility>
 
-#include "AudioOutput.hpp"
 #include "MachineController.hpp"
 
 namespace {
@@ -11,9 +10,8 @@ namespace {
 constexpr int kFrameIntervalMs = 16;
 } // namespace
 
-EmulationPacer::EmulationPacer(MachineController* controller, AudioOutput* audio,
-                               std::function<void()> refreshViews, QObject* parent)
-    : QObject(parent), m_controller(controller), m_audio(audio), m_refreshViews(std::move(refreshViews)) {
+EmulationPacer::EmulationPacer(MachineController* controller, std::function<void()> refreshViews, QObject* parent)
+    : QObject(parent), m_controller(controller), m_refreshViews(std::move(refreshViews)) {
     m_timer = new QTimer(this);
     m_timer->setTimerType(Qt::PreciseTimer);
     connect(m_timer, &QTimer::timeout, this, &EmulationPacer::onTick);
@@ -45,22 +43,17 @@ void EmulationPacer::setFrozen(bool frozen) {
 }
 
 void EmulationPacer::onTick() {
-    const bool turbo = m_controller->app().tick();
-    m_audio->pump(*m_controller, /*discard=*/turbo);
+    m_controller->app().tick();
     m_refreshViews();
 }
 
 void EmulationPacer::runFor(double seconds) {
-    shared::runEmulatedSeconds(m_controller->session(), seconds);
-    m_controller->app().frameDuties();
-    m_controller->discardAudio(); // not paced in real time -- nothing to play
+    m_controller->app().runFor(seconds);
     m_refreshViews();
 }
 
 bool EmulationPacer::runUntilPasteDone(double capSeconds) {
-    const bool done = shared::runUntilPasteDone(m_controller->session(), capSeconds);
-    m_controller->app().frameDuties();
-    m_controller->discardAudio();
+    const bool done = m_controller->app().runUntilPasteDone(capSeconds);
     m_refreshViews();
     return done;
 }

@@ -129,8 +129,8 @@ OpResult AppSession::runNow(job::Task<OpResult> op, const std::function<void()>&
     return result;
 }
 
-bool AppSession::tick() {
-    bool turbo = false;
+void AppSession::tick() {
+    bool realTime = false;
     if (m_busy && m_op.valid()) {
         // A slice of the running operation instead of paced emulation.
         bool done = false;
@@ -149,10 +149,32 @@ bool AppSession::tick() {
             if (doneFn) doneFn(result);
         }
     } else if (!m_busy) {
-        turbo = m_pacer.tick(*m_machine);
+        realTime = !m_pacer.tick(*m_machine);
     }
     frameDuties();
-    return turbo;
+    if (m_audio) m_audio->pump(*m_machine, /*discard=*/!realTime);
+    else m_machine->discardAudio();
+}
+
+void AppSession::runFor(double seconds) {
+    runEmulatedSeconds(*m_machine, seconds);
+    frameDuties();
+    m_machine->discardAudio();
+}
+
+bool AppSession::runUntilPasteDone(double capSeconds) {
+    const bool done = shared::runUntilPasteDone(*m_machine, capSeconds);
+    frameDuties();
+    m_machine->discardAudio();
+    return done;
+}
+
+void AppSession::attachAudio(AudioSink& sink, AudioPump::Warn warn) {
+    m_audio = std::make_unique<AudioPump>(sink, std::move(warn));
+}
+
+void AppSession::warmUpAudio() {
+    if (m_audio) m_audio->warmUp();
 }
 
 void AppSession::frameDuties() {

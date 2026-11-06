@@ -153,6 +153,35 @@ void test_tape_status_follows_frames() {
     CHECK(f.app->tapeStatus().mode == TapeDeck::Mode::Empty);
 }
 
+struct CountingSink : shared::AudioSink {
+    std::size_t written = 0;
+    bool start(int, int) override { return true; }
+    void stop() override {}
+    std::size_t room() const override { return 1 << 20; }
+    void write(const std::int16_t*, std::size_t count) override { written += count; }
+    bool ranDry() const override { return false; }
+};
+
+// tick() plays the buzzer in real time and throws turbo audio away.
+void test_audio_follows_tick() {
+    Fixture f;
+    CountingSink sink;
+    f.app->attachAudio(sink, {});
+    f.settings.setStartupModelPreference("PC1600");
+    f.app->start();
+    f.app->machine().typeCommand("BEEP 50");
+    CHECK(f.app->runUntilPasteDone(5.0));
+    CHECK(sink.written == 0);  // scripted: not real time
+    const std::int64_t deadline = shared::Pacer::steadyNowNs() + 3'000'000'000LL;
+    while (sink.written == 0 && shared::Pacer::steadyNowNs() < deadline) f.app->tick();
+    CHECK(sink.written > 0);
+    f.app->pacer().setTurbo(true);
+    f.app->tick();  // drops what the paced ticks left
+    const std::size_t before = sink.written;
+    for (int i = 0; i < 5; ++i) f.app->tick();
+    CHECK(sink.written == before);
+}
+
 } // namespace
 
 int run_shared_app_session_tests() {
@@ -163,6 +192,7 @@ int run_shared_app_session_tests() {
     test_cooperative_preset();
     test_run_now_and_selection();
     test_tape_status_follows_frames();
+    test_audio_follows_tick();
     std::printf("shared_app_session_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

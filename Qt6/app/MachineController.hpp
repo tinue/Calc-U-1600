@@ -84,7 +84,6 @@ public:
     bool liveTypingActive() const { return session().liveTypingActive(); }
 
     GrayImage currentScreenImage() const { return session().currentScreenImage(); }
-    void discardAudio() { session().discardAudio(); }
     DisplayFrame currentDisplay() const { return session().currentDisplay(); }
     bool lcdText(LcdText* out) const { return session().lcdText(out); }
 
