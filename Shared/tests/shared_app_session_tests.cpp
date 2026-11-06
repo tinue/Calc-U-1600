@@ -15,6 +15,7 @@
 #include "PC1600/PC1600Machine.hpp"
 #include "Shared/AppSession.hpp"
 #include "Shared/MachineCodeLoad.hpp"
+#include "Shared/MediaLibrary.hpp"
 #include "SharedTestSupport.hpp"
 
 namespace {
@@ -281,6 +282,59 @@ void test_machine_code_load() {
     CHECK(check.valid && !check.hint.empty());
 }
 
+const shared::MediaItem* findItem(const std::vector<shared::MediaItem>& items, const std::string& name) {
+    for (const auto& item : items)
+        if (item.name == name) return &item;
+    return nullptr;
+}
+
+// MediaLibrary: the save folder's cards, disks and tapes -- listed with
+// their in-use state, exported, deleted (not while in use), imported back
+// (not over an existing name).
+void test_media_library() {
+    Fixture f;
+    f.settings.setStartupModelPreference("PC1600");
+    f.app->start();
+    shared::MediaLibrary library(*f.app);
+    CHECK(library.items().empty());
+
+    CHECK(f.app->runNow(f.app->selectModuleJob(1, "CE-1600M")).ok);
+    std::string error;
+    CHECK(f.app->modules().nameAndSave(1, "Work", &error));
+    std::vector<shared::MediaItem> items = library.items();
+    const shared::MediaItem* work = findItem(items, "Work");
+    CHECK(work && work->type == shared::MediaType::Card && work->inUse && !work->isTemplate);
+    CHECK(work && work->fileName == "Work.card.yaml");
+    if (!work) return;
+    const shared::MediaItem workItem = *work;
+    std::vector<std::uint8_t> bytes;
+    CHECK(library.exportBytes(workItem, &bytes) && !bytes.empty());
+    CHECK(!library.remove(workItem).ok);  // in slot 1
+
+    CHECK(f.app->runNow(f.app->selectModuleJob(1, "")).ok);
+    CHECK(library.remove(workItem).ok);
+    CHECK(library.items().empty());
+    CHECK(library.importFile("Work.card.yaml", bytes).ok);
+    CHECK(findItem(library.items(), "Work") != nullptr);
+    CHECK(!library.importFile("Work.card.yaml", bytes).ok);  // exists
+    shared::OpResult r = library.importFile("x.card.yaml", {'n', 'o', 'p', 'e'});
+    CHECK(!r.ok && r.error.find("isn't a card file") != std::string::npos);
+    // A bundled card's name is taken.
+    std::vector<std::uint8_t> bundled = readBytes("Qt6/resources/cards/ce161.card.yaml");
+    CHECK(!bundled.empty() && !library.importFile("ce161.card.yaml", bundled).ok);
+
+    const std::vector<std::uint8_t> wav = readBytes("Core/tests/fixtures/tape/pc1500_tape.wav");
+    CHECK(library.importFile("Side A.wav", wav).ok);
+    CHECK(!library.importFile("side a.wav", wav).ok);
+    CHECK(!library.importFile("Broken.wav", {'R', 'I', 'F', 'F'}).ok);
+    CHECK(findItem(library.items(), "Broken") == nullptr);
+    items = library.items();
+    const shared::MediaItem* tape = findItem(items, "Side A");
+    CHECK(tape && tape->type == shared::MediaType::Tape && !tape->inUse);
+    CHECK(!library.importFile("notes.txt", {'x'}).ok);
+    CHECK(shared::MediaLibrary::importable("A.WAV") && !shared::MediaLibrary::importable("a.bas"));
+}
+
 struct CountingSink : shared::AudioSink {
     std::size_t written = 0;
     bool start(int, int) override { return true; }
@@ -325,6 +379,7 @@ int run_shared_app_session_tests() {
     test_control_state_without_host_directories();
     test_program_choice();
     test_machine_code_load();
+    test_media_library();
     std::printf("shared_app_session_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }
