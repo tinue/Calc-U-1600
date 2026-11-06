@@ -68,6 +68,18 @@ if(EMSCRIPTEN)
   # from the host file system, run from the repo root under node.
   target_link_options(wasm_smoke PRIVATE -fwasm-exceptions -sNODERAWFS=1 -sALLOW_MEMORY_GROWTH=1
                       -sENVIRONMENT=node -sEXIT_RUNTIME=1)
+
+  # The web client's engine (Web/build.sh copies it into Web/dist/wasm/):
+  # Shared/ behind Web/bindings.cpp, for a Web Worker. No -pthread: a static
+  # host can't be relied on for the COOP/COEP headers threads need. IDBFS
+  # keeps the save folder in IndexedDB (mounted by the worker).
+  add_executable(calcu_web ${CMAKE_CURRENT_SOURCE_DIR}/Web/bindings.cpp)
+  target_link_libraries(calcu_web PRIVATE calcu_shared)
+  set_target_properties(calcu_web PROPERTIES OUTPUT_NAME calcu1600-core)
+  target_link_options(calcu_web PRIVATE -fwasm-exceptions -lembind -lidbfs.js -sMODULARIZE=1
+                      -sEXPORT_NAME=createCalcU1600Module -sENVIRONMENT=worker -sALLOW_MEMORY_GROWTH=1
+                      -sSTACK_SIZE=1MB
+                      -sEXPORTED_RUNTIME_METHODS=FS,IDBFS,getExceptionMessage,decrementExceptionRefcount)
   return()
 endif()
 
