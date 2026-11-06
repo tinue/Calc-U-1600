@@ -6,6 +6,17 @@
 
 namespace AppPaths {
 
+namespace {
+
+// Where the bundled resources live -- *.card.yaml catalog AND ROM images
+// (disjoint filename extensions, one shared directory) -- resolved
+// relative to the running executable: macOS .app bundle's
+// Contents/Resources (via applicationDirPath()'s Contents/MacOS +
+// "../Resources"), or a "resources" folder next to the binary on
+// Windows/Linux (matching windeployqt's and AppImage's flat-next-to-binary
+// convention). Read-only bundled content -- never created if missing; a
+// missing/unreadable directory is tolerated by scanMemoryCardDirectory()/
+// BundledRomCatalog (empty catalogue / resolve failure).
 QString bundledResourcesDir() {
     const QString exeDir = QCoreApplication::applicationDirPath();
 #if defined(Q_OS_MACOS)
@@ -22,43 +33,21 @@ QString bundledResourcesDir() {
 #endif
 }
 
+QString q(const std::string& s) { return QString::fromStdString(s); }
+
+} // namespace
+
 shared::AppPaths& paths() {
     static shared::AppPaths p(AppSettings::settings(),
                               shared::HostDirs{QDir::homePath().toStdString(), bundledResourcesDir().toStdString()});
     return p;
 }
 
-namespace {
-QString q(const std::string& s) { return QString::fromStdString(s); }
-} // namespace
-
 QString defaultInstanceDir() { return q(paths().defaultInstanceDir()); }
 void setIsolatedInstanceDir(const QString& dir) { paths().setIsolatedInstanceDir(dir.toStdString()); }
 QString displayPath(const QString& path) { return q(paths().displayPath(path.toStdString())); }
 QString instanceDir() { return q(paths().instanceDir()); }
-QString instancePathFor(const QString& instanceName) { return q(paths().instancePathFor(instanceName.toStdString())); }
-QString floppyInstancePathFor(const QString& diskName) {
-    return q(paths().floppyInstancePathFor(diskName.toStdString()));
-}
 QString tapeDir() { return q(paths().tapeDir()); }
-QString tapePathFor(const QString& tapeName) { return q(paths().tapePathFor(tapeName.toStdString())); }
-bool isUnderDir(const QString& path, const QString& dir) {
-    return shared::isUnderDir(path.toStdString(), dir.toStdString());
-}
-
-bool atomicWriteFile(const QString& path, const std::string& text) {
-    return shared::atomicWriteFile(path.toStdString(), text);
-}
-
-bool planNamedSave(MediaKind kind, const QString& name, const QString& explicitPath, bool asTemplate,
-                   QString* path, QString* error) {
-    std::string planned;
-    const MediaSaveRefusal refusal =
-        paths().planNamedSave(kind, name.toStdString(), explicitPath.toStdString(), asTemplate, &planned);
-    *path = QString::fromStdString(planned);
-    if (refusal == MediaSaveRefusal::None) return true;
-    *error = QString::fromStdString(shared::mediaSaveRefusalMessage(refusal, name.toStdString(), planned));
-    return false;
-}
-
+QString traceDir() { return q(paths().traceDir()); }
+QString serialLinkDir() { return q(paths().serialLinkDir()); }
 }  // namespace AppPaths

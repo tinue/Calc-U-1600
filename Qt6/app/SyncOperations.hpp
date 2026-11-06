@@ -34,7 +34,7 @@ public:
     bool run(const QString& title, job::Task<shared::OpResult> op, const std::function<void()>& afterLoad = {},
              QString* error = nullptr);
     /// The same for an instant operation (no emulated time).
-    bool run(const QString& title, const std::function<bool(QString*)>& op,
+    bool run(const QString& title, const std::function<shared::OpResult()>& op,
              const std::function<void()>& afterLoad = {}, QString* error = nullptr);
 
     /// Resyncs the UI after a preset (it may have attached peripherals and

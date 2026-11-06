@@ -180,6 +180,10 @@ private:
     // audio, and its clock is off -- re-seed it and rebase pacing.
     void beginOperation();
     void endOperation();
+    // Steps `j` for one kOperationSliceSeconds slice; true once it's done.
+    bool stepSlice(job::Job<OpResult>& j);
+    // The finished job's result; a thrown exception becomes a failure.
+    static OpResult takeResult(job::Job<OpResult>& j);
     double nowSeconds() const;
 
     Settings& m_settings;

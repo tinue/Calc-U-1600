@@ -1,6 +1,5 @@
 #include "MemoryModuleManager.hpp"
 
-
 namespace {
 
 QVector<MemoryModuleManager::ModuleEntry> toQt(const std::vector<shared::ModuleBay::ModuleEntry>& entries) {
@@ -8,12 +7,6 @@ QVector<MemoryModuleManager::ModuleEntry> toQt(const std::vector<shared::ModuleB
     for (const auto& e : entries) out.push_back({QString::fromStdString(e.moduleName), e.battery, e.rom});
     return out;
 }
-
-bool reportResult(bool ok, const std::string& err, QString* error) {
-    if (!ok && error) *error = QString::fromStdString(err);
-    return ok;
-}
-
 
 } // namespace
 
@@ -31,15 +24,5 @@ MemoryModuleManager::ModuleLists MemoryModuleManager::moduleLists(CardHost host)
 }
 
 bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QString* error) {
-    std::string err;
-    return reportResult(m_bay->nameAndSave(slot, instanceName.toStdString(), &err), err, error);
+    return withQtError(error, [&](std::string* err) { return m_bay->nameAndSave(slot, instanceName.toStdString(), err); });
 }
-
-bool MemoryModuleManager::saveAsFromPreset(int slot, const QString& instanceName, const QString& filePath,
-                                           bool asTemplate, QString* error) {
-    std::string err;
-    return reportResult(
-        m_bay->saveAsFromPreset(slot, instanceName.toStdString(), filePath.toStdString(), asTemplate, &err), err,
-        error);
-}
-

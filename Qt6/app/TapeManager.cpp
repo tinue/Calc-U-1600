@@ -16,10 +16,7 @@ QStringList TapeManager::tapeNames() const {
 }
 
 bool TapeManager::selectForPlay(const QString& nameOrEmpty, QString* error) {
-    std::string err;
-    const bool ok = m_bay->selectForPlay(nameOrEmpty.toStdString(), &err);
-    if (!ok && error) *error = QString::fromStdString(err);
-    return ok;
+    return withQtError(error, [&](std::string* err) { return m_bay->selectForPlay(nameOrEmpty.toStdString(), err); });
 }
 
 bool TapeManager::recordNew(const QString& name, QString* error) {

@@ -94,23 +94,33 @@ bool AppSession::start(job::Task<OpResult> op, Done done) {
     return true;
 }
 
+bool AppSession::stepSlice(job::Job<OpResult>& j) {
+    const std::int64_t deadline = Pacer::steadyNowNs() + static_cast<std::int64_t>(kOperationSliceSeconds * 1e9);
+    const auto cyclesPerStep = static_cast<std::uint64_t>(m_machine->clockHz() / 1000);
+    for (;;) {
+        if (j.step(cyclesPerStep)) return true;
+        if (Pacer::steadyNowNs() >= deadline) return false;
+    }
+}
+
+OpResult AppSession::takeResult(job::Job<OpResult>& j) {
+    try {
+        return j.result();
+    } catch (const std::exception& e) {
+        return OpResult::fail(e.what());
+    }
+}
+
 OpResult AppSession::runNow(job::Task<OpResult> op, const std::function<void()>& pump) {
     if (m_busy) return job::runToCompletion(std::move(op));  // nested: straight through
     beginOperation();
     job::Job<OpResult> j(std::move(op));
-    const auto sliceNs = static_cast<std::int64_t>(kOperationSliceSeconds * 1e9);
     OpResult result;
     try {
-        for (;;) {
-            const std::int64_t deadline = Pacer::steadyNowNs() + sliceNs;
-            bool done = false;
-            while (!(done = j.step(static_cast<std::uint64_t>(m_machine->clockHz() / 1000))) &&
-                   Pacer::steadyNowNs() < deadline) {
-            }
-            if (done) break;
+        while (!stepSlice(j)) {
             if (pump) pump();
         }
-        result = j.result();
+        result = takeResult(j);
     } catch (const std::exception& e) {
         result = OpResult::fail(e.what());
     }
@@ -122,18 +132,16 @@ bool AppSession::tick() {
     bool turbo = false;
     if (m_busy && m_op.valid()) {
         // A slice of the running operation instead of paced emulation.
-        const std::int64_t deadline = Pacer::steadyNowNs() + static_cast<std::int64_t>(kOperationSliceSeconds * 1e9);
         bool done = false;
-        while (!(done = m_op.step(static_cast<std::uint64_t>(m_machine->clockHz() / 1000))) &&
-               Pacer::steadyNowNs() < deadline) {
+        OpResult result;
+        try {
+            done = stepSlice(m_op);
+            if (done) result = takeResult(m_op);
+        } catch (const std::exception& e) {
+            done = true;
+            result = OpResult::fail(e.what());
         }
         if (done) {
-            OpResult result;
-            try {
-                result = m_op.result();
-            } catch (const std::exception& e) {
-                result = OpResult::fail(e.what());
-            }
             m_op = job::Job<OpResult>();
             Done doneFn = std::exchange(m_opDone, {});
             endOperation();
@@ -148,9 +156,7 @@ bool AppSession::tick() {
 
 void AppSession::frameDuties() {
     const double now = nowSeconds();
-    m_modules->markDirty();
     m_modules->tick(now);
-    m_floppy->markDirty();
     m_floppy->tick(now);
     m_tapes->onFrameTick(m_machine->tapeStatus());
 }
@@ -170,10 +176,8 @@ job::Task<OpResult> AppSession::loadPresetJob(std::string path, bool armOnly) {
     const std::string bundled = m_paths.bundledResourcesDir();
     const std::vector<std::string> romDirs = {bundled};
     const std::vector<std::string> extraModuleDirs = {m_paths.instanceDir()};
-    // `- trace:` and `- screenshot:` write into the trace folder setting,
-    // else the save folder.
-    const std::string traceSetting = m_settings.traceDirOverride();
-    const std::string traceDir = traceSetting.empty() ? m_paths.instanceDir() : traceSetting;
+    // `- trace:` and `- screenshot:` write into the trace folder.
+    const std::string traceDir = m_paths.traceDir();
     const PresetLogFn log = [this](const std::string& line) { m_platform.presetLog(line); };
     const PresetSaveAsFn onSaveAs = [this](const PresetSaveAsRequest& request, std::string* error) {
         switch (request.target) {

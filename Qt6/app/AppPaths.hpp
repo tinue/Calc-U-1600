@@ -16,20 +16,9 @@
 namespace AppPaths {
 
 // The shared::AppPaths every call below forwards to (Shared/AppPaths.hpp
-// has the rules); built on first use from bundledResourcesDir() and the
-// home folder.
+// has the rules); built on first use from the bundled resources folder
+// next to the executable and the home folder.
 shared::AppPaths& paths();
-
-// Where the bundled resources live -- *.card.yaml catalog AND ROM images
-// (disjoint filename extensions, one shared directory) -- resolved
-// relative to the running executable: macOS .app bundle's
-// Contents/Resources (via applicationDirPath()'s Contents/MacOS +
-// "../Resources"), or a "resources" folder next to the binary on
-// Windows/Linux (matching windeployqt's and AppImage's flat-next-to-binary
-// convention). Read-only bundled content -- never created if missing; a
-// missing/unreadable directory is tolerated by scanMemoryCardDirectory()/
-// BundledRomCatalog (empty catalogue / resolve failure).
-QString bundledResourcesDir();
 
 // ~/Calc-U-1600 (home dir, non-dotted) -- or, in a screenshot run, the
 // throwaway folder set by setIsolatedInstanceDir() -- created if missing.
@@ -50,32 +39,14 @@ QString displayPath(const QString& path);
 // to find "where battery-card instances live right now".
 QString instanceDir();
 
-// The full path a fresh save under `instanceName` should write to.
-QString instancePathFor(const QString& instanceName);
-
-// Same as instancePathFor(), but for CE-1600F floppy disks:
-// "<name>.floppy.yaml" (Connector/FloppyImageFile.hpp) instead of
-// "<name>.card.yaml".
-QString floppyInstancePathFor(const QString& diskName);
-
 // Cassette tapes (TapeManager): AppSettings::tapeDirOverride() if
 // non-empty, else "Tapes" inside instanceDir(); created on demand. A tape
 // named `tapeName` is "<tapeName>.wav" there (namedFileName()'s rules).
 QString tapeDir();
-QString tapePathFor(const QString& tapeName);
 
-// The saves of a card or a floppy under a name (Name & Save, a preset's
-// `saveas:`) by the shared rules (Connector/MediaSave.hpp), for the
-// managers: where the file goes, or -- false -- the refusal in the GUI's
-// words.
-bool planNamedSave(MediaKind kind, const QString& name, const QString& explicitPath, bool asTemplate,
-                   QString* path, QString* error);
-
-// True if `path` resolves to somewhere inside `dir` (both canonicalized;
-// false if either doesn't exist).
-bool isUnderDir(const QString& path, const QString& dir);
-
-// shared::atomicWriteFile(): a temp file beside `path`, renamed into place.
-bool atomicWriteFile(const QString& path, const std::string& text);
+// shared::AppPaths::traceDir() / serialLinkDir(): the Settings override,
+// else instanceDir().
+QString traceDir();
+QString serialLinkDir();
 
 }  // namespace AppPaths

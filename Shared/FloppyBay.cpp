@@ -9,6 +9,7 @@
 #include "PC1600/PC1600Machine.hpp"
 #include "Shared/AppPaths.hpp"
 #include "Shared/MachineSession.hpp"
+#include "Shared/Text.hpp"
 #include "Shared/Utf8Path.hpp"
 
 namespace shared {
@@ -24,15 +25,6 @@ std::vector<std::string> namesIn(const std::string& dir) {
 bool contains(const std::vector<std::string>& names, const std::string& name) {
     return std::find(names.begin(), names.end(), name) != names.end();
 }
-
-std::string trimmed(const std::string& s) {
-    const auto b = s.find_first_not_of(" \t\r\n");
-    if (b == std::string::npos) return {};
-    const auto e = s.find_last_not_of(" \t\r\n");
-    return s.substr(b, e - b + 1);
-}
-
-std::string inQuotes(const std::string& s) { return "\"" + s + "\""; }
 
 } // namespace
 
@@ -109,8 +101,8 @@ void FloppyBay::syncFromPresetLoad(const std::string& labelOrEmpty, const std::s
 
 bool FloppyBay::nameCollides(const std::string& diskName) const {
     std::error_code ec;
-    return contains(namesIn(m_paths.instanceDir()), diskName) ||
-           std::filesystem::exists(toPath(m_paths.floppyInstancePathFor(diskName)), ec);
+    return std::filesystem::exists(toPath(m_paths.floppyInstancePathFor(diskName)), ec) ||
+           contains(namesIn(m_paths.instanceDir()), diskName);
 }
 
 bool FloppyBay::nameAndSave(const std::string& diskName, std::string* error) {
@@ -173,26 +165,19 @@ void FloppyBay::writeInstance() {
     atomicWriteFile(m_instanceFilePath, formatFloppyFile(m_diskName, m1600->ce1600fDiskImage()));
 }
 
-void FloppyBay::markDirty() {
-    PC1600Machine* m1600 = drive();
-    if (!m1600) return;
-    const std::uint64_t rev = m1600->ce1600fRevision();
-    if (rev == m_lastSeenRevision) return;
-    m_lastSeenRevision = rev;
-    if (m_instanceFilePath.empty()) return;  // dirty, but nothing to autosave to yet
-    m_persistPending = true;
-    m_debounceArmed = true;
-}
-
 void FloppyBay::tick(double nowSeconds) {
-    if (!m_debounceArmed) return;
-    if (!m_debounceDue) {
-        // Not restarted by further writes, so a long disk operation still
-        // autosaves every kPersistDebounceSeconds.
-        m_debounceDue = nowSeconds + kPersistDebounceSeconds;
-        return;
+    if (PC1600Machine* m1600 = drive()) {
+        const std::uint64_t rev = m1600->ce1600fRevision();
+        if (rev != m_lastSeenRevision) {
+            m_lastSeenRevision = rev;
+            if (!m_instanceFilePath.empty()) m_persistPending = true;  // else nothing to autosave to yet
+        }
     }
-    if (nowSeconds >= *m_debounceDue) flushPendingPersist();
+    if (!m_persistPending) return;
+    // Not restarted by further writes, so a long disk operation still
+    // autosaves every kPersistDebounceSeconds.
+    if (!m_persistDue) m_persistDue = nowSeconds + kPersistDebounceSeconds;
+    else if (nowSeconds >= *m_persistDue) flushPendingPersist();
 }
 
 bool FloppyBay::canNameAndSave() const {
@@ -218,8 +203,7 @@ bool FloppyBay::motorOn() const {
 }
 
 void FloppyBay::flushPendingPersist() {
-    m_debounceArmed = false;
-    m_debounceDue.reset();
+    m_persistDue.reset();
     if (!m_persistPending) return;
     writeInstance();
     m_persistPending = false;

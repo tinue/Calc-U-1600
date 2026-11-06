@@ -17,18 +17,14 @@ namespace {
 constexpr int kPumpIntervalMs = 30;
 constexpr int kPopupDelayMs = 500;
 
-job::Task<shared::OpResult> instant(std::function<bool(QString*)> op) {
-    QString error;
-    const bool ok = op(&error);
-    co_return ok ? shared::OpResult{} : shared::OpResult::fail(error.toStdString());
-}
+job::Task<shared::OpResult> instant(std::function<shared::OpResult()> op) { co_return op(); }
 } // namespace
 
 SyncOperations::SyncOperations(QWidget* window, MachineController* machines, EmulationPacer* pacer,
                                std::function<void()> refreshLcd, QObject* parent)
     : QObject(parent), m_window(window), m_machines(machines), m_pacer(pacer), m_refreshLcd(std::move(refreshLcd)) {}
 
-bool SyncOperations::run(const QString& title, const std::function<bool(QString*)>& op,
+bool SyncOperations::run(const QString& title, const std::function<shared::OpResult()>& op,
                          const std::function<void()>& afterLoad, QString* error) {
     return run(title, instant(op), afterLoad, error);
 }

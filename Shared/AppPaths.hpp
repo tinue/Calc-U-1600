@@ -55,6 +55,12 @@ public:
     std::string tapeDir() const;
     std::string tapePathFor(const std::string& tapeName) const;
 
+    // Settings::traceDirOverride() / serialLinkDirOverride() if set, else
+    // instanceDir(): where TRACE.bin and preset screenshots go, and where
+    // the serial ports' PTY symlinks live.
+    std::string traceDir() const;
+    std::string serialLinkDir() const;
+
     // A save of a card or a floppy under a name (Name & Save, a preset's
     // `saveas:`) by the shared rules (Connector/MediaSave.hpp): the path in
     // *path, and the refusal (None if allowed).

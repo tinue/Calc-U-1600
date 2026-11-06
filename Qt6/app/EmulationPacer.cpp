@@ -17,13 +17,13 @@ EmulationPacer::EmulationPacer(MachineController* controller, AudioOutput* audio
     m_timer = new QTimer(this);
     m_timer->setTimerType(Qt::PreciseTimer);
     connect(m_timer, &QTimer::timeout, this, &EmulationPacer::onTick);
+    restart();
     resume();
 }
 
 void EmulationPacer::suspend() { m_timer->stop(); }
 
 void EmulationPacer::resume() {
-    restart();
     if (!m_frozen) m_timer->start(kFrameIntervalMs);
 }
 
@@ -36,8 +36,12 @@ void EmulationPacer::setTurbo(bool active) { m_controller->app().pacer().setTurb
 
 void EmulationPacer::setFrozen(bool frozen) {
     m_frozen = frozen;
-    if (frozen) m_timer->stop();
-    else resume();
+    if (frozen) {
+        m_timer->stop();
+        return;
+    }
+    restart();
+    resume();
 }
 
 void EmulationPacer::onTick() {

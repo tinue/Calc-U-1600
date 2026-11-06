@@ -27,10 +27,9 @@ class MachineSession;
 // selectModule() (state only), then rebuild
 // (MachineSession::switchModel(currentModel(), true)).
 //
-// Battery cards loaded from a saved instance autosave in place: the
-// frontend calls markDirty() once per frame, and tick() writes changed
-// cards at most every kPersistDebounceSeconds (only when the card's
-// content revision moved since the file was last read or written).
+// Battery cards loaded from a saved instance autosave in place: tick(),
+// called once per frame, writes a card kPersistDebounceSeconds after its
+// content revision moved away from the one last read or written.
 //
 // Messages for the user come back in English (the app has no
 // translations).
@@ -100,10 +99,8 @@ public:
     bool saveAsFromPreset(int slot, const std::string& instanceName, const std::string& filePath, bool asTemplate,
                           std::string* error);
 
-    // Once per frame: the live cards may have changed.
-    void markDirty();
-    // Writes pending autosaves once the debounce has passed. `nowSeconds`
-    // is any monotonic host clock.
+    // Once per frame: notices changed cards and writes them once the
+    // debounce has passed. `nowSeconds` is any monotonic host clock.
     void tick(double nowSeconds);
     // Writes pending autosaves now (before a select, rebuild, quit).
     void flushPendingPersist();
@@ -120,7 +117,6 @@ private:
         bool battery = false;          // that file declares `battery: true`
         std::string instanceFilePath;  // == sourcePath for an instance (autosaved there), else empty
         std::string romFile;           // a preset's `slot-N-rom:` file: never saved, re-read on re-attach
-        bool persistPending = false;
         // The card's contentRevision() when last attached from / written to
         // instanceFilePath; unset = unknown, so the next persist writes.
         std::optional<std::uint64_t> persistedRevision;
@@ -147,10 +143,8 @@ private:
     const AppPaths& m_paths;
     Events m_events;
     SlotState m_slots[2];  // index 0 = slot 1, index 1 = slot 2
-    // markDirty() arms the debounce: tick() persists once it has seen
-    // kPersistDebounceSeconds pass since then.
-    bool m_debounceArmed = false;
-    std::optional<double> m_debounceDue;
+    // Set by tick() on the first changed frame; it persists once reached.
+    std::optional<double> m_persistDue;
 };
 
 } // namespace shared

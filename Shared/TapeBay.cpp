@@ -7,6 +7,7 @@
 
 #include "Shared/AppPaths.hpp"
 #include "Shared/MachineSession.hpp"
+#include "Shared/Text.hpp"
 #include "Shared/Utf8Path.hpp"
 
 namespace shared {
@@ -18,13 +19,6 @@ namespace {
 std::string lower(std::string s) {
     for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     return s;
-}
-
-std::string trimmed(const std::string& s) {
-    const auto b = s.find_first_not_of(" \t\r\n");
-    if (b == std::string::npos) return {};
-    const auto e = s.find_last_not_of(" \t\r\n");
-    return s.substr(b, e - b + 1);
 }
 
 // "<name>.wav" -> "<name>": everything before the last suffix, like

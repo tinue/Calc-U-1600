@@ -50,7 +50,7 @@ MachineSession::MachineSession(Settings& settings, const AppPaths& paths, Listen
       m_paths(paths),
       m_listener(listener),
       m_ce158SerialLink([this] {
-          return std::make_unique<PtySerialLink>(effectiveSerialLinkDir(), PtySerialLink::kCE158LinkName);
+          return std::make_unique<PtySerialLink>(m_paths.serialLinkDir(), PtySerialLink::kCE158LinkName);
       }) {}
 
 MachineSession::~MachineSession() = default;
@@ -179,13 +179,8 @@ void MachineSession::finishPresetLoad(Model model) {
     m_listener.modelSwitched(m_model);
 }
 
-std::string MachineSession::effectiveSerialLinkDir() const {
-    const std::string dir = m_settings.serialLinkDirOverride();
-    return dir.empty() ? m_paths.instanceDir() : dir;
-}
-
 void MachineSession::refreshSerialLinkDirectory() {
-    const std::string dir = effectiveSerialLinkDir();
+    const std::string dir = m_paths.serialLinkDir();
     if (m_serialLink) m_serialLink->relink(dir);
     if (PtySerialLink* ce158 = m_ce158SerialLink.link()) ce158->relink(dir);
     m_listener.serialLinksRelinked();
@@ -205,7 +200,7 @@ std::string MachineSession::ce158SerialLinkStatus() const {
 void MachineSession::wireNewMachine() {
     withMachine([this](auto& machine) { machine.setCE158SerialLink(&m_ce158SerialLink); });
     if (m_pc1600) {
-        if (!m_serialLink) m_serialLink = std::make_unique<PtySerialLink>(effectiveSerialLinkDir());
+        if (!m_serialLink) m_serialLink = std::make_unique<PtySerialLink>(m_paths.serialLinkDir());
         m_pc1600->setSerialLink(m_serialLink.get());
     }
     m_listener.machineReplaced();
@@ -640,9 +635,7 @@ bool MachineSession::attachHostDrive(const std::string& dir, std::string* error)
 }
 
 std::string MachineSession::hostDriveDirectory() const {
-    if (!m_pc1600) return {};
-    const std::u8string dir = m_pc1600->hostDriveDirectory().u8string();
-    return std::string(dir.begin(), dir.end());
+    return m_pc1600 ? fromPath(m_pc1600->hostDriveDirectory()) : std::string();
 }
 
 void MachineSession::detachHostDrive() {

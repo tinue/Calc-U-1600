@@ -237,10 +237,9 @@ debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request
         return r;
     }
     QString error;
-    m_sync->run(tr("Load Program"), [this, &r, &request](QString* e) {
+    m_sync->run(tr("Load Program"), [this, &r, &request] {
         r = debug::loadProgram(m_machines->pc1500(), m_machines->pc1600(), request, m_map, *m_target);
-        *e = QString::fromStdString(r.error);
-        return r.ok;
+        return r.ok ? shared::OpResult{} : shared::OpResult::fail(r.error);
     }, {}, &error);
     if (!r.ok) return r;
     if (after == After::None) return r;
@@ -267,10 +266,10 @@ bool DebugController::resetMachine(bool allReset, bool stop, QString* error) {
     }
     // Without the boot run (ROM research starts at the vector), but like
     // any reset: timer stopped meanwhile, clock re-seeded after.
-    if (!m_sync->run(allReset ? tr("Reset All") : tr("Reset"), [this, allReset](QString*) {
+    if (!m_sync->run(allReset ? tr("Reset All") : tr("Reset"), [this, allReset] {
             m_machines->cancelPaste();
             m_target->reset(allReset);
-            return true;
+            return shared::OpResult{};
         }, {}, error))
         return false;
     if (stop) m_run->pause(debug::DebugEvent::Entry);

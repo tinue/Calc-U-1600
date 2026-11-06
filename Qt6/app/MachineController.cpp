@@ -10,16 +10,6 @@
 #include "AppSettings.hpp"
 #include "debug/DebugController.hpp"
 
-namespace {
-
-// Writes a std::string error into an optional QString out-parameter.
-bool report(bool ok, const std::string& err, QString* error) {
-    if (!ok && error) *error = QString::fromStdString(err);
-    return ok;
-}
-
-} // namespace
-
 MachineController::MachineController(QObject* parent) : QObject(parent) {
     shared::AppSession::Platform& platform = *this;
     m_app = std::make_unique<shared::AppSession>(AppSettings::settings(), AppPaths::paths(), platform);
@@ -105,37 +95,6 @@ bool MachineController::runDebuggerSlice(std::uint64_t cycles) {
 
 void MachineController::refreshDebugServer() { m_debug->refreshServer(); }
 
-bool MachineController::attachCE150(QString* error) {
-    std::string err;
-    return report(session().attachCE150(&err), err, error);
-}
-
-bool MachineController::attachCE1600P(QString* error) {
-    std::string err;
-    return report(session().attachCE1600P(&err), err, error);
-}
-
-bool MachineController::swapCE1600PRom(CE1600PRomVersion version, QString* error) {
-    std::string err;
-    return report(session().swapCE1600PRom(version, &err), err, error);
-}
-
-bool MachineController::attachCE158(QString* error) {
-    std::string err;
-    return report(session().attachCE158(&err), err, error);
-}
-
-bool MachineController::attachHostDrive(const QString& dir, QString* error) {
-    std::string err;
-    return report(session().attachHostDrive(dir.toStdString(), &err), err, error);
-}
-
-bool MachineController::tapePlay(const QString& path, QString* error) {
-    std::string err;
-    return report(session().tapePlay(path.toStdString(), &err), err, error);
-}
-
 bool MachineController::tapeEject(QString* error) {
-    std::string err;
-    return report(session().tapeEject(&err), err, error);
+    return withQtError(error, [this](std::string* err) { return session().tapeEject(err); });
 }

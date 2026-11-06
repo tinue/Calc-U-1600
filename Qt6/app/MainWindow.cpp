@@ -440,11 +440,7 @@ void MainWindow::loadBasicProgramFile(const QString& path) {
     AppSettings::rememberOpenFile(AppSettings::OpenFolder::Basic, path);
     std::optional<std::vector<uint8_t>> bytes = readProgramFile(path, title);
     if (!bytes) return;
-    m_sync->run(title, [this, &bytes, &path](QString* error) {
-        const shared::OpResult r = m_controller->app().loadBasicProgram(*bytes, path.toStdString());
-        *error = QString::fromStdString(r.error);
-        return r.ok;
-    });
+    m_sync->run(title, [this, &bytes, &path] { return m_controller->app().loadBasicProgram(*bytes, path.toStdString()); });
 }
 
 void MainWindow::loadMachineCodeFile(const QString& path) {
@@ -485,14 +481,7 @@ void MainWindow::loadMachineCodeFile(const QString& path) {
     request.slot = static_cast<int>(slot);
     request.bank = bank;
 
-    bool loaded = false;
-    m_sync->run(title, [this, &request, &loaded](QString* error) {
-        const shared::OpResult r = m_controller->app().loadMachineCode(request);
-        *error = QString::fromStdString(r.error);
-        loaded = r.ok;
-        return loaded;
-    });
-    if (!loaded) return;
+    if (!m_sync->run(title, [this, &request] { return m_controller->app().loadMachineCode(request); })) return;
 
     // The advice: NEW that keeps BASIC off the code, CALL that starts it.
     uint32_t ramStart = 0, ramEnd = 0;

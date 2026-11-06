@@ -257,10 +257,7 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     {
         PathRowSpec spec = directorySpec(this, tr("Trace directory:"), tr("Choose Trace Directory"),
                                          [] { return AppPaths::instanceDir(); });
-        spec.display = [] {
-            const QString dir = AppSettings::traceDirOverride();
-            return AppPaths::displayPath(dir.isEmpty() ? AppPaths::instanceDir() : dir);
-        };
+        spec.display = [] { return AppPaths::displayPath(AppPaths::traceDir()); };
         spec.isOverridden = [] { return !AppSettings::traceDirOverride().isEmpty(); };
         spec.set = [](const QString& dir) { AppSettings::setTraceDirOverride(dir); };
         addPathRow(tracing, 0, this, sections, spec);
@@ -294,10 +291,7 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     {
         PathRowSpec spec = directorySpec(this, tr("Symlink directory:"), tr("Choose Serial Port Directory"),
                                          [] { return AppPaths::instanceDir(); });
-        spec.display = [] {
-            const QString dir = AppSettings::serialLinkDirOverride();
-            return AppPaths::displayPath(dir.isEmpty() ? AppPaths::instanceDir() : dir);
-        };
+        spec.display = [] { return AppPaths::displayPath(AppPaths::serialLinkDir()); };
         spec.isOverridden = [] { return !AppSettings::serialLinkDirOverride().isEmpty(); };
         spec.set = [](const QString& dir) { AppSettings::setSerialLinkDirOverride(dir); };
         spec.onChanged = [this, refreshSerialStatusLabel] {

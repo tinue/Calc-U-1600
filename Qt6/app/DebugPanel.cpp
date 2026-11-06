@@ -251,9 +251,7 @@ void DebugPanel::setTraceEnabled(bool enabled) {
     if (m_controller->traceActive() == enabled) return;
 
     if (enabled) {
-        const QString dir = AppSettings::traceDirOverride().isEmpty() ? AppPaths::instanceDir()
-                                                                        : AppSettings::traceDirOverride();
-        const QString path = dir + "/TRACE.bin";
+        const QString path = AppPaths::traceDir() + "/TRACE.bin";
         if (!m_controller->beginTrace(path)) {
             ringWriteAll({fmt("TRACE: couldn't start a capture to %s.", path.toStdString().c_str())});
             updateTraceButtonAppearance();

@@ -8,28 +8,15 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <map>
 #include <string>
 
 #include "Shared/AppSession.hpp"
+#include "Shared/Pacer.hpp"
+#include "Shared/tests/MemorySettingsStore.hpp"
 
 namespace {
 
 namespace fs = std::filesystem;
-
-class MemoryStore : public shared::SettingsStore {
-public:
-    std::optional<std::string> get(const std::string& key) const override {
-        const auto it = m_values.find(key);
-        if (it == m_values.end()) return std::nullopt;
-        return it->second;
-    }
-    void set(const std::string& key, const std::string& value) override { m_values[key] = value; }
-    void remove(const std::string& key) override { m_values.erase(key); }
-
-private:
-    std::map<std::string, std::string> m_values;
-};
 
 class ConsolePlatform : public shared::AppSession::Platform {
 public:
@@ -83,7 +70,7 @@ int main() {
         for (const auto& f : fs::directory_iterator(dir))
             if (f.is_regular_file()) fs::copy_file(f.path(), root / "bundle" / f.path().filename());
 
-    MemoryStore store;
+    MemorySettingsStore store;
     shared::Settings settings(store);
     shared::AppPaths paths(settings, shared::HostDirs{(root / "home").generic_string(), (root / "bundle").generic_string()});
     ConsolePlatform platform;
@@ -107,7 +94,7 @@ int main() {
     }
     // Typing through the paste queue, in paced frames.
     app.machine().typeCommand("PRINT 6*7");
-    for (int i = 0; i < 240; ++i) app.machine().advance(static_cast<std::uint64_t>(app.machine().clockHz() / 60));
+    shared::runEmulatedSeconds(app.machine(), 4.0);
     const bool typed = screen(app).find("42") != std::string::npos;
     std::printf("%s PRINT 6*7\n%s\n", typed ? "ok  " : "FAIL", screen(app).c_str());
     if (!typed) ++failures;

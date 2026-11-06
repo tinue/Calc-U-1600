@@ -21,8 +21,8 @@ public:
                    QObject* parent = nullptr);
 
     /// Stop the frame timer for a synchronous load (nothing else may drive
-    /// the machine meanwhile) / restart() and start it again afterwards,
-    /// unless frozen.
+    /// the machine meanwhile) / start it again afterwards, unless frozen.
+    /// An AppSession operation already restarts pacing when it ends.
     void suspend();
     void resume();
     /// Paced emulation (re)starts after something ran the machine flat out

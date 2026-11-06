@@ -10,7 +10,9 @@
 # smoke run; without them it builds and skips.
 set -e
 cd "$(dirname "$0")/.."
-emcmake cmake -S . -B build-wasm -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
+if [ ! -f build-wasm/CMakeCache.txt ]; then
+  emcmake cmake -S . -B build-wasm -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
+fi
 cmake --build build-wasm --target wasm_smoke
 set +e
 node build-wasm/wasm_smoke.js

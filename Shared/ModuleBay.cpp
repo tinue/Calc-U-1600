@@ -12,6 +12,7 @@
 #include "Preset/PresetRunner.hpp"
 #include "Shared/AppPaths.hpp"
 #include "Shared/MachineSession.hpp"
+#include "Shared/Text.hpp"
 #include "Shared/Utf8Path.hpp"
 
 namespace shared {
@@ -19,15 +20,6 @@ namespace shared {
 namespace {
 
 ModuleBay::ModuleEntry entryFrom(const MemoryCardCatalogEntry& e) { return {e.moduleName, e.battery, e.rom}; }
-
-std::string trimmed(const std::string& s) {
-    const auto b = s.find_first_not_of(" \t\r\n");
-    if (b == std::string::npos) return {};
-    const auto e = s.find_last_not_of(" \t\r\n");
-    return s.substr(b, e - b + 1);
-}
-
-std::string inQuotes(const std::string& s) { return "\"" + s + "\""; }
 
 } // namespace
 
@@ -123,10 +115,10 @@ void ModuleBay::attachAllToFreshMachine() {
         m1600->detachSlot1();
         m1600->detachSlot2();
         if (!m_slots[0].moduleName.empty())
-            attachOneSlot(0, CardHost::PC1600Slot1,
+            attachOneSlot(0, hostFor(1),
                           [&](std::unique_ptr<ExpansionCard> c) { m1600->attachSlot1Card(std::move(c)); });
         if (!m_slots[1].moduleName.empty())
-            attachOneSlot(1, CardHost::PC1600Slot2,
+            attachOneSlot(1, hostFor(2),
                           [&](std::unique_ptr<ExpansionCard> c) { m1600->attachSlot2Card(std::move(c)); });
     }
 }
@@ -236,7 +228,6 @@ bool ModuleBay::saveSlotAs(int slot, const std::string& instanceName, bool fromP
     st.sourcePath = newPath;
     st.isTemplate = asTemplate;  // `battery` carries over
     st.instanceFilePath = asTemplate ? std::string() : newPath;
-    st.persistPending = false;
     st.persistedRevision = revision;
     if (m_events.moduleChanged) m_events.moduleChanged(slot);
     return true;
@@ -264,40 +255,30 @@ std::uint64_t ModuleBay::currentSlotRevision(int slot) const {
     return card ? card->contentRevision() : 0;
 }
 
-void ModuleBay::markDirty() {
-    for (auto& st : m_slots) {
-        if (!st.instanceFilePath.empty()) {
-            st.persistPending = true;
-            m_debounceArmed = true;
-        }
-    }
-}
-
 void ModuleBay::tick(double nowSeconds) {
-    if (!m_debounceArmed) return;
-    if (!m_debounceDue) {
-        // The first dirty frame starts the debounce; later ones coalesce.
-        m_debounceDue = nowSeconds + kPersistDebounceSeconds;
+    if (!m_persistDue) {
+        // The first change starts the debounce; later ones coalesce.
+        for (int slot = 1; slot <= 2; ++slot) {
+            const SlotState& st = m_slots[slot - 1];
+            if (!st.instanceFilePath.empty() && st.persistedRevision != currentSlotRevision(slot)) {
+                m_persistDue = nowSeconds + kPersistDebounceSeconds;
+                break;
+            }
+        }
         return;
     }
-    if (nowSeconds >= *m_debounceDue) flushPendingPersist();
+    if (nowSeconds >= *m_persistDue) flushPendingPersist();
 }
 
 void ModuleBay::flushPendingPersist() {
-    m_debounceArmed = false;
-    m_debounceDue.reset();
-    for (int i = 0; i < 2; ++i) {
-        if (!m_slots[i].persistPending) continue;
-        writeInstance(i + 1);
-        m_slots[i].persistPending = false;
-    }
+    m_persistDue.reset();
+    writeInstance(1);
+    writeInstance(2);
 }
 
 void ModuleBay::onModelChanged() {
-    for (int i = 0; i < 2; ++i) {
-        if (m_slots[i].persistPending) writeInstance(i + 1);
-        m_slots[i] = SlotState{};
-    }
+    flushPendingPersist();
+    for (auto& st : m_slots) st = SlotState{};
 }
 
 } // namespace shared

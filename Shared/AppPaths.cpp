@@ -89,6 +89,16 @@ std::string AppPaths::tapePathFor(const std::string& tapeName) const {
     return joinPath(tapeDir(), namedFileName(tapeName, ".wav"));
 }
 
+std::string AppPaths::traceDir() const {
+    const std::string dir = m_settings.traceDirOverride();
+    return dir.empty() ? instanceDir() : dir;
+}
+
+std::string AppPaths::serialLinkDir() const {
+    const std::string dir = m_settings.serialLinkDirOverride();
+    return dir.empty() ? instanceDir() : dir;
+}
+
 MediaSaveRefusal AppPaths::planNamedSave(MediaKind kind, const std::string& name, const std::string& explicitPath,
                                          bool asTemplate, std::string* path) const {
     return planMediaSave(kind, name, explicitPath, asTemplate, {m_dirs.bundledResources, instanceDir()}, path);

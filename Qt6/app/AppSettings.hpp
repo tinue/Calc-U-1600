@@ -60,7 +60,6 @@ inline void setTapeDirOverride(const QString& dir) { settings().setTapeDirOverri
 using shared::OpenFolder;
 inline QString openDir(OpenFolder folder) { return q(settings().openDir(folder)); }
 inline void setOpenDir(OpenFolder folder, const QString& dir) { settings().setOpenDir(folder, s(dir)); }
-inline QString lastOpenDir(OpenFolder folder) { return q(settings().lastOpenDir(folder)); }
 inline void rememberOpenDir(OpenFolder folder, const QString& dir) { settings().rememberOpenDir(folder, s(dir)); }
 inline void rememberOpenFile(OpenFolder folder, const QString& filePath) {
     settings().rememberOpenFile(folder, s(filePath));
@@ -77,7 +76,6 @@ inline void setTraceDirOverride(const QString& dir) { settings().setTraceDirOver
 inline int traceMaxFileSizeMB() { return settings().traceMaxFileSizeMB(); }
 inline void setTraceMaxFileSizeMB(int mb) { settings().setTraceMaxFileSizeMB(mb); }
 
-constexpr int kDefaultDapPort = shared::Settings::kDefaultDapPort;
 inline bool dapEnabled() { return settings().dapEnabled(); }
 inline void setDapEnabled(bool on) { settings().setDapEnabled(on); }
 inline int dapPort() { return settings().dapPort(); }
@@ -91,7 +89,5 @@ inline void setWindowSize(const QSize& size) { settings().setWindowSize(size.wid
 
 inline QString startupModelPreference() { return q(settings().startupModelPreference()); }
 inline void setStartupModelPreference(const QString& pref) { settings().setStartupModelPreference(s(pref)); }
-inline int lastUsedModel() { return settings().lastUsedModel(); }
-inline void setLastUsedModel(int model) { settings().setLastUsedModel(model); }
 
 }  // namespace AppSettings

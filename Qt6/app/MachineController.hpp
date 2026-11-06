@@ -14,7 +14,6 @@
 #include "Display/LcdScreenshot.hpp"
 #include "Display/LcdText.hpp"
 #include "KeyPaste.hpp"
-#include "PC1500/PC1500Variant.hpp"
 #include "Serial/LazySerialLink.hpp"
 #include "Serial/PtySerialLink.hpp"
 #include "Tape/TapeDeck.hpp"
@@ -37,6 +36,16 @@ inline QString modelSettingsKey(Model model) { return QString::fromLatin1(shared
 
 using shared::DisplayFrame;
 
+// Runs `op(std::string* error)` and copies a failure's message into the
+// optional `error` -- the Shared calls' error form, for the Qt widgets.
+template <class Op>
+bool withQtError(QString* error, Op&& op) {
+    std::string err;
+    const bool ok = op(&err);
+    if (!ok && error) *error = QString::fromStdString(err);
+    return ok;
+}
+
 // The Qt side of shared::AppSession (Shared/AppSession.hpp and
 // Shared/MachineSession.hpp have the behaviour and the docs): owns the
 // app session, turns its Platform calls into signals, message boxes and
@@ -53,18 +62,11 @@ public:
     const shared::MachineSession& session() const { return m_app->machine(); }
 
     // ---- Forwarded unchanged (see MachineSession) ----
-    void resetRomSelectionsToDefault() { session().resetRomSelectionsToDefault(); }
-    void switchModel(Model model, bool keepPlotter = false) { session().switchModel(model, keepPlotter); }
     Model currentModel() const { return session().currentModel(); }
-    void setPC1500RomRevision(PC1500RomRevision r) { session().setPC1500RomRevision(r); }
     PC1500RomRevision pc1500RomRevision() const { return session().pc1500RomRevision(); }
-    void setPC1600RomVersion(PC1600RomVersion v) { session().setPC1600RomVersion(v); }
     PC1600RomVersion pc1600RomVersion() const { return session().pc1600RomVersion(); }
-    void setCE1600PRomVersion(CE1600PRomVersion v) { session().setCE1600PRomVersion(v); }
     CE1600PRomVersion ce1600pRomVersion() const { return session().ce1600pRomVersion(); }
-    void resetToPrompt(bool allReset) { session().resetToPrompt(allReset); }
     void seedClockFromHost() { session().seedClockFromHost(); }
-    void powerCycleAround(const std::function<void()>& change) { session().powerCycleAround(change); }
 
     void pressKey(const std::string& name) { session().pressKey(name); }
     void releaseKey(const std::string& name) { session().releaseKey(name); }
@@ -82,27 +84,17 @@ public:
     bool liveTypingActive() const { return session().liveTypingActive(); }
 
     GrayImage currentScreenImage() const { return session().currentScreenImage(); }
-    void advance(std::uint64_t cyclesBudget) { session().advance(cyclesBudget); }
-    std::size_t drainAudio(std::int16_t* out, std::size_t max) { return session().drainAudio(out, max); }
     void discardAudio() { session().discardAudio(); }
     DisplayFrame currentDisplay() const { return session().currentDisplay(); }
     bool lcdText(LcdText* out) const { return session().lcdText(out); }
-    double clockHz() const { return session().clockHz(); }
 
     PC1500Machine* pc1500() const { return session().pc1500(); }
     PC1600Machine* pc1600() const { return session().pc1600(); }
     bool hasLiveMachine() const { return session().hasLiveMachine(); }
-    bool isMachinePoweredOn() const { return session().isMachinePoweredOn(); }
     template <class F>
     void withMachine(F&& f) const { session().withMachine(std::forward<F>(f)); }
     template <class R, class F>
     R withMachine(R none, F&& f) const { return session().withMachine(std::move(none), std::forward<F>(f)); }
-
-    PC1500Machine& resetBareForPresetPC1500(PC1500Variant variant) { return session().resetBareForPresetPC1500(variant); }
-    PC1600Machine& resetBareForPresetPC1600(PC1600RomVersion version, CE1600PRomVersion ce1600pVersion) {
-        return session().resetBareForPresetPC1600(version, ce1600pVersion);
-    }
-    void finishPresetLoad(Model model) { session().finishPresetLoad(model); }
 
     std::vector<std::string> inspectorView(inspect::View view) const { return session().inspectorView(view); }
     std::vector<inspect::MenuEntry> inspectorMenu(bool dumps) const { return session().inspectorMenu(dumps); }
@@ -113,17 +105,12 @@ public:
     std::uint64_t traceBytes() const { return session().traceBytes(); }
     bool traceActive() const { return session().traceActive(); }
 
-    void detachCE150() { session().detachCE150(); }
     bool ce150Attached() const { return session().ce150Attached(); }
-    void detachCE1600P() { session().detachCE1600P(); }
     bool ce1600pAttached() const { return session().ce1600pAttached(); }
-    void detachCE158() { session().detachCE158(); }
     bool ce158Attached() const { return session().ce158Attached(); }
     std::vector<std::uint8_t> drainCE158PrinterOutput() { return session().drainCE158PrinterOutput(); }
-    void detachHostDrive() { session().detachHostDrive(); }
     bool hostDriveAttached() const { return session().hostDriveAttached(); }
     bool tapeInterfaceAttached() const { return session().tapeInterfaceAttached(); }
-    void tapeRecord(const QString& path) { session().tapeRecord(path.toStdString()); }
     TapeDeck::Status tapeStatus() const { return session().tapeStatus(); }
     std::vector<AlpsPlotterMechanism::FlatPoint> ce150PlotPoints() const { return session().ce150PlotPoints(); }
     std::uint64_t ce150PlotRevision() const { return session().ce150PlotRevision(); }
@@ -134,15 +121,8 @@ public:
 
     // ---- QString translations ----
     bool beginTrace(const QString& path) { return session().beginTrace(path.toStdString()); }
-    bool attachCE150(QString* error = nullptr);
-    bool attachCE1600P(QString* error = nullptr);
-    bool swapCE1600PRom(CE1600PRomVersion version, QString* error = nullptr);
-    bool attachCE158(QString* error = nullptr);
-    bool attachHostDrive(const QString& dir, QString* error = nullptr);
     QString hostDriveDirectory() const { return QString::fromStdString(session().hostDriveDirectory()); }
-    bool tapePlay(const QString& path, QString* error = nullptr);
     bool tapeEject(QString* error = nullptr);
-    QString tapeTakeLastError() { return QString::fromStdString(session().tapeTakeLastError()); }
     void refreshSerialLinkDirectory() { session().refreshSerialLinkDirectory(); }
     QString serialLinkStatus() const { return QString::fromStdString(session().serialLinkStatus()); }
     QString ce158SerialLinkStatus() const { return QString::fromStdString(session().ce158SerialLinkStatus()); }

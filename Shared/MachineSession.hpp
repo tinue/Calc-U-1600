@@ -367,7 +367,6 @@ private:
     void wireNewMachine();
     void flushFloppyBeforeDetach();
     // The serial link directory setting, falling back to the save folder.
-    std::string effectiveSerialLinkDir() const;
     [[noreturn]] void romMissing(const std::string& error);
     // Replaces m_pc1600 with a fresh machine holding m_pc1600RomVersion's
     // ROM set. A missing old set falls back to (and remembers) the new one.

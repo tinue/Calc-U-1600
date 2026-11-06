@@ -148,7 +148,6 @@ void test_floppy_bay() {
     std::vector<std::uint8_t> image = m->ce1600fDiskImage();
     image[100] ^= 0xFF;
     m->ce1600fLoadImage(image.data(), image.size());
-    f.floppy->markDirty();
     f.floppy->tick(10.0);
     f.floppy->tick(10.3);
     CHECK(!fs::exists(saved));

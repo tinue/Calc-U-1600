@@ -24,7 +24,7 @@ class MachineSession;
 // FloppyImageFile.hpp), found by its `disk-name` -- bundled directory
 // first, then the save folder, as for memory cards. It is always rewritten
 // whole. An instance disk autosaves at most every kPersistDebounceSeconds
-// after the drive wrote to it (markDirty() each frame, tick()).
+// after the drive wrote to it (tick() each frame).
 class FloppyBay {
 public:
     struct Events {
@@ -68,9 +68,8 @@ public:
     bool saveAsFromPreset(const std::string& diskName, const std::string& filePath, bool asTemplate,
                           std::string* error);
 
-    // Once per frame: notices a changed disk.
-    void markDirty();
-    // Writes a pending autosave once the debounce has passed.
+    // Once per frame: notices a changed disk and writes it once the
+    // debounce has passed.
     void tick(double nowSeconds);
     // MachineSession::Listener::flushFloppy(), and before a select / quit.
     void flushPendingPersist();
@@ -97,8 +96,7 @@ private:
     std::string m_instanceFilePath;  // the loaded file if it is an instance, else empty
     bool m_persistPending = false;
     std::uint64_t m_lastSeenRevision = 0;
-    std::optional<double> m_debounceDue;
-    bool m_debounceArmed = false;
+    std::optional<double> m_persistDue;  // set while m_persistPending
 };
 
 } // namespace shared

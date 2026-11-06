@@ -1,17 +1,11 @@
 #include "FloppyDiskManager.hpp"
 
-
 namespace {
 
 QVector<FloppyDiskManager::DiskEntry> toQt(const std::vector<std::string>& names) {
     QVector<FloppyDiskManager::DiskEntry> out;
     for (const std::string& n : names) out.push_back({QString::fromStdString(n)});
     return out;
-}
-
-bool reportResult(bool ok, const std::string& err, QString* error) {
-    if (!ok && error) *error = QString::fromStdString(err);
-    return ok;
 }
 
 } // namespace
@@ -29,14 +23,5 @@ FloppyDiskManager::DiskLists FloppyDiskManager::diskLists() const {
 }
 
 bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {
-    std::string err;
-    return reportResult(m_bay->nameAndSave(diskName.toStdString(), &err), err, error);
+    return withQtError(error, [&](std::string* err) { return m_bay->nameAndSave(diskName.toStdString(), err); });
 }
-
-bool FloppyDiskManager::saveAsFromPreset(const QString& diskName, const QString& filePath, bool asTemplate,
-                                         QString* error) {
-    std::string err;
-    return reportResult(m_bay->saveAsFromPreset(diskName.toStdString(), filePath.toStdString(), asTemplate, &err),
-                        err, error);
-}
-
