@@ -5,6 +5,7 @@ int run_shared_geometry_tests();
 int run_shared_host_key_map_tests();
 int run_shared_settings_tests();
 int run_shared_machine_session_tests();
+int run_shared_pacing_tests();
 
 int run_shared_tests() {
     int failures = 0;
@@ -12,5 +13,6 @@ int run_shared_tests() {
     failures += run_shared_host_key_map_tests();
     failures += run_shared_settings_tests();
     failures += run_shared_machine_session_tests();
+    failures += run_shared_pacing_tests();
     return failures;
 }

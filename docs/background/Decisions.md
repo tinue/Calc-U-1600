@@ -210,9 +210,11 @@ calling `intCause()` so that a masked live source (UART, sub-CPU) isn't even
 evaluated on this per-step path; keep the two bit assignments in step.
 
 ### Absolute-deadline emulation pacing
-`Qt6/app/EmulationPacer.cpp` schedules each batch against
-`start + n * batch`, not a fresh relative sleep. Relative sleeps oversleep by
-about 4% on macOS, and the error builds up into a visible TIME lag.
+`Shared/Pacer.cpp` credits each frame tick against an absolute deadline
+(`start + elapsed * clockHz` minus the cycles already run), not the time
+since the last tick or a fresh relative sleep. Relative sleeps oversleep by
+about 4% on macOS, and the error builds up into a visible TIME lag. Only a
+stall over 0.1 s rebases the deadline (dropped, not caught up).
 
 ### RTC keeps running while the LH5803 owns the bus
 The RTC accumulator advances in both CPU branches of `PC1600Machine::step()`.

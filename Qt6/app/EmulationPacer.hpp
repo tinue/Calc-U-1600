@@ -1,16 +1,18 @@
 #pragma once
-#include <QElapsedTimer>
 #include <QObject>
 #include <functional>
+
+#include "Shared/Pacer.hpp"
 
 class AudioOutput;
 class MachineController;
 class QTimer;
 
-// Drives the emulation from the GUI thread: a ~60 Hz frame timer that runs
-// exactly the emulated time that passed on the wall clock (or, while the
-// LCD is held for turbo, as much as the host can produce), then pumps the
-// buzzer audio and has the window refresh its views. The --shots runner
+// Drives the emulation from the GUI thread: a ~60 Hz frame timer whose
+// ticks shared::Pacer turns into emulated time (exactly the wall-clock time
+// that passed, or, while the LCD is held for turbo, as much as the host can
+// produce), then pumps the buzzer audio and has the window refresh its
+// views. The --shots runner
 // freezes it instead and advances emulated time explicitly (runFor(),
 // runUntilPasteDone()), with the same view refresh.
 class EmulationPacer : public QObject {
@@ -30,7 +32,7 @@ public:
     /// and rebase pacing on "now", so the next tick doesn't catch up.
     void restart();
 
-    void setTurbo(bool active) { m_turbo = active; }
+    void setTurbo(bool active) { m_pacer.setTurbo(active); }
 
     /// Frozen: no frame timer at all; emulated time only moves via runFor()
     /// / runUntilPasteDone(), so a capture is reproducible run to run.
@@ -44,14 +46,11 @@ public:
 
 private:
     void onTick();
-    void restartPacing();
 
     MachineController* m_controller; // not owned
     AudioOutput* m_audio;            // not owned
     std::function<void()> m_refreshViews;
     QTimer* m_timer = nullptr;
-    bool m_turbo = false;
     bool m_frozen = false;
-    QElapsedTimer m_paceClock;
-    double m_cycleCarry = 0.0;
+    shared::Pacer m_pacer;
 };
