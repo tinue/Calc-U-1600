@@ -2,9 +2,13 @@
 
 #include <cmath>
 #include <cstdio>
+#include <initializer_list>
+#include <string>
 #include <vector>
 
 #include "Shared/KeyLayout/FaceplateLayout.hpp"
+#include "Shared/LcdLayout.hpp"
+#include "Shared/MachineSession.hpp"
 #include "Shared/PlotterPaper.hpp"
 #include "SharedTestSupport.hpp"
 
@@ -95,11 +99,44 @@ void test_faceplate_fit() {
 
 } // namespace
 
+shared::DisplayFrame frameWith(std::initializer_list<const char*> lit) {
+    shared::DisplayFrame frame;
+    for (const char* name : {"BUSY", "SHIFT", "KANA", "S", "BATT", "DE", "G", "RAD", "I", "II", "III"}) {
+        bool on = false;
+        for (const char* l : lit) on = on || std::string(l) == name;
+        frame.statusSymbols.emplace_back(name, on);
+    }
+    return frame;
+}
+
+void test_lcd_indicators() {
+    using shared::lcd::Indicator;
+    using shared::Model;
+    // PC-1500: KANA reads JPN, DE+G is one word, the battery dot is always on.
+    auto p15 = shared::lcd::indicators(Model::PC1500A, frameWith({"KANA", "DE", "G"}));
+    CHECK(p15.size() == 3);
+    CHECK(p15[0].text == "JPN" && p15[0].x == shared::lcd::kP15JapX);
+    CHECK(p15[1].text == "DEG" && p15[1].x == shared::lcd::kP15AngleX);
+    CHECK(p15[2].style == Indicator::Style::Dot && p15[2].x == shared::lcd::kP15BatteryX);
+    // PC-1500: I and II each have their own place.
+    CHECK(shared::lcd::indicators(Model::PC1500, frameWith({"I", "II"})).size() == 3);
+    // PC-1600: S and BATT inverted, I/II/III share one place (first wins),
+    // no battery dot.
+    auto p16 = shared::lcd::indicators(Model::PC1600, frameWith({"S", "BATT", "II", "III"}));
+    CHECK(p16.size() == 3);
+    CHECK(p16[0].text == "S" && p16[0].style == Indicator::Style::Inverted);
+    CHECK(p16[1].text == "BATT" && p16[1].style == Indicator::Style::Inverted);
+    CHECK(p16[2].text == "II");
+    CHECK(p16[0].x > shared::lcd::kP16RowLeft && p16[1].x <= shared::lcd::kP16RowRight);
+    CHECK(shared::lcd::indicators(Model::PC1600, frameWith({})).empty());
+}
+
 int run_shared_geometry_tests() {
     test_canvas_point();
     test_strokes();
     test_export_size();
     test_faceplate_fit();
+    test_lcd_indicators();
     std::printf("shared_geometry_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

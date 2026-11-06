@@ -1,6 +1,14 @@
 #pragma once
 
+#include <string>
+#include <vector>
+
+#include "Shared/MachineModel.hpp"
 #include "Shared/Rgb.hpp"
+
+namespace shared {
+struct DisplayFrame;
+}
 
 // ── LCD panel layout ─────────────────────────────────────────────────────
 //
@@ -63,6 +71,28 @@ inline double p16StartX(double rawX) {
     const double t = (rawX - kP16MeasuredLeft) / (kP16MeasuredRight - kP16MeasuredLeft);
     return kP16RowLeft + t * (kP16RowRight - kP16RowLeft);
 }
+
+// ── Status indicators ────────────────────────────────────────────────────
+// What the indicator row shows for a frame: the caption of every lit
+// symbol, where it starts and how it is drawn. `x` is a fraction of the
+// row's width -- the padded interior on the PC-1500, the whole panel on
+// the PC-1600 -- and `scale` multiplies the model's label font size.
+struct Indicator {
+    enum class Style {
+        Text,      // ink on the panel
+        Inverted,  // panel colour in a filled ink box (PC-1600 S, BATT)
+        Dot,       // a filled ink circle 0.4 font sizes across (PC-1500 battery)
+    };
+    std::string text;
+    double x = 0;
+    double scale = 1.0;
+    Style style = Style::Text;
+};
+
+// The indicators lit in `frame` on `model`'s panel, in drawing order. The
+// PC-1500 battery dot is always on (no data bit backs it); the PC-1600
+// shares one position between I/II/III (the first lit one wins).
+std::vector<Indicator> indicators(Model model, const DisplayFrame& frame);
 
 inline constexpr Rgb kP15BackgroundRgb{150, 158, 142};
 inline constexpr Rgb kP16BackgroundRgb{156, 168, 149};
