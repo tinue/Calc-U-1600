@@ -6,7 +6,9 @@
 #include <vector>
 
 #include "Connector/ExpansionCard.hpp"
+#include "Connector/MemoryCardCatalog.hpp"
 #include "Connector/MemoryCardDefinition.hpp"  // CardHost
+#include "Shared/DirectoryScanCache.hpp"
 #include "Shared/MachineModel.hpp"
 
 namespace shared {
@@ -130,6 +132,9 @@ private:
     bool nameCollides(const std::string& instanceName) const;
     CardHost hostFor(int slot) const;
     std::uint64_t currentSlotRevision(int slot) const;
+    // The bundled / save-folder cards, re-parsed only when a file changed.
+    const std::vector<MemoryCardCatalogEntry>& bundledCards() const;
+    const std::vector<MemoryCardCatalogEntry>& instanceCards() const;
     void writeInstance(int slot);
     std::string attachedModuleName(int slot) const;
     void attachOneSlot(int slot);
@@ -141,6 +146,8 @@ private:
     const AppPaths& m_paths;
     Events m_events;
     SlotState m_slots[2];  // index 0 = slot 1, index 1 = slot 2
+    mutable DirectoryScanCache<MemoryCardCatalogEntry> m_bundledScan;
+    mutable DirectoryScanCache<MemoryCardCatalogEntry> m_instanceScan;
     // Set by tick() on the first changed frame; it persists once reached.
     std::optional<double> m_persistDue;
 };

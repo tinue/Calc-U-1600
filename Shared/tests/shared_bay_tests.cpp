@@ -10,6 +10,7 @@
 
 #include "MemorySettingsStore.hpp"
 #include "PC1600/PC1600Machine.hpp"
+#include "Shared/DirectoryScanCache.hpp"
 #include "Shared/FloppyBay.hpp"
 #include "Shared/MachineSession.hpp"
 #include "Shared/ModuleBay.hpp"
@@ -190,7 +191,35 @@ void test_tape_bay() {
 
 } // namespace
 
+// DirectoryScanCache: one parse while the files stay put; a new, grown or
+// removed file makes the next get() parse again.
+void test_directory_scan_cache() {
+    const fs::path dir = fs::temp_directory_path() / "calcu-scan-cache-test";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    int scans = 0;
+    auto scan = [&](const std::string& d) {
+        ++scans;
+        std::vector<std::string> names;
+        for (const auto& e : fs::directory_iterator(d)) names.push_back(e.path().filename().string());
+        return names;
+    };
+    shared::DirectoryScanCache<std::string> cache;
+    CHECK(cache.get(dir.string(), scan).empty() && scans == 1);
+    CHECK(cache.get(dir.string(), scan).empty() && scans == 1);
+    std::ofstream(dir / "a.card.yaml") << "x";
+    CHECK(cache.get(dir.string(), scan).size() == 1 && scans == 2);
+    CHECK(cache.get(dir.string(), scan).size() == 1 && scans == 2);
+    std::ofstream(dir / "a.card.yaml", std::ios::app) << "more";
+    cache.get(dir.string(), scan);
+    CHECK(scans == 3);
+    fs::remove(dir / "a.card.yaml");
+    CHECK(cache.get(dir.string(), scan).empty() && scans == 4);
+    fs::remove_all(dir);
+}
+
 int run_shared_bay_tests() {
+    test_directory_scan_cache();
     if (!std::ifstream("roms/PC1600-P0-B0-new.bin").good()) {
         std::printf("shared_bay_tests: SKIP (no ROMs in roms/)\n");
         return 0;

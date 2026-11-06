@@ -31,14 +31,24 @@ CardHost ModuleBay::hostForModel(int slot, Model model) {
     return model == Model::PC1500A ? CardHost::PC1500A : CardHost::PC1500;
 }
 
+const std::vector<MemoryCardCatalogEntry>& ModuleBay::bundledCards() const {
+    return m_bundledScan.get(m_paths.bundledResourcesDir(),
+                             [](const std::string& dir) { return scanMemoryCardDirectory(dir, nullptr); });
+}
+
+const std::vector<MemoryCardCatalogEntry>& ModuleBay::instanceCards() const {
+    return m_instanceScan.get(m_paths.instanceDir(),
+                              [](const std::string& dir) { return scanMemoryCardDirectory(dir, nullptr); });
+}
+
 ModuleBay::ModuleLists ModuleBay::moduleLists(CardHost host) const {
     ModuleLists lists;
     std::set<std::string> bundled;
-    for (const auto& e : scanMemoryCardDirectory(m_paths.bundledResourcesDir(), nullptr)) {
+    for (const auto& e : bundledCards()) {
         bundled.insert(e.moduleName);
         if (e.compatibleWith(host)) lists.templates.push_back(entryFrom(e));
     }
-    for (const auto& e : scanMemoryCardDirectory(m_paths.instanceDir(), nullptr)) {
+    for (const auto& e : instanceCards()) {
         if (!e.compatibleWith(host) || bundled.count(e.moduleName)) continue;
         (e.isTemplate ? lists.templates : lists.instances).push_back(entryFrom(e));
     }
@@ -126,8 +136,7 @@ void ModuleBay::syncFromPresetLoad(int slot, const std::string& resolvedPathOrEm
 bool ModuleBay::nameCollides(const std::string& instanceName) const {
     std::error_code ec;
     if (std::filesystem::exists(toPath(m_paths.instancePathFor(instanceName)), ec)) return true;
-    std::string err;
-    for (const auto& e : scanMemoryCardDirectory(m_paths.instanceDir(), &err))
+    for (const auto& e : instanceCards())
         if (e.moduleName == instanceName) return true;
     return false;
 }

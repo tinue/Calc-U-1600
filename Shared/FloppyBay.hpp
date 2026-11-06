@@ -5,6 +5,9 @@
 #include <string>
 #include <vector>
 
+#include "Connector/FloppyImageFile.hpp"
+#include "Shared/DirectoryScanCache.hpp"
+
 class PC1600Machine;
 
 namespace shared {
@@ -90,6 +93,9 @@ private:
 
     MachineSession& m_session;
     const AppPaths& m_paths;
+    // The bundled / save-folder disks, re-parsed only when a file changed.
+    mutable DirectoryScanCache<FloppyCatalogEntry> m_bundledScan;
+    mutable DirectoryScanCache<FloppyCatalogEntry> m_instanceScan;
     Events m_events;
     std::string m_diskName;          // empty = no disk in the drive
     bool m_isTemplate = false;       // the loaded file declares `template: true`

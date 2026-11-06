@@ -16,11 +16,7 @@ namespace shared {
 
 namespace {
 
-std::vector<std::string> namesIn(const std::string& dir) {
-    std::vector<std::string> out;
-    for (const auto& e : scanFloppyDirectory(dir, nullptr)) out.push_back(e.diskName);
-    return out;
-}
+std::vector<FloppyCatalogEntry> scanDisks(const std::string& dir) { return scanFloppyDirectory(dir, nullptr); }
 
 bool contains(const std::vector<std::string>& names, const std::string& name) {
     return std::find(names.begin(), names.end(), name) != names.end();
@@ -38,9 +34,10 @@ PC1600Machine* FloppyBay::drive() const {
 
 FloppyBay::DiskLists FloppyBay::diskLists() const {
     DiskLists lists;
-    lists.templates = namesIn(m_paths.bundledResourcesDir());
+    for (const auto& e : m_bundledScan.get(m_paths.bundledResourcesDir(), scanDisks))
+        lists.templates.push_back(e.diskName);
     const std::vector<std::string> bundled = lists.templates;
-    for (const auto& e : scanFloppyDirectory(m_paths.instanceDir(), nullptr)) {
+    for (const auto& e : m_instanceScan.get(m_paths.instanceDir(), scanDisks)) {
         if (contains(bundled, e.diskName)) continue;
         (e.isTemplate ? lists.templates : lists.instances).push_back(e.diskName);
     }
@@ -101,8 +98,10 @@ void FloppyBay::syncFromPresetLoad(const std::string& labelOrEmpty, const std::s
 
 bool FloppyBay::nameCollides(const std::string& diskName) const {
     std::error_code ec;
-    return std::filesystem::exists(toPath(m_paths.floppyInstancePathFor(diskName)), ec) ||
-           contains(namesIn(m_paths.instanceDir()), diskName);
+    if (std::filesystem::exists(toPath(m_paths.floppyInstancePathFor(diskName)), ec)) return true;
+    for (const auto& e : m_instanceScan.get(m_paths.instanceDir(), scanDisks))
+        if (e.diskName == diskName) return true;
+    return false;
 }
 
 bool FloppyBay::nameAndSave(const std::string& diskName, std::string* error) {
