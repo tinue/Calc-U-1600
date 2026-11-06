@@ -201,9 +201,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(
         m_controller.get(), &MachineController::peripheralAttachFailed, this,
         [this](const QString& device, const QString& reason) {
-            QMessageBox::warning(this, tr("Attach %1").arg(device),
-                                 reason.isEmpty() ? tr("The %1 could not be attached.").arg(device)
-                                                  : tr("The %1 could not be attached:\n\n%2").arg(device, reason));
+            const auto message = shared::AppSession::attachFailedText(device.toStdString(), reason.toStdString());
+            QMessageBox::warning(this, QString::fromStdString(message.title), QString::fromStdString(message.text));
         },
         Qt::QueuedConnection);
     connect(m_faceplate, &FaceplateWidget::keyPressed, this, [this](QString name) {
@@ -372,7 +371,7 @@ void MainWindow::saveTape() {
 }
 
 void MainWindow::refreshTapeCombo() {
-    m_controlBar->setTapeCombo(m_tapeManager->tapeNames(), m_tapeManager->currentName());
+    m_controlBar->setTapeCombo(m_tapeManager->pickerNames(), m_tapeManager->currentName());
 }
 
 void MainWindow::syncHostDriveActions(const shared::ControlState& state) {
@@ -488,8 +487,7 @@ void MainWindow::syncPeripherals() {
     // Re-kind on every sync, not just on a change: it also drops the paper's
     // cached plot revision, which a rebuilt machine's plotter restarts.
     if (state.paper != shared::PaperKind::None)
-        m_plotterPaper->setKind(state.paper == shared::PaperKind::CE150 ? PlotterPaperWidget::Kind::CE150
-                                                                        : PlotterPaperWidget::Kind::CE1600P);
+        m_plotterPaper->setKind(state.paper);
     setDockedPane(m_plotterPaper, state.paper != shared::PaperKind::None);
     m_controlBar->setTapeVisible(state.tapeShown);
     refreshTapeCombo();
@@ -546,8 +544,7 @@ void MainWindow::refreshModuleCombos() {
     for (int slot = 1; slot <= slotCount; ++slot) {
         const CardHost host = MemoryModuleManager::hostForModel(slot, m_controller->currentModel());
         const MemoryModuleManager::ModuleLists lists = m_moduleManager->moduleLists(host);
-        m_controlBar->setModuleCombos(slot, lists.templates, lists.instances,
-                                      m_moduleManager->selectedModuleName(slot));
+        m_controlBar->setModuleCombos(slot, lists, m_moduleManager->selectedModuleName(slot));
         m_controlBar->setSlotSaveEnabled(slot, m_moduleManager->canNameAndSave(slot));
     }
 }

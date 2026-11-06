@@ -253,13 +253,11 @@ void ControlBar::setModel(Model model) {
     m_modelCombo->setCurrentIndex(static_cast<int>(model));
 }
 
-void ControlBar::setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& templates,
-                                  const QVector<MemoryModuleManager::ModuleEntry>& instances,
+void ControlBar::setModuleCombos(int slot, const MemoryModuleManager::ModuleLists& lists,
                                   const QString& selectedOrEmpty) {
-    QStringList ram, roms;
-    for (const auto& e : templates) (e.rom ? roms : ram) << e.moduleName;
     const auto name = [](const MemoryModuleManager::ModuleEntry& e) { return e.moduleName; };
-    fillPicker(m_slot[slot - 1].combo, ram, namesOf(instances, name), selectedOrEmpty, roms);
+    fillPicker(m_slot[slot - 1].combo, namesOf(lists.templates, name), namesOf(lists.instances, name), selectedOrEmpty,
+               namesOf(lists.roms, name));
 }
 
 // Enables rather than shows/hides the button, so the control bar doesn't
@@ -347,9 +345,7 @@ void ControlBar::applyLampStyle(QLabel* lamp, bool on) {
 }
 
 void ControlBar::setTapeCombo(const QStringList& names, const QString& selectedOrEmpty) {
-    QStringList all = names;
-    if (!selectedOrEmpty.isEmpty() && !all.contains(selectedOrEmpty)) all << selectedOrEmpty;
-    fillPicker(m_tapeCombo, all, {}, selectedOrEmpty);
+    fillPicker(m_tapeCombo, names, {}, selectedOrEmpty);
 }
 
 void ControlBar::setTapeVisible(bool visible) {

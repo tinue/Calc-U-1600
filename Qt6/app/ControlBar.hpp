@@ -23,9 +23,7 @@ public:
     // with a leading "-empty-" item;
     // `selectedOrEmpty` picks the current item without re-emitting
     // moduleSelected (QSignalBlocker'd, like setModel()).
-    void setModuleCombos(int slot, const QVector<MemoryModuleManager::ModuleEntry>& templates,
-                         const QVector<MemoryModuleManager::ModuleEntry>& instances,
-                         const QString& selectedOrEmpty);
+    void setModuleCombos(int slot, const MemoryModuleManager::ModuleLists& lists, const QString& selectedOrEmpty);
     void setSlotSaveEnabled(int slot, bool enabled);   // Name & Save offered (battery-backed template)
     void setSlot2Visible(bool visible);                // PC1600 vs PC1500/1500A
 
@@ -66,8 +64,7 @@ public:
     // ("–empty–", then the tape folder's WAVs; picking one plays it), the
     // Save button (a blank tape to record onto), the tape counter (green
     // while the motor runs). Shown only while a tape interface is attached.
-    // setTapeCombo() lists `names` plus `selectedOrEmpty` if it isn't one of
-    // them yet (a recording before its first save). setTapeStatus() is
+    // setTapeCombo() lists `names` (TapeBay::pickerNames()). setTapeStatus() is
     // polled every frame; it only touches widgets whose text changed.
     void setTapeCombo(const QStringList& names, const QString& selectedOrEmpty);
     void setTapeVisible(bool visible);

@@ -1,6 +1,7 @@
 // The calculator face, as Qt6/app/FaceplateWidget + LcdWidget: the model's
 // artwork scaled to `width` (aspect kept), the LCD painted over its
-// rectangle, a translucent white flash on each pressed key. One key per
+// rectangle, a translucent white flash on each pressed key (its button,
+// calc.css), so a press doesn't redraw the artwork. One key per
 // pointer, so two fingers can hold SHIFT and a key on a tablet; a key stays
 // down until its pointer comes up, wherever that is. Holding the LCD runs
 // the emulator flat out (turbo), as in the desktop app.
@@ -13,7 +14,6 @@ const FACE_ART = ["pc1500.png", "pc1500A.png", "pc1600.png"];
 // Width / height of each artwork, known before the engine is (layout and
 // prerender need it): Shared/KeyLayout's imageWidth / imageHeight.
 const FACE_ASPECT = [4000 / 1760, 4000 / 1760, 4000 / 1777];
-const PRESS_FLASH = "rgba(255,255,255,0.25)";
 
 function LcdCanvas({ engine, model, rect }) {
   const ref = React.useRef(null);
@@ -62,12 +62,7 @@ function Faceplate({ engine, model, width }) {
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, 0, 0, width, height);
     }
-    ctx.fillStyle = PRESS_FLASH;
-    for (const i of pressed) {
-      const r = keyRects[i];
-      if (r) ctx.fillRect(r.x, r.y, r.w, r.h);
-    }
-  }, [model, width, height, pressed, keyRects, loaded]);
+  }, [model, width, height, loaded]);
 
   // A model switch lets go of everything held.
   React.useEffect(() => () => releaseAll(), [model]);

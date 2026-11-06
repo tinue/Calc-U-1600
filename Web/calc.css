@@ -145,9 +145,9 @@
   margin: 0;
   border: none;
   background: transparent;
-  opacity: 0;
   pointer-events: none;
 }
+.calcu-key[aria-pressed="true"] { background: rgba(255, 255, 255, 0.25); }
 
 /* ── Control bar ──────────────────────────────────────────────────── */
 .calcu-controlbar {

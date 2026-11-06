@@ -31,11 +31,9 @@ class MachineController;
 class PlotterPaperWidget : public QWidget {
     Q_OBJECT
 public:
-    enum class Kind { CE150, CE1600P };
-
     explicit PlotterPaperWidget(MachineController* controller, QWidget* parent = nullptr);
 
-    void setKind(Kind kind);
+    void setKind(shared::PaperKind kind);
 
     // Revision-gated point refresh, called once per ~60Hz frame tick from
     // MainWindow::onFrameTick() while a plotter is attached -- an O(1) "did
@@ -56,7 +54,7 @@ private:
     class PlotArea; // custom-painted QWidget, defined in the .cpp
 
     MachineController* m_controller; // not owned
-    Kind m_kind = Kind::CE1600P;
+    shared::PaperKind m_kind = shared::PaperKind::CE1600P;
     shared::PaperGeometry m_geometry = shared::PaperGeometry::ce1600p();
 
     QLabel* m_header;

@@ -4,15 +4,6 @@
 
 namespace shared {
 
-const PeripheralState& ControlState::peripheral(Peripheral p) const {
-    switch (p) {
-        case Peripheral::CE150: return ce150;
-        case Peripheral::CE1600P: return ce1600p;
-        case Peripheral::CE158: return ce158;
-    }
-    return ce150;
-}
-
 ControlState controlStateOf(const MachineSession& session, bool hostDirectories) {
     ControlState s;
     s.model = session.currentModel();

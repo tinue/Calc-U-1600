@@ -14,17 +14,13 @@ function Panel({ title, className, children, buttons, panel, empty }) {
   );
 }
 
-// A pill button with a drop-down of entries ({title, enabled, onClick}).
+// A pill button with a drop-down menu; `entries()` resolves to its
+// MenuList items ({label, disabled, onClick}).
 function PillMenu({ label, entries }) {
   const [open, setOpen] = React.useState(false);
   const [items, setItems] = React.useState([]);
   const ref = React.useRef(null);
-  React.useEffect(() => {
-    if (!open) return undefined;
-    const close = (e) => { if (!ref.current || !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("pointerdown", close, true);
-    return () => document.removeEventListener("pointerdown", close, true);
-  }, [open]);
+  useDismiss(ref, open, () => setOpen(false));
   return (
     <span className="calcu-pillmenu" ref={ref}>
       <button type="button" className="calcu-pill" aria-haspopup="true" aria-expanded={open}
@@ -35,18 +31,7 @@ function PillMenu({ label, entries }) {
         }}>
         {label} <span className="calcu-pill-arrow">▾</span>
       </button>
-      {open && (
-        <div className="calcu-menu calcu-pillmenu-list" role="menu">
-          {items.map((it) => (
-            <div key={it.title} role="menuitem" aria-disabled={!it.enabled}
-              className={`calcu-menu-item${it.enabled ? "" : " disabled"}`}
-              onClick={() => { if (!it.enabled) return; setOpen(false); it.onClick(); }}>
-              <span className="calcu-menu-check" />
-              <span className="calcu-menu-label">{it.title}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {open && <MenuList items={items} onDone={() => setOpen(false)} className="calcu-pillmenu-list" />}
     </span>
   );
 }
@@ -69,7 +54,7 @@ function Inspector({ engine }) {
   };
   const menu = (dumps) => async () => {
     const list = await engine.request("inspectorMenu", dumps);
-    return list.map((e) => ({ title: e.title, enabled: e.enabled, onClick: () => showView(e.view) }));
+    return list.map((e) => ({ label: e.title, disabled: !e.enabled, onClick: () => showView(e.view) }));
   };
 
   return (
@@ -141,13 +126,7 @@ function PlotterPaper({ engine }) {
     paintPaper(ctx, ex.paneWidth, ex.contentHeight, ex.strokes, lcd);
     return canvasPng(canvas);
   };
-  const copy = async () => {
-    const png = exportPng();
-    if (!(await writeClipboard({ "image/png": png }))) {
-      const blob = await png;
-      if (blob) downloadBytes(`${kind || "plot"}.png`, blob, "image/png");
-    }
-  };
+  const copy = () => copyImageOrDownload(`${kind || "plot"}.png`, { "image/png": exportPng() });
 
   return (
     <Panel title={kind} className="calcu-paper" panel="paper" empty={empty}

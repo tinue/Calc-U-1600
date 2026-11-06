@@ -25,19 +25,11 @@
 #include "Debug/Inspect/HexDump.hpp"
 #include "MachineController.hpp"
 #include "Shared/CardYamlDump.hpp"
+#include "Shared/Text.hpp"
 
 namespace {
 
 using inspect::fmt;
-
-std::string joinLines(const std::vector<std::string>& lines) {
-    std::string joined;
-    for (std::size_t i = 0; i < lines.size(); ++i) {
-        if (i) joined += '\n';
-        joined += lines[i];
-    }
-    return joined;
-}
 
 }  // namespace
 
@@ -327,7 +319,7 @@ void DebugPanel::fillMenu(QMenu* menu, bool dumps) {
 void DebugPanel::showView(inspect::View view) {
     const std::vector<std::string> lines = m_controller->inspectorView(view);
     // One ring entry, so a long dump isn't cut to the last display page.
-    if (!lines.empty()) ringWriteAll({joinLines(lines)});
+    if (!lines.empty()) ringWriteAll({shared::joinLines(lines)});
 }
 
 // ── Dump Card YAML ──────────────────────────────────────────────────────

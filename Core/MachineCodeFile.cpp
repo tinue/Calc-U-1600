@@ -8,6 +8,12 @@
 
 namespace machinecode {
 
+std::string hexAddress(uint32_t v) {
+    char b[16];
+    std::snprintf(b, sizeof(b), "&%X", v);
+    return b;
+}
+
 namespace {
 
 // The system keeps the first &C5 (197) bytes of a program area for itself
@@ -25,19 +31,13 @@ constexpr uint32_t kPc1600WorkArea = 0xF000;  // F000-FFFF: BASIC/IOCS work area
 constexpr uint32_t kPc1600Wake = 0xFF00;
 constexpr uint32_t kPc1600FreeTop = 0xFF40;
 
-std::string hex(uint32_t v) {
-    char b[16];
-    std::snprintf(b, sizeof(b), "&%X", v);
-    return b;
-}
-
 // A Z-80 address the way `cpu` sees it: messages name addresses the way
 // the user gave them (LH5803 addresses for LH5801 code).
 uint32_t inCpu(uint32_t z80, Cpu cpu) {
     return cpu == Cpu::LH5803 ? pc1600::z80ToLh5803(static_cast<uint16_t>(z80)) : z80;
 }
 
-std::string hexIn(uint32_t z80, Cpu cpu) { return hex(inCpu(z80, cpu)); }
+std::string hexIn(uint32_t z80, Cpu cpu) { return hexAddress(inCpu(z80, cpu)); }
 
 }  // namespace
 
@@ -217,8 +217,8 @@ bool pc1600BankTarget(uint32_t addr, size_t len, int bank, const PC1600State& st
     }
     if (addr < kPc1600SlotBase || addr >= kPc1600S0Base || end > 0x10000) {
         *why = "the header asks for bank " + std::to_string(bank) + ", which is only reachable at " +
-               hex(kPc1600SlotBase) + "-" + hex(kPc1600S0Base - 1) + ", but the code occupies " + hex(addr) + "-" +
-               hex(static_cast<uint32_t>(end - 1)) + ".";
+               hexAddress(kPc1600SlotBase) + "-" + hexAddress(kPc1600S0Base - 1) + ", but the code occupies " + hexAddress(addr) + "-" +
+               hexAddress(static_cast<uint32_t>(end - 1)) + ".";
         return false;
     }
     const uint64_t pages = state.bankRamPages[static_cast<size_t>(bank)];
@@ -226,7 +226,7 @@ bool pc1600BankTarget(uint32_t addr, size_t len, int bank, const PC1600State& st
     for (uint32_t page = (addr - kPc1600SlotBase) >> 8; page <= ((windowEnd - 1 - kPc1600SlotBase) >> 8); page++) {
         if (!(pages >> page & 1)) {
             *why = "the header asks for bank " + std::to_string(bank) + " (" + bankWhere(bank) +
-                   "), but there is no RAM at " + hex(addr) + "-" + hex(static_cast<uint32_t>(windowEnd - 1)) +
+                   "), but there is no RAM at " + hexAddress(addr) + "-" + hexAddress(static_cast<uint32_t>(windowEnd - 1)) +
                    " in that bank.";
             return false;
         }
@@ -315,15 +315,15 @@ Plan plan(Target target, const File& file, const PC1600State& state) {
             break;
         case LoadError::Empty: p.error = "The file contains no code."; break;
         case LoadError::OutsideBank0:
-            p.error = "The header's load address " + hex(file.loadAddr) + " is above &FFFF.";
+            p.error = "The header's load address " + hexAddress(file.loadAddr) + " is above &FFFF.";
             break;
         case LoadError::LhRange:
-            p.error = "The header's load address " + hex(file.loadAddr) + " + " + std::to_string(file.payload.size()) +
+            p.error = "The header's load address " + hexAddress(file.loadAddr) + " + " + std::to_string(file.payload.size()) +
                       " bytes is outside the LH5803's RAM (&0000-&7FFF).";
             break;
         case LoadError::NoSlot: p.error = "The header's load address doesn't fit: " + lp.detail; break;
         case LoadError::PastEnd:
-            p.error = "The code (" + std::to_string(file.payload.size()) + " bytes at " + hex(file.loadAddr) + ") runs past &FFFF.";
+            p.error = "The code (" + std::to_string(file.payload.size()) + " bytes at " + hexAddress(file.loadAddr) + ") runs past &FFFF.";
             break;
         default: p.error = lp.detail; break; // BadFile, HeaderMismatch
     }
@@ -356,20 +356,20 @@ Advice advice(Target target, Slot slot, int bank, uint32_t addr, size_t len, uin
 
     if (target == Target::PC1500) {
         const uint32_t end = addr + static_cast<uint32_t>(len);  // one past the last byte
-        a.callCommand = "CALL " + hex(entry);
+        a.callCommand = "CALL " + hexAddress(entry);
         const uint32_t basicMin = ramStart + kReserve;
         if (addr >= basicMin && end < ramEnd) {
-            a.newCommand = "NEW " + hex(end);
-            a.newNote = "BASIC then starts right after the code, at " + hex(end) + ".";
+            a.newCommand = "NEW " + hexAddress(end);
+            a.newNote = "BASIC then starts right after the code, at " + hexAddress(end) + ".";
         } else if (addr >= ramStart && addr < basicMin) {
             a.newNote = "The code starts inside the " + std::to_string(kReserve) + "-byte BASIC reserve (" +
-                        hex(ramStart) + "-" + hex(basicMin - 1) + "), which NEW can't protect. Load it at " +
-                        hex(basicMin) + " or higher.";
+                        hexAddress(ramStart) + "-" + hexAddress(basicMin - 1) + "), which NEW can't protect. Load it at " +
+                        hexAddress(basicMin) + " or higher.";
         } else if (addr < ramEnd && end > ramStart) {
-            a.newNote = "The code reaches the end of user RAM (" + hex(ramEnd - 1) +
+            a.newNote = "The code reaches the end of user RAM (" + hexAddress(ramEnd - 1) +
                         "), so NEW can't leave room for BASIC after it.";
         } else {
-            a.newNote = "The code is outside the BASIC RAM area (" + hex(ramStart) + "-" + hex(ramEnd - 1) +
+            a.newNote = "The code is outside the BASIC RAM area (" + hexAddress(ramStart) + "-" + hexAddress(ramEnd - 1) +
                         "), so BASIC doesn't use it and no NEW is needed.";
         }
         return a;
@@ -382,11 +382,11 @@ Advice advice(Target target, Slot slot, int bank, uint32_t addr, size_t len, uin
     // the emulator: `CALL #2,&80C5` runs code loaded at $80C5 in a slot 2
     // CE-1600M. A header auto-run address with a bank of its own names it.
     if (cpu == Cpu::LH5803) {
-        a.callCommand = "XCALL " + hex(entry);
+        a.callCommand = "XCALL " + hexAddress(entry);
         a.callNote += " (an LH5803 address: the code is LH5801 code)";
     } else {
         const int callBank = (autorunAddr >> 16) != 0 ? static_cast<int>(autorunAddr >> 16) : bank;
-        const std::string at = hex(entry & 0xFFFF);
+        const std::string at = hexAddress(entry & 0xFFFF);
         a.callCommand = callBank != 0 ? "CALL #" + std::to_string(callBank) + "," + at : "CALL " + at;
     }
     // The rest works on Z-80 addresses.
@@ -403,7 +403,7 @@ Advice advice(Target target, Slot slot, int bank, uint32_t addr, size_t len, uin
     // it at the start of that module (size counted from the module base).
     if ((slot == Slot::S1 && state.title == 1) || (slot == Slot::S2 && state.title == 2)) {
         const uint32_t start = state.titleBase + kReserve;
-        a.newCommand = "NEW \"S" + std::to_string(state.title) + ":\"," + hex(end - state.titleBase);
+        a.newCommand = "NEW \"S" + std::to_string(state.title) + ":\"," + hexAddress(end - state.titleBase);
         a.newNote = "BASIC's selected program area is the slot " + std::to_string(state.title) +
                     " program module; this reserves " + hexIn(start, cpu) + "-" + hexIn(end - 1, cpu) +
                     " there for machine code.";
@@ -439,9 +439,9 @@ Advice advice(Target target, Slot slot, int bank, uint32_t addr, size_t len, uin
         // the code (rom3b 4351H: at least the S0 start + &C5, below the
         // variable area; an LH5803 address).
         if (bus >= areaStart && (state.ramEnd == 0 || end < state.ramEnd)) {
-            a.newCommand = "NEW " + hex(pc1600::z80ToLh5803(static_cast<uint16_t>(end)));
+            a.newCommand = "NEW " + hexAddress(pc1600::z80ToLh5803(static_cast<uint16_t>(end)));
             a.newNote = "MODE 1 moves BASIC's start the PC-1500 way: BASIC then starts right after the code, at LH5803 " +
-                        hex(pc1600::z80ToLh5803(static_cast<uint16_t>(end))) + ".";
+                        hexAddress(pc1600::z80ToLh5803(static_cast<uint16_t>(end))) + ".";
         } else {
             a.newNote = "The code starts below " + hexIn(areaStart, cpu) +
                         ", inside the area the system keeps for itself, so NEW can't protect it -- load it at " +
@@ -451,12 +451,12 @@ Advice advice(Target target, Slot slot, int bank, uint32_t addr, size_t len, uin
         return a;
     }
     if (hit == 0) {
-        a.newCommand = "NEW \"S0:\"," + hex(end - first.windowBase);
+        a.newCommand = "NEW \"S0:\"," + hexAddress(end - first.windowBase);
         a.newNote = "BASIC's program area starts" + std::string(areaWhere(first.slot)) + "; this reserves " +
-                    hex(areaStart) + "-" + hex(end - 1) + " there for machine code.";
+                    hexAddress(areaStart) + "-" + hexAddress(end - 1) + " there for machine code.";
         if (bus < areaStart)
-            a.newNote += " Warning: the code starts below " + hex(areaStart) +
-                         ", inside the area the system keeps for itself -- load it at " + hex(areaStart) +
+            a.newNote += " Warning: the code starts below " + hexAddress(areaStart) +
+                         ", inside the area the system keeps for itself -- load it at " + hexAddress(areaStart) +
                          " or higher.";
         // NEW "S0:" can only reserve from the START of the area, so code
         // parked high costs BASIC everything underneath it as well. Say
@@ -465,7 +465,7 @@ Advice advice(Target target, Slot slot, int bank, uint32_t addr, size_t len, uin
         if (bus > areaStart) {
             const uint32_t below = bus - areaStart;
             a.newNote += " Note: only " + std::to_string(len) + " of those bytes are the code -- the " +
-                         std::to_string(below) + " bytes below it (" + hex(areaStart) + "-" + hex(bus - 1) +
+                         std::to_string(below) + " bytes below it (" + hexAddress(areaStart) + "-" + hexAddress(bus - 1) +
                          ") are reserved along with it and lost to BASIC. If the code was placed this high on "
                          "purpose, skip the NEW and keep the program and its variables from growing into it "
                          "instead.";

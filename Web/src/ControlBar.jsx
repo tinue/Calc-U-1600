@@ -97,7 +97,7 @@ function ControlBar({ engine, actions }) {
       <PeripheralToggle label="CE-150" state={ui.ce150} onToggle={() => engine.call("togglePeripheral", 0)} />
       <PeripheralToggle label="CE-158" state={ui.ce158} onToggle={() => engine.call("togglePeripheral", 2)} />
       <PeripheralToggle label="CE-1600P" state={ui.ce1600p} onToggle={() => engine.call("togglePeripheral", 1)} />
-      {ui.floppyShown && ui.floppy && (
+      {ui.floppy && (
         <React.Fragment>
           <span className="calcu-bar-label">Disk:</span>
           <Picker groups={[ui.floppy.templates, ui.floppy.instances]} selected={ui.floppy.selected}
@@ -115,7 +115,7 @@ function ControlBar({ engine, actions }) {
             title="Drive active -- wait for this to go dark before turning the disk over">●</span>
         </React.Fragment>
       )}
-      {ui.tapeShown && ui.tape && (
+      {ui.tape && (
         <React.Fragment>
           <BarSeparator />
           <span className="calcu-bar-label">Tape:</span>

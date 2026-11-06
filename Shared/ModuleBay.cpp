@@ -43,15 +43,16 @@ const std::vector<MemoryCardCatalogEntry>& ModuleBay::instanceCards() const {
 
 ModuleBay::ModuleLists ModuleBay::moduleLists(CardHost host) const {
     ModuleLists lists;
+    const auto add = [&lists](ModuleEntry entry, bool isTemplate) {
+        (!isTemplate ? lists.instances : entry.rom ? lists.roms : lists.templates).push_back(std::move(entry));
+    };
     std::set<std::string> bundled;
     for (const auto& e : bundledCards()) {
         bundled.insert(e.moduleName);
-        if (e.compatibleWith(host)) lists.templates.push_back(entryFrom(e));
+        if (e.compatibleWith(host)) add(entryFrom(e), /*isTemplate=*/true);
     }
-    for (const auto& e : instanceCards()) {
-        if (!e.compatibleWith(host) || bundled.count(e.moduleName)) continue;
-        (e.isTemplate ? lists.templates : lists.instances).push_back(entryFrom(e));
-    }
+    for (const auto& e : instanceCards())
+        if (e.compatibleWith(host) && !bundled.count(e.moduleName)) add(entryFrom(e), e.isTemplate);
     return lists;
 }
 

@@ -40,21 +40,26 @@ function MenuList({ items, onDone, className }) {
   );
 }
 
+// While `active`: a pointer down outside `ref`'s element or Escape calls
+// `close` (an open menu, the menu bar's or a pill's).
+function useDismiss(ref, active, close) {
+  React.useEffect(() => {
+    if (!active) return undefined;
+    const outside = (e) => { if (!ref.current || !ref.current.contains(e.target)) close(); };
+    const escape = (e) => { if (e.key === "Escape") close(); };
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", escape, true);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", escape, true);
+    };
+  }, [active]);
+}
+
 function MenuBar({ menus }) {
   const [open, setOpen] = React.useState(null);
   const barRef = React.useRef(null);
-
-  React.useEffect(() => {
-    if (open === null) return undefined;
-    const close = (e) => { if (!barRef.current || !barRef.current.contains(e.target)) setOpen(null); };
-    const escape = (e) => { if (e.key === "Escape") setOpen(null); };
-    document.addEventListener("pointerdown", close, true);
-    document.addEventListener("keydown", escape, true);
-    return () => {
-      document.removeEventListener("pointerdown", close, true);
-      document.removeEventListener("keydown", escape, true);
-    };
-  }, [open]);
+  useDismiss(barRef, open !== null, () => setOpen(null));
 
   return (
     <div className="calcu-menubar" ref={barRef} role="menubar">

@@ -32,12 +32,20 @@ PC1600Machine* FloppyBay::drive() const {
     return m && m->ce1600fAttached() ? m : nullptr;
 }
 
+const std::vector<FloppyCatalogEntry>& FloppyBay::bundledDisks() const {
+    return m_bundledScan.get(m_paths.bundledResourcesDir(), scanDisks);
+}
+
+const std::vector<FloppyCatalogEntry>& FloppyBay::instanceDisks() const {
+    return m_instanceScan.get(m_paths.instanceDir(), scanDisks);
+}
+
 FloppyBay::DiskLists FloppyBay::diskLists() const {
     DiskLists lists;
-    for (const auto& e : m_bundledScan.get(m_paths.bundledResourcesDir(), scanDisks))
+    for (const auto& e : bundledDisks())
         lists.templates.push_back(e.diskName);
     const std::vector<std::string> bundled = lists.templates;
-    for (const auto& e : m_instanceScan.get(m_paths.instanceDir(), scanDisks)) {
+    for (const auto& e : instanceDisks()) {
         if (contains(bundled, e.diskName)) continue;
         (e.isTemplate ? lists.templates : lists.instances).push_back(e.diskName);
     }
@@ -99,7 +107,7 @@ void FloppyBay::syncFromPresetLoad(const std::string& labelOrEmpty, const std::s
 bool FloppyBay::nameCollides(const std::string& diskName) const {
     std::error_code ec;
     if (std::filesystem::exists(toPath(m_paths.floppyInstancePathFor(diskName)), ec)) return true;
-    for (const auto& e : m_instanceScan.get(m_paths.instanceDir(), scanDisks))
+    for (const auto& e : instanceDisks())
         if (e.diskName == diskName) return true;
     return false;
 }

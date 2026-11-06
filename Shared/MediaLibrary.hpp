@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -32,8 +33,9 @@ public:
     // Cards, then disks, then tapes; each by name.
     std::vector<MediaItem> items() const;
 
-    // The file's bytes for a download; false if it can't be read.
-    bool exportBytes(const MediaItem& item, std::vector<std::uint8_t>* out) const;
+    // The bytes of the listed item at `path`, for a download; false if
+    // there is no such item or it can't be read.
+    bool exportBytes(const std::string& path, std::vector<std::uint8_t>* out) const;
 
     // A `.card.yaml`, `.floppy.yaml` or `.wav` file into the save folder,
     // under the name it carries (a card's module name, a disk's name, a
@@ -41,13 +43,12 @@ public:
     // parse, a name a bundled card/disk or a saved item already has.
     OpResult importFile(const std::string& fileName, const std::vector<std::uint8_t>& bytes);
 
-    // Deletes the item's file. Refused while it is in use.
-    OpResult remove(const MediaItem& item);
-
-    // Whether `fileName` is something importFile() takes (by its suffix).
-    static bool importable(const std::string& fileName);
+    // Deletes the listed item at `path`. Refused while it is in use.
+    OpResult remove(const std::string& path);
 
 private:
+    std::optional<MediaItem> find(const std::string& path) const;
+
     AppSession& m_app;
 };
 

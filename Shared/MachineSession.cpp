@@ -718,27 +718,37 @@ void MachineSession::detachHostDrive() {
 
 bool MachineSession::hostDriveAttached() const { return m_pc1600 && m_pc1600->hostDriveAttached(); }
 
-std::vector<AlpsPlotterMechanism::FlatPoint> MachineSession::ce150PlotPoints() const {
-    return withMachine(std::vector<AlpsPlotterMechanism::FlatPoint>{},
-                       [](auto& machine) { return machine.ce150PlotPoints(); });
+MachineSession::NoticeText MachineSession::noticeText(Notice notice, const std::string& detail) {
+    const std::string why = detail.empty() ? "" : ":\n\n" + detail;
+    switch (notice) {
+        case Notice::OldPC1600RomUnavailable:
+            return {"Old ROM unavailable", "The old PC-1600 ROM could not be loaded" + why + "\n\nUsing the new ROM instead."};
+        case Notice::OldCE1600PRomUnavailable:
+            return {"Old CE-1600P ROM unavailable",
+                    "The old CE-1600P ROM could not be loaded" + why + "\n\nUsing the new ROM instead."};
+        case Notice::TapeSaveFailed: return {"Tape", "The tape recording could not be saved" + why};
+    }
+    return {};
 }
 
-std::uint64_t MachineSession::ce150PlotRevision() const {
-    return withMachine(std::uint64_t{0}, [](auto& machine) { return machine.ce150PlotRevision(); });
+std::vector<AlpsPlotterMechanism::FlatPoint> MachineSession::plotPoints(PaperKind kind) const {
+    if (kind == PaperKind::CE1600P && m_pc1600) return m_pc1600->ce1600pPlotPoints();
+    if (kind == PaperKind::CE150)
+        return withMachine(std::vector<AlpsPlotterMechanism::FlatPoint>{},
+                           [](auto& machine) { return machine.ce150PlotPoints(); });
+    return {};
 }
 
-void MachineSession::clearCE150Paper() {
-    withMachine([](auto& machine) { machine.clearCE150Paper(); });
+std::uint64_t MachineSession::plotRevision(PaperKind kind) const {
+    if (kind == PaperKind::CE1600P) return m_pc1600 ? m_pc1600->ce1600pPlotRevision() : 0;
+    if (kind == PaperKind::CE150)
+        return withMachine(std::uint64_t{0}, [](auto& machine) { return machine.ce150PlotRevision(); });
+    return 0;
 }
 
-std::vector<AlpsPlotterMechanism::FlatPoint> MachineSession::ce1600pPlotPoints() const {
-    return m_pc1600 ? m_pc1600->ce1600pPlotPoints() : std::vector<AlpsPlotterMechanism::FlatPoint>{};
-}
-
-std::uint64_t MachineSession::ce1600pPlotRevision() const { return m_pc1600 ? m_pc1600->ce1600pPlotRevision() : 0; }
-
-void MachineSession::clearCE1600PPaper() {
-    if (m_pc1600) m_pc1600->clearCE1600PPaper();
+void MachineSession::clearPaper(PaperKind kind) {
+    if (kind == PaperKind::CE1600P && m_pc1600) m_pc1600->clearCE1600PPaper();
+    else if (kind == PaperKind::CE150) withMachine([](auto& machine) { machine.clearCE150Paper(); });
 }
 
 } // namespace shared

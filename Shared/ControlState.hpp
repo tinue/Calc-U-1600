@@ -2,6 +2,7 @@
 #include <string>
 
 #include "Shared/MachineModel.hpp"
+#include "Shared/PlotterPaper.hpp"
 
 namespace shared {
 
@@ -17,9 +18,6 @@ struct PeripheralState {
     bool attached = false;
     bool enabled = false;       // may be toggled now: no attached peripheral rules it out
 };
-
-// Which plotter paper the paper panel shows.
-enum class PaperKind { None, CE150, CE1600P };
 
 // ── ControlState: what the pickers, menus and panels offer right now ─────
 //
@@ -55,8 +53,6 @@ struct ControlState {
     // The docked panels.
     PaperKind paper = PaperKind::None;
     bool printerShown = false;  // CE-158 printer output
-
-    const PeripheralState& peripheral(Peripheral p) const;
 };
 
 // The control state of `session`'s live machine. `hostDirectories`: the

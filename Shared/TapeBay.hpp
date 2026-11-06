@@ -36,6 +36,9 @@ public:
     /// The tapes in the folder: "<name>.wav" files, sorted case-
     /// insensitively, without ".wav".
     std::vector<std::string> tapeNames() const;
+    /// The tape picker's list: tapeNames() plus the tape in the bay if it
+    /// has no file yet (a recording before its first save).
+    std::vector<std::string> pickerNames() const;
     /// The tape in the bay ("" for none), whichever role.
     std::string currentName() const;
     bool exists(const std::string& name) const;
@@ -44,9 +47,9 @@ public:
     /// reason if the WAV can't be read.
     bool selectForPlay(const std::string& nameOrEmpty, std::string* error);
     /// Puts a blank tape in to record into "<name>.wav" (replacing a tape of
-    /// that name when the first CSAVE stops the motor). False if the name
-    /// is empty (after trimming).
-    bool recordNew(const std::string& name);
+    /// that name when the first CSAVE stops the motor). False with a
+    /// reason if the name is empty (after trimming).
+    bool recordNew(const std::string& name, std::string* error);
 
     /// Once per frame: reports a failed automatic save, and tapesChanged
     /// when a recording has just been saved.

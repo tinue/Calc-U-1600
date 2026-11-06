@@ -181,8 +181,8 @@ void test_tape_bay() {
     const auto names = tapes.tapeNames();
     CHECK(names.size() == 2 && names[0] == "A side" && names[1] == "b side");
     CHECK(tapes.exists("A side"));
-    CHECK(!tapes.recordNew("   "));
-    CHECK(tapes.recordNew(" New "));
+    { std::string why; CHECK(!tapes.recordNew("   ", &why) && !why.empty()); }
+    CHECK(tapes.recordNew(" New ", nullptr));
     CHECK(tapes.currentName() == "New");
     std::string error;
     CHECK(tapes.selectForPlay("", &error));

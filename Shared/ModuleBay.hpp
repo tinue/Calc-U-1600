@@ -50,12 +50,14 @@ public:
     };
     // `templates` are the files declaring `template: true` -- every bundled
     // card plus any the user dropped into the save folder; `instances` are
-    // the save folder's other cards. A save-folder card sharing a bundled
-    // card's name is left out of both: lookup is bundled-first, so it could
-    // never be loaded.
+    // the save folder's other cards; `roms` the ROM-module templates, a
+    // picker section of their own. A save-folder card sharing a bundled
+    // card's name is left out: lookup is bundled-first, so it could never
+    // be loaded.
     struct ModuleLists {
-        std::vector<ModuleEntry> templates;
+        std::vector<ModuleEntry> templates;  // RAM
         std::vector<ModuleEntry> instances;
+        std::vector<ModuleEntry> roms;
     };
 
     static constexpr double kPersistDebounceSeconds = 0.5;
@@ -66,6 +68,9 @@ public:
     ModuleLists moduleLists(CardHost host) const;
     // Which CardHost a slot resolves to under `model`.
     static CardHost hostForModel(int slot, Model model);
+    // The bundled / save-folder cards, re-parsed only when a file changed.
+    const std::vector<MemoryCardCatalogEntry>& bundledCards() const;
+    const std::vector<MemoryCardCatalogEntry>& instanceCards() const;
 
     // slot is 1 or 2. Empty moduleName => detach. Saves a pending write for
     // the slot being replaced first.
@@ -132,9 +137,6 @@ private:
     bool nameCollides(const std::string& instanceName) const;
     CardHost hostFor(int slot) const;
     std::uint64_t currentSlotRevision(int slot) const;
-    // The bundled / save-folder cards, re-parsed only when a file changed.
-    const std::vector<MemoryCardCatalogEntry>& bundledCards() const;
-    const std::vector<MemoryCardCatalogEntry>& instanceCards() const;
     void writeInstance(int slot);
     std::string attachedModuleName(int slot) const;
     void attachOneSlot(int slot);

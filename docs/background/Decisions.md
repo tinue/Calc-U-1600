@@ -732,6 +732,14 @@ authentic speed for the span that matters.
   when the web client needed it. Drop dispatch stays per frontend: Core's
   `dropfile::classify` already decides, and holding a drop while busy is
   event timing.
+- **ControlState names each control, even when two fields agree today**
+  (`pc1600RomMenu`, `floppyShown`, `ce1600p.offered` are all "is a
+  PC-1600" now): a frontend asks about the control it draws, and a rule
+  that changes for one of them changes in one place.
+- **The web ROM pickers skip a pick of the ROM already in use** before
+  starting the Shared job, which would do nothing: a started job would
+  still blip the busy state, and a pick during another operation would
+  say "Wait until ...".
 - **Media pickers cache by file stamps, not by invalidation calls**
   (`DirectoryScanCache`). Names, sizes and times are read with no file
   opened, so a file copied in from outside is noticed too, and no save

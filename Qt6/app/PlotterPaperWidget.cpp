@@ -154,7 +154,7 @@ void PlotterPaperWidget::changeEvent(QEvent* event) {
 void PlotterPaperWidget::applyChrome() {
     const ChromeColors c = ChromeColors::forWidget(this);
 
-    m_header->setText(m_kind == Kind::CE1600P ? tr("CE-1600P") : tr("CE-150"));
+    m_header->setText(QString::fromLatin1(shared::paperName(m_kind)));
     m_header->setStyleSheet(ChromeStyle::header(c));
 
     m_buttonBar->setStyleSheet(ChromeStyle::buttonBar(c));
@@ -173,9 +173,9 @@ void PlotterPaperWidget::applyChrome() {
     m_cutButton->setStyleSheet(buttonStyle);
 }
 
-void PlotterPaperWidget::setKind(Kind kind) {
+void PlotterPaperWidget::setKind(shared::PaperKind kind) {
     m_kind = kind;
-    m_geometry = kind == Kind::CE1600P ? shared::PaperGeometry::ce1600p() : shared::PaperGeometry::ce150();
+    m_geometry = shared::PaperGeometry::forKind(kind);
     setPoints({});
     m_lastRevision = UINT64_MAX;
     m_plotArea->updateGeometry();
@@ -206,13 +206,12 @@ void PlotterPaperWidget::updateButtonsEnabled() {
 }
 
 void PlotterPaperWidget::onFrameTick() {
-    const std::uint64_t rev = m_kind == Kind::CE1600P ? m_controller->ce1600pPlotRevision()
-                                                         : m_controller->ce150PlotRevision();
+    const std::uint64_t rev = m_controller->plotRevision(m_kind);
     if (rev == m_lastRevision) return;
     m_lastRevision = rev;
 
     const bool wasNearBottom = isNearBottom();
-    setPoints(m_kind == Kind::CE1600P ? m_controller->ce1600pPlotPoints() : m_controller->ce150PlotPoints());
+    setPoints(m_controller->plotPoints(m_kind));
     m_plotArea->updateGeometry();
     m_plotArea->update();
     updateButtonsEnabled();
@@ -260,8 +259,7 @@ void PlotterPaperWidget::copyToClipboard() {
 
 void PlotterPaperWidget::cutPaper() {
     copyToClipboard();
-    if (m_kind == Kind::CE1600P) m_controller->clearCE1600PPaper();
-    else m_controller->clearCE150Paper();
+    m_controller->clearPaper(m_kind);
     setPoints({});
     m_lastRevision = UINT64_MAX;
     m_plotArea->updateGeometry();

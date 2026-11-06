@@ -9,9 +9,9 @@ TapeManager::TapeManager(MachineController* controller, QObject* parent)
     });
 }
 
-QStringList TapeManager::tapeNames() const {
+QStringList TapeManager::pickerNames() const {
     QStringList names;
-    for (const std::string& n : m_bay->tapeNames()) names << QString::fromStdString(n);
+    for (const std::string& n : m_bay->pickerNames()) names << QString::fromStdString(n);
     return names;
 }
 
@@ -20,7 +20,5 @@ bool TapeManager::selectForPlay(const QString& nameOrEmpty, QString* error) {
 }
 
 bool TapeManager::recordNew(const QString& name, QString* error) {
-    if (m_bay->recordNew(name.toStdString())) return true;
-    *error = tr("Name cannot be empty.");
-    return false;
+    return withQtError(error, [&](std::string* err) { return m_bay->recordNew(name.toStdString(), err); });
 }

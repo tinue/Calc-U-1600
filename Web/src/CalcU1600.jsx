@@ -197,11 +197,7 @@ function CalcU1600(props) {
 
   const copyScreen = () => {
     const image = engine.request("screenImage");
-    writeClipboard({ "image/png": image.then(grayPng), "text/plain": image.then((i) => i.text) }).then(async (ok) => {
-      if (ok) return;
-      const png = await grayPng(await image);
-      downloadBytes("screen.png", png, "image/png");
-    });
+    copyImageOrDownload("screen.png", { "image/png": image.then(grayPng), "text/plain": image.then((i) => i.text) });
   };
   const pasteText = async () => {
     try {
@@ -300,7 +296,7 @@ function CalcU1600(props) {
     if (heldKeys.current.has(e.code)) return;
     const down = performance.now();
     const base = engine.request("hostKeyDown", e.code, e.key, e.shiftKey, e.ctrlKey, e.altKey, e.metaKey, IS_MAC)
-      .then((b) => (b === "\u0001" ? "" : b), () => "");
+      .catch(() => "");
     heldKeys.current.set(e.code, { base, down });
   };
 

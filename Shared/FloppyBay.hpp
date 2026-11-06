@@ -43,6 +43,9 @@ public:
     FloppyBay(MachineSession& session, const AppPaths& paths, Events events);
 
     DiskLists diskLists() const;
+    // The bundled / save-folder disks, re-parsed only when a file changed.
+    const std::vector<FloppyCatalogEntry>& bundledDisks() const;
+    const std::vector<FloppyCatalogEntry>& instanceDisks() const;
 
     // Empty => no disk. A live hot-swap (the floppy isn't sized by the boot
     // ROM; a real drive lets you swap diskettes while powered). Only the

@@ -16,6 +16,11 @@
 
 namespace shared {
 
+MachineSession::NoticeText AppSession::attachFailedText(const std::string& device, const std::string& reason) {
+    return {"Attach " + device, reason.empty() ? "The " + device + " could not be attached."
+                                               : "The " + device + " could not be attached:\n\n" + reason};
+}
+
 namespace {
 
 Model modelForPreset(const PresetFile& preset) {

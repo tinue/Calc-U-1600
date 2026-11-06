@@ -20,7 +20,7 @@ MemoryModuleManager::MemoryModuleManager(MachineController* controller, QObject*
 
 MemoryModuleManager::ModuleLists MemoryModuleManager::moduleLists(CardHost host) const {
     const shared::ModuleBay::ModuleLists lists = m_bay->moduleLists(host);
-    return {toQt(lists.templates), toQt(lists.instances)};
+    return {toQt(lists.templates), toQt(lists.instances), toQt(lists.roms)};
 }
 
 bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QString* error) {

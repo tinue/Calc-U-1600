@@ -175,3 +175,11 @@ async function writeClipboard(items) {
   } catch (e) { /* refused, or a type this browser doesn't take */ }
   return false;
 }
+
+// Copy Screen / the paper's Copy: `items` on the clipboard, else (the
+// browser refuses) its "image/png" downloaded as `fileName`.
+async function copyImageOrDownload(fileName, items) {
+  if (await writeClipboard(items)) return;
+  const png = await items["image/png"];
+  if (png) downloadBytes(fileName, png, "image/png");
+}

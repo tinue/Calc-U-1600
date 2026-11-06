@@ -24,6 +24,7 @@ public:
     struct ModuleLists {
         QVector<ModuleEntry> templates;
         QVector<ModuleEntry> instances;
+        QVector<ModuleEntry> roms;
     };
     ModuleLists moduleLists(CardHost host) const;
     static CardHost hostForModel(int slot, Model model) { return shared::ModuleBay::hostForModel(slot, model); }

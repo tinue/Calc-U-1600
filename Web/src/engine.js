@@ -188,7 +188,6 @@ function createEngine({ workerUrl }) {
     }),
     unlockAudio: audio.unlock,
     dismissNotice: () => set({ notices: state.notices.slice(1) }),
-    notify: (title, text) => set({ notices: state.notices.concat([{ title, text }]) }),
     clearPrinter: () => set({ printer: { text: "", chunks: [] } }),
     destroy: () => {
       document.removeEventListener("visibilitychange", onVisibility);

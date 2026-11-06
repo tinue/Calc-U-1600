@@ -16,7 +16,6 @@
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 
-#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -39,7 +38,9 @@
 #include "Shared/MachineCodeLoad.hpp"
 #include "Shared/MediaLibrary.hpp"
 #include "Shared/PlotterPaper.hpp"
+#include "Shared/Text.hpp"
 #include "Shared/Utf8Path.hpp"
+#include "Utf8.hpp"
 
 using namespace emscripten;
 namespace fs = std::filesystem;
@@ -99,25 +100,9 @@ shared::HostKey hostKeyFromCode(const std::string& code) {
 
 // The one code point `utf8` holds, 0 for none or more than one.
 char32_t singleCodePoint(const std::string& utf8) {
-    if (utf8.empty()) return 0;
-    const auto c = static_cast<unsigned char>(utf8[0]);
-    int len = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 0;
-    if (len == 0 || static_cast<int>(utf8.size()) != len) return 0;
-    char32_t cp = len == 1 ? c : len == 2 ? (c & 0x1F) : len == 3 ? (c & 0x0F) : (c & 0x07);
-    for (int i = 1; i < len; ++i) cp = (cp << 6) | (static_cast<unsigned char>(utf8[i]) & 0x3F);
-    return cp;
-}
-
-// Each code point of `utf8` as its own UTF-8 string.
-std::vector<std::string> codePoints(const std::string& utf8) {
-    std::vector<std::string> out;
-    for (std::size_t i = 0; i < utf8.size();) {
-        const auto c = static_cast<unsigned char>(utf8[i]);
-        const std::size_t len = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : 4;
-        out.push_back(utf8.substr(i, len));
-        i += len;
-    }
-    return out;
+    std::size_t i = 0;
+    char32_t cp = 0;
+    return decodeUtf8(utf8, i, cp) && i == utf8.size() ? cp : 0;
 }
 
 bool writeFile(const std::string& path, const std::vector<std::uint8_t>& bytes) {
@@ -267,7 +252,7 @@ public:
 
     // A host key down (KeyboardEvent.code / .key and modifiers): the
     // calculator key the page must release on the key's keyup, or "" when
-    // nothing needs releasing (or the key doesn't type).
+    // nothing needs releasing (or it isn't a calculator key).
     std::string hostKeyDown(const std::string& code, const std::string& key, bool shift, bool control, bool alt,
                             bool meta, bool macHost) {
         shared::HostModifiers mods;
@@ -282,19 +267,11 @@ public:
         }
         const auto resolved = shared::resolveHostKey(hostKeyFromCode(code), mods, singleCodePoint(key),
                                                      isPC1600(), macHost);
-        if (!resolved) return "\x01";  // not a calculator key: the page lets the browser have it
+        if (!resolved) return {};
         return m_app->machine().hostKeyDown(*resolved, /*physical=*/true) ? resolved->baseKey : std::string();
     }
     void hostKeyUp(const std::string& baseKey) { m_app->machine().hostKeyUp(baseKey); }
     void hostShiftTap() { m_app->machine().hostShiftTap(); }
-    // Committed text from a composition (dead keys, IME): a tap per character.
-    void typeCommitted(const std::string& text) {
-        for (const std::string& c : codePoints(text)) {
-            const auto resolved =
-                shared::resolveHostKey(shared::HostKey::Other, {}, singleCodePoint(c), isPC1600(), false);
-            if (resolved) m_app->machine().hostKeyDown(*resolved, /*physical=*/false);
-        }
-    }
     void pasteText(const std::string& text) { m_app->machine().pasteText(text); }
 
     // ── Operations ───────────────────────────────────────────────────────
@@ -428,9 +405,10 @@ public:
     }
     bool tapeExists(const std::string& name) const { return m_app->tapes().exists(name); }
     std::string recordTape(const std::string& name) {
-        const bool ok = m_app->tapes().recordNew(name);
+        std::string error;
+        m_app->tapes().recordNew(name, &error);
         postEverything();
-        return ok ? std::string() : std::string("A tape needs a name.");
+        return error;
     }
 
     // ── Saved media ──────────────────────────────────────────────────────
@@ -449,12 +427,8 @@ public:
         });
     }
     val exportMedia(const std::string& path) const {
-        for (const auto& item : m_library->items()) {
-            if (item.path != path) continue;
-            std::vector<std::uint8_t> bytes;
-            if (m_library->exportBytes(item, &bytes)) return bytesToJS(bytes);
-        }
-        return val::null();
+        std::vector<std::uint8_t> bytes;
+        return m_library->exportBytes(path, &bytes) ? bytesToJS(bytes) : val::null();
     }
     std::string importMedia(const std::string& name, val bytes) {
         const shared::OpResult r = m_library->importFile(name, bytesFromJS(bytes));
@@ -462,15 +436,10 @@ public:
         return r.ok ? std::string() : r.error;
     }
     std::string removeMedia(const std::string& path) {
-        for (const auto& item : m_library->items()) {
-            if (item.path != path) continue;
-            const shared::OpResult r = m_library->remove(item);
-            postEverything();
-            return r.ok ? std::string() : r.error;
-        }
-        return "It is no longer there.";
+        const shared::OpResult r = m_library->remove(path);
+        postEverything();
+        return r.ok ? std::string() : r.error;
     }
-    static bool importable(const std::string& name) { return shared::MediaLibrary::importable(name); }
 
     // ── Inspector ────────────────────────────────────────────────────────
     val inspectorMenu(bool dumps) const {
@@ -484,7 +453,7 @@ public:
         });
     }
     std::string inspectorView(int view) const {
-        return joinLines(m_app->machine().inspectorView(static_cast<inspect::View>(view)));
+        return shared::joinLines(m_app->machine().inspectorView(static_cast<inspect::View>(view)));
     }
     val cardYaml() { return strings(shared::cardYamlDump(*m_app)); }
 
@@ -514,14 +483,15 @@ public:
         if (width == m_paperWidth) return;
         m_paperWidth = width;
         m_paperRevision = UINT64_MAX;
-        postPaper();
+        postPaper(m_app->controlState().paper);
     }
     // The physical-size export (Copy / Cut): {width, height, scale,
     // paneWidth, contentHeight, dotsPerMeter, strokes}.
     val paperExport() const {
-        const auto points = plotPoints();
+        const shared::PaperKind kind = m_app->controlState().paper;
+        const auto points = m_app->machine().plotPoints(kind);
         if (points.empty()) return val::null();
-        const shared::PaperGeometry geom = paperGeometry();
+        const shared::PaperGeometry geom = shared::PaperGeometry::forKind(kind);
         const auto [lower, upper] = shared::penYRange(points);
         const shared::PaperExportSize size = shared::paperExportSize(geom, lower, upper);
         val out = obj();
@@ -535,11 +505,10 @@ public:
         return out;
     }
     void clearPaper() {
-        const shared::ControlState s = m_app->controlState();
-        if (s.paper == shared::PaperKind::CE150) m_app->machine().clearCE150Paper();
-        else if (s.paper == shared::PaperKind::CE1600P) m_app->machine().clearCE1600PPaper();
+        const shared::PaperKind kind = m_app->controlState().paper;
+        m_app->machine().clearPaper(kind);
         m_paperRevision = UINT64_MAX;
-        postPaper();
+        postPaper(kind);
     }
 
     // ── Settings ─────────────────────────────────────────────────────────
@@ -613,16 +582,8 @@ public:
         post(m);
     }
     void notice(shared::MachineSession::Notice n, const std::string& detail) override {
-        using Notice = shared::MachineSession::Notice;
-        switch (n) {
-            case Notice::OldPC1600RomUnavailable:
-                tell("ROM", "The old PC-1600 ROM set could not be loaded; the new one is used. " + detail);
-                break;
-            case Notice::OldCE1600PRomUnavailable:
-                tell("ROM", "The old CE-1600P ROM could not be loaded; the new one is used. " + detail);
-                break;
-            case Notice::TapeSaveFailed: tell("Tape", "The tape recording could not be saved. " + detail); break;
-        }
+        const auto message = shared::MachineSession::noticeText(n, detail);
+        tell(message.title, message.text);
     }
     void moduleChanged(int) override { m_dirty = true; }
     void tapesChanged() override { m_dirty = true; }
@@ -632,8 +593,8 @@ public:
     void presetArmed() override { postEverything(); }
     void presetLog(const std::string& line) override { log(line); }
     void attachFailed(const std::string& device, const std::string& reason) override {
-        tell("Attach " + device, reason.empty() ? "The " + device + " could not be attached."
-                                                : "The " + device + " could not be attached:\n\n" + reason);
+        const auto message = shared::AppSession::attachFailedText(device, reason);
+        tell(message.title, message.text);
     }
     void busyChanged(bool busy) override {
         val m = obj();
@@ -646,15 +607,6 @@ public:
 
 private:
     bool isPC1600() const { return m_app->machine().currentModel() == shared::Model::PC1600; }
-
-    static std::string joinLines(const std::vector<std::string>& lines) {
-        std::string out;
-        for (std::size_t i = 0; i < lines.size(); ++i) {
-            if (i) out += '\n';
-            out += lines[i];
-        }
-        return out;
-    }
 
     static void log(const std::string& text) {
         val m = obj();
@@ -684,8 +636,8 @@ private:
     // Everything the controls show, after anything may have changed it.
     void postEverything() {
         m_dirty = false;
-        m_lastFrameKey.clear();
-        m_lastLamps.clear();
+        m_lastFrame.reset();
+        m_lastLamps.reset();
         m_paperRevision = UINT64_MAX;
         postUi();
         postFrame();
@@ -697,9 +649,10 @@ private:
             m_dirty = false;
             postUi();
         }
+        const shared::ControlState state = m_app->controlState();
         postDisplay();
-        postLamps();
-        postPaper();
+        postLamps(state);
+        postPaper(state.paper);
         postPrinter();
     }
 
@@ -720,15 +673,11 @@ private:
         ui.set("ce150", peripheral(s.ce150));
         ui.set("ce1600p", peripheral(s.ce1600p));
         ui.set("ce158", peripheral(s.ce158));
-        ui.set("floppyShown", s.floppyShown);
         ui.set("floppyEnabled", s.floppyEnabled);
-        ui.set("tapeShown", s.tapeShown);
         ui.set("pc1500RomMenu", s.pc1500RomMenu);
         ui.set("pc1600RomMenu", s.pc1600RomMenu);
         ui.set("ce1600pRomMenu", s.ce1600pRomMenu);
-        ui.set("paper", s.paper == shared::PaperKind::CE150     ? "CE-150"
-                        : s.paper == shared::PaperKind::CE1600P ? "CE-1600P"
-                                                                : "");
+        ui.set("paper", shared::paperName(s.paper));
         ui.set("printerShown", s.printerShown);
         ui.set("pc1500Rom", static_cast<int>(m_app->machine().pc1500RomRevision()));
         ui.set("pc1600Rom", static_cast<int>(m_app->machine().pc1600RomVersion()));
@@ -738,13 +687,13 @@ private:
         val slots = val::array();
         for (int slot = 1; slot <= s.slotCount; ++slot) {
             const auto lists = m_app->modules().moduleLists(shared::ModuleBay::hostForModel(slot, s.model));
-            std::vector<std::string> ram, roms, saved;
-            for (const auto& e : lists.templates) (e.rom ? roms : ram).push_back(e.moduleName);
-            for (const auto& e : lists.instances) saved.push_back(e.moduleName);
+            const auto names = [](const std::vector<shared::ModuleBay::ModuleEntry>& entries) {
+                return array(entries, [](const shared::ModuleBay::ModuleEntry& e) { return val(e.moduleName); });
+            };
             val v = obj();
-            v.set("templates", strings(ram));
-            v.set("instances", strings(saved));
-            v.set("roms", strings(roms));
+            v.set("templates", names(lists.templates));
+            v.set("instances", names(lists.instances));
+            v.set("roms", names(lists.roms));
             v.set("selected", m_app->modules().selectedModuleName(slot));
             v.set("canSave", m_app->modules().canNameAndSave(slot));
             slots.set(slot - 1, v);
@@ -762,30 +711,21 @@ private:
             ui.set("floppy", v);
         }
         if (s.tapeShown) {
-            std::vector<std::string> names = m_app->tapes().tapeNames();
-            const std::string current = m_app->tapes().currentName();
-            if (!current.empty() && std::find(names.begin(), names.end(), current) == names.end())
-                names.push_back(current);
             val v = obj();
-            v.set("names", strings(names));
-            v.set("current", current);
+            v.set("names", strings(m_app->tapes().pickerNames()));
+            v.set("current", m_app->tapes().currentName());
             ui.set("tape", v);
         }
         post(ui);
     }
 
     void postDisplay() {
-        const shared::DisplayFrame frame = m_app->machine().currentDisplay();
-        // The frame as a string: a cheap "did anything change" key.
-        std::string key;
-        key.reserve(frame.pixels.size() + 64);
-        key += static_cast<char>(m_app->machine().currentModel());
-        key += frame.poweredOn ? 'P' : 'p';
-        key += std::to_string(frame.cols) + "x" + std::to_string(frame.rows);
-        for (bool b : frame.pixels) key += b ? '1' : '0';
-        for (const auto& [name, on] : frame.statusSymbols) key += on ? '1' : '0';
-        if (key == m_lastFrameKey) return;
-        m_lastFrameKey = std::move(key);
+        shared::DisplayFrame frame = m_app->machine().currentDisplay();
+        const shared::Model model = m_app->machine().currentModel();
+        if (m_lastFrame && m_lastFrameModel == model && m_lastFrame->poweredOn == frame.poweredOn &&
+            m_lastFrame->cols == frame.cols && m_lastFrame->rows == frame.rows &&
+            m_lastFrame->pixels == frame.pixels && m_lastFrame->statusSymbols == frame.statusSymbols)
+            return;
 
         val m = obj();
         m.set("type", "display");
@@ -808,38 +748,27 @@ private:
                   return v;
               }));
         post(m);
+        m_lastFrame = std::move(frame);
+        m_lastFrameModel = model;
     }
 
     // The floppy lamp and the tape counter.
-    void postLamps() {
+    void postLamps(const shared::ControlState& state) {
         const TapeDeck::Status& tape = m_app->tapeStatus();
-        const bool floppyMotor = m_app->controlState().floppyShown && m_app->floppy().motorOn();
-        const std::string key = std::to_string(floppyMotor) + std::to_string(static_cast<int>(tape.mode)) +
-                                std::to_string(tape.motor) + std::to_string(static_cast<int>(tape.position)) +
-                                tape.path;
-        if (key == m_lastLamps) return;
-        m_lastLamps = key;
+        const Lamps lamps{state.floppyShown && m_app->floppy().motorOn(), tape.mode, tape.motor,
+                          static_cast<int>(tape.position), tape.path};
+        if (lamps == m_lastLamps) return;
         val m = obj();
         m.set("type", "lamps");
-        m.set("floppyMotor", floppyMotor);
-        m.set("tapeMode", tape.mode == TapeDeck::Mode::Play     ? "play"
-                          : tape.mode == TapeDeck::Mode::Record ? "record"
-                                                                : "");
-        m.set("tapeMotor", tape.motor);
-        m.set("tapeSeconds", static_cast<int>(tape.position));
-        m.set("tapeFile", shared::fromPath(shared::toPath(tape.path).filename()));
+        m.set("floppyMotor", lamps.floppyMotor);
+        m.set("tapeMode", lamps.tapeMode == TapeDeck::Mode::Play     ? "play"
+                          : lamps.tapeMode == TapeDeck::Mode::Record ? "record"
+                                                                     : "");
+        m.set("tapeMotor", lamps.tapeMotor);
+        m.set("tapeSeconds", lamps.tapeSeconds);
+        m.set("tapeFile", shared::fromPath(shared::toPath(lamps.tapePath).filename()));
         post(m);
-    }
-
-    shared::PaperGeometry paperGeometry() const {
-        return m_app->controlState().paper == shared::PaperKind::CE150 ? shared::PaperGeometry::ce150()
-                                                                        : shared::PaperGeometry::ce1600p();
-    }
-    std::vector<AlpsPlotterMechanism::FlatPoint> plotPoints() const {
-        const shared::PaperKind kind = m_app->controlState().paper;
-        if (kind == shared::PaperKind::CE150) return m_app->machine().ce150PlotPoints();
-        if (kind == shared::PaperKind::CE1600P) return m_app->machine().ce1600pPlotPoints();
-        return {};
+        m_lastLamps = lamps;
     }
 
     // Per pen: {coords: Float32Array of x,y pairs, starts: polyline starts
@@ -870,21 +799,18 @@ private:
     }
 
     // The strokes at the page's pane width, when the plot changed.
-    void postPaper() {
-        const shared::PaperKind kind = m_app->controlState().paper;
+    void postPaper(shared::PaperKind kind) {
         if (kind == shared::PaperKind::None || m_paperWidth <= 0) return;
-        const std::uint64_t rev = kind == shared::PaperKind::CE150 ? m_app->machine().ce150PlotRevision()
-                                                                   : m_app->machine().ce1600pPlotRevision();
-        const int kindKey = static_cast<int>(kind);
-        if (rev == m_paperRevision && kindKey == m_paperKind) return;
+        const std::uint64_t rev = m_app->machine().plotRevision(kind);
+        if (rev == m_paperRevision && kind == m_paperKind) return;
         m_paperRevision = rev;
-        m_paperKind = kindKey;
-        const auto points = plotPoints();
-        const shared::PaperGeometry geom = paperGeometry();
+        m_paperKind = kind;
+        const auto points = m_app->machine().plotPoints(kind);
+        const shared::PaperGeometry geom = shared::PaperGeometry::forKind(kind);
         const auto [lower, upper] = shared::penYRange(points);
         val m = obj();
         m.set("type", "paper");
-        m.set("kind", kind == shared::PaperKind::CE150 ? "CE-150" : "CE-1600P");
+        m.set("kind", shared::paperName(kind));
         m.set("empty", points.empty());
         m.set("contentHeight", geom.contentHeight(0, lower, upper, m_paperWidth));
         m.set("strokes", strokesJS(shared::buildPaperStrokes(geom, m_paperWidth, points, lower)));
@@ -913,12 +839,22 @@ private:
     std::string m_programName;
     std::optional<shared::MachineCodeLoad> m_code;
 
+    // What was posted last: a frame / lamps equal to it aren't posted again.
+    struct Lamps {
+        bool floppyMotor = false;
+        TapeDeck::Mode tapeMode{};
+        bool tapeMotor = false;
+        int tapeSeconds = 0;
+        std::string tapePath;
+        bool operator==(const Lamps&) const = default;
+    };
     bool m_dirty = false;
-    std::string m_lastFrameKey;
-    std::string m_lastLamps;
+    std::optional<shared::DisplayFrame> m_lastFrame;
+    shared::Model m_lastFrameModel{};
+    std::optional<Lamps> m_lastLamps;
     double m_paperWidth = 0;
     std::uint64_t m_paperRevision = UINT64_MAX;
-    int m_paperKind = -1;
+    shared::PaperKind m_paperKind = shared::PaperKind::None;
 };
 
 } // namespace
@@ -934,7 +870,6 @@ EMSCRIPTEN_BINDINGS(calcu1600) {
         .function("hostKeyDown", &WebController::hostKeyDown)
         .function("hostKeyUp", &WebController::hostKeyUp)
         .function("hostShiftTap", &WebController::hostShiftTap)
-        .function("typeCommitted", &WebController::typeCommitted)
         .function("pasteText", &WebController::pasteText)
         .function("pickModel", &WebController::pickModel)
         .function("selectModule", &WebController::selectModule)
@@ -974,6 +909,5 @@ EMSCRIPTEN_BINDINGS(calcu1600) {
         .function("setStartupModel", &WebController::setStartupModel)
         .function("setDefaultPreset", &WebController::setDefaultPreset)
         .class_function("faceplate", &WebController::faceplate)
-        .class_function("lcdConstants", &WebController::lcdConstants)
-        .class_function("importable", &WebController::importable);
+        .class_function("lcdConstants", &WebController::lcdConstants);
 }

@@ -16,11 +16,6 @@ namespace fs = std::filesystem;
 
 namespace {
 
-std::string lower(std::string s) {
-    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return s;
-}
-
 // "<name>.wav" -> "<name>": everything before the last suffix, like
 // QFileInfo::completeBaseName().
 std::string baseName(const fs::path& p) { return fromPath(p.stem()); }
@@ -35,10 +30,17 @@ std::vector<std::string> TapeBay::tapeNames() const {
     std::error_code ec;
     for (fs::directory_iterator it(toPath(m_paths.tapeDir()), ec), end; !ec && it != end; it.increment(ec)) {
         if (!it->is_regular_file(ec)) continue;
-        if (lower(fromPath(it->path().extension())) != ".wav") continue;
+        if (lowered(fromPath(it->path().extension())) != ".wav") continue;
         names.push_back(baseName(it->path()));
     }
-    std::sort(names.begin(), names.end(), [](const std::string& a, const std::string& b) { return lower(a) < lower(b); });
+    std::sort(names.begin(), names.end(), [](const std::string& a, const std::string& b) { return lowered(a) < lowered(b); });
+    return names;
+}
+
+std::vector<std::string> TapeBay::pickerNames() const {
+    std::vector<std::string> names = tapeNames();
+    const std::string current = currentName();
+    if (!current.empty() && std::find(names.begin(), names.end(), current) == names.end()) names.push_back(current);
     return names;
 }
 
@@ -59,9 +61,12 @@ bool TapeBay::selectForPlay(const std::string& nameOrEmpty, std::string* error) 
     return m_session.tapePlay(m_paths.tapePathFor(nameOrEmpty), error);
 }
 
-bool TapeBay::recordNew(const std::string& name) {
+bool TapeBay::recordNew(const std::string& name, std::string* error) {
     const std::string t = trimmed(name);
-    if (t.empty()) return false;
+    if (t.empty()) {
+        if (error) *error = "A tape needs a name.";
+        return false;
+    }
     m_session.tapeRecord(m_paths.tapePathFor(t)); // ejects what was in
     return true;
 }

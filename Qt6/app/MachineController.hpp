@@ -89,29 +89,20 @@ public:
 
     std::vector<std::string> inspectorView(inspect::View view) const { return session().inspectorView(view); }
     std::vector<inspect::MenuEntry> inspectorMenu(bool dumps) const { return session().inspectorMenu(dumps); }
-    std::vector<std::uint8_t> debugSlotCardImage(int slot, int* bankCount) const {
-        return session().debugSlotCardImage(slot, bankCount);
-    }
     void endTrace() { session().endTrace(); }
     std::uint64_t traceBytes() const { return session().traceBytes(); }
     bool traceActive() const { return session().traceActive(); }
 
-    bool ce150Attached() const { return session().ce150Attached(); }
-    bool ce1600pAttached() const { return session().ce1600pAttached(); }
-    bool ce158Attached() const { return session().ce158Attached(); }
     std::vector<std::uint8_t> drainCE158PrinterOutput() { return session().drainCE158PrinterOutput(); }
     bool hostDriveAttached() const { return session().hostDriveAttached(); }
-    bool tapeInterfaceAttached() const { return session().tapeInterfaceAttached(); }
-    std::vector<AlpsPlotterMechanism::FlatPoint> ce150PlotPoints() const { return session().ce150PlotPoints(); }
-    std::uint64_t ce150PlotRevision() const { return session().ce150PlotRevision(); }
-    void clearCE150Paper() { session().clearCE150Paper(); }
-    std::vector<AlpsPlotterMechanism::FlatPoint> ce1600pPlotPoints() const { return session().ce1600pPlotPoints(); }
-    std::uint64_t ce1600pPlotRevision() const { return session().ce1600pPlotRevision(); }
-    void clearCE1600PPaper() { session().clearCE1600PPaper(); }
+    std::vector<AlpsPlotterMechanism::FlatPoint> plotPoints(shared::PaperKind kind) const {
+        return session().plotPoints(kind);
+    }
+    std::uint64_t plotRevision(shared::PaperKind kind) const { return session().plotRevision(kind); }
+    void clearPaper(shared::PaperKind kind) { session().clearPaper(kind); }
 
     // ---- QString translations ----
     bool beginTrace(const QString& path) { return session().beginTrace(path.toStdString()); }
-    QString hostDriveDirectory() const { return QString::fromStdString(session().hostDriveDirectory()); }
     bool tapeEject(QString* error = nullptr);
     void refreshSerialLinkDirectory() { session().refreshSerialLinkDirectory(); }
     QString serialLinkStatus() const { return QString::fromStdString(session().serialLinkStatus()); }

@@ -5,21 +5,9 @@
 #include "Connector/BatteryCardInstance.hpp"
 #include "Debug/Inspect/HexDump.hpp"
 #include "Shared/AppSession.hpp"
+#include "Shared/Text.hpp"
 
 namespace shared {
-
-namespace {
-
-std::string joinLines(const std::vector<std::string>& lines) {
-    std::string out;
-    for (std::size_t i = 0; i < lines.size(); ++i) {
-        if (i) out += '\n';
-        out += lines[i];
-    }
-    return out;
-}
-
-} // namespace
 
 std::vector<std::string> cardYamlDump(AppSession& app) {
     using inspect::fmt;

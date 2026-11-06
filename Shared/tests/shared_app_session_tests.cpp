@@ -148,7 +148,7 @@ void test_tape_status_follows_frames() {
     CHECK(f.app->runNow(f.app->togglePeripheralJob(shared::Peripheral::CE150)).ok);
     CHECK(f.app->machine().tapeInterfaceAttached());
     CHECK(f.app->tapeStatus().mode == TapeDeck::Mode::Empty);
-    CHECK(f.app->tapes().recordNew("side a"));
+    CHECK(f.app->tapes().recordNew("side a", nullptr));
     CHECK(f.app->tapeStatus().mode == TapeDeck::Mode::Empty);  // not seen yet
     f.app->tick();
     CHECK(f.app->tapeStatus().mode == TapeDeck::Mode::Record);
@@ -188,7 +188,6 @@ void test_control_state() {
     s = f.app->controlState();
     CHECK(s.ce1600p.attached && s.floppyEnabled && s.tapeShown && s.paper == shared::PaperKind::CE1600P);
     CHECK(!s.ce150.enabled && !s.ce158.enabled);
-    CHECK(&s.peripheral(shared::Peripheral::CE158) == &s.ce158);
 }
 
 // A frontend without host directories never offers the host drive.
@@ -309,11 +308,11 @@ void test_media_library() {
     if (!work) return;
     const shared::MediaItem workItem = *work;
     std::vector<std::uint8_t> bytes;
-    CHECK(library.exportBytes(workItem, &bytes) && !bytes.empty());
-    CHECK(!library.remove(workItem).ok);  // in slot 1
+    CHECK(library.exportBytes(workItem.path, &bytes) && !bytes.empty());
+    CHECK(!library.remove(workItem.path).ok);  // in slot 1
 
     CHECK(f.app->runNow(f.app->selectModuleJob(1, "")).ok);
-    CHECK(library.remove(workItem).ok);
+    CHECK(library.remove(workItem.path).ok);
     CHECK(library.items().empty());
     CHECK(library.importFile("Work.card.yaml", bytes).ok);
     CHECK(findItem(library.items(), "Work") != nullptr);
@@ -333,7 +332,6 @@ void test_media_library() {
     const shared::MediaItem* tape = findItem(items, "Side A");
     CHECK(tape && tape->type == shared::MediaType::Tape && !tape->inUse);
     CHECK(!library.importFile("notes.txt", {'x'}).ok);
-    CHECK(shared::MediaLibrary::importable("A.WAV") && !shared::MediaLibrary::importable("a.bas"));
 }
 
 // cardYamlDump(): a header and the initial-content block per slot card,

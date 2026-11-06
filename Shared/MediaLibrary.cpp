@@ -1,7 +1,7 @@
 #include "Shared/MediaLibrary.hpp"
 
-#include <algorithm>
 #include <filesystem>
+#include <optional>
 #include <system_error>
 
 #include "Audio/WavFile.hpp"
@@ -17,42 +17,23 @@ namespace fs = std::filesystem;
 
 namespace {
 
-bool endsWith(const std::string& s, const std::string& tail) {
-    if (s.size() < tail.size()) return false;
-    return std::equal(tail.rbegin(), tail.rend(), s.rbegin(),
-                      [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) ==
-                                                  std::tolower(static_cast<unsigned char>(b)); });
-}
-
 std::string fileNameOf(const std::string& path) { return fromPath(toPath(path).filename()); }
-
-bool sameName(const std::string& a, const std::string& b) {
-    return a.size() == b.size() &&
-           std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
-               return std::tolower(static_cast<unsigned char>(x)) == std::tolower(static_cast<unsigned char>(y));
-           });
-}
 
 } // namespace
 
-bool MediaLibrary::importable(const std::string& fileName) {
-    return endsWith(fileName, kCardFileSuffix) || endsWith(fileName, kFloppyFileSuffix) || endsWith(fileName, ".wav");
-}
-
 std::vector<MediaItem> MediaLibrary::items() const {
     std::vector<MediaItem> out;
-    const std::string saves = m_app.paths().instanceDir();
     const ModuleBay& modules = m_app.modules();
     const int slots = m_app.machine().slotCount();
 
-    for (const auto& e : scanMemoryCardDirectory(saves, nullptr)) {
+    for (const auto& e : modules.instanceCards()) {
         MediaItem item{MediaType::Card, e.moduleName, fileNameOf(e.filePath), e.filePath, e.isTemplate, false};
         for (int slot = 1; slot <= slots; ++slot)
             if (modules.selectedModuleName(slot) == e.moduleName) item.inUse = true;
         out.push_back(std::move(item));
     }
     const bool driveOn = m_app.machine().ce1600pAttached();
-    for (const auto& e : scanFloppyDirectory(saves, nullptr)) {
+    for (const auto& e : m_app.floppy().instanceDisks()) {
         MediaItem item{MediaType::Disk, e.diskName, fileNameOf(e.filePath), e.filePath, e.isTemplate, false};
         item.inUse = driveOn && m_app.floppy().selectedDiskName() == e.diskName;
         out.push_back(std::move(item));
@@ -65,22 +46,25 @@ std::vector<MediaItem> MediaLibrary::items() const {
     return out;
 }
 
-bool MediaLibrary::exportBytes(const MediaItem& item, std::vector<std::uint8_t>* out) const {
-    return readWholeFile(toPath(item.path), out);
+std::optional<MediaItem> MediaLibrary::find(const std::string& path) const {
+    for (MediaItem& item : items())
+        if (item.path == path) return std::move(item);
+    return std::nullopt;
+}
+
+bool MediaLibrary::exportBytes(const std::string& path, std::vector<std::uint8_t>* out) const {
+    return find(path) && readWholeFile(toPath(path), out);
 }
 
 OpResult MediaLibrary::importFile(const std::string& fileName, const std::vector<std::uint8_t>& bytes) {
     const std::string text(bytes.begin(), bytes.end());
-    const std::string bundled = m_app.paths().bundledResourcesDir();
-    const std::string saves = m_app.paths().instanceDir();
-
-    if (endsWith(fileName, kCardFileSuffix)) {
+    if (endsWithIgnoringCase(fileName, kCardFileSuffix)) {
         MemoryCardCatalogEntry entry;
         std::string err;
         if (!memory_card_catalog_detail::parseEntry(text, fileName, &entry, &err))
             return OpResult::fail(inQuotes(fileName) + " isn't a card file: " + err);
-        for (const auto& dir : {bundled, saves})
-            for (const auto& e : scanMemoryCardDirectory(dir, nullptr))
+        for (const auto* cards : {&m_app.modules().bundledCards(), &m_app.modules().instanceCards()})
+            for (const auto& e : *cards)
                 if (e.moduleName == entry.moduleName)
                     return OpResult::fail("A card named " + inQuotes(entry.moduleName) + " already exists.");
         const std::string path = m_app.paths().instancePathFor(entry.moduleName);
@@ -88,12 +72,12 @@ OpResult MediaLibrary::importFile(const std::string& fileName, const std::vector
         return {};
     }
 
-    if (endsWith(fileName, kFloppyFileSuffix)) {
+    if (endsWithIgnoringCase(fileName, kFloppyFileSuffix)) {
         FloppyFile disk;
         std::string err;
         if (!parseFloppyFile(text, &disk, &err)) return OpResult::fail(inQuotes(fileName) + " isn't a disk file: " + err);
-        for (const auto& dir : {bundled, saves})
-            for (const auto& e : scanFloppyDirectory(dir, nullptr))
+        for (const auto* disks : {&m_app.floppy().bundledDisks(), &m_app.floppy().instanceDisks()})
+            for (const auto& e : *disks)
                 if (e.diskName == disk.diskName)
                     return OpResult::fail("A disk named " + inQuotes(disk.diskName) + " already exists.");
         const std::string path = m_app.paths().floppyInstancePathFor(disk.diskName);
@@ -101,12 +85,12 @@ OpResult MediaLibrary::importFile(const std::string& fileName, const std::vector
         return {};
     }
 
-    if (endsWith(fileName, ".wav")) {
+    if (endsWithIgnoringCase(fileName, ".wav")) {
         const std::string name = trimmed(fileName.substr(0, fileName.size() - 4));
         if (name.empty() || name.find_first_of("/\\:") != std::string::npos)
             return OpResult::fail(inQuotes(fileName) + " isn't a usable tape name.");
         for (const std::string& existing : m_app.tapes().tapeNames())
-            if (sameName(existing, name)) return OpResult::fail("A tape named " + inQuotes(name) + " already exists.");
+            if (sameIgnoringCase(existing, name)) return OpResult::fail("A tape named " + inQuotes(name) + " already exists.");
         const std::string path = m_app.paths().tapePathFor(name);
         if (!atomicWriteFile(path, text)) return OpResult::fail("Couldn't write " + inQuotes(path) + ".");
         WavData wav;
@@ -122,16 +106,13 @@ OpResult MediaLibrary::importFile(const std::string& fileName, const std::vector
     return OpResult::fail(inQuotes(fileName) + " isn't a card (.card.yaml), disk (.floppy.yaml) or tape (.wav).");
 }
 
-OpResult MediaLibrary::remove(const MediaItem& item) {
-    for (const MediaItem& current : items()) {
-        if (current.path != item.path) continue;
-        if (current.inUse)
-            return OpResult::fail(inQuotes(item.name) + " is in use. Take it out first.");
-        std::error_code ec;
-        if (!fs::remove(toPath(item.path), ec) || ec) return OpResult::fail("Couldn't delete " + inQuotes(item.name) + ".");
-        return {};
-    }
-    return OpResult::fail(inQuotes(item.name) + " is no longer there.");
+OpResult MediaLibrary::remove(const std::string& path) {
+    const std::optional<MediaItem> item = find(path);
+    if (!item) return OpResult::fail("It is no longer there.");
+    if (item->inUse) return OpResult::fail(inQuotes(item->name) + " is in use. Take it out first.");
+    std::error_code ec;
+    if (!fs::remove(toPath(path), ec) || ec) return OpResult::fail("Couldn't delete " + inQuotes(item->name) + ".");
+    return {};
 }
 
 } // namespace shared

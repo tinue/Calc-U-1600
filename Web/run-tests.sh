@@ -48,6 +48,9 @@ serve "$SUBPATH_PORT" "/anything/calc"
 sleep 1
 
 cd "$WEB"
-npm install --no-audit --no-fund
-npx playwright install chromium webkit
+# CI installs these itself (with the browsers' system dependencies).
+if [ -z "${CI:-}" ]; then
+  npm install --no-audit --no-fund
+  npx playwright install chromium webkit
+fi
 npx playwright test "$@"

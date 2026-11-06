@@ -30,6 +30,14 @@ struct PaperPoint {
 // (not 960/190): BASIC's X=0..960 plot window maps to 190mm, but the
 // mechanism's own raw penX range is double that. Shared by both plotters --
 // same physical stepper hardware, not recomputed per paper width.
+// Which plotter paper the paper panel shows.
+enum class PaperKind { None, CE150, CE1600P };
+
+// "CE-150" / "CE-1600P"; empty for None.
+inline const char* paperName(PaperKind kind) {
+    return kind == PaperKind::CE150 ? "CE-150" : kind == PaperKind::CE1600P ? "CE-1600P" : "";
+}
+
 struct PaperGeometry {
     double paperWidthMM = 0;
     double plottableWidthMM = 0;
@@ -40,6 +48,7 @@ struct PaperGeometry {
 
     static PaperGeometry ce1600p() { return PaperGeometry{210.0, 190.0}; }
     static PaperGeometry ce150() { return PaperGeometry{56.0, 42.75}; }
+    static PaperGeometry forKind(PaperKind kind) { return kind == PaperKind::CE150 ? ce150() : ce1600p(); }
 
     double sideMarginMM() const { return (paperWidthMM - plottableWidthMM) / 2.0; }
 

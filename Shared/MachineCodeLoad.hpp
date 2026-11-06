@@ -35,9 +35,9 @@ class MachineCodeLoad {
 public:
     static MachineCodeLoad plan(const MachineSession& session, const std::vector<std::uint8_t>& image);
 
-    const std::string& error() const { return m_error; }  // non-empty: refuse
-    bool needsAddress() const { return m_needsAddress; }
-    std::size_t length() const { return m_code.payload.size(); }
+    const std::string& error() const { return m_plan.error; }  // non-empty: refuse
+    bool needsAddress() const { return m_plan.needsAddress; }
+    std::size_t length() const { return m_request.payload.size(); }
     // The address field's text to start with ("&C0C5"; empty for none), its
     // placeholder, and (PC-1600) which CPU's address space it is in.
     std::string defaultAddressText() const;
@@ -64,15 +64,13 @@ public:
 
 private:
     machinecode::Target m_target = machinecode::Target::PC1500;
-    machinecode::File m_code;
+    machinecode::File m_code;  // its payload moved into m_request
     machinecode::PC1600State m_state;
-    machinecode::Cpu m_cpu = machinecode::Cpu::Z80;
-    std::string m_error;
-    bool m_needsAddress = false;
-    std::uint32_t m_defaultAddr = 0;
-    std::uint32_t m_addr = 0;  // in m_cpu's address space
-    machinecode::Slot m_slot = machinecode::Slot::S0;
-    MachineCodeLoadRequest m_request;
+    machinecode::Plan m_plan;
+    std::uint32_t m_addr = 0;  // in m_plan.cpu's address space
+    MachineCodeLoadRequest m_request;  // the slot is a machinecode::Slot
+
+    machinecode::Slot slot() const { return static_cast<machinecode::Slot>(m_request.slot); }
 };
 
 } // namespace shared

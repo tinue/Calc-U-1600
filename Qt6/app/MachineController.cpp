@@ -47,24 +47,13 @@ void MachineController::romMissing(const std::string& error, const std::string& 
 }
 
 void MachineController::notice(shared::MachineSession::Notice notice, const std::string& detail) {
-    const QString d = QString::fromStdString(detail);
-    switch (notice) {
-        case shared::MachineSession::Notice::OldPC1600RomUnavailable:
-            QMessageBox::warning(nullptr, QObject::tr("Old ROM unavailable"),
-                                 QObject::tr("The old PC-1600 ROM could not be loaded:\n\n%1\n\n"
-                                             "Using the new ROM instead.")
-                                     .arg(d));
-            break;
-        case shared::MachineSession::Notice::OldCE1600PRomUnavailable:
-            QMessageBox::warning(nullptr, QObject::tr("Old CE-1600P ROM unavailable"),
-                                 QObject::tr("The old CE-1600P ROM could not be loaded:\n\n%1\n\n"
-                                             "Using the new ROM instead.")
-                                     .arg(d));
-            break;
-        case shared::MachineSession::Notice::TapeSaveFailed:
-            qWarning("Tape: %s", qPrintable(d));
-            break;
+    const auto message = shared::MachineSession::noticeText(notice, detail);
+    // A failed tape save is logged, not shown: it happens inside a rebuild.
+    if (notice == shared::MachineSession::Notice::TapeSaveFailed) {
+        qWarning("Tape: %s", detail.c_str());
+        return;
     }
+    QMessageBox::warning(nullptr, QString::fromStdString(message.title), QString::fromStdString(message.text));
 }
 
 void MachineController::machineAboutToChange() {

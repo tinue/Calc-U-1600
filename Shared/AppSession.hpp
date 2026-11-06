@@ -54,6 +54,9 @@ enum class Bay { Modules, Floppy, Tape };
 // Single-threaded: everything is called on the frontend's one thread.
 class AppSession : private MachineSession::Bays {
 public:
+    // The message box for Platform::attachFailed().
+    static MachineSession::NoticeText attachFailedText(const std::string& device, const std::string& reason);
+
     // The machine's events (MachineSession::Listener: ROM missing, model
     // switched, debugger hooks, ...) plus the app's own.
     class Platform : public MachineSession::Listener {
@@ -70,6 +73,7 @@ public:
         virtual void presetLog(const std::string& /*line*/) {}
         // A peripheral the user asked for couldn't be attached; it stays
         // detached.
+        // attachFailedText() words it.
         virtual void attachFailed(const std::string& /*device*/, const std::string& /*reason*/) {}
         // An operation started / finished (start() and runNow()).
         virtual void busyChanged(bool /*busy*/) {}

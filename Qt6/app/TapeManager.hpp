@@ -13,7 +13,7 @@ class TapeManager : public QObject {
 public:
     explicit TapeManager(MachineController* controller, QObject* parent = nullptr);
 
-    QStringList tapeNames() const;
+    QStringList pickerNames() const;
     QString currentName() const { return QString::fromStdString(m_bay->currentName()); }
     bool exists(const QString& name) const { return m_bay->exists(name.toStdString()); }
     bool selectForPlay(const QString& nameOrEmpty, QString* error);

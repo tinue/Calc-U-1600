@@ -23,6 +23,7 @@
 #include "Shared/DisplayFrame.hpp"
 #include "Shared/HostKeyMap.hpp"
 #include "Shared/MachineModel.hpp"
+#include "Shared/PlotterPaper.hpp"
 #include "Shared/Settings.hpp"
 
 class PC1500Machine;
@@ -57,6 +58,12 @@ public:
         // Ejecting the tape before a rebuild failed to save the recording.
         TapeSaveFailed,
     };
+    // A notice as a message box: its title and its sentence.
+    struct NoticeText {
+        std::string title;
+        std::string text;
+    };
+    static NoticeText noticeText(Notice notice, const std::string& detail);
 
     class Listener {
     public:
@@ -319,12 +326,10 @@ public:
     TapeDeck::Status tapeStatus() const;
     std::string tapeTakeLastError();  // a failed automatic save, once
 
-    std::vector<AlpsPlotterMechanism::FlatPoint> ce150PlotPoints() const;
-    std::uint64_t ce150PlotRevision() const;
-    void clearCE150Paper();
-    std::vector<AlpsPlotterMechanism::FlatPoint> ce1600pPlotPoints() const;
-    std::uint64_t ce1600pPlotRevision() const;
-    void clearCE1600PPaper();
+    // The plotter behind `kind` (ControlState::paper); None has no points.
+    std::vector<AlpsPlotterMechanism::FlatPoint> plotPoints(PaperKind kind) const;
+    std::uint64_t plotRevision(PaperKind kind) const;
+    void clearPaper(PaperKind kind);
 
 private:
     // ---- Live typing (hostKeyDown()/hostShiftTap() route here) ----
