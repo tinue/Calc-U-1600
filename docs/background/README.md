@@ -43,6 +43,7 @@ with a status note on how the implementation differed. New plans go into
 | [Debug panel → INSPECTOR: pointers, memory views, dumps](plans/Inspector-Panel-Plan.md) | 2026-10-10 | Implemented; RAM-disk directory listing open in TODO.md |
 | [Shared layer for a WebAssembly GUI](plans/Shared-Layer-Plan.md) | 2026-11-06 | Implemented (phases 0–5); web GUI, DAP move open |
 | [Shared layer follow-up: frontend-neutral seams](plans/Shared-Layer-Followup-Plan.md) | 2026-11-06 | Implemented |
+| [Web GUI: WebAssembly frontend, embed + PWA](plans/Web-GUI-Plan.md) | 2026-11-06 | In progress |
 
 ## Handoffs
 
