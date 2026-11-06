@@ -43,6 +43,14 @@ constexpr int kPowerOffTimeoutFrames = 180;
 constexpr double kTapHoldSeconds = 0.030;
 constexpr double kTapGapSeconds = 0.100;
 
+// The card in memory-module slot `slot` (from 1), null if empty or none.
+const ExpansionCard* cardInSlot(const PC1600Machine& m, int slot) {
+    return slot == 1 || slot == 2 ? m.memory().slotCard(slot) : nullptr;
+}
+const ExpansionCard* cardInSlot(const PC1500Machine& m, int slot) {
+    return slot == 1 ? m.memory().expansionConnector().attachedCard() : nullptr;
+}
+
 } // namespace
 
 MachineSession::MachineSession(Settings& settings, const AppPaths& paths, Listener& listener, Bays* bays)
@@ -511,17 +519,43 @@ std::vector<inspect::MenuEntry> MachineSession::inspectorMenu(bool dumps) const 
 }
 
 std::vector<std::uint8_t> MachineSession::debugSlotCardImage(int slot, int* bankCount) const {
-    auto read = [&](const ExpansionCard* card) {
+    auto read = [&](const auto& m) {
+        const ExpansionCard* card = cardInSlot(m, slot);
         *bankCount = card ? card->debugBankCount() : -1;
         return card ? card->debugImage() : std::vector<std::uint8_t>{};
     };
-    if (m_pc1600)
-        return m_pc1600->debugInspect([&](const PC1600Machine& m) { return read(m.memory().slotCard(slot)); });
-    if (m_pc1500)
-        return m_pc1500->debugInspect(
-            [&](const PC1500Machine& m) { return read(m.memory().expansionConnector().attachedCard()); });
+    if (m_pc1600) return m_pc1600->debugInspect([&](const PC1600Machine& m) { return read(m); });
+    if (m_pc1500) return m_pc1500->debugInspect([&](const PC1500Machine& m) { return read(m); });
     *bankCount = -1;
     return {};
+}
+
+// ---- Expansion slots ----
+
+int MachineSession::slotCount() const { return m_pc1600 ? 2 : m_pc1500 ? 1 : 0; }
+
+const ExpansionCard* MachineSession::slotCard(int slot) const {
+    if (m_pc1600) return cardInSlot(*m_pc1600, slot);
+    if (m_pc1500) return cardInSlot(*m_pc1500, slot);
+    return nullptr;
+}
+
+void MachineSession::attachSlotCard(int slot, std::unique_ptr<ExpansionCard> card) {
+    if (m_pc1600) {
+        if (slot == 1) m_pc1600->attachSlot1Card(std::move(card));
+        else if (slot == 2) m_pc1600->attachSlot2Card(std::move(card));
+    } else if (m_pc1500 && slot == 1) {
+        m_pc1500->attachExpansionCard(std::move(card));
+    }
+}
+
+void MachineSession::detachSlots() {
+    if (m_pc1600) {
+        m_pc1600->detachSlot1();
+        m_pc1600->detachSlot2();
+    } else if (m_pc1500) {
+        m_pc1500->expansionConnector().detach();
+    }
 }
 
 bool MachineSession::beginTrace(const std::string& path) {

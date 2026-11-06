@@ -7,8 +7,6 @@
 #include "Connector/MediaSave.hpp"
 #include "Connector/MemoryCardCatalog.hpp"
 #include "Connector/SoftwareDefinedCard.hpp"
-#include "PC1500/PC1500Machine.hpp"
-#include "PC1600/PC1600Machine.hpp"
 #include "Preset/PresetRunner.hpp"
 #include "Shared/AppPaths.hpp"
 #include "Shared/MachineSession.hpp"
@@ -54,9 +52,10 @@ void ModuleBay::selectModule(int slot, const std::string& moduleNameOrEmpty) {
     m_slots[idx].moduleName = moduleNameOrEmpty;
 }
 
-template <typename AttachFn>
-void ModuleBay::attachOneSlot(int slotIndex, CardHost host, AttachFn attach) {
-    SlotState& st = m_slots[slotIndex];
+void ModuleBay::attachOneSlot(int slot) {
+    SlotState& st = m_slots[slot - 1];
+    const CardHost host = hostFor(slot);
+    const auto attach = [&](std::unique_ptr<ExpansionCard> card) { m_session.attachSlotCard(slot, std::move(card)); };
     if (!st.romFile.empty()) {
         // A preset's ROM module under development: the same file and ROM
         // again (read anew), never autosaved.
@@ -78,7 +77,7 @@ void ModuleBay::attachOneSlot(int slotIndex, CardHost host, AttachFn attach) {
             attach(std::move(card));
             // Freshly loaded from the file -- identical to it until the
             // machine writes to the card.
-            if (!st.instanceFilePath.empty()) st.persistedRevision = currentSlotRevision(slotIndex + 1);
+            if (!st.instanceFilePath.empty()) st.persistedRevision = currentSlotRevision(slot);
             return;
         }
     }
@@ -103,33 +102,14 @@ void ModuleBay::classifySlot(SlotState& st, const std::string& resolvedPath) con
 }
 
 void ModuleBay::attachAllToFreshMachine() {
-    if (auto* m1500 = m_session.pc1500()) {
-        m1500->expansionConnector().detach();  // no-op on a fresh machine; defensive/self-documenting
-        if (!m_slots[0].moduleName.empty()) {
-            attachOneSlot(0, hostFor(1),
-                          [&](std::unique_ptr<ExpansionCard> card) { m1500->attachExpansionCard(std::move(card)); });
-        }
-        return;
-    }
-    if (auto* m1600 = m_session.pc1600()) {
-        m1600->detachSlot1();
-        m1600->detachSlot2();
-        if (!m_slots[0].moduleName.empty())
-            attachOneSlot(0, hostFor(1),
-                          [&](std::unique_ptr<ExpansionCard> c) { m1600->attachSlot1Card(std::move(c)); });
-        if (!m_slots[1].moduleName.empty())
-            attachOneSlot(1, hostFor(2),
-                          [&](std::unique_ptr<ExpansionCard> c) { m1600->attachSlot2Card(std::move(c)); });
-    }
+    m_session.detachSlots();  // no-op on a fresh machine; defensive/self-documenting
+    for (int slot = 1; slot <= m_session.slotCount(); ++slot)
+        if (!m_slots[slot - 1].moduleName.empty()) attachOneSlot(slot);
 }
 
 std::string ModuleBay::attachedModuleName(int slot) const {
-    if (auto* m1500 = m_session.pc1500()) {
-        const ExpansionCard* card = slot == 1 ? m1500->expansionConnector().attachedCard() : nullptr;
-        return card ? card->moduleName() : std::string();
-    }
-    if (auto* m1600 = m_session.pc1600()) return m1600->memory().slotModuleName(slot);
-    return {};
+    const ExpansionCard* card = m_session.slotCard(slot);
+    return card ? card->moduleName() : std::string();
 }
 
 void ModuleBay::syncFromPresetLoad(int slot, const std::string& resolvedPathOrEmpty, const std::string& romFile) {
@@ -142,12 +122,6 @@ void ModuleBay::syncFromPresetLoad(int slot, const std::string& resolvedPathOrEm
         if (!romFile.empty()) m_slots[idx].instanceFilePath.clear();
     }
     if (m_events.moduleChanged) m_events.moduleChanged(slot);
-}
-
-const ExpansionCard* ModuleBay::slotCard(int slot) const {
-    if (auto* m1500 = m_session.pc1500()) return slot == 1 ? m1500->expansionConnector().attachedCard() : nullptr;
-    if (auto* m1600 = m_session.pc1600()) return m1600->memory().slotCard(slot);
-    return nullptr;
 }
 
 bool ModuleBay::nameCollides(const std::string& instanceName) const {
@@ -206,7 +180,7 @@ bool ModuleBay::saveSlotAs(int slot, const std::string& instanceName, bool fromP
 
     // Splice from the file the card was loaded from -- a template, or (a
     // preset save-as) an instance; either way its layout is the card's.
-    const ExpansionCard* card = slotCard(slot);
+    const ExpansionCard* card = m_session.slotCard(slot);
     if (!card) {
         *error = "Couldn't read the live card contents.";
         return false;
@@ -240,7 +214,7 @@ void ModuleBay::writeInstance(int slot) {
     // Runs on every debounce: skip the image copy, file read and rewrite
     // unless the card's content changed since it was last attached from or
     // written to the file.
-    const ExpansionCard* card = slotCard(slot);
+    const ExpansionCard* card = m_session.slotCard(slot);
     if (!card) return;
     const std::uint64_t revision = card->contentRevision();
     if (st.persistedRevision == revision) return;
@@ -251,7 +225,7 @@ void ModuleBay::writeInstance(int slot) {
 }
 
 std::uint64_t ModuleBay::currentSlotRevision(int slot) const {
-    const ExpansionCard* card = slotCard(slot);
+    const ExpansionCard* card = m_session.slotCard(slot);
     return card ? card->contentRevision() : 0;
 }
 

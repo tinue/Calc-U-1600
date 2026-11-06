@@ -164,6 +164,18 @@ public:
     void powerCycleAround(const std::function<void()>& change);
     job::Task<void> powerCycleAroundJob(std::function<void()> change);
 
+    // ---- Expansion slots ----
+    // The memory-module slots of the live machine: 1 on the PC-1500/1500A
+    // (the 40-pin connector), 2 on the PC-1600 (Slot 1 / Slot 2); 0 with
+    // no machine. Slots count from 1.
+    int slotCount() const;
+    // The card in `slot`, null for an empty or missing slot.
+    const ExpansionCard* slotCard(int slot) const;
+    // Takes ownership of `card` and plugs it into `slot` (ignored for a
+    // missing slot); detachSlots() empties every slot.
+    void attachSlotCard(int slot, std::unique_ptr<ExpansionCard> card);
+    void detachSlots();
+
     // ---- Host keyboard ----
     // A host key resolved to a calculator key (Shared/HostKeyMap). Stops a
     // paste, then types it the way the model needs: on the PC-1600 an

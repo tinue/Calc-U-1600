@@ -129,12 +129,10 @@ private:
                     const std::string& filePath = {}, bool asTemplate = false);
     bool nameCollides(const std::string& instanceName) const;
     CardHost hostFor(int slot) const;
-    const ExpansionCard* slotCard(int slot) const;
     std::uint64_t currentSlotRevision(int slot) const;
     void writeInstance(int slot);
     std::string attachedModuleName(int slot) const;
-    template <typename AttachFn>
-    void attachOneSlot(int slotIndex, CardHost host, AttachFn attach);
+    void attachOneSlot(int slot);
     void reportError(const std::string& text) const {
         if (m_events.error) m_events.error(text);
     }

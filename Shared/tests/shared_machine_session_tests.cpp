@@ -74,6 +74,8 @@ void test_switch_and_paste(Model model) {
     CHECK(f.listener.replaced == 1 && f.bays.modulesAttached == 1);
     CHECK(f.settings.lastUsedModel() == static_cast<int>(model));
     CHECK(f.session.isMachinePoweredOn());
+    CHECK(f.session.slotCount() == (model == Model::PC1600 ? 2 : 1));
+    CHECK(f.session.slotCard(1) == nullptr && f.session.slotCard(2) == nullptr && f.session.slotCard(3) == nullptr);
 
     // A cold PC-1500 shows "NEW0? :CHECK": CL, then NEW0.
     if (model != Model::PC1600) {
