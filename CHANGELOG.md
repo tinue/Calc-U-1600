@@ -56,6 +56,13 @@
   and the CLIs refuse a bundled or template name and never overwrite a
   template file, as the app always did.
 
+- **The emulator's app logic is now a GUI-neutral layer (`Shared/`)**
+  under the Qt app, as groundwork for a web version: model and ROM
+  switches, presets, peripheral power cycles, pacing, the module, disk and
+  tape bays, settings and paths. Long operations run in slices, so a
+  model, module or ROM switch now shows the "Loading…" popup like a preset
+  instead of freezing the window. Building needs a C++20 compiler.
+
 ### Fixed
 
 - **PC-1600: the CE-158 terminal works in MODE 1.** `TERMINAL` and `DTE`
