@@ -87,6 +87,17 @@ function CalcU1600(props) {
   const persistent = useEngine(engine, (s) => s.persistent);
   const model = ui ? ui.model : (modelProp === undefined ? 1 : modelProp);
 
+  // The keyboard reaches the calculator without a click first: the client
+  // takes the focus once it runs and after each dialog, unless the host
+  // page has put it elsewhere.
+  const running = ready && !!ui;
+  React.useEffect(() => {
+    const el = rootRef.current;
+    if (!keyboard || !running || dialogs.open || !el) return;
+    const active = document.activeElement;
+    if (!active || active === document.body) el.focus({ preventScroll: true });
+  }, [keyboard, running, dialogs.open]);
+
   // Notices from the engine, one at a time.
   React.useEffect(() => {
     if (!engine || !notices.length || dialogs.open) return;

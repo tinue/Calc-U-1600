@@ -82,10 +82,15 @@ test('the panels take only the room a full-width faceplate leaves', async ({ pag
   await expect(page.locator('.calcu-panels')).toHaveCount(0);
 });
 
+test('the client has the keyboard from the start, no click needed', async ({ page }) => {
+  await gotoReady(page);
+  await expect(page.locator('.calcu-client')).toBeFocused();
+});
+
 test('the physical keyboard types, ENTER runs it', async ({ page }) => {
   await gotoReady(page);
   await pickModel(page, 2);
-  await page.locator('.calcu-client').focus();
+  await page.locator('.calcu-client').focus();  // from the Model picker
   await page.keyboard.type('PRINT 6*7', { delay: 60 });
   await page.keyboard.press('Enter');
   await waitForScreen(page, /42/);
