@@ -51,26 +51,36 @@ WebAssembly check.
 
 | File | What it is |
 |---|---|
-| `AppSession` | The whole emulator behind one frontend: owns `MachineSession`, the bays and the `Pacer`, wires them, runs operations, `tick()` |
-| `MachineSession` | The live PC-1500/1500A/1600: model and ROM switches, keys and paste queue, display, audio, peripherals, tape, host drive, trace, inspector, serial links |
+| `AppSession` | The whole emulator behind one frontend: owns `MachineSession`, the bays, the `Pacer` and the `AudioPump`, wires them, runs operations, `tick()` |
+| `MachineSession` | The live PC-1500/1500A/1600: model and ROM switches, host keys (`hostKeyDown`) and paste queue, display, audio, memory-module slots, peripherals, tape, host drive, trace, inspector, serial links |
 | `ModuleBay`, `FloppyBay`, `TapeBay` | The control bar's slots, disk and tape: catalogues, attach, Name & Save, preset `saveas:`, debounced autosave |
 | `Pacer`, `AudioPump` | Frame ticks → emulated time (absolute deadline, turbo); buzzer PCM → an `AudioSink` |
 | `Settings`, `AppPaths`, `Utf8Path` | Every settings key with its default; the save/tapes/bundle folders and by-name save paths |
-| `HostKeyMap`, `KeyLayout/`, `LcdLayout`, `PlotterPaper`, `Rgb` | Host keys → calculator keys; key hit-regions and the faceplate fit; LCD and plotter-paper geometry and colours |
+| `HostKeyMap`, `KeyLayout/`, `LcdLayout`, `PlotterPaper`, `Rgb` | Host keys → calculator keys; key hit-regions and the faceplate fit; LCD geometry, colours and status indicators (`lcd::indicators()`); plotter-paper geometry |
 | `MachineModel` | The `Model` and ROM-version enums |
 
 ## How a frontend drives it
 
-1. Implement `shared::AppSession::Platform`: a missing ROM, notices, bay
-   errors, preset log and "armed", a failed attach, debugger hooks.
+1. Implement `shared::AppSession::Platform`. It is a
+   `MachineSession::Listener` (a missing ROM, notices, model switched,
+   machine replaced, debugger hooks) plus the app's own events: bay
+   errors, preset log and "armed", a failed attach, `busyChanged` (resync
+   the whole UI when an operation ends). The bays' part in a rebuild
+   (`MachineSession::Bays`) is AppSession's own business.
 2. Build `Settings` (over its store), `AppPaths` (with its `HostDirs`) and
-   the `AppSession`; call `start()` to boot the startup model.
+   the `AppSession`; `attachAudio()` the host's `AudioSink`; call `start()`
+   to boot the startup model.
 3. Call `tick()` from a ~60 Hz timer. It runs a slice of the running
    operation, or paced emulation (`pacer().setTurbo()` for fast-forward),
-   then the per-frame duties (autosave, tape). Repaint from
-   `machine().currentDisplay()`, plotter points, printer output; feed audio
-   through an `AudioPump`.
-4. Start operations — `loadPresetJob()`, `resetJob()`, `selectModelJob()`,
+   then the per-frame duties (autosave, tape), then plays the buzzer (or
+   throws turbo and operation audio away). Repaint from
+   `machine().currentDisplay()` and `lcd::indicators()`, plotter points,
+   printer output, `tapeStatus()`. A frozen frontend (screenshots) uses
+   `runFor()` / `runUntilPasteDone()` instead.
+4. Resolve host keys with `resolveHostKey()` and hand them to
+   `machine().hostKeyDown()`; release what it asks to with `hostKeyUp()`,
+   and send a bare Shift tap to `hostShiftTap()`.
+5. Start operations — `loadPresetJob()`, `resetJob()`, `selectModelJob()`,
    `togglePeripheralJob()`, … — with `start(op, done)`; a browser waits for
    `done`. A desktop app may instead `runNow(op, pump)`, which steps the job
    in 10 ms slices and calls `pump` between them (the Qt app keeps painting
@@ -78,7 +88,9 @@ WebAssembly check.
 
 The Qt app does exactly this: `MachineController` owns the `AppSession`
 and is its Platform, `EmulationPacer` calls `tick()` from a QTimer,
-`SyncOperations` runs operations with `runNow()`.
+`SyncOperations` runs operations with `runNow()`, `AudioOutput` is the
+QAudioSink, and `MainWindow` keeps only the physical-key map and the
+Shift-tap timer.
 
 ## Jobs: resumable machine work
 

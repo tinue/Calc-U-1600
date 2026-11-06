@@ -374,8 +374,8 @@ that. Groundwork that needs indexing time can start before 1.0.
 
 ## Shared layer and web GUI: still open
 
-Core / Shared / frontends: docs/developer/Shared-Architecture.md, plan
-docs/background/plans/Shared-Layer-Plan.md.
+Core / Shared / frontends: docs/developer/Shared-Architecture.md, plans
+docs/background/plans/Shared-Layer-Plan.md and Shared-Layer-Followup-Plan.md.
 
 - **The web GUI itself.** Bindings over `shared::AppSession` (embind,
   Calc-U-59 `Web/bindings.cpp` style), a worker or main-thread `tick()`,

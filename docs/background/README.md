@@ -42,6 +42,7 @@ with a status note on how the implementation differed. New plans go into
 | [Pre-1.0 format freeze: versions, `slot-N-rom:`, one `saveas:`](plans/Format-Freeze-Plan.md) | 2026-10-10 | Implemented |
 | [Debug panel → INSPECTOR: pointers, memory views, dumps](plans/Inspector-Panel-Plan.md) | 2026-10-10 | Implemented; RAM-disk directory listing open in TODO.md |
 | [Shared layer for a WebAssembly GUI](plans/Shared-Layer-Plan.md) | 2026-11-06 | Implemented (phases 0–5); web GUI, DAP move open |
+| [Shared layer follow-up: frontend-neutral seams](plans/Shared-Layer-Followup-Plan.md) | 2026-11-06 | Implemented |
 
 ## Handoffs
 

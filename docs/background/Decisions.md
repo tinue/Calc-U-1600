@@ -545,6 +545,12 @@ authentic speed for the span that matters.
   record would trim twice.
 
 ### Typing into the machine
+- **How a host key is typed is `MachineSession::hostKeyDown()`'s
+  decision**, not the frontend's: PC-1600 accents (and keys behind one)
+  through the live queue, shifted keys as a Shift sequence, plain physical
+  keys as real presses; PC-1500 cursor keys as real presses (the ROM's own
+  auto-repeat), the rest through the keystroke queue. Any of them stops a
+  paste. The frontend keeps only which physical key to release.
 - **The GUI Paste Text never presses ENTER.** This is deliberate: a careless
   paste must not run anything. Tool paths (debugger auto-start, future inbound
   APIs) use `MachineSession::typeCommand()`, which does press ENTER.
@@ -700,6 +706,21 @@ authentic speed for the span that matters.
   accents** (`Shared/HostKeyMap`).
 - **Bay messages are English sentences from Shared.** The app has no
   translations; a frontend shows them as they are.
+- **The busy state is AppSession's alone.** `AppSession::busy()` and
+  `Platform::busyChanged` are the only "an operation runs" signal; the Qt
+  app re-emits it (`MachineController::appBusyChanged`), and `MainWindow`
+  resyncs every surface (`syncUiFromController()`) when it goes false
+  instead of each call site picking the pieces it remembers. The resync
+  runs directly, not queued, so a caller sees a synced window when its
+  operation returns.
+- **`tick()` owns the audio policy.** The pump is AppSession's: turbo
+  ticks and operation slices aren't real time and their audio is thrown
+  away; scripted runs (`runFor()`) too. A frontend supplies only the sink.
+- **Rebuilds re-attach one peripheral snapshot.** `switchModelJob(model,
+  keepPeripherals)` re-attaches CE-150, CE-1600P, CE-158 and host drive in
+  that order after the modules, whatever the model; an attach the model
+  can't take is a no-op. Anything that can drop the CE-1600P goes through
+  `MachineSession::busChange()`, which saves the disk first.
 - **Settings are stored as strings.** `QSettings` reads back the native
   ints/bools older versions wrote, and older versions read the strings.
 
