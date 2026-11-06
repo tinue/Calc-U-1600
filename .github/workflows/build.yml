@@ -85,10 +85,13 @@ jobs:
   # Core + Shared built for WebAssembly with Emscripten, and a node smoke
   # test running presets cooperatively through shared::AppSession (no
   # threads, no blocking) -- keeps the frontend-neutral layers portable to
-  # a web GUI. libsharpdx-wasm.a is committed (tools/build_sharpdx_wasm.sh),
-  # so no Rust toolchain is needed here. Same Emscripten as it was built
-  # with: Rust's wasm32-unknown-emscripten std uses native wasm exceptions.
-  wasm-check:
+  # a web GUI. Then the web client itself (Web/build.sh), its Playwright
+  # tests in Chromium and WebKit (Web/run-tests.sh), and dist/ zipped as the
+  # Calc-U-1600-web artifact (release.yaml attaches it). libsharpdx-wasm.a
+  # is committed (tools/build_sharpdx_wasm.sh), so no Rust toolchain is
+  # needed here. Same Emscripten as it was built with: Rust's
+  # wasm32-unknown-emscripten std uses native wasm exceptions.
+  web:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -113,6 +116,32 @@ jobs:
       - name: Build and run the WebAssembly smoke test
         shell: bash
         run: tools/build_wasm_check.sh
+
+      - name: Build the web client
+        shell: bash
+        run: Web/build.sh
+
+      - name: Install Playwright browsers
+        working-directory: Web
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium webkit
+
+      - name: Test the web client
+        shell: bash
+        run: Web/run-tests.sh --reporter=line
+
+      - name: Package the web client
+        shell: bash
+        run: |
+          version=$(sed -n 's/^set(APP_VERSION "\(.*\)")/\1/p' Qt6/CMakeLists.txt)
+          (cd Web/dist && zip -qr "../../Calc-U-1600-web-${version}.zip" .)
+
+      - name: Upload the web client
+        uses: actions/upload-artifact@v6
+        with:
+          name: Calc-U-1600-web
+          path: Calc-U-1600-web-*.zip
 
   linux-x86_64:
     runs-on: ubuntu-24.04
