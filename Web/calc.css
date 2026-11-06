@@ -98,6 +98,7 @@
   left: 0;
   min-width: 200px;
   padding: 5px;
+  color: var(--calcu-text);
   background: var(--calcu-menu);
   border: 1px solid var(--calcu-menu-border);
   border-radius: 7px;
