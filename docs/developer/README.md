@@ -25,8 +25,10 @@ decisions, plans, handoffs — is in [../background/README.md](../background/REA
 
 | Folder | What's in it |
 |---|---|
-| `Core/` | The emulator, free of Qt: CPUs, machines, connectors and cards, loaders, presets, the debug server core; `Core/tests/` holds the test suite |
+| `Core/` | The emulator, free of Qt: CPUs, machines, connectors and cards, loaders, presets, resumable jobs, the debug server core; `Core/tests/` holds the test suite |
+| `Shared/` | The app logic every frontend shares, free of Qt: the live machine and its operations, bays, pacing, settings, paths, layouts ([Shared-Architecture.md](Shared-Architecture.md)); `Shared/tests/` |
 | `Qt6/` | The desktop app (`Qt6/app/`) and its bundled resources: cards, faceplates, platform files (`Qt6/resources/`) |
+| `cmake/` | `CalcU.cmake`: the `calcu_core` / `calcu_shared` libraries for every CMake build |
 | `firmware/` | Our own ROMs, e.g. the host-drive driver ROM (`firmware/pc1600-hostdrive/`) |
 | `vscode/` | The VS Code debugger extension ([README](../../vscode/calcu1600-debug/README.md)); `tools/install_vscode_extension.sh` packages and installs it |
 | `tools/` | Build scripts, the headless CLIs (`pc1500_cli`, `pc1600_cli`), probes, `fetch_roms.sh`, `fetch_sharpdx.sh` / `refresh_sharpdx.sh`, `run_tests.sh`, `dap_smoke.py`, `read_trace.py`, `make_screenshots.sh` |
@@ -37,6 +39,9 @@ decisions, plans, handoffs — is in [../background/README.md](../background/REA
 
 ## How the emulator works
 
+- [Shared-Architecture.md](Shared-Architecture.md) — Core, Shared and the
+  frontends: the layering rules, `AppSession`, resumable jobs, the
+  WebAssembly check.
 - [PC1600-Core-Limitations.md](PC1600-Core-Limitations.md) — the deliberate
   shortcuts, unmodelled parts and open assumptions in the PC-1600 core.
 - [PC1600-Serial-Port.md](PC1600-Serial-Port.md) — the RS-232C port on a

@@ -372,6 +372,33 @@ that. Groundwork that needs indexing time can start before 1.0.
 - [ ] Short YouTube demo (e.g. PC-1600 plotting on the CE-1600P), linked
   from the posts.
 
+## Shared layer and web GUI: still open
+
+Core / Shared / frontends: docs/developer/Shared-Architecture.md, plan
+docs/background/plans/Shared-Layer-Plan.md.
+
+- **The web GUI itself.** Bindings over `shared::AppSession` (embind,
+  Calc-U-59 `Web/bindings.cpp` style), a worker or main-thread `tick()`,
+  canvas renderers from `LcdLayout` / `KeyLayout` / `PlotterPaper`, an
+  `AudioSink` on an AudioWorklet, settings in localStorage, files via
+  MEMFS/OPFS, and a frontend-parity table like Calc-U-59's.
+- **The DAP debugger to Shared.** `Qt6/app/debug/DapSession` (~1100 lines)
+  and `DebugController` are protocol logic over Core's debug objects, but
+  written against QJson; they need a JSON value type in Shared first
+  (vendored, header-only). `DapServer` (TCP framing) stays per frontend.
+- **Dialog-led flows still in `MainWindow`.** Picking one file of a
+  multi-file tape (`readProgramFile`), the Load Machine Code plan / address
+  dialog / NEW-CALL advice (`loadMachineCodeFile`) and drop dispatch
+  (`openDroppedFile`): move the decisions to Shared behind a
+  `Platform::choose()`-style callback, keep the dialogs.
+- **CLIs on Shared.** `tools/pc1500_cli.cpp` / `pc1600_cli.cpp` build their
+  own preset environment and both copy the `drainWav` yield hook; they could
+  run presets through `AppSession` (headless Platform) instead.
+- **`tools/build_*.sh` and the probes still list Core sources by hand**
+  (the probes need `PC1600_POWER_PROBE`); CMake globs everything else.
+- **CI `wasm-check` job not run yet** (workflow is manual-dispatch only):
+  the emsdk 6.0.13 / node 24 versions are pinned blind.
+
 ## Feature ideas
 
 - **LCD text: the kana set.** No font that the parser reads has katakana

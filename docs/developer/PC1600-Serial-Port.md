@@ -17,7 +17,7 @@ symlink's folder is **Settings ▸ Serial ports ▸ Symlink directory**
 
 **Lifecycle: always active.** The port opens with the PC-1600 machine and
 closes with it — there is no enable switch, matching the real hardware's
-built-in port. `Qt6/app/MachineController` owns the `PtySerialLink`; a
+built-in port. `Shared/MachineSession` owns the `PtySerialLink`; a
 fresh `/dev/ttysNNN` per machine rebuild is invisible behind the stable
 symlink.
 

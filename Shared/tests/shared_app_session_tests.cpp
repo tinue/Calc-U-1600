@@ -81,7 +81,7 @@ void test_cooperative_preset() {
     // dozen typed lines), a tick at a time.
     bool finished = false;
     OpResult result;
-    CHECK(f.app->start(f.app->loadPresetJob("examples/startup/default-pc1600.pc1600"), [&](const OpResult& r) {
+    CHECK(f.app->start(f.app->loadPresetJob("Core/tests/fixtures/presets/startup-pc1600.pc1600"), [&](const OpResult& r) {
         finished = true;
         result = r;
     }));
@@ -126,11 +126,11 @@ void test_run_now_and_selection() {
     CHECK(f.platform.attachFailures.empty());
 
     // The default preset of another model is refused, touching nothing.
-    r = f.app->runNow(f.app->loadDefaultPresetJob("examples/startup/default-pc1500a.pc1500a", Model::PC1600));
+    r = f.app->runNow(f.app->loadDefaultPresetJob("Core/tests/fixtures/presets/startup-pc1500a.pc1500a", Model::PC1600));
     CHECK(!r.ok);
     CHECK(f.app->machine().currentModel() == Model::PC1600);
     // A preset that doesn't parse.
-    r = f.app->runNow(f.app->loadPresetJob("examples/no-such.pc1600"));
+    r = f.app->runNow(f.app->loadPresetJob("Core/tests/fixtures/presets/no-such.pc1600"));
     CHECK(!r.ok && !r.error.empty());
 }
 

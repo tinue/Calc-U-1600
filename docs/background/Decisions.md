@@ -510,7 +510,8 @@ authentic speed for the span that matters.
 - **A CE-1600P ROM switch swaps the box. It doesn't reset the machine.** The
   ROM sits in the CE-1600P, so picking the other version on an attached one
   counts as unplugging one CE-1600P and plugging in another. The switch runs
-  through the attach/detach OFF/ON cycle (`MachineController::swapCE1600PRom()`).
+  through the attach/detach OFF/ON cycle (`shared::AppSession::selectCE1600PRomJob()`,
+  `MachineSession::swapCE1600PRom()`).
   RAM survives. The floppy goes into the new drive with the same side up, and
   the changed-disk latch is armed. The PC-1600's own ROM switch still rebuilds
   the machine, because that ROM is in the calculator.
@@ -546,7 +547,7 @@ authentic speed for the span that matters.
 ### Typing into the machine
 - **The GUI Paste Text never presses ENTER.** This is deliberate: a careless
   paste must not run anything. Tool paths (debugger auto-start, future inbound
-  APIs) use `MachineController::typeCommand()`, which does press ENTER.
+  APIs) use `MachineSession::typeCommand()`, which does press ENTER.
 - **PC-1600 accented characters are typed through KBII, one sequence per
   character.** A character from the ROM's KBII tables (`KYCDKB2` /
   `KYCDSK2`, P2-B6 9592H / 95E5H) is typed as KBII, [SHIFT,] key, KBII.
@@ -671,6 +672,36 @@ authentic speed for the span that matters.
   interpreted debugger expression evaluator, hit conditions and log
   interpolation, and the tests check the compiled forms against it. The
   duplication is deliberate.
+
+### Shared layer (docs/background/plans/Shared-Layer-Plan.md)
+- **Shared is single-threaded; there is no threaded mode.** Unlike
+  Calc-U-59's Shared layer, nothing here runs on a worker thread: the app
+  has always run the emulation on its GUI thread, and a browser can't share
+  memory with a worker without COOP/COEP headers. Everything long is a
+  resumable job instead. Core's machine mutexes stay (uncontended).
+- **Long machine work is C++20 coroutines, not hand-written state
+  machines.** `co_await job::run(machine, n)` keeps each typer, boot and
+  preset step exactly as the blocking code read, which is why the project
+  is C++20. The blocking function names remain (they run the job to
+  completion), so the CLIs, probes and tests call the same API.
+- **A job's run request is never split.** `job::Job::step()` may overshoot
+  its budget by up to one request rather than cut a `runCycles()` call in
+  two, so a sliced job and one run straight through leave the machine in
+  the same state. `job_tests.cpp` checks this on real presets; keep it.
+- **The GUI no longer installs the machines' yield hook.** Operations run
+  through `AppSession::runNow()`, which steps the job in 10 ms slices and
+  pumps the Qt event loop between them. The hook stays in Core for the
+  CLIs (they drain WAV audio from it).
+- **The PC-1600's live key taps count emulated time.** `tapKey()` /
+  `tapShiftedKey()` (30 ms hold, 100 ms gap) release on `advance()`'s
+  budget, not on wall-clock QTimers, so they follow pause and turbo like
+  the paste queue.
+- **A host character outside ASCII types nothing, except PC-1600 KBII
+  accents** (`Shared/HostKeyMap`).
+- **Bay messages are English sentences from Shared.** The app has no
+  translations; a frontend shows them as they are.
+- **Settings are stored as strings.** `QSettings` reads back the native
+  ints/bools older versions wrote, and older versions read the strings.
 
 ### Debugger IDE integration (docs/background/plans/Debugger-Use-Cases-Plan.md)
 - **Nothing is copied into a project for the generic cases.** The VS Code

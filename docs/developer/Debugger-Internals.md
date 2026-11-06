@@ -40,10 +40,12 @@ and [../background/plans/Debugger-Use-Cases-Plan.md](../background/plans/Debugge
   - `DapSession`: the requests;
   - `DebugController`: owned by `MachineController`.
 - **Hooks elsewhere:**
-  - `MachineController::runActive()`: routes each frame through `runSlice()` while attached;
+  - `Shared/MachineSession::runActive()`: routes each frame through `runSlice()` while attached
+    (`Listener::runDebuggerSlice()`, answered by `MachineController`);
   - `discardMachine()` / `wireNewMachine()`: `machineAboutToChange()` / `machineReplaced()`;
   - `typeCommand()`;
-  - `Qt6/app/SyncOperations`: every synchronous load/reset; `busyChanged` drives the DAP queue;
+  - `Qt6/app/SyncOperations`: every load/reset, run to completion through
+    `shared::AppSession::runNow()`; `busyChanged` drives the DAP queue;
   - `main.cpp`: `--dap`, `macDisableWindowRestoration()`.
 - **`vscode/calcu1600-debug/`:** the extension. Install with `tools/install_vscode_extension.sh`.
 

@@ -20,8 +20,9 @@ PR.
   audio output) and `Network` (the debugger's server) components. Older Qt6 (e.g.
   Ubuntu 22.04's packaged 6.2.4) doesn't provide
   `qt_standard_project_setup()` and won't configure.
-- A **C++17** compiler (the project is plain portable C++, no
-  compiler-specific extensions beyond what Qt itself needs).
+- A **C++20** compiler (plain portable C++; the long machine operations
+  are C++20 coroutines, Core/Job.hpp): Xcode clang, GCC 11+, MSVC 2019
+  16.8+.
 - On macOS only: Xcode command-line tools (for the Objective-C++
   compiler — three files need it: `MacClipboardImage.mm` for the
   plotter-paper clipboard export, `MacAppSupport.mm` and
@@ -227,6 +228,22 @@ cmake -S . -B build-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCALCU_TESTS_DEBUG=
 cmake --build build-debug --target CoreTests
 ./build-debug/CoreTests   # from the repo root
 ```
+
+## WebAssembly check
+
+```sh
+tools/build_wasm_check.sh
+```
+
+Builds `Core/` + `Shared/` with Emscripten (`emcmake`, into `build-wasm/`)
+and runs `tools/wasm_smoke.cpp` under node from the repo root: both models
+boot through `shared::AppSession` and presets run cooperatively, a slice
+per `tick()`, never blocking -- what a browser GUI will do. It keeps the
+frontend-neutral layers portable ([Shared-Architecture.md](Shared-Architecture.md));
+CI runs it as the `wasm-check` job. Needs `emcc`/`emcmake` (Homebrew
+`emscripten`, or an activated emsdk; 6.0.13 matches the committed
+`libsharpdx-wasm.a`, see `Core/Basic/vendor/sharpdx/README.md`), node, and
+the ROMs for the smoke run (without them it only builds).
 
 ## Packaging
 

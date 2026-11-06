@@ -227,11 +227,11 @@ int run_job_tests() {
     if (std::ifstream("roms/PC1600-P0-B0-new.bin").good() && std::ifstream("roms/PC-1500_A04.ROM").good()) {
         // A pinned wall clock: `- syncclock:` must seed the same time both runs.
         hostClockOverride() = [] { return std::chrono::system_clock::time_point(std::chrono::hours(500000)); };
-        equivalence_pc1600("examples/startup/default-pc1600.pc1600");
-        equivalence_pc1600("examples/memory/maxed-out-mem.pc1600");   // typed program, keys, slot cards
-        equivalence_pc1600("examples/basic/hanoi.pc1600");            // BASIC file + RUN
-        equivalence_pc1500("examples/startup/default-pc1500a.pc1500a");
-        equivalence_pc1500("examples/machine-code/memtest_stock.pc1500");  // machine code + auto-run
+        equivalence_pc1600("Core/tests/fixtures/presets/startup-pc1600.pc1600");
+        equivalence_pc1600("Core/tests/fixtures/presets/maxed-out-mem.pc1600");   // typed program, keys, slot cards
+        equivalence_pc1600("Core/tests/fixtures/presets/hanoi.pc1600");            // BASIC file + RUN
+        equivalence_pc1500("Core/tests/fixtures/presets/startup-pc1500a.pc1500a");
+        equivalence_pc1500("Core/tests/fixtures/presets/memtest_stock.pc1500");  // machine code + typed CALL
         hostClockOverride() = nullptr;
     } else {
         std::printf("job_tests: preset equivalence SKIP (no ROMs in roms/)\n");

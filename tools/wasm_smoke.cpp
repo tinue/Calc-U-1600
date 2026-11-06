@@ -95,9 +95,9 @@ int main() {
         const char* preset;
         const char* expect;
     };
-    for (const Case& c : {Case{"examples/startup/default-pc1600.pc1600", "Memory:"},
-                          Case{"examples/basic/hanoi.pc1600", ""},
-                          Case{"examples/startup/default-pc1500a.pc1500a", ""}}) {
+    for (const Case& c : {Case{"Core/tests/fixtures/presets/startup-pc1600.pc1600", "Memory:"},
+                          Case{"Core/tests/fixtures/presets/hanoi.pc1600", ""},
+                          Case{"Core/tests/fixtures/presets/startup-pc1500a.pc1500a", ""}}) {
         int ticks = 0;
         const bool ok = runPreset(app, c.preset, &ticks);
         const std::string lcd = screen(app);
