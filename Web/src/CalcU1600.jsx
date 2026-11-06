@@ -9,8 +9,8 @@
 
 const MENU_HEIGHT = 26;
 const BAR_HEIGHT = 40;
-const PANEL_MIN = 220;          // the panels' row, when there is one
-const INSPECTOR_MIN_WIDTH = 700; // narrower: no inspector
+const PANEL_MIN = 220;          // the least room below the faceplate worth a panels' row
+const INSPECTOR_MIN_WIDTH = 700; // narrower: the inspector only when no other panel is shown
 const SHIFT_TAP_MS = 400;
 // A key's release reaches the engine at least this long after its press:
 // both events can arrive between two 60 Hz frames, and a press that lasts
@@ -70,7 +70,7 @@ function CalcU1600(props) {
   const pendingDrop = React.useRef(null);
 
   React.useEffect(() => {
-    const e = createEngine({ workerUrl });
+    const e = createEngine({ workerUrl, model: modelProp, preset: presetProp });
     setEngine(e);
     // Test hook (docs/developer/Web-Client.md): the root element's
     // calcuEngine has request(method, ...args) -- e.g. request("lcdText").
@@ -86,15 +86,6 @@ function CalcU1600(props) {
   const fatal = useEngine(engine, (s) => s.fatal);
   const persistent = useEngine(engine, (s) => s.persistent);
   const model = ui ? ui.model : (modelProp === undefined ? 1 : modelProp);
-
-  // The host page's model / preset, once the engine is up.
-  const applied = React.useRef(false);
-  React.useEffect(() => {
-    if (!engine || !ready || applied.current) return;
-    applied.current = true;
-    if (modelProp !== undefined && modelProp !== null) engine.call("pickModel", Number(modelProp));
-    if (presetProp) engine.call("loadPreset", `/presets/${presetProp}`);
-  }, [engine, ready]);
 
   // Notices from the engine, one at a time.
   React.useEffect(() => {
@@ -325,14 +316,18 @@ function CalcU1600(props) {
     return () => ro.disconnect();
   }, [width, height]);
   const W = measured.w || 900, H = measured.h || 600;
-  const showInspector = W >= INSPECTOR_MIN_WIDTH;
-  const showPaper = !!(ui && ui.paper);
-  const showPrinter = !!(ui && ui.printerShown);
-  const anyPanel = showInspector || showPaper || showPrinter;
+  // The calculator comes first: the faceplate is as large as the window
+  // allows. Only when it reaches both edges and leaves PANEL_MIN or more
+  // below it do the panels get that space (portrait, tall windows) -- a
+  // phone in landscape shows the calculator alone.
   const aspect = FACE_ASPECT[model];
-  // The faceplate fills the width, leaving the panels at least PANEL_MIN.
-  const faceRoom = H - MENU_HEIGHT - BAR_HEIGHT - (anyPanel ? PANEL_MIN : 0);
+  const faceRoom = H - MENU_HEIGHT - BAR_HEIGHT;
   const faceWidth = Math.max(200, Math.min(W, faceRoom * aspect));
+  const panelRoom = faceRoom - W / aspect >= PANEL_MIN;
+  const showPaper = panelRoom && !!(ui && ui.paper);
+  const showPrinter = panelRoom && !!(ui && ui.printerShown);
+  const showInspector = panelRoom && (W >= INSPECTOR_MIN_WIDTH || !(showPaper || showPrinter));
+  const anyPanel = showInspector || showPaper || showPrinter;
 
   return (
     <div className="calcu-client" ref={rootRef} tabIndex={0} style={{ width: W, height: H }}

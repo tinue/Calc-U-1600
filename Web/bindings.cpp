@@ -215,6 +215,13 @@ private:
 
 // ── The controller ───────────────────────────────────────────────────────
 
+// WebController::start()'s operation.
+job::Task<shared::OpResult> startupJob(shared::AppSession* app, int model, std::string presetPath) {
+    if (model >= 0 && model <= 2) co_await app->selectModelJob(static_cast<shared::Model>(model));
+    if (!presetPath.empty()) co_return co_await app->loadPresetJob(presetPath);
+    co_return co_await app->defaultPresetJob();
+}
+
 class WebController : public shared::AppSession::Platform {
 public:
     explicit WebController(val stored)
@@ -225,11 +232,13 @@ public:
     }
 
     // After construction, once the worker is listening: the startup model,
-    // then (as an operation) its default preset.
-    void start() {
+    // then, as one operation, the host page's model (-1: none) and its
+    // preset ("": the model's default preset). One operation, because a
+    // second one started while it runs would be refused.
+    void start(int model, const std::string& presetPath) {
         m_app->start();
         postEverything();
-        run("Default Preset", m_app->defaultPresetJob());
+        run(presetPath.empty() ? "Default Preset" : "Load Preset", startupJob(m_app.get(), model, presetPath));
     }
 
     // The ~60 Hz frame.

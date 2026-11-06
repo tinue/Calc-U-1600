@@ -31,6 +31,9 @@ async function pickModel(page, index) {
   await expect(page.locator('.calcu-busy')).toHaveCount(0, { timeout: 30000 });
 }
 
+// A window tall enough that the panels fit below the full-width faceplate.
+const TALL = { width: 1280, height: 1000 };
+
 async function menu(page, ...path) {
   await page.locator('.calcu-menubar-item > button', { hasText: path[0] }).click();
   for (const item of path.slice(1, -1)) await page.locator('.calcu-menu-item', { hasText: item }).last().hover();
@@ -47,6 +50,36 @@ test('boots, and each model comes up', async ({ page }) => {
   await pickModel(page, 0);
   await expect(page.locator('.calcu-key')).not.toHaveCount(0);
   await expect(page.locator('[role=alertdialog]')).toHaveCount(0);
+});
+
+test('?model= and ?preset= start with them', async ({ page }) => {
+  await gotoReady(page, '?model=2');
+  await expect(page.locator('.calcu-face[data-model="2"]')).toHaveCount(1, { timeout: 30000 });
+  await expect(page.locator('[role=alertdialog], [data-dialog=notice]')).toHaveCount(0);
+  await gotoReady(page, '?model=0');
+  await expect(page.locator('.calcu-face[data-model="0"]')).toHaveCount(1, { timeout: 30000 });
+  await expect(page.locator('[data-dialog=notice]')).toHaveCount(0);
+  await page.setViewportSize(TALL);
+  await gotoReady(page, '?preset=plotter/lissajou-1600.pc1600');
+  await expect(page.locator('[data-panel=paper][data-empty=false]')).toHaveCount(1, { timeout: 45000 });
+  await expect(page.locator('[data-dialog=notice]')).toHaveCount(0);
+});
+
+test('the panels take only the room a full-width faceplate leaves', async ({ page }) => {
+  // A phone in landscape: the calculator alone, as large as it fits.
+  await page.setViewportSize({ width: 844, height: 390 });
+  await gotoReady(page);
+  await expect(page.locator('.calcu-panels')).toHaveCount(0);
+  const face = await page.locator('.calcu-face').boundingBox();
+  expect(face.height).toBeGreaterThan(250);
+  // In portrait the faceplate spans the width and the inspector fits below.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('[data-panel=inspector]')).toBeVisible();
+  // A tall desktop window too; a wide, short one shows the calculator alone.
+  await page.setViewportSize(TALL);
+  await expect(page.locator('[data-panel=inspector]')).toBeVisible();
+  await page.setViewportSize({ width: 1600, height: 700 });
+  await expect(page.locator('.calcu-panels')).toHaveCount(0);
 });
 
 test('the physical keyboard types, ENTER runs it', async ({ page }) => {
@@ -72,6 +105,7 @@ test('a faceplate key types while its pointer is down', async ({ page }) => {
 });
 
 test('the control bar follows the model: peripherals, floppy, tape', async ({ page }) => {
+  await page.setViewportSize(TALL);
   await gotoReady(page);
   // PC-1500A: CE-150 and CE-158 on the bar, no disk.
   await expect(page.getByRole('button', { name: 'CE-150' })).toBeVisible();
@@ -95,6 +129,7 @@ test('the control bar follows the model: peripherals, floppy, tape', async ({ pa
 });
 
 test('a plotter preset draws on the paper', async ({ page }) => {
+  await page.setViewportSize(TALL);
   await gotoReady(page);
   await menu(page, 'File', 'Load Preset', 'Lissajous figure on the CE-1600P');
   await expect(page.locator('[data-panel=paper][data-empty=false]')).toHaveCount(1, { timeout: 45000 });
@@ -186,6 +221,7 @@ test('a WAV with several programs asks which one', async ({ page }) => {
 });
 
 test('the inspector shows the pointers and the card dump', async ({ page }) => {
+  await page.setViewportSize(TALL);
   await gotoReady(page);
   await page.locator('[data-panel=inspector] button', { hasText: 'Pointers' }).click();
   await expect(page.locator('.calcu-inspector-output')).toContainText('RAM_ST');

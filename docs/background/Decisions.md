@@ -771,6 +771,14 @@ authentic speed for the span that matters.
   the worker per pointer event would add a frame of latency.
 - **React is vendored, JSX compiled at build time** (as in Calc-U-59): no
   npm runtime dependencies, no bundler, one global (`CalcU1600`).
+- **The calculator before the panels.** The faceplate is never shrunk to
+  make room for a panel: the panels appear only when the full-width
+  faceplate leaves at least `PANEL_MIN` below it. So a phone in landscape
+  shows the calculator alone, and so does a wide, short desktop window (no
+  inspector there; make the window taller). At the user's request.
+- **The page's `model` / `preset` go to the worker's `start()`**, run in
+  the startup operation in place of the default preset. Sent as calls
+  after `ready`, they arrived while that operation ran and were refused.
 
 ### Debugger IDE integration (docs/background/plans/Debugger-Use-Cases-Plan.md)
 - **Nothing is copied into a project for the generic cases.** The VS Code

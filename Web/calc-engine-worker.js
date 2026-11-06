@@ -15,7 +15,9 @@
 //             copy that isn't saved, and says so.
 //
 // Protocol, main thread -> worker:
-//   {type: "init", settings}            first: stored settings by key
+//   {type: "init", settings, model, preset}
+//                                       first: stored settings by key, and
+//                                       the start model (-1 none) and preset
 //   {type: "call", method, args, id}    a WebController method; with an id,
 //                                       its result comes back as reply
 //   {type: "pause"} / {type: "resume"}  document.visibilitychange
@@ -125,7 +127,7 @@ function syncFromStorage(FS) {
   return new Promise((resolve) => FS.syncfs(true, (err) => resolve(err)));
 }
 
-async function init({ settings }) {
+async function init({ settings, model, preset }) {
   const manifest = JSON.parse(new TextDecoder().decode(await fetchBytes("files.json")));
   const fetchAll = (dir, names) => Promise.all(names.map(async (n) => [n, await fetchBytes(`${dir}/${n}`)]));
   const [mod, bundle, presets, persistent] = await Promise.all([
@@ -155,7 +157,7 @@ async function init({ settings }) {
   });
   controller = new Module.WebController(settings);
   try {
-    controller.start();
+    controller.start(model, preset);
   } catch (e) {
     fatal(errorText(e));
     return;

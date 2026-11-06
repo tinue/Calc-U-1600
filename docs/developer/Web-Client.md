@@ -7,9 +7,13 @@ One build (`Web/dist/`) serves two uses:
 - **embedded** in a web page, as a component;
 - **installed** as an offline app (`dist/app/`, a PWA), for a tablet.
 
-It is made for landscape screens and tablets. In portrait the faceplate
-shrinks to the width and the panels take the space below; phones are not
-designed for.
+It is made for landscape screens and tablets; phones are not designed
+for. The calculator comes first: the faceplate is as large as the client
+allows, and the panels (inspector, plotter paper, printer) appear only when
+the faceplate spans the full width and leaves at least 220 px below it --
+in portrait and in tall windows, not on a phone in landscape or in a wide,
+short window. Narrower than 700 px, the inspector gives way to the paper or
+printer.
 
 ```mermaid
 flowchart LR
@@ -66,7 +70,7 @@ attaches it as `Calc-U-1600-web.zip`.
   |---|---|
   | `width`, `height` | The client's size in CSS pixels (default: its parent's size) |
   | `keyboard` | Take the physical keyboard while focused (default true) |
-  | `model` | 0 PC-1500, 1 PC-1500A, 2 PC-1600: switch to it at start |
+  | `model` | 0 PC-1500, 1 PC-1500A, 2 PC-1600: start with it (read once, at mount) |
   | `preset` | A bundled preset to load at start (`plotter/lissajou-1600.pc1600`) |
   | `workerUrl` | Another worker entry (the app uses `app/engine-worker.js`) |
 

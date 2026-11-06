@@ -107,7 +107,8 @@ const INITIAL_STATE = {
   log: [],            // preset step lines, for the inspector
 };
 
-function createEngine({ workerUrl }) {
+// model (0-2) and preset (a path under presets/) start the engine with them.
+function createEngine({ workerUrl, model, preset }) {
   let state = INITIAL_STATE;
   const listeners = new Set();
   const frames = { display: null, onFrame: null };
@@ -169,7 +170,12 @@ function createEngine({ workerUrl }) {
   };
   worker.onerror = (e) => set({ fatal: e.message || "The emulator could not start." });
 
-  post({ type: "init", settings: storedSettings() });
+  post({
+    type: "init",
+    settings: storedSettings(),
+    model: Number.isInteger(Number(model)) && model !== null && model !== "" ? Number(model) : -1,
+    preset: preset ? `/presets/${preset}` : "",
+  });
 
   const onVisibility = () => post({ type: document.hidden ? "pause" : "resume" });
   document.addEventListener("visibilitychange", onVisibility);
