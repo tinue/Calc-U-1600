@@ -24,13 +24,13 @@ SyncOperations::SyncOperations(QWidget* window, MachineController* machines, Emu
                                std::function<void()> refreshLcd, QObject* parent)
     : QObject(parent), m_window(window), m_machines(machines), m_pacer(pacer), m_refreshLcd(std::move(refreshLcd)) {}
 
-bool SyncOperations::run(const QString& title, const std::function<shared::OpResult()>& op,
-                         const std::function<void()>& afterLoad, QString* error) {
-    return run(title, instant(op), afterLoad, error);
+bool SyncOperations::busy() const { return m_machines->app().busy(); }
+
+bool SyncOperations::run(const QString& title, const std::function<shared::OpResult()>& op, QString* error) {
+    return run(title, instant(op), error);
 }
 
-bool SyncOperations::run(const QString& title, job::Task<shared::OpResult> op, const std::function<void()>& afterLoad,
-                         QString* error) {
+bool SyncOperations::run(const QString& title, job::Task<shared::OpResult> op, QString* error) {
     auto report = [this, &title, error](const shared::OpResult& r) {
         if (!r.ok) {
             const QString text = QString::fromStdString(r.error);
@@ -39,16 +39,12 @@ bool SyncOperations::run(const QString& title, job::Task<shared::OpResult> op, c
         }
         return r.ok;
     };
-    if (m_running) {
+    if (busy()) {
         // Already inside one: the timer is stopped; run straight through.
-        const shared::OpResult r = m_machines->app().runNow(std::move(op));
-        if (afterLoad) afterLoad();
-        return report(r);
+        return report(m_machines->app().runNow(std::move(op)));
     }
 
     m_pacer->suspend();
-    m_running = true;
-    emit busyChanged(true);
     m_window->setCursor(Qt::WaitCursor);
 
     // Between job slices: keep the window painting (no beachball) and, once
@@ -78,24 +74,20 @@ bool SyncOperations::run(const QString& title, job::Task<shared::OpResult> op, c
     const shared::OpResult r = m_machines->app().runNow(std::move(op), pump);
     popup.reset();
     m_window->unsetCursor();
-    if (afterLoad) afterLoad();
     m_pacer->resume();
-    m_running = false;
-    emit busyChanged(false);
     return report(r);
 }
 
 bool SyncOperations::loadPreset(const QString& path, QString* error, bool armOnly) {
-    return run(tr("Load Preset"), m_machines->app().loadPresetJob(path.toStdString(), armOnly), m_presetResync, error);
+    return run(tr("Load Preset"), m_machines->app().loadPresetJob(path.toStdString(), armOnly), error);
 }
 
 bool SyncOperations::loadDefaultPreset(const QString& path, Model model, QString* error) {
-    return run(tr("Default Preset"), m_machines->app().loadDefaultPresetJob(path.toStdString(), model),
-               m_presetResync, error);
+    return run(tr("Default Preset"), m_machines->app().loadDefaultPresetJob(path.toStdString(), model), error);
 }
 
 bool SyncOperations::resetToPrompt(bool allReset, QString* error) {
     // Boot flat out to the prompt (incl. a plotter's power-on init) instead
     // of watching it in real time; the clock is set from the host after.
-    return run(allReset ? tr("Reset All") : tr("Reset"), m_machines->app().resetJob(allReset), {}, error);
+    return run(allReset ? tr("Reset All") : tr("Reset"), m_machines->app().resetJob(allReset), error);
 }

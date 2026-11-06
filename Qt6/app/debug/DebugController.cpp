@@ -189,7 +189,7 @@ std::vector<debug::BreakpointStatus> DebugController::rebindListings() {
 
 void DebugController::setSyncOperations(SyncOperations* sync) {
     m_sync = sync;
-    connect(sync, &SyncOperations::busyChanged, this, &DebugController::setAppBusy);
+    connect(m_machines, &MachineController::appBusyChanged, this, &DebugController::setAppBusy);
 }
 
 bool DebugController::loadPreset(const QString& path, QString* error, bool armOnly) {
@@ -240,7 +240,7 @@ debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request
     m_sync->run(tr("Load Program"), [this, &r, &request] {
         r = debug::loadProgram(m_machines->pc1500(), m_machines->pc1600(), request, m_map, *m_target);
         return r.ok ? shared::OpResult{} : shared::OpResult::fail(r.error);
-    }, {}, &error);
+    }, &error);
     if (!r.ok) return r;
     if (after == After::None) return r;
     if (!command.empty()) r.callCommand = command;
@@ -270,7 +270,7 @@ bool DebugController::resetMachine(bool allReset, bool stop, QString* error) {
             m_machines->cancelPaste();
             m_target->reset(allReset);
             return shared::OpResult{};
-        }, {}, error))
+        }, error))
         return false;
     if (stop) m_run->pause(debug::DebugEvent::Entry);
     else m_run->resume();

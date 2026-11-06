@@ -122,8 +122,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(m_controlBar, &ControlBar::modelSelected, this, &MainWindow::applyModelSelection);
     connect(m_controlBar, &ControlBar::moduleSelected, this, [this](int slot, QString moduleNameOrEmpty) {
         m_sync->run(tr("Memory Module"), m_controller->app().selectModuleJob(slot, moduleNameOrEmpty.toStdString()));
-        syncPeripherals(); // the plotter survives the rebuild
-        refreshModuleCombos();
     });
     connect(m_controlBar, &ControlBar::nameAndSaveRequested, this, [this](int slot) {
         bool ok = false;
@@ -246,12 +244,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
             m_faceplate->lcdWidget()->update();
         },
         this);
-    // PresetController::armed (connected to onPresetArmed()) resyncs the
-    // control bar/plotter/module combos once, mid-load, while the machine
-    // is still armed-but-off. Again after the load, so a preset that failed
-    // before ever arming (bad slot module, missing ROM, ...) still gets the
-    // UI resynced to whatever's actually attached.
-    m_sync->setPresetResync([this] { onPresetArmed(); });
     // The debugger's clean starts and loads go through the same service.
     m_controller->debugController()->setSyncOperations(m_sync);
 
@@ -273,9 +265,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         m_startupDone = true;
         drainPendingDrop();
     });
-    // A drop that came in while the machine was being driven.
-    connect(m_sync, &SyncOperations::busyChanged, this, [this](bool busy) {
-        if (!busy) QTimer::singleShot(0, this, &MainWindow::drainPendingDrop);
+    // Every operation (a menu, the control bar, the debugger, a preset --
+    // also one that failed before arming) may have rebuilt the machine or
+    // changed what is attached: resync every surface once it ends. Then a
+    // drop that came in while the machine was being driven.
+    connect(m_controller.get(), &MachineController::appBusyChanged, this, [this](bool busy) {
+        if (busy) return;
+        syncUiFromController();
+        QTimer::singleShot(0, this, &MainWindow::drainPendingDrop);
     });
     setAcceptDrops(true);
 }
@@ -345,13 +342,11 @@ void MainWindow::mountHostDirectory() {
     AppSettings::rememberOpenDir(AppSettings::OpenFolder::HostDrive, dir);
     // A power cycle if no drive is attached yet, else a live directory swap.
     m_sync->run(title, m_controller->app().mountHostDriveJob(dir.toStdString()));
-    syncHostDriveActions();
 }
 
 void MainWindow::unmountHostDirectory() {
     if (!m_controller->hostDriveAttached()) return;
     m_sync->run(tr("Unmount Directory"), m_controller->app().mountHostDriveJob({}));
-    syncHostDriveActions();
 }
 
 // Control bar > Tape: picking a tape puts it in to play (CLOAD), rewound;
@@ -526,7 +521,6 @@ void MainWindow::togglePeripheral(shared::Peripheral p) {
     // Flat out, like Reset: the pin header's power-on rotation isn't worth
     // watching, and the clock is re-injected afterwards.
     m_sync->run(tr("Plotter"), m_controller->app().togglePeripheralJob(p));
-    syncPeripherals();
 }
 
 void MainWindow::syncPeripherals() {
@@ -1109,7 +1103,6 @@ void MainWindow::applyModelSelection(Model model) {
     // A fresh default machine (AppSession::selectModelJob()); a startup
     // preset customises it.
     m_sync->run(tr("Machine"), m_controller->app().selectModelJob(model));
-    syncUiFromController();
     applyDefaultPreset(model);
 }
 
@@ -1122,19 +1115,12 @@ void MainWindow::applyDefaultPreset(Model model) {
 void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {
     if (revision == m_controller->pc1500RomRevision()) return; // see applyModelSelection()
     m_sync->run(tr("ROM"), m_controller->app().selectPC1500RomJob(revision)); // rebuilds the machine
-    syncPeripherals(); // the plotter survives the rebuild
-    syncMachineMenuFromRomRevision(revision);
-    refreshModuleCombos();
 }
 
 void MainWindow::applyPC1600RomVersionSelection(PC1600RomVersion version) {
     if (version == m_controller->pc1600RomVersion()) return; // see applyModelSelection()
-    m_sync->run(tr("ROM"), m_controller->app().selectPC1600RomJob(version)); // rebuilds a PC-1600
-    syncPeripherals(); // the plotter survives the rebuild
-    // The controller may have fallen back to New if the old ROM failed to load.
-    syncMachineMenuFromPC1600RomVersion(m_controller->pc1600RomVersion());
-    syncControlBarForModel();
-    refreshModuleCombos();
+    // Rebuilds a PC-1600; the menu shows New if the old ROM failed to load.
+    m_sync->run(tr("ROM"), m_controller->app().selectPC1600RomJob(version));
 }
 
 void MainWindow::applyCE1600PRomVersionSelection(CE1600PRomVersion version) {
@@ -1142,10 +1128,8 @@ void MainWindow::applyCE1600PRomVersionSelection(CE1600PRomVersion version) {
     // The ROM is in the CE-1600P box: on an attached one this is a box swap
     // inside an OFF/ON cycle (no rebuild, RAM survives); otherwise it just
     // records the choice for the next attach.
+    // The menu shows New if the old ROM failed to load.
     m_sync->run(tr("Plotter"), m_controller->app().selectCE1600PRomJob(version));
-    syncPeripherals();
-    // The controller may have fallen back to New if the old ROM failed to load.
-    syncMachineMenuFromCE1600PRomVersion(m_controller->ce1600pRomVersion());
 }
 
 void MainWindow::syncMachineMenuFromCE1600PRomVersion(CE1600PRomVersion version) {

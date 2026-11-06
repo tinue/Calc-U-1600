@@ -28,18 +28,11 @@ public:
     SyncOperations(QWidget* window, MachineController* machines, EmulationPacer* pacer,
                    std::function<void()> refreshLcd, QObject* parent = nullptr);
 
-    /// Runs `op`, then `afterLoad`. A failure goes to `error`, or to a
-    /// warning box titled `title` when `error` is null. Nested calls run
-    /// straight through.
-    bool run(const QString& title, job::Task<shared::OpResult> op, const std::function<void()>& afterLoad = {},
-             QString* error = nullptr);
+    /// Runs `op`. A failure goes to `error`, or to a warning box titled
+    /// `title` when `error` is null. Nested calls run straight through.
+    bool run(const QString& title, job::Task<shared::OpResult> op, QString* error = nullptr);
     /// The same for an instant operation (no emulated time).
-    bool run(const QString& title, const std::function<shared::OpResult()>& op,
-             const std::function<void()>& afterLoad = {}, QString* error = nullptr);
-
-    /// Resyncs the UI after a preset (it may have attached peripherals and
-    /// rebuilt the machine); also runs when a preset failed before arming.
-    void setPresetResync(std::function<void()> resync) { m_presetResync = std::move(resync); }
+    bool run(const QString& title, const std::function<shared::OpResult()>& op, QString* error = nullptr);
 
     // The common operations.
     /// `armOnly`: the machine set up but not booted (PresetFile::armOnly).
@@ -48,16 +41,13 @@ public:
     bool loadDefaultPreset(const QString& path, Model model, QString* error = nullptr);
     bool resetToPrompt(bool allReset, QString* error = nullptr);
 
-    bool busy() const { return m_running; }
-
-signals:
-    void busyChanged(bool busy);
+    /// An operation is running (AppSession::busy()); the window resyncs
+    /// when it ends (MachineController::appBusyChanged).
+    bool busy() const;
 
 private:
     QWidget* m_window;
     MachineController* m_machines;
     EmulationPacer* m_pacer;
     std::function<void()> m_refreshLcd;
-    std::function<void()> m_presetResync;
-    bool m_running = false; // run() doesn't nest: an inner call runs straight through
 };

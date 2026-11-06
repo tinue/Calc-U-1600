@@ -15,6 +15,8 @@ FaceplateWidget::FaceplateWidget(QWidget* parent) : QWidget(parent) {
 }
 
 void FaceplateWidget::setModel(Model model) {
+    // Called after every operation (MainWindow::syncUiFromController()).
+    if (m_layout == &KeyLayout::layoutFor(model)) return;
     switch (model) {
     case Model::PC1500: m_pixmap.load(":/faceplates/pc1500.png"); break;
     case Model::PC1500A: m_pixmap.load(":/faceplates/pc1500A.png"); break;

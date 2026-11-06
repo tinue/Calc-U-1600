@@ -143,6 +143,8 @@ signals:
     void bayErrorMessage(shared::Bay bay, const QString& text);
     void presetWasArmed();
     void peripheralAttachFailed(const QString& device, const QString& reason);
+    // An AppSession operation started / finished (emitted from inside it).
+    void appBusyChanged(bool busy);
 
 private:
     // shared::AppSession::Platform
@@ -159,6 +161,7 @@ private:
     void presetArmed() override { emit presetWasArmed(); }
     void presetLog(const std::string& line) override;
     void attachFailed(const std::string& device, const std::string& reason) override;
+    void busyChanged(bool busy) override { emit appBusyChanged(busy); }
 
     std::unique_ptr<shared::AppSession> m_app;
     // Declared after the session so it goes first on destruction: its
