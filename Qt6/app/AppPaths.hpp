@@ -2,7 +2,7 @@
 #include <QString>
 #include <string>
 
-#include "Connector/MediaSave.hpp"
+#include "Shared/AppPaths.hpp"
 
 // Path resolution for bundled resources and the memory-module feature --
 // the one place that knows where bundled resources (*.card.yaml templates
@@ -14,6 +14,11 @@
 // ~/Calc-U-1600 on every platform (not QStandardPaths::AppDataLocation, no
 // iCloud).
 namespace AppPaths {
+
+// The shared::AppPaths every call below forwards to (Shared/AppPaths.hpp
+// has the rules); built on first use from bundledResourcesDir() and the
+// home folder.
+shared::AppPaths& paths();
 
 // Where the bundled resources live -- *.card.yaml catalog AND ROM images
 // (disjoint filename extensions, one shared directory) -- resolved
@@ -45,17 +50,12 @@ QString displayPath(const QString& path);
 // to find "where battery-card instances live right now".
 QString instanceDir();
 
-// Strips path separators so a user-typed instance name can't escape the
-// directory, collapses whitespace, "Untitled" fallback, ".card.yaml" suffix.
-QString sanitizedInstanceFileName(const QString& instanceName);
-
 // The full path a fresh save under `instanceName` should write to.
 QString instancePathFor(const QString& instanceName);
 
-// Same as sanitizedInstanceFileName()/instancePathFor(), but for CE-1600F
-// floppy disks: "<name>.floppy.yaml" (Connector/FloppyImageFile.hpp)
-// instead of "<name>.card.yaml".
-QString sanitizedFloppyFileName(const QString& diskName);
+// Same as instancePathFor(), but for CE-1600F floppy disks:
+// "<name>.floppy.yaml" (Connector/FloppyImageFile.hpp) instead of
+// "<name>.card.yaml".
 QString floppyInstancePathFor(const QString& diskName);
 
 // Cassette tapes (TapeManager): AppSettings::tapeDirOverride() if

@@ -1150,7 +1150,7 @@ void MainWindow::applyModelSelection(Model model) {
 }
 
 void MainWindow::applyDefaultPreset(Model model) {
-    const QString path = AppSettings::defaultPresetPath(modelSettingsKey(model));
+    const QString path = AppSettings::defaultPresetPath(model);
     if (path.isEmpty()) return;
     m_sync->loadDefaultPreset(path, model);
 }

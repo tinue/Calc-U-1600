@@ -3,10 +3,12 @@
 
 int run_shared_geometry_tests();
 int run_shared_host_key_map_tests();
+int run_shared_settings_tests();
 
 int run_shared_tests() {
     int failures = 0;
     failures += run_shared_geometry_tests();
     failures += run_shared_host_key_map_tests();
+    failures += run_shared_settings_tests();
     return failures;
 }

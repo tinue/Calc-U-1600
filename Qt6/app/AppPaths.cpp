@@ -1,12 +1,8 @@
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
-#include "Connector/FloppyImageFile.hpp"
-#include "Connector/MemoryCardCatalog.hpp"
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QFile>
-#include <QFileInfo>
 #include <QSaveFile>
 
 namespace AppPaths {
@@ -27,81 +23,28 @@ QString bundledResourcesDir() {
 #endif
 }
 
-namespace {
-QString& isolatedInstanceDir() {
-    static QString dir;
-    return dir;
+shared::AppPaths& paths() {
+    static shared::AppPaths p(AppSettings::settings(),
+                              shared::HostDirs{QDir::homePath().toStdString(), bundledResourcesDir().toStdString()});
+    return p;
 }
 
-// `path` with the leading `dir` replaced by `shown`, or empty when `path`
-// isn't `dir` itself or inside it.
-QString replacePrefix(const QString& path, const QString& dir, const QString& shown) {
-    if (dir.isEmpty() || !path.startsWith(dir)) return QString();
-    if (path.size() > dir.size() && path.at(dir.size()) != QLatin1Char('/')) return QString();
-    return shown + path.mid(dir.size());
-}
+namespace {
+QString q(const std::string& s) { return QString::fromStdString(s); }
 } // namespace
 
-QString defaultInstanceDir() {
-    const QString dir = isolatedInstanceDir().isEmpty() ? QDir::homePath() + QStringLiteral("/Calc-U-1600")
-                                                        : isolatedInstanceDir();
-    QDir().mkpath(dir);
-    return dir;
-}
-
-void setIsolatedInstanceDir(const QString& dir) {
-    isolatedInstanceDir() = dir;
-}
-
-QString displayPath(const QString& path) {
-    QString shown = replacePrefix(path, defaultInstanceDir(), QStringLiteral("~/Calc-U-1600"));
-    if (shown.isEmpty()) shown = replacePrefix(path, QDir::homePath(), QStringLiteral("~"));
-    return shown.isEmpty() ? path : shown;
-}
-
-QString instanceDir() {
-    const QString override = AppSettings::instanceDirOverride();
-    if (!override.isEmpty()) {
-        QDir().mkpath(override);
-        return override;
-    }
-    return defaultInstanceDir();
-}
-
-QString sanitizedInstanceFileName(const QString& instanceName) {
-    return QString::fromStdString(namedFileName(instanceName.toStdString(), kCardFileSuffix));
-}
-
-QString instancePathFor(const QString& instanceName) {
-    return QDir(instanceDir()).filePath(sanitizedInstanceFileName(instanceName));
-}
-
-QString sanitizedFloppyFileName(const QString& diskName) {
-    return QString::fromStdString(namedFileName(diskName.toStdString(), kFloppyFileSuffix));
-}
-
+QString defaultInstanceDir() { return q(paths().defaultInstanceDir()); }
+void setIsolatedInstanceDir(const QString& dir) { paths().setIsolatedInstanceDir(dir.toStdString()); }
+QString displayPath(const QString& path) { return q(paths().displayPath(path.toStdString())); }
+QString instanceDir() { return q(paths().instanceDir()); }
+QString instancePathFor(const QString& instanceName) { return q(paths().instancePathFor(instanceName.toStdString())); }
 QString floppyInstancePathFor(const QString& diskName) {
-    return QDir(instanceDir()).filePath(sanitizedFloppyFileName(diskName));
+    return q(paths().floppyInstancePathFor(diskName.toStdString()));
 }
-
-QString tapeDir() {
-    QString dir = AppSettings::tapeDirOverride();
-    if (dir.isEmpty()) dir = QDir(instanceDir()).filePath(QStringLiteral("Tapes"));
-    QDir().mkpath(dir);
-    return dir;
-}
-
-QString tapePathFor(const QString& tapeName) {
-    return QDir(tapeDir()).filePath(QString::fromStdString(namedFileName(tapeName.toStdString(), ".wav")));
-}
-
+QString tapeDir() { return q(paths().tapeDir()); }
+QString tapePathFor(const QString& tapeName) { return q(paths().tapePathFor(tapeName.toStdString())); }
 bool isUnderDir(const QString& path, const QString& dir) {
-    if (path.isEmpty() || dir.isEmpty()) return false;
-    const QString a = QFileInfo(path).canonicalFilePath();
-    const QString b = QFileInfo(dir).canonicalFilePath();
-    if (a.isEmpty() || b.isEmpty()) return false;
-    // Match whole path components: "<dir>-backup/x" is not under "<dir>".
-    return a == b || a.startsWith(b.endsWith(QLatin1Char('/')) ? b : b + QLatin1Char('/'));
+    return shared::isUnderDir(path.toStdString(), dir.toStdString());
 }
 
 bool atomicWriteFile(const QString& path, const std::string& text) {
@@ -115,8 +58,7 @@ bool planNamedSave(MediaKind kind, const QString& name, const QString& explicitP
                    QString* path, QString* error) {
     std::string planned;
     const MediaSaveRefusal refusal =
-        planMediaSave(kind, name.toStdString(), explicitPath.toStdString(), asTemplate,
-                      {bundledResourcesDir().toStdString(), instanceDir().toStdString()}, &planned);
+        paths().planNamedSave(kind, name.toStdString(), explicitPath.toStdString(), asTemplate, &planned);
     *path = QString::fromStdString(planned);
     switch (refusal) {
         case MediaSaveRefusal::None: return true;

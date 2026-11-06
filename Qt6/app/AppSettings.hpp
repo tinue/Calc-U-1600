@@ -1,13 +1,16 @@
 #pragma once
 #include <QDir>
-#include <QFileInfo>
 #include <QSettings>
 #include <QSize>
 #include <QString>
 
-// The QSettings key namespace for the app. Uses the app's own name for
-// both organization and application, avoiding an unrelated-looking
-// reverse-DNS identifier.
+#include "Shared/Settings.hpp"
+
+// The app's settings: key names, defaults and resolution live in
+// Shared/Settings.hpp; this file supplies the QSettings storage and keeps
+// the QString-typed calls the widgets use. The QSettings namespace uses the
+// app's own name for both organization and application, avoiding an
+// unrelated-looking reverse-DNS identifier.
 namespace AppSettings {
 
 // Non-empty: an INI file every read/write goes to instead of the user's
@@ -24,206 +27,71 @@ inline QSettings backingStore() {
     return QSettings(QStringLiteral("Calc-U-1600"), QStringLiteral("Calc-U-1600"));
 }
 
-// Key: "storage/instanceDirOverride" -- empty/absent means "use the
-// ~/Calc-U-1600 default" (see AppPaths::instanceDir()), not "use
-// QStandardPaths" -- there is no AppData/Application Support fallback in
-// this design at all.
-inline QString instanceDirOverride() {
-    return backingStore().value(QStringLiteral("storage/instanceDirOverride"), QString()).toString();
-}
-
-inline void setInstanceDirOverride(const QString& dir) {
-    QSettings s = backingStore();
-    if (dir.isEmpty())
-        s.remove(QStringLiteral("storage/instanceDirOverride"));
-    else
-        s.setValue(QStringLiteral("storage/instanceDirOverride"), dir);
-}
-
-// Key: "storage/tapeDirOverride" -- the cassette tapes' folder; empty/absent
-// means "Tapes" inside the save folder (see AppPaths::tapeDir()).
-inline QString tapeDirOverride() {
-    return backingStore().value(QStringLiteral("storage/tapeDirOverride"), QString()).toString();
-}
-
-inline void setTapeDirOverride(const QString& dir) {
-    QSettings s = backingStore();
-    if (dir.isEmpty())
-        s.remove(QStringLiteral("storage/tapeDirOverride"));
-    else
-        s.setValue(QStringLiteral("storage/tapeDirOverride"), dir);
-}
-
-// The folders the file-open dialogs start in, one per kind of file, each
-// shown as its own row in Settings:
-//   Samples  -- "Load Preset…" (and Settings' default-preset pickers)
-//   Basic    -- "Load BASIC Program…" (.bas listings)
-//   Assembly -- "Load Machine Code…" (.bin files)
-//   HostDrive -- "Mount Directory…" (PC-1600 host drive S3:)
-enum class OpenFolder { Samples, Basic, Assembly, HostDrive };
-
-// Key group per folder. Samples keeps the original "preset/" keys so a
-// folder configured before the split carries over.
-inline QString openFolderKeyGroup(OpenFolder folder) {
-    switch (folder) {
-        case OpenFolder::Samples: return QStringLiteral("preset/");
-        case OpenFolder::Basic: return QStringLiteral("basic/");
-        case OpenFolder::Assembly: return QStringLiteral("assembly/");
-        case OpenFolder::HostDrive: return QStringLiteral("hostDrive/");
+// shared::SettingsStore over QSettings. Opens the backing store per call,
+// so a switch to isolatedStorePath() takes effect immediately.
+class QtSettingsStore : public shared::SettingsStore {
+public:
+    std::optional<std::string> get(const std::string& key) const override {
+        const QVariant v = backingStore().value(QString::fromStdString(key));
+        if (!v.isValid()) return std::nullopt;
+        return v.toString().toStdString();
     }
-    return QStringLiteral("preset/");
+    void set(const std::string& key, const std::string& value) override {
+        backingStore().setValue(QString::fromStdString(key), QString::fromStdString(value));
+    }
+    void remove(const std::string& key) override { backingStore().remove(QString::fromStdString(key)); }
+};
+
+inline shared::Settings& settings() {
+    static QtSettingsStore store;
+    static shared::Settings s(store);
+    return s;
 }
 
-// Key: "<group>openDir" -- a fixed folder the dialog starts in, set via
-// Settings and not auto-updated by each Open. Empty/absent -- the default,
-// and what Settings' Reset restores -- means "<last used>": the dialog
-// starts in lastOpenDir() instead.
-inline QString openDir(OpenFolder folder) {
-    return backingStore().value(openFolderKeyGroup(folder) + QStringLiteral("openDir"), QString()).toString();
-}
+inline QString q(const std::string& s) { return QString::fromStdString(s); }
+inline std::string s(const QString& q) { return q.toStdString(); }
 
-inline void setOpenDir(OpenFolder folder, const QString& dir) {
-    QSettings s = backingStore();
-    const QString key = openFolderKeyGroup(folder) + QStringLiteral("openDir");
-    if (dir.isEmpty())
-        s.remove(key);
-    else
-        s.setValue(key, dir);
-}
+inline QString instanceDirOverride() { return q(settings().instanceDirOverride()); }
+inline void setInstanceDirOverride(const QString& dir) { settings().setInstanceDirOverride(s(dir)); }
 
-// Key: "<group>lastOpenDir" -- the folder of the file last picked in that
-// dialog (for HostDrive: the directory last mounted). Recorded on every
-// pick (rememberOpenFile() / rememberOpenDir()), but only used while
-// openDir() is unset.
-inline QString lastOpenDir(OpenFolder folder) {
-    return backingStore().value(openFolderKeyGroup(folder) + QStringLiteral("lastOpenDir"), QString()).toString();
-}
+inline QString tapeDirOverride() { return q(settings().tapeDirOverride()); }
+inline void setTapeDirOverride(const QString& dir) { settings().setTapeDirOverride(s(dir)); }
 
-inline void rememberOpenDir(OpenFolder folder, const QString& dir) {
-    backingStore().setValue(openFolderKeyGroup(folder) + QStringLiteral("lastOpenDir"), QDir(dir).absolutePath());
-}
-
+using shared::OpenFolder;
+inline QString openDir(OpenFolder folder) { return q(settings().openDir(folder)); }
+inline void setOpenDir(OpenFolder folder, const QString& dir) { settings().setOpenDir(folder, s(dir)); }
+inline QString lastOpenDir(OpenFolder folder) { return q(settings().lastOpenDir(folder)); }
+inline void rememberOpenDir(OpenFolder folder, const QString& dir) { settings().rememberOpenDir(folder, s(dir)); }
 inline void rememberOpenFile(OpenFolder folder, const QString& filePath) {
-    rememberOpenDir(folder, QFileInfo(filePath).absolutePath());
+    settings().rememberOpenFile(folder, s(filePath));
+}
+inline QString openStartDir(OpenFolder folder) { return q(settings().openStartDir(folder, s(QDir::homePath()))); }
+
+inline QString defaultPresetPath(shared::Model model) { return q(settings().defaultPresetPath(model)); }
+inline void setDefaultPresetPath(shared::Model model, const QString& path) {
+    settings().setDefaultPresetPath(model, s(path));
 }
 
-// The start directory for that dialog: the fixed openDir() if set, else
-// the last-used folder, else the user's home directory.
-inline QString openStartDir(OpenFolder folder) {
-    QString dir = openDir(folder);
-    if (dir.isEmpty()) dir = lastOpenDir(folder);
-    return dir.isEmpty() ? QDir::homePath() : dir;
-}
+inline QString traceDirOverride() { return q(settings().traceDirOverride()); }
+inline void setTraceDirOverride(const QString& dir) { settings().setTraceDirOverride(s(dir)); }
+inline int traceMaxFileSizeMB() { return settings().traceMaxFileSizeMB(); }
+inline void setTraceMaxFileSizeMB(int mb) { settings().setTraceMaxFileSizeMB(mb); }
 
-// Key: "preset/default/<model>" -- `modelKey` is "PC1500", "PC1500A" or
-// "PC1600" (the same strings startupModelPreference() stores). The preset
-// file applied whenever that model gets selected; empty/absent means none
-// (the model just boots bare).
-inline QString defaultPresetPath(const QString& modelKey) {
-    return backingStore().value(QStringLiteral("preset/default/") + modelKey, QString()).toString();
-}
+constexpr int kDefaultDapPort = shared::Settings::kDefaultDapPort;
+inline bool dapEnabled() { return settings().dapEnabled(); }
+inline void setDapEnabled(bool on) { settings().setDapEnabled(on); }
+inline int dapPort() { return settings().dapPort(); }
+inline void setDapPort(int port) { settings().setDapPort(port); }
 
-inline void setDefaultPresetPath(const QString& modelKey, const QString& path) {
-    QSettings s = backingStore();
-    if (path.isEmpty())
-        s.remove(QStringLiteral("preset/default/") + modelKey);
-    else
-        s.setValue(QStringLiteral("preset/default/") + modelKey, path);
-}
+inline QString serialLinkDirOverride() { return q(settings().serialLinkDirOverride()); }
+inline void setSerialLinkDirOverride(const QString& dir) { settings().setSerialLinkDirOverride(s(dir)); }
 
-// Key: "trace/dirOverride" -- empty/absent means "write TRACE.bin under
-// AppPaths::instanceDir()" (DebugPanel's default), matching
-// instanceDirOverride()'s own empty-means-default convention.
-inline QString traceDirOverride() {
-    return backingStore().value(QStringLiteral("trace/dirOverride"), QString()).toString();
-}
+inline QSize windowSize() { return QSize(settings().windowWidth(), settings().windowHeight()); }
+inline void setWindowSize(const QSize& size) { settings().setWindowSize(size.width(), size.height()); }
 
-inline void setTraceDirOverride(const QString& dir) {
-    QSettings s = backingStore();
-    if (dir.isEmpty())
-        s.remove(QStringLiteral("trace/dirOverride"));
-    else
-        s.setValue(QStringLiteral("trace/dirOverride"), dir);
-}
-
-// Key: "trace/maxFileSizeMB" -- the cap DebugPanel's trace writer rolls
-// TRACE.bin over at, in megabytes.
-inline int traceMaxFileSizeMB() {
-    return backingStore().value(QStringLiteral("trace/maxFileSizeMB"), 50).toInt();
-}
-
-inline void setTraceMaxFileSizeMB(int mb) {
-    backingStore().setValue(QStringLiteral("trace/maxFileSizeMB"), mb);
-}
-
-// Keys: "debug/dapEnabled" (default off) and "debug/dapPort" (default 32168)
-// -- the Debug Adapter Protocol server VS Code attaches to (see
-// debug/DebugController). It listens on 127.0.0.1 only.
-constexpr int kDefaultDapPort = 32168;
-inline bool dapEnabled() { return backingStore().value(QStringLiteral("debug/dapEnabled"), false).toBool(); }
-inline void setDapEnabled(bool on) { backingStore().setValue(QStringLiteral("debug/dapEnabled"), on); }
-inline int dapPort() {
-    const int port = backingStore().value(QStringLiteral("debug/dapPort"), kDefaultDapPort).toInt();
-    return port >= 1024 && port <= 65535 ? port : kDefaultDapPort;
-}
-inline void setDapPort(int port) { backingStore().setValue(QStringLiteral("debug/dapPort"), port); }
-
-// Key: "serial/linkDirectory" -- directory PtySerialLink creates its stable
-// serial port symlinks (`calcu1600-rs232c.serial`, ...) in. Empty/absent means AppPaths::instanceDir()
-// (the same ~/Calc-U-1600 default everything else uses); MachineController
-// always resolves and passes a concrete directory here.
-inline QString serialLinkDirOverride() {
-    return backingStore().value(QStringLiteral("serial/linkDirectory"), QString()).toString();
-}
-
-inline void setSerialLinkDirOverride(const QString& dir) {
-    QSettings s = backingStore();
-    if (dir.isEmpty())
-        s.remove(QStringLiteral("serial/linkDirectory"));
-    else
-        s.setValue(QStringLiteral("serial/linkDirectory"), dir);
-}
-
-// Key: "window/width" / "window/height" -- last user-resized main-window
-// size, restored on the next launch instead of always opening at the
-// original hardcoded 900x500 default.
-inline QSize windowSize() {
-    QSettings s = backingStore();
-    const int w = s.value(QStringLiteral("window/width"), 900).toInt();
-    const int h = s.value(QStringLiteral("window/height"), 500).toInt();
-    return QSize(w, h);
-}
-
-inline void setWindowSize(const QSize& size) {
-    QSettings s = backingStore();
-    s.setValue(QStringLiteral("window/width"), size.width());
-    s.setValue(QStringLiteral("window/height"), size.height());
-}
-
-// Key: "startup/modelPreference" -- which model to boot into: "last" (the
-// default) reuses lastUsedModel() below, or one of "PC1500"/"PC1500A"/
-// "PC1600" pins a specific model regardless of what was last selected.
-// There is deliberately no equivalent ROM-revision preference: the plain
-// PC-1500 always boots on ROM A04 (MachineController's own default), and
-// that isn't user-configurable.
-inline QString startupModelPreference() {
-    return backingStore().value(QStringLiteral("startup/modelPreference"), QStringLiteral("last")).toString();
-}
-
-inline void setStartupModelPreference(const QString& pref) {
-    backingStore().setValue(QStringLiteral("startup/modelPreference"), pref);
-}
-
-// Key: "startup/lastUsedModel" -- the Model enum value (as int) of whatever
-// was last switched to, updated on every MachineController::switchModel()
-// call. Only consulted at startup when startupModelPreference() == "last".
-// Default 1 == Model::PC1500A, MachineController's default model.
-inline int lastUsedModel() {
-    return backingStore().value(QStringLiteral("startup/lastUsedModel"), 1).toInt();
-}
-
-inline void setLastUsedModel(int model) {
-    backingStore().setValue(QStringLiteral("startup/lastUsedModel"), model);
-}
+inline QString startupModelPreference() { return q(settings().startupModelPreference()); }
+inline void setStartupModelPreference(const QString& pref) { settings().setStartupModelPreference(s(pref)); }
+inline int lastUsedModel() { return settings().lastUsedModel(); }
+inline void setLastUsedModel(int model) { settings().setLastUsedModel(model); }
 
 }  // namespace AppSettings

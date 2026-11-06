@@ -40,15 +40,9 @@ const char* pc1500RomVariantName(PC1500RomRevision revision) {
     return "A04";
 }
 
-// Which model to cold-boot into, per AppSettings::startupModelPreference():
-// a pinned model, or ("last", the default) whatever was last switched to.
-Model initialModel() {
-    const QString pref = AppSettings::startupModelPreference();
-    for (Model m : {Model::PC1500, Model::PC1500A, Model::PC1600}) {
-        if (pref == modelSettingsKey(m)) return m;
-    }
-    return static_cast<Model>(AppSettings::lastUsedModel());
-}
+// Which model to cold-boot into: a pinned model, or ("last", the default)
+// whatever was last switched to (Shared/Settings.hpp).
+Model initialModel() { return AppSettings::settings().startupModel(); }
 
 // A missing/unreadable bundled ROM means the install is broken -- there's
 // no usable machine to fall back to (this is called both at startup and

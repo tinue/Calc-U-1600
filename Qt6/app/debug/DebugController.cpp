@@ -213,7 +213,7 @@ bool DebugController::cleanStart(const QString& preset, QString* how, QString* e
     if (!preset.isEmpty()) {
         *how = tr("preset %1").arg(preset);
         ok = m_sync->loadPreset(preset, error);
-    } else if (const QString path = AppSettings::defaultPresetPath(modelSettingsKey(m_machines->currentModel()));
+    } else if (const QString path = AppSettings::defaultPresetPath(m_machines->currentModel());
                !path.isEmpty()) {
         // As the app applies it: refused if it's for another model.
         *how = tr("default preset %1").arg(path);

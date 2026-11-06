@@ -161,27 +161,26 @@ void addOpenFolderRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids&
     addPathRow(grid, row, parent, sections, spec);
 }
 
-// One model's "default preset" row: `modelKey` is AppSettings::
-// defaultPresetPath()'s key, `extension` the preset suffix that model uses.
+// One model's "default preset" row; `extension` is the preset suffix that
+// model uses.
 void addDefaultPresetRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids& sections, const QString& label,
                          Model model) {
-    const QString modelKey = modelSettingsKey(model);
-    const QString extension = modelKey.toLower();
+    const QString extension = modelSettingsKey(model).toLower();
     PathRowSpec spec;
     spec.label = label;
     spec.pickText = SettingsDialog::tr("Choose…");
     spec.resetText = SettingsDialog::tr("Clear");
     spec.resetToolTip = SettingsDialog::tr("Don't load a preset for this model");
     spec.placeholder = SettingsDialog::tr("(none)");
-    spec.pick = [parent, modelKey, extension] {
-        const QString current = AppSettings::defaultPresetPath(modelKey);
+    spec.pick = [parent, model, extension] {
+        const QString current = AppSettings::defaultPresetPath(model);
         return QFileDialog::getOpenFileName(parent, SettingsDialog::tr("Choose Default Preset"),
                                             current.isEmpty() ? AppSettings::openStartDir(AppSettings::OpenFolder::Samples) : current,
                                             SettingsDialog::tr("Presets (*.%1);;All Files (*)").arg(extension));
     };
-    spec.display = [modelKey] { return AppSettings::defaultPresetPath(modelKey); };
-    spec.isOverridden = [modelKey] { return !AppSettings::defaultPresetPath(modelKey).isEmpty(); };
-    spec.set = [modelKey](const QString& path) { AppSettings::setDefaultPresetPath(modelKey, path); };
+    spec.display = [model] { return AppSettings::defaultPresetPath(model); };
+    spec.isOverridden = [model] { return !AppSettings::defaultPresetPath(model).isEmpty(); };
+    spec.set = [model](const QString& path) { AppSettings::setDefaultPresetPath(model, path); };
     addPathRow(grid, row, parent, sections, spec);
 }
 
