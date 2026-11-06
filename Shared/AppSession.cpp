@@ -283,6 +283,19 @@ job::Task<OpResult> AppSession::selectModelJob(Model model) {
     co_return OpResult{};
 }
 
+job::Task<OpResult> AppSession::defaultPresetJob() {
+    const Model model = m_machine->currentModel();
+    const std::string path = m_settings.defaultPresetPath(model);
+    if (path.empty()) co_return OpResult{};
+    co_return co_await loadDefaultPresetJob(path, model);
+}
+
+job::Task<OpResult> AppSession::pickModelJob(Model model) {
+    if (model == m_machine->currentModel()) co_return OpResult{};
+    co_await selectModelJob(model);
+    co_return co_await defaultPresetJob();
+}
+
 job::Task<OpResult> AppSession::selectModuleJob(int slot, std::string moduleNameOrEmpty) {
     m_modules->selectModule(slot, moduleNameOrEmpty);
     co_await m_machine->switchModelJob(m_machine->currentModel(), /*keepPeripherals=*/true);  // rebuild -> re-attach

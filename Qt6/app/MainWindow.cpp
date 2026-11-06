@@ -266,7 +266,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // once the event loop runs, so the window is already up while a preset
     // with long `wait:` steps plays out.
     QTimer::singleShot(0, this, [this] {
-        applyDefaultPreset(m_controller->currentModel());
+        applyDefaultPreset();
         m_startupDone = true;
         drainPendingDrop();
     });
@@ -988,16 +988,13 @@ void MainWindow::applyModelSelection(Model model) {
     // The Machine menu's QActionGroup re-emits triggered() for the item
     // that is already checked; re-picking it must not cold-rebuild.
     if (model == m_controller->currentModel()) return;
-    // A fresh default machine (AppSession::selectModelJob()); a startup
-    // preset customises it.
-    m_sync->run(tr("Machine"), m_controller->app().selectModelJob(model));
-    applyDefaultPreset(model);
+    // A fresh default machine; its default preset customises it.
+    m_sync->run(tr("Machine"), m_controller->app().pickModelJob(model));
 }
 
-void MainWindow::applyDefaultPreset(Model model) {
-    const QString path = AppSettings::defaultPresetPath(model);
-    if (path.isEmpty()) return;
-    m_sync->loadDefaultPreset(path, model);
+void MainWindow::applyDefaultPreset() {
+    if (AppSettings::defaultPresetPath(m_controller->currentModel()).isEmpty()) return;
+    m_sync->run(tr("Default Preset"), m_controller->app().defaultPresetJob());
 }
 
 void MainWindow::applyRomRevisionSelection(PC1500RomRevision revision) {

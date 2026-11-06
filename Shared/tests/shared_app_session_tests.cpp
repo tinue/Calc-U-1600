@@ -349,6 +349,23 @@ void test_card_yaml_dump() {
     CHECK(dump.size() == 2 && dump[0].find("CE-1600M (Slot 2), unbanked") != std::string::npos);
 }
 
+// pickModelJob(): a fresh machine of the model, then its default preset;
+// defaultPresetJob() is ok with none set.
+void test_pick_model() {
+    Fixture f;
+    f.settings.setStartupModelPreference("PC1500A");
+    f.app->start();
+    CHECK(f.app->runNow(f.app->defaultPresetJob()).ok);  // none set
+    f.settings.setDefaultPresetPath(Model::PC1600, "Core/tests/fixtures/presets/startup-pc1600.pc1600");
+    CHECK(f.app->runNow(f.app->pickModelJob(Model::PC1600)).ok);
+    CHECK(f.app->machine().currentModel() == Model::PC1600);
+    CHECK(f.app->machine().ce1600pAttached());  // the preset's plotter
+    // Re-picking the model does nothing.
+    CHECK(f.app->runNow(f.app->togglePeripheralJob(shared::Peripheral::CE1600P)).ok);
+    CHECK(f.app->runNow(f.app->pickModelJob(Model::PC1600)).ok);
+    CHECK(!f.app->machine().ce1600pAttached());
+}
+
 struct CountingSink : shared::AudioSink {
     std::size_t written = 0;
     bool start(int, int) override { return true; }
@@ -395,6 +412,7 @@ int run_shared_app_session_tests() {
     test_machine_code_load();
     test_media_library();
     test_card_yaml_dump();
+    test_pick_model();
     std::printf("shared_app_session_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

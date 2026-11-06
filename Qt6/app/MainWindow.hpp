@@ -137,9 +137,9 @@ private:
     void applyRomRevisionSelection(PC1500RomRevision revision);
     void applyPC1600RomVersionSelection(PC1600RomVersion version);
     void applyCE1600PRomVersionSelection(CE1600PRomVersion version);
-    // Loads `model`'s default preset (AppSettings::defaultPresetPath()), if
-    // one is set -- run whenever a model gets selected, including at startup.
-    void applyDefaultPreset(Model model);
+    // At startup: the startup model's default preset, if one is set (a
+    // model pick loads it inside AppSession::pickModelJob()).
+    void applyDefaultPreset();
 
     // Re-checks the Machine menu's model/ROM QActions to match `model`/
     // `revision` without themselves triggering another applyModelSelection/

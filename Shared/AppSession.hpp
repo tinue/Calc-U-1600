@@ -116,6 +116,13 @@ public:
     // modules, no disk. Nothing if it already is that model. (The default
     // preset is a separate operation: loadDefaultPresetJob().)
     job::Task<OpResult> selectModelJob(Model model);
+    // The current model's default preset (Settings::defaultPresetPath()),
+    // if one is set -- at startup and after a model pick. Ok when none is.
+    job::Task<OpResult> defaultPresetJob();
+    // A model picked on the control bar / Machine menu: a fresh default
+    // machine (selectModelJob()), then its default preset. Nothing at all
+    // if it already is that model.
+    job::Task<OpResult> pickModelJob(Model model);
     // A module picked for `slot` ("" = none): a rebuild that keeps the
     // attached peripherals, so the boot ROM sees the module.
     job::Task<OpResult> selectModuleJob(int slot, std::string moduleNameOrEmpty);
