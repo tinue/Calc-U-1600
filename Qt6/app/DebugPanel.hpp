@@ -14,7 +14,6 @@ class QPushButton;
 class QToolButton;
 class QLabel;
 class MachineController;
-class MemoryModuleManager;
 
 // INSPECTOR: the docked machine inspector -- a header, a scrolling
 // monospaced output log, and a two-row button bar (Pointers, the Memory ▾
@@ -33,11 +32,6 @@ class DebugPanel : public QWidget {
 public:
     explicit DebugPanel(MachineController* controller, QWidget* parent = nullptr);
     ~DebugPanel();
-
-    // Late-bound, mirroring MachineController::setModuleManager's own
-    // construction-order workaround (MemoryModuleManager doesn't exist yet
-    // when MainWindow constructs this panel).
-    void setModuleManager(MemoryModuleManager* mgr) { m_moduleManager = mgr; }
 
     // Called once per ~60Hz frame tick from MainWindow::onFrameTick() --
     // checks the trace file against its size cap while TRACE is enabled.
@@ -60,7 +54,6 @@ protected:
 
 private:
     MachineController* m_controller;               // not owned
-    MemoryModuleManager* m_moduleManager = nullptr; // not owned, set later
 
     QLabel* m_header = nullptr;
     QWidget* m_buttonBar = nullptr;
@@ -106,7 +99,6 @@ private:
     void showView(inspect::View view);
     void debugDumpModuleCardAsYaml();
     void clearDebug();
-    bool batteryCardImage(int slot, int* bankCount, std::vector<std::uint8_t>* image);
 
     QIcon dotIcon(const QColor& color) const;
 

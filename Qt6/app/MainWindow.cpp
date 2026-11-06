@@ -85,7 +85,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_faceplate = new FaceplateWidget(central);
     m_controlBar = new ControlBar(central);
     m_debugPanel = new DebugPanel(m_controller.get(), central);
-    m_debugPanel->setModuleManager(m_moduleManager.get());
     m_plotterPaper = new PlotterPaperWidget(m_controller.get(), central);
     m_plotterPaper->hide(); // added to m_debugRowLayout only once a plotter attaches
     m_ce158Printer = new Ce158PrinterWidget(m_controller.get(), central);

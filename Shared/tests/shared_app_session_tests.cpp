@@ -14,6 +14,7 @@
 #include "MemorySettingsStore.hpp"
 #include "PC1600/PC1600Machine.hpp"
 #include "Shared/AppSession.hpp"
+#include "Shared/CardYamlDump.hpp"
 #include "Shared/MachineCodeLoad.hpp"
 #include "Shared/MediaLibrary.hpp"
 #include "SharedTestSupport.hpp"
@@ -335,6 +336,19 @@ void test_media_library() {
     CHECK(shared::MediaLibrary::importable("A.WAV") && !shared::MediaLibrary::importable("a.bas"));
 }
 
+// cardYamlDump(): a header and the initial-content block per slot card,
+// or one line saying there's nothing.
+void test_card_yaml_dump() {
+    Fixture f;
+    f.settings.setStartupModelPreference("PC1600");
+    f.app->start();
+    std::vector<std::string> dump = shared::cardYamlDump(*f.app);
+    CHECK(dump.size() == 1 && dump[0].find("no card attached") != std::string::npos);
+    CHECK(f.app->runNow(f.app->selectModuleJob(2, "CE-1600M")).ok);
+    dump = shared::cardYamlDump(*f.app);
+    CHECK(dump.size() == 2 && dump[0].find("CE-1600M (Slot 2), unbanked") != std::string::npos);
+}
+
 struct CountingSink : shared::AudioSink {
     std::size_t written = 0;
     bool start(int, int) override { return true; }
@@ -380,6 +394,7 @@ int run_shared_app_session_tests() {
     test_program_choice();
     test_machine_code_load();
     test_media_library();
+    test_card_yaml_dump();
     std::printf("shared_app_session_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

@@ -22,10 +22,9 @@
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
 #include "ChromeColors.hpp"
-#include "Connector/BatteryCardInstance.hpp"
 #include "Debug/Inspect/HexDump.hpp"
 #include "MachineController.hpp"
-#include "MemoryModuleManager.hpp"
+#include "Shared/CardYamlDump.hpp"
 
 namespace {
 
@@ -333,36 +332,4 @@ void DebugPanel::showView(inspect::View view) {
 
 // ── Dump Card YAML ──────────────────────────────────────────────────────
 
-bool DebugPanel::batteryCardImage(int slot, int* bankCount, std::vector<std::uint8_t>* image) {
-    *image = m_controller->debugSlotCardImage(slot, bankCount);
-    // bankCount <= 0 is an unbanked card (e.g. CE-1600M): one implicit bank,
-    // which formatBatteryCardInitialContentBlock() writes without a `bank:` key.
-    if (image->empty()) return false;
-    return *bankCount <= 0 || image->size() % *bankCount == 0;
-}
-
-void DebugPanel::debugDumpModuleCardAsYaml() {
-    const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
-    const std::vector<int> slotsToDump = isPC1600 ? std::vector<int>{1, 2} : std::vector<int>{1};
-    std::vector<std::string> chunks;
-    for (int slot : slotsToDump) {
-        int bankCount = 0;
-        std::vector<std::uint8_t> image;
-        if (!batteryCardImage(slot, &bankCount, &image)) continue;
-        const auto lines = formatBatteryCardInitialContentBlock(bankCount, image);
-        const std::string name = m_moduleManager ? m_moduleManager->selectedModuleName(slot).toStdString() : std::string();
-        const std::string label = name.empty() ? "attached module" : name;
-        const std::string slotLabel = isPC1600 ? fmt(" (Slot %d)", slot) : "";
-        const std::string layout = bankCount > 0
-            ? fmt("%d bank(s) x %s", bankCount, inspect::sizeLabel(static_cast<std::uint32_t>(image.size() / bankCount)).c_str())
-            : fmt("unbanked, %s", inspect::sizeLabel(static_cast<std::uint32_t>(image.size())).c_str());
-        chunks.push_back(fmt("\xE2\x94\x80\xE2\x94\x80 Module card dump: %s%s, %s -- paste under the region's initial-content: \xE2\x94\x80\xE2\x94\x80",
-                              label.c_str(), slotLabel.c_str(), layout.c_str()));
-        chunks.push_back(joinLines(lines));
-    }
-    if (chunks.empty()) {
-        ringWriteAll({"\xE2\x94\x80\xE2\x94\x80 Module card dump: no card attached, or it has no dumpable RAM \xE2\x94\x80\xE2\x94\x80"});
-        return;
-    }
-    ringWriteAll(chunks);
-}
+void DebugPanel::debugDumpModuleCardAsYaml() { ringWriteAll(shared::cardYamlDump(m_controller->app())); }
