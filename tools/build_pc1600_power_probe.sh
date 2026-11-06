@@ -8,7 +8,7 @@
 set -e
 cd "$(dirname "$0")/.."
 mkdir -p headless
-clang++ -std=c++17 -Wall -Wextra -O2 -DPC1600_POWER_PROBE \
+clang++ -std=c++20 -Wall -Wextra -O2 -DPC1600_POWER_PROBE \
   Core/CPU/LH5801/LH5801.cpp \
   Core/CPU/SC7852/SC7852.cpp \
   Core/CPU/LH5803/LH5803Memory.cpp \

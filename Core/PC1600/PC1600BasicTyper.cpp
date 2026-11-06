@@ -115,7 +115,7 @@ bool programChanged(PC1600Machine& machine, const basic::LineStoreCheck& check) 
 // without asserting BUSY, so waitIdle() alone can return before F867 has
 // settled and the next line's keystrokes would collide with the still-
 // running tokeniser. Mirrors PC1500BasicTyper's settleUntilProgramPtrStable.
-void settleUntilProgramPtrStable(PC1600Machine& machine) {
+job::Task<void> settleUntilProgramPtrStable(PC1600Machine& machine) {
     constexpr int kStableFramesNeeded = 30;                         // ~0.5 s of no change
     constexpr uint64_t kCap = static_cast<uint64_t>(kTStateHz * 6); // ~6 s emulated
 
@@ -123,7 +123,7 @@ void settleUntilProgramPtrStable(PC1600Machine& machine) {
     int stable = 0;
     uint32_t last = programArea(machine).endKey;
     while (stable < kStableFramesNeeded && spent < kCap) {
-        spent += machine.runCycles(kFrameTStates);
+        spent += co_await job::run(machine, kFrameTStates);
         uint32_t now = programArea(machine).endKey;
         if (now == last) stable++;
         else { stable = 0; last = now; }
@@ -132,29 +132,29 @@ void settleUntilProgramPtrStable(PC1600Machine& machine) {
 
 } // namespace
 
-void tapKey(PC1600Machine& machine, const std::string& name) {
+job::Task<void> tapKeyJob(PC1600Machine& machine, std::string name) {
     machine.pressKey(name);
-    machine.runCycles(kFrameTStates * kTapFrames);
+    co_await job::run(machine, kFrameTStates * kTapFrames);
     machine.releaseKey(name);
-    machine.runCycles(kFrameTStates * kIdleFrames);
+    co_await job::run(machine, kFrameTStates * kIdleFrames);
 }
 
-uint64_t waitIdle(PC1600Machine& machine, uint64_t maxTStates) {
+job::Task<uint64_t> waitIdleJob(PC1600Machine& machine, uint64_t maxTStates) {
     uint64_t consumed = 0;
     while (machine.display().statusLine().isOn(StatusLine::Symbol::Busy) && consumed < maxTStates) {
-        consumed += machine.runCycles(kFrameTStates);
+        consumed += co_await job::run(machine, kFrameTStates);
     }
-    return consumed;
+    co_return consumed;
 }
 
-void waitForKeyboardScanLoop(PC1600Machine& machine) {
+job::Task<void> waitForKeyboardScanLoopJob(PC1600Machine& machine) {
     // Needed with ANY plotter, not just the CE-1600P. The CE-1600P's
     // power-on init opens the gap on the SC7852 side; the CE-150 opens the
     // same gap a different way -- the PC-1600 boot's plotter self-test
     // hands off to the LH5803 to home the CE-150 turret, and the SC7852
     // key-scan loop only re-engages for good once that returns. Either way
     // the first scripted keystroke would otherwise land in a dead scan.
-    if (!machine.ce1600pAttached() && !machine.ce150Attached()) return;
+    if (!machine.ce1600pAttached() && !machine.ce150Attached()) co_return;
 
     //
     // "Ready" per frame: CK0 (the LCD clock) is on, and the SC7852 is either
@@ -171,7 +171,7 @@ void waitForKeyboardScanLoop(PC1600Machine& machine) {
     int active = 0;
     uint64_t lastScan = machine.keyboard().scanCount();
     while (active < kActiveFramesNeeded && spent < kCap) {
-        spent += machine.runCycles(kFrameTStates);
+        spent += co_await job::run(machine, kFrameTStates);
         uint64_t nowScan = machine.keyboard().scanCount();
         const bool polling = nowScan != lastScan;
         lastScan = nowScan;
@@ -181,7 +181,7 @@ void waitForKeyboardScanLoop(PC1600Machine& machine) {
     }
 }
 
-void runBootToPrompt(PC1600Machine& machine) {
+job::Task<void> runBootToPromptJob(PC1600Machine& machine) {
     // Generous margin past the boot ROM's power-on sequence -- the ROM
     // doesn't poll the keyboard until it settles into its post-boot idle
     // loop (headless: ~2M T-states to a stable PC set, see
@@ -189,21 +189,21 @@ void runBootToPrompt(PC1600Machine& machine) {
     // a slower boot.
     constexpr uint64_t kBootSettleTStates = PC1600Machine::kTStateHz * 2;
     constexpr uint64_t kBootIdleCapTStates = PC1600Machine::kTStateHz * 5;
-    machine.runCycles(kBootSettleTStates);
-    waitIdle(machine, kBootIdleCapTStates);
+    co_await job::run(machine, kBootSettleTStates);
+    co_await waitIdleJob(machine, kBootIdleCapTStates);
     // With a plotter attached the boot ROM only turns the LCD on and enters
     // its keyboard-scan idle loop once the CE-1600P has finished its power-
     // on init (on real hardware the LCD + indicator strip stay dark until
     // then) -- that init raises no BUSY symbol. No-op without a plotter.
-    waitForKeyboardScanLoop(machine);
+    co_await waitForKeyboardScanLoopJob(machine);
     // The keyboard-scan test above can pass while the ROM is still finishing
     // its start-up (measured with a CE-1600P: ~10 s of emulated time before
     // the cursor appears), so also wait until it is steady in the BASIC
     // command loop -- otherwise that tail runs in real time.
-    waitUntilBasicIdle(machine, PC1600Machine::kTStateHz * 20);  // cap: safety only
+    co_await waitUntilBasicIdleJob(machine, PC1600Machine::kTStateHz * 20);  // cap: safety only
 }
 
-uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates) {
+job::Task<uint64_t> waitUntilBasicIdleJob(PC1600Machine& machine, uint64_t maxTStates) {
     // "The program has finished" == the SC7852 is back spinning in the BASIC
     // command loop, a very tight loop pinned to ~$92B3 (measured: at the
     // prompt the SC7852 PC is on that exact address ~97% of frames; a
@@ -231,21 +231,21 @@ uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates) {
     while (inLoop < kFramesNeeded && spent < maxTStates) {
         int idleSamples = 0;
         for (int i = 0; i < kSamplesPerFrame; ++i) {
-            spent += machine.runCycles(kFrameTStates / kSamplesPerFrame);
+            spent += co_await job::run(machine, kFrameTStates / kSamplesPerFrame);
             if (pc1600AtBasicPrompt(machine)) idleSamples++;
         }
         if (idleSamples >= kIdleSamplesNeeded) inLoop++;
         else inLoop = 0;
     }
-    return spent;
+    co_return spent;
 }
 
-bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, std::string* error) {
+job::Task<bool> typeLineJob(PC1600Machine& machine, std::string line, bool pressEnter, std::string* error) {
     // Don't start typing until the ROM's key-scan loop is actually running
     // -- after the previous line's ENTER (tokenisation, plus CE-1600P post-
     // line housekeeping) it drops out of the loop, and the first characters
     // of this line would otherwise land unseen. No-op without a plotter.
-    waitForKeyboardScanLoop(machine);
+    co_await waitForKeyboardScanLoopJob(machine);
 
     for (std::size_t i = 0; i < line.size();) {
         const std::size_t at = i;
@@ -258,13 +258,13 @@ bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, 
                                                : pc1600ResolveTypedChar(static_cast<char>(cp), &name, &needsShift));
         if (!resolved) {
             if (error) *error = "no PC-1600 key for character '" + line.substr(at, i - at) + "'";
-            return false;
+            co_return false;
         }
         if (kbii) {
             // Shaped by what the user has latched (kbiiSequence, KeyPaste.hpp).
             for (const KbiiTap& tap : kbiiSequence(name, needsShift, pc1600ReadLatches(machine))) {
-                tapKey(machine, tap.key);
-                if (tap.gapAfter) machine.runCycles(kFrameTStates * kShiftGapFrames);
+                co_await tapKeyJob(machine, tap.key);
+                if (tap.gapAfter) co_await job::run(machine, kFrameTStates * kShiftGapFrames);
             }
             continue;
         }
@@ -273,22 +273,22 @@ bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, 
             // latch is consumed by that key and must NOT be explicitly
             // un-latched afterward (an explicit un-latch corrupts the next
             // unshifted character -- confirmed on the PC-1500 side).
-            tapKey(machine, "shift");
-            machine.runCycles(kFrameTStates * kShiftGapFrames);
+            co_await tapKeyJob(machine, "shift");
+            co_await job::run(machine, kFrameTStates * kShiftGapFrames);
         }
-        tapKey(machine, name);
+        co_await tapKeyJob(machine, name);
     }
     if (pressEnter) {
-        tapKey(machine, "enter");
-        waitIdle(machine, kPostEnterBusyCap);
-        machine.runCycles(kFrameTStates * kPostEnterFloorFrames);
+        co_await tapKeyJob(machine, "enter");
+        co_await waitIdleJob(machine, kPostEnterBusyCap);
+        co_await job::run(machine, kFrameTStates * kPostEnterFloorFrames);
     } else {
-        waitIdle(machine, kPostEnterBusyCap);
+        co_await waitIdleJob(machine, kPostEnterBusyCap);
     }
-    return true;
+    co_return true;
 }
 
-BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& text) {
+job::Task<BasicTypeResult> typeBasicProgramTextJob(PC1600Machine& machine, std::string text) {
     BasicTypeResult result;
 
     int typedLines = 0;   // lines actually sent to the editor (not the length-guard skips)
@@ -310,9 +310,9 @@ BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& 
         const basic::LineStoreCheck before = captureProgram(machine, line);
 
         std::string typeError;
-        if (!typeLine(machine, line, /*pressEnter=*/true, &typeError)) {
+        if (!co_await typeLineJob(machine, line, /*pressEnter=*/true, &typeError)) {
             result.error = typeError;
-            return result;
+            co_return result;
         }
         typedLines++;
 
@@ -324,7 +324,7 @@ BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& 
         // preset must `key: mode` into it before the program: block).
         // Re-typing a line identical to the stored one also changes
         // nothing and is reported the same way.
-        settleUntilProgramPtrStable(machine);
+        co_await settleUntilProgramPtrStable(machine);
         if (programChanged(machine, before)) storedCount++;
         else result.rejectedLines.push_back(line);
     }
@@ -339,5 +339,29 @@ BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& 
                            " program line(s) not stored (too long, or rejected by the editor)";
         }
     }
-    return result;
+    co_return result;
+}
+
+// ---- Blocking forms ----
+
+void tapKey(PC1600Machine& machine, const std::string& name) { job::runToCompletion(tapKeyJob(machine, name)); }
+
+uint64_t waitIdle(PC1600Machine& machine, uint64_t maxTStates) {
+    return job::runToCompletion(waitIdleJob(machine, maxTStates));
+}
+
+void waitForKeyboardScanLoop(PC1600Machine& machine) { job::runToCompletion(waitForKeyboardScanLoopJob(machine)); }
+
+void runBootToPrompt(PC1600Machine& machine) { job::runToCompletion(runBootToPromptJob(machine)); }
+
+uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates) {
+    return job::runToCompletion(waitUntilBasicIdleJob(machine, maxTStates));
+}
+
+bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, std::string* error) {
+    return job::runToCompletion(typeLineJob(machine, line, pressEnter, error));
+}
+
+BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& text) {
+    return job::runToCompletion(typeBasicProgramTextJob(machine, text));
 }

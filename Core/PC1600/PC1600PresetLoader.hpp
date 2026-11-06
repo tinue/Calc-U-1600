@@ -40,6 +40,13 @@ class PC1600Machine;
 /// `onArmed` fires right before the cold boot, once cards/plotter are
 /// attached but the machine is still powered off -- see PresetArmedFn.
 /// `onSaveAs` fires for each `saveas:` step -- see PresetSaveAsFn.
+/// The resumable form (Core/Job.hpp): every argument is copied into the
+/// job, so it may outlive them.
+job::Task<PresetLoadResult> applyPC1600PresetJob(PC1600Machine& machine, PresetFile preset, PresetLogFn log = {},
+                                              std::string traceDir = ".", std::string moduleDir = ".",
+                                              PresetBootedFn onBooted = {}, std::vector<std::string> romDirs = {},
+                                              std::vector<std::string> extraModuleDirs = {},
+                                              PresetArmedFn onArmed = {}, PresetSaveAsFn onSaveAs = {});
 PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& preset,
                                    const PresetLogFn& log = {},
                                    const std::string& traceDir = ".",

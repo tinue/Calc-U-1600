@@ -92,7 +92,7 @@ file(GLOB_RECURSE CALCU_CORE_SOURCES CONFIGURE_DEPENDS ${CALCU_CORE_ROOT}/*.cpp)
 list(FILTER CALCU_CORE_SOURCES EXCLUDE REGEX "^${CALCU_CORE_ROOT}/tests/")
 add_library(calcu_core STATIC ${CALCU_CORE_SOURCES})
 target_include_directories(calcu_core PUBLIC ${CALCU_CORE_ROOT})
-target_compile_features(calcu_core PUBLIC cxx_std_17)
+target_compile_features(calcu_core PUBLIC cxx_std_20)
 target_compile_options(calcu_core PRIVATE ${CALCU_WARNINGS})
 target_link_libraries(calcu_core PUBLIC calcu_sharpdx)
 if(CALCU_CORE_DEBUG_O1 AND NOT MSVC)
@@ -100,7 +100,7 @@ if(CALCU_CORE_DEBUG_O1 AND NOT MSVC)
 endif()
 
 # ---- calcu_shared
-# Shared/ is C++17 and standard-library-only: no Qt, Cocoa or Emscripten
+# Shared/ is C++20 and standard-library-only: no Qt, Cocoa or Emscripten
 # headers, and single-threaded (docs/developer/Shared-Architecture.md).
 # Headers include their Core dependencies relative to Core/ ("PC1600/...")
 # and each other as "Shared/...".

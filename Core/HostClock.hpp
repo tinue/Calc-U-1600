@@ -9,9 +9,19 @@
 // emulator flat out, so the free-running RTC ends up ahead of real time;
 // re-seeding at the end of the script puts it back. Returns the time
 // that was seeded (for the loader's log line).
+
+// Tests pin the wall clock here so a run that ends in `- syncclock:` is
+// reproducible (job_tests' sliced-vs-straight equivalence). Null: the real
+// clock.
+using HostClockSource = std::chrono::system_clock::time_point (*)();
+inline HostClockSource& hostClockOverride() {
+    static HostClockSource source = nullptr;
+    return source;
+}
+
 template <typename Machine>
 std::tm seedClockFromHostTime(Machine& machine) {
-    const auto nowTp = std::chrono::system_clock::now();
+    const auto nowTp = hostClockOverride() ? hostClockOverride()() : std::chrono::system_clock::now();
     std::time_t now = std::chrono::system_clock::to_time_t(nowTp);
     // to_time_t may round rather than truncate: take the sub-second phase
     // relative to the time_t it actually returned, borrowing a second if

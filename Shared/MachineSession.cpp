@@ -607,7 +607,9 @@ bool MachineSession::attachHostDrive(const std::string& dir, std::string* error)
 }
 
 std::string MachineSession::hostDriveDirectory() const {
-    return m_pc1600 ? m_pc1600->hostDriveDirectory().u8string() : std::string();
+    if (!m_pc1600) return {};
+    const std::u8string dir = m_pc1600->hostDriveDirectory().u8string();
+    return std::string(dir.begin(), dir.end());
 }
 
 void MachineSession::detachHostDrive() {
