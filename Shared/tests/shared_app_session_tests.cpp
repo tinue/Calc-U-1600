@@ -2,9 +2,11 @@
 // browser frontend would) and with runNow() (as the Qt app does). SKIP
 // without ROMs.
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,6 +14,7 @@
 #include "MemorySettingsStore.hpp"
 #include "PC1600/PC1600Machine.hpp"
 #include "Shared/AppSession.hpp"
+#include "Shared/MachineCodeLoad.hpp"
 #include "SharedTestSupport.hpp"
 
 namespace {
@@ -201,6 +204,83 @@ void test_control_state_without_host_directories() {
     f.app.reset();
 }
 
+std::vector<std::uint8_t> readBytes(const char* path) {
+    std::ifstream in(path, std::ios::binary);
+    return std::vector<std::uint8_t>(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+// The same tape twice in one WAV: its data chunk's samples doubled.
+std::vector<std::uint8_t> doubledTape(const std::vector<std::uint8_t>& wav) {
+    for (std::size_t i = 12; i + 8 <= wav.size();) {
+        const std::uint32_t size = wav[i + 4] | wav[i + 5] << 8 | wav[i + 6] << 16 | std::uint32_t(wav[i + 7]) << 24;
+        if (std::equal(wav.begin() + i, wav.begin() + i + 4, "data")) {
+            std::vector<std::uint8_t> out(wav.begin(), wav.begin() + i + 8 + size);
+            out.insert(out.end(), wav.begin() + i + 8, wav.begin() + i + 8 + size);
+            const std::uint32_t doubled = size * 2, riff = static_cast<std::uint32_t>(out.size() - 8);
+            for (int b = 0; b < 4; ++b) {
+                out[i + 4 + b] = static_cast<std::uint8_t>(doubled >> (8 * b));
+                out[4 + b] = static_cast<std::uint8_t>(riff >> (8 * b));
+            }
+            return out;
+        }
+        i += 8 + size + (size & 1);
+    }
+    return {};
+}
+
+// programChoice(): a plain file is its own image, a one-file tape its
+// file, a several-file tape a list to pick from.
+void test_program_choice() {
+    const std::vector<std::uint8_t> plain = {1, 2, 3};
+    shared::ProgramChoice c = shared::programChoice(plain);
+    CHECK(!c.needsChoice() && c.images.size() == 1 && c.images[0] == plain && c.names.empty());
+
+    const std::vector<std::uint8_t> wav = readBytes("Core/tests/fixtures/tape/pc1500_tape.wav");
+    c = shared::programChoice(wav);
+    CHECK(!c.needsChoice() && c.images.size() == 1 && c.images[0] != wav);
+
+    c = shared::programChoice(doubledTape(wav));
+    CHECK(c.needsChoice() && c.names.size() == 2);
+    CHECK(c.names.size() == 2 && c.names[0].rfind("1. TAPEFIX", 0) == 0 && c.names[1].rfind("2. ", 0) == 0);
+}
+
+// MachineCodeLoad: a headerless file asks for an address, checked as
+// typed; the load gives the summary and the NEW / CALL advice.
+void test_machine_code_load() {
+    Fixture f;
+    f.settings.setStartupModelPreference("PC1500A");
+    f.app->start();
+    const std::vector<std::uint8_t> code = {0x9A, 0x9A, 0x9A, 0x9A};  // RTN x4
+    shared::MachineCodeLoad load = shared::MachineCodeLoad::plan(f.app->machine(), code);
+    CHECK(load.error().empty() && load.needsAddress() && load.length() == 4);
+    CHECK(load.cpuNote().empty() && load.addressPlaceholder() == "hex, e.g. &7C01");
+    shared::MachineCodeLoad::AddressCheck check = load.setAddress("zz");
+    CHECK(!check.valid && check.hint == "Not a hex address (&0000-&FFFF).");
+    CHECK(!load.setAddress("").valid && load.setAddress("").hint.empty());
+    CHECK(!load.setAddress("&FFFE").valid);
+    CHECK(load.setAddress("&7C01").valid);
+    CHECK(load.request().addr == 0x7C01 && load.request().payload == code);
+    CHECK(f.app->loadMachineCode(load.request()).ok);
+    shared::MachineCodeLoad::Loaded loaded = load.loaded(f.app->machine());
+    CHECK(loaded.summary == "Loaded 4 bytes at &7C01\u2013&7C04");
+    CHECK(loaded.advice.callCommand == "CALL &7C01");
+
+    CHECK(f.app->runNow(f.app->selectModelJob(Model::PC1600)).ok);
+    load = shared::MachineCodeLoad::plan(f.app->machine(), code);
+    CHECK(load.error().empty() && load.needsAddress());
+    CHECK(load.defaultAddressText() == "&C0C5" && !load.cpuNote().empty());
+    check = load.setAddress(load.defaultAddressText());
+    CHECK(check.valid && check.hint.empty());
+    CHECK(load.request().addr == 0xC0C5 && load.request().slot == 0 && load.request().bank == 0);
+    CHECK(f.app->loadMachineCode(load.request()).ok);
+    loaded = load.loaded(f.app->machine());
+    CHECK(loaded.summary == "Loaded 4 bytes at &C0C5\u2013&C0C8 (S0)");
+    CHECK(loaded.advice.callCommand == "CALL &C0C5");
+    // Into the work area: a warning, still loadable.
+    check = load.setAddress("&F800");
+    CHECK(check.valid && !check.hint.empty());
+}
+
 struct CountingSink : shared::AudioSink {
     std::size_t written = 0;
     bool start(int, int) override { return true; }
@@ -243,6 +323,8 @@ int run_shared_app_session_tests() {
     test_audio_follows_tick();
     test_control_state();
     test_control_state_without_host_directories();
+    test_program_choice();
+    test_machine_code_load();
     std::printf("shared_app_session_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

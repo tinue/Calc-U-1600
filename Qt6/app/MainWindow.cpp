@@ -20,11 +20,9 @@
 #include "AppSettings.hpp"
 #include "MacClipboardImage.h"
 #include "PC1500/PC1500Machine.hpp"
-#include "PC1500/PC1500MachineCodeLoader.hpp"
 #include "PC1600/PC1600Machine.hpp"
-#include "PC1600/PC1600MachineCodeLoader.hpp"
 #include "DropFile.hpp"
-#include "ProgramFile.hpp"
+#include "Shared/MachineCodeLoad.hpp"
 
 #include <QHBoxLayout>
 #include <QInputMethodEvent>
@@ -407,25 +405,19 @@ std::optional<std::vector<uint8_t>> MainWindow::readProgramFile(const QString& p
         return std::nullopt;
     }
     const QByteArray raw = file.readAll();
-    std::vector<uint8_t> bytes(raw.begin(), raw.end());
-    // A tape that can't be read stays a WAV: the loader says why.
-    std::vector<programfile::TapeFile> files = programfile::tapeFiles(bytes, nullptr);
-    if (files.empty()) return bytes;
-    if (files.size() == 1) return std::move(files[0].image);
+    shared::ProgramChoice choice = shared::programChoice(std::vector<uint8_t>(raw.begin(), raw.end()));
+    if (!choice.needsChoice()) return std::move(choice.images.front());
 
     QStringList names;
-    for (size_t i = 0; i < files.size(); i++) {
-        const QString name = QString::fromStdString(files[i].name);
-        names << tr("%1. %2").arg(i + 1).arg(name.isEmpty() ? tr("(no name)") : name);
-    }
+    for (const std::string& name : choice.names) names << QString::fromStdString(name);
     bool ok = false;
-    const QString choice = QInputDialog::getItem(this, title,
+    const QString picked = QInputDialog::getItem(this, title,
                                                  tr("%1 holds %2 files. Load which one?")
                                                      .arg(QFileInfo(path).fileName())
-                                                     .arg(files.size()),
+                                                     .arg(choice.images.size()),
                                                  names, 0, false, &ok);
     if (!ok) return std::nullopt;
-    return std::move(files[static_cast<size_t>(names.indexOf(choice))].image);
+    return std::move(choice.images[static_cast<size_t>(names.indexOf(picked))]);
 }
 
 void MainWindow::loadBasicProgramFile(const QString& path) {
@@ -442,61 +434,20 @@ void MainWindow::loadMachineCodeFile(const QString& path) {
 
     const std::optional<std::vector<uint8_t>> bytes = readProgramFile(path, title);
     if (!bytes) return;
-    const machinecode::File code = machinecode::readFile(*bytes);
-
-    const bool isPC1600 = m_controller->currentModel() == Model::PC1600;
-    const machinecode::Target target = isPC1600 ? machinecode::Target::PC1600 : machinecode::Target::PC1500;
-    // On the PC-1600 the machine's MODE and TITLE decide the address space
-    // and the target (docs/background/plans/Loader-Mode-Plan.md); the loader
-    // never changes them.
-    machinecode::PC1600State state;
-    if (isPC1600 && m_controller->pc1600()) state = pc1600LoadState(*m_controller->pc1600());
-    const machinecode::Plan plan = machinecode::plan(target, code, state);
-    if (!plan.error.empty()) {
-        QMessageBox::warning(this, title, QString::fromStdString(plan.error));
+    shared::MachineCodeLoad load = shared::MachineCodeLoad::plan(m_controller->session(), *bytes);
+    if (!load.error().empty()) {
+        QMessageBox::warning(this, title, QString::fromStdString(load.error()));
         return;
     }
-
-    shared::MachineCodeLoadRequest request;
-    request.payload = code.payload;
-    uint32_t addr = code.loadAddr & 0xFFFF;  // in the code's CPU's address space (a header's bank is plan.bank)
-    request.addr = plan.busAddr;
-    machinecode::Slot slot = plan.slot;
-    int bank = plan.bank;  // the header's bank, else the slot's
-    if (plan.needsAddress) {
-        MachineCodeLoadDialog dialog(this, target, code.payload.size(), plan.defaultAddr, state, plan.cpu);
+    if (load.needsAddress()) {
+        MachineCodeLoadDialog dialog(this, load);
         if (dialog.exec() != QDialog::Accepted) return;
-        addr = dialog.address();
-        request.addr = dialog.busAddress();
-        slot = dialog.slot();
-        bank = machinecode::pc1600DefaultBank(slot);
     }
-    request.slot = static_cast<int>(slot);
-    request.bank = bank;
+    if (!m_sync->run(title, [this, &load] { return m_controller->app().loadMachineCode(load.request()); })) return;
 
-    if (!m_sync->run(title, [this, &request] { return m_controller->app().loadMachineCode(request); })) return;
-
-    // The advice: NEW that keeps BASIC off the code, CALL that starts it.
-    uint32_t ramStart = 0, ramEnd = 0;
-    if (!isPC1600) {
-        if (PC1500Machine* pc1500 = m_controller->pc1500()) {
-            ramStart = static_cast<uint32_t>(pc1500->debugPeek(kPc1500RamStPage)) << 8;
-            ramEnd = static_cast<uint32_t>(pc1500->debugPeek(kPc1500RamEndPage)) << 8;
-        }
-    }
-    const size_t len = request.payload.size();
-    const machinecode::Advice advice =
-        machinecode::advice(target, slot, bank, addr, len, code.autorunAddr, ramStart, ramEnd, state, plan.cpu);
-
-    auto hex = [](uint32_t v) { return QStringLiteral("&") + QString::number(v, 16).toUpper(); };
-    QString where = tr("Loaded %1 bytes at %2–%3").arg(len).arg(hex(addr), hex(addr + len - 1));
-    if (isPC1600 && plan.cpu == machinecode::Cpu::LH5803)
-        where += tr(" (LH5803 addresses; Z-80 %1, %2)").arg(hex(request.addr), QString::fromLatin1(machinecode::slotName(slot)));
-    else if (isPC1600 && bank != 0)
-        where += tr(" (%1, bank %2)").arg(QString::fromLatin1(machinecode::slotName(slot))).arg(bank);
-    else if (isPC1600)
-        where += tr(" (%1)").arg(QString::fromLatin1(machinecode::slotName(slot)));
-    QString html = QStringLiteral("<p>%1.</p>").arg(where.toHtmlEscaped());
+    const shared::MachineCodeLoad::Loaded loaded = load.loaded(m_controller->session());
+    const machinecode::Advice& advice = loaded.advice;
+    QString html = QStringLiteral("<p>%1.</p>").arg(QString::fromStdString(loaded.summary).toHtmlEscaped());
     html += QStringLiteral("<p>%1<br>").arg(tr("Keep BASIC from overwriting it:").toHtmlEscaped());
     if (!advice.newCommand.empty())
         html += QStringLiteral("<b><tt>%1</tt></b><br>").arg(QString::fromStdString(advice.newCommand).toHtmlEscaped());
