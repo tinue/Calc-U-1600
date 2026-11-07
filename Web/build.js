@@ -29,7 +29,9 @@ const read = (p) => fs.readFileSync(p, "utf8");
 const sha256 = (buf) => crypto.createHash("sha256").update(buf).digest("hex");
 
 function walk(dir) {
-  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+  // Dotfiles (macOS .DS_Store, editor droppings) never ship: a host that
+  // ignores them would 404 on a file files.json lists.
+  return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => !e.name.startsWith(".")).flatMap((e) => {
     const p = path.join(dir, e.name);
     return e.isDirectory() ? walk(p) : [p];
   });
@@ -81,7 +83,7 @@ const presetDirs = [...new Set(presets.map((f) => path.dirname(f)))];
 for (const dir of presetDirs) {
   const from = path.join(REPO, "examples", dir);
   for (const f of fs.readdirSync(from, { withFileTypes: true })) {
-    if (!f.isFile()) continue;
+    if (!f.isFile() || f.name.startsWith(".")) continue;
     fs.mkdirSync(path.join(DIST, "presets", dir), { recursive: true });
     fs.copyFileSync(path.join(from, f.name), path.join(DIST, "presets", dir, f.name));
   }
