@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <map>
 #include <functional>
 #include <memory>
 #include <string>
@@ -189,6 +190,10 @@ public:
     void hostShiftTap();
 
     // ---- Keys and typing ----
+    // A frontend's own key (faceplate, physical host key). A release that
+    // comes before kKeyHoldFrames of emulated time since the press -- a
+    // quick finger tap, both events between two advance() calls -- is
+    // deferred until then, so the ROM's key scan always sees the key.
     void pressKey(const std::string& name);
     void releaseKey(const std::string& name);
     void setOnKeyPressed(bool pressed);
@@ -377,8 +382,9 @@ private:
     bool m_liveTyping = false;             // m_paste holds live keystrokes (typeLiveStep()), not a paste
     std::uint64_t m_pasteFrameCycles = 0;  // cycles run since the paste feeder's last frame boundary
 
-    // tapShiftedKey()/tapKey()'s PC-1600 presses and releases, due at a
-    // point of m_budgetClock (the sum of advance() budgets).
+    // tapShiftedKey()/tapKey()'s PC-1600 presses and releases and
+    // releaseKey()'s deferred releases, due at a point of m_budgetClock
+    // (the sum of advance() budgets).
     struct TimedKey {
         std::uint64_t due;
         bool press;
@@ -387,7 +393,15 @@ private:
     std::deque<TimedKey> m_timedKeys;
     std::uint64_t m_budgetClock = 0;
     void scheduleKey(double afterSeconds, bool press, const std::string& name);
+    void scheduleKeyAt(std::uint64_t due, bool press, const std::string& name);
     void fireDueKeys();
+    // pressKey()'s m_budgetClock per key still down, for releaseKey()'s
+    // minimum hold.
+    std::map<std::string, std::uint64_t> m_keyPressedAt;
+    // The machine's key matrix, now: the timed taps and the paste feeder,
+    // whose holds are their own.
+    void machinePressKey(const std::string& name);
+    void machineReleaseKey(const std::string& name);
 
     void enqueueTyped(const std::string& text, bool pressEnter);
     void runActive(std::uint64_t cycles);

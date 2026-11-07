@@ -14,6 +14,8 @@ const FACE_ART = ["pc1500.png", "pc1500A.png", "pc1600.png"];
 // Width / height of each artwork, known before the engine is (layout and
 // prerender need it): Shared/KeyLayout's imageWidth / imageHeight.
 const FACE_ASPECT = [4000 / 1760, 4000 / 1760, 4000 / 1777];
+// How far (CSS px) outside a key's rectangle a touch still takes it.
+const TOUCH_SLOP_PX = 12;
 
 function LcdCanvas({ engine, model, rect }) {
   const ref = React.useRef(null);
@@ -69,12 +71,23 @@ function Faceplate({ engine, model, width }) {
 
   const syncPressed = () => setPressed([...pointers.current.values()].filter((v) => v !== "lcd"));
 
+  // A mouse hits a key's rectangle exactly. A finger is reported as one
+  // point, often a few pixels off and on a phone the keys are tiny (a
+  // PC-1600 F-key is ~7 px tall), so a touch takes the nearest key within
+  // TOUCH_SLOP_PX of its rectangle: the gaps between keys go to the closer
+  // key instead of to nothing.
   const hit = (e) => {
     const box = artRef.current.getBoundingClientRect();
     const x = e.clientX - box.left, y = e.clientY - box.top;
-    const inside = (r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
-    if (inside(lcdRect)) return "lcd";
-    return keyRects.findIndex(inside);
+    const distance = (r) => Math.hypot(Math.max(r.x - x, 0, x - (r.x + r.w)), Math.max(r.y - y, 0, y - (r.y + r.h)));
+    if (distance(lcdRect) === 0) return "lcd";
+    const slop = e.pointerType === "touch" ? TOUCH_SLOP_PX : 0;
+    let best = -1, bestDistance = Infinity;
+    keyRects.forEach((r, i) => {
+      const d = distance(r);
+      if (d <= slop && d < bestDistance) { best = i; bestDistance = d; }
+    });
+    return best;
   };
 
   const release = (pointerId) => {

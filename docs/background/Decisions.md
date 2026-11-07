@@ -574,6 +574,16 @@ authentic speed for the span that matters.
   keys as real presses; PC-1500 cursor keys as real presses (the ROM's own
   auto-repeat), the rest through the keystroke queue. Any of them stops a
   paste. The frontend keeps only which physical key to release.
+- **A faceplate or host key stays down at least 4 emulated frames**
+  (`MachineSession::releaseKey()` defers an earlier release). A quick
+  finger tap can deliver press and release between two `advance()` calls,
+  and the ROM's key scan would never see the key. The minimum counts
+  emulated time, so it holds under pacing and turbo alike. The timed taps
+  and the paste feeder press the machine directly, keeping their own holds.
+- **Touch takes the nearest key within 12 px** (`Web/src/Faceplate.jsx`),
+  a mouse only its exact rectangle. A finger is reported as one point a few
+  pixels off, and on a phone a PC-1600 F-key is ~7 px tall; without the
+  slop a touch in the gap between keys does nothing.
 - **The GUI Paste Text never presses ENTER.** This is deliberate: a careless
   paste must not run anything. Tool paths (debugger auto-start, future inbound
   APIs) use `MachineSession::typeCommand()`, which does press ENTER.

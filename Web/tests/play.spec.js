@@ -128,6 +128,21 @@ test('a faceplate key types while its pointer is down', async ({ page }) => {
   await waitForScreen(page, /5/);
 });
 
+test.describe('on a touchscreen', () => {
+  test.use({ hasTouch: true });
+
+  // An instant tap (down and up at once) in the gap just below a key: the
+  // touch slop takes the nearest key, the engine's minimum hold lets the
+  // ROM see it.
+  test('a quick tap next to a key types it', async ({ page }) => {
+    await gotoReady(page);
+    await pickModel(page, 2);
+    const key = await page.locator('.calcu-key[aria-label="5"]').boundingBox();
+    await page.touchscreen.tap(key.x + key.width / 2, key.y + key.height + 3);
+    await waitForScreen(page, /5/);
+  });
+});
+
 test('the control bar follows the model: peripherals, floppy, tape', async ({ page }) => {
   await page.setViewportSize(TALL);
   await gotoReady(page);

@@ -111,6 +111,36 @@ void test_timed_tap_pc1600() {
     CHECK(screen(f.session).find("A'") != std::string::npos);
 }
 
+// A faceplate or host key released before the key scan could see it (a
+// quick finger tap, both events between two advance() calls) stays down
+// for the minimum hold: still exactly one key.
+void test_minimum_key_hold(Model model) {
+    Fixture f;
+    f.session.switchModel(model);
+    if (model != Model::PC1600) {
+        f.session.tapKey("cl");
+        run(f.session, 0.5);
+    }
+    f.session.pressKey("a");
+    f.session.releaseKey("a");
+    run(f.session, 1.5);
+    std::string text = screen(f.session);
+    CHECK(text.find('A') != std::string::npos);
+    CHECK(text.find("AA") == std::string::npos);
+    // Pressed again while its deferred release is still pending: the new
+    // press isn't cut short by the old release.
+    f.session.pressKey("b");
+    f.session.releaseKey("b");
+    f.session.pressKey("b");
+    run(f.session, 0.02);
+    f.session.releaseKey("b");
+    run(f.session, 1.5);
+    text = screen(f.session);
+    CHECK(text.find("AB") != std::string::npos);
+    CHECK(text.find("BB") == std::string::npos);
+    if (text.find("AB") == std::string::npos) std::fprintf(stderr, "  screen: %s\n", text.c_str());
+}
+
 // hostKeyDown() routes a host key the way the model needs.
 void test_host_keys() {
     using shared::ResolvedKey;
@@ -183,6 +213,8 @@ int run_shared_machine_session_tests() {
     test_switch_and_paste(Model::PC1500A);
     test_switch_and_paste(Model::PC1600);
     test_timed_tap_pc1600();
+    test_minimum_key_hold(Model::PC1500A);
+    test_minimum_key_hold(Model::PC1600);
     test_host_keys();
     test_rebuild_keeps_plotter();
     std::printf("shared_machine_session_tests: %d passed, %d failed\n", g_pass, g_fail);

@@ -211,6 +211,7 @@ void MachineSession::discardMachine() {
     m_paste.cancel({}); // the machine it was typing into is going away
     m_liveTyping = false;
     m_timedKeys.clear();
+    m_keyPressedAt.clear();
     m_pc1500.reset();
     m_pc1600.reset();
 }
@@ -272,10 +273,31 @@ job::Task<void> MachineSession::powerCycleAroundJob(std::function<void()> change
 // ---- Keys and typing ----
 
 void MachineSession::pressKey(const std::string& name) {
-    withMachine([&](auto& machine) { machine.pressKey(name); });
+    // A release still pending from an earlier quick tap must not cut this
+    // press short.
+    std::erase_if(m_timedKeys, [&](const TimedKey& k) { return !k.press && k.name == name; });
+    m_keyPressedAt[name] = m_budgetClock;
+    machinePressKey(name);
 }
 
 void MachineSession::releaseKey(const std::string& name) {
+    const auto it = m_keyPressedAt.find(name);
+    if (it != m_keyPressedAt.end()) {
+        const auto holdUntil = it->second + static_cast<std::uint64_t>(kKeyHoldFrames * clockHz() / 60.0);
+        m_keyPressedAt.erase(it);
+        if (m_budgetClock < holdUntil) {
+            scheduleKeyAt(holdUntil, false, name);
+            return;
+        }
+    }
+    machineReleaseKey(name);
+}
+
+void MachineSession::machinePressKey(const std::string& name) {
+    withMachine([&](auto& machine) { machine.pressKey(name); });
+}
+
+void MachineSession::machineReleaseKey(const std::string& name) {
     withMachine([&](auto& machine) { machine.releaseKey(name); });
 }
 
@@ -284,7 +306,10 @@ void MachineSession::setOnKeyPressed(bool pressed) {
 }
 
 void MachineSession::scheduleKey(double afterSeconds, bool press, const std::string& name) {
-    const auto due = m_budgetClock + static_cast<std::uint64_t>(afterSeconds * clockHz());
+    scheduleKeyAt(m_budgetClock + static_cast<std::uint64_t>(afterSeconds * clockHz()), press, name);
+}
+
+void MachineSession::scheduleKeyAt(std::uint64_t due, bool press, const std::string& name) {
     // Keep the queue in due order (taps can overlap).
     auto it = std::upper_bound(m_timedKeys.begin(), m_timedKeys.end(), due,
                                [](std::uint64_t d, const TimedKey& k) { return d < k.due; });
@@ -295,13 +320,13 @@ void MachineSession::fireDueKeys() {
     while (!m_timedKeys.empty() && m_timedKeys.front().due <= m_budgetClock) {
         const TimedKey key = m_timedKeys.front();
         m_timedKeys.pop_front();
-        if (key.press) pressKey(key.name);
-        else releaseKey(key.name);
+        if (key.press) machinePressKey(key.name);
+        else machineReleaseKey(key.name);
     }
 }
 
 void MachineSession::tapShiftedKey(const std::string& baseName) {
-    pressKey("shift");
+    machinePressKey("shift");
     scheduleKey(kTapHoldSeconds, false, "shift");
     scheduleKey(kTapHoldSeconds + kTapGapSeconds, true, baseName);
     scheduleKey(kTapHoldSeconds + kTapGapSeconds + kTapHoldSeconds, false, baseName);
@@ -311,7 +336,7 @@ void MachineSession::tapKey(const std::string& name) {
     if (m_pc1500) {
         m_pc1500->enqueueKey(name);
     } else if (m_pc1600) {
-        pressKey(name);
+        machinePressKey(name);
         scheduleKey(kTapHoldSeconds, false, name);
     }
 }
@@ -396,12 +421,12 @@ void MachineSession::typeLiveStep(const PasteStep& step) {
 }
 
 void MachineSession::cancelPaste() {
-    m_paste.cancel([this](const std::string& key) { releaseKey(key); });
+    m_paste.cancel([this](const std::string& key) { machineReleaseKey(key); });
     m_liveTyping = false;
 }
 
 void MachineSession::interruptPaste() {
-    m_paste.cancel([this](const std::string& key) { releaseKey(key); }, /*finishKbii=*/true);
+    m_paste.cancel([this](const std::string& key) { machineReleaseKey(key); }, /*finishKbii=*/true);
     m_liveTyping = m_paste.active(); // what's left is a KBII sequence's closing tap
 }
 
@@ -413,8 +438,8 @@ void MachineSession::runActive(std::uint64_t cycles) {
 }
 
 void MachineSession::pasteOnFrame() {
-    m_paste.onFrame([this](const std::string& key) { pressKey(key); },
-                    [this](const std::string& key) { releaseKey(key); },
+    m_paste.onFrame([this](const std::string& key) { machinePressKey(key); },
+                    [this](const std::string& key) { machineReleaseKey(key); },
                     [this] { return m_pc1600 ? pc1600ReadLatches(*m_pc1600) : KeyLatches{}; });
 }
 
