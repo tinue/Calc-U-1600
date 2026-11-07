@@ -52,6 +52,13 @@ FloppyBay::DiskLists FloppyBay::diskLists() const {
     return lists;
 }
 
+std::string FloppyBay::diskDescription(const std::string& diskName) const {
+    for (const auto* disks : {&bundledDisks(), &instanceDisks()})
+        for (const auto& e : *disks)
+            if (e.diskName == diskName) return e.description;
+    return {};
+}
+
 void FloppyBay::classifySource(const std::string& resolvedPathOrEmpty, bool isTemplate) {
     m_isTemplate = isTemplate;
     m_instanceFilePath.clear();

@@ -39,7 +39,7 @@ QString q(const std::string& s) { return QString::fromStdString(s); }
 
 shared::AppPaths& paths() {
     static shared::AppPaths p(AppSettings::settings(),
-                              shared::HostDirs{QDir::homePath().toStdString(), bundledResourcesDir().toStdString()});
+                              shared::HostDirs{QDir::homePath().toStdString(), bundledResourcesDir().toStdString(), {}});
     return p;
 }
 

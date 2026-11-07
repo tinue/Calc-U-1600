@@ -45,6 +45,7 @@ public:
 
     struct ModuleEntry {
         std::string moduleName;
+        std::string description;  // the card's `description:`, for a tooltip; "" = none
         bool battery = false;
         bool rom = false;  // a ROM module -- listed in its own picker section
     };

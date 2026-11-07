@@ -43,6 +43,8 @@ public:
     FloppyBay(MachineSession& session, const AppPaths& paths, Events events);
 
     DiskLists diskLists() const;
+    // A listed disk's `description:` (bundled first, as lookup), "" = none.
+    std::string diskDescription(const std::string& diskName) const;
     // The bundled / save-folder disks, re-parsed only when a file changed.
     const std::vector<FloppyCatalogEntry>& bundledDisks() const;
     const std::vector<FloppyCatalogEntry>& instanceDisks() const;

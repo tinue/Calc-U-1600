@@ -3,6 +3,8 @@
 # Runs a memtest over all banks, 2 passes.
 
 format-version: 1
+preset-name: Banked memtest
+description: Memory test across all banks of a banked module
 model: PC-1500A
 
 slot-1: CE-1638

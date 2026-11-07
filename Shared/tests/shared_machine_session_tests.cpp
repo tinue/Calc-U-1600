@@ -47,7 +47,7 @@ struct Fixture {
     MemorySettingsStore store;
     shared::Settings settings{store};
     std::filesystem::path home = std::filesystem::temp_directory_path() / "calcu-shared-session-test";
-    shared::AppPaths paths{settings, shared::HostDirs{home.generic_string(), "roms"}};
+    shared::AppPaths paths{settings, shared::HostDirs{home.generic_string(), "roms", {}}};
     RecordingListener listener;
     CountingBays bays;
     MachineSession session{settings, paths, listener, &bays};

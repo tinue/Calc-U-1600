@@ -78,7 +78,7 @@ struct Fixture {
             for (const auto& f : fs::directory_iterator(dir))
                 if (f.is_regular_file()) fs::copy_file(f.path(), bundle / f.path().filename());
         paths = std::make_unique<shared::AppPaths>(
-            settings, shared::HostDirs{(root / "home").generic_string(), bundle.generic_string()});
+            settings, shared::HostDirs{(root / "home").generic_string(), bundle.generic_string(), {}});
         session = std::make_unique<shared::MachineSession>(settings, *paths, listener, &bays);
         auto onError = [this](const std::string& e) { errors.push_back(e); };
         modules = std::make_unique<shared::ModuleBay>(*session, *paths, shared::ModuleBay::Events{{}, onError});
@@ -98,6 +98,8 @@ void test_module_bay() {
     Fixture f;
     const auto lists = f.modules->moduleLists(CardHost::PC1600Slot1);
     CHECK(contains(lists.templates, "CE-1600M"));
+    for (const auto& e : lists.templates)
+        if (e.moduleName == "CE-1600M") CHECK(e.description == "32 KB battery-backed RAM");
     CHECK(!contains(lists.templates, "CE-1601M"));  // Slot 2 only
     CHECK(lists.instances.empty());
 
@@ -132,6 +134,7 @@ void test_floppy_bay() {
     Fixture f;
     const auto lists = f.floppy->diskLists();
     CHECK(contains(lists.templates, "Formatted"));
+    CHECK(f.floppy->diskDescription("Formatted") == "Formatted, both sides empty");
     f.session->switchModel(Model::PC1600);
     f.floppy->selectDisk("Formatted");  // no drive yet: selection only
     CHECK(f.floppy->selectedDiskName() == "Formatted");
@@ -147,6 +150,7 @@ void test_floppy_bay() {
     const std::string saved = f.paths->floppyInstancePathFor("Work");
     CHECK(fs::exists(saved));
     CHECK(!f.floppy->canNameAndSave());
+    CHECK(f.floppy->diskDescription("Work") == "Formatted, both sides empty");  // kept from the template
 
     // The drive writes: autosaved once the debounce has passed, not before.
     fs::remove(saved);
@@ -158,6 +162,7 @@ void test_floppy_bay() {
     CHECK(!fs::exists(saved));
     f.floppy->tick(10.6);
     CHECK(fs::exists(saved));
+    CHECK(f.floppy->diskDescription("Work") == "Formatted, both sides empty");  // and by the autosave
 
     // A CE-150 taking the bus drops the CE-1600P: the disk is saved first,
     // without waiting for the debounce.

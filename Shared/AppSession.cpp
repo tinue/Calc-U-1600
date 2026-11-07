@@ -194,7 +194,8 @@ void AppSession::finishUnpaced() {
 
 // ---- Operations ----
 
-job::Task<OpResult> AppSession::loadPresetJob(std::string path, bool armOnly) {
+job::Task<OpResult> AppSession::loadPresetJob(std::string ref, bool armOnly) {
+    const std::string path = m_paths.resolvePresetRef(ref);
     PresetFile preset;
     std::string parseError;
     if (!parsePresetFile(path, &preset, &parseError)) co_return OpResult::fail(parseError);
@@ -258,12 +259,13 @@ job::Task<OpResult> AppSession::loadPresetJob(std::string path, bool armOnly) {
     co_return OpResult{};
 }
 
-job::Task<OpResult> AppSession::loadDefaultPresetJob(std::string path, Model model) {
+job::Task<OpResult> AppSession::loadDefaultPresetJob(std::string ref, Model model) {
+    const std::string path = m_paths.resolvePresetRef(ref);
     PresetFile preset;
     std::string parseError;
     if (!parsePresetFile(path, &preset, &parseError)) co_return OpResult::fail(parseError);
     if (modelForPreset(preset) != model) {
-        co_return OpResult::fail("The default preset \"" + path +
+        co_return OpResult::fail("The default preset \"" + presetDisplayName(preset.presetName, path) +
                                  "\" is for a different model -- change it in Settings.");
     }
     co_return co_await loadPresetJob(path);

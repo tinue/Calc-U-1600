@@ -27,21 +27,21 @@ std::vector<MediaItem> MediaLibrary::items() const {
     const int slots = m_app.machine().slotCount();
 
     for (const auto& e : modules.instanceCards()) {
-        MediaItem item{MediaType::Card, e.moduleName, fileNameOf(e.filePath), e.filePath, e.isTemplate, false};
+        MediaItem item{MediaType::Card, e.moduleName, e.description, fileNameOf(e.filePath), e.filePath, e.isTemplate, false};
         for (int slot = 1; slot <= slots; ++slot)
             if (modules.selectedModuleName(slot) == e.moduleName) item.inUse = true;
         out.push_back(std::move(item));
     }
     const bool driveOn = m_app.machine().ce1600pAttached();
     for (const auto& e : m_app.floppy().instanceDisks()) {
-        MediaItem item{MediaType::Disk, e.diskName, fileNameOf(e.filePath), e.filePath, e.isTemplate, false};
+        MediaItem item{MediaType::Disk, e.diskName, e.description, fileNameOf(e.filePath), e.filePath, e.isTemplate, false};
         item.inUse = driveOn && m_app.floppy().selectedDiskName() == e.diskName;
         out.push_back(std::move(item));
     }
     const std::string inDeck = m_app.tapes().currentName();
     for (const std::string& name : m_app.tapes().tapeNames()) {
         const std::string path = m_app.paths().tapePathFor(name);
-        out.push_back(MediaItem{MediaType::Tape, name, fileNameOf(path), path, false, name == inDeck});
+        out.push_back(MediaItem{MediaType::Tape, name, {}, fileNameOf(path), path, false, name == inDeck});
     }
     return out;
 }

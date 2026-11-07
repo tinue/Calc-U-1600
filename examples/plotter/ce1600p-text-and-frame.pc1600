@@ -1,6 +1,8 @@
 # PC-1600 plotter test -- draws text and a rectangle of maximum size
 
 format-version: 1
+preset-name: Frame CE-1600P
+description: Text sizes and the largest frame on the CE-1600P
 model: PC-1600
 
 # CE-1600P pen-plotter attached.

@@ -7,6 +7,8 @@
 # (Settings), e.g. `screen <folder>/calcu1600-ce158.serial 300`.
 
 format-version: 1
+preset-name: CE-158 demo
+description: CE-158 parallel and serial port demo (MODE 1)
 model: PC-1600
 interface: CE-158
 

@@ -5,6 +5,8 @@
 # log) once the plotter is attached.
 
 format-version: 1
+preset-name: CE-150 demo
+description: CE-150 four-colour box spiral with a caption
 model: PC-1500A
 plotter: CE-150
 

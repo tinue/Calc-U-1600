@@ -35,6 +35,8 @@
 # not reproduced here -- issue the sequences as pure &1555/&2AAA writes.
 
 format-version: 1
+preset-name: CE-163F flash
+description: Writes to the CE-163F flash at run time
 model: PC-1500A
 
 slot-1: CE-163F

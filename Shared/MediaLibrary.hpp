@@ -20,6 +20,7 @@ enum class MediaType { Card, Disk, Tape };
 struct MediaItem {
     MediaType type = MediaType::Card;
     std::string name;      // module / disk / tape name, as the pickers show it
+    std::string description;  // a card's / disk's `description:`; "" = none
     std::string fileName;  // the file's own name ("CE-161 work.card.yaml"), for a download
     std::string path;
     bool isTemplate = false;

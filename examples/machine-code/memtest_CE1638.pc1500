@@ -4,6 +4,8 @@
 # When finished, check X for the test result.
 
 format-version: 1
+preset-name: Memtest CE-1638
+description: Memory test with the CE-1638 module
 model: PC-1500
 
 slot-1: CE-1638

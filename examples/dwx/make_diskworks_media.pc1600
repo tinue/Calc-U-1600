@@ -4,6 +4,8 @@
 # and "Progs.floppy.yaml" -- so DiskWorks.pc1600 always starts from them.
 
 format-version: 1
+preset-name: DiskWorks media
+description: Makes the RAM card and floppy DiskWorks starts from
 model: PC-1600
 plotter: CE-1600P
 floppy: Formatted

@@ -72,7 +72,7 @@ int main() {
 
     MemorySettingsStore store;
     shared::Settings settings(store);
-    shared::AppPaths paths(settings, shared::HostDirs{(root / "home").generic_string(), (root / "bundle").generic_string()});
+    shared::AppPaths paths(settings, shared::HostDirs{(root / "home").generic_string(), (root / "bundle").generic_string(), {}});
     ConsolePlatform platform;
     shared::AppSession app(settings, paths, platform);
     app.start();

@@ -3,6 +3,8 @@
 # Program found on https://www.sharp-pc-1600.de
 
 format-version: 1
+preset-name: Biorhythm
+description: Biorhythm chart on the CE-1600P
 model: PC-1600
 
 # CE-1600P pen-plotter attached.

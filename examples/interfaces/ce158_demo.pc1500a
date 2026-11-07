@@ -8,6 +8,8 @@
 #   ./headless/pc1500_cli --preset examples/interfaces/ce158_demo.pc1500a 30000000 --ce158-pty
 
 format-version: 1
+preset-name: CE-158 demo
+description: CE-158 parallel and serial port demo
 model: PC-1500A
 interface: CE-158
 

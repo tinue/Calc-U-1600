@@ -48,6 +48,16 @@ std::string joinPath(const std::string& dir, const std::string& name) {
     return fromPath(toPath(dir) / toPath(name));
 }
 
+std::string AppPaths::bundledExamplesDir() const {
+    return m_dirs.bundledExamples.empty() ? joinPath(m_dirs.bundledResources, "examples") : m_dirs.bundledExamples;
+}
+
+std::string AppPaths::resolvePresetRef(const std::string& ref) const {
+    const std::string prefix = kExamplePresetPrefix;
+    if (ref.compare(0, prefix.size(), prefix) != 0) return ref;
+    return joinPath(bundledExamplesDir(), ref.substr(prefix.size()));
+}
+
 std::string AppPaths::defaultInstanceDir() const {
     const std::string dir =
         m_isolatedInstanceDir.empty() ? joinPath(m_dirs.home, "Calc-U-1600") : m_isolatedInstanceDir;

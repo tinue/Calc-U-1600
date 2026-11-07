@@ -78,7 +78,7 @@ void test_app_paths() {
     const std::string home = (root / "home").generic_string();
     MemorySettingsStore store;
     shared::Settings s(store);
-    shared::AppPaths paths(s, shared::HostDirs{home, (root / "bundle").generic_string()});
+    shared::AppPaths paths(s, shared::HostDirs{home, (root / "bundle").generic_string(), {}});
 
     CHECK(paths.instanceDir() == home + "/Calc-U-1600");
     CHECK(fs::is_directory(home + "/Calc-U-1600"));

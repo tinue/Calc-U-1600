@@ -17,7 +17,7 @@ namespace shared {
 
 namespace {
 
-ModuleBay::ModuleEntry entryFrom(const MemoryCardCatalogEntry& e) { return {e.moduleName, e.battery, e.rom}; }
+ModuleBay::ModuleEntry entryFrom(const MemoryCardCatalogEntry& e) { return {e.moduleName, e.description, e.battery, e.rom}; }
 
 } // namespace
 

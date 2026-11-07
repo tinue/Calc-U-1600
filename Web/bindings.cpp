@@ -49,6 +49,7 @@ namespace {
 
 constexpr const char* kHomeDir = "/persist";
 constexpr const char* kBundleDir = "/bundle";
+constexpr const char* kExamplesDir = "/presets";  // examples/bundled.yaml and its folders
 constexpr const char* kUploadDir = "/uploads";
 
 void post(val message) { val::global("postMessage")(message); }
@@ -225,7 +226,7 @@ job::Task<shared::OpResult> startupJob(shared::AppSession* app, int model, std::
 class WebController : public shared::AppSession::Platform {
 public:
     explicit WebController(val stored)
-        : m_store(stored), m_settings(m_store), m_paths(m_settings, shared::HostDirs{kHomeDir, kBundleDir}) {
+        : m_store(stored), m_settings(m_store), m_paths(m_settings, shared::HostDirs{kHomeDir, kBundleDir, kExamplesDir}) {
         m_app = std::make_unique<shared::AppSession>(m_settings, m_paths, *this);
         m_app->attachAudio(m_audio, [](const std::string& text) { log(text); });
         m_library = std::make_unique<shared::MediaLibrary>(*m_app);

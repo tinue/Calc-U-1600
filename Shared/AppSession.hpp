@@ -109,11 +109,12 @@ public:
     // ---- Operations (resumable; run one with start() or runNow()) ----
     // A preset file, end to end: parse, build the machine it targets, arm
     // it (the bays follow), boot, run its steps. `armOnly`: set up, not
-    // booted.
-    job::Task<OpResult> loadPresetJob(std::string path, bool armOnly = false);
+    // booted. `ref` is a path or a bundled "examples:..." one
+    // (AppPaths::resolvePresetRef()).
+    job::Task<OpResult> loadPresetJob(std::string ref, bool armOnly = false);
     // A model's default preset: refuses -- touching nothing -- one that
     // targets another model than `model`.
-    job::Task<OpResult> loadDefaultPresetJob(std::string path, Model model);
+    job::Task<OpResult> loadDefaultPresetJob(std::string ref, Model model);
     // Reset / Reset All, booted flat out to the prompt.
     job::Task<OpResult> resetJob(bool allReset);
     // A fresh default machine of `model`: A04 / new ROMs, no plotter, no

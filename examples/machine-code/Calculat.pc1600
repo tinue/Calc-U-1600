@@ -85,6 +85,8 @@
 # &D003/&D0AE).
 
 format-version: 1
+preset-name: CalCula
+description: CalCula, an HP-style RPN calculator (KiKiSoft)
 model: PC-1600
 
 slot-1: CE-1600M

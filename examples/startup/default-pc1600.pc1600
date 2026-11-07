@@ -5,6 +5,8 @@
 # as a RAM disk.
 
 format-version: 1
+preset-name: CE-1600P + modules
+description: PC-1600 with the CE-1600P, a floppy and two modules
 model: PC-1600
 
 plotter: CE-1600P

@@ -61,7 +61,8 @@ struct Fixture {
             for (const auto& f : fs::directory_iterator(dir))
                 if (f.is_regular_file()) fs::copy_file(f.path(), bundle / f.path().filename());
         paths = std::make_unique<shared::AppPaths>(
-            settings, shared::HostDirs{(root / "home").generic_string(), bundle.generic_string()});
+            settings, shared::HostDirs{(root / "home").generic_string(), bundle.generic_string(),
+                                       fs::absolute("examples").generic_string()});
         app = std::make_unique<AppSession>(settings, *paths, platform);
     }
     ~Fixture() {
@@ -364,6 +365,22 @@ void test_pick_model() {
     CHECK(!f.app->machine().ce1600pAttached());
 }
 
+// A bundled default preset by its "examples:" ref, as Settings stores it.
+void test_example_ref_default_preset() {
+    Fixture f;
+    f.settings.setStartupModelPreference("PC1500A");
+    f.app->start();
+    f.settings.setDefaultPresetPath(Model::PC1500A, "examples:startup/default-pc1500a.pc1500a");
+    const OpResult r = f.app->runNow(f.app->defaultPresetJob());
+    if (!r.ok) std::fprintf(stderr, "  (%s)\n", r.error.c_str());
+    CHECK(r.ok);
+    CHECK(f.app->machine().ce150Attached());
+    // Another model's default is refused by its name, not its path.
+    const OpResult wrong =
+        f.app->runNow(f.app->loadDefaultPresetJob("examples:startup/default-pc1600.pc1600", Model::PC1500A));
+    CHECK(!wrong.ok && wrong.error.find("\"CE-1600P + modules\"") != std::string::npos);
+}
+
 struct CountingSink : shared::AudioSink {
     std::size_t written = 0;
     bool start(int, int) override { return true; }
@@ -411,6 +428,7 @@ int run_shared_app_session_tests() {
     test_media_library();
     test_card_yaml_dump();
     test_pick_model();
+    test_example_ref_default_preset();
     std::printf("shared_app_session_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

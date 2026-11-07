@@ -4,6 +4,8 @@
 # bank window.
 
 format-version: 1
+preset-name: Maximum memory
+description: "CE-1600M and banked CE-1601M: as much memory as it gets"
 model: PC-1600
 
 slot-1: CE-1600M

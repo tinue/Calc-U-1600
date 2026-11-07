@@ -17,7 +17,14 @@ namespace shared {
 struct HostDirs {
     std::string home;
     std::string bundledResources;
+    // The bundled example presets (examples/bundled.yaml and its folders);
+    // empty = "<bundledResources>/examples".
+    std::string bundledExamples;
 };
+
+// A bundled preset as Settings stores it: "examples:basic/hanoi.pc1600",
+// relative to AppPaths::bundledExamplesDir(), so it survives the app moving.
+constexpr const char* kExamplePresetPrefix = "examples:";
 
 class AppPaths {
 public:
@@ -25,6 +32,10 @@ public:
 
     const std::string& bundledResourcesDir() const { return m_dirs.bundledResources; }
     const std::string& homeDir() const { return m_dirs.home; }
+    std::string bundledExamplesDir() const;
+
+    // A preset reference -- a path, or an "examples:" one -- as a path.
+    std::string resolvePresetRef(const std::string& ref) const;
 
     // Screenshot runs make a throwaway folder the default storage root, so
     // the user's saved cards/disks stay out of the pictures and untouched.
