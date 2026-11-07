@@ -149,6 +149,10 @@ struct Region {
 
 struct MemoryCardDefinition {
     std::string moduleName;
+    // `description:` -- one line for a picker's tooltip ("16 KB battery-backed
+    // RAM"); "" = none. Name & Save keeps it (the card is spliced into its
+    // source file).
+    std::string description;
     std::vector<CardHost> compatibleHosts;
     CardHost terminology = CardHost::PC1500;
     std::vector<Region> regions;
@@ -1356,8 +1360,8 @@ inline bool parseMemoryCardDefinition(const std::string& yamlText, MemoryCardDef
     }
     if (!requireFormatVersion(root, kCardFormatVersion, "card", error)) return false;
     if (!root.requireOnlyKeys(
-            {"format-version", "module-name", "compatible-hosts", "definition-terminology", "regions", "notes",
-             "battery", "template"},
+            {"format-version", "module-name", "description", "compatible-hosts", "definition-terminology", "regions",
+             "notes", "battery", "template"},
             error))
         return false;
 
@@ -1370,6 +1374,9 @@ inline bool parseMemoryCardDefinition(const std::string& yamlText, MemoryCardDef
         return false;
     }
     if (!nameN->asString(&out->moduleName, error)) return false;
+    if (const YamlNode* descriptionN = root.find("description")) {
+        if (!descriptionN->asString(&out->description, error)) return false;
+    }
 
     if (const YamlNode* batteryN = root.find("battery")) {
         if (!batteryN->asBool(&out->battery, error)) return false;

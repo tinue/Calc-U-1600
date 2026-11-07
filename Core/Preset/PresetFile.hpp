@@ -171,6 +171,12 @@ struct PresetFile {
     /// "PC-1500", "PC-1500A" or "PC-1600" (canonical spelling; the ROM
     /// suffix is split off into `romVariant`).
     std::string model;
+    // `preset-name:` -- the short name a picker shows once the preset is
+    // chosen ("Hanoi"); `description:` -- the one line lists, menus and
+    // tooltips show ("Towers of Hanoi, up to seven bricks"). Both optional;
+    // presetDisplayName() stands in for a missing name.
+    std::string presetName;
+    std::string description;
     /// The PC-1600 is a separate machine (Core/PC1600/), applied by
     /// Core/PC1600/PC1600PresetLoader.cpp, not applyPC1500Preset().
     bool isPC1600() const { return model == "PC-1600"; }
@@ -259,6 +265,22 @@ struct PresetFile {
 constexpr uint32_t kPresetFormatVersion = 1;
 
 bool parsePresetFile(const std::string& path, PresetFile* out, std::string* error);
+
+/// What a preset list shows of a preset, without loading it.
+struct PresetHeader {
+    std::string model;        // canonical, as PresetFile::model
+    std::string presetName;   // `preset-name:`, "" = none
+    std::string description;  // `description:`, "" = none
+};
+
+/// Reads only the top-level `format-version:`, `model:`, `preset-name:` and
+/// `description:` of the preset at `path` -- no files resolved, no steps
+/// parsed -- for a list of presets. False (with `error`) when the file can't
+/// be read, has no supported `format-version`, or no known `model:`.
+bool readPresetHeader(const std::string& path, PresetHeader* out, std::string* error);
+
+/// `presetName`, or the file name without its extension when there is none.
+std::string presetDisplayName(const std::string& presetName, const std::string& path);
 
 /// A path in a preset: `~` / `~/...` is the home directory, anything else
 /// relative is relative to the preset's directory `dir`.

@@ -31,6 +31,43 @@ bool parse(const std::string& yaml, PresetFile* out, std::string* err) {
     return parsePresetString(yaml, "/tmp/preset_tests_scratch.pc1500", out, err);
 }
 
+// `preset-name:` / `description:` -- plain inline values, quotes and a
+// trailing comment handled like any other key; each at most once.
+void test_preset_name_and_description() {
+    PresetFile p;
+    std::string err;
+    CHECK(parse("format-version: 1\nmodel: PC-1500A\npreset-name: Hanoi   # short\n"
+                "description: \"Towers of Hanoi: up to seven bricks\"\n",
+                &p, &err));
+    CHECK(p.presetName == "Hanoi");
+    CHECK(p.description == "Towers of Hanoi: up to seven bricks");
+    CHECK(!parse("format-version: 1\nmodel: PC-1500A\npreset-name: A\npreset-name: B\n", &p, &err));
+    CHECK(err.find("given twice") != std::string::npos);
+    CHECK(!parse("format-version: 1\nmodel: PC-1500A\ndescription:\n", &p, &err));
+}
+
+// readPresetHeader(): only the header keys, no steps or files resolved (a
+// missing `program:` file doesn't matter); a missing name falls back to the
+// file stem.
+void test_preset_header() {
+    const std::string path = "/tmp/preset_tests_header.pc1600";
+    std::ofstream(path) << "format-version: 1\nmodel: pc-1600:old\npreset-name: Globe\n"
+                           "description: Globe on the CE-1600P\nprogram:\n  file: missing.bas\n";
+    PresetHeader h;
+    std::string err;
+    CHECK(readPresetHeader(path, &h, &err));
+    CHECK(h.model == "PC-1600");
+    CHECK(h.presetName == "Globe" && h.description == "Globe on the CE-1600P");
+    CHECK(presetDisplayName(h.presetName, path) == "Globe");
+    CHECK(presetDisplayName("", path) == "preset_tests_header");
+
+    std::ofstream(path) << "model: PC-1600\n";
+    CHECK(!readPresetHeader(path, &h, &err));  // no format-version
+    std::ofstream(path) << "format-version: 1\nmodel: PC-1350\n";
+    CHECK(!readPresetHeader(path, &h, &err));
+    std::filesystem::remove(path);
+}
+
 // Returns the value of the Nth `type:` step across all sections, or "" .
 std::string nthType(const PresetFile& p, int n) {
     int seen = 0;
@@ -839,6 +876,8 @@ int run_preset_tests() {
     test_plotter_ce1600p_on_pc1500_is_rejected();
     test_plotter_ce150_on_pc1500_parses();
     test_plotter_absent_leaves_field_empty();
+    test_preset_name_and_description();
+    test_preset_header();
 
     std::printf("preset_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

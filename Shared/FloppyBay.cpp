@@ -62,6 +62,7 @@ void FloppyBay::classifySource(const std::string& resolvedPathOrEmpty, bool isTe
 void FloppyBay::selectDisk(const std::string& diskNameOrEmpty) {
     flushPendingPersist();
     m_diskName = diskNameOrEmpty;
+    m_description.clear();
     classifySource({}, false);
     m_persistPending = false;
 
@@ -87,6 +88,7 @@ bool FloppyBay::loadSelectedDisk(PC1600Machine* m1600) {
     }
     m1600->ce1600fLoadImage(disk.image.data(), disk.image.size());
     classifySource(path, disk.isTemplate);
+    m_description = disk.description;
     return true;
 }
 
@@ -100,6 +102,7 @@ void FloppyBay::syncFromPresetLoad(const std::string& labelOrEmpty, const std::s
     const bool isTemplate = !resolvedPathOrEmpty.empty() &&
                             readFloppyCatalogEntry(resolvedPathOrEmpty, &entry, nullptr) && entry.isTemplate;
     classifySource(labelOrEmpty.empty() ? std::string() : resolvedPathOrEmpty, isTemplate);
+    m_description = labelOrEmpty.empty() ? std::string() : entry.description;
     m_persistPending = false;
     if (PC1600Machine* m1600 = m_session.pc1600()) m_lastSeenRevision = m1600->ce1600fRevision();
 }
@@ -151,7 +154,7 @@ bool FloppyBay::saveDiskAs(const std::string& diskName, bool fromPreset, std::st
         *error = "A disk named " + inQuotes(name) + " already exists. Choose a different name.";
         return false;
     }
-    if (!atomicWriteFile(newPath, formatFloppyFile(name, m1600->ce1600fDiskImage(), asTemplate))) {
+    if (!atomicWriteFile(newPath, formatFloppyFile(name, m1600->ce1600fDiskImage(), asTemplate, m_description))) {
         *error = "Couldn't write " + inQuotes(newPath) + ".";
         return false;
     }
@@ -169,7 +172,7 @@ void FloppyBay::writeInstance() {
     if (m_instanceFilePath.empty()) return;
     PC1600Machine* m1600 = drive();
     if (!m1600) return;
-    atomicWriteFile(m_instanceFilePath, formatFloppyFile(m_diskName, m1600->ce1600fDiskImage()));
+    atomicWriteFile(m_instanceFilePath, formatFloppyFile(m_diskName, m1600->ce1600fDiskImage(), false, m_description));
 }
 
 void FloppyBay::tick(double nowSeconds) {

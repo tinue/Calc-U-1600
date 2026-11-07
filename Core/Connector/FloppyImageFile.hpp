@@ -46,6 +46,7 @@ constexpr long kFloppyFormatVersion = 1;
 
 struct FloppyFile {
     std::string diskName;
+    std::string description;  // `description:`, one line for a tooltip; "" = none
     // `template: true`: a read-only starting disk the app never writes to,
     // wherever the file lives; Name & Save copies it into an instance
     // (formatFloppyFile() writes the key only when asked to). No key = an instance,
@@ -59,9 +60,10 @@ namespace floppy_detail {
 constexpr const char* kFormatTag = "ce1600f-floppy";
 constexpr const char* kSideKeys[2] = {"a", "b"};
 
-// Checks `format`/`format-version` and reads `disk-name` and `template`
-// from a parsed file.
-inline bool readHeader(const YamlNode& root, std::string* diskName, bool* isTemplate, std::string* error) {
+// Checks `format`/`format-version` and reads `disk-name`, `description`
+// and `template` from a parsed file.
+inline bool readHeader(const YamlNode& root, std::string* diskName, std::string* description, bool* isTemplate,
+                       std::string* error) {
     if (!root.isMap()) {
         *error = "not a floppy-disk file (expected a YAML mapping)";
         return false;
@@ -73,7 +75,7 @@ inline bool readHeader(const YamlNode& root, std::string* diskName, bool* isTemp
         return false;
     }
     if (!requireFormatVersion(root, kFloppyFormatVersion, "floppy", error)) return false;
-    if (!root.requireOnlyKeys({"format", "format-version", "disk-name", "template", "saved", "sides"}, error))
+    if (!root.requireOnlyKeys({"format", "format-version", "disk-name", "description", "template", "saved", "sides"}, error))
         return false;
     const YamlNode* nameNode = root.find("disk-name");
     if (!nameNode) {
@@ -84,6 +86,10 @@ inline bool readHeader(const YamlNode& root, std::string* diskName, bool* isTemp
     if (diskName->empty()) {
         *error = "empty 'disk-name'";
         return false;
+    }
+    description->clear();
+    if (const YamlNode* descriptionNode = root.find("description")) {
+        if (!descriptionNode->asString(description, error)) return false;
     }
     *isTemplate = false;
     if (const YamlNode* templateNode = root.find("template")) {
@@ -98,15 +104,20 @@ inline bool readHeader(const YamlNode& root, std::string* diskName, bool* isTemp
 // version-1 file. `diskName` is written double-quoted verbatim (the YAML
 // reader does no escape processing), so it must not contain '"' or a newline.
 // `asTemplate` writes `template: true` (a preset's `saveas: template
-// floppy:...`); the app itself only ever writes instances.
+// floppy:...`); the app itself only ever writes instances. A non-empty
+// `description` is written too (single-quoted if it holds a '"').
 inline std::string formatFloppyFile(const std::string& diskName, const std::vector<uint8_t>& image,
-                                    bool asTemplate = false) {
+                                    bool asTemplate = false, const std::string& description = {}) {
     std::string out;
     out.reserve(4096);
     out += "# Calc-U-1600 CE-1600F floppy disk image\n";
     out += std::string("format: ") + floppy_detail::kFormatTag + "\n";
     out += "format-version: " + std::to_string(kFloppyFormatVersion) + "\n";
     out += "disk-name: \"" + diskName + "\"\n";
+    if (!description.empty()) {
+        const char quote = description.find('"') == std::string::npos ? '"' : '\'';
+        out += std::string("description: ") + quote + description + quote + "\n";
+    }
     if (asTemplate) out += "template: true\n";
     out += "saved: " + currentIso8601Timestamp() + "\n";
     out += "sides:\n";
@@ -128,7 +139,7 @@ inline std::string formatFloppyFile(const std::string& diskName, const std::vect
 inline bool parseFloppyFile(const std::string& text, FloppyFile* out, std::string* error) {
     YamlNode root;
     if (!parseYaml(text, &root, error)) return false;
-    if (!floppy_detail::readHeader(root, &out->diskName, &out->isTemplate, error)) return false;
+    if (!floppy_detail::readHeader(root, &out->diskName, &out->description, &out->isTemplate, error)) return false;
     const YamlNode* sides = root.find("sides");
     if (!sides || !sides->isMap()) {
         *error = "missing 'sides' mapping";
@@ -182,6 +193,7 @@ inline bool readFloppyFile(const std::string& path, FloppyFile* out, std::string
 
 struct FloppyCatalogEntry {
     std::string diskName;
+    std::string description;  // FloppyFile::description
     std::string filePath;
     bool isTemplate = false;  // FloppyFile::isTemplate
 };
@@ -194,7 +206,7 @@ inline bool parseCatalogEntry(const std::string& text, const std::string& path, 
                               std::string* err) {
     const size_t sides = text.find("\nsides:");
     YamlNode root;
-    if (!parseYaml(text.substr(0, sides), &root, err) || !readHeader(root, &out->diskName, &out->isTemplate, err))
+    if (!parseYaml(text.substr(0, sides), &root, err) || !readHeader(root, &out->diskName, &out->description, &out->isTemplate, err))
         return false;
     out->filePath = path;
     return true;

@@ -158,6 +158,14 @@ bool isProductName(const std::string& value, const char* name) {
     return a == b;
 }
 
+// `model:`'s name (ROM suffix already split off) in its canonical spelling,
+// "" when it isn't one of the three.
+std::string canonicalModel(const std::string& name) {
+    for (const char* model : {"PC-1500", "PC-1500A", "PC-1600"})
+        if (isProductName(name, model)) return model;
+    return "";
+}
+
 bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, const std::filesystem::path& presetDir,
                    std::vector<PresetStep>* out, std::string* error) {
     if (idx >= lines.size() || lines[idx].indent == 0) {
@@ -618,16 +626,10 @@ bool parseBusRoms(const YamlNode& block, const std::filesystem::path& presetDir,
     return true;
 }
 
-}  // namespace
-
-bool parsePresetFile(const std::string& path, PresetFile* out, std::string* error) {
-    std::vector<RawLine> lines;
-    if (!readLines(path, &lines, error)) return false;
-
-    std::filesystem::path presetDir = std::filesystem::path(path).parent_path();
-    if (presetDir.empty()) presetDir = ".";
-
-    // `format-version` first, before the key list can reject a newer key.
+// `format-version:` must be there and be kPresetFormatVersion -- checked
+// before any other key, so a newer preset says so instead of naming its
+// first unknown key.
+bool checkFormatVersion(const std::vector<RawLine>& lines, std::string* error) {
     bool hasFormatVersion = false;
     for (const RawLine& line : lines) {
         std::string key, value;
@@ -651,6 +653,19 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         *error = "'format-version' is required";
         return false;
     }
+    return true;
+}
+
+}  // namespace
+
+bool parsePresetFile(const std::string& path, PresetFile* out, std::string* error) {
+    std::vector<RawLine> lines;
+    if (!readLines(path, &lines, error)) return false;
+
+    std::filesystem::path presetDir = std::filesystem::path(path).parent_path();
+    if (presetDir.empty()) presetDir = ".";
+
+    if (!checkFormatVersion(lines, error)) return false;
 
     std::string modelRom;    // the ROM suffix of `model: NAME:ROM`, lower-cased ("" = none given)
     std::string plotter;     // "" / "ce1600p" / "ce150", ROM suffix stripped
@@ -687,7 +702,7 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         }
         idx++;
         const std::string at = "line " + std::to_string(line.lineNo) + ": ";
-        static const char* const kKeys[] = {"format-version", "model", "plotter", "interface", "floppy", "floppy-file", "host-drive",
+        static const char* const kKeys[] = {"format-version", "model", "preset-name", "description", "plotter", "interface", "floppy", "floppy-file", "host-drive",
                                             "slot-1", "slot-1-file", "slot-1-rom", "slot-2", "slot-2-file", "slot-2-rom", "program", "keys",
                                             "debug", "bus-rom"};
         if (std::find(std::begin(kKeys), std::end(kKeys), key) == std::end(kKeys)) {
@@ -705,6 +720,13 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         }
         if (key == "format-version") {
             // checked above
+        } else if (key == "preset-name" || key == "description") {
+            std::string& text = key == "preset-name" ? out->presetName : out->description;
+            if (!text.empty()) {
+                *error = at + "'" + key + ":' is given twice";
+                return false;
+            }
+            text = value;
         } else if (key == "model") {
             // `model: NAME[:ROM]` -- the ROM revision rides on the model
             // (`PC-1500:A01`, `PC-1600:old`); validated per model below.
@@ -713,10 +735,8 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
                 *error = at + "'model: " + value + "' has an empty ROM after ':'";
                 return false;
             }
-            if (isProductName(name, "PC-1500")) out->model = "PC-1500";
-            else if (isProductName(name, "PC-1500A")) out->model = "PC-1500A";
-            else if (isProductName(name, "PC-1600")) out->model = "PC-1600";
-            else {
+            out->model = canonicalModel(name);
+            if (out->model.empty()) {
                 *error = at + "unsupported model '" + name + "' (must be PC-1500, PC-1500A or PC-1600)";
                 return false;
             }
@@ -911,4 +931,29 @@ bool parsePresetFile(const std::string& path, PresetFile* out, std::string* erro
         }
     }
     return true;
+}
+
+bool readPresetHeader(const std::string& path, PresetHeader* out, std::string* error) {
+    std::vector<RawLine> lines;
+    if (!readLines(path, &lines, error)) return false;
+    if (!checkFormatVersion(lines, error)) return false;
+    *out = PresetHeader{};
+    for (const RawLine& line : lines) {
+        std::string key, value;
+        bool hasInline;
+        if (line.indent != 0 || !splitKeyValue(line.content, &key, &value, &hasInline)) continue;
+        if (key == "model") out->model = canonicalModel(value.substr(0, value.find(':')));
+        else if (key == "preset-name") out->presetName = value;
+        else if (key == "description") out->description = value;
+    }
+    if (out->model.empty()) {
+        *error = "no known 'model:'";
+        return false;
+    }
+    return true;
+}
+
+std::string presetDisplayName(const std::string& presetName, const std::string& path) {
+    if (!presetName.empty()) return presetName;
+    return std::filesystem::path(path).stem().string();
 }

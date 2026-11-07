@@ -25,6 +25,7 @@ constexpr const char* kCardFileSuffix = ".card.yaml";
 
 struct MemoryCardCatalogEntry {
     std::string moduleName;
+    std::string description;  // MemoryCardDefinition::description
     std::vector<CardHost> compatibleHosts;
     std::string filePath;
     bool battery = false;
@@ -47,7 +48,7 @@ inline bool parseEntry(const std::string& text, const std::string& path, MemoryC
                        std::string* err) {
     MemoryCardDefinition def;
     if (!parseMemoryCardDefinition(text, &def, err)) return false;
-    *out = {def.moduleName, def.compatibleHosts, path, def.battery, def.isRom(), def.isTemplate};
+    *out = {def.moduleName, def.description, def.compatibleHosts, path, def.battery, def.isRom(), def.isTemplate};
     return true;
 }
 

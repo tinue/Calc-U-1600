@@ -101,6 +101,7 @@ private:
     mutable DirectoryScanCache<FloppyCatalogEntry> m_instanceScan;
     Events m_events;
     std::string m_diskName;          // empty = no disk in the drive
+    std::string m_description;       // the loaded file's `description:`, kept by autosave and Name & Save
     bool m_isTemplate = false;       // the loaded file declares `template: true`
     std::string m_instanceFilePath;  // the loaded file if it is an instance, else empty
     bool m_persistPending = false;

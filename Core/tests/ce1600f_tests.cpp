@@ -421,6 +421,26 @@ void test_floppy_file_round_trips_both_sides() {
     CHECK(f.image == image);
 }
 
+// `description:` is written when set (single-quoted around a '"') and read
+// back, by the full parse and by the header-only catalogue entry.
+void test_floppy_file_description_round_trips() {
+    const std::vector<uint8_t> blank(CE1600FCard::kImageSize, 0);
+    for (const std::string d : {std::string("Two formatted sides"), std::string("The \"Progs\" disk")}) {
+        const std::string text = formatFloppyFile("D", blank, false, d);
+        FloppyFile f;
+        std::string err;
+        CHECK(parseFloppyFile(text, &f, &err));
+        CHECK(f.description == d);
+        FloppyCatalogEntry e;
+        CHECK(floppy_detail::parseCatalogEntry(text, "x", &e, &err));
+        CHECK(e.description == d);
+    }
+    FloppyFile f;
+    std::string err;
+    CHECK(parseFloppyFile(formatFloppyFile("D", blank), &f, &err));
+    CHECK(f.description.empty());
+}
+
 void test_floppy_file_blank_disk_is_compact() {
     const std::vector<uint8_t> blank(CE1600FCard::kImageSize, 0);
     const std::string text = formatFloppyFile("Empty", blank);
@@ -528,6 +548,7 @@ int run_ce1600f_tests() {
     test_seek_busies_the_drive_for_the_real_step_time();
     test_claims_only_its_own_ports();
     test_floppy_file_round_trips_both_sides();
+    test_floppy_file_description_round_trips();
     test_floppy_file_blank_disk_is_compact();
     test_floppy_file_rejects_missing_or_unknown_version();
     test_floppy_file_rejects_wrong_side_size();

@@ -288,6 +288,18 @@ void test_inline_definitions_parse() {
     }
 }
 
+void test_card_description() {
+    MemoryCardDefinition def;
+    std::string err;
+    CHECK(parseMemoryCardDefinition(kCe155Yaml, &def, &err));
+    CHECK(def.description.empty());
+    std::string y = kCe155Yaml;
+    y.insert(y.find("compatible-hosts"), "description: \"8 KB static RAM\"\n");
+    MemoryCardDefinition described;
+    CHECK(parseMemoryCardDefinition(y, &described, &err));
+    CHECK(described.description == "8 KB static RAM");
+}
+
 void test_ce155_definition_shape() {
     MemoryCardDefinition def;
     std::string err;
@@ -1683,6 +1695,7 @@ int run_memory_card_tests() {
     test_yaml_rejects_tabs_and_bad_indent();
 
     test_inline_definitions_parse();
+    test_card_description();
     test_ce155_definition_shape();
     test_reject_unknown_top_key();
     test_reject_missing_or_unknown_format_version();
