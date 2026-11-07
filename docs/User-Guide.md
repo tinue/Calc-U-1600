@@ -445,7 +445,9 @@ copy:
 
 From then on that copy **saves itself**: about half a second after a
 change, the file is updated. It appears in the picker below the separator,
-so you can plug it in again later, and presets can use it by name.
+so you can plug it in again later, and presets can use it by name. It
+keeps the template's one-line description, which the picker shows as a
+tooltip.
 
 ```mermaid
 stateDiagram-v2
@@ -621,7 +623,8 @@ A preset is a small script that builds a machine from a cold boot: which
 model, modules and peripherals, then what to type and which programs to
 load. The file extension matches the model: `.pc1500`, `.pc1500a` or
 `.pc1600`. Open one with **File ▸ Load Preset…**. The
-[examples/](../examples/) folder is full of them.
+[examples/](../examples/) folder is full of them; the ones the app comes
+with are under **File ▸ Examples**, by their description.
 
 A preset always runs in the same order:
 
@@ -652,6 +655,18 @@ which version of the preset format the file is written in; a newer app
 refuses a version it doesn't know rather than guess. `key:` presses one
 key by name. `type:` types a line,
 followed by ENTER.
+
+A preset can name itself, for the lists it shows up in:
+
+```yaml
+preset-name: Hanoi                                 # short, shown once it is chosen
+description: Towers of Hanoi, up to seven bricks   # shown in lists and menus
+```
+
+Both are optional. Without `preset-name:`, the file name stands in
+(`hanoi` for `hanoi.pc1600`). Keep the name short (18 characters at
+most) and different from the other presets of the same model, so a chosen
+preset reads in full and can't be mistaken for another one.
 
 ### 8.3 Adding hardware
 
@@ -768,7 +783,9 @@ itself, and the preset that uses them:
 
 **Settings ▸ Default presets** sets one preset per model. This is how a model
 gets its usual setup, because a model switch starts with no modules and no
-peripherals:
+peripherals. Each model's list offers the startup presets the app comes
+with, by description; once one is chosen, the list shows its short name.
+**Choose…** takes any preset file of your own:
 
 ```mermaid
 flowchart LR
@@ -800,6 +817,8 @@ This is what it leaves on the LCD:
 |---|---|
 | `format-version:` | `1` (required) |
 | `model:` | `PC-1500[:A01\|A03\|A04]`, `PC-1500A`, `PC-1600[:new\|old]` (required) |
+| `preset-name:` | the short name a list shows once the preset is chosen; default: the file name |
+| `description:` | one line for lists, menus and tooltips |
 | `plotter:` | `CE-150`, `CE-1600P[:new\|old]` (PC-1600) |
 | `interface:` | `CE-158` |
 | `floppy:` | disk name, optionally `,A` / `,B` (PC-1600 with the CE-1600P) |

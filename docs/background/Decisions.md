@@ -413,6 +413,29 @@ authentic speed for the span that matters.
   with a missing file fails before the machine starts, like every other
   parse error.
 
+### Names and descriptions (docs/background/plans/Media-Names-Plan.md)
+- **The name lives in the file.** A preset's `preset-name:` / `description:`,
+  a card's or disk's `description:`: no list kept beside the files says
+  what they are. `examples/bundled.yaml` only says *which* presets the app
+  ships and in which group, so it can't drift from them.
+- **Optional in a file, required in the bundle.** A user's preset without
+  them still loads (the file name stands in); every preset `bundled.yaml`
+  lists must have both, short names at most 18 characters and unique per
+  model within a list (`presetNameProblems()`, checked by the tests).
+- **Two lists, not one.** `defaults` are offered only in Settings ▸ Default
+  presets, `examples` only in File ▸ Examples: a startup setup isn't
+  something to load from a menu, and a demo isn't a startup setup.
+- **Settings stores a bundled preset as `examples:<file>`**, resolved
+  against the bundled examples folder, not as a path: the app bundle moves
+  with every update (and the web client has no stable path at all).
+- **Long in the list, short once chosen.** The pickers show descriptions
+  while open and the short name when closed (Qt `NamedComboBox`, web
+  `NamedCombo`), so a choice is never cut off. A native `<select>` can't
+  do that, hence the web's own combo.
+- **Cards and disks keep their name as the label.** `module-name:` /
+  `disk-name:` are short and unique already; the `description:` is only a
+  tooltip. Name & Save and the autosave keep it.
+
 ### Loading programs (docs/background/plans/Loader-Mode-Plan.md)
 - **The loaders follow MODE and `TITLE` and never change them.** Load
   BASIC, Load Machine Code, presets and the debugger read BMODE b6 and F1D5H

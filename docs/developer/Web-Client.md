@@ -35,7 +35,6 @@ flowchart LR
 | `src/*.jsx`, `src/*.js` | The client, compiled into one `dist/calc.js` (one global, `CalcU1600`) |
 | `calc.css` | Styles, all under `.calcu-client`, light and dark |
 | `app/` | The installable app: page, manifest, service worker, worker shim |
-| `presets.json` | The bundled example presets (each with its `examples/` folder) |
 | `build.sh`, `build.js` | The build (below) |
 | `tests/`, `run-tests.sh` | Playwright tests |
 | `vendor/` | React 18, ReactDOM, ReactDOMServer (tests), Babel (build only) |
@@ -52,7 +51,9 @@ Web/run-tests.sh    # Playwright: root, sub-path, offline (Chromium, WebKit), pr
 engine is the CMake target `calcu_web` in `build-wasm/`
 (`calcu1600-core.js` / `.wasm`): no `-pthread`, native wasm exceptions,
 `IDBFS`. `build.js` compiles the JSX with the vendored Babel (no npm
-runtime dependencies), copies the presets, writes `files.json`, stamps
+runtime dependencies), copies the presets that
+[`examples/bundled.yaml`](../../examples/bundled.yaml) lists (each with its
+`examples/` folder, and the list itself) into `presets/`, writes `files.json`, stamps
 the service worker's precache list and writes `MANIFEST.json`. CI's `web`
 job builds, tests and uploads `Calc-U-1600-web-<version>.zip`; a release
 attaches it as `Calc-U-1600-web.zip`.

@@ -7,6 +7,12 @@ program; open one with **File ▸ Load Preset…**. A `.bas` file can also be
 loaded on its own with **File ▸ Load BASIC Program…**. See
 `docs/User-Guide.md` for the full preset format.
 
+Each preset names itself with `preset-name:` (short) and `description:`
+(one line). [bundled.yaml](bundled.yaml) lists the presets the app and the
+web client come with: `defaults` for **Settings ▸ Default presets**,
+`examples` for **File ▸ Examples**. A preset in either list must have both
+keys (the test suite checks it).
+
 ## plotter/ — CE-150 and CE-1600P
 
 | File | Machine | What it does |
@@ -65,8 +71,8 @@ loaded on its own with **File ▸ Load BASIC Program…**. See
 
 ## startup/ — default presets
 
-One default preset per model. Set them under **Settings** to have them
-applied whenever that model is selected.
+One default preset per model, offered under **Settings ▸ Default presets**
+(bundled.yaml's `defaults`), applied whenever that model is selected.
 
 ## setup/ — preparation scripts
 

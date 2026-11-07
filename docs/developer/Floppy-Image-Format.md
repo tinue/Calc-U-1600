@@ -44,6 +44,7 @@ Keys may appear in any order. Unknown keys are an error at every level.
 | `format` | yes | `ce1600f-floppy` |
 | `format-version` | yes | integer; this document is version **1** |
 | `disk-name` | yes | non-empty string. Writers double-quote it; it therefore must not contain `"` or a newline |
+| `description` | no | one line about the disk, the picker's tooltip for it. Written double-quoted, or single-quoted when it holds a `"`. Name & Save and the autosave keep it |
 | `template` | no | `true` = read-only template (see §2); absent or `false` = instance. Written only by a preset's `saveas: template …`; Name & Save never writes it |
 | `saved` | no | ISO-8601 UTC timestamp `YYYY-MM-DDTHH:MM:SSZ` of the last write (informational) |
 | `sides` | yes | mapping with exactly the keys `a` and `b` |
@@ -79,7 +80,8 @@ A reader accepts any valid `addressed-hex`, but writers **should** emit the cano
 so that files diff cleanly whichever tool saved them:
 
 - the first line is `# Calc-U-1600 CE-1600F floppy disk image`, then `format`,
-  `format-version`, `disk-name`, `template` (only when true), `saved`, `sides`
+  `format-version`, `disk-name`, `description` (only when set), `template` (only when
+  true), `saved`, `sides`
   in that order;
 - 2-space indent per level (`  a:`, `    encoding:`, `      $0000: …`), `\n` line endings;
 - rows of 16 bytes, uppercase hex, `$` plus a 4-digit uppercase address, one space between
@@ -96,6 +98,7 @@ so that files diff cleanly whichever tool saved them:
 format: ce1600f-floppy
 format-version: 1
 disk-name: "Formatted"
+description: "Formatted, both sides empty"
 template: true
 saved: 2026-09-19T10:17:46Z
 sides:

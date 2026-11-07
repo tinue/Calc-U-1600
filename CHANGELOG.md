@@ -4,6 +4,15 @@
 
 ### New
 
+- **Presets, cards and disks name themselves.** A preset can carry
+  `preset-name:` (short, shown once chosen) and `description:` (the line
+  lists and menus show); cards and disks a `description:`, shown as the
+  picker's tooltip and kept by Name & Save. **File ▸ Examples** loads the
+  bundled example presets, and **Settings ▸ Default presets** offers the
+  bundled startup presets by description and shows the chosen one by its
+  short name -- in the desktop app and in the browser. Which presets are
+  bundled is `examples/bundled.yaml`.
+
 - **Fast-load cassette WAVs.** File ▸ Load BASIC Program…, Load Machine
   Code… and a drop open a WAV of a PC-1500 (CE-150) or PC-1600 (CE-1600P)
   tape and write the file on it straight into memory, as for a `.bbin` or

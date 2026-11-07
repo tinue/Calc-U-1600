@@ -55,6 +55,7 @@ WebAssembly check.
 | `AppSession` | The whole emulator behind one frontend: owns `MachineSession`, the bays, the `Pacer` and the `AudioPump`, wires them, runs operations, `tick()` |
 | `MachineSession` | The live PC-1500/1500A/1600: model and ROM switches, host keys (`hostKeyDown`) and paste queue, display, audio, memory-module slots, peripherals, tape, host drive, trace, inspector, serial links |
 | `ModuleBay`, `FloppyBay`, `TapeBay` | The control bar's slots, disk and tape: catalogues, attach, Name & Save, preset `saveas:`, debounced autosave |
+| `PresetCatalog` | The bundled presets of `examples/bundled.yaml` (`defaults`, `examples`) and any preset's short name and description; `examples:` refs resolve through `AppPaths` |
 | `Pacer`, `AudioPump` | Frame ticks → emulated time (absolute deadline, turbo); buzzer PCM → an `AudioSink` |
 | `Settings`, `AppPaths`, `Utf8Path` | Every settings key with its default; the save/tapes/bundle folders and by-name save paths |
 | `HostKeyMap`, `KeyLayout/`, `LcdLayout`, `PlotterPaper`, `Rgb` | Host keys → calculator keys; key hit-regions and the faceplate fit; LCD geometry, colours and status indicators (`lcd::indicators()`); plotter-paper geometry |

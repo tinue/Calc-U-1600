@@ -44,6 +44,7 @@ with a status note on how the implementation differed. New plans go into
 | [Shared layer for a WebAssembly GUI](plans/Shared-Layer-Plan.md) | 2026-11-06 | Implemented (phases 0–5); web GUI, DAP move open |
 | [Shared layer follow-up: frontend-neutral seams](plans/Shared-Layer-Followup-Plan.md) | 2026-11-06 | Implemented |
 | [Web GUI: WebAssembly frontend, embed + PWA](plans/Web-GUI-Plan.md) | 2026-11-06 | Implemented; calc-u.org page, user docs and iPad check in TODO.md |
+| [Names and descriptions: presets, cards, disks](plans/Media-Names-Plan.md) | 2026-11-07 | Implemented |
 
 ## Handoffs
 
