@@ -630,7 +630,7 @@ load. The file extension matches the model: `.pc1500`, `.pc1500a` or
 `.pc1600`. Open one with **File ▸ Load Preset…**. The
 [examples/](../examples/) folder is full of them; the ones the app comes
 with are under **File ▸ Examples**, grouped (BASIC, Plotter, Machine
-code, Memory) and listed by their description.
+code) and listed by their description.
 
 A preset always runs in the same order:
 

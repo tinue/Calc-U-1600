@@ -49,7 +49,7 @@ void test_bundled_lists() {
         defaults.insert(defaults.end(), forModel.begin(), forModel.end());
     }
     const std::vector<PresetEntry> examples = f.catalog.examples();
-    CHECK(examples.size() > 10);
+    CHECK(!examples.empty());
     CHECK(defaults.size() + examples.size() == all.size());
 
     auto problems = shared::presetNameProblems(defaults);
