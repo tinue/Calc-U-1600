@@ -69,6 +69,20 @@ val strings(const std::vector<std::string>& items) {
     return array(items, [](const std::string& s) { return val(s); });
 }
 
+// A picker's name groups plus `descriptions` (name -> the entry's
+// `description:`) for its tooltips -- the slot and floppy pickers.
+template <typename Entry>
+void setPickerGroups(val& v, std::initializer_list<std::pair<const char*, const std::vector<Entry>*>> groups,
+                     std::string Entry::*name) {
+    val descriptions = obj();
+    for (const auto& [key, entries] : groups) {
+        v.set(key, array(*entries, [name](const Entry& e) { return val(e.*name); }));
+        for (const Entry& e : *entries)
+            if (!e.description.empty()) descriptions.set(e.*name, e.description);
+    }
+    v.set("descriptions", descriptions);
+}
+
 val bytesToJS(const std::vector<std::uint8_t>& bytes) {
     val out = val::global("Uint8Array").new_(bytes.size());
     out.call<void>("set", val(typed_memory_view(bytes.size(), bytes.data())));
@@ -219,9 +233,9 @@ private:
 // ── The controller ───────────────────────────────────────────────────────
 
 // WebController::start()'s operation.
-job::Task<shared::OpResult> startupJob(shared::AppSession* app, int model, std::string presetPath) {
+job::Task<shared::OpResult> startupJob(shared::AppSession* app, int model, std::string presetRef) {
     if (model >= 0 && model <= 2) co_await app->selectModelJob(static_cast<shared::Model>(model));
-    if (!presetPath.empty()) co_return co_await app->loadPresetJob(presetPath);
+    if (!presetRef.empty()) co_return co_await app->loadPresetJob(presetRef);
     co_return co_await app->defaultPresetJob();
 }
 
@@ -537,14 +551,7 @@ public:
         for (shared::Model m : {shared::Model::PC1500, shared::Model::PC1500A, shared::Model::PC1600}) {
             const std::string current = m_settings.defaultPresetPath(m);
             presets.set(modelName(m), current);
-            std::vector<shared::PresetEntry> entries = catalog.defaults(m);
-            const bool listed = current.empty() || std::any_of(entries.begin(), entries.end(), [&](const auto& e) {
-                return e.ref == current;
-            });
-            if (!listed) {
-                if (auto e = catalog.describe(current)) entries.push_back(*e);
-            }
-            choices.set(modelName(m), array(entries, presetEntry));
+            choices.set(modelName(m), array(catalog.defaultChoices(m, current), presetEntry));
         }
         out.set("defaultPresets", presets);
         out.set("presetChoices", choices);
@@ -560,6 +567,7 @@ public:
         v.set("model", modelName(e.model));
         v.set("name", e.name);
         v.set("description", e.description);
+        v.set("label", e.label());
         return v;
     }
     void setStartupModel(const std::string& pref) { m_settings.setStartupModelPreference(pref); }
@@ -728,19 +736,9 @@ private:
         val slots = val::array();
         for (int slot = 1; slot <= s.slotCount; ++slot) {
             const auto lists = m_app->modules().moduleLists(shared::ModuleBay::hostForModel(slot, s.model));
-            const auto names = [](const std::vector<shared::ModuleBay::ModuleEntry>& entries) {
-                return array(entries, [](const shared::ModuleBay::ModuleEntry& e) { return val(e.moduleName); });
-            };
-            // Each card's `description:`, by name, for the picker's tooltips.
-            val descriptions = obj();
-            for (const auto* entries : {&lists.templates, &lists.instances, &lists.roms})
-                for (const auto& e : *entries)
-                    if (!e.description.empty()) descriptions.set(e.moduleName, e.description);
             val v = obj();
-            v.set("templates", names(lists.templates));
-            v.set("instances", names(lists.instances));
-            v.set("roms", names(lists.roms));
-            v.set("descriptions", descriptions);
+            setPickerGroups(v, {{"templates", &lists.templates}, {"instances", &lists.instances}, {"roms", &lists.roms}},
+                            &shared::ModuleBay::ModuleEntry::moduleName);
             v.set("selected", m_app->modules().selectedModuleName(slot));
             v.set("canSave", m_app->modules().canNameAndSave(slot));
             slots.set(slot - 1, v);
@@ -750,15 +748,8 @@ private:
         if (s.floppyShown) {
             const auto disks = m_app->floppy().diskLists();
             val v = obj();
-            v.set("templates", strings(disks.templates));
-            v.set("instances", strings(disks.instances));
-            val descriptions = obj();
-            for (const auto* names : {&disks.templates, &disks.instances})
-                for (const std::string& name : *names) {
-                    const std::string d = m_app->floppy().diskDescription(name);
-                    if (!d.empty()) descriptions.set(name, d);
-                }
-            v.set("descriptions", descriptions);
+            setPickerGroups(v, {{"templates", &disks.templates}, {"instances", &disks.instances}},
+                            &shared::FloppyBay::DiskEntry::diskName);
             v.set("selected", m_app->floppy().selectedDiskName());
             v.set("side", m_app->floppy().side());
             v.set("canSave", m_app->floppy().canNameAndSave());

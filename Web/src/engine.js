@@ -174,7 +174,7 @@ function createEngine({ workerUrl, model, preset }) {
     type: "init",
     settings: storedSettings(),
     model: Number.isInteger(Number(model)) && model !== null && model !== "" ? Number(model) : -1,
-    preset: preset ? `/presets/${preset}` : "",
+    preset: preset ? `examples:${preset}` : "",
   });
 
   const onVisibility = () => post({ type: document.hidden ? "pause" : "resume" });

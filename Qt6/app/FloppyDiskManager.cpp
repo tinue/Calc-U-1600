@@ -2,10 +2,10 @@
 
 namespace {
 
-QVector<FloppyDiskManager::DiskEntry> toQt(const shared::FloppyBay& bay, const std::vector<std::string>& names) {
+QVector<FloppyDiskManager::DiskEntry> toQt(const std::vector<shared::FloppyBay::DiskEntry>& entries) {
     QVector<FloppyDiskManager::DiskEntry> out;
-    for (const std::string& n : names)
-        out.push_back({QString::fromStdString(n), QString::fromStdString(bay.diskDescription(n))});
+    for (const auto& e : entries)
+        out.push_back({QString::fromStdString(e.diskName), QString::fromStdString(e.description)});
     return out;
 }
 
@@ -20,7 +20,7 @@ FloppyDiskManager::FloppyDiskManager(MachineController* controller, QObject* par
 
 FloppyDiskManager::DiskLists FloppyDiskManager::diskLists() const {
     const shared::FloppyBay::DiskLists lists = m_bay->diskLists();
-    return {toQt(*m_bay, lists.templates), toQt(*m_bay, lists.instances)};
+    return {toQt(lists.templates), toQt(lists.instances)};
 }
 
 bool FloppyDiskManager::nameAndSave(const QString& diskName, QString* error) {

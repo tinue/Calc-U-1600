@@ -10,7 +10,6 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
-#include <QFileInfo>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QLabel>
@@ -22,7 +21,6 @@
 
 #include <algorithm>
 #include <functional>
-#include <optional>
 #include <vector>
 
 namespace {
@@ -78,18 +76,15 @@ QPushButton* makeRowButton(const QString& text, QWidget* parent) {
 }
 
 // Everything one path row needs. `display` returns the effective path to
-// show (empty = show `placeholder` instead); `isOverridden` says whether a
-// user value is stored, which is what enables the reset/clear button.
+// show; `isOverridden` says whether a user value is stored, which is what
+// enables the reset button.
 // `pick` runs the picker dialog and returns the chosen path (empty =
 // cancelled); `set` writes through to AppSettings (empty = back to
 // default); `onChanged` runs after either button, for a row that needs to
 // do more than refresh itself (e.g. relinking a live serial port).
 struct PathRowSpec {
     QString label;
-    QString pickText = SettingsDialog::tr("Change…");
-    QString resetText = SettingsDialog::tr("Reset");
     QString resetToolTip = SettingsDialog::tr("Revert to the default location");
-    QString placeholder;
     std::function<QString()> pick;
     std::function<QString()> display;
     std::function<bool()> isOverridden;
@@ -104,11 +99,10 @@ void addPathRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids& secti
 
     auto* field = new QLineEdit(parent);
     field->setReadOnly(true);
-    field->setPlaceholderText(spec.placeholder);
     grid->addWidget(field, row, kValueColumn);
 
-    auto* pickButton = makeRowButton(spec.pickText, parent);
-    auto* resetButton = makeRowButton(spec.resetText, parent);
+    auto* pickButton = makeRowButton(SettingsDialog::tr("Change…"), parent);
+    auto* resetButton = makeRowButton(SettingsDialog::tr("Reset"), parent);
     resetButton->setToolTip(spec.resetToolTip);
     grid->addWidget(pickButton, row, kPickColumn);
     grid->addWidget(resetButton, row, kResetColumn);
@@ -187,23 +181,13 @@ void addDefaultPresetRow(QGridLayout* grid, int row, QWidget* parent, SectionGri
         combo->addNamedItem(SettingsDialog::tr("(none)"), SettingsDialog::tr("(none)"), QString(),
                             SettingsDialog::tr("Don't load a preset for this model"));
         const QString current = AppSettings::defaultPresetPath(model);
-        bool listed = current.isEmpty();
-        const auto add = [combo](const shared::PresetEntry& e, const QString& tip) {
-            const QString name = QString::fromStdString(e.name);
-            const QString description = QString::fromStdString(e.description);
-            combo->addNamedItem(description.isEmpty() ? name : description, name, QString::fromStdString(e.ref),
-                                tip);
-        };
-        for (const shared::PresetEntry& e : catalog.defaults(model)) {
-            add(e, QString::fromStdString(e.description));
-            listed = listed || QString::fromStdString(e.ref) == current;
-        }
-        if (!listed) {
-            // The user's own file: its name and description, the path on hover.
-            const std::optional<shared::PresetEntry> e = catalog.describe(current.toStdString());
-            const QString shown = AppPaths::displayPath(current);
-            if (e) add(*e, shown);
-            else combo->addNamedItem(shown, QFileInfo(current).completeBaseName(), current, shown);
+        for (const shared::PresetEntry& e : catalog.defaultChoices(model, current.toStdString())) {
+            const QString ref = QString::fromStdString(e.ref);
+            // A bundled one shows its description on hover, the user's own file its path.
+            const QString tip = ref.startsWith(QLatin1String(shared::kExamplePresetPrefix))
+                                    ? QString::fromStdString(e.description)
+                                    : AppPaths::displayPath(ref);
+            combo->addNamedItem(QString::fromStdString(e.label()), QString::fromStdString(e.name), ref, tip);
         }
         combo->setCurrentIndex(std::max(0, combo->findData(current)));
         combo->setToolTip(combo->itemData(combo->currentIndex(), Qt::ToolTipRole).toString());

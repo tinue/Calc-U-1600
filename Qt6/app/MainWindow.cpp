@@ -850,7 +850,7 @@ void MainWindow::buildMenuBar() {
         const QString group = QString::fromStdString(e.group);
         QMenu*& groupMenu = groupMenus[group];
         if (!groupMenu) groupMenu = examplesMenu->addMenu(group);
-        const QString label = QString::fromStdString(e.description.empty() ? e.name : e.description);
+        const QString label = QString::fromStdString(e.label());
         const QString ref = QString::fromStdString(e.ref);
         connect(groupMenu->addAction(label), &QAction::triggered, this, [this, ref] { m_sync->loadPreset(ref); });
     }

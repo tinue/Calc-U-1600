@@ -33,9 +33,13 @@ public:
     struct Events {
         std::function<void(const std::string&)> error;
     };
+    struct DiskEntry {
+        std::string diskName;
+        std::string description;  // the disk's `description:`, for a tooltip; "" = none
+    };
     struct DiskLists {
-        std::vector<std::string> templates;  // `template: true`: every bundled disk + user templates
-        std::vector<std::string> instances;  // the save folder's other disks (bundled names left out)
+        std::vector<DiskEntry> templates;  // `template: true`: every bundled disk + user templates
+        std::vector<DiskEntry> instances;  // the save folder's other disks (bundled names left out)
     };
 
     static constexpr double kPersistDebounceSeconds = 0.5;
@@ -43,8 +47,6 @@ public:
     FloppyBay(MachineSession& session, const AppPaths& paths, Events events);
 
     DiskLists diskLists() const;
-    // A listed disk's `description:` (bundled first, as lookup), "" = none.
-    std::string diskDescription(const std::string& diskName) const;
     // The bundled / save-folder disks, re-parsed only when a file changed.
     const std::vector<FloppyCatalogEntry>& bundledDisks() const;
     const std::vector<FloppyCatalogEntry>& instanceDisks() const;

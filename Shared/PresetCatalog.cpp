@@ -1,5 +1,6 @@
 #include "Shared/PresetCatalog.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 
@@ -55,18 +56,21 @@ bool readList(const std::string& path, const char* list, std::vector<ListedFile>
 }
 
 std::vector<PresetEntry> listed(const AppPaths& paths, const char* list, std::string* error) {
+    const auto report = [error](const std::string& line) {
+        if (error) *error += (error->empty() ? "" : "\n") + line;
+    };
     std::vector<ListedFile> files;
     std::string err;
     if (!readList(joinPath(paths.bundledExamplesDir(), "bundled.yaml"), list, &files, &err)) {
-        if (error) *error = err;
+        report(err);
         return {};
     }
+    const PresetCatalog catalog(paths);
     std::vector<PresetEntry> out;
     for (const ListedFile& f : files) {
-        PresetCatalog catalog(paths);
         std::optional<PresetEntry> e = catalog.describe(kExamplePresetPrefix + f.file);
         if (!e) {
-            if (error) *error += (error->empty() ? "" : "\n") + f.file + ": can't be read as a preset";
+            report(f.file + ": can't be read as a preset");
             continue;
         }
         e->group = f.group;
@@ -86,7 +90,6 @@ std::optional<PresetEntry> PresetCatalog::describe(const std::string& ref) const
     if (!model) return std::nullopt;
     PresetEntry e;
     e.ref = ref;
-    e.path = path;
     e.model = *model;
     e.name = presetDisplayName(header.presetName, path);
     e.description = header.description;
@@ -101,13 +104,27 @@ std::vector<PresetEntry> PresetCatalog::defaults(Model model) const {
     return out;
 }
 
+std::vector<PresetEntry> PresetCatalog::defaultChoices(Model model, const std::string& current) const {
+    std::vector<PresetEntry> out = defaults(model);
+    if (current.empty() || std::any_of(out.begin(), out.end(), [&](const PresetEntry& e) { return e.ref == current; }))
+        return out;
+    if (std::optional<PresetEntry> e = describe(current)) {
+        out.push_back(std::move(*e));
+    } else {
+        PresetEntry stray;
+        stray.ref = current;
+        stray.model = model;
+        stray.name = presetDisplayName({}, m_paths.resolvePresetRef(current));
+        out.push_back(std::move(stray));
+    }
+    return out;
+}
+
 std::vector<PresetEntry> PresetCatalog::examples() const { return listed(m_paths, "examples", nullptr); }
 
 std::vector<PresetEntry> PresetCatalog::all(std::string* error) const {
     std::vector<PresetEntry> out = listed(m_paths, "defaults", error);
-    std::string more;
-    for (PresetEntry& e : listed(m_paths, "examples", error ? &more : nullptr)) out.push_back(std::move(e));
-    if (error && !more.empty()) *error += (error->empty() ? "" : "\n") + more;
+    for (PresetEntry& e : listed(m_paths, "examples", error)) out.push_back(std::move(e));
     return out;
 }
 

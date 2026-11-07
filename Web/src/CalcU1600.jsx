@@ -244,7 +244,7 @@ function CalcU1600(props) {
         group = p.group;
         items.push({ heading: group });
       }
-      items.push({ label: p.description || p.name, onClick: () => engine.call("loadPreset", p.ref) });
+      items.push({ label: p.label, onClick: () => engine.call("loadPreset", p.ref) });
     }
     items.push({ separator: true });
     items.push({ label: "Upload Preset…", onClick: async () => loadPresetFiles(await pickFiles(".pc1500,.pc1500a,.pc1600,.bas,.bbin,.bin,.wav,.yaml", true)) });

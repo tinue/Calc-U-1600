@@ -72,7 +72,7 @@ void test_describe() {
     Fixture f;
     const auto hanoi = f.catalog.describe("examples:basic/hanoi.pc1600");
     CHECK(hanoi && hanoi->name == "Hanoi" && hanoi->model == Model::PC1600 && !hanoi->description.empty());
-    CHECK(hanoi && hanoi->path == "examples/basic/hanoi.pc1600");
+    CHECK(f.paths.resolvePresetRef("examples:basic/hanoi.pc1600") == "examples/basic/hanoi.pc1600");
     CHECK(f.paths.resolvePresetRef("/x/y.pc1600") == "/x/y.pc1600");
 
     // A preset without a name of its own: the file name stands in.
@@ -82,6 +82,18 @@ void test_describe() {
     CHECK(e && e->name == "calcu-catalog-plain" && !e->hasName && e->description.empty());
     fs::remove(plain);
     CHECK(!f.catalog.describe("examples:no/such.pc1600"));
+}
+
+void test_default_choices() {
+    Fixture f;
+    const auto defaults = f.catalog.defaults(Model::PC1600);
+    CHECK(!defaults.empty());
+    CHECK(f.catalog.defaultChoices(Model::PC1600, "").size() == defaults.size());
+    CHECK(f.catalog.defaultChoices(Model::PC1600, defaults.front().ref).size() == defaults.size());
+    // The user's own file, unreadable here: listed by its file name.
+    const auto choices = f.catalog.defaultChoices(Model::PC1600, "/no/such/mine.pc1600");
+    CHECK(choices.size() == defaults.size() + 1);
+    CHECK(choices.back().ref == "/no/such/mine.pc1600" && choices.back().label() == "mine");
 }
 
 void test_name_problems() {
@@ -108,6 +120,7 @@ void test_name_problems() {
 int run_shared_preset_catalog_tests() {
     test_bundled_lists();
     test_describe();
+    test_default_choices();
     test_name_problems();
     std::printf("shared_preset_catalog_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

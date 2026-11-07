@@ -32,10 +32,19 @@ bool contains(const std::vector<shared::ModuleBay::ModuleEntry>& v, const std::s
     return false;
 }
 
-bool contains(const std::vector<std::string>& v, const std::string& name) {
+bool contains(const std::vector<shared::FloppyBay::DiskEntry>& v, const std::string& name) {
     for (const auto& e : v)
-        if (e == name) return true;
+        if (e.diskName == name) return true;
     return false;
+}
+
+// A listed disk's `description:`, "" if it isn't listed.
+std::string diskDescription(const shared::FloppyBay& bay, const std::string& name) {
+    const auto lists = bay.diskLists();
+    for (const auto* entries : {&lists.templates, &lists.instances})
+        for (const auto& e : *entries)
+            if (e.diskName == name) return e.description;
+    return {};
 }
 
 struct Listener : shared::MachineSession::Listener {
@@ -134,7 +143,7 @@ void test_floppy_bay() {
     Fixture f;
     const auto lists = f.floppy->diskLists();
     CHECK(contains(lists.templates, "Formatted"));
-    CHECK(f.floppy->diskDescription("Formatted") == "Formatted, both sides empty");
+    CHECK(diskDescription(*f.floppy, "Formatted") == "Formatted, both sides empty");
     f.session->switchModel(Model::PC1600);
     f.floppy->selectDisk("Formatted");  // no drive yet: selection only
     CHECK(f.floppy->selectedDiskName() == "Formatted");
@@ -150,7 +159,7 @@ void test_floppy_bay() {
     const std::string saved = f.paths->floppyInstancePathFor("Work");
     CHECK(fs::exists(saved));
     CHECK(!f.floppy->canNameAndSave());
-    CHECK(f.floppy->diskDescription("Work") == "Formatted, both sides empty");  // kept from the template
+    CHECK(diskDescription(*f.floppy, "Work") == "Formatted, both sides empty");  // kept from the template
 
     // The drive writes: autosaved once the debounce has passed, not before.
     fs::remove(saved);
@@ -162,7 +171,7 @@ void test_floppy_bay() {
     CHECK(!fs::exists(saved));
     f.floppy->tick(10.6);
     CHECK(fs::exists(saved));
-    CHECK(f.floppy->diskDescription("Work") == "Formatted, both sides empty");  // and by the autosave
+    CHECK(diskDescription(*f.floppy, "Work") == "Formatted, both sides empty");  // and by the autosave
 
     // A CE-150 taking the bus drops the CE-1600P: the disk is saved first,
     // without waiting for the debounce.

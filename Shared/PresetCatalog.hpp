@@ -20,11 +20,13 @@ class AppPaths;
 struct PresetEntry {
     std::string group;        // `examples` only; "" in `defaults`
     std::string ref;          // what Settings stores and loadPresetJob() takes ("examples:...", or a path)
-    std::string path;         // the file
     Model model = Model::PC1600;
     std::string name;         // `preset-name:`, else the file name without extension
     std::string description;  // `description:`, else ""
     bool hasName = false;     // the file has a `preset-name:` of its own
+
+    // What a list or menu shows: the description, else the name.
+    const std::string& label() const { return description.empty() ? name : description; }
 };
 
 class PresetCatalog {
@@ -33,6 +35,10 @@ public:
 
     // Settings ▸ Default presets: the bundled ones for `model`.
     std::vector<PresetEntry> defaults(Model model) const;
+    // The Settings pick list: defaults(model), plus `current` (the stored
+    // setting) when it is set and not one of them -- described, or, if it
+    // can't be read, by its file name alone.
+    std::vector<PresetEntry> defaultChoices(Model model, const std::string& current) const;
     // File ▸ Examples, in list order.
     std::vector<PresetEntry> examples() const;
     // Both lists, unfiltered -- for the bundle check.

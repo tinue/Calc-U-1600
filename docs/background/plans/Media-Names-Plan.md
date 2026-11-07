@@ -2,7 +2,7 @@
 
 > **Status (2026-11-07): implemented** (4e2c58a … this commit). Differences from this plan:
 > - **Core:** `preset-name:` / `description:` values go through the parser's usual quote and comment handling (`splitKeyValue`), so no special quote rule was needed for Decisions.md. The headless `saveas: floppy:` (Core/Preset/PresetMedia.hpp) writes no description: it has only the image, not the disk's source file.
-> - **Shared:** `FloppyBay::DiskLists` stays a list of names; `FloppyBay::diskDescription(name)` gives the tooltip. Card instances keep the description for free (a save is spliced into the source file). `HostDirs` got a third field, `bundledExamples` (default `<bundle>/examples`; the web's is `/presets`).
+> - **Shared:** `FloppyBay::DiskLists` entries carry the disk's description (like `ModuleBay::ModuleEntry`). Card instances keep the description for free (a save is spliced into the source file). `HostDirs` got a third field, `bundledExamples` (default `<bundle>/examples`; the web's is `/presets`).
 > - **Web:** the menu is still **File ▸ Load Preset ▸** (examples, then Upload Preset…), not "Examples"; the engine gives `presetExamples()` and `settingsState().presetChoices`. `?preset=` still takes a path under `presets/`.
 > - **Settings (both):** the Qt row lost its Clear button; "(none)" / "None" is the first item of the list.
 

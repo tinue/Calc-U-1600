@@ -18,10 +18,6 @@ namespace {
 
 std::vector<FloppyCatalogEntry> scanDisks(const std::string& dir) { return scanFloppyDirectory(dir, nullptr); }
 
-bool contains(const std::vector<std::string>& names, const std::string& name) {
-    return std::find(names.begin(), names.end(), name) != names.end();
-}
-
 } // namespace
 
 FloppyBay::FloppyBay(MachineSession& session, const AppPaths& paths, Events events)
@@ -42,21 +38,15 @@ const std::vector<FloppyCatalogEntry>& FloppyBay::instanceDisks() const {
 
 FloppyBay::DiskLists FloppyBay::diskLists() const {
     DiskLists lists;
-    for (const auto& e : bundledDisks())
-        lists.templates.push_back(e.diskName);
-    const std::vector<std::string> bundled = lists.templates;
+    const std::vector<FloppyCatalogEntry>& bundled = bundledDisks();
+    for (const auto& e : bundled)
+        lists.templates.push_back({e.diskName, e.description});
     for (const auto& e : instanceDisks()) {
-        if (contains(bundled, e.diskName)) continue;
-        (e.isTemplate ? lists.templates : lists.instances).push_back(e.diskName);
+        if (std::any_of(bundled.begin(), bundled.end(), [&](const auto& b) { return b.diskName == e.diskName; }))
+            continue;
+        (e.isTemplate ? lists.templates : lists.instances).push_back({e.diskName, e.description});
     }
     return lists;
-}
-
-std::string FloppyBay::diskDescription(const std::string& diskName) const {
-    for (const auto* disks : {&bundledDisks(), &instanceDisks()})
-        for (const auto& e : *disks)
-            if (e.diskName == diskName) return e.description;
-    return {};
 }
 
 void FloppyBay::classifySource(const std::string& resolvedPathOrEmpty, bool isTemplate) {
