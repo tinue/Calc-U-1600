@@ -191,7 +191,7 @@ public:
 
     // ---- Keys and typing ----
     // A frontend's own key (faceplate, physical host key). A release that
-    // comes before kKeyHoldFrames of emulated time since the press -- a
+    // comes before kMinKeyHoldFrames (2) of emulated time since the press -- a
     // quick finger tap, both events between two advance() calls -- is
     // deferred until then, so the ROM's key scan always sees the key.
     void pressKey(const std::string& name);

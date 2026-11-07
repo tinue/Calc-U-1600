@@ -115,6 +115,24 @@ test('the physical keyboard types, ENTER runs it', async ({ page }) => {
   await waitForScreen(page, /42/);
 });
 
+test('the keyboard comes back to the calculator after a picker or a click', async ({ page }) => {
+  await gotoReady(page);
+  // A picker change hands the keyboard back.
+  await pickModel(page, 2);
+  await page.keyboard.type('PRINT 6*7', { delay: 60 });
+  await page.keyboard.press('Enter');
+  await waitForScreen(page, /42/);
+  // A button that had the focus doesn't get ENTER after a click on the
+  // faceplate (off any key): the calculator does.
+  await page.locator('.calcu-menubar-item > button', { hasText: 'Help' }).focus();
+  const face = await page.locator('.calcu-face').boundingBox();
+  await page.mouse.click(face.x + 4, face.y + 4);
+  await page.keyboard.type('PRINT 7*8', { delay: 60 });
+  await page.keyboard.press('Enter');
+  await waitForScreen(page, /56/);
+  await expect(page.locator('.calcu-menu')).toHaveCount(0);
+});
+
 test('a faceplate key types while its pointer is down', async ({ page }) => {
   await gotoReady(page);
   await pickModel(page, 2);

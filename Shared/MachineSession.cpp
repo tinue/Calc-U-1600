@@ -36,6 +36,10 @@ const char* pc1500RomVariantName(PC1500RomRevision revision) {
 
 // ~4 frames @60Hz: long enough for the ROM's key-scan loop to see the press.
 constexpr int kKeyHoldFrames = 4;
+// releaseKey()'s minimum hold for a frontend's key: a press of one frame
+// is scanned on both models; two leave a margin without making a fast
+// typist's keys overlap.
+constexpr int kMinKeyHoldFrames = 2;
 // 3 s of emulated time: don't hang if the power-down path never completes.
 constexpr int kPowerOffTimeoutFrames = 180;
 
@@ -283,7 +287,7 @@ void MachineSession::pressKey(const std::string& name) {
 void MachineSession::releaseKey(const std::string& name) {
     const auto it = m_keyPressedAt.find(name);
     if (it != m_keyPressedAt.end()) {
-        const auto holdUntil = it->second + static_cast<std::uint64_t>(kKeyHoldFrames * clockHz() / 60.0);
+        const auto holdUntil = it->second + static_cast<std::uint64_t>(kMinKeyHoldFrames * clockHz() / 60.0);
         m_keyPressedAt.erase(it);
         if (m_budgetClock < holdUntil) {
             scheduleKeyAt(holdUntil, false, name);

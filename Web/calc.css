@@ -118,6 +118,15 @@
   cursor: default;
 }
 .calcu-menu-item:hover:not(.disabled), .calcu-menu-item.open:not(.disabled) { background: var(--calcu-menu-hover); color: #fff; }
+/* Touch screens: a taller bar and taller rows. In landscape, iOS Safari
+   takes a tap at the very top of the page to bring back its toolbar, so a
+   26 px bar is nearly untappable there; this one has a lower part Safari
+   leaves to the page. */
+@media (pointer: coarse) {
+  .calcu-menubar { height: 40px; }
+  .calcu-menubar-item > button { padding: 0 14px; }
+  .calcu-menu-item { padding-top: 8px; padding-bottom: 8px; }
+}
 .calcu-menu-item.disabled { color: var(--calcu-text-dim); }
 .calcu-menu-check { width: 18px; text-align: center; flex: none; }
 .calcu-menu-label { flex: 1; }

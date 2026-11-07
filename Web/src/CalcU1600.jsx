@@ -12,10 +12,6 @@ const BAR_HEIGHT = 40;
 const PANEL_MIN = 220;          // the least room below the faceplate worth a panels' row
 const INSPECTOR_MIN_WIDTH = 700; // narrower: the inspector only when no other panel is shown
 const SHIFT_TAP_MS = 400;
-// A key's release reaches the engine at least this long after its press:
-// both events can arrive between two 60 Hz frames, and a press that lasts
-// no emulated time is never scanned.
-const MIN_HOLD_MS = 50;
 const MAX_DROP_BYTES = 1 << 20;
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
 
@@ -65,7 +61,7 @@ function CalcU1600(props) {
   const [presets, setPresets] = React.useState([]);
   const dialogs = useDialogs();
   const rootRef = React.useRef(null);
-  const heldKeys = React.useRef(new Map());   // KeyboardEvent.code -> {base: Promise of the key to release, down: time}
+  const heldKeys = React.useRef(new Map());   // KeyboardEvent.code -> {base: Promise of the key to release}
   const shiftTap = React.useRef(null);        // time the bare Shift went down
   const pendingDrop = React.useRef(null);
 
@@ -100,6 +96,23 @@ function CalcU1600(props) {
     const active = document.activeElement;
     if (!active || active === document.body) el.focus({ preventScroll: true });
   }, [keyboard, running, dialogs.open]);
+
+  // After a tap or click anywhere but a text field or picker, the keyboard
+  // goes back to the calculator. The faceplate never takes the focus (its
+  // pointerdown is prevented), and a control-bar button that kept it would
+  // be pressed again by ENTER or SPACE. A dialog keeps its own focus, and
+  // so does a host page element outside the client.
+  const reclaimFocus = () => {
+    const el = rootRef.current;
+    if (!keyboard || !el) return;
+    setTimeout(() => {
+      if (el.querySelector(".calcu-modal")) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && !el.contains(active)) return;
+      if (active && active !== el && /^(INPUT|SELECT|TEXTAREA)$/.test(active.tagName)) return;
+      el.focus({ preventScroll: true });
+    }, 0);
+  };
 
   // Notices from the engine, one at a time.
   React.useEffect(() => {
@@ -299,10 +312,9 @@ function CalcU1600(props) {
     if (/^F([7-9]|1\d)$/.test(e.key)) return;
     e.preventDefault();
     if (heldKeys.current.has(e.code)) return;
-    const down = performance.now();
     const base = engine.request("hostKeyDown", e.code, e.key, e.shiftKey, e.ctrlKey, e.altKey, e.metaKey, IS_MAC)
       .catch(() => "");
-    heldKeys.current.set(e.code, { base, down });
+    heldKeys.current.set(e.code, { base });
   };
 
   const onKeyUp = (e) => {
@@ -315,8 +327,9 @@ function CalcU1600(props) {
     const held = heldKeys.current.get(e.code);
     if (!held) return;
     heldKeys.current.delete(e.code);
-    const wait = Math.max(0, held.down + MIN_HOLD_MS - performance.now());
-    held.base.then((b) => { if (b) setTimeout(() => engine.call("hostKeyUp", b), wait); });
+    // The engine keeps a quick tap down long enough to be scanned
+    // (MachineSession::releaseKey()).
+    held.base.then((b) => { if (b) engine.call("hostKeyUp", b); });
   };
 
   // ── Layout ──────────────────────────────────────────────────────────
@@ -348,6 +361,10 @@ function CalcU1600(props) {
       data-ready={ready && !!ui ? "true" : "false"}
       onKeyDown={onKeyDown} onKeyUp={onKeyUp} onBlur={releaseHeldKeys}
       onPointerDown={() => { shiftTap.current = null; if (engine) engine.unlockAudio(); }}
+      onPointerUp={reclaimFocus}
+      onChange={(e) => {
+        if (e.target.tagName === "SELECT" && !e.target.closest(".calcu-modal")) { e.target.blur(); reclaimFocus(); }
+      }}
       onPaste={(e) => {
         const text = e.clipboardData && e.clipboardData.getData("text/plain");
         if (text && engine) { e.preventDefault(); engine.call("pasteText", text); }

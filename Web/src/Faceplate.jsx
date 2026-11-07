@@ -15,7 +15,7 @@ const FACE_ART = ["pc1500.png", "pc1500A.png", "pc1600.png"];
 // prerender need it): Shared/KeyLayout's imageWidth / imageHeight.
 const FACE_ASPECT = [4000 / 1760, 4000 / 1760, 4000 / 1777];
 // How far (CSS px) outside a key's rectangle a touch still takes it.
-const TOUCH_SLOP_PX = 12;
+const TOUCH_SLOP_PX = 24;
 
 function LcdCanvas({ engine, model, rect }) {
   const ref = React.useRef(null);
