@@ -7,7 +7,8 @@
 // Qt6/app/MainWindow (file opens, Name & Save, tapes) -- the decisions in
 // them are Shared's, behind WebController.
 
-const MENU_HEIGHT = 26;
+// calc.css: the menu bar is taller on a touch screen (pointer: coarse).
+const MENU_HEIGHT = typeof matchMedia !== "undefined" && matchMedia("(pointer: coarse)").matches ? 40 : 26;
 const BAR_HEIGHT = 40;
 const PANEL_MIN = 220;          // the least room below the faceplate worth a panels' row
 const INSPECTOR_MIN_WIDTH = 700; // narrower: the inspector only when no other panel is shown

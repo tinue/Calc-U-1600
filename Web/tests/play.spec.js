@@ -159,6 +159,17 @@ test.describe('on a touchscreen', () => {
     await page.touchscreen.tap(key.x + key.width / 2, key.y + key.height + 3);
     await waitForScreen(page, /5/);
   });
+
+  // The taller touch menu bar is counted: the control bar ends inside the
+  // window (a phone in landscape, the calculator alone).
+  test('the client fits the window with the touch menu bar', async ({ page }) => {
+    await page.setViewportSize({ width: 932, height: 400 });
+    await gotoReady(page, '?height=400');
+    expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+    const bar = await page.locator('.calcu-controlbar').boundingBox();
+    const client = await page.locator('.calcu-client').boundingBox();
+    expect(bar.y + bar.height).toBeLessThanOrEqual(client.y + client.height + 0.5);
+  });
 });
 
 test('the control bar follows the model: peripherals, floppy, tape', async ({ page }) => {
