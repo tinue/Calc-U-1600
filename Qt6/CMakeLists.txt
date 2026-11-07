@@ -104,6 +104,7 @@ qt_add_executable(CalcU1600Qt
   app/FloppyDiskManager.cpp
   app/TapeManager.cpp
   app/SettingsDialog.cpp
+  app/NamedComboBox.cpp
   app/MachineCodeLoadDialog.cpp
   app/AboutDialog.cpp
   app/AudioOutput.cpp
@@ -208,6 +209,47 @@ else()
             "$<TARGET_FILE_DIR:CalcU1600Qt>/resources"
     COMMENT "Copying bundled .card.yaml/ROM resources next to the executable")
   install(FILES ${BUNDLED_RESOURCE_FILES} DESTINATION resources)
+endif()
+
+# ---- Bundled example presets: examples/bundled.yaml and the folder of
+# every preset it lists (each folder's files, not its subfolders -- the
+# web build takes the same), loose under Resources/examples
+# (AppPaths::bundledExamplesDir(); Shared/PresetCatalog reads them) ----
+set(EXAMPLES_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../examples)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${EXAMPLES_SRC_DIR}/bundled.yaml)
+file(STRINGS ${EXAMPLES_SRC_DIR}/bundled.yaml EXAMPLE_FILE_LINES REGEX "^ *(- )?file: ")
+set(EXAMPLE_DIRS "")
+foreach(line IN LISTS EXAMPLE_FILE_LINES)
+  string(REGEX REPLACE "^ *(- )?file: *" "" example_file "${line}")
+  get_filename_component(example_dir "${example_file}" DIRECTORY)
+  list(APPEND EXAMPLE_DIRS "${example_dir}")
+endforeach()
+list(REMOVE_DUPLICATES EXAMPLE_DIRS)
+
+if(APPLE)
+  set_source_files_properties(${EXAMPLES_SRC_DIR}/bundled.yaml PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/examples")
+  target_sources(CalcU1600Qt PRIVATE ${EXAMPLES_SRC_DIR}/bundled.yaml)
+endif()
+foreach(example_dir IN LISTS EXAMPLE_DIRS)
+  file(GLOB example_dir_files LIST_DIRECTORIES false CONFIGURE_DEPENDS ${EXAMPLES_SRC_DIR}/${example_dir}/*)
+  if(APPLE)
+    set_source_files_properties(${example_dir_files} PROPERTIES
+      MACOSX_PACKAGE_LOCATION "Resources/examples/${example_dir}")
+    target_sources(CalcU1600Qt PRIVATE ${example_dir_files})
+  else()
+    add_custom_command(TARGET CalcU1600Qt POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:CalcU1600Qt>/resources/examples/${example_dir}"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${example_dir_files}
+              "$<TARGET_FILE_DIR:CalcU1600Qt>/resources/examples/${example_dir}"
+      COMMENT "Copying the bundled examples in ${example_dir}/")
+    install(FILES ${example_dir_files} DESTINATION resources/examples/${example_dir})
+  endif()
+endforeach()
+if(NOT APPLE)
+  add_custom_command(TARGET CalcU1600Qt POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EXAMPLES_SRC_DIR}/bundled.yaml
+            "$<TARGET_FILE_DIR:CalcU1600Qt>/resources/examples")
+  install(FILES ${EXAMPLES_SRC_DIR}/bundled.yaml DESTINATION resources/examples)
 endif()
 
 # ---- License / third-party-notice files -- ships GPLv3 (this project)

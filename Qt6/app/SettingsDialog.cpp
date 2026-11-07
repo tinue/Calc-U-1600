@@ -2,22 +2,27 @@
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
 #include "MachineController.hpp"
+#include "NamedComboBox.hpp"
+#include "Shared/PresetCatalog.hpp"
 #include "debug/DebugController.hpp"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
 #include <algorithm>
 #include <functional>
+#include <optional>
 #include <vector>
 
 namespace {
@@ -161,27 +166,64 @@ void addOpenFolderRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids&
     addPathRow(grid, row, parent, sections, spec);
 }
 
-// One model's "default preset" row; `extension` is the preset suffix that
-// model uses.
+// One model's "default preset" row: a pick list of the bundled default
+// presets for `model` (examples/bundled.yaml's `defaults`), "(none)", and
+// the user's own file once one is chosen. The list shows descriptions, the
+// closed combo the short name (NamedComboBox); Settings stores a bundled
+// one as its "examples:" ref. "Choose…" picks any preset file.
 void addDefaultPresetRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids& sections, const QString& label,
                          Model model) {
-    const QString extension = modelSettingsKey(model).toLower();
-    PathRowSpec spec;
-    spec.label = label;
-    spec.pickText = SettingsDialog::tr("Choose…");
-    spec.resetText = SettingsDialog::tr("Clear");
-    spec.resetToolTip = SettingsDialog::tr("Don't load a preset for this model");
-    spec.placeholder = SettingsDialog::tr("(none)");
-    spec.pick = [parent, model, extension] {
+    addRowLabel(grid, row, parent, sections, label);
+    auto* combo = new NamedComboBox(parent);
+    combo->setObjectName(QStringLiteral("dialog.settings.preset.") + modelSettingsKey(model));
+    grid->addWidget(combo, row, kValueColumn, Qt::AlignLeft);
+    auto* pickButton = makeRowButton(SettingsDialog::tr("Choose…"), parent);
+    grid->addWidget(pickButton, row, kPickColumn);
+
+    const shared::PresetCatalog catalog(AppPaths::paths());
+    const auto fill = [combo, model, catalog] {
+        const QSignalBlocker block(combo);
+        combo->clear();
+        combo->addNamedItem(SettingsDialog::tr("(none)"), SettingsDialog::tr("(none)"), QString(),
+                            SettingsDialog::tr("Don't load a preset for this model"));
         const QString current = AppSettings::defaultPresetPath(model);
-        return QFileDialog::getOpenFileName(parent, SettingsDialog::tr("Choose Default Preset"),
-                                            current.isEmpty() ? AppSettings::openStartDir(AppSettings::OpenFolder::Samples) : current,
-                                            SettingsDialog::tr("Presets (*.%1);;All Files (*)").arg(extension));
+        bool listed = current.isEmpty();
+        const auto add = [combo](const shared::PresetEntry& e, const QString& tip) {
+            const QString name = QString::fromStdString(e.name);
+            const QString description = QString::fromStdString(e.description);
+            combo->addNamedItem(description.isEmpty() ? name : description, name, QString::fromStdString(e.ref),
+                                tip);
+        };
+        for (const shared::PresetEntry& e : catalog.defaults(model)) {
+            add(e, QString::fromStdString(e.description));
+            listed = listed || QString::fromStdString(e.ref) == current;
+        }
+        if (!listed) {
+            // The user's own file: its name and description, the path on hover.
+            const std::optional<shared::PresetEntry> e = catalog.describe(current.toStdString());
+            const QString shown = AppPaths::displayPath(current);
+            if (e) add(*e, shown);
+            else combo->addNamedItem(shown, QFileInfo(current).completeBaseName(), current, shown);
+        }
+        combo->setCurrentIndex(std::max(0, combo->findData(current)));
+        combo->setToolTip(combo->itemData(combo->currentIndex(), Qt::ToolTipRole).toString());
+        combo->updateGeometry();
     };
-    spec.display = [model] { return AppSettings::defaultPresetPath(model); };
-    spec.isOverridden = [model] { return !AppSettings::defaultPresetPath(model).isEmpty(); };
-    spec.set = [model](const QString& path) { AppSettings::setDefaultPresetPath(model, path); };
-    addPathRow(grid, row, parent, sections, spec);
+    fill();
+
+    QObject::connect(combo, &QComboBox::currentIndexChanged, parent, [combo, model](int index) {
+        AppSettings::setDefaultPresetPath(model, combo->itemData(index).toString());
+        combo->setToolTip(combo->itemData(index, Qt::ToolTipRole).toString());
+    });
+    QObject::connect(pickButton, &QPushButton::clicked, parent, [parent, model, fill] {
+        const QString extension = modelSettingsKey(model).toLower();
+        const QString path = QFileDialog::getOpenFileName(
+            parent, SettingsDialog::tr("Choose Default Preset"), AppSettings::openStartDir(AppSettings::OpenFolder::Samples),
+            SettingsDialog::tr("Presets (*.%1);;All Files (*)").arg(extension));
+        if (path.isEmpty()) return;
+        AppSettings::setDefaultPresetPath(model, path);
+        fill();
+    });
 }
 
 } // namespace

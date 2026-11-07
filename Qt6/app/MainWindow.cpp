@@ -23,6 +23,8 @@
 #include "PC1600/PC1600Machine.hpp"
 #include "DropFile.hpp"
 #include "Shared/MachineCodeLoad.hpp"
+#include "Shared/PresetCatalog.hpp"
+#include "AppPaths.hpp"
 
 #include <QHBoxLayout>
 #include <QInputMethodEvent>
@@ -37,6 +39,7 @@
 #include <QMessageBox>
 #include <QFile>
 #include <QDir>
+#include <QMap>
 #include <QFileDialog>
 #include <QApplication>
 #include <QCoreApplication>
@@ -838,6 +841,20 @@ void MainWindow::buildMenuBar() {
     // are connected by the constructor, next to their handler closures.
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
     m_openPresetAction = fileMenu->addAction(tr("Load Preset…"));
+    // Examples: the bundled presets (examples/bundled.yaml's `examples`),
+    // grouped, each by its description. The default presets are offered in
+    // Settings instead.
+    QMenu* examplesMenu = fileMenu->addMenu(tr("Examples"));
+    QMap<QString, QMenu*> groupMenus;
+    for (const shared::PresetEntry& e : shared::PresetCatalog(AppPaths::paths()).examples()) {
+        const QString group = QString::fromStdString(e.group);
+        QMenu*& groupMenu = groupMenus[group];
+        if (!groupMenu) groupMenu = examplesMenu->addMenu(group);
+        const QString label = QString::fromStdString(e.description.empty() ? e.name : e.description);
+        const QString ref = QString::fromStdString(e.ref);
+        connect(groupMenu->addAction(label), &QAction::triggered, this, [this, ref] { m_sync->loadPreset(ref); });
+    }
+    examplesMenu->setEnabled(!groupMenus.isEmpty());
     m_loadBasicProgramAction = fileMenu->addAction(tr("Load BASIC Program…"));
     m_loadMachineCodeAction = fileMenu->addAction(tr("Load Machine Code…"));
     fileMenu->addSeparator();

@@ -4,7 +4,7 @@ namespace {
 
 QVector<MemoryModuleManager::ModuleEntry> toQt(const std::vector<shared::ModuleBay::ModuleEntry>& entries) {
     QVector<MemoryModuleManager::ModuleEntry> out;
-    for (const auto& e : entries) out.push_back({QString::fromStdString(e.moduleName), e.battery, e.rom});
+    for (const auto& e : entries) out.push_back({QString::fromStdString(e.moduleName), QString::fromStdString(e.description), e.battery, e.rom});
     return out;
 }
 

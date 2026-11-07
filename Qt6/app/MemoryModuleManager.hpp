@@ -18,6 +18,7 @@ public:
 
     struct ModuleEntry {
         QString moduleName;
+        QString description;  // the card's `description:`, for a tooltip
         bool battery = false;
         bool rom = false;
     };

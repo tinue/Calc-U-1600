@@ -16,6 +16,7 @@ public:
 
     struct DiskEntry {
         QString diskName;
+        QString description;  // the disk's `description:`, for a tooltip
     };
     struct DiskLists {
         QVector<DiskEntry> templates;

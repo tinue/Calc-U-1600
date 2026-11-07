@@ -25,27 +25,46 @@ QFrame* addSeparator(QHBoxLayout* layout, QWidget* parent) {
     return line;
 }
 
+// A picker item: the card's / disk's name, and its `description:` as the
+// tooltip.
+struct PickerItem {
+    QString name;
+    QString description;
+};
+using PickerItems = QVector<PickerItem>;
+
+// A module/disk combo's own tooltip is its current item's description.
+void showCurrentToolTip(QComboBox* combo) {
+    combo->setToolTip(combo->itemData(combo->currentIndex(), Qt::ToolTipRole).toString());
+}
+
 // Shared by the memory-slot and floppy pickers: "–empty–", the templates
 // (bundled and the user's own), then (after a separator) the user's saved
 // instances, then (after another) the ROM modules -- memory slots only.
-void fillPicker(QComboBox* combo, const QStringList& templates, const QStringList& saved,
-                const QString& selectedOrEmpty, const QStringList& roms = {}) {
+void fillPicker(QComboBox* combo, const PickerItems& templates, const PickerItems& saved,
+                const QString& selectedOrEmpty, const PickerItems& roms = {}) {
     const QSignalBlocker blocker(combo);
     combo->clear();
     combo->addItem(ControlBar::tr("–empty–"), QString());
-    for (const auto& name : templates) combo->addItem(name, name);
+    const auto add = [combo](const PickerItems& items) {
+        for (const PickerItem& item : items) {
+            combo->addItem(item.name, item.name);
+            if (!item.description.isEmpty()) combo->setItemData(combo->count() - 1, item.description, Qt::ToolTipRole);
+        }
+    };
+    add(templates);
     if (!saved.isEmpty()) combo->insertSeparator(combo->count());
-    for (const auto& name : saved) combo->addItem(name, name);
+    add(saved);
     if (!roms.isEmpty()) combo->insertSeparator(combo->count());
-    for (const auto& name : roms) combo->addItem(name, name);
+    add(roms);
     const int idx = combo->findData(selectedOrEmpty);
     combo->setCurrentIndex(idx >= 0 ? idx : 0);
 }
 
 template <typename Entry, typename NameOf>
-QStringList namesOf(const QVector<Entry>& entries, NameOf nameOf) {
-    QStringList out;
-    for (const auto& e : entries) out << nameOf(e);
+PickerItems itemsOf(const QVector<Entry>& entries, NameOf nameOf) {
+    PickerItems out;
+    for (const auto& e : entries) out.push_back({nameOf(e), e.description});
     return out;
 }
 
@@ -100,6 +119,7 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
         layout->addWidget(saveButton);
 
         connect(combo, &QComboBox::currentIndexChanged, this, [this, slot](int index) {
+            showCurrentToolTip(m_slot[slot - 1].combo);
             emit moduleSelected(slot, m_slot[slot - 1].combo->itemData(index).toString());
         });
         connect(saveButton, &QPushButton::clicked, this, [this, slot] { emit nameAndSaveRequested(slot); });
@@ -195,7 +215,10 @@ ControlBar::ControlBar(QWidget* parent) : QWidget(parent) {
     applyLampStyle(m_floppyLampLabel, false);
 
     connect(m_floppyCombo, &QComboBox::currentIndexChanged, this,
-            [this](int index) { emit floppyDiskSelected(m_floppyCombo->itemData(index).toString()); });
+            [this](int index) {
+                showCurrentToolTip(m_floppyCombo);
+                emit floppyDiskSelected(m_floppyCombo->itemData(index).toString());
+            });
     connect(m_floppySaveButton, &QPushButton::clicked, this, [this] { emit floppyNameAndSaveRequested(); });
     connect(m_floppySideButton, &QPushButton::clicked, this, [this] { emit floppySideToggleRequested(); });
 
@@ -256,8 +279,9 @@ void ControlBar::setModel(Model model) {
 void ControlBar::setModuleCombos(int slot, const MemoryModuleManager::ModuleLists& lists,
                                   const QString& selectedOrEmpty) {
     const auto name = [](const MemoryModuleManager::ModuleEntry& e) { return e.moduleName; };
-    fillPicker(m_slot[slot - 1].combo, namesOf(lists.templates, name), namesOf(lists.instances, name), selectedOrEmpty,
-               namesOf(lists.roms, name));
+    fillPicker(m_slot[slot - 1].combo, itemsOf(lists.templates, name), itemsOf(lists.instances, name), selectedOrEmpty,
+               itemsOf(lists.roms, name));
+    showCurrentToolTip(m_slot[slot - 1].combo);
 }
 
 // Enables rather than shows/hides the button, so the control bar doesn't
@@ -307,7 +331,8 @@ void ControlBar::setFloppyCombo(const QVector<FloppyDiskManager::DiskEntry>& tem
                                 const QVector<FloppyDiskManager::DiskEntry>& instances,
                                 const QString& selectedOrEmpty) {
     const auto name = [](const FloppyDiskManager::DiskEntry& e) { return e.diskName; };
-    fillPicker(m_floppyCombo, namesOf(templates, name), namesOf(instances, name), selectedOrEmpty);
+    fillPicker(m_floppyCombo, itemsOf(templates, name), itemsOf(instances, name), selectedOrEmpty);
+    showCurrentToolTip(m_floppyCombo);
 }
 
 void ControlBar::setFloppyVisible(bool visible) {
@@ -345,7 +370,9 @@ void ControlBar::applyLampStyle(QLabel* lamp, bool on) {
 }
 
 void ControlBar::setTapeCombo(const QStringList& names, const QString& selectedOrEmpty) {
-    fillPicker(m_tapeCombo, names, {}, selectedOrEmpty);
+    PickerItems items;
+    for (const QString& name : names) items.push_back({name, {}});
+    fillPicker(m_tapeCombo, items, {}, selectedOrEmpty);  // keeps the combo's own tooltip
 }
 
 void ControlBar::setTapeVisible(bool visible) {
