@@ -35,8 +35,6 @@ const CORE_ASSETS = [
   "../img/pc1600.png",
   "../img/icon.png",
 
-  "../presets/manifest.json",
-
   "../wasm/calcu1600-core.js",
   "../wasm/calcu1600-core.wasm",
   // Every file in bundle/ and presets/; Web/build.js fills them in.

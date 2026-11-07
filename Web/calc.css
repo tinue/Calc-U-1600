@@ -348,3 +348,8 @@
   animation: calcu-spin 0.8s linear infinite;
 }
 @keyframes calcu-spin { to { transform: rotate(360deg); } }
+
+/* NamedCombo (Dialogs.jsx): a combo button with a menu of long labels. */
+.calcu-namedcombo { position: relative; display: inline-block; }
+.calcu-namedcombo > .calcu-combo { text-align: left; white-space: nowrap; overflow: hidden; }
+.calcu-namedcombo-list { min-width: 100%; z-index: 10; }

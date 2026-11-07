@@ -22,18 +22,21 @@ function SaveIcon() {
 }
 
 // A picker: "–empty–", then the groups, a separator between non-empty ones.
-function Picker({ groups, selected, onChange, disabled, label, name, minWidth }) {
+// `descriptions` (name -> the card's / disk's `description:`) are the
+// tooltips, of each option and of the picker for its current one.
+function Picker({ groups, selected, onChange, disabled, label, name, minWidth, descriptions }) {
+  const tip = (n) => (descriptions && descriptions[n]) || undefined;
   const options = [<option key="empty" value="">{EMPTY_LABEL}</option>];
   let first = true;
   groups.forEach((group, g) => {
     if (!group || !group.length) return;
     if (!first) options.push(<option key={`sep${g}`} disabled value={`\u0000${g}`}>{SEPARATOR_LABEL}</option>);
     first = false;
-    group.forEach((n) => options.push(<option key={`${g}:${n}`} value={n}>{n}</option>));
+    group.forEach((n) => options.push(<option key={`${g}:${n}`} value={n} title={tip(n)}>{n}</option>));
   });
   return (
     <select className="calcu-combo" value={selected || ""} disabled={disabled} aria-label={label} name={name}
-      style={minWidth ? { minWidth } : undefined} onChange={(e) => onChange(e.target.value)}>
+      title={tip(selected)} style={minWidth ? { minWidth } : undefined} onChange={(e) => onChange(e.target.value)}>
       {options}
     </select>
   );
@@ -72,6 +75,7 @@ function ControlBar({ engine, actions }) {
       <React.Fragment key={n}>
         <span className="calcu-bar-label">{n}:</span>
         <Picker groups={[s.templates, s.instances, s.roms]} selected={s.selected} disabled={busy}
+          descriptions={s.descriptions}
           label={`Slot ${n}`} name={`slot${n}`} minWidth="11em"
           onChange={(name) => engine.call("selectModule", n, name)} />
         <button type="button" className="calcu-iconbutton" disabled={!s.canSave} title="Name & Save"
@@ -101,6 +105,7 @@ function ControlBar({ engine, actions }) {
         <React.Fragment>
           <span className="calcu-bar-label">Disk:</span>
           <Picker groups={[ui.floppy.templates, ui.floppy.instances]} selected={ui.floppy.selected}
+            descriptions={ui.floppy.descriptions}
             disabled={!ui.floppyEnabled} label="Disk" name="disk" minWidth="8em"
             onChange={(name) => engine.call("selectDisk", name)} />
           <button type="button" className="calcu-button calcu-compact" disabled={!ui.floppyEnabled}

@@ -6,9 +6,10 @@
 //   1. Compiles src/*.jsx into one dist/calc.js and app/app.jsx into
 //      dist/app/app.js with the vendored Babel run in Node (no npm runtime
 //      dependencies, no in-browser transform).
-//   2. Copies the presets of presets.json -- each with the other files of
-//      its examples/ folder, which a preset names by relative path -- into
-//      dist/presets/, with their manifest.
+//   2. Copies examples/bundled.yaml and the presets it lists -- each with
+//      the other files of its examples/ folder, which a preset names by
+//      relative path -- into dist/presets/ (the engine's bundled examples;
+//      Shared/PresetCatalog reads the list and each preset's name).
 //   3. Writes dist/files.json: what the engine worker loads into its file
 //      system (bundle/, presets/).
 //   4. Stamps the service worker with its precache list and a hash of it.
@@ -71,8 +72,12 @@ console.log("compiled calc.js, app/app.js");
 
 // ---- 2. Presets ---------------------------------------------------------
 
-const presets = JSON.parse(read(path.join(WEB, "presets.json")));
-const presetDirs = [...new Set(presets.map((p) => path.dirname(p.file)))];
+// Only the `file:` lines of both lists are needed here.
+const bundledList = path.join(REPO, "examples", "bundled.yaml");
+const presets = read(bundledList).split("\n")
+  .map((line) => line.match(/^\s*(?:- )?file:\s*(\S.*?)\s*$/))
+  .filter(Boolean).map((m) => m[1]);
+const presetDirs = [...new Set(presets.map((f) => path.dirname(f)))];
 for (const dir of presetDirs) {
   const from = path.join(REPO, "examples", dir);
   for (const f of fs.readdirSync(from, { withFileTypes: true })) {
@@ -81,16 +86,16 @@ for (const dir of presetDirs) {
     fs.copyFileSync(path.join(from, f.name), path.join(DIST, "presets", dir, f.name));
   }
 }
-for (const p of presets)
-  if (!fs.existsSync(path.join(DIST, "presets", p.file))) throw new Error(`presets.json: ${p.file} is not in examples/`);
-fs.writeFileSync(path.join(DIST, "presets", "manifest.json"), JSON.stringify(presets, null, 2) + "\n");
+for (const f of presets)
+  if (!fs.existsSync(path.join(DIST, "presets", f))) throw new Error(`bundled.yaml: ${f} is not in examples/`);
+fs.copyFileSync(bundledList, path.join(DIST, "presets", "bundled.yaml"));
 console.log(`presets: ${presets.length} from ${presetDirs.join(", ")}`);
 
 // ---- 3. files.json ------------------------------------------------------
 
 const bundleFiles = walk(path.join(DIST, "bundle")).map((f) => rel(path.join(DIST, "bundle"), f)).sort();
 const presetFiles = walk(path.join(DIST, "presets")).map((f) => rel(path.join(DIST, "presets"), f))
-  .filter((f) => f !== "manifest.json").sort();
+  .sort();
 fs.writeFileSync(path.join(DIST, "files.json"), JSON.stringify({ bundle: bundleFiles, presets: presetFiles }, null, 2) + "\n");
 
 // ---- 4. Service worker --------------------------------------------------

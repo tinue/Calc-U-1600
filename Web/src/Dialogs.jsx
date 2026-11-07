@@ -147,16 +147,44 @@ const STARTUP_CHOICES = [
 ];
 const MODEL_KEYS = ["PC1500", "PC1500A", "PC1600"];
 
+// A combo whose open list shows each choice's long label (a preset's
+// description) while the closed combo shows the chosen one's short name --
+// as Qt6/app/NamedComboBox; a native <select> shows the same text in both.
+// `choices`: [{value, name, description}].
+function NamedCombo({ value, choices, onChange, label }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  useDismiss(ref, open, () => setOpen(false));
+  const current = choices.find((c) => c.value === value) || choices[0];
+  return (
+    <span className="calcu-namedcombo" ref={ref}>
+      <button type="button" className="calcu-combo" aria-haspopup="menu" aria-expanded={open} aria-label={label}
+        title={current.description || undefined} onClick={() => setOpen(!open)}>
+        {current.name}
+      </button>
+      {open && (
+        <MenuList className="calcu-namedcombo-list" onDone={() => setOpen(false)}
+          items={choices.map((c) => ({
+            label: c.description || c.name,
+            checked: c.value === current.value,
+            onClick: () => onChange(c.value),
+          }))} />
+      )}
+    </span>
+  );
+}
+
 // Settings (Qt6/app/SettingsDialog), the parts a browser has: the startup
-// device and each model's default preset (from the bundled presets). The
-// save folder is this browser's storage; serial ports, tracing and the
-// debugger aren't there.
-function SettingsDialog({ engine, presets, done }) {
+// device and each model's default preset (the bundled defaults of
+// examples/bundled.yaml, by short name). The save folder is this browser's
+// storage; serial ports, tracing and the debugger aren't there.
+function SettingsDialog({ engine, done }) {
   const [state, setState] = React.useState(null);
   const persistent = useEngine(engine, (s) => s.persistent);
   React.useEffect(() => { engine.request("settingsState").then(setState); }, []);
   if (!state) return null;
-  const forModel = (key) => presets.filter((p) => p.model === key);
+  const choices = (key) => [{ value: "", name: "None", description: "Don't load a preset for this model" }].concat(
+    (state.presetChoices[key] || []).map((p) => ({ value: p.ref, name: p.name, description: p.description })));
   return (
     <Modal title="Settings" name="settings" onCancel={() => done(true)} className="calcu-settings"
       buttons={<button type="button" className="calcu-button default" onClick={() => done(true)}>Close</button>}>
@@ -173,17 +201,15 @@ function SettingsDialog({ engine, presets, done }) {
       </label>
       <h3 className="calcu-settings-section">Default presets</h3>
       {MODEL_KEYS.map((key, model) => (
-        <label key={key} className="calcu-form-row">
+        <div key={key} className="calcu-form-row" data-default-preset={key}>
           <span>{MODEL_NAMES[model]}:</span>
-          <select className="calcu-combo" value={state.defaultPresets[key] || ""}
-            onChange={(e) => {
-              engine.call("setDefaultPreset", model, e.target.value);
-              setState({ ...state, defaultPresets: { ...state.defaultPresets, [key]: e.target.value } });
-            }}>
-            <option value="">None</option>
-            {forModel(key).map((p) => <option key={p.file} value={`/presets/${p.file}`}>{p.title}</option>)}
-          </select>
-        </label>
+          <NamedCombo label={`${MODEL_NAMES[model]} default preset`} value={state.defaultPresets[key] || ""}
+            choices={choices(key)}
+            onChange={(ref) => {
+              engine.call("setDefaultPreset", model, ref);
+              setState({ ...state, defaultPresets: { ...state.defaultPresets, [key]: ref } });
+            }} />
+        </div>
       ))}
       <h3 className="calcu-settings-section">Storage</h3>
       <p className="calcu-modal-text">
@@ -247,7 +273,7 @@ function MediaDialog({ engine, importFiles, done }) {
             <h3 className="calcu-settings-section">{heading}</h3>
             {group.map((item) => (
               <div key={item.path} className="calcu-media-row" data-media={item.name}>
-                <span className="calcu-media-name">{item.name}{item.isTemplate ? " (template)" : ""}</span>
+                <span className="calcu-media-name" title={item.description || undefined}>{item.name}{item.isTemplate ? " (template)" : ""}</span>
                 {item.inUse && <span className="calcu-media-inuse">in use</span>}
                 <button type="button" className="calcu-button" onClick={() => download(item)}>Download</button>
                 <button type="button" className="calcu-button" disabled={item.inUse} onClick={() => remove(item)}>Delete</button>

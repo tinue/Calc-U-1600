@@ -210,14 +210,6 @@ function useEngine(engine, select) {
   return React.useSyncExternalStore(e.subscribe, () => select(e.getState()), () => select(INITIAL_STATE));
 }
 
-// A file next to calc.js, as text.
-function fetchBesideCalc(path) {
-  return fetch(`${CALC_BASE}${path}`).then((r) => {
-    if (!r.ok) throw new Error(`${path}: ${r.status}`);
-    return r.text();
-  });
-}
-
 // A picked/dropped File's bytes.
 function fileBytes(file) {
   return file.arrayBuffer().then((b) => new Uint8Array(b));

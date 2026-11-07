@@ -16,6 +16,7 @@
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -38,6 +39,7 @@
 #include "Shared/MachineCodeLoad.hpp"
 #include "Shared/MediaLibrary.hpp"
 #include "Shared/PlotterPaper.hpp"
+#include "Shared/PresetCatalog.hpp"
 #include "Shared/Text.hpp"
 #include "Shared/Utf8Path.hpp"
 #include "Utf8.hpp"
@@ -429,6 +431,7 @@ public:
                           : item.type == shared::MediaType::Disk ? "disk"
                                                                  : "tape");
             v.set("name", item.name);
+            v.set("description", item.description);
             v.set("fileName", item.fileName);
             v.set("path", item.path);
             v.set("isTemplate", item.isTemplate);
@@ -522,14 +525,42 @@ public:
     }
 
     // ── Settings ─────────────────────────────────────────────────────────
+    // Each model's default preset (its ref, "" = none) and the choices for
+    // it: the bundled defaults (examples/bundled.yaml), plus the current one
+    // when it isn't one of them -- each {ref, name, description}.
     val settingsState() const {
         val out = obj();
         out.set("startupModel", m_settings.startupModelPreference());
+        const shared::PresetCatalog catalog(m_paths);
         val presets = obj();
-        for (shared::Model m : {shared::Model::PC1500, shared::Model::PC1500A, shared::Model::PC1600})
-            presets.set(modelName(m), m_settings.defaultPresetPath(m));
+        val choices = obj();
+        for (shared::Model m : {shared::Model::PC1500, shared::Model::PC1500A, shared::Model::PC1600}) {
+            const std::string current = m_settings.defaultPresetPath(m);
+            presets.set(modelName(m), current);
+            std::vector<shared::PresetEntry> entries = catalog.defaults(m);
+            const bool listed = current.empty() || std::any_of(entries.begin(), entries.end(), [&](const auto& e) {
+                return e.ref == current;
+            });
+            if (!listed) {
+                if (auto e = catalog.describe(current)) entries.push_back(*e);
+            }
+            choices.set(modelName(m), array(entries, presetEntry));
+        }
         out.set("defaultPresets", presets);
+        out.set("presetChoices", choices);
         return out;
+    }
+    // File ▸ Examples: the bundled examples, in list order, each
+    // {group, ref, model, name, description}.
+    val presetExamples() const { return array(shared::PresetCatalog(m_paths).examples(), presetEntry); }
+    static val presetEntry(const shared::PresetEntry& e) {
+        val v = obj();
+        v.set("group", e.group);
+        v.set("ref", e.ref);
+        v.set("model", modelName(e.model));
+        v.set("name", e.name);
+        v.set("description", e.description);
+        return v;
     }
     void setStartupModel(const std::string& pref) { m_settings.setStartupModelPreference(pref); }
     void setDefaultPreset(int model, const std::string& path) {
@@ -700,10 +731,16 @@ private:
             const auto names = [](const std::vector<shared::ModuleBay::ModuleEntry>& entries) {
                 return array(entries, [](const shared::ModuleBay::ModuleEntry& e) { return val(e.moduleName); });
             };
+            // Each card's `description:`, by name, for the picker's tooltips.
+            val descriptions = obj();
+            for (const auto* entries : {&lists.templates, &lists.instances, &lists.roms})
+                for (const auto& e : *entries)
+                    if (!e.description.empty()) descriptions.set(e.moduleName, e.description);
             val v = obj();
             v.set("templates", names(lists.templates));
             v.set("instances", names(lists.instances));
             v.set("roms", names(lists.roms));
+            v.set("descriptions", descriptions);
             v.set("selected", m_app->modules().selectedModuleName(slot));
             v.set("canSave", m_app->modules().canNameAndSave(slot));
             slots.set(slot - 1, v);
@@ -715,6 +752,13 @@ private:
             val v = obj();
             v.set("templates", strings(disks.templates));
             v.set("instances", strings(disks.instances));
+            val descriptions = obj();
+            for (const auto* names : {&disks.templates, &disks.instances})
+                for (const std::string& name : *names) {
+                    const std::string d = m_app->floppy().diskDescription(name);
+                    if (!d.empty()) descriptions.set(name, d);
+                }
+            v.set("descriptions", descriptions);
             v.set("selected", m_app->floppy().selectedDiskName());
             v.set("side", m_app->floppy().side());
             v.set("canSave", m_app->floppy().canNameAndSave());
@@ -916,6 +960,7 @@ EMSCRIPTEN_BINDINGS(calcu1600) {
         .function("paperExport", &WebController::paperExport)
         .function("clearPaper", &WebController::clearPaper)
         .function("settingsState", &WebController::settingsState)
+        .function("presetExamples", &WebController::presetExamples)
         .function("setStartupModel", &WebController::setStartupModel)
         .function("setDefaultPreset", &WebController::setDefaultPreset)
         .class_function("faceplate", &WebController::faceplate)

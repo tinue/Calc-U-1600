@@ -65,6 +65,25 @@ test('?model= and ?preset= start with them', async ({ page }) => {
   await expect(page.locator('[data-dialog=notice]')).toHaveCount(0);
 });
 
+// Settings > Default presets: the open list shows each bundled default by
+// its description, the closed combo the chosen one's short name; a reload
+// keeps the choice (stored as its examples: ref).
+test('a default preset is picked by description and shown by name', async ({ page }) => {
+  await gotoReady(page);
+  await menu(page, 'Edit', 'Settings');
+  const row = page.locator('[data-default-preset=PC1600]');
+  const combo = row.getByRole('button', { name: 'PC-1600 default preset' });
+  await expect(combo).toHaveText('None');
+  await combo.click();
+  await row.locator('.calcu-menu-item', { hasText: 'PC-1600 with the CE-1600P, a floppy and two modules' }).click();
+  await expect(combo).toHaveText('CE-1600P + modules');
+  expect((await request(page, 'settingsState')).defaultPresets.PC1600).toBe('examples:startup/default-pc1600.pc1600');
+  // The examples don't offer the default presets.
+  const examples = await request(page, 'presetExamples');
+  expect(examples.some((e) => e.ref.startsWith('examples:startup/'))).toBe(false);
+  expect(examples.find((e) => e.ref === 'examples:basic/hanoi.pc1600').name).toBe('Hanoi');
+});
+
 test('the panels take only the room a full-width faceplate leaves', async ({ page }) => {
   // A phone in landscape: the calculator alone, as large as it fits.
   await page.setViewportSize({ width: 844, height: 390 });

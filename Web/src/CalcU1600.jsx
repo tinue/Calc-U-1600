@@ -75,11 +75,14 @@ function CalcU1600(props) {
     // Test hook (docs/developer/Web-Client.md): the root element's
     // calcuEngine has request(method, ...args) -- e.g. request("lcdText").
     if (rootRef.current) rootRef.current.calcuEngine = e;
-    fetchBesideCalc("presets/manifest.json").then((t) => setPresets(JSON.parse(t))).catch(() => {});
     return () => e.destroy();
   }, []);
 
   const ready = useEngine(engine, (s) => s.ready);
+  // File ▸ Examples: examples/bundled.yaml's `examples`, from the engine.
+  React.useEffect(() => {
+    if (ready) engine.request("presetExamples").then(setPresets).catch(() => {});
+  }, [ready]);
   const ui = useEngine(engine, (s) => s.ui);
   const busy = useEngine(engine, (s) => s.busy);
   const notices = useEngine(engine, (s) => s.notices);
@@ -219,7 +222,7 @@ function CalcU1600(props) {
         group = p.group;
         items.push({ heading: group });
       }
-      items.push({ label: p.title, onClick: () => engine.call("loadPreset", `/presets/${p.file}`) });
+      items.push({ label: p.description || p.name, onClick: () => engine.call("loadPreset", p.ref) });
     }
     items.push({ separator: true });
     items.push({ label: "Upload Preset…", onClick: async () => loadPresetFiles(await pickFiles(".pc1500,.pc1500a,.pc1600,.bas,.bbin,.bin,.wav,.yaml", true)) });
@@ -249,7 +252,7 @@ function CalcU1600(props) {
         { label: "Copy Screen", shortcut: `${mod}C`, disabled: !ui, onClick: copyScreen },
         { label: "Paste Text", shortcut: `${mod}V`, disabled: !ui, onClick: pasteText },
         { separator: true },
-        { label: "Settings…", shortcut: `${mod},`, disabled: !ui, onClick: () => dialogs.ask("settings", { engine, presets }) },
+        { label: "Settings…", shortcut: `${mod},`, disabled: !ui, onClick: () => dialogs.ask("settings", { engine }) },
       ],
     },
     {
@@ -284,7 +287,7 @@ function CalcU1600(props) {
       const k = e.key.toLowerCase();
       if (k === "c" && !e.shiftKey) { e.preventDefault(); copyScreen(); }
       else if (k === "r") { e.preventDefault(); if (!busy) engine.call("reset", e.shiftKey); }
-      else if (k === ",") { e.preventDefault(); dialogs.ask("settings", { engine, presets }); }
+      else if (k === ",") { e.preventDefault(); dialogs.ask("settings", { engine }); }
       // ⌘V / Ctrl+V: the browser's paste event (onPaste) brings the text.
       return;
     }
