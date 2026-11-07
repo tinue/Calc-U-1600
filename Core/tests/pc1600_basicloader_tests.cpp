@@ -430,6 +430,7 @@ void test_work_area_matches_typed() {
         checkTypedVsFast(label, slot1Ram, slot2Ram, setup, kShortProgram, shortPayload, expectTitle);
     };
     check("stock", 0, 0, {"NEW0"});
+    check("CE-155", 0x2000, 0, {"NEW0"});
     // A 32 KB module folded into S0, the program start pushed near the end
     // of its first bank so the (long) program crosses into the second.
     checkTypedVsFast("S0 across banks", 0x8000, 0, {"NEW0", "NEW \"S0:\",&3F00"}, kLongProgram, longPayload);
@@ -438,9 +439,7 @@ void test_work_area_matches_typed() {
 
     // MODE 1: the area the ROM sets up (PC15MAP), whatever TITLE said before.
     check("MODE 1, no module", 0, 0, {"MODE1", "NEW0"}, 0);
-    // Fails: the fast loader puts the program at the wrong CE-155 offset
-    // (TODO.md, "MODE 1 + CE-155"). Re-enable with the fix.
-    // check("MODE 1, CE-155", 0x2000, 0, {"MODE1", "NEW0"}, 0);
+    check("MODE 1, CE-155", 0x2000, 0, {"MODE1", "NEW0"}, 0);
     // A one-bank program module in S1 becomes the MODE 1 area ...
     check("MODE 1, S1 one bank", 0x4000, 0, {"NEW0", "INIT\"S1:\",\"P\"", "TITLE\"S1:\"", "MODE1"}, 1);
     // ... a two-bank one is hidden and S0 is used ...

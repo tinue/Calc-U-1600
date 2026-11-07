@@ -9,9 +9,9 @@
 #include "../Audio/PiezoSampler.hpp"
 #include "../CPU/SC7852/SC7852.hpp"
 #include "../Connector/ExpansionCard.hpp"
-#include "../Connector/CardChain.hpp"
 #include "../Connector/MemorySlotConnector.hpp"
-#include "../Connector/PC1600SystemBus.hpp"
+#include "../Connector/SystemBus.hpp"
+#include "PC1600BusDrive.hpp"
 #include "PC1600Bank.hpp"
 #include "PC1600BusArbiter.hpp"
 #include "PC1600Display.hpp"
@@ -47,8 +47,10 @@
 //   Page D  C000-FFFF  Port 31H bit 7: bank 0 = internal 16KB RAM (RAM3);
 //                      bank 1 is undocumented and open bus.
 //
-// F07DH reads back Port 3DH's last-written value (the port itself isn't
-// readable); read() handles it.
+// F07DH is ordinary RAM: the firmware's own copy of the write-only Port
+// 3DH, written next to every OUT (3DH). Its interrupt entry and bank calls
+// restore the port from it, so a bare OUT (3DH) is undone by the next
+// interrupt -- as on the real machine.
 //
 // As an SC7852Bus, readIO/writeIO decode the PIO and keyboard (14H,
 // 17H-1FH), the TC8576F (20H-27H), the Slot 2 card latch (28H-2FH), the
@@ -67,9 +69,6 @@ public:
     static constexpr uint16_t kBankJump  = 0x019C;
     static constexpr uint16_t kBankCall  = 0x019F;
     static constexpr uint16_t kSlotSt    = 0x00E8;
-
-    // Read-side mirror of Port 3DH (see class comment).
-    static constexpr uint16_t kPort3DMirrorAddr = 0xF07D;
 
     static constexpr size_t kBankSize = 0x4000; // 16384B, one Z-80 "bank"
 
@@ -198,6 +197,15 @@ public:
     /// INT is what ends the parked SC7852's HALT.
     void latchLh5803InterruptCause() { m_intCause |= 0x08; }
 
+    /// The SC7852's LHNMIO output (pin 92, wired to the LH5803's NMI): set
+    /// by PC1600Machine when the LH5803 fetches 9400H with PU = PV = 1
+    /// (the CE-158 high bank's display shift, which the LH5803 ROM's NMI
+    /// handler at C440H replaces), cleared by any port 36H write -- the
+    /// handler's `ANI #(A036H),00H` acknowledge.
+    /// Ref/PC-1600/PC-1600-CPU-LH5803-Compat.md §6.1.
+    bool lhNmiLatched() const { return m_lhNmiLatch; }
+    void latchLhNmi() { m_lhNmiLatch = true; }
+
     /// Port 32H as read: the latched causes plus two live levels, bit 0
     /// the TC8576F's INT output (INT0, pin 81) and bit 6 the sub-CPU's Z7
     /// (INT6, pin 84). Neither is latched: bit 0 follows the chip until the
@@ -236,20 +244,14 @@ public:
     /// loadBank6Rom() -- read-only, so safe from any thread.
     const uint8_t* bank6Rom() const { return m_bank6Loaded ? m_bank6Rom.data() : nullptr; }
 
-    /// The 60-pin system bus (Page B banks 4-7 ROM window + I/O ports
-    /// 0x70-0x9F) -- CE-1600P and the host drive plug in here, not the memory slots. See
-    /// PC1600SystemBus.hpp for why this bus has its own pin model rather
-    /// than reusing ExpansionCard::PinState.
-    PC1600SystemBus& ce1600pBus() { return m_ce1600pBus; }
-
-    /// The same 60-pin connector as seen from the LH5803 side: the cards
-    /// the LH5803 reaches (CE-150, CE-158). LH5803SharedMemory builds the
-    /// pins and offers its peripheral accesses here; the cards decode them.
-    /// This and ce1600pBus() are still two paths for one physical plug --
-    /// merging them waits on the open 60-pin signal questions (TODO.md,
-    /// "Expansion connectors: one model on both machines").
-    CardChain<ExpansionCard, PinState>& lh5803PeripheralBus() { return m_lh5803PeripheralBus; }
-    const CardChain<ExpansionCard, PinState>& lh5803PeripheralBus() const { return m_lh5803PeripheralBus; }
+    /// The 60-pin connector: the PC-1600's one system-bus plug, driven by
+    /// whichever CPU owns the bus (PC1600BusDrive builds each cycle's
+    /// contacts). The Z-80 side offers its page-1 banks 4-7 and I/O
+    /// 70H-9FH here, LH5803SharedMemory the LH5803's peripheral window and
+    /// ME1 8000H up. CE-150, CE-158, CE-1600P/F, the host drive and bus
+    /// ROMs all sit on it; each decodes the contacts itself.
+    SystemBus& systemBus() { return m_systemBus; }
+    const SystemBus& systemBus() const { return m_systemBus; }
 
     /// Plugs a card into Slot 1 / Slot 2 -- the connector-level path, taking
     /// ownership of the card (mirrors PC1500Machine::attachExpansionCard).
@@ -269,6 +271,8 @@ public:
     void detachSlot2() { m_slot2Conn.detach(); m_slot2Card.reset(); }
     bool slot1Attached() const { return m_slot1Conn.attachedCard() != nullptr; }
     bool slot2Attached() const { return m_slot2Conn.attachedCard() != nullptr; }
+    /// The card in Slot `slot` (1 or 2), null for an empty slot.
+    const ExpansionCard* slotCard(int slot) const { return (slot == 1 ? m_slot1Conn : m_slot2Conn).attachedCard(); }
     /// The module in Slot `slot` (1 or 2) by name (ExpansionCard::moduleName()),
     /// "" for an empty slot.
     std::string slotModuleName(int slot) const {
@@ -299,14 +303,30 @@ public:
         return c ? c->debugImage() : std::vector<uint8_t>{};
     }
 
-    /// The Slot 1 / Slot 2 card's contentRevision(); 0 for an empty slot.
+    /// The Slot 1 card's contentRevision(); 0 for an empty slot.
     uint64_t slot1CardRevision() const {
         auto* c = m_slot1Conn.attachedCard();
         return c ? c->contentRevision() : 0;
     }
-    uint64_t slot2CardRevision() const {
-        auto* c = m_slot2Conn.attachedCard();
-        return c ? c->contentRevision() : 0;
+
+    /// The fixed internal 16 KB RAM (page D bank 0, Z-80 C000H up), read in
+    /// place -- the inspector, under PC1600Machine::debugInspect().
+    const uint8_t* internalRam() const { return m_internalRam.data(); }
+
+    /// Which of the built-in ROM images are loaded, for the inspector.
+    bool systemRomLoaded() const { return m_bank0Loaded; }
+    bool bank3RomLoaded() const { return m_bank3Loaded; }
+    bool bank3bRomLoaded() const { return m_bank3bLoaded; }
+    bool bank6RomLoaded() const { return m_bank6Loaded; }
+
+    /// A side-effect-free read of the slot card behind global page-C `bank`
+    /// (0/1 = Slot 1, 2/3 = Slot 2) at `addr` ($8000-$BFFF), whichever bank
+    /// is mapped right now (MemorySlotConnector::readInBank); false for an
+    /// empty slot or a byte the card doesn't decode. The card's own latches
+    /// (a vertical bank) stay as they are.
+    bool slotBusRead(int bank, uint16_t addr, uint8_t& out) const {
+        if (bank < 0 || bank > 3 || addr < 0x8000 || addr >= 0xC000) return false;
+        return (bank < 2 ? m_slot1Conn : m_slot2Conn).readInBank(bank, addr, out);
     }
 
     /// Copy the fixed internal 16 KB RAM (page D bank 0) into `out` (which
@@ -415,8 +435,7 @@ private:
     MemorySlotConnector m_slot2Conn;
     std::unique_ptr<ExpansionCard> m_slot1Card; // null = slot empty
     std::unique_ptr<ExpansionCard> m_slot2Card;
-    PC1600SystemBus m_ce1600pBus; // Page B banks 4-7 + I/O 0x70-0x9F; see ce1600pBus()
-    CardChain<ExpansionCard, PinState> m_lh5803PeripheralBus; // see lh5803PeripheralBus()
+    SystemBus m_systemBus; // the 60-pin connector; see systemBus()
     PC1600BusArbiter* m_arbiter{nullptr};
     SC7852* m_cpu{nullptr};
     uint8_t m_intCause{0};      // Port 32H latched causes, whatever the mask -- bit 3 LH5803
@@ -425,15 +444,15 @@ private:
                                 // Bits 0 (comm) and 6 (sub-CPU) are live levels, see intCause().
                                 // INT = intCause() & mask (interruptLevel())
     uint8_t m_intMask{0};       // Port 35H
+    bool m_lhNmiLatch{false};   // LHNMIO, see latchLhNmi(); a port 36H write clears it
     uint8_t m_im2VectorLow{0xFF}; // Port 39H
 
     // Keyboard/display I/O. LH5810-style port block:
     // DDA(1CH)/DDB(1DH) direction registers (bit i: 1 = output, 0 = input).
-    // The KS0-7 strobes on OPA are treated as simply "active when OPA bit
-    // reads 0" -- DDA not consulted, the same simplification PC1500Memory's
-    // own comment flags (PC-1500 KEYSCAN_NOWAIT DDA nuance not mattering
-    // here). The PB6 strobe (CTRL/KBII/BS) *does* consult DDB.6: it is
-    // asserted only while PB6 is an output driven low -- see readIO(0x37).
+    // A KS0-7 strobe is active only while its PA bit is an output (DDA = 1)
+    // driven low (OPA = 0); the PB6 strobe (CTRL/KBII/BS) likewise with
+    // DDB.6 / OPB.6 -- see readIO(0x37). The LH5803 reaches the same block
+    // at ME1 F000H-F00FH (LH5803SharedMemory).
     uint8_t m_dda{0}, m_opa{0}, m_ddb{0}, m_opb{0};
     // OPC (18H), the PC-port output buffer. The BEEP loop (P1-B3 5EC5)
     // toggles bit 7 with `IN A,(18H)` / OR 80H or AND 7FH / `OUT (18H),A`,
@@ -467,12 +486,17 @@ private:
     // (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md pin 75: PC6 = NAND(..., SD0)). So the
     // audible level is (b6 && b7) && SDO. The recording agrees: the
     // whistle runs on unchanged through the noise routine's OPC writes, and
-    // BEEP OFF (b6 low) silences both.
+    // BEEP OFF (b6 low) silences both. PB2, the cassette input, is the
+    // gate's fourth input, so a tape playing into CLOAD sounds too (a real
+    // unit is audible on CSAVE and CLOAD); it counts as high (its pull-up)
+    // while no tape interface drives it.
     static constexpr int64_t kModulatorHz = kPC1600PhiOsHz / 4;   // phi of the F-register dividers
     uint8_t m_fReg{0};
     bool    m_sdo{true};
     int64_t m_sdoAccum{0};  // T-states * kModulatorHz into the current SDO half period
-    void updateBuzzerLine() { m_piezo.setLevel((m_opc & 0xC0) == 0xC0 && m_sdo); }
+    void updateBuzzerLine() {
+        m_piezo.setLevel((m_opc & 0xC0) == 0xC0 && m_sdo && m_systemBus.cmtIn(true));
+    }
     // Sampled in SC-7852 T-states.
     PiezoSampler m_piezo{double(kPC1600TStateHz), PiezoSampler::Transducer::PC1600};
     // Live PB *pin* levels for the bits driven from outside the CPU, kept
@@ -509,6 +533,12 @@ private:
     /// is a physical input, not a reset-latched line.
     static constexpr uint8_t kPbInOnKey = 0x80;
     uint8_t m_pbIn{kPbInResetLevels};
+    // PB2 = the cassette-read line (CMTIN), driven from the 60-pin bus by
+    // a tape interface (CE-1600P, CMT-in enabled); 0 when none drives it.
+    static constexpr uint8_t kPbInCmtIn = 0x04;
+    uint8_t pbPins() const {
+        return static_cast<uint8_t>(m_pbIn | (m_systemBus.cmtIn(false) ? kPbInCmtIn : 0));
+    }
     // MSK (1AH) -- interrupt mask bits 0-3 (IRQ, PB7, RD, TD enables; PC-1500
     // TRM p.71). Stored only: nothing in this core raises those causes.
     uint8_t m_msk{0};

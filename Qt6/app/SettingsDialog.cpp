@@ -2,6 +2,8 @@
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
 #include "MachineController.hpp"
+#include "NamedComboBox.hpp"
+#include "Shared/PresetCatalog.hpp"
 #include "debug/DebugController.hpp"
 
 #include <QCheckBox>
@@ -13,6 +15,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
@@ -73,18 +76,15 @@ QPushButton* makeRowButton(const QString& text, QWidget* parent) {
 }
 
 // Everything one path row needs. `display` returns the effective path to
-// show (empty = show `placeholder` instead); `isOverridden` says whether a
-// user value is stored, which is what enables the reset/clear button.
+// show; `isOverridden` says whether a user value is stored, which is what
+// enables the reset button.
 // `pick` runs the picker dialog and returns the chosen path (empty =
 // cancelled); `set` writes through to AppSettings (empty = back to
 // default); `onChanged` runs after either button, for a row that needs to
 // do more than refresh itself (e.g. relinking a live serial port).
 struct PathRowSpec {
     QString label;
-    QString pickText = SettingsDialog::tr("Change…");
-    QString resetText = SettingsDialog::tr("Reset");
     QString resetToolTip = SettingsDialog::tr("Revert to the default location");
-    QString placeholder;
     std::function<QString()> pick;
     std::function<QString()> display;
     std::function<bool()> isOverridden;
@@ -99,11 +99,10 @@ void addPathRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids& secti
 
     auto* field = new QLineEdit(parent);
     field->setReadOnly(true);
-    field->setPlaceholderText(spec.placeholder);
     grid->addWidget(field, row, kValueColumn);
 
-    auto* pickButton = makeRowButton(spec.pickText, parent);
-    auto* resetButton = makeRowButton(spec.resetText, parent);
+    auto* pickButton = makeRowButton(SettingsDialog::tr("Change…"), parent);
+    auto* resetButton = makeRowButton(SettingsDialog::tr("Reset"), parent);
     resetButton->setToolTip(spec.resetToolTip);
     grid->addWidget(pickButton, row, kPickColumn);
     grid->addWidget(resetButton, row, kResetColumn);
@@ -161,28 +160,54 @@ void addOpenFolderRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids&
     addPathRow(grid, row, parent, sections, spec);
 }
 
-// One model's "default preset" row: `modelKey` is AppSettings::
-// defaultPresetPath()'s key, `extension` the preset suffix that model uses.
+// One model's "default preset" row: a pick list of the bundled default
+// presets for `model` (examples/bundled.yaml's `defaults`), "(none)", and
+// the user's own file once one is chosen. The list shows descriptions, the
+// closed combo the short name (NamedComboBox); Settings stores a bundled
+// one as its "examples:" ref. "Choose…" picks any preset file.
 void addDefaultPresetRow(QGridLayout* grid, int row, QWidget* parent, SectionGrids& sections, const QString& label,
                          Model model) {
-    const QString modelKey = modelSettingsKey(model);
-    const QString extension = modelKey.toLower();
-    PathRowSpec spec;
-    spec.label = label;
-    spec.pickText = SettingsDialog::tr("Choose…");
-    spec.resetText = SettingsDialog::tr("Clear");
-    spec.resetToolTip = SettingsDialog::tr("Don't load a preset for this model");
-    spec.placeholder = SettingsDialog::tr("(none)");
-    spec.pick = [parent, modelKey, extension] {
-        const QString current = AppSettings::defaultPresetPath(modelKey);
-        return QFileDialog::getOpenFileName(parent, SettingsDialog::tr("Choose Default Preset"),
-                                            current.isEmpty() ? AppSettings::openStartDir(AppSettings::OpenFolder::Samples) : current,
-                                            SettingsDialog::tr("Presets (*.%1);;All Files (*)").arg(extension));
+    addRowLabel(grid, row, parent, sections, label);
+    auto* combo = new NamedComboBox(parent);
+    combo->setObjectName(QStringLiteral("dialog.settings.preset.") + modelSettingsKey(model));
+    grid->addWidget(combo, row, kValueColumn, Qt::AlignLeft);
+    auto* pickButton = makeRowButton(SettingsDialog::tr("Choose…"), parent);
+    grid->addWidget(pickButton, row, kPickColumn);
+
+    const shared::PresetCatalog catalog(AppPaths::paths());
+    const auto fill = [combo, model, catalog] {
+        const QSignalBlocker block(combo);
+        combo->clear();
+        combo->addNamedItem(SettingsDialog::tr("(none)"), SettingsDialog::tr("(none)"), QString(),
+                            SettingsDialog::tr("Don't load a preset for this model"));
+        const QString current = AppSettings::defaultPresetPath(model);
+        for (const shared::PresetEntry& e : catalog.defaultChoices(model, current.toStdString())) {
+            const QString ref = QString::fromStdString(e.ref);
+            // A bundled one shows its description on hover, the user's own file its path.
+            const QString tip = ref.startsWith(QLatin1String(shared::kExamplePresetPrefix))
+                                    ? QString::fromStdString(e.description)
+                                    : AppPaths::displayPath(ref);
+            combo->addNamedItem(QString::fromStdString(e.label()), QString::fromStdString(e.name), ref, tip);
+        }
+        combo->setCurrentIndex(std::max(0, combo->findData(current)));
+        combo->setToolTip(combo->itemData(combo->currentIndex(), Qt::ToolTipRole).toString());
+        combo->updateGeometry();
     };
-    spec.display = [modelKey] { return AppSettings::defaultPresetPath(modelKey); };
-    spec.isOverridden = [modelKey] { return !AppSettings::defaultPresetPath(modelKey).isEmpty(); };
-    spec.set = [modelKey](const QString& path) { AppSettings::setDefaultPresetPath(modelKey, path); };
-    addPathRow(grid, row, parent, sections, spec);
+    fill();
+
+    QObject::connect(combo, &QComboBox::currentIndexChanged, parent, [combo, model](int index) {
+        AppSettings::setDefaultPresetPath(model, combo->itemData(index).toString());
+        combo->setToolTip(combo->itemData(index, Qt::ToolTipRole).toString());
+    });
+    QObject::connect(pickButton, &QPushButton::clicked, parent, [parent, model, fill] {
+        const QString extension = modelSettingsKey(model).toLower();
+        const QString path = QFileDialog::getOpenFileName(
+            parent, SettingsDialog::tr("Choose Default Preset"), AppSettings::openStartDir(AppSettings::OpenFolder::Samples),
+            SettingsDialog::tr("Presets (*.%1);;All Files (*)").arg(extension));
+        if (path.isEmpty()) return;
+        AppSettings::setDefaultPresetPath(model, path);
+        fill();
+    });
 }
 
 } // namespace
@@ -244,16 +269,21 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
         spec.set = [](const QString& dir) { AppSettings::setInstanceDirOverride(dir); };
         addPathRow(storage, 0, this, sections, spec);
     }
+    {
+        PathRowSpec spec = directorySpec(this, tr("Tapes:"), tr("Choose Tape Folder"),
+                                         [] { return AppPaths::tapeDir(); });
+        spec.display = [] { return AppPaths::displayPath(AppPaths::tapeDir()); };
+        spec.isOverridden = [] { return !AppSettings::tapeDirOverride().isEmpty(); };
+        spec.set = [](const QString& dir) { AppSettings::setTapeDirOverride(dir); };
+        addPathRow(storage, 1, this, sections, spec);
+    }
 
     // ── Tracing ──────────────────────────────────────────────────────────
     QGridLayout* tracing = addSection(layout, this, sections, tr("Tracing"), QStringLiteral("dialog.settings.tracing"));
     {
         PathRowSpec spec = directorySpec(this, tr("Trace directory:"), tr("Choose Trace Directory"),
                                          [] { return AppPaths::instanceDir(); });
-        spec.display = [] {
-            const QString dir = AppSettings::traceDirOverride();
-            return AppPaths::displayPath(dir.isEmpty() ? AppPaths::instanceDir() : dir);
-        };
+        spec.display = [] { return AppPaths::displayPath(AppPaths::traceDir()); };
         spec.isOverridden = [] { return !AppSettings::traceDirOverride().isEmpty(); };
         spec.set = [](const QString& dir) { AppSettings::setTraceDirOverride(dir); };
         addPathRow(tracing, 0, this, sections, spec);
@@ -287,10 +317,7 @@ SettingsDialog::SettingsDialog(MachineController* controller, QWidget* parent)
     {
         PathRowSpec spec = directorySpec(this, tr("Symlink directory:"), tr("Choose Serial Port Directory"),
                                          [] { return AppPaths::instanceDir(); });
-        spec.display = [] {
-            const QString dir = AppSettings::serialLinkDirOverride();
-            return AppPaths::displayPath(dir.isEmpty() ? AppPaths::instanceDir() : dir);
-        };
+        spec.display = [] { return AppPaths::displayPath(AppPaths::serialLinkDir()); };
         spec.isOverridden = [] { return !AppSettings::serialLinkDirOverride().isEmpty(); };
         spec.set = [](const QString& dir) { AppSettings::setSerialLinkDirOverride(dir); };
         spec.onChanged = [this, refreshSerialStatusLabel] {

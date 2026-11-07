@@ -33,8 +33,7 @@
 //
 //   Port 3DH (write-only) — bit 2 clear selects the hidden Bank 3b BASIC
 //   ROM at page B (4000-7FFF) in place of the normal Bank 3 ROM. Not
-//   readable via IN — mirrored at system memory address F07DH instead (see
-//   PC1600Memory). D0-D2 additionally latch into gate-array outputs
+//   readable via IN; the firmware keeps a copy in RAM at F07DH. D0-D2 additionally latch into gate-array outputs
 //   A14A-A16A; A16A extends CS24's 16KB window into 32KB by sub-banking
 //   Bank 3 into two 8KB halves, which is a memory-decode detail
 //   (PC1600Memory), not something this register class needs to interpret.
@@ -146,32 +145,32 @@ public:
 
     // ── Port 3DH ──────────────────────────────────────────────────────
     void    writePort3D(uint8_t value) { m_port3d = value; }
-    /// Last value written to Port 3DH — PC1600Memory derives the hidden-ROM
-    /// latch and F07DH mirror from this directly.
+    /// Last value written to Port 3DH (the A14A-A16A latch).
     uint8_t port3DLatch() const { return m_port3d; }
     /// True when the hidden Bank 3b BASIC ROM is selected in place of the
     /// normal Bank 3 ROM at page B (Port 3DH bit 2 clear).
     bool hiddenBasicRomSelected() const { return (m_port3d & 0x04) == 0; }
 
-    /// Resets all four registers to 0 — the documented reset-state bank
-    /// configuration (A13A high/A15A low/A14A high per
-    /// Ref/PC-1600/PC-1600-Machine-Overview.md §6) corresponds to an all-zero register
-    /// bank: page A/B/C/D all select bank 0, hidden ROM not selected.
+    /// Resets Ports 31H/28H/3CH to 0 (pages A/B/C/D all select bank 0) and
+    /// Port 3DH to 05H: the gate array's reset input forces A16A high, A15A
+    /// low and A14A high (TRM §7.8, Service Manual §9-4), i.e. latched
+    /// D2..D0 = 1,0,1 -- normal Bank 3, hidden ROM not selected.
     void reset() {
         m_port31 = 0;
         m_port28 = 0;
         m_port3c = 0;
-        m_port3d = 0;
+        m_port3d = kPort3DReset;
         m_port3cSeq = 0;
         m_slot1MapChangeSeq = 0;
         m_slot2MapChangeSeq = 0;
     }
 
 private:
+    static constexpr uint8_t kPort3DReset = 0x05;
     uint8_t m_port31{0};
     uint8_t m_port28{0};
     uint8_t m_port3c{0};
-    uint8_t m_port3d{0};
+    uint8_t m_port3d{kPort3DReset};
     // "Last call wins" bookkeeping for the SLOT1MAP/SLOT2MAP collision at
     // page-B bank 1 — see writePort3C()/slot1MapWinsTie().
     uint32_t m_port3cSeq{0};

@@ -119,7 +119,7 @@ std::string absPath(const std::string& p) {
 std::unique_ptr<PC1600Machine> applyPreset(const Config& c, SerialLink* com1, SerialLink* ce158,
                                            const std::vector<std::string>& extraKeys,
                                            const std::string& loaderFile, PresetLoadResult* res) {
-    std::string yaml = "model: PC-1600\ninterface: CE-158\n";
+    std::string yaml = "format-version: 1\nmodel: PC-1600\ninterface: CE-158\n";
     if (!c.slot1.empty()) yaml += "slot-1: " + c.slot1 + "\n";
     if (!c.slot2.empty()) yaml += "slot-2: " + c.slot2 + "\n";
     yaml += "keys:\n";

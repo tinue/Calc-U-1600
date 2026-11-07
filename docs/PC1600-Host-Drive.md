@@ -71,7 +71,7 @@ letters, digits and ``` `@#$%^&()-_{}' ```.
   across launches.
 - **Preset:** `host-drive: <dir>` mounts a folder before the preset's cold
   boot. The path is relative to the preset, or starts with `~/`. The GUI then
-  shows the drive under File ▸ Unmount (`examples/dwx/DiskWorks.pc1600`).
+  shows the drive as File ▸ Unmount "<folder>" (`examples/dwx/DiskWorks.pc1600`).
 
 ## Compared with a real MEP rev3
 

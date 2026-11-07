@@ -169,7 +169,7 @@ void test_port3d_hidden_rom_latch() {
     CHECK(!bank.hiddenBasicRomSelected());
 }
 
-void test_reset_zeroes_all_bank_registers() {
+void test_reset_zeroes_bank_registers_and_sets_port3d() {
     PC1600Bank bank;
     bank.writePort31(0xBB);
     bank.writePort28(7);
@@ -180,7 +180,8 @@ void test_reset_zeroes_all_bank_registers() {
     CHECK(bank.slot2VerticalBank() == 0);
     CHECK(bank.readPort3C() == 0);
     CHECK(bank.slot2MapMode() == 0);
-    CHECK(bank.hiddenBasicRomSelected()); // port3D==0 -> bit2 clear -> hidden selected
+    CHECK(bank.port3DLatch() == 0x05);    // reset forces A16A=1, A15A=0, A14A=1
+    CHECK(!bank.hiddenBasicRomSelected()); // A16A high -> normal Bank 3
 }
 
 // ── PC1600Memory: page A always resident regardless of pageABank() ──────
@@ -280,14 +281,19 @@ void test_rom_ignores_writes() {
     CHECK(mem.read(0x0000) == 0x11); // unchanged
 }
 
-void test_port3d_f07dh_mirror() {
+// F07DH is plain RAM: a Port 3DH write does not show up there, and a RAM
+// write there does not reach the port (the firmware writes both itself).
+void test_f07dh_is_plain_ram() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
     bank.writePort31(0x00); // pageDBank() == 0, so 0xF07D is in RAM range
-    bank.writePort3D(0x05);
-    CHECK(mem.read(PC1600Memory::kPort3DMirrorAddr) == 0x05);
-    bank.writePort3D(0xFA);
-    CHECK(mem.read(PC1600Memory::kPort3DMirrorAddr) == 0xFA);
+    mem.write(0xF07D, 0x04);
+    bank.writePort3D(0x00);
+    CHECK(mem.read(0xF07D) == 0x04);
+    CHECK(bank.hiddenBasicRomSelected());
+    mem.write(0xF07D, 0xFA);
+    CHECK(mem.read(0xF07D) == 0xFA);
+    CHECK(bank.port3DLatch() == 0x00);
 }
 
 void test_reset_keeps_ram_all_reset_clears_it_never_touches_rom() {
@@ -336,7 +342,7 @@ int run_pc1600_bank_tests() {
     test_port3c_slot1map_active();
     test_port3c_slot1map_wins_tie();
     test_port3d_hidden_rom_latch();
-    test_reset_zeroes_all_bank_registers();
+    test_reset_zeroes_bank_registers_and_sets_port3d();
     test_page_a_always_resident_regardless_of_port31_bit0();
     test_page_b_bank0_is_system_rom_upper_half();
     test_page_b_unbacked_banks_are_open_bus();
@@ -346,7 +352,7 @@ int run_pc1600_bank_tests() {
     test_page_d_bank0_is_internal_ram_readwrite();
     test_page_d_bank1_is_open_bus_and_ignores_writes();
     test_rom_ignores_writes();
-    test_port3d_f07dh_mirror();
+    test_f07dh_is_plain_ram();
     test_reset_keeps_ram_all_reset_clears_it_never_touches_rom();
     test_load_rejects_wrong_size();
 

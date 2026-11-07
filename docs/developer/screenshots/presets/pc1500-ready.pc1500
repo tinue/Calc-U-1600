@@ -1,4 +1,5 @@
 # User-guide screenshots: a plain PC-1500 (ROM A04) ready for work.
+format-version: 1
 model: PC-1500
 keys:
   - key: cl

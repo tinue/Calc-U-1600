@@ -17,6 +17,7 @@
 # file deliberately stops at S1-S3 so the same definition is identically
 # "maxed out" on both models, with nothing dormant on either.
 
+format-version: 1
 module-name: "PC-1500 Maxed-Out (fictional)"
 # A template: the app never writes to this file, wherever it is stored.
 # Dropped into the storage folder it is listed with the bundled cards,

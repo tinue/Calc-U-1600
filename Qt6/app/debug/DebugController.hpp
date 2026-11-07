@@ -105,7 +105,7 @@ private:
     /// A synchronous operation is running (SyncOperations): the machine is
     /// being rebuilt or driven directly, so DAP messages wait until it is done.
     bool appBusy() const;
-    /// SyncOperations::busyChanged: drains what waited once it is done.
+    /// MachineController::appBusyChanged: drains what waited once it is done.
     void setAppBusy(bool busy);
     void createTarget();
     void onClientConnected();

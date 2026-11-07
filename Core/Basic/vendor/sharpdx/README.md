@@ -2,17 +2,18 @@
 
 `libsharpdx.a` + `sharpdx.h` are the prebuilt static library and generated C
 header of [`SharpDataExchange`](../../../../SharpDataExchange) (crate `sharpdx`,
-version 0.3.2). Every program loader uses it: `sde_file_info` tells what a
+version 0.3.5). Every program loader uses it: `sde_file_info` tells what a
 file is (BASIC listing, tokenized BASIC, machine code with or without a
-header) and where its payload is (`Core/ProgramFile.cpp`), and `sde_tokenize`
+header, cassette WAV) and where its payload is (`Core/ProgramFile.cpp`,
+which decodes a WAV with `sde_wav_count` / `sde_wav_decode`), and `sde_tokenize`
 turns a `.bas` listing into in-RAM line records
 (`Core/Basic/BasicProgramSource.cpp`). It is a required dependency.
 
 We vendor the built artifact rather than adding a Rust toolchain to the
-Calc-U-1600 build. Only `sde_file_info` / `sde_tokenize` / `sde_last_error` /
-`sde_buf_free` are used; the library does no file I/O and never panics across
-the FFI boundary. It is built without sharpdx's `serial` feature
-(`--lib --no-default-features`), so it links no serial-port code or
+Calc-U-1600 build. Only `sde_file_info` / `sde_tokenize` / `sde_wav_count` /
+`sde_wav_decode` / `sde_last_error` / `sde_buf_free` are used; the library does no file I/O and never panics across
+the FFI boundary. It is built without sharpdx's `serial` and `audio` features
+(`--lib --no-default-features`), so it links no serial-port or audio code or
 frameworks.
 
 ## Architecture
@@ -22,9 +23,9 @@ frameworks.
 
 ## Linking
 
-The Qt6 app links `libsharpdx.a` through `Qt6/CMakeLists.txt`. The headless
-CLI / test builds (`tools/*.sh`) pass the archive path on the clang++
-command line.
+Every CMake build (the Qt6 app, the tests, the web engine) links it through
+the `calcu_sharpdx` target in `cmake/CalcU.cmake`. Only the script builds
+(`tools/build_*.sh`) pass the archive path on the clang++ command line.
 
 `ld` prints a handful of `object file ... was built for newer 'macOS'
 version (26.0) than being linked` warnings: those are the Rust toolchain's
@@ -41,3 +42,13 @@ Run `tools/refresh_sharpdx.sh` from the repo root after the sibling
 `SharpDataExchange` checkout changes. It runs
 `cargo build --release --lib --no-default-features` there and copies
 `target/release/libsharpdx.a` + `include/sharpdx.h` over these files. Commit the result.
+
+## WebAssembly
+
+`libsharpdx-wasm.a` is the same crate built for `wasm32-unknown-emscripten`
+by `tools/build_sharpdx_wasm.sh` (needs `rustup target add
+wasm32-unknown-emscripten` and `emcc`), committed so the WebAssembly check
+(`tools/build_wasm_check.sh`, CI job `web`) needs no Rust toolchain.
+Rust's std for that target uses native wasm exception handling, so the C++
+side is built with `-fwasm-exceptions`, and the Emscripten used to link it
+should match the one it was built with (6.0.13).

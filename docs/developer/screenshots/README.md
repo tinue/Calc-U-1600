@@ -68,9 +68,9 @@ A shot without `preset:` continues from where the previous one left off.
 The window is set to the shot's size when the shot starts, and again after
 each `preset:` or `reset`, since a model switch changes the minimum size.
 Two limits apply. A window can't be narrower than its layout: the PC-1600's
-control bar needs about 1430. It also can't be taller than the screen. If
-the real size differs from the requested one, the capture logs a
-`note: window is …`. Give the shot a `window:` that fits: the plotter shot
+control bar needs about 1430, or 1620 with the Tape group showing. It also
+can't be taller than the screen. If the real size differs from the
+requested one, the capture logs a `note: window is …`. Give the shot a `window:` that fits: the plotter shot
 uses `1430x1280`, so the paper panel shows the whole figure.
 `capture:` on the shot is a final capture step. `capture: name.png` alone
 captures the whole window. More captures can go in `steps:` as
@@ -94,8 +94,9 @@ captures the whole window. More captures can go in `steps:` as
 | `action: Menu > … > Item` | Trigger a menu item. `&` mnemonics are ignored, and `...` matches `…`. |
 | `menu: Menu > Submenu` | Open a menu and leave it open. See the macOS note below. |
 | `close` | Close the topmost popup, dialog, or native menu. |
-| `choose-file: <path>` | Pick that file (relative to the scenario) in the open file dialog and accept it, e.g. after `action: File > Load Machine Code…`. |
+| `choose-file: <path>` | Pick that file (relative to the scenario) in the open file dialog and accept it, e.g. after `action: File > Load Machine Code…`. In a Save dialog (`File > Tape > Record…`) the file may not exist yet; its folder must. |
 | `enter-text: <text>` | Type into the text field of the open dialog, e.g. a name in Name & Save. |
+| `accept` | Accept the open dialog (its OK button), e.g. after `enter-text`. |
 | `capture: …` | Write an image; see below. |
 
 A dialog opened by `action:` or `click:` stays open and scriptable: the
@@ -161,15 +162,16 @@ Two macOS details:
 |---|---|
 | `faceplate`, `lcd` | calculator face / its LCD |
 | `controlbar` | the whole control bar |
-| `controlbar.model`, `controlbar.rom`, `controlbar.rom1600` | model / PC-1500 ROM / PC-1600 ROM pickers |
+| `controlbar.model` | model picker |
 | `controlbar.slot1`, `controlbar.slot2`, `controlbar.slot1.save`, `controlbar.slot2.save` | module pickers and their Name & Save buttons |
-| `controlbar.ce150`, `controlbar.ce158`, `controlbar.ce1600p`, `controlbar.ce1600p.rom` | peripheral toggles, CE-1600P ROM picker |
+| `controlbar.ce150`, `controlbar.ce158`, `controlbar.ce1600p` | peripheral toggles (CE-150/CE-158 on PC-1500/1500A, CE-1600P on PC-1600) |
 | `controlbar.floppy`, `controlbar.floppy.side`, `controlbar.floppy.save`, `controlbar.floppy.lamp` | CE-1600F disk row |
-| `debugpanel`, `debugpanel.pointers`, `debugpanel.dumpmem`, `debugpanel.dumpcard`, `debugpanel.clear`, `debugpanel.trace` | Debug panel and its buttons |
+| `controlbar.tape`, `controlbar.tape.save`, `controlbar.tape.counter` | cassette bay: tape picker, Save, counter (green while the motor runs; with a CE-150 or CE-1600P) |
+| `debugpanel`, `debugpanel.pointers`, `debugpanel.memory`, `debugpanel.dump`, `debugpanel.card`, `debugpanel.clear`, `debugpanel.trace` | Inspector panel and its buttons (`open:` on `debugpanel.memory` / `debugpanel.dump` shows the menu) |
 | `paper`, `paper.copy`, `paper.cut` | plotter paper panel |
 | `ce158printer`, `ce158printer.save`, `ce158printer.clear` | CE-158 printer panel |
 | `dialog.settings`, `dialog.about`, `dialog.machinecode` | dialogs |
-| `dialog.settings.general`, `.presets`, `.storage`, `.tracing`, `.serial` | one section of Settings |
+| `dialog.settings.general`, `.presets`, `.storage`, `.tracing`, `.serial`, `.debugger` | one section of Settings |
 
 ## Presets
 
@@ -178,7 +180,7 @@ pictures don't change when an example preset does.
 
 **Leave the calculator in RUN mode.** PRO mode is only right when the shot
 shows a LIST or program entry. A capture taken in PRO mode logs a note. Start
-from a clean `NEW0`, or the BASIC pointers (and so Debug ▸ Pointers, MEM
+from a clean `NEW0`, or the BASIC pointers (and so the INSPECTOR's Pointers, MEM
 and so on) are garbage:
 
 - PC-1500/1500A cold boot lands in PRO mode, so use `key: cl`, `type: NEW0`,

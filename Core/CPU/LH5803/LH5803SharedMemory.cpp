@@ -5,6 +5,10 @@
 #include "../../PC1600/PC1600Memory.hpp"
 
 uint8_t LH5803SharedMemory::readME0(uint16_t addr) {
+    return onBus(readME0Driven(addr));
+}
+
+uint8_t LH5803SharedMemory::readME0Driven(uint16_t addr) {
     if (addr < 0x8000) return m_shared.read(uint16_t(lha90(addr) + 0x8000));
     if (addr < kRomBase) {
         // 8000-BFFF peripheral-ROM window, selected by the LH5803's own PV
@@ -18,6 +22,7 @@ uint8_t LH5803SharedMemory::readME0(uint16_t addr) {
 }
 
 void LH5803SharedMemory::writeME0(uint16_t addr, uint8_t value) {
+    m_dataBus = value;
     if (addr < 0x8000) {
         addr = lha90(addr);
         m_shared.write(uint16_t(addr + 0x8000), value);
@@ -42,6 +47,10 @@ void LH5803SharedMemory::mirrorPc1500Display(uint16_t addr) {
         display.mirrorPc1500Column(pc1500ram::columnOf(pair, block), pc1500ram::columnDots(first, second, block));
 }
 
+uint8_t LH5803SharedMemory::readInputPort() {
+    return m_shared.readIO(0x37);
+}
+
 bool LH5803SharedMemory::isUartShadow(uint16_t addr, uint8_t* reg, bool* isSubCpuAnswer) {
     const uint16_t off = addr & 0x00FF; // 0xA0xx shadow and the bare form share the low byte
     if ((addr & 0xFF00) != 0x0000 && (addr & 0xFF00) != 0xA000) return false;
@@ -51,30 +60,34 @@ bool LH5803SharedMemory::isUartShadow(uint16_t addr, uint8_t* reg, bool* isSubCp
 }
 
 bool LH5803SharedMemory::cardRead(uint16_t addr, bool me1, uint8_t* value) const {
-    const auto& bus = m_shared.lh5803PeripheralBus();
-    return !bus.empty() && bus.read(peripheralPins(addr, /*forWrite=*/false, me1), *value);
+    const auto& bus = m_shared.systemBus();
+    return !bus.empty() && bus.read(busPins(addr, /*forWrite=*/false, me1), *value);
 }
 
 bool LH5803SharedMemory::cardWrite(uint16_t addr, bool me1, uint8_t value) {
-    auto& bus = m_shared.lh5803PeripheralBus();
-    return !bus.empty() && bus.write(peripheralPins(addr, /*forWrite=*/true, me1), value);
+    auto& bus = m_shared.systemBus();
+    return !bus.empty() && bus.write(busPins(addr, /*forWrite=*/true, me1), value);
 }
 
 uint8_t LH5803SharedMemory::debugPeek(uint16_t addr, bool me1, bool* readable) const {
     *readable = true;
     if (me1) {
         uint8_t reg; bool answer;
-        if (isUartShadow(addr, &reg, &answer) || (addr >= 0x8000 && addr < kRomBase)) {
+        // isLcdPort(): an HD61102 data read advances its address counter;
+        // isControlPort(): a 32H read clears the interrupt cause.
+        if (isUartShadow(addr, &reg, &answer) || isLcdPort(addr) || isControlPort(addr) ||
+            (addr >= 0x8000 && addr < kRomBase)) {
             *readable = false;
             return 0xFF;
         }
-        if ((addr & 0xFFF0) == 0xF000) return m_ioRegs[addr & 0x0F];
+        // Ports 10H-1FH have no read side effects.
+        if ((addr & 0xFFF0) == 0xF000) return m_shared.readIO(uint8_t(0x10 | (addr & 0x0F)));
         if (addr >= 0x8000) {
             // Same order as readME1(): a card gets the rest of the ME1
             // upper half; one whose register a read would disturb stays
             // unread.
-            const PinState p = peripheralPins(addr, /*forWrite=*/false, /*me1=*/true);
-            const auto& bus = m_shared.lh5803PeripheralBus();
+            const SystemBusPins p = busPins(addr, /*forWrite=*/false, /*me1=*/true);
+            const auto& bus = m_shared.systemBus();
             if (bus.readHasSideEffects(p)) {
                 *readable = false;
                 return 0xFF;
@@ -82,52 +95,64 @@ uint8_t LH5803SharedMemory::debugPeek(uint16_t addr, bool me1, bool* readable) c
             uint8_t v;
             if (bus.read(p, v)) return v;
         }
+        // Nothing answers: the bus floats (readME1()), no value to show.
+        *readable = false;
+        return 0xFF;
     }
-    // ME0, and the ME1 addresses readME1() aliases onto it
+    // ME0 (LHA90 included, as readME0() applies it)
     uint16_t z80 = 0;
-    if (toZ80Address(addr, &z80)) return m_shared.peek(z80);
+    if (toZ80Address(lha90(addr), &z80)) return m_shared.peek(z80);
     uint8_t v;
     if (addr < kRomBase) return cardRead(addr, /*me1=*/false, &v) ? v : 0xFF;
     return m_rom.read(addr);
 }
 
+const SystemBusCard* LH5803SharedMemory::debugBusCardAt(uint16_t addr, bool me1, bool pu, bool pv) const {
+    return m_shared.systemBus().debugResponder(PC1600BusDrive::lh5803Pins(addr, /*forWrite=*/false, me1, pu, pv));
+}
+
 uint8_t LH5803SharedMemory::readME1(uint16_t addr) {
+    uint8_t v;
+    if (readME1Driven(addr, &v)) return onBus(v);
+    // Nothing drives the data bus: ME1 is the SC7852's IORQ, so no RAM or
+    // ROM answers, and the bus still holds the cycle before's byte -- on a
+    // real PC-1600 XPEEK# reads 37 (25H, the second byte of its LDA #(U),
+    // FD 25H) at every address tried, C000H included (2026-10-10,
+    // docs/background/Decisions.md).
+    return m_dataBus;
+}
+
+bool LH5803SharedMemory::readME1Driven(uint16_t addr, uint8_t* out) {
+    uint8_t& v = *out;
     uint8_t reg; bool answer;
     if (isUartShadow(addr, &reg, &answer)) {
-        return answer ? m_shared.subCpu().readAnswer()
-                      : m_shared.uart().readRegister(reg);
+        v = answer ? m_shared.subCpu().readAnswer() : m_shared.uart().readRegister(reg);
+        return true;
     }
     // SC7852 control-port block 30H-3FH at ME1 A030-A03F, e.g. the bank
-    // register save `LDA #(P_BANK)` at rom1500 DC85/DC9A. See writeME1().
-    if (isControlPort(addr)) return m_shared.readIO(static_cast<uint8_t>(addr));
-    // LH5803 on-chip LH5811-compat PIO, ME1 0xF000-0xF00F. Unconditional
-    // (CPU-internal, present with or without a CE-150). Without this, an
-    // ME1 read here falls through to readME0() and 0xF00B >= kRomBase
-    // returns a PC1600-LH5803-C000-FFFF-new.bin byte (0x27) -- bit 1 set -- so the CE-150 plot
-    // loop's `BII #(0xF00B),0x02` pacing poll takes the wrong arm and
-    // LPRINT/TEST draw one glyph then unwind. IF (0xB) is software-only: no
-    // clear-on-read (firmware clears bit 1 with `ani #(0xF00B),0xFD`), and
-    // no PC-1600 TP/RTC edge feeds it yet. Cf. PC1500Memory's `case 0xB`.
+    // register save `LDA #(P_BANK)` at rom1500 DC85/DC9A, and the LCD ports
+    // at A040-A05F / 8040-805F (the ROM's LCD busy polls). See writeME1().
+    if (isControlPort(addr) || isLcdPort(addr)) {
+        v = m_shared.readIO(static_cast<uint8_t>(addr));
+        return true;
+    }
+    // ME1 0xF000-0xF00F: the SC7852's LH5810-compatible block, Z-80 ports
+    // 10H-1FH (see the class comment). Before the card decode: falling
+    // through to readME0() would serve LH5803 ROM bytes, and the CE-150
+    // plot loop's `BII #(0xF00B),0x02` pacing poll would take the wrong arm.
     if ((addr & 0xFFF0) == 0xF000) {
-        return m_ioRegs[addr & 0x0F];
+        v = m_shared.readIO(uint8_t(0x10 | (addr & 0x0F)));
+        return true;
     }
-    // 8000-FFFF: offered to the cards as ME1, terminal when one claims it
-    // (the CE-150's LH5810 at B008-B00F, the CE-158's register blocks at
-    // D000-D3FF / DE00-DFFF). A claimed read in C000-FFFF must not fall
-    // through, or the LH5803 ROM bytes would be served as I/O.
-    if (addr >= 0x8000) {
-        uint8_t v;
-        if (cardRead(addr, /*me1=*/true, &v)) return v;
-    }
-    // 8000-BFFF unclaimed: ME1 reaches the bus as an I/O cycle (IORQ), so
-    // it never selects a peripheral ROM -- open bus. Aliasing it to
-    // readME0() would serve CE-150/CE-158 ROM bytes as I/O (the CE-150
-    // ROM reads ME1 B000-B007 as I/O).
-    if (addr >= 0x8000 && addr < kRomBase) return 0xFF;
-    return readME0(addr); // default aliasing -- no other read-side trigger
+    // 8000-FFFF: offered to the cards as ME1 (the CE-150's LH5810 at
+    // B008-B00F, the CE-158's register blocks at D000-D3FF / DE00-DFFF).
+    // Never the RAM, the peripheral ROMs or the LH5803 ROM: an ME1 cycle is
+    // an I/O cycle (IORQ).
+    return addr >= 0x8000 && cardRead(addr, /*me1=*/true, &v);
 }
 
 void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
+    m_dataBus = value;
     if (addr == kHandoffTriggerAddr) {
         if (m_arbiter) m_arbiter->requestSwitchFromLH5803();
         return;
@@ -138,27 +163,20 @@ void LH5803SharedMemory::writeME1(uint16_t addr, uint8_t value) {
         return;
     }
     // SC7852 control-port block 30H-3FH at ME1 A030-A03F (A038 is the
-    // handoff, above). rom1500 writes P_MOD/P_BANK/P_LHMSK2/P_CL1 here; the
+    // handoff, above), and the LCD ports at A040-A05F / 8040-805F. rom1500 writes P_MOD/P_BANK/P_LHMSK2/P_CL1 here; the
     // one that matters today is P_MAPPRG's `STA #(P_BANK)` (E652 -> DC94),
     // which maps the BASIC program bank into page C for MODE 1 PEEK/XPEEK.
     // Dropping it left page C on whatever the Z-80 had set (bank 0).
-    if (isControlPort(addr)) {
+    if (isControlPort(addr) || isLcdPort(addr)) {
         m_shared.writeIO(static_cast<uint8_t>(addr), value);
         return;
     }
-    // Internal LH5811-compat PIO, ME1 0xF000-0xF00F -- straight-through
-    // latch (IF at 0xB included). See readME1() for the rationale.
+    // ME1 0xF000-0xF00F: Z-80 ports 10H-1FH, see readME1().
     if ((addr & 0xFFF0) == 0xF000) {
-        m_ioRegs[addr & 0x0F] = value;
+        m_shared.writeIO(uint8_t(0x10 | (addr & 0x0F)), value);
         return;
     }
-    // 8000-FFFF: an ME1 I/O cycle for the cards, see readME1(). Unclaimed
-    // 8000-BFFF goes nowhere; the rest keeps the default aliasing (which
-    // ignores writes at 8000+ anyway).
-    if (addr >= 0x8000 && cardWrite(addr, /*me1=*/true, value)) return;
-    if (addr >= 0x8000 && addr < kRomBase) return;
-    // Default aliasing for every other ME1 address -- the RAM only: the
-    // gate array's LCD mirror (mirrorPc1500Display()) is taken to watch
-    // ME0 writes, the ones PC-1500 display code makes.
-    if (addr < 0x8000) m_shared.write(uint16_t(lha90(addr) + 0x8000), value);
+    // 8000-FFFF: an ME1 I/O cycle for the cards, see readME1(). Anything
+    // unclaimed goes nowhere: no RAM answers an ME1 cycle.
+    if (addr >= 0x8000) cardWrite(addr, /*me1=*/true, value);
 }

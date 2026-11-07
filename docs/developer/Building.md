@@ -20,11 +20,13 @@ PR.
   audio output) and `Network` (the debugger's server) components. Older Qt6 (e.g.
   Ubuntu 22.04's packaged 6.2.4) doesn't provide
   `qt_standard_project_setup()` and won't configure.
-- A **C++17** compiler (the project is plain portable C++, no
-  compiler-specific extensions beyond what Qt itself needs).
+- A **C++20** compiler (plain portable C++; the long machine operations
+  are C++20 coroutines, Core/Job.hpp): Xcode clang, GCC 11+, MSVC 2019
+  16.8+.
 - On macOS only: Xcode command-line tools (for the Objective-C++
-  compiler — one file, `MacClipboardImage.mm`, needs it for the
-  plotter-paper clipboard export).
+  compiler — three files need it: `MacClipboardImage.mm` for the
+  plotter-paper clipboard export, `MacAppSupport.mm` and
+  `screenshots/MacShotSupport.mm`).
 
 ### `libsharpdx`
 
@@ -34,7 +36,7 @@ library, `Core/Basic/vendor/sharpdx/`: it tells what a file is and
 tokenizes BASIC listings.
 
 - On **macOS** it's committed directly to the repo — nothing to do.
-- On **Linux/Windows** it's fetched at configure time by
+- On **Linux/Windows** fetch it before configuring with
   `tools/fetch_sharpdx.sh` (see below) from a `SharpDataExchange`
   GitHub release.
 
@@ -100,7 +102,8 @@ release-packaging concerns — see the `mac-aarch64` job in
 ```sh
 sudo apt-get install -y \
   build-essential cmake ninja-build patchelf \
-  qt6-base-dev qt6-base-dev-tools qt6-multimedia-dev qt6-wayland libgl1-mesa-dev
+  qt6-base-dev qt6-base-dev-tools qt6-multimedia-dev qt6-wayland libgl1-mesa-dev \
+  qt6-gtk-platformtheme qt6ct
 cmake -S Qt6 -B Qt6/build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build Qt6/build
 ```
@@ -113,8 +116,7 @@ see the `linux-x86_64`/`linux-aarch64` jobs in
 [`.github/workflows/build.yml`](../../.github/workflows/build.yml) for the
 full `linuxdeploy`/`linuxdeploy-plugin-qt` recipe (it's involved enough —
 Wayland plugin handling included — that it's not worth hand-transcribing
-here; run the workflow or copy its steps directly). Linux arm64 CI is
-`continue-on-error` in that workflow, i.e. best-effort even there.
+here; run the workflow or copy its steps directly).
 
 ### Windows (best-effort — CI-derived, not verified on a fresh machine)
 
@@ -181,10 +183,15 @@ Run `tools/fetch_roms.sh` (step 2 above) first: `CoreTests` and the
 aren't committed. The configurations use repo-relative paths throughout,
 so they work in any checkout without editing.
 
-CI covers this build too — the `core-tests` job in
+Both CMake files take `Core/` and `Shared/` from
+[`cmake/CalcU.cmake`](../../cmake/CalcU.cmake), which globs the sources into
+two static libraries: `calcu_core` and `calcu_shared` (the frontend-neutral
+layer above Core). A new `.cpp` under either directory needs no list entry;
+re-run CMake (or let Ninja's glob check do it). Only `tools/build_*.sh` and
+the probes in the root file still list Core sources by hand. CI covers the
+root build too: the `core-tests` job in
 [`.github/workflows/build.yml`](../../.github/workflows/build.yml)
-configures the root `CMakeLists.txt` and runs CTest, so a new `Core/`
-source that's only added to `Qt6/CMakeLists.txt` won't silently break it.
+configures the root `CMakeLists.txt` and runs CTest.
 
 ## Running the tests
 
@@ -192,10 +199,12 @@ source that's only added to `Qt6/CMakeLists.txt` won't silently break it.
 tools/run_tests.sh
 ```
 
-Builds and runs the headless `Core/` test suite (no Qt, no GUI) from a
-plain `clang++` invocation — must be run from the repo root, since the
-tests load `roms/PC-1500_A04.ROM` via a relative path. The tests also need
-zlib (`zlib1g-dev` on Ubuntu; macOS has it).
+Builds and runs the headless `Core/` + `Shared/` test suite (no Qt, no
+GUI): it configures the root `CMakeLists.txt` with `-DCALCU_BUILD_QT=OFF`
+into `build-tests/` (Debug, so Core and the tests compile at `-O1`) and runs
+`CoreTests` from the repo root, since the tests load `roms/` via relative
+paths. Arguments are passed on to `CoreTests`. Needs CMake, Ninja and zlib
+(`zlib1g-dev` on Ubuntu; macOS has it).
 
 The same suite is also a `CoreTests` target in the root `CMakeLists.txt`
 (see [CLion / IDE integration](#clion--ide-integration) above), which is
@@ -207,10 +216,10 @@ cmake --build build --target CoreTests
 ctest --test-dir build --output-on-failure
 ```
 
-The tests are always built optimized: `tools/run_tests.sh` uses `-O1`, and
-so does `CoreTests` in a Debug build — the suite runs about three times
+The tests are always built optimized: `CoreTests` and `calcu_core` compile
+at `-O1` in a Debug build (which is what `tools/run_tests.sh` uses) — the suite runs about three times
 faster than at `-O0`. To step through a failing test, build a separate
-full-debug tree with `CALCU_TESTS_DEBUG=ON` (in CLion: add the option to a
+full-debug tree with `CALCU_TESTS_DEBUG=ON` (Core and the tests at `-O0`) (in CLion: add the option to a
 CMake profile's options):
 
 ```sh
@@ -219,10 +228,40 @@ cmake --build build-debug --target CoreTests
 ./build-debug/CoreTests   # from the repo root
 ```
 
+## WebAssembly check
+
+```sh
+tools/build_wasm_check.sh
+```
+
+Builds `Core/` + `Shared/` with Emscripten (`emcmake`, into `build-wasm/`)
+and runs `tools/wasm_smoke.cpp` under node from the repo root: both models
+boot through `shared::AppSession` and presets run cooperatively, a slice
+per `tick()`, never blocking -- what a browser GUI will do. It keeps the
+frontend-neutral layers portable ([Shared-Architecture.md](Shared-Architecture.md));
+CI runs it in the `web` job. Needs `emcc`/`emcmake` (Homebrew
+`emscripten`, or an activated emsdk; 6.0.13 matches the committed
+`libsharpdx-wasm.a`, see `Core/Basic/vendor/sharpdx/README.md`), node, and
+the ROMs for the smoke run (without them it only builds).
+
+## Web client
+
+```sh
+Web/build.sh       # the WASM engine (target calcu_web) and Web/dist/
+Web/run-tests.sh   # Playwright tests against Web/dist/
+```
+
+Same Emscripten and ROMs as the WebAssembly check, plus node; the tests
+install Playwright's Chromium and WebKit. Serve `Web/dist/` over HTTP
+(`python3 -m http.server -d Web/dist`) to try it. CI's `web` job runs the
+check, the build and the tests. See [Web-Client.md](Web-Client.md).
+
 ## Packaging
 
 Release packaging (code signing, notarization, installers) is handled
 by CI — see [`.github/workflows/build.yml`](../../.github/workflows/build.yml)
-and [`bin/release`](../../bin/release) rather than duplicating it here. The
+and [`release.yaml`](../../release.yaml) (driven by the `release` command
+from [ReleaseIt](https://github.com/tinue/ReleaseIt)) rather than duplicating
+it here. The
 Windows installer is currently unsigned; every other platform's package
 is signed (macOS) or otherwise complete.

@@ -1,6 +1,6 @@
 #include "PtySerialLink.hpp"
 
-#if defined(__APPLE__) || defined(__unix__)
+#if (defined(__APPLE__) || defined(__unix__)) && !defined(__EMSCRIPTEN__)
 
 #include <cerrno>
 #include <cstdlib>

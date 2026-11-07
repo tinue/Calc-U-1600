@@ -1,60 +1,46 @@
 #include "PC1500KeyboardMap.hpp"
 
-#include "PC1600/PC1600TypedInput.hpp"
-#include "SharpShiftedSymbols.hpp"
-
 namespace PC1500KeyboardMap {
 
 namespace {
 
-std::optional<ResolvedKey> plain(const char* name, bool needsShift = false) {
-    return ResolvedKey{name, needsShift};
-}
+using shared::HostKey;
 
-// The 13 shared "second legend" punctuation chars: Core/SharpShiftedSymbols.hpp
-// is the single source of truth for this table (also used by the PC-1500/1600
-// BASIC typers).
-std::optional<ResolvedKey> shiftedCharacterBaseKeyName(QChar c) {
-    if (c.unicode() > 0x7f) return std::nullopt;
-    std::string base;
-    if (!sharpShiftedSymbolBaseKey(static_cast<char>(c.unicode()), &base)) return std::nullopt;
-    return ResolvedKey{base, true};
-}
-
-// PC-1600-only: the digit-row's own "second legend" (printed above the
-// numeric keypad's 0-9), which the PC-1500 keyboard lacks entirely.
-// Core/SharpShiftedSymbols.hpp's pc1600DigitRowShiftedBaseKey is the single
-// source of truth for this table (also used by Core/PC1600/PC1600BasicTyper.cpp
-// for preset `type:` steps); this reuses it rather than re-transcribing it.
-std::optional<ResolvedKey> pc1600DigitRowShiftedBaseKeyName(QChar c) {
-    if (c.unicode() > 0x7f) return std::nullopt;
-    std::string base;
-    if (!pc1600DigitRowShiftedBaseKey(static_cast<char>(c.unicode()), &base)) return std::nullopt;
-    return ResolvedKey{base, true};
-}
-
-std::optional<ResolvedKey> characterName(QChar c) {
-    if (c == ' ') return plain("space");
-    if (c.isLetter()) {
-        static char buf[2] = {0, 0};
-        buf[0] = c.toLower().toLatin1();
-        return plain(buf);
-    }
-    if (c.isDigit()) {
-        static char buf[2] = {0, 0};
-        buf[0] = c.toLatin1();
-        return plain(buf);
-    }
-    switch (c.unicode()) {
-    case '+': return plain("+");
-    case '-': return plain("-");
-    case '=': return plain("=");
-    case '*': return plain("*");
-    case '/': return plain("/");
-    case '(': return plain("(");
-    case ')': return plain(")");
-    case '.': return plain(".");
-    default: return std::nullopt;
+HostKey hostKey(Qt::Key key, quint32 nativeVirtualKey) {
+#ifdef Q_OS_MACOS
+    // macOS reports a PC keyboard's Scroll Lock as kVK_ContextualMenu
+    // (0x6E), which Qt has no Qt::Key for (it hands over the raw 0x10
+    // character code instead) -- match the physical key code directly.
+    if (nativeVirtualKey == 0x6E) return HostKey::ScrollLock;
+#else
+    (void)nativeVirtualKey;
+#endif
+    switch (key) {
+    case Qt::Key_Backspace: return HostKey::Backspace;
+    case Qt::Key_Return: return HostKey::Return;
+    case Qt::Key_Enter: return HostKey::Enter;
+    case Qt::Key_Tab: return HostKey::Tab;
+    case Qt::Key_Delete: return HostKey::Delete;
+    case Qt::Key_Up: return HostKey::Up;
+    case Qt::Key_Down: return HostKey::Down;
+    case Qt::Key_Left: return HostKey::Left;
+    case Qt::Key_Right: return HostKey::Right;
+    case Qt::Key_F1: return HostKey::F1;
+    case Qt::Key_F2: return HostKey::F2;
+    case Qt::Key_F3: return HostKey::F3;
+    case Qt::Key_F4: return HostKey::F4;
+    case Qt::Key_F5: return HostKey::F5;
+    case Qt::Key_F6: return HostKey::F6;
+    case Qt::Key_ScrollLock: return HostKey::ScrollLock;
+#ifndef Q_OS_MACOS
+    // On macOS, Insert arrives as Key_Help and stays unmapped.
+    case Qt::Key_Insert: return HostKey::Insert;
+#endif
+    case Qt::Key_Home: return HostKey::Home;
+    case Qt::Key_End: return HostKey::End;
+    case Qt::Key_PageUp: return HostKey::PageUp;
+    case Qt::Key_PageDown: return HostKey::PageDown;
+    default: return HostKey::Other;
     }
 }
 
@@ -62,82 +48,21 @@ std::optional<ResolvedKey> characterName(QChar c) {
 
 std::optional<ResolvedKey> resolve(Qt::Key key, Qt::KeyboardModifiers modifiers,
                                     const QString& text, bool isPC1600, quint32 nativeVirtualKey) {
+    shared::HostModifiers mods;
+    mods.shift = modifiers & Qt::ShiftModifier;
+    mods.alt = modifiers & Qt::AltModifier;
 #ifdef Q_OS_MACOS
     // Qt maps Cmd to ControlModifier and the Control key to MetaModifier.
-    if (modifiers & (Qt::ControlModifier | Qt::MetaModifier)) return std::nullopt;
-    // macOS reports a PC keyboard's Scroll Lock as kVK_ContextualMenu
-    // (0x6E), which Qt has no Qt::Key for (it hands over the raw 0x10
-    // character code instead) -- match the physical key code directly.
-    if (nativeVirtualKey == 0x6E) return plain("rsv");
+    mods.command = modifiers & Qt::ControlModifier;
+    mods.control = modifiers & Qt::MetaModifier;
+    constexpr bool macHost = true;
 #else
-    (void)nativeVirtualKey;
-    if (modifiers & Qt::MetaModifier) return std::nullopt;
-    const bool ctrl = modifiers & Qt::ControlModifier;
-    const bool alt = modifiers & Qt::AltModifier;
-    if (ctrl != alt) return std::nullopt;  // Ctrl or Alt alone; both together = AltGr
+    mods.control = modifiers & Qt::ControlModifier;
+    mods.meta = modifiers & Qt::MetaModifier;
+    constexpr bool macHost = false;
 #endif
-    if (key == Qt::Key_Backspace) {
-        return plain(isPC1600 ? "bs" : "left");
-    }
-    if (key >= Qt::Key_F1 && key <= Qt::Key_F6) {
-        static const char* names[] = {"f1", "f2", "f3", "f4", "f5", "f6"};
-        return plain(names[key - Qt::Key_F1]);
-    }
-
-    // Extended/navigation-cluster keys, only reachable via an external/
-    // PC-style keyboard -- the project's own chosen PC-1500 equivalents,
-    // not hardware-documented correspondences.
-    switch (key) {
-    case Qt::Key_ScrollLock: return plain("rsv");
-#ifndef Q_OS_MACOS
-    // Insert sits where a Mac-layout keyboard's Scroll Lock is (that one
-    // is matched by its virtual key code above); on macOS, Insert arrives
-    // as Key_Help and stays unmapped.
-    case Qt::Key_Insert: return plain("rsv");
-#endif
-    case Qt::Key_Home:
-        // CTRL exists only on the PC-1600; elsewhere Shift+Home = Home.
-        if (isPC1600 && (modifiers & Qt::ShiftModifier)) return plain("ctrl");
-        return plain("rcl");
-    case Qt::Key_End:
-        // KB II exists only on the PC-1600; elsewhere Shift+End = End.
-        if (isPC1600 && (modifiers & Qt::ShiftModifier)) return plain("kbii");
-        return plain("sml");
-    case Qt::Key_PageUp:
-        if (modifiers & Qt::ShiftModifier) return plain("def");
-        return plain("left", true);
-    case Qt::Key_PageDown: return plain("right", true);
-    default: break;
-    }
-
-    switch (key) {
-    case Qt::Key_Return:
-    case Qt::Key_Enter: return plain("enter");
-    case Qt::Key_Up: return plain("up");
-    case Qt::Key_Down: return plain("down");
-    case Qt::Key_Left: return plain("left");
-    case Qt::Key_Right: return plain("right");
-    case Qt::Key_Delete: return plain("cl", modifiers & Qt::ShiftModifier);
-    case Qt::Key_Tab: return plain("mode");
-    default: break;
-    }
-
-    if (text.size() == 1) {
-        // PC-1600 accented characters, typed as typed (é gives é, É gives
-        // É) -- unlike the letters, whose uppercase default is for BASIC.
-        if (isPC1600 && text.at(0).unicode() > 0x7f) {
-            ResolvedKey r;
-            r.needsKbii = pc1600ResolveKbiiChar(text.at(0).unicode(), &r.baseKey, &r.needsShift);
-            if (r.needsKbii) return r;
-        }
-        if (auto r = characterName(text.at(0))) return r;
-        if (auto r = shiftedCharacterBaseKeyName(text.at(0))) return r;
-        if (isPC1600) {
-            if (auto r = pc1600DigitRowShiftedBaseKeyName(text.at(0))) return r;
-        }
-    }
-
-    return std::nullopt;
+    const char32_t typed = text.size() == 1 ? text.at(0).unicode() : 0;
+    return shared::resolveHostKey(hostKey(key, nativeVirtualKey), mods, typed, isPC1600, macHost);
 }
 
 } // namespace PC1500KeyboardMap

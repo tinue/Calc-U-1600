@@ -414,12 +414,21 @@ void test_memory_keyboard_and_on_key_via_io() {
     PC1600Bank bank;
     PC1600Memory mem(bank);
     mem.keyboard().setKeyState(PC1600Keyboard::Key::Digit1, true); // KS2 bit0
-    // Real firmware pattern: OUT (1EH),KS-mask ; IN A,(37H).
+    // Real firmware pattern: OUT (1CH),FFH ; OUT (1EH),KS-mask ; IN A,(37H).
     // We drive PC1600Memory's SC7852Bus interface directly since that's
     // what the CPU would use.
-    static_cast<SC7852Bus&>(mem).writeIO(0x1E, static_cast<uint8_t>(~(1 << 2))); // strobe only KS2
+    static_cast<SC7852Bus&>(mem).writeIO(0x1E, static_cast<uint8_t>(~(1 << 2))); // strobe only KS2...
+    CHECK(static_cast<SC7852Bus&>(mem).readIO(0x37) == 0xFF); // ...but PA is still all inputs
+    static_cast<SC7852Bus&>(mem).writeIO(0x1C, 0xFF);         // DDA: PA outputs (P1-B3 47C4H)
     uint8_t sense = static_cast<SC7852Bus&>(mem).readIO(0x37);
     CHECK((sense & 0x01) == 0);
+    // The ROMs' column scan: DDA = that column's bit, OPA = 0 (LH5803 ISKEY)
+    // or OPA = ~bit (Z-80 P1-B3 47D8H). Only that column is driven.
+    static_cast<SC7852Bus&>(mem).writeIO(0x1E, 0x00);
+    static_cast<SC7852Bus&>(mem).writeIO(0x1C, 1 << 2);
+    CHECK((static_cast<SC7852Bus&>(mem).readIO(0x37) & 0x01) == 0);
+    static_cast<SC7852Bus&>(mem).writeIO(0x1C, 1 << 3);
+    CHECK(static_cast<SC7852Bus&>(mem).readIO(0x37) == 0xFF);
 
     CHECK(static_cast<SC7852Bus&>(mem).readIO(0x1B) == 0x00);
     auto& bus = static_cast<SC7852Bus&>(mem);
@@ -451,6 +460,7 @@ void test_memory_pb6_strobe_needs_output_mode_via_io() {
 
     // No KS line strobed. Driving OPB.6 low but leaving PB6 as an input
     // (DDB.6 = 0) must NOT strobe -- the line is pulled up internally.
+    bus.writeIO(0x1C, 0xFF);        // PA outputs, as the ROM sets them
     bus.writeIO(0x1E, 0xFF);        // no KS strobe
     bus.writeIO(0x1F, ~0x40 & 0xFF); // OPB.6 = 0
     CHECK(bus.readIO(0x37) == 0xFF);

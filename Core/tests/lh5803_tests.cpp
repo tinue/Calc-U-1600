@@ -48,6 +48,34 @@ void test_lh5803_inherits_lh5801_reset_and_opcode_behavior() {
     CHECK(!cpu.flagZ());
 }
 
+// TRM §7.1.2: SDP, RDP and OFF "operate as a NOP instruction in LH-5803".
+// The plain LH5801 powers down on OFF; the LH5803 just carries on.
+void test_lh5803_off_sdp_rdp_are_nops() {
+    LH5803Memory mem;
+    std::vector<uint8_t> rom(16384, 0x00);
+    rom[16384 - 2] = 0x42;
+    rom[16384 - 1] = 0x34; // reset vector 0x4234
+    CHECK(mem.loadROM(rom.data(), rom.size()));
+    LH5803 cpu(mem);
+    cpu.reset();
+    const uint8_t code[] = {0xFD, 0xC1, 0xFD, 0x4C, 0xFD, 0xC0, 0xB5, 0x99}; // sdp ; off ; rdp ; ldi a,0x99
+    for (size_t i = 0; i < sizeof code; ++i) mem.poke(uint16_t(0x4234 + i), code[i]);
+    CHECK(cpu.step() == 9);    // sdp
+    CHECK(!cpu.displayOn());
+    CHECK(cpu.step() == 8);    // off
+    CHECK(!cpu.poweredOff());
+    CHECK(cpu.step() == 8);    // rdp
+    CHECK(cpu.step() > 0);     // ldi a,0x99 still runs
+    CHECK(cpu.a() == 0x99);
+
+    // The same OFF on a plain LH5801 is a real power-down.
+    LH5801 plain(mem);
+    plain.reset();
+    plain.setPC(0x4236);
+    plain.step();
+    CHECK(plain.poweredOff());
+}
+
 void test_memory_slot_window_open_bus() {
     LH5803Memory mem;
     CHECK(mem.peek(0x0000) == 0xFF);
@@ -102,6 +130,7 @@ void test_reset_clears_ram_not_rom() {
 
 int run_lh5803_tests() {
     test_lh5803_inherits_lh5801_reset_and_opcode_behavior();
+    test_lh5803_off_sdp_rdp_are_nops();
     test_memory_slot_window_open_bus();
     test_memory_internal_ram_readwrite();
     test_memory_ce158_window_open_bus_in_v1();

@@ -2,6 +2,8 @@
 #include <QString>
 #include <string>
 
+#include "Shared/AppPaths.hpp"
+
 // Path resolution for bundled resources and the memory-module feature --
 // the one place that knows where bundled resources (*.card.yaml templates
 // AND ROM images, side by side) and user-writable battery-card instances
@@ -13,16 +15,10 @@
 // iCloud).
 namespace AppPaths {
 
-// Where the bundled resources live -- *.card.yaml catalog AND ROM images
-// (disjoint filename extensions, one shared directory) -- resolved
-// relative to the running executable: macOS .app bundle's
-// Contents/Resources (via applicationDirPath()'s Contents/MacOS +
-// "../Resources"), or a "resources" folder next to the binary on
-// Windows/Linux (matching windeployqt's and AppImage's flat-next-to-binary
-// convention). Read-only bundled content -- never created if missing; a
-// missing/unreadable directory is tolerated by scanMemoryCardDirectory()/
-// BundledRomCatalog (empty catalogue / resolve failure).
-QString bundledResourcesDir();
+// The shared::AppPaths every call below forwards to (Shared/AppPaths.hpp
+// has the rules); built on first use from the bundled resources folder
+// next to the executable and the home folder.
+shared::AppPaths& paths();
 
 // ~/Calc-U-1600 (home dir, non-dotted) -- or, in a screenshot run, the
 // throwaway folder set by setIsolatedInstanceDir() -- created if missing.
@@ -43,25 +39,14 @@ QString displayPath(const QString& path);
 // to find "where battery-card instances live right now".
 QString instanceDir();
 
-// Strips path separators so a user-typed instance name can't escape the
-// directory, collapses whitespace, "Untitled" fallback, ".card.yaml" suffix.
-QString sanitizedInstanceFileName(const QString& instanceName);
+// Cassette tapes (TapeManager): AppSettings::tapeDirOverride() if
+// non-empty, else "Tapes" inside instanceDir(); created on demand. A tape
+// named `tapeName` is "<tapeName>.wav" there (namedFileName()'s rules).
+QString tapeDir();
 
-// The full path a fresh save under `instanceName` should write to.
-QString instancePathFor(const QString& instanceName);
-
-// Same as sanitizedInstanceFileName()/instancePathFor(), but for CE-1600F
-// floppy disks: "<name>.floppy.yaml" (Connector/FloppyImageFile.hpp)
-// instead of "<name>.card.yaml".
-QString sanitizedFloppyFileName(const QString& diskName);
-QString floppyInstancePathFor(const QString& diskName);
-
-// True if `path` resolves to somewhere inside `dir` (both canonicalized;
-// false if either doesn't exist).
-bool isUnderDir(const QString& path, const QString& dir);
-
-// Atomic write via QSaveFile (writes to a temp file beside `path` and
-// renames on commit).
-bool atomicWriteFile(const QString& path, const std::string& text);
+// shared::AppPaths::traceDir() / serialLinkDir(): the Settings override,
+// else instanceDir().
+QString traceDir();
+QString serialLinkDir();
 
 }  // namespace AppPaths

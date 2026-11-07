@@ -1,5 +1,6 @@
 # User-guide screenshots: a PC-1500A with the CE-158 that has printed two
 # lines on its parallel (printer) port.
+format-version: 1
 model: PC-1500A
 interface: CE-158
 keys:

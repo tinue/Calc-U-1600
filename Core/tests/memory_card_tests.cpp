@@ -46,7 +46,7 @@ int g_fail = 0;
 // ── inline card definitions (CE-155 / CE-1600M / CE-1601M shapes) ───────
 
 const char* kCe155Yaml =
-    "module-name: CE-155\n"
+    "format-version: 1\nmodule-name: CE-155\n"
     "compatible-hosts: [PC-1500, PC-1500A, PC-1600-Slot-1]\n"
     "definition-terminology: PC-1500\n"
     "regions:\n"
@@ -66,7 +66,7 @@ const char* kCe155Yaml =
     "        - { chip-select: S3, span: 0x0800, maps-to: 0x1800 }\n";
 
 const char* kCe1600mYaml =
-    "module-name: CE-1600M\n"
+    "format-version: 1\nmodule-name: CE-1600M\n"
     "compatible-hosts: [PC-1600-Slot-1, PC-1600-Slot-2]\n"
     "definition-terminology: PC-1600-Slot-1\n"
     "regions:\n"
@@ -85,7 +85,7 @@ const char* kCe1600mYaml =
     "          maps-to: 0x4000\n";
 
 const char* kCe1601mYaml =
-    "module-name: CE-1601M\n"
+    "format-version: 1\nmodule-name: CE-1601M\n"
     "compatible-hosts: [PC-1600-Slot-2]\n"
     "definition-terminology: PC-1600-Slot-2\n"
     "regions:\n"
@@ -115,7 +115,7 @@ const char* kCe1601mYaml =
 // fitted = 512 KB. Same trigger-based OUT (28H) / data-domain latch, same
 // PVOUT half-select nesting.
 const char* kSuperRamYaml =
-    "module-name: superRAM\n"
+    "format-version: 1\nmodule-name: superRAM\n"
     "compatible-hosts: [PC-1600-Slot-2]\n"
     "definition-terminology: PC-1600-Slot-2\n"
     "regions:\n"
@@ -145,7 +145,7 @@ const char* kSuperRamYaml =
 // Same trigger shape as CE-1638/CE-163F (pin 18, address domain), scaled
 // down -- not modeling a real product.
 const char* kFlashByBankYaml =
-    "module-name: T-FLASH\n"
+    "format-version: 1\nmodule-name: T-FLASH\n"
     "compatible-hosts: [PC-1500]\n"
     "definition-terminology: PC-1500\n"
     "regions:\n"
@@ -288,6 +288,18 @@ void test_inline_definitions_parse() {
     }
 }
 
+void test_card_description() {
+    MemoryCardDefinition def;
+    std::string err;
+    CHECK(parseMemoryCardDefinition(kCe155Yaml, &def, &err));
+    CHECK(def.description.empty());
+    std::string y = kCe155Yaml;
+    y.insert(y.find("compatible-hosts"), "description: \"8 KB static RAM\"\n");
+    MemoryCardDefinition described;
+    CHECK(parseMemoryCardDefinition(y, &described, &err));
+    CHECK(described.description == "8 KB static RAM");
+}
+
 void test_ce155_definition_shape() {
     MemoryCardDefinition def;
     std::string err;
@@ -311,7 +323,7 @@ void test_ce155_definition_shape() {
 // 2-3 Flash) plus `initial-content` on bank 0 (addressed-hex) and bank 2
 // (plain hex, partial coverage -- the rest keeps the flash power-up-fill).
 const char* kInitialContentYaml =
-    "module-name: T-INIT\n"
+    "format-version: 1\nmodule-name: T-INIT\n"
     "compatible-hosts: [PC-1500]\n"
     "definition-terminology: PC-1500\n"
     "regions:\n"
@@ -364,7 +376,7 @@ bool rejects(const std::string& text, std::string* err) {
 }
 
 const char* kMinPrefix =
-    "module-name: T\n"
+    "format-version: 1\nmodule-name: T\n"
     "compatible-hosts: [PC-1500]\n"
     "definition-terminology: PC-1500\n"
     "regions:\n";
@@ -378,9 +390,31 @@ void test_reject_unknown_top_key() {
                   &err));
 }
 
+// A card without `format-version`, or with one this build doesn't know, is
+// refused -- and the version is checked before the key list, so a newer
+// file with new keys still says which version it is.
+void test_reject_missing_or_unknown_format_version() {
+    const std::string body = std::string(kMinPrefix) +
+                             "  - name: r\n    capacity: 0x800\n    banking: none\n"
+                             "    content: regular\n    addressing: { chip-select: Y0, span: 0x800 }\n";
+    std::string err;
+    MemoryCardDefinition def;
+    CHECK(parseMemoryCardDefinition(body, &def, &err));
+
+    std::string noVersion = body;
+    noVersion.erase(0, std::string("format-version: 1\n").size());
+    CHECK(rejects(noVersion, &err));
+    CHECK(err == "missing 'format-version'");
+
+    std::string v2 = body;
+    v2.replace(0, std::string("format-version: 1").size(), "format-version: 2");
+    CHECK(rejects(v2 + "new-key: 1\n", &err));
+    CHECK(err == "unsupported card format-version 2 (this build reads 1)");
+}
+
 void test_reject_terminology_not_in_hosts() {
     std::string err;
-    CHECK(rejects("module-name: T\n"
+    CHECK(rejects("format-version: 1\nmodule-name: T\n"
                   "compatible-hosts: [PC-1500]\n"
                   "definition-terminology: PC-1500A\n"
                   "regions:\n"
@@ -591,45 +625,87 @@ void test_rom_needs_every_byte_covered() {
     CHECK(err.find("0x8") != std::string::npos);
 }
 
-// `encoding: file`: the bytes come from a sidecar next to the definition,
-// read when the definition is loaded -- a rebuilt ROM is picked up by the
-// next load.
-void test_rom_from_a_sidecar_file() {
-    char tmpl[] = "/tmp/card_file_XXXXXX";
+// A preset's `slot-N-rom:` file replaces the ROM of a ROM module: the card
+// file's placeholder (`$0000: FF...`) gives way to the file's bytes, a
+// rebuilt file is picked up by the next build of the card, and only a
+// single-region ROM module of exactly the file's size takes it.
+void test_rom_replaced_from_a_file() {
+    const std::string placeholder = std::string(kMinPrefix) +
+                                    "  - name: r\n    capacity: 0x10\n    banking: none\n    content: rom\n"
+                                    "    addressing: { chip-select: Y0, span: 0x10 }\n"
+                                    "    initial-content:\n      blocks:\n        - offset: 0\n"
+                                    "          encoding: addressed-hex\n          bytes: |\n            $0000: FF...\n";
+    MemoryCardDefinition def;
+    std::string err;
+    CHECK(parseMemoryCardDefinition(placeholder, &def, &err));
+    std::vector<uint8_t> rom(16, 0xEE);
+    rom[0] = 0x55;
+    CHECK(replaceRomContent(&def, rom, &err));
+    CHECK(def.regions[0].initialContentByBank[0] == rom);
+
+    // Through the card factory, read on the bus.
+    char tmpl[] = "/tmp/card_rom_XXXXXX";
     const char* dir = mkdtemp(tmpl);
     CHECK(dir != nullptr);
     if (!dir) return;
-    const std::string d(dir);
-    const std::string yaml = std::string(kMinPrefix) +
-                             "  - name: r\n    capacity: 0x10\n    banking: none\n    content: rom\n"
-                             "    addressing: { chip-select: Y0, span: 0x10 }\n"
-                             "    initial-content:\n      blocks:\n        - offset: 0\n          encoding: file\n"
-                             "          path: build/rom.bin\n";
-    std::ofstream(d + "/rom.card.yaml") << yaml;
-    std::filesystem::create_directories(d + "/build");
-    const auto writeRom = [&](uint8_t first) {
-        std::string bytes(16, char(0xEE));
-        bytes[0] = char(first);
-        std::ofstream(d + "/build/rom.bin", std::ios::binary) << bytes;
-    };
+    const std::string cardPath = std::string(dir) + "/rom.card.yaml";
+    std::ofstream(cardPath) << placeholder;
     PinState p;
     p.pin[4] = true;
     uint8_t v = 0;
-    writeRom(0x55);
-    std::string err;
-    auto card = makeSoftwareDefinedCard(d + "/rom.card.yaml", CardHost::PC1500, &err);
+    auto card = makeSoftwareDefinedCard(cardPath, CardHost::PC1500, &err, &rom);
     CHECK(card && card->respondsToRead(p, v) && v == 0x55);
-    writeRom(0x66);  // rebuilt: the next load has the new bytes
-    card = makeSoftwareDefinedCard(d + "/rom.card.yaml", CardHost::PC1500, &err);
-    CHECK(card && card->respondsToRead(p, v) && v == 0x66);
+    card = makeSoftwareDefinedCard(cardPath, CardHost::PC1500, &err);  // no file: the placeholder
+    CHECK(card && card->respondsToRead(p, v) && v == 0xFF);
+    std::filesystem::remove_all(dir);
 
-    // Without the definition's own file there is nothing to be relative to.
-    MemoryCardDefinition def;
-    CHECK(!parseMemoryCardDefinition(yaml, &def, &err) && err.find("relative") != std::string::npos);
-    // A short file doesn't cover the ROM.
-    std::ofstream(d + "/build/rom.bin", std::ios::binary) << std::string(8, char(0xEE));
-    CHECK(!makeSoftwareDefinedCard(d + "/rom.card.yaml", CardHost::PC1500, &err));
-    std::filesystem::remove_all(d);
+    // A file of the wrong size is refused, shorter or longer.
+    MemoryCardDefinition def2;
+    CHECK(parseMemoryCardDefinition(placeholder, &def2, &err));
+    CHECK(!replaceRomContent(&def2, std::vector<uint8_t>(8, 0), &err));
+    CHECK(err == "8 bytes, the module's ROM is 16 bytes");
+    CHECK(!replaceRomContent(&def2, std::vector<uint8_t>(17, 0), &err));
+
+    // Not a ROM module: RAM, a ROM/RAM by-bank split, two regions.
+    const auto refuses = [&](const std::string& yaml) {
+        MemoryCardDefinition d;
+        std::string e;
+        if (!parseMemoryCardDefinition(yaml, &d, &e)) return false;
+        return !replaceRomContent(&d, std::vector<uint8_t>(16, 0), &e) &&
+               e.find("is not a ROM module") != std::string::npos;
+    };
+    CHECK(refuses(std::string(kMinPrefix) +
+                  "  - name: r\n    capacity: 0x10\n    banking: none\n    content: regular\n"
+                  "    addressing: { chip-select: Y0, span: 0x10 }\n"));
+    CHECK(refuses(std::string(kMinPrefix) +
+                  "  - name: r\n"
+                  "    banking:\n"
+                  "      latch: { type: trigger-based, trigger: { pin: 18 }, sampled-lines: [A0], source-domain: address }\n"
+                  "      bank-count: 2\n      bank-size: 0x8\n"
+                  "      bank-window: { chip-select: Y0, span: 0x8 }\n"
+                  "    content:\n      by-bank:\n"
+                  "        - { banks: \"0\", kind: rom }\n"
+                  "        - { banks: \"1\", kind: regular }\n"
+                  "    addressing: { chip-select: Y0 }\n"
+                  "    initial-content:\n      blocks:\n        - bank: 0\n          offset: 0\n          encoding: hex\n"
+                  "          bytes: \"A0 A1 A2 A3 A4 A5 A6 A7\"\n"));
+    CHECK(refuses(std::string(kMinPrefix) +
+                  "  - name: a\n    capacity: 0x8\n    banking: none\n    content: rom\n"
+                  "    addressing: { chip-select: S1, span: 0x8 }\n"
+                  "    initial-content:\n      blocks:\n        - offset: 0\n"
+                  "          encoding: addressed-hex\n          bytes: |\n            $0000: FF...\n"
+                  "  - name: b\n    capacity: 0x8\n    banking: none\n    content: rom\n"
+                  "    addressing: { chip-select: S2, span: 0x8 }\n"
+                  "    initial-content:\n      blocks:\n        - offset: 0\n"
+                  "          encoding: addressed-hex\n          bytes: |\n            $0000: FF...\n"));
+
+    // `encoding: file` is gone: an unknown key, then an unknown encoding.
+    CHECK(rejects(std::string(kMinPrefix) +
+                      "  - name: r\n    capacity: 0x10\n    banking: none\n    content: rom\n"
+                      "    addressing: { chip-select: Y0, span: 0x10 }\n"
+                      "    initial-content:\n      blocks:\n        - offset: 0\n          encoding: file\n",
+                  &err));
+    CHECK(err.find("unknown encoding 'file'") != std::string::npos);
 }
 
 // ROM and RAM banks in one region: the ROM banks stay read-only, the RAM
@@ -996,21 +1072,21 @@ void test_preset_parses_modulespec() {
     // `slot-N-file:` -- a path, resolved relative to the preset dir.
     PresetFile preset;
     std::string err;
-    CHECK(parsePresetString("model: PC-1500\n"
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1500\n"
                             "slot-1-file: /abs/path/foo.card.yaml\n",
                             "/tmp/memory_card_tests_scratch.pc1500", &preset, &err));
     CHECK(preset.slot1ModuleSpecFile == "/abs/path/foo.card.yaml");
     CHECK(preset.slot1ModuleSpecName.empty());
 
     PresetFile p2;
-    CHECK(parsePresetString("model: PC-1600\n"
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1600\n"
                             "slot-2-file: cards/x.card.yaml\n",
                             "/tmp/memory_card_tests_scratch.pc1600", &p2, &err));
     CHECK(p2.slot2ModuleSpecFile == "/tmp/cards/x.card.yaml");  // relative to the scratch dir
 
     // `slot-N:` -- a bundled module-name, stored verbatim (unresolved).
     PresetFile p3;
-    CHECK(parsePresetString("model: PC-1600\n"
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1600\n"
                             "slot-1: CE-155\n",
                             "/tmp/memory_card_tests_scratch3.pc1600", &p3, &err));
     CHECK(p3.slot1ModuleSpecName == "CE-155");
@@ -1020,7 +1096,7 @@ void test_preset_parses_modulespec() {
 void test_preset_rejects_second_modulespec_item() {
     PresetFile preset;
     std::string err;
-    CHECK(!parsePresetString("model: PC-1600\n"
+    CHECK(!parsePresetString("format-version: 1\nmodel: PC-1600\n"
                              "slot-1: CE-155\n"
                              "  - modulespec: CE-155\n",
                              "/tmp/memory_card_tests_scratch2.pc1600", &preset, &err));
@@ -1057,7 +1133,7 @@ void test_ce1601m_end_to_end_through_pc1600() {
     { std::ofstream f(cardPath); f << kCe1601mYaml; }
     PresetFile byFile;
     std::string err;
-    CHECK(parsePresetString(std::string("model: PC-1600\n"
+    CHECK(parsePresetString(std::string("format-version: 1\nmodel: PC-1600\n"
                                         "slot-2-file: ") +
                                 cardPath + "\n",
                             "/tmp/memory_card_tests_e2e.pc1600", &byFile, &err));
@@ -1066,11 +1142,62 @@ void test_ce1601m_end_to_end_through_pc1600() {
 
     const std::string moduleDir = makeScratchCardDir();  // writes ce1601m.card.yaml (module-name CE-1601M)
     PresetFile byName;
-    CHECK(parsePresetString("model: PC-1600\n"
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1600\n"
                             "slot-2: CE-1601M\n",
                             "/tmp/memory_card_tests_e2e_name.pc1600", &byName, &err));
     CHECK(byName.slot2ModuleSpecName == "CE-1601M");
     run(byName, moduleDir);
+}
+
+// `slot-N-rom:` end to end: the preset's ROM file replaces the module's
+// placeholder ROM, the load result names the file (so the GUI never saves
+// the card), and a rebuilt file is read again by the next load.
+void test_slot_rom_end_to_end_through_pc1600() {
+    char tmpl[] = "/tmp/slot_rom_XXXXXX";
+    const char* dir = mkdtemp(tmpl);
+    CHECK(dir != nullptr);
+    if (!dir) return;
+    const std::string d(dir);
+    std::ofstream(d + "/module.card.yaml")
+        << "format-version: 1\nmodule-name: Dev ROM\ncompatible-hosts: [PC-1600-Slot-1]\n"
+           "definition-terminology: PC-1600-Slot-1\nregions:\n"
+           "  - name: rom\n    capacity: 0x1000\n    banking: none\n    content: rom\n"
+           "    addressing: { chip-select: RAM2, span: 0x1000 }\n"
+           "    initial-content:\n      blocks:\n        - offset: 0\n"
+           "          encoding: addressed-hex\n          bytes: |\n            $0000: FF...\n";
+    std::ofstream(d + "/dev.pc1600") << "format-version: 1\nmodel: PC-1600\n"
+                                        "slot-1-file: module.card.yaml\nslot-1-rom: build/module.bin\n";
+    std::filesystem::create_directories(d + "/build");
+    const auto build = [&](uint8_t first) {
+        std::string bytes(0x1000, char(0x00));
+        bytes[0] = char(first);
+        std::ofstream(d + "/build/module.bin", std::ios::binary) << bytes;
+    };
+    const auto load = [&](PresetLoadResult* r) {
+        PresetFile preset;
+        std::string err;
+        CHECK(parsePresetFile(d + "/dev.pc1600", &preset, &err));
+        auto m = std::make_unique<PC1600Machine>();
+        *r = applyPC1600Preset(*m, preset, {}, ".", ".");
+        return m;
+    };
+
+    PresetLoadResult r;
+    build(0x55);
+    auto m = load(&r);
+    CHECK(r.ok);
+    CHECK(r.slot1RomFile == d + "/build/module.bin");
+    CHECK(m->memory().slot1CardImage().size() == 0x1000 && m->memory().slot1CardImage()[0] == 0x55);
+    build(0x66);  // rebuilt: the next load has the new bytes
+    m = load(&r);
+    CHECK(r.ok && m->memory().slot1CardImage()[0] == 0x66);
+
+    // A ROM file of the wrong size stops the load, naming the file.
+    std::ofstream(d + "/build/module.bin", std::ios::binary) << std::string(0x800, char(0));
+    m = load(&r);
+    CHECK(!r.ok);
+    CHECK(r.error == "slot-1: " + d + "/build/module.bin: 2048 bytes, the module's ROM is 4096 bytes");
+    std::filesystem::remove_all(d);
 }
 
 // The SLOT2MAP gate-array remap (Port 3CH b5:b4): the firmware can make the
@@ -1291,7 +1418,7 @@ std::string makeScratchCardDir() {
     // Not a card file -- must be ignored by the ".card.yaml" tail match.
     put("notes.yaml", "hello: world\n");
     // Malformed card -- must be skipped, not abort the scan.
-    put("broken.card.yaml", "module-name: BROKEN\nbogus-key: 1\n");
+    put("broken.card.yaml", "format-version: 1\nmodule-name: BROKEN\nbogus-key: 1\n");
     return dir;
 }
 
@@ -1357,8 +1484,8 @@ void test_resolve_modulespec_multi_dir() {
     {
         const std::string body = kCe1601mYaml;
         std::ofstream(instances + "/CE-1601M - Programs.card.yaml")
-            << "module-name: \"CE-1601M - Programs\"\n"
-            << body.substr(body.find('\n') + 1);
+            << "format-version: 1\nmodule-name: \"CE-1601M - Programs\"\n"
+            << body.substr(body.find('\n', body.find("module-name:")) + 1);
     }
 
     std::string path, err;
@@ -1474,7 +1601,7 @@ void test_memory_range_offset_counts_from_range_start() {
 }
 
 const char* kUnbankedFlashYaml =
-    "module-name: T-FLASH-U\n"
+    "format-version: 1\nmodule-name: T-FLASH-U\n"
     "compatible-hosts: [PC-1500]\n"
     "definition-terminology: PC-1500\n"
     "regions:\n"
@@ -1554,7 +1681,8 @@ void test_reject_unbanked_flash_sector_not_dividing_capacity() {
 }
 
 int run_memory_card_tests() {
-    test_rom_from_a_sidecar_file();
+    test_rom_replaced_from_a_file();
+    test_slot_rom_end_to_end_through_pc1600();
     test_card_content_revision();
     test_power_up_fill_defaults_per_kind();
     test_yaml_block_map_and_scalars();
@@ -1567,8 +1695,10 @@ int run_memory_card_tests() {
     test_yaml_rejects_tabs_and_bad_indent();
 
     test_inline_definitions_parse();
+    test_card_description();
     test_ce155_definition_shape();
     test_reject_unknown_top_key();
+    test_reject_missing_or_unknown_format_version();
     test_reject_terminology_not_in_hosts();
     test_reject_tiling_gap_and_overlap();
     test_reject_rom_flash_bybank_linebased();

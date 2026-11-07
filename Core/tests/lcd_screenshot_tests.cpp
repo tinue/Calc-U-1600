@@ -144,13 +144,13 @@ void test_png_roundtrip() {
 void test_preset_screenshot_parse() {
     PresetFile p;
     std::string err;
-    CHECK(parsePresetString("model: PC-1500A\nkeys:\n  - screenshot: shot.png\n",
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1500A\nkeys:\n  - screenshot: shot.png\n",
                             "/tmp/lcd_screenshot_tests_scratch.pc1500a", &p, &err));
     CHECK(!p.sections.empty() && !p.sections[0].keys.empty() &&
           p.sections[0].keys[0].kind == PresetStep::Kind::Screenshot && p.sections[0].keys[0].text == "shot.png");
 
     PresetFile bad;
-    CHECK(!parsePresetString("model: PC-1500A\nkeys:\n  - screenshot: sub/shot.png\n",
+    CHECK(!parsePresetString("format-version: 1\nmodel: PC-1500A\nkeys:\n  - screenshot: sub/shot.png\n",
                              "/tmp/lcd_screenshot_tests_scratch.pc1500a", &bad, &err));
     CHECK(err.find("path separator") != std::string::npos);
 }
@@ -161,7 +161,7 @@ void test_preset_screenshot_writes_png() {
     PC1500Machine m;
     PresetFile p;
     std::string err;
-    CHECK(parsePresetString("model: PC-1500A\nkeys:\n  - type: PRINT 12345\n  - screenshot: lcd_shot.png\n",
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1500A\nkeys:\n  - type: PRINT 12345\n  - screenshot: lcd_shot.png\n",
                             "/tmp/lcd_screenshot_tests_scratch.pc1500a", &p, &err));
     std::remove("/tmp/lcd_shot.png");
     const PresetLoadResult r = applyPC1500Preset(m, p, {}, "/tmp", ".", {}, {"roms"});

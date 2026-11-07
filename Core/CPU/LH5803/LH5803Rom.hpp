@@ -35,6 +35,7 @@ public:
 
     /// `addr` must be >= kBase.
     uint8_t read(uint16_t addr) const { return m_loaded ? m_bytes[addr - kBase] : 0xFF; }
+    bool loaded() const { return m_loaded; }
 
 private:
     std::array<uint8_t, kSize> m_bytes{};

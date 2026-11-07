@@ -6,6 +6,8 @@
 #include <QMouseEvent>
 #include <algorithm>
 
+#include "Shared/LcdLayout.hpp"
+
 namespace {
 
 // The platform's own preferred fixed-width font (Consolas on Windows,
@@ -20,61 +22,13 @@ const QFont& fixedWidthFont() {
     return font;
 }
 
-// ── PC-1500/1500A layout constants -- hand-tuned to match the real
-// device's indicator-bar/dot-matrix proportions ───────────────────────────
-constexpr double kP15IndicatorBarFraction = 18.0 / 42.0;
-constexpr double kP15IndicatorFontHeightFraction = 0.277;
-constexpr double kP15IndicatorTopInsetFraction = 0.01;
-constexpr double kP15ContentScale = 24.52 / 31.1;
-constexpr double kP15MatrixTopGapFraction = 0.2;
+// Layout constants and colours: Shared/LcdLayout.hpp.
+using namespace shared::lcd;
 
-constexpr double kP15BusyX = 0.0053;
-constexpr double kP15ShiftX = 0.0998;
-constexpr double kP15JapX = 0.1943;
-constexpr double kP15SmallX = 0.2572;
-constexpr double kP15AngleX = 0.3579;
-constexpr double kP15RunX = 0.5090;
-constexpr double kP15ProX = 0.6034;
-constexpr double kP15ReserveX = 0.6664;
-constexpr double kP15DefX = 0.7922;
-constexpr double kP15RomanIX = 0.8740;
-constexpr double kP15RomanIIX = 0.8930;
-constexpr double kP15RomanIIIX = 0.9245;
-constexpr double kP15BatteryX = 0.9874;
-
-// ── PC-1600 layout constants -- hand-tuned; fractions are of the panel's
-// own width/height directly. ──────────────────────────────────────────────
-constexpr double kP16IndicatorRowTop = 0.03;
-constexpr double kP16LabelFontHeightFraction = 26.0 / 337.0; // labelFontSize / canvasSize.height
-constexpr double kP16RowHeightFraction = kP16LabelFontHeightFraction * 1.15;
-constexpr double kP16MatrixLeft = 0.05;
-constexpr double kP16MatrixRight = 0.955;
-constexpr double kP16MatrixTop = 0.18;
-constexpr double kP16MatrixBottom = 1.00;
-constexpr double kP16RowLeft = 0.025;
-constexpr double kP16RowRight = 0.9205;
-
-struct P16Item { const char* name; double rawX; };
-// rawStartX, measured from source-material/Display.png -- fixed reference
-// data, remapped below into [kP16RowLeft, kP16RowRight] exactly like
-// Layout.startX(for:) does.
-constexpr P16Item kP16Items[] = {
-    {"busy", 0.04837}, {"shift", 0.10587}, {"s", 0.17526}, {"romaji", 0.19389}, {"kana", 0.2502},
-    {"small", 0.31047}, {"degrad", 0.39611}, {"run", 0.50436}, {"pro", 0.54401},
-    {"reserve", 0.60984}, {"def", 0.72086}, {"roman", 0.76209}, {"ctrl", 0.81562},
-    {"batt", 0.87192},
-};
-constexpr double kP16MeasuredLeft = 0.04837;  // kP16Items[0] (busy)
-constexpr double kP16MeasuredRight = 0.87192; // kP16Items[last] (batt)
-
-double p16StartX(double rawX) {
-    const double t = (rawX - kP16MeasuredLeft) / (kP16MeasuredRight - kP16MeasuredLeft);
-    return kP16RowLeft + t * (kP16RowRight - kP16RowLeft);
-}
-
-const QColor kP15Background(150, 158, 142);
-const QColor kP16Background(156, 168, 149);
-const QColor kInk(0x20, 0x28, 0x18);
+QColor toQColor(shared::Rgb c) { return QColor(c.r, c.g, c.b); }
+const QColor kP15Background = toQColor(kP15BackgroundRgb);
+const QColor kP16Background = toQColor(kP16BackgroundRgb);
+const QColor kInk = toQColor(kInkRgb);
 
 } // namespace
 
@@ -88,13 +42,6 @@ void LcdWidget::setModel(Model model) {
 
 void LcdWidget::setFrame(const DisplayFrame& frame) {
     m_frame = frame;
-}
-
-bool LcdWidget::flag(const char* name) const {
-    for (const auto& [label, on] : m_frame.statusSymbols) {
-        if (label == name) return on;
-    }
-    return false;
 }
 
 void LcdWidget::mousePressEvent(QMouseEvent* event) {
@@ -162,36 +109,19 @@ void LcdWidget::paintPC1500(QPainter& painter) {
     painter.setFont(font);
     painter.setPen(kInk);
 
-    const auto drawLabel = [&](double xFraction, const QString& text) {
-        const double x = interior.left() + xFraction * totalWidth;
-        const double y = interior.top() + topInset;
-        painter.drawText(QRectF(x, y, totalWidth, fontSize * 1.4), Qt::AlignLeft | Qt::AlignTop, text);
-    };
-
-    if (flag("BUSY")) drawLabel(kP15BusyX, "BUSY");
-    if (flag("SHIFT")) drawLabel(kP15ShiftX, "SHIFT");
-    if (flag("KANA")) drawLabel(kP15JapX, "JPN");
-    if (flag("SMALL")) drawLabel(kP15SmallX, "SMALL");
-    if (flag("RUN")) drawLabel(kP15RunX, "RUN");
-    if (flag("PRO")) drawLabel(kP15ProX, "PRO");
-    if (flag("RESERVE")) drawLabel(kP15ReserveX, "RESERVE");
-    if (flag("DEF")) drawLabel(kP15DefX, "DEF");
-    if (flag("I")) drawLabel(kP15RomanIX, "I");
-    if (flag("II")) drawLabel(kP15RomanIIX, "II");
-    if (flag("III")) drawLabel(kP15RomanIIIX, "III");
-
-    // DE/G/RAD concatenate into one shared "DEGRAD" template span.
-    const QString angle = QString::fromStdString(lcdAngleLegend(flag("DE"), flag("G"), flag("RAD")));
-    if (!angle.isEmpty()) drawLabel(kP15AngleX, angle);
-
-    // Battery indicator: always on, no data bit backs it.
-    {
-        const double d = fontSize * 0.4;
-        const double x = interior.left() + kP15BatteryX * totalWidth;
-        const double y = interior.top() + topInset;
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(kInk);
-        painter.drawEllipse(QRectF(x, y, d, d));
+    const double y = interior.top() + topInset;
+    for (const Indicator& ind : indicators(m_model, m_frame)) {
+        const double x = interior.left() + ind.x * totalWidth;
+        if (ind.style == Indicator::Style::Dot) {
+            const double d = fontSize * 0.4;
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(kInk);
+            painter.drawEllipse(QRectF(x, y, d, d));
+            continue;
+        }
+        painter.setPen(kInk);
+        painter.drawText(QRectF(x, y, totalWidth, fontSize * 1.4), Qt::AlignLeft | Qt::AlignTop,
+                         QString::fromStdString(ind.text));
     }
 
     const QRectF matrixArea(interior.left(), interior.top() + barHeight + matrixTopGap, totalWidth, canvasHeight);
@@ -212,64 +142,27 @@ void LcdWidget::paintPC1600(QPainter& painter) {
     font.setWeight(QFont::Medium);
     font.setPixelSize(std::max(1, static_cast<int>(fontSize)));
 
-    const auto xFor = [&](const char* name) -> double {
-        for (const auto& item : kP16Items) {
-            if (std::string_view(item.name) == name) return p16StartX(item.rawX) * totalWidth;
-        }
-        return 0.0;
-    };
-
-    const auto drawLabel = [&](const char* itemName, const QString& text, double scale = 1.0) {
+    for (const Indicator& ind : indicators(m_model, m_frame)) {
+        const double x = ind.x * totalWidth;
+        const QString text = QString::fromStdString(ind.text);
         QFont labelFont = font;
-        if (scale != 1.0) labelFont.setPixelSize(std::max(1, static_cast<int>(fontSize * scale)));
+        if (ind.scale != 1.0) labelFont.setPixelSize(std::max(1, static_cast<int>(fontSize * ind.scale)));
         painter.setFont(labelFont);
-        painter.setPen(kInk);
-        const double x = xFor(itemName);
-        const QRectF box(x, rowTop, totalWidth - x, rowHeight);
-        painter.drawText(box, Qt::AlignLeft | Qt::AlignVCenter, text);
-    };
-
-    // "Inverted" labels (S, BATT): filled rounded box in ink, text in the
-    // background color.
-    const auto drawInvertedLabel = [&](const char* itemName, const QString& text) {
-        painter.setFont(font);
-        const QFontMetrics fm(font);
-        const double x = xFor(itemName);
-        const QRectF textRect = fm.boundingRect(text);
-        const QRectF box(x - 2, rowTop + (rowHeight - textRect.height()) / 2 - 2,
-                          textRect.width() + 4, textRect.height() + 4);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(kInk);
-        painter.drawRoundedRect(box, 2, 2);
-        painter.setPen(kP16Background);
-        painter.drawText(QRectF(x, rowTop, totalWidth - x, rowHeight), Qt::AlignLeft | Qt::AlignVCenter, text);
-    };
-
-    if (flag("BUSY")) drawLabel("busy", "BUSY");
-    if (flag("SHIFT")) drawLabel("shift", "SHIFT");
-    if (flag("S")) drawInvertedLabel("s", "S");
-    // The romaji->kana caption shares the window after S and is printed
-    // small on the glass. The "kana" position is an estimate (the other
-    // positions are measured) that keeps both parts clear of SMALL.
-    if (flag("ROMAJI")) drawLabel("romaji", QString::fromUtf8("ローマ字"), 0.75);
-    if (flag("KANA")) drawLabel("kana", QString::fromUtf8("→カナ"), 0.75);
-    if (flag("SMALL")) drawLabel("small", "SMALL");
-    if (flag("RUN")) drawLabel("run", "RUN");
-    if (flag("PRO")) drawLabel("pro", "PRO");
-    if (flag("RESERVE")) drawLabel("reserve", "RESERVE");
-    if (flag("DEF")) drawLabel("def", "DEF");
-    if (flag("CTRL")) drawLabel("ctrl", "CTRL");
-    if (flag("BATT")) drawInvertedLabel("batt", "BATT");
-
-    // DEGRAD: the DE/G/RAD segments read as one word (DE+G = DEG,
-    // G+RAD = GRAD), as on the PC-1500.
-    const QString angle = QString::fromStdString(lcdAngleLegend(flag("DE"), flag("G"), flag("RAD")));
-    if (!angle.isEmpty()) drawLabel("degrad", angle);
-
-    // I/II/III: one shared position, first match wins.
-    if (flag("I")) drawLabel("roman", "I");
-    else if (flag("II")) drawLabel("roman", "II");
-    else if (flag("III")) drawLabel("roman", "III");
+        const QRectF row(x, rowTop, totalWidth - x, rowHeight);
+        if (ind.style == Indicator::Style::Inverted) {
+            // A filled rounded box in ink, the text in the background colour.
+            const QRectF textRect = QFontMetrics(labelFont).boundingRect(text);
+            const QRectF box(x - 2, rowTop + (rowHeight - textRect.height()) / 2 - 2, textRect.width() + 4,
+                             textRect.height() + 4);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(kInk);
+            painter.drawRoundedRect(box, 2, 2);
+            painter.setPen(kP16Background);
+        } else {
+            painter.setPen(kInk);
+        }
+        painter.drawText(row, Qt::AlignLeft | Qt::AlignVCenter, text);
+    }
 
     const QRectF matrixArea(kP16MatrixLeft * totalWidth, kP16MatrixTop * totalHeight,
                              (kP16MatrixRight - kP16MatrixLeft) * totalWidth,

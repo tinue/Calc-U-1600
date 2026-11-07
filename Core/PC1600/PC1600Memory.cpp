@@ -52,6 +52,7 @@ void PC1600Memory::reset() {
     // Interrupt cause/mask start clear; the boot ROM programs 35H itself.
     m_intCause = 0;
     m_intMask = 0;
+    m_lhNmiLatch = false;
     m_uart.reset();
     // Port 37H bit 4 (CK0, the LCD base clock) is 0 after reset until the
     // boot ROM enables it. The LCD controllers themselves are not reset:
@@ -65,6 +66,7 @@ void PC1600Memory::reset() {
 }
 
 void PC1600Memory::advanceBuzzer(uint32_t tstates) {
+    updateBuzzerLine(); // the cassette input may have moved since (the recorder's last tick)
     if ((m_fReg & 0x40) == 0) {
         m_piezo.advance(tstates);
         return;
@@ -216,9 +218,6 @@ bool PC1600Memory::slot1MapTarget(uint16_t addr, bool* pvoutHigh, uint16_t* offs
 }
 
 uint8_t PC1600Memory::read(uint16_t addr) const {
-    if (addr == kPort3DMirrorAddr) {
-        return m_bank.port3DLatch();
-    }
 #ifdef PC1600_POWER_PROBE
     // Report which branch served the read, so a probe can tell a genuine
     // card hit from a ROM/open-bus miss (see PC1600PowerProbe's onSlotRead).
@@ -251,11 +250,11 @@ uint8_t PC1600Memory::read(uint16_t addr) const {
         // Page B banks 4-7: peripheral ROM on the 60-pin system bus -- 4/5
         // CE-1600P, 7 the host-directory drive (where the MEP module sits
         // on real hardware) -- see PC1600Memory.hpp's class comment and
-        // ce1600pBus().
+        // systemBus(). The bank goes out on PT / PU / PVOUT.
         const uint8_t bank = m_bank.pageBBank();
         if (bank >= 4) {
             uint8_t v;
-            if (m_ce1600pBus.readRom(static_cast<uint16_t>(addr - 0x4000), bank, v))
+            if (m_systemBus.read(PC1600BusDrive::z80MemPins(addr, /*forWrite=*/false, bank), v))
                 return trace(v, 6);
         }
     }
@@ -315,7 +314,7 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
     // port, same convention as the rest of this function.
     if (port >= 0x70 && port <= 0x9F) {
         uint8_t v;
-        return m_ce1600pBus.readIO(port, v) ? v : 0xFF;
+        return m_systemBus.read(PC1600BusDrive::z80IoPins(port, /*forWrite=*/false), v) ? v : 0xFF;
     }
     switch (port) {
         case 0x31: return m_bank.readPort31();
@@ -343,7 +342,7 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
         // 64Hz square wave alive across the ROM's own read-modify-write of
         // this port -- see setTimer64Bit()'s comment for the trace evidence.
         case 0x1F: return static_cast<uint8_t>((m_opb & m_ddb) |
-                                                (m_pbIn & static_cast<uint8_t>(~m_ddb)));
+                                                (pbPins() & static_cast<uint8_t>(~m_ddb)));
         case 0x37: {
             // PB6 is a key strobe for CTRL/KBII/BS. Per the PC-1600 service
             // manual's PB6 description it drives the strobe low only while
@@ -355,7 +354,11 @@ uint8_t PC1600Memory::readIOImpl(uint8_t port) {
             // if the ROM releases by flipping to input without the courtesy
             // high write, colliding with MODE (also KS6/KIN1).
             bool pb6Strobing = (m_ddb & 0x40) != 0 && (m_opb & 0x40) == 0;
-            return m_keyboard.scan(m_opa, pb6Strobing);
+            // The PA strobes likewise: a line is driven low only while it
+            // is an output (DDA = 1) with OPA = 0; an input floats high.
+            // Both ROMs strobe one column through DDA with OPA = 0 (Z-80:
+            // P1-B3 47D8H; LH5803: ISKEY E41AH, the PC-1500 way).
+            return m_keyboard.scan(static_cast<uint8_t>(m_opa | ~m_dda), pb6Strobing);
         }
         // TC8576F UART register file (20H-27H, A1:A0 = port & 3): 20H RxD,
         // 21H PIN, 22H SSR, 23H PSR. The sub-CPU answer at 33H is a
@@ -377,7 +380,7 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
     // registers), 0x80-0x8F (0x81 FD reset, 0x82 Z-motor, 0x83 X/Y-motor;
     // see CE1600PCard/CE1600FCard) and 0x90-0x9F (PC1600HostDriveCard).
     // No-op when unattached.
-    if (port >= 0x70 && port <= 0x9F) { m_ce1600pBus.writeIO(port, value); return; }
+    if (port >= 0x70 && port <= 0x9F) { m_systemBus.write(PC1600BusDrive::z80IoPins(port, /*forWrite=*/true), value); return; }
     // Slot-2 I/O range (28-2FH, PC-1600 TRM §9): a module whose bank latch
     // triggers on a port write (CE-1601M: OUT (28H) sampling the data bus)
     // sees it here -- the card now owns that decode. The mainboard's own
@@ -395,10 +398,9 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
         case 0x24: case 0x25: case 0x26: case 0x27:
             m_uart.writeRegister(port & 0x03, value); return;
         case 0x31: m_bank.writePort31(value); return;
-        // 3CH = SLOT1MAP/SLOT2MAP gate-array control. The firmware keeps a
-        // RAM shadow at F08DH (ordinary internal RAM -- no mirror needed
-        // here, unlike Port 3DH's F07DH); slot2MapTarget() reads the
-        // authoritative b5:b4 from this latch.
+        // 3CH = SLOT1MAP/SLOT2MAP control. The firmware keeps a RAM copy
+        // at F08DH (ordinary internal RAM, like Port 3DH's F07DH);
+        // slot2MapTarget() reads the authoritative b5:b4 from this latch.
         case 0x3C: m_bank.writePort3C(value); return;
         case 0x3D: m_bank.writePort3D(value); return;
         case 0x35: m_intMask = value; return;
@@ -409,6 +411,9 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
             // wave the BEEP loop toggles. See m_opc.
             m_opc = value;
             updateBuzzerLine();
+            // b7 is also SD0, the cassette-write line out to the 60-pin
+            // bus (bank 5 CMTONE0/1 bit-bangs it).
+            m_systemBus.setCmtOut((value & 0x80) != 0);
             return;
         // 14H: divider reset -- restart the modulation clocks' phase.
         case 0x14: m_sdoAccum = 0; return;
@@ -437,9 +442,10 @@ void PC1600Memory::writeIO(uint8_t port, uint8_t value) {
         // PC1600-P1-B3-new.bin 4197H, immediately after the `IN A,(32H)` cause
         // read at 40FFH -- i.e. an interrupt acknowledge/re-arm -- and
         // interrupts keep arriving with it ignored, so nothing in this
-        // core needs the register's contents yet. Recorded here so it
-        // stops reading as an unidentified port.
-        case 0x36: return;
+        // core needs the register's contents. The one effect modelled: the
+        // LH5803 ROM's NMI handler acknowledges the SC7852's LHNMIO trap
+        // here (`ANI #(A036H),00H`, C491H), so a write clears that latch.
+        case 0x36: m_lhNmiLatch = false; return;
         default:   return; // open bus -- see class comment for scope
     }
 }

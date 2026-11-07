@@ -39,8 +39,8 @@ public:
     using PresetMachineBase::PresetMachineBase;
 
     uint32_t cyclesPerSecond() const override { return PC1500Machine::kCpuHz; }
-    uint64_t waitUntilBasicIdle(uint64_t maxCycles) override {
-        return ::waitUntilBasicIdle(m_machine, maxCycles);
+    job::Task<uint64_t> waitUntilBasicIdle(uint64_t maxCycles) override {
+        co_return co_await waitUntilBasicIdleJob(m_machine, maxCycles);
     }
     std::string stepTag() override {
         // std::string, not a fixed buffer -- inputText() can return up to 80
@@ -51,13 +51,13 @@ public:
     }
 
     // The parser already rejected unknown key names.
-    bool key(const std::string& name, std::string*) override {
-        if (name == "break" || name == "on") presetTapOn(m_machine, kCyclesPerFrame * 4);
-        else tapKey(m_machine, name);
-        return true;
+    job::Task<bool> key(std::string name, std::string*) override {
+        if (name == "break" || name == "on") co_await presetTapOn(m_machine, kCyclesPerFrame * 4);
+        else co_await tapKeyJob(m_machine, name);
+        co_return true;
     }
-    bool typeLine(const std::string& line, std::string* error) override {
-        return ::typeLine(m_machine, line, /*pressEnter=*/true, error);
+    job::Task<bool> typeLine(std::string line, std::string* error) override {
+        co_return co_await typeLineJob(m_machine, line, /*pressEnter=*/true, error);
     }
 
     bool writeScreenshot(const std::string& path, std::string* error) override {
@@ -65,8 +65,8 @@ public:
     }
     LcdText lcdText() override { return pc1500LcdText(m_machine); }
 
-    BasicTypeResult typeBasicProgram(const std::string& text) override {
-        return typeBasicProgramText(m_machine, text);
+    job::Task<BasicTypeResult> typeBasicProgram(std::string text) override {
+        co_return co_await typeBasicProgramTextJob(m_machine, text);
     }
     BasicLoadResult loadBasicFile(const std::string& path) override {
         return loadBasicProgramFile(m_machine, path);
@@ -81,13 +81,11 @@ public:
 
 } // namespace
 
-PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& preset,
-                                   const PresetLogFn& log,
-                                   const std::string& traceDir, const std::string& moduleDir,
-                                   const PresetBootedFn& onBooted, const std::vector<std::string>& romDirs,
-                                   const std::vector<std::string>& extraModuleDirs,
-                                   const PresetArmedFn& onArmed,
-                                   const PresetSaveAsFn& onSaveAs) {
+job::Task<PresetLoadResult> applyPC1500PresetJob(PC1500Machine& machine, PresetFile preset, PresetLogFn log,
+                                                 std::string traceDir, std::string moduleDir, PresetBootedFn onBooted,
+                                                 std::vector<std::string> romDirs,
+                                                 std::vector<std::string> extraModuleDirs, PresetArmedFn onArmed,
+                                                 PresetSaveAsFn onSaveAs) {
     PresetLoadResult result;
     PC1500PresetMachine adapter(machine);
 
@@ -107,7 +105,7 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
                                                                        : CardHost::PC1500;
             std::string err, specPath;
             auto card = makePresetModuleCard(preset.slot1ModuleSpecFile,
-                                             preset.slot1ModuleSpecName,
+                                             preset.slot1ModuleSpecName, preset.slot1RomFile,
                                              presetModuleDirs(moduleDir, extraModuleDirs), host, &specPath, &err);
             if (!card) {
                 result.error = "slot-1: " + err;
@@ -116,6 +114,7 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
             }
             machine.attachExpansionCard(std::move(card));
             result.slot1ResolvedPath = specPath;
+            result.slot1RomFile = preset.slot1RomFile;
             if (log) log("software-defined module attached: " + specPath);
         }
 
@@ -145,14 +144,14 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
     // boot below makes it start running. Fired on a failed arming too, so
     // the caller always sees what did get attached.
     if (onArmed) onArmed(result);
-    if (!armed) return result;
+    if (!armed) co_return result;
     if (preset.armOnly) {
         result.ok = true;
-        return result;
+        co_return result;
     }
 
     machine.reset();
-    runBootToPrompt(machine);
+    co_await runBootToPromptJob(machine);
 
     // Connecting the CE-150 (like any memory-map change) makes the ROM do
     // a cold memory check on power-up and stop at the "NEW0? :CHECK"
@@ -163,14 +162,23 @@ PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& pre
     // can be missed.
     for (int attempt = 0; attempt < 5 && inputText(machine).find("NEW0") != std::string::npos;
          ++attempt) {
-        tapKey(machine, "cl");
-        machine.runCycles(kBootSettleCycles / 4);
-        waitIdle(machine, kIdleCap);
+        co_await tapKeyJob(machine, "cl");
+        co_await job::run(machine, kBootSettleCycles / 4);
+        co_await waitIdleJob(machine, kIdleCap);
     }
 
     if (log) log("reset + boot settle done" + adapter.stepTag());
     if (onBooted) onBooted();
 
-    runPresetSections(adapter, preset, &result, log, traceDir, onSaveAs);
-    return result;
+    co_await runPresetSectionsJob(adapter, preset, &result, log, traceDir, onSaveAs);
+    co_return result;
+}
+
+PresetLoadResult applyPC1500Preset(PC1500Machine& machine, const PresetFile& preset, const PresetLogFn& log,
+                                   const std::string& traceDir, const std::string& moduleDir,
+                                   const PresetBootedFn& onBooted, const std::vector<std::string>& romDirs,
+                                   const std::vector<std::string>& extraModuleDirs, const PresetArmedFn& onArmed,
+                                   const PresetSaveAsFn& onSaveAs) {
+    return job::runToCompletion(applyPC1500PresetJob(machine, preset, log, traceDir, moduleDir, onBooted, romDirs,
+                                                     extraModuleDirs, onArmed, onSaveAs));
 }

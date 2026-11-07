@@ -21,8 +21,10 @@
 #include "../CPU/DebugStop.hpp"
 #include "../CPU/SC7852/SC7852.hpp"
 #include "../PC1500/PC1500TraceFile.hpp"
+#include "../Tape/TapeDeck.hpp"
 #include "PC1600Bank.hpp"
 #include "PC1600BusArbiter.hpp"
+#include "PC1600Clocks.hpp"
 #include "PC1600Memory.hpp"
 
 /// A genuine value-type snapshot of PC1600Display's pixel state, copied
@@ -159,8 +161,8 @@ public:
     //
     // `PC1600-P1-B4-CE1600P-{new,old}.bin`/`PC1600-P1-B5-CE1600P-OR-F-{new,old}.bin` are confirmed CE-1600P ROM (see
     // roms/README.md) -- `attachCE1600P` builds a card, loads both halves,
-    // and attaches it to `m_z80Mem.ce1600pBus()`; PC1600Memory routes Page B
-    // banks 4-7 and I/O ports 0x70-0x9F to that bus once attached.
+    // and attaches it to `m_z80Mem.systemBus()`; PC1600Memory offers Page B
+    // banks 4-7 and I/O ports 0x70-0x9F to that bus.
     //
     // The CE-1600F floppy docks onto the CE-1600P and cannot run
     // standalone (its driver lives in the CE-1600P's own bank-5 ROM), so
@@ -211,6 +213,23 @@ public:
     /// motorOn(). False when no floppy is attached.
     bool ce1600fMotorOn() const;
 
+    // ── Cassette recorder (CE-152 on the CE-1600P's jacks) ──────────────
+    //
+    // The recorder outlives attach/detach of the interface: arm it with a
+    // WAV to play (CLOAD) or a file to record into (CSAVE); it moves only
+    // while the interface's remote relay runs it, in emulated time. A
+    // recording is saved each time the motor stops. All GUI-safe (take
+    // m_mutex).
+    bool tapePlay(const std::string& path, std::string& error);
+    void tapeRecord(const std::string& path);
+    bool tapeEject(std::string* error = nullptr);
+    TapeDeck::Status tapeStatus() const;
+    /// Why the last automatic save (at a motor stop) failed, once; empty if
+    /// it didn't (TapeDeck::takeLastError()).
+    std::string tapeTakeLastError();
+    /// Unlocked direct access -- headless/tests only.
+    TapeDeck& tapeDeck() { return m_tapeDeck; }
+
     // ── Host-directory drive S3: / Y: (60-pin system bus, page-1 bank 7) ─
     //
     // Calc-U-1600's own peripheral (PC1600HostDriveCard): a host directory
@@ -224,12 +243,12 @@ public:
 
     // ── Bus ROMs (preset `bus-rom:`, Connector/BusRomCard.hpp) ───────────
     //
-    // A plain ROM on the system bus (a page B bank) or on the LH5803 side,
-    // in front of every other card there, so a rebuilt ROM shadows a
-    // bundled one (e.g. the host drive's bank 7). Kept for the machine's
+    // A plain ROM on the 60-pin connector, decoded like the Z-80's page-B
+    // banks (PC1600BusRomCard) or like the LH5803's peripherals
+    // (BusRomCard), in front of every other card, so a rebuilt ROM shadows
+    // a bundled one (e.g. the host drive's bank 7). Kept for the machine's
     // lifetime; a preset builds a fresh machine.
-    void attachBusRom(std::unique_ptr<PC1600BusRomCard> card);
-    void attachBusRom(std::unique_ptr<BusRomCard> card);
+    void attachBusRom(std::unique_ptr<SystemBusCard> card);
     bool hostDriveAttached() const;
     void setHostDriveDirectory(const std::filesystem::path& dir);
     std::filesystem::path hostDriveDirectory() const;
@@ -239,10 +258,10 @@ public:
     // The PC-1500's CE-150 attached to the PC-1600's LH5803 compatibility
     // CPU: its ROM window (LH5803 0xA000-0xBFFF, PV=0) and LH5810 block
     // (LH5803 ME1 0xB008-0xB00F) are served by the same Ce150Card the
-    // PC-1500 uses, plugged into PC1600Memory::lh5803PeripheralBus() (the
-    // LH5803 side of the 60-pin connector). Mutually exclusive
-    // with the CE-1600P on the shared 60-pin bus concept -- attaching one
-    // detaches the other. A chip/machine reset re-anchors the card but
+    // PC-1500 uses, plugged into PC1600Memory::systemBus() (the 60-pin
+    // connector, where it answers the LH5803's cycles). Mutually exclusive
+    // with the CE-1600P (one plotter at a time) -- attaching one detaches
+    // the other. A chip/machine reset re-anchors the card but
     // leaves it attached (like the CE-1600P).
     bool attachCE150(const uint8_t* rom, size_t romSize); // 8192 bytes
     void detachCE150();
@@ -276,11 +295,13 @@ public:
     LH5803&       lh5803() { return m_lh5803; }
     const LH5803& lh5803() const { return m_lh5803; }
     PC1600Bank&   bank() { return m_bank; }
+    const PC1600Bank& bank() const { return m_bank; }
     PC1600Memory& memory() { return m_z80Mem; }
     const PC1600Memory& memory() const { return m_z80Mem; }
     /// The LH5803's memory view -- its 0000-3FFF window aliases the Z-80's
     /// 8000-BFFF (Slot 1/2), so a slot card is visible through both.
     LH5803SharedMemory& lh5803Memory() { return m_lh5803Mem; }
+    const LH5803SharedMemory& lh5803Memory() const { return m_lh5803Mem; }
     PC1600BusArbiter& busArbiter() { return m_arbiter; }
     bool sc7852Owns() const { return m_arbiter.sc7852Owns(); }
 
@@ -411,10 +432,10 @@ public:
     /// view, which chunks it into 16 KB bank rows.
     std::vector<uint8_t> debugSlotImage(int slot);
 
-    /// What a CPU page currently decodes to, for the debug panel's live
-    /// address-map view. Mirrors PC1600Memory::resolveConst()'s branch set
-    /// plus the two slot windows; `PeripheralRom` is the CE-1600P ROM at
-    /// page-B banks 4/5, which has no backing store yet (shown, not read).
+    /// What a CPU page currently decodes to, for the inspector's Z80 view.
+    /// Mirrors PC1600Memory::read()'s branch set: the fixed ROMs, the two
+    /// slot windows, and `BusCard`, a card on the 60-pin system bus that
+    /// answers page B banks 4-7 (CE-1600P, host drive, a preset bus ROM).
     enum class PageTarget : uint8_t {
         OpenBus = 0,
         SystemRomLo,   // Bank 0 lower 16 KB (page A)
@@ -422,7 +443,7 @@ public:
         Bank3Rom,      // page B bank 3, Port 3DH b2 set
         Bank3bRom,     // page B bank 3, Port 3DH b2 clear (hidden BASIC ROM)
         Bank6Rom,      // ROM IV, page C bank 6
-        PeripheralRom, // CE-1600P, page B banks 4/5 -- not modelled
+        BusCard,       // page B banks 4-7, a 60-pin card (DebugBankState::busCard)
         InternalRam,   // fixed internal 16 KB, page D bank 0
         Slot1,
         Slot2,
@@ -448,8 +469,22 @@ public:
         int     slot2CardBankCount{-1};
         PageTarget target[4]{};       // A,B,C,D -- what each page decodes to right now
         bool    slotmapRedirect[4]{}; // A,B,C,D -- true when a SLOTMAP rewrite is live for that page
+        std::string busCard;          // page B's card when target[1] == BusCard
     };
     DebugBankState debugBankState();
+    /// debugBankState() for a caller that already holds the lock
+    /// (debugInspect()).
+    DebugBankState inspectBankState() const;
+
+    /// Runs `view(*this)` under the machine lock and returns its result: one
+    /// consistent snapshot for the inspector (Core/Debug/Inspect), which
+    /// reads through the const accessors and the inspect*() calls only --
+    /// never a locked debug*() call, which would deadlock.
+    template <class F>
+    auto debugInspect(F&& view) const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return view(*this);
+    }
 
     // ── Trace: both CPUs' rings drain into one TRACE.bin, tagged by cpuId ──
     //
@@ -502,11 +537,11 @@ private:
     LH5803 m_lh5803;
     PC1600BusArbiter m_arbiter;
 
+    TapeDeck m_tapeDeck{double(kPC1600TStateHz)}; // see tapePlay()
     std::unique_ptr<CE1600PCard> m_ce1600pCard; // see attachCE1600P()
     std::unique_ptr<CE1600FCard> m_ce1600fCard; // union-attached with m_ce1600pCard
     std::unique_ptr<PC1600HostDriveCard> m_hostDriveCard; // see attachHostDrive()
-    std::vector<std::unique_ptr<PC1600BusRomCard>> m_systemBusRoms; // see attachBusRom()
-    std::vector<std::unique_ptr<BusRomCard>> m_lh5803BusRoms;
+    std::vector<std::unique_ptr<SystemBusCard>> m_busRoms; // see attachBusRom()
     std::unique_ptr<Ce150Card> m_ce150Card;     // see attachCE150() -- LH5803-side plotter (MODE 1)
     Ce158Port m_ce158;                          // see attachCE158() -- LH5803-side interface (MODE 1)
 
@@ -550,9 +585,9 @@ private:
     // T-state accumulator against the SC-7852's own 3.58 MHz crystal
     // (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md §2.1) since that's the domain the ROM's
     // polling loop actually observes it in -- accumulates only SC7852
-    // T-states (not LH5803 cycles, a different clock domain entirely), so
-    // the pulse effectively pauses while the SC7852 is parked, a real but
-    // small deviation from true hardware's always-running crystal.
+    // T-states; while the LH5803 owns the bus its cycles are converted to
+    // T-states (toTStates()) and advance it the same way, so the pulse runs
+    // on as it does on the hardware. advanceTimer64().
     // The half period is kTStateHz / 128 = 27968.75 T-states. The
     // accumulator counts quarter T-states so it can hold that exactly.
     // Rounding it to 27969 made the 64 Hz signal drift against anything
@@ -562,6 +597,9 @@ private:
     static_assert(kTStateHz * kTimer64AccumScale % 128 == 0, "64 Hz half period must be exact");
     int m_timer64Accum{0};
     bool m_timer64State{false};
+    /// Advances the 64 Hz pulse (PB5, the INT4 cause, the sub-CPU's 0.5 s
+    /// tick) by `tstates`, from either bus-ownership branch of step().
+    void advanceTimer64(int tstates);
     // System power (SubCpu doc §4) is the sub-CPU's systemOn(). While it
     // has VCC off, step() advances only the always-on clocks,
     // kOffSliceTStates at a time, until a power-on source fires; power-on

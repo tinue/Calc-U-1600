@@ -17,7 +17,9 @@
 # Compatibility is an author-declared list, not a pin-derived one (spec
 # section 1).
 
+format-version: 1
 module-name: "CE-151"
+description: "4 KB static RAM"
 template: true   # read-only starting point; Name & Save copies it
 compatible-hosts: [PC-1500, PC-1500A, PC-1600-Slot-1]
 definition-terminology: PC-1500

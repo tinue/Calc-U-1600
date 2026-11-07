@@ -18,50 +18,33 @@
 #include <QScrollBar>
 #include <QVBoxLayout>
 
-#include <algorithm>
 #include <cmath>
 
 namespace {
 constexpr double kFollowThresholdPt = 64.0;
-constexpr double kDpiScale = 1200.0 / 72.0;    // target 1200 DPI (72pt/in base)
-constexpr double kMaxTextureDimPx = 16000.0;   // GPU texture size cap
-// Total-pixel cap for the export. Copy holds the image, the pasteboard's
-// bitmap and its TIFF/PNG encodings at once, so 64 MP (256 MB a copy) is
-// already a lot; uncapped, a long roll ran past 2 GB. Full 1200 DPI up to
-// ~136 mm of CE-1600P paper, scaled down beyond that. The narrow CE-150
-// roll hits the long-side cap first (~339 mm) and stays under this one.
-constexpr double kMaxExportPixels = 64.0e6;
 
-// pen[color % 4] -- AlpsPlotterMechanism::PenColor's raw value order.
-const QColor kPenColors[4] = {Qt::black, Qt::blue, Qt::darkGreen, Qt::red};
-
-// Shared by on-screen paint and clipboard export: builds one QPainterPath
-// per pen color (moveTo on newStroke, else lineTo) and strokes each with a
-// 1pt-wide round-capped/joined pen.
-void paintPaper(QPainter& painter, const PaperGeometry& geom, double paneWidthPt, double contentHeightPt,
+// Shared by on-screen paint and clipboard export: one QPainterPath per pen
+// color from shared::buildPaperStrokes(), each stroked with a 1pt-wide
+// round-capped/joined pen.
+void paintPaper(QPainter& painter, const shared::PaperGeometry& geom, double paneWidthPt, double contentHeightPt,
                  const std::vector<AlpsPlotterMechanism::FlatPoint>& points, std::int32_t penYLower) {
     painter.fillRect(QRectF(0, 0, paneWidthPt, contentHeightPt), Qt::white);
     if (points.empty()) return;
 
-    QPainterPath paths[4];
-    bool hasPoints[4] = {false, false, false, false};
-    for (const auto& pt : points) {
-        const int idx = pt.color % 4;
-        const QPointF p = geom.canvasPoint(pt.x, pt.y, penYLower, paneWidthPt);
-        if (pt.newStroke || !hasPoints[idx]) {
-            paths[idx].moveTo(p);
-        } else {
-            paths[idx].lineTo(p);
+    const shared::PaperStrokes strokes = shared::buildPaperStrokes(geom, paneWidthPt, points, penYLower);
+    for (int i = 0; i < shared::kPenCount; ++i) {
+        if (strokes[i].empty()) continue;
+        QPainterPath path;
+        for (const shared::Polyline& line : strokes[i]) {
+            path.moveTo(line.front().x, line.front().y);
+            for (std::size_t k = 1; k < line.size(); ++k) path.lineTo(line[k].x, line[k].y);
         }
-        hasPoints[idx] = true;
-    }
-    for (int i = 0; i < 4; ++i) {
-        if (!hasPoints[i]) continue;
-        QPen pen(kPenColors[i], 1.0);
+        const shared::Rgb rgb = shared::kPenColors[i];
+        QPen pen(QColor(rgb.r, rgb.g, rgb.b), shared::kPenWidthPt);
         pen.setCapStyle(Qt::RoundCap);
         pen.setJoinStyle(Qt::RoundJoin);
         painter.setPen(pen);
-        painter.drawPath(paths[i]);
+        painter.drawPath(path);
     }
 }
 } // namespace
@@ -109,7 +92,7 @@ PlotterPaperWidget::PlotterPaperWidget(MachineController* controller, QWidget* p
     outer->setContentsMargins(0, 0, 0, 0);
     outer->setSpacing(0);
 
-    // Header -- matches DebugPanel's "DEBUG LOG" header exactly (same
+    // Header -- matches DebugPanel's "INSPECTOR" header exactly (same
     // ChromeColors, same font/padding), showing which plotter is attached
     // instead of a fixed label.
     m_header = new QLabel(this);
@@ -171,7 +154,7 @@ void PlotterPaperWidget::changeEvent(QEvent* event) {
 void PlotterPaperWidget::applyChrome() {
     const ChromeColors c = ChromeColors::forWidget(this);
 
-    m_header->setText(m_kind == Kind::CE1600P ? tr("CE-1600P") : tr("CE-150"));
+    m_header->setText(QString::fromLatin1(shared::paperName(m_kind)));
     m_header->setStyleSheet(ChromeStyle::header(c));
 
     m_buttonBar->setStyleSheet(ChromeStyle::buttonBar(c));
@@ -190,9 +173,9 @@ void PlotterPaperWidget::applyChrome() {
     m_cutButton->setStyleSheet(buttonStyle);
 }
 
-void PlotterPaperWidget::setKind(Kind kind) {
+void PlotterPaperWidget::setKind(shared::PaperKind kind) {
     m_kind = kind;
-    m_geometry = kind == Kind::CE1600P ? PaperGeometry::ce1600p() : PaperGeometry::ce150();
+    m_geometry = shared::PaperGeometry::forKind(kind);
     setPoints({});
     m_lastRevision = UINT64_MAX;
     m_plotArea->updateGeometry();
@@ -203,13 +186,7 @@ void PlotterPaperWidget::setKind(Kind kind) {
 
 void PlotterPaperWidget::setPoints(std::vector<AlpsPlotterMechanism::FlatPoint> points) {
     m_points = std::move(points);
-    if (m_points.empty()) {
-        m_penYRange = {0, 0};
-    } else {
-        const auto [lo, hi] = std::minmax_element(m_points.begin(), m_points.end(),
-                                                   [](const auto& a, const auto& b) { return a.y < b.y; });
-        m_penYRange = {lo->y, hi->y};
-    }
+    m_penYRange = shared::penYRange(m_points);
 }
 
 bool PlotterPaperWidget::isNearBottom() const {
@@ -229,13 +206,12 @@ void PlotterPaperWidget::updateButtonsEnabled() {
 }
 
 void PlotterPaperWidget::onFrameTick() {
-    const std::uint64_t rev = m_kind == Kind::CE1600P ? m_controller->ce1600pPlotRevision()
-                                                         : m_controller->ce150PlotRevision();
+    const std::uint64_t rev = m_controller->plotRevision(m_kind);
     if (rev == m_lastRevision) return;
     m_lastRevision = rev;
 
     const bool wasNearBottom = isNearBottom();
-    setPoints(m_kind == Kind::CE1600P ? m_controller->ce1600pPlotPoints() : m_controller->ce150PlotPoints());
+    setPoints(m_controller->plotPoints(m_kind));
     m_plotArea->updateGeometry();
     m_plotArea->update();
     updateButtonsEnabled();
@@ -245,57 +221,45 @@ void PlotterPaperWidget::onFrameTick() {
 QImage PlotterPaperWidget::renderPaperImage() const {
     if (m_points.empty()) return {};
 
-    const double paneWidthPt = m_geometry.physicalPaneWidthPt();
     const auto [lower, upper] = m_penYRange;
-    const double contentHeightPt = m_geometry.contentHeight(0, lower, upper, paneWidthPt);
-    const double longestDimPt = std::max(paneWidthPt, contentHeightPt);
-    const double areaPt = paneWidthPt * contentHeightPt;
-    double effectiveScale = kDpiScale;
-    if (longestDimPt > 0) effectiveScale = std::min(effectiveScale, kMaxTextureDimPx / longestDimPt);
-    if (areaPt > 0) effectiveScale = std::min(effectiveScale, std::sqrt(kMaxExportPixels / areaPt));
-
+    const shared::PaperExportSize size = shared::paperExportSize(m_geometry, lower, upper);
     // RGBA8888: the byte order macSetClipboardImage() hands to Cocoa, so
     // its conversion is a no-op rather than a second full-size copy.
-    QImage image(std::max(1, qRound(paneWidthPt * effectiveScale)),
-                 std::max(1, qRound(contentHeightPt * effectiveScale)),
-                 QImage::Format_RGBA8888);
+    QImage image(size.widthPx, size.heightPx, QImage::Format_RGBA8888);
     QPainter painter(&image);
     // Deliberately no anti-aliasing: at 1200 DPI the strokes are ~16 px wide,
     // and the soft edges only made the printout look worse.
-    painter.scale(effectiveScale, effectiveScale);
-    paintPaper(painter, m_geometry, paneWidthPt, contentHeightPt, m_points, lower);
+    painter.scale(size.scale, size.scale);
+    paintPaper(painter, m_geometry, size.paneWidthPt, size.contentHeightPt, m_points, lower);
     painter.end();
 
     // Embed true DPI so a direct file save (or a non-macOS clipboard path)
-    // carries physical size too, even when effectiveScale backed off from
+    // carries physical size too, even when the scale backed off from
     // 1200 DPI to respect the caps (long rolls).
-    const int dotsPerMeter = qRound(effectiveScale * 72.0 / 0.0254);
-    image.setDotsPerMeterX(dotsPerMeter);
-    image.setDotsPerMeterY(dotsPerMeter);
+    image.setDotsPerMeterX(size.dotsPerMeter);
+    image.setDotsPerMeterY(size.dotsPerMeter);
     return image;
 }
 
 void PlotterPaperWidget::copyToClipboard() {
     const QImage image = renderPaperImage();
     if (image.isNull()) return;
-    const double paneWidthPt = m_geometry.physicalPaneWidthPt();
     const auto [lower, upper] = m_penYRange;
-    const double contentHeightPt = m_geometry.contentHeight(0, lower, upper, paneWidthPt);
+    const shared::PaperExportSize size = shared::paperExportSize(m_geometry, lower, upper);
 
 #ifdef Q_OS_MACOS
     // Qt's cross-platform QClipboard::setImage() ignores both
     // devicePixelRatio and dotsPerMeter when converting to NSImage on
     // macOS (confirmed empirically) -- go straight to Cocoa instead, so
     // Preview/printing see the correct physical size.
-    if (macSetClipboardImage(image, paneWidthPt, contentHeightPt)) return;
+    if (macSetClipboardImage(image, size.paneWidthPt, size.contentHeightPt)) return;
 #endif
     QGuiApplication::clipboard()->setImage(image);
 }
 
 void PlotterPaperWidget::cutPaper() {
     copyToClipboard();
-    if (m_kind == Kind::CE1600P) m_controller->clearCE1600PPaper();
-    else m_controller->clearCE150Paper();
+    m_controller->clearPaper(m_kind);
     setPoints({});
     m_lastRevision = UINT64_MAX;
     m_plotArea->updateGeometry();

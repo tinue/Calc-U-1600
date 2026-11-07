@@ -34,7 +34,6 @@ private:
     Model m_model = Model::PC1500A;
     DisplayFrame m_frame;
 
-    bool flag(const char* name) const;
     void paintPC1500(class QPainter& painter);
     void paintPC1600(class QPainter& painter);
     void paintDotMatrix(class QPainter& painter, const QRectF& area, const QColor& ink);

@@ -1,9 +1,8 @@
 # PC-1600 host-directory drive — internals
 
 How the `S3:` / `Y:` host-directory drive is built. What it does for the
-user is in [../PC1600-Host-Drive.md](../PC1600-Host-Drive.md); the design
-history is in
-[../background/plans/PC1600-Host-Drive-Plan.md](../background/plans/PC1600-Host-Drive-Plan.md).
+user is in [../PC1600-Host-Drive.md](../PC1600-Host-Drive.md); the reasons
+behind its oddities are in [../background/Decisions.md](../background/Decisions.md).
 
 It has the same shape as the MEP rev3 module: a 60-pin bus module with a ROM
 at page-1 bank 7 and a microcontroller behind I/O port 90H. The ROM, the
@@ -23,7 +22,7 @@ PC-1600 BASIC ──FILE 01DEH──▶ FILE_I (105FH) ──device "S3"/"Y"─�
   `tools/build_hostdrive_rom.sh` (zasm). The `.bin` and `.lst` are committed
   and bundled with the app.
   - It is a ROM module (ID `43 16`) with device table `S3`=42H and `Y`=43H,
-    and no token table.
+    and a token table at +13H (CDIR, LDIR; see BASIC below).
   - 4020H/4023H/4026H are the MEP's fixed entries CDIR, DIRMODE and
     FILEMODE (see below), so the device table starts at 4029H.
   - SCANMODS (07C5H) finds it at power-on/reset.

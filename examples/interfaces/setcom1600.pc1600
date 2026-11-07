@@ -43,6 +43,9 @@
 # On the Mac, point SharpDataExchange at the stable symlink (see README):
 #     get -p ~/Library/Containers/ch.erzberger.calcu1600/Data/Library/Application\ Support/Calc-U-1600/serial
 
+format-version: 1
+preset-name: Serial setup
+description: "COM1: setup for SharpDataExchange"
 model: PC-1600
 
 slot-2: CE-1601M

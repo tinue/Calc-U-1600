@@ -3,6 +3,7 @@
 # then loads the assembled program at its listing's address and types its
 # CALL.
 
+format-version: 1
 model: PC-1500A
 
 slot-1: CE-163F

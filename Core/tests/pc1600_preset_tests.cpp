@@ -19,6 +19,7 @@
 
 #include "../Connector/CE1600FCard.hpp"
 #include "../Connector/FloppyImageFile.hpp"
+#include "../PC1600/PC1600BusDrive.hpp"
 #include "../PC1600/PC1600Machine.hpp"
 #include "../PC1600/PC1600PresetLoader.hpp"
 #include "../PC1600/PC1600PresetMedia.hpp"
@@ -43,7 +44,7 @@ void test_parser_accepts_pc1600_with_slot_and_keys() {
     PresetFile p;
     std::string err;
     CHECK(parse(
-        "model: PC-1600\n"
+        "format-version: 1\nmodel: PC-1600\n"
         "slot-1: CE-155\n"
         "keys:\n"
         "  - type: MEM\n"
@@ -65,7 +66,7 @@ void test_parser_rejects_multichar_key() {
     // Same rule as the PC-1500 side.
     PresetFile p;
     std::string err;
-    CHECK(!parse("model: PC-1600\nkeys:\n  - key: MEM\n", &p, &err));
+    CHECK(!parse("format-version: 1\nmodel: PC-1600\nkeys:\n  - key: MEM\n", &p, &err));
     CHECK(err.find("MEM") != std::string::npos);
 }
 
@@ -73,7 +74,7 @@ void test_parser_both_slots() {
     PresetFile p;
     std::string err;
     CHECK(parse(
-        "model: PC-1600\n"
+        "format-version: 1\nmodel: PC-1600\n"
         "slot-1: CE-1600M\n"
         "slot-2: CE-1601M\n",
         &p, &err));
@@ -85,17 +86,17 @@ void test_parser_rejects_cross_model_fields() {
     PresetFile p;
     std::string err;
     // PC-1600 preset with a firmware: field (gone -- the ROM rides on the model).
-    CHECK(!parse("model: PC-1600\nfirmware: A04\n", &p, &err));
+    CHECK(!parse("format-version: 1\nmodel: PC-1600\nfirmware: A04\n", &p, &err));
     CHECK(!err.empty());
     // A memory-expansion: block is refused.
-    CHECK(!parse("model: PC-1600\nmemory-expansion:\n  - modulespec: CE-155\n", &p, &err));
+    CHECK(!parse("format-version: 1\nmodel: PC-1600\nmemory-expansion:\n  - modulespec: CE-155\n", &p, &err));
     // PC-1600 machine code needs no target slot: the loader
     // follows MODE / TITLE (see test_parser_pc1600_machine_binary).
     p = PresetFile{};
-    CHECK(parse("model: PC-1600\nprogram:\n  file: x.bin\n  address: 0x8000\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: x.bin\n  address: 0x8000\n", &p, &err));
     // PC-1500 preset with the PC-1600's second slot.
     p = PresetFile{};
-    CHECK(!parse("model: PC-1500A\nslot-2: CE-155\n", &p, &err));
+    CHECK(!parse("format-version: 1\nmodel: PC-1500A\nslot-2: CE-155\n", &p, &err));
 }
 
 void test_parser_pc1600_machine_binary() {
@@ -106,7 +107,7 @@ void test_parser_pc1600_machine_binary() {
     // `address` / `length` optional (a header may supply them).
     {
         PresetFile p;
-        CHECK(parse("model: PC-1600\nprogram:\n  file: x.bin\n", &p, &err));
+        CHECK(parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: x.bin\n", &p, &err));
         CHECK(p.sections.size() == 1);
         CHECK(p.sections[0].program.format == PresetProgram::Format::Binary);
         CHECK(!p.sections[0].program.hasAddress);
@@ -116,7 +117,7 @@ void test_parser_pc1600_machine_binary() {
     // `address` / `length` overrides, both bases.
     {
         PresetFile p;
-        CHECK(parse("model: PC-1600\nprogram:\n  file: x.bin\n"
+        CHECK(parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: x.bin\n"
                     "  address: 0x8100\n  length: 0x40\n",
                     &p, &err));
         CHECK(p.sections[0].program.hasAddress && p.sections[0].program.address == 0x8100);
@@ -124,26 +125,26 @@ void test_parser_pc1600_machine_binary() {
     }
     {
         PresetFile p;
-        CHECK(parse("model: PC-1600\nprogram:\n  file: x.bin\n  length: 256\n", &p, &err));
+        CHECK(parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: x.bin\n  length: 256\n", &p, &err));
         CHECK(p.sections[0].program.length == 256);
     }
 
     // `slot:` is refused (the loader follows MODE / TITLE) -- on every
     // model and format; bad length; length on the wrong format.
-    for (const char* preset : {"model: PC-1600\nprogram:\n  slot: S0\n  file: x.bin\n",
-                               "model: PC-1600\nprogram:\n  slot: S0\n  file: x.bas\n",
-                               "model: PC-1500A\nprogram:\n  slot: S0\n  file: x.bin\n"}) {
+    for (const char* preset : {"format-version: 1\nmodel: PC-1600\nprogram:\n  slot: S0\n  file: x.bin\n",
+                               "format-version: 1\nmodel: PC-1600\nprogram:\n  slot: S0\n  file: x.bas\n",
+                               "format-version: 1\nmodel: PC-1500A\nprogram:\n  slot: S0\n  file: x.bin\n"}) {
         PresetFile p;
         CHECK(!parse(preset, &p, &err));
         CHECK(err.find("'slot:' was removed") != std::string::npos);
     }
     {
         PresetFile p;
-        CHECK(!parse("model: PC-1600\nprogram:\n  file: x.bin\n  length: 12x\n", &p, &err));
+        CHECK(!parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: x.bin\n  length: 12x\n", &p, &err));
     }
     {
         PresetFile p;
-        CHECK(!parse("model: PC-1600\nprogram:\n  length: 8\n  file: x.bas\n", &p, &err));
+        CHECK(!parse("format-version: 1\nmodel: PC-1600\nprogram:\n  length: 8\n  file: x.bas\n", &p, &err));
         CHECK(err.find("length") != std::string::npos);
     }
 
@@ -152,12 +153,12 @@ void test_parser_pc1600_machine_binary() {
     // loader refuses a headerless file without `address`).
     {
         PresetFile p;
-        CHECK(parse("model: PC-1500A\nprogram:\n  file: x.bin\n", &p, &err));
+        CHECK(parse("format-version: 1\nmodel: PC-1500A\nprogram:\n  file: x.bin\n", &p, &err));
         CHECK(!p.sections[0].program.hasAddress);
     }
     {
         PresetFile p;
-        CHECK(parse("model: PC-1500A\nprogram:\n  file: x.bin\n  address: 0x40C5\n"
+        CHECK(parse("format-version: 1\nmodel: PC-1500A\nprogram:\n  file: x.bin\n  address: 0x40C5\n"
                     "  length: 8\n",
                     &p, &err));
         CHECK(p.sections[0].program.hasLength && p.sections[0].program.length == 8);
@@ -209,7 +210,7 @@ void test_loader_machine_binary_header() {
 
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nprogram:\n  file: " + bin + "\n",
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: " + bin + "\n",
                 &p, &err));
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
@@ -233,7 +234,7 @@ void test_loader_machine_binary_length_mismatch() {
 
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nprogram:\n  file: " + bin + "\n",
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: " + bin + "\n",
                 &p, &err));
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
@@ -243,7 +244,7 @@ void test_loader_machine_binary_length_mismatch() {
     PC1600Machine m2;
     loadPC1600Roms(m2);
     PresetFile p2;
-    CHECK(parse("model: PC-1600\nprogram:\n  file: " + bin +
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: " + bin +
                     "\n  length: 4\n",
                 &p2, &err));
     PresetLoadResult r2 = applyPC1600Preset(m2, p2);
@@ -264,7 +265,7 @@ void test_loader_machine_binary_headerless() {
 
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nprogram:\n  file: " + bin + "\n",
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: " + bin + "\n",
                 &p, &err));
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(!r.ok);
@@ -273,7 +274,7 @@ void test_loader_machine_binary_headerless() {
     PC1600Machine m2;
     loadPC1600Roms(m2);
     PresetFile p2;
-    CHECK(parse("model: PC-1600\nprogram:\n  file: " + bin +
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: " + bin +
                     "\n  address: 0xD200\n  length: 4\n",
                 &p2, &err));
     PresetLoadResult r2 = applyPC1600Preset(m2, p2);
@@ -295,7 +296,7 @@ void test_loader_machine_binary_headerless_address_only_and_ce158() {
     CHECK(writeFile(bin, {0x12, 0x34, 0x56}));
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nprogram:\n  file: " + bin +
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: " + bin +
                     "\n  address: 0xD400\n",
                 &p, &err));
     PresetLoadResult r = applyPC1600Preset(m, p);
@@ -315,7 +316,7 @@ void test_loader_machine_binary_headerless_address_only_and_ce158() {
     PC1600Machine m2;
     loadPC1600Roms(m2);
     PresetFile p2;
-    CHECK(parse("model: PC-1600\nprogram:\n  file: " + ce158Bin +
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: " + ce158Bin +
                     "\n  address: 0xD500\n",
                 &p2, &err));
     PresetLoadResult r2 = applyPC1600Preset(m2, p2);
@@ -337,7 +338,7 @@ void test_loader_machine_binary_autorun() {
 
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nprogram:\n  file: " + bin + "\n",
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nprogram:\n  file: " + bin + "\n",
                 &p, &err));
     PresetLoadResult r = applyPC1600Preset(m, p);
     CHECK(r.ok);
@@ -362,7 +363,7 @@ void test_loader_machine_binary_autorun_slot2() {
 
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nslot-2: CE-1600M\n"
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nslot-2: CE-1600M\n"
                 "program:\n  file: " + bin + "\n",
                 &p, &err));
     std::string logText;
@@ -396,7 +397,7 @@ void test_loader_machine_binary_mode1() {
     CHECK(writeFile(ce158Bin, ce158));
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nkeys:\n  - type: MODE1\nprogram:\n  file: " + bin +
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nkeys:\n  - type: MODE1\nprogram:\n  file: " + bin +
                     "\n  address: 0x5000\nprogram:\n  file: " + ce158Bin + "\n",
                 &p, &err));
     PresetLoadResult r = applyPC1600Preset(m, p);
@@ -417,7 +418,7 @@ void test_loader_machine_binary_title_s1() {
     CHECK(writeFile(bin, {0x11, 0x22, 0x33}));
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nslot-1: CE-1600M\n"
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nslot-1: CE-1600M\n"
                 "keys:\n  - type: INIT\"S1:\",\"P\"\n  - type: TITLE\"S1:\"\n"
                 "program:\n  file: " + bin + "\n  address: 0x8100\n",
                 &p, &err));
@@ -432,7 +433,7 @@ void test_parser_accepts_basic_text_program() {
     PresetFile p;
     std::string err;
     CHECK(parse(
-        "model: PC-1600\n"
+        "format-version: 1\nmodel: PC-1600\n"
         "keys:\n"
         "  - key: mode\n"
         "program:\n"
@@ -461,7 +462,7 @@ void test_loader_reports_overlong_basic_line() {
     PresetFile p;
     std::string err;
     CHECK(parse(
-        "model: PC-1600\n"
+        "format-version: 1\nmodel: PC-1600\n"
         "keys:\n"
         "  - key: mode\n"
         "program:\n"
@@ -482,7 +483,7 @@ void test_loader_applies_ce155_and_type_step() {
     PresetFile p;
     std::string err;
     CHECK(parse(
-        "model: PC-1600\n"
+        "format-version: 1\nmodel: PC-1600\n"
         "slot-1: CE-155\n"
         "keys:\n"
         "  - type: MEM\n",
@@ -507,7 +508,7 @@ void test_type_step_rejects_untypeable_char() {
     PresetFile p;
     std::string err;
     // A control byte (0x01) has no PC-1600 key.
-    CHECK(parse(std::string("model: PC-1600\nkeys:\n  - type: a\x01""b\n"), &p, &err));
+    CHECK(parse(std::string("format-version: 1\nmodel: PC-1600\nkeys:\n  - type: a\x01""b\n"), &p, &err));
     PC1600Machine m;
     loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
     PresetLoadResult r = applyPC1600Preset(m, p);
@@ -532,7 +533,7 @@ void test_type_step_shifted_punctuation_reaches_input_buffer() {
     // No ENTER echo to worry about: the step appends ENTER, but we read the
     // buffer right after typing, before the line is consumed. Use a line
     // that never runs anything: just the characters.
-    CHECK(parse("model: PC-1600\n"
+    CHECK(parse("format-version: 1\nmodel: PC-1600\n"
                 "keys:\n"
                 "  - type: A\"B:C,D\n",
                 &p, &err));
@@ -564,7 +565,7 @@ void test_loader_applies_basic_text_program() {
     PresetFile p;
     std::string err;
     CHECK(parse(
-        "model: PC-1600\n"
+        "format-version: 1\nmodel: PC-1600\n"
         "keys:\n"
         "  - key: mode\n"
         "program:\n"
@@ -601,7 +602,7 @@ void test_loader_rejects_unknown_key_defensively() {
 void test_loader_ce150_plotter_needs_rom_path() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nplotter: CE-150\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nplotter: CE-150\n", &p, &err));
 
     PC1600Machine m;
     // No romDirs passed -> a clear error, not a crash / silent skip.
@@ -614,7 +615,7 @@ void test_loader_ce150_plotter_needs_rom_path() {
 void test_loader_ce150_plotter_attaches_with_rom_path() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nplotter: CE-150\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nplotter: CE-150\n", &p, &err));
 
     PC1600Machine m;
     loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
@@ -631,7 +632,7 @@ void test_loader_ce150_plotter_attaches_with_rom_path() {
 void test_loader_ce1600p_plotter_needs_rom_path() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nplotter: CE-1600P\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\n", &p, &err));
 
     PC1600Machine m;
     // No romDirs passed -> a clear error, not a crash / silent skip.
@@ -646,10 +647,10 @@ void test_loader_ce1600p_plotter_needs_rom_path() {
 void test_parser_rejects_floppy_without_ce1600p() {
     PresetFile p;
     std::string err;
-    CHECK(!parse("model: PC-1600\nfloppy: mydisk\n", &p, &err));
+    CHECK(!parse("format-version: 1\nmodel: PC-1600\nfloppy: mydisk\n", &p, &err));
     CHECK(err.find("floppy") != std::string::npos);
 
-    CHECK(!parse("model: PC-1600\nplotter: CE-150\nfloppy: mydisk\n", &p, &err));
+    CHECK(!parse("format-version: 1\nmodel: PC-1600\nplotter: CE-150\nfloppy: mydisk\n", &p, &err));
     CHECK(err.find("floppy") != std::string::npos);
 }
 
@@ -657,7 +658,7 @@ void test_parser_rejects_floppy_without_ce1600p() {
 void test_parser_rejects_floppy_on_pc1500() {
     PresetFile p;
     std::string err;
-    CHECK(!parse("model: PC-1500\nfloppy: mydisk\n", &p, &err));
+    CHECK(!parse("format-version: 1\nmodel: PC-1500\nfloppy: mydisk\n", &p, &err));
     CHECK(err.find("floppy") != std::string::npos);
 }
 
@@ -666,7 +667,7 @@ void test_parser_rejects_floppy_on_pc1500() {
 void test_parser_accepts_floppy_with_ce1600p() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nplotter: CE-1600P\nfloppy: mydisk\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\nfloppy: mydisk\n", &p, &err));
     CHECK(p.floppy == "mydisk");
     CHECK(p.floppySide == 0);
     CHECK(p.plotter == "ce1600p");
@@ -677,15 +678,15 @@ void test_parser_accepts_floppy_with_ce1600p() {
 void test_parser_accepts_floppy_side_suffix() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nplotter: CE-1600P\nfloppy: mydisk,B\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\nfloppy: mydisk,B\n", &p, &err));
     CHECK(p.floppy == "mydisk");
     CHECK(p.floppySide == 1);
 
-    CHECK(parse("model: PC-1600\nplotter: CE-1600P\nfloppy: mydisk,a\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\nfloppy: mydisk,a\n", &p, &err));
     CHECK(p.floppy == "mydisk");
     CHECK(p.floppySide == 0);
 
-    CHECK(!parse("model: PC-1600\nplotter: CE-1600P\nfloppy: mydisk,Q\n", &p, &err));
+    CHECK(!parse("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\nfloppy: mydisk,Q\n", &p, &err));
     CHECK(err.find("side") != std::string::npos);
 }
 
@@ -694,7 +695,7 @@ void test_parser_accepts_floppy_side_suffix() {
 void test_loader_ce1600p_with_no_floppy_key_leaves_drive_empty() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nplotter: CE-1600P\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\n", &p, &err));
 
     PC1600Machine m;
     loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
@@ -713,7 +714,7 @@ void test_loader_ce1600p_with_no_floppy_key_leaves_drive_empty() {
 void test_loader_floppy_key_loads_named_disk_image() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nplotter: CE-1600P\nfloppy: mydisk\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\nfloppy: mydisk\n", &p, &err));
 
     std::vector<uint8_t> diskImage(CE1600FCard::kImageSize, 0x5A);
     CHECK(writeTextFile("/tmp/mydisk-file.floppy.yaml", formatFloppyFile("mydisk", diskImage)));
@@ -740,7 +741,7 @@ void test_loader_floppy_key_loads_named_disk_image() {
 void test_loader_floppy_key_side_suffix_selects_side_b() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nplotter: CE-1600P\nfloppy: mydiskb,B\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\nfloppy: mydiskb,B\n", &p, &err));
 
     std::vector<uint8_t> diskImage(CE1600FCard::kImageSize, 0x33);
     CHECK(writeTextFile("/tmp/mydiskb.floppy.yaml", formatFloppyFile("mydiskb", diskImage)));
@@ -761,7 +762,7 @@ void test_loader_floppy_key_side_suffix_selects_side_b() {
 void test_loader_floppy_key_missing_file_is_an_error() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nplotter: CE-1600P\nfloppy: nosuchdisk\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\nfloppy: nosuchdisk\n", &p, &err));
 
     PC1600Machine m;
     PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "/tmp", {}, {"roms"});
@@ -776,7 +777,7 @@ void test_loader_saveas_step_invokes_callback() {
     PresetFile p;
     std::string err;
     CHECK(parse(
-        "model: PC-1600\n"
+        "format-version: 1\nmodel: PC-1600\n"
         "keys:\n"
         "  - type: 1\n"
         "  - saveas: live slot-2:My Card\n"
@@ -811,7 +812,7 @@ void test_loader_saveas_step_invokes_callback() {
 void test_loader_saveas_step_failure_stops_preset() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nkeys:\n  - saveas: live slot-1:Bad\n  - type: 1\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nkeys:\n  - saveas: live slot-1:Bad\n  - type: 1\n", &p, &err));
 
     PC1600Machine m;
     loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
@@ -830,7 +831,7 @@ void test_loader_saveas_step_failure_stops_preset() {
 void test_loader_saveas_step_without_callback_is_noop() {
     PresetFile p;
     std::string err;
-    CHECK(parse("model: PC-1600\nkeys:\n  - saveas: live slot-1:Whatever\n", &p, &err));
+    CHECK(parse("format-version: 1\nmodel: PC-1600\nkeys:\n  - saveas: live slot-1:Whatever\n", &p, &err));
 
     PC1600Machine m;
     loadPC1600Roms(m);  // optional: an empty bus boots too, only slower
@@ -846,27 +847,27 @@ void test_parser_floppy_file_and_host_drive() {
     std::filesystem::create_directories("/tmp/calcu_preset_dir");
     PresetFile p;
     std::string err;
-    CHECK(parsePresetString("model: PC-1600\nplotter: CE-1600P\nfloppy-file: disks/P.floppy.yaml,B\nhost-drive: S3\n",
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\nfloppy-file: disks/P.floppy.yaml,B\nhost-drive: S3\n",
                             "/tmp/calcu_preset_dir/x.pc1600", &p, &err));
     CHECK(p.floppyFile == "/tmp/calcu_preset_dir/disks/P.floppy.yaml");
     CHECK(p.floppy.empty());
     CHECK(p.floppySide == 1);
     CHECK(p.hostDrive == "/tmp/calcu_preset_dir/S3");
     const char* home = std::getenv("HOME");
-    CHECK(parsePresetString("model: PC-1600\nhost-drive: ~/share\n", "/tmp/calcu_preset_dir/x.pc1600", &p, &err));
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1600\nhost-drive: ~/share\n", "/tmp/calcu_preset_dir/x.pc1600", &p, &err));
     CHECK(home && p.hostDrive == std::string(home) + "/share");
 
-    CHECK(!parse("model: PC-1600\nplotter: CE-1600P\nfloppy: a\nfloppy-file: b.floppy.yaml\n", &p, &err));
+    CHECK(!parse("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\nfloppy: a\nfloppy-file: b.floppy.yaml\n", &p, &err));
     CHECK(err.find("only one") != std::string::npos);
-    CHECK(!parse("model: PC-1600\nfloppy-file: b.floppy.yaml\n", &p, &err));
+    CHECK(!parse("format-version: 1\nmodel: PC-1600\nfloppy-file: b.floppy.yaml\n", &p, &err));
     CHECK(err.find("floppy-file") != std::string::npos);
-    CHECK(!parse("model: PC-1500\nhost-drive: S3\n", &p, &err));
+    CHECK(!parse("format-version: 1\nmodel: PC-1500\nhost-drive: S3\n", &p, &err));
     CHECK(err.find("host-drive") != std::string::npos);
 }
 
 // End to end with the ROMs: `floppy-file:` loads the disk, `host-drive:`
 // mounts S3: before the boot, and `saveas: template ... file:` writes
-// template files through PC1600PresetMedia.hpp.
+// template files through savePresetMedia() (Core/Preset/PresetMedia.hpp).
 void test_loader_host_drive_floppy_file_and_template_saves() {
     char tmpl[] = "/tmp/pc1600_preset_media_XXXXXX";
     const char* dir = mkdtemp(tmpl);
@@ -878,7 +879,7 @@ void test_loader_host_drive_floppy_file_and_template_saves() {
     const std::string floppyPath = std::filesystem::absolute("Qt6/resources/cards/formatted.floppy.yaml").string();
     PresetFile p;
     std::string err;
-    CHECK(parsePresetString("model: PC-1600\n"
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1600\n"
                             "plotter: CE-1600P\n"
                             "floppy-file: " + floppyPath + "\n"
                             "host-drive: S3\n"
@@ -902,7 +903,7 @@ void test_loader_host_drive_floppy_file_and_template_saves() {
     PresetLoadResult armedResult;
     const PresetArmedFn onArmed = [&](const PresetLoadResult& r) { armedResult = r; };
     const PresetSaveAsFn onSaveAs = [&](const PresetSaveAsRequest& request, std::string* e) {
-        return savePC1600PresetMedia(m, request, "", armedResult.slot1ResolvedPath, armedResult.slot2ResolvedPath, e);
+        return savePresetMedia(request, {"Qt6/resources/cards", ""}, pc1600PresetMedia(m, armedResult, request), e);
     };
     PresetLoadResult r = applyPC1600Preset(m, p, {}, ".", "Qt6/resources/cards", {},
                                            {"roms", "firmware/pc1600-hostdrive"}, {}, onArmed, onSaveAs);
@@ -948,7 +949,7 @@ void test_loader_bus_rom_shadows_the_host_drive_rom() {
         std::ofstream(d + "/ext.bin", std::ios::binary).write(rom.data(), std::streamsize(rom.size()));
         PresetFile p;
         std::string err;
-        CHECK(parsePresetString("model: PC-1600\n"
+        CHECK(parsePresetString("format-version: 1\nmodel: PC-1600\n"
                                 "host-drive: S3\n"
                                 "bus-rom:\n"
                                 "  - file: ext.bin\n"
@@ -977,7 +978,7 @@ void test_loader_bus_rom_shadows_the_host_drive_rom() {
 void test_parser_bus_rom_forms() {
     PresetFile p;
     std::string err;
-    CHECK(parsePresetString("model: PC-1600\n"
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1600\n"
                             "bus-rom:\n"
                             "  - file: a.bin\n"
                             "    bank: 6\n"
@@ -1004,19 +1005,20 @@ void test_parser_bus_rom_forms() {
             std::fprintf(stderr, "FAIL bus-rom error '%s' lacks '%s'\n", e.c_str(), what);
         }
     };
-    rejects("model: PC-1600\nbus-rom:\n  - file: a.bin\n    bank: 3\n", "'bank' must be 4-7");
-    rejects("model: PC-1600\nbus-rom:\n  - file: a.bin\n", "either 'bank'");
-    rejects("model: PC-1600\nbus-rom:\n  - file: a.bin\n    bank: 7\n    address: 0x4000\n", "either 'bank'");
-    rejects("model: PC-1600\nbus-rom:\n  - file: a.bin\n    bank: 7\n    pv: 1\n", "go with 'address'");
-    rejects("model: PC-1600\nbus-rom:\n  - bank: 7\n", "needs 'file'");
-    rejects("model: PC-1600\nbus-rom:\n  - file: a.bin\n    address: 0x8000\n    pv: 2\n", "0 or 1");
-    rejects("model: PC-1500\nbus-rom:\n  - file: a.bin\n    bank: 7\n", "a PC-1500 ROM takes 'address'");
+    rejects("format-version: 1\nmodel: PC-1600\nbus-rom:\n  - file: a.bin\n    bank: 3\n", "'bank' must be 4-7");
+    rejects("format-version: 1\nmodel: PC-1600\nbus-rom:\n  - file: a.bin\n", "either 'bank'");
+    rejects("format-version: 1\nmodel: PC-1600\nbus-rom:\n  - file: a.bin\n    bank: 7\n    address: 0x4000\n", "either 'bank'");
+    rejects("format-version: 1\nmodel: PC-1600\nbus-rom:\n  - file: a.bin\n    bank: 7\n    pv: 1\n", "go with 'address'");
+    rejects("format-version: 1\nmodel: PC-1600\nbus-rom:\n  - bank: 7\n", "needs 'file'");
+    rejects("format-version: 1\nmodel: PC-1600\nbus-rom:\n  - file: a.bin\n    address: 0x8000\n    pv: 2\n", "0 or 1");
+    rejects("format-version: 1\nmodel: PC-1500\nbus-rom:\n  - file: a.bin\n    bank: 7\n", "a PC-1500 ROM takes 'address'");
 }
 
 // The cards on their buses: a bus ROM attached first answers before a card
 // at the same place, and only inside its window and gates.
 void test_bus_rom_cards_shadow_and_gate() {
-    PC1600SystemBus bus;
+    using PC1600BusDrive::z80MemPins;
+    SystemBus bus;
     PC1600HostDriveCard drive;
     std::vector<uint8_t> hostRom(0x4000, 0x11);
     CHECK(drive.loadRom(hostRom.data(), hostRom.size()));
@@ -1024,35 +1026,29 @@ void test_bus_rom_cards_shadow_and_gate() {
     PC1600BusRomCard ext(std::vector<uint8_t>(0x100, 0x22), 7);
     bus.attachFirst(&ext);
     uint8_t v = 0;
-    CHECK(bus.readRom(0x0000, 7, v) && v == 0x22);   // shadowed
-    CHECK(bus.readRom(0x0100, 7, v) && v == 0x11);   // past the bus ROM: the drive's
-    CHECK(!bus.readRom(0x0000, 6, v));               // other bank: nobody
-    CHECK(bus.readIO(0x91, v) && v == 0x00);         // the drive's I/O is untouched
+    CHECK(bus.read(z80MemPins(0x4000, false, 7), v) && v == 0x22);   // shadowed
+    CHECK(bus.read(z80MemPins(0x4100, false, 7), v) && v == 0x11);   // past the bus ROM: the drive's
+    CHECK(!bus.read(z80MemPins(0x4000, false, 6), v));               // other bank: nobody
+    CHECK(bus.read(PC1600BusDrive::z80IoPins(0x91, false), v) && v == 0x00); // the drive's I/O is untouched
+    // The LH5803's cycles (ELH̄ asserted) never reach the Z-80-side cards.
+    CHECK(!bus.read(PC1600BusDrive::lh5803Pins(0x4000, false, false, true, true), v));
+    CHECK(!bus.read(PC1600BusDrive::lh5803Pins(0xD091, false, /*me1=*/true, false, false), v));
 
     std::vector<uint8_t> bytes(0x2000);
     for (size_t i = 0; i < bytes.size(); i++) bytes[i] = uint8_t(i);
     BusRomCard rom(bytes, 0x8000, /*me1=*/false, /*pv=*/1, /*pu=*/0);
-    PinState pins;
-    pins.address = 0x8010;
-    pins.pin[2] = true;  // PV
-    pins.pin[3] = false; // PU
-    CHECK(rom.respondsToRead(pins, v) && v == 0x10);
-    pins.pin[3] = true;
-    CHECK(!rom.respondsToRead(pins, v));             // PU gate
-    pins.pin[3] = false;
-    pins.pin[2] = false;
-    CHECK(!rom.respondsToRead(pins, v));             // PV gate
-    pins.pin[2] = true;
-    pins.me1 = true;
-    CHECK(!rom.respondsToRead(pins, v));             // ME1
-    pins.me1 = false;
-    pins.address = 0xA000;
-    CHECK(!rom.respondsToRead(pins, v));             // past the end
-    pins.address = 0x7FFF;
-    CHECK(!rom.respondsToRead(pins, v));             // below the base
-    pins.address = 0x8000;
-    pins.forWrite = true;
-    CHECK(!rom.respondsToRead(pins, v) && !rom.respondsToWrite(pins, 0).claimed);
+    // An LH5803 ME0 read: the contacts it drives (PU, PV, MREQ/DME0, ELH).
+    auto lh = [](uint16_t addr, bool me1, bool pu, bool pv, bool forWrite = false) {
+        return PC1600BusDrive::lh5803Pins(addr, forWrite, me1, pu, pv);
+    };
+    CHECK(rom.respondsToRead(lh(0x8010, false, false, true), v) && v == 0x10);
+    CHECK(!rom.respondsToRead(lh(0x8010, false, true, true), v));   // PU gate
+    CHECK(!rom.respondsToRead(lh(0x8010, false, false, false), v)); // PV gate
+    CHECK(!rom.respondsToRead(lh(0x8010, true, false, true), v));   // ME1
+    CHECK(!rom.respondsToRead(lh(0xA000, false, false, true), v));  // past the end
+    CHECK(!rom.respondsToRead(lh(0x7FFF, false, false, true), v));  // below the base
+    const SystemBusPins write = lh(0x8000, false, false, true, /*forWrite=*/true);
+    CHECK(!rom.respondsToRead(write, v) && !rom.respondsToWrite(write, 0).claimed);
 }
 
 int run_pc1600_preset_tests() {

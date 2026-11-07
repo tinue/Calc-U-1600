@@ -1,5 +1,6 @@
 # PC-1600 debug set for the superRAM card in slot 2: formats and splits it,
 # then shows the free memory and the RAM disk's size.
+format-version: 1
 model: PC-1600
 
 slot-2: superRAM

@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "Connector/AlpsPlotterMechanism.hpp"
-#include "PaperGeometry.hpp"
+#include "Shared/PlotterPaper.hpp"
 
 class QScrollArea;
 class QPushButton;
@@ -17,7 +17,7 @@ class MachineController;
 // a running machine (Core-enforced), so only one is ever shown at a time --
 // MainWindow calls setKind() when the active plotter changes.
 //
-// Layout: a title header matching DebugPanel's "DEBUG LOG" header (same
+// Layout: a title header matching DebugPanel's "INSPECTOR" header (same
 // size/coloring, showing "CE-150"/"CE-1600P" instead) and a Copy/Cut button
 // row underneath the paper matching DebugPanel's TRACE/LOG row in size and
 // using the exact same ChromeColors -- so this panel reads as a sibling of
@@ -31,11 +31,9 @@ class MachineController;
 class PlotterPaperWidget : public QWidget {
     Q_OBJECT
 public:
-    enum class Kind { CE150, CE1600P };
-
     explicit PlotterPaperWidget(MachineController* controller, QWidget* parent = nullptr);
 
-    void setKind(Kind kind);
+    void setKind(shared::PaperKind kind);
 
     // Revision-gated point refresh, called once per ~60Hz frame tick from
     // MainWindow::onFrameTick() while a plotter is attached -- an O(1) "did
@@ -56,8 +54,8 @@ private:
     class PlotArea; // custom-painted QWidget, defined in the .cpp
 
     MachineController* m_controller; // not owned
-    Kind m_kind = Kind::CE1600P;
-    PaperGeometry m_geometry = PaperGeometry::ce1600p();
+    shared::PaperKind m_kind = shared::PaperKind::CE1600P;
+    shared::PaperGeometry m_geometry = shared::PaperGeometry::ce1600p();
 
     QLabel* m_header;
     PlotArea* m_plotArea;

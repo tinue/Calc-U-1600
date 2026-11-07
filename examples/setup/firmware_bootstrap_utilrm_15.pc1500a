@@ -6,6 +6,9 @@
 #  Then use this flasher to load the utilities.
 #  Last use the utilities to format the chip (flash and ram)
 
+format-version: 1
+preset-name: Firmware rm 1.5
+description: Flashes the CE-163F firmware from scratch (utilrm 1.5)
 model: PC-1500A
 
 slot-1: CE-163F

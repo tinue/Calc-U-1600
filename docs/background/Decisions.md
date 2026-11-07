@@ -38,13 +38,31 @@ decides what reaches the PV pin.
 `LH5803SharedMemory` decodes it with the narrow `(addr & 0xFFF0) == 0xF000`
 mask, before falling through to ME0. Don't use the PC-1500's broad
 `(addr & 0x3000) == 0x3000` chip select: on this bus it would swallow ME1 RAM
-and card accesses. The latch is a plain 16-byte latch and deliberately not the
-full named register block.
+and card accesses. The block is the SC7852's own ports 10H-1FH
+(`PC1600Memory::readIO`/`writeIO`), the same registers the Z-80 reaches.
 
 IF (0xF00B) is software-only. It isn't cleared on read and gets no live
 TP/RTC edge. The firmware clears the bit itself, and a stray edge in the
 middle of a loop breaks CE-150 LPRINT/TEST on the PC-1600. The user chose this
 over a live edge (a34f57d).
+
+### Unclaimed ME1 is not a mirror of ME0
+An ME1 address that no chip or card claims doesn't reach the RAM or the ROM.
+**PC-1500/1500A:** it reads FFH, writes go nowhere (`PC1500Memory::readME1`):
+on a real PC-1500A `PEEK# &111`, `&7C02` and `&C000` read 255 while `PEEK`
+reads the RAM / ROM, and a CE-163F decodes ME0 too. **PC-1600:** the LH5803's
+ME1 is the SC7852's IORQ, nothing drives the data bus, and a read returns the
+last byte the bus carried (`LH5803SharedMemory::readME1`): `XPEEK# &4100`,
+`&C000`, `&1000` read 37 = 25H, the second byte of `XPEEK#`'s `LDA #(U)`
+(FD 25H), while `XPEEK &4100` reads the 85 poked there (measured 2026-10-10).
+Don't reinstate the alias. The PC-1500's internal LH5811 answers ME1
+F000H–FFFFH only (1Y3 = C000–FFFF with A12/A13; bits 4–11 ignored):
+`PEEK# &700C` = 255, `PEEK# &F00C` = 8. Its register slots 0–3 hold no
+register (the first is the divider reset, F004H) and read FFH
+(`PEEK# &F002` = 255). The 40-pin connector is never offered an ME1 cycle:
+it carries only DME0, and every module known gates on it (S-strobe chips
+inherit the mainboard's ME0 check; the CE-155/CE-159 Y0 chip gates on DME0),
+so none appears in ME1.
 
 ### SC7852 adds one wait state per M1
 `kM1WaitStates` (`Core/CPU/SC7852/SC7852.cpp`) looks like an arbitrary
@@ -62,10 +80,78 @@ hardware. The ROM never writes LOCK ($79FF) on reset or CL. Don't
 it on commands. On the real unit, BEEP repeats are whole 64ths of a second.
 
 ### Buzzer audio follows the drive line
-`PiezoSampler` follows the drive line that the ROM toggles (PC-1500 OPC b6;
-PC-1600 port 18H b6 && b7 && SDO). It doesn't synthesize BEEP tones, because
-the user wants the actual square wave. New sound sources drive
-`PiezoSampler::setLevel` from their emulated signal.
+`PiezoSampler` follows the drive line that the ROM toggles, through each
+machine's buzzer gate: PC-1500 NAND(SD0, PC6 · CMT IN) (Service Manual
+p.16), PC-1600 18H b6 && b7 && SDO && PB2. So tape traffic sounds as on
+the real units (confirmed audible on CSAVE and CLOAD, 2026-10-04); CMT IN
+counts as high while no tape interface drives it. It doesn't synthesize
+BEEP tones, because the user wants the actual square wave. New sound
+sources drive `PiezoSampler::setLevel` from their emulated signal.
+
+### Tapes are fixed-role media, saved at each motor stop
+The cassette bay works like the card and disk pickers (TapeManager): a
+tape picked from the tape folder's list only plays; one named with the
+save button only records, and goes back in to play only by picking it from
+the list. That is deliberate: nothing records over a tape picked to load
+it. A recording is written (whole) each time the remote relay stops the
+motor, so a finished CSAVE is on disk at once and taking the tape out only
+un-arms it; while it stays in, further CSAVEs are appended. The tape combo
+reacts to `activated`, so picking the tape it already shows still puts it
+in to play (rewound).
+
+### The cassette tape moves only while the remote relay runs it
+`TapeDeck` advances by emulated CPU cycles, and only while the interface's
+remote relay is closed: CE-150 PA1-PA4 pulses (either REMOTE 0 or 1), or
+CE-1600P 82H b4/b5. Motor-off time is neither played nor recorded, as with
+a CE-152 on the remote jack. The ROM waits ~0.6 s for the motor before it
+counts the leader, so a tape needs a long leader (`bin2wav -s 3` or
+`-l 0x400`); don't
+start the tape before the relay closes to make short leaders work. Because
+time is emulated, a recording is the same in real time, turbo or the CLI.
+
+### Tape recordings are AC-coupled at 12 Hz, spikes included
+`TapeDeck` records the cassette line through a 12 Hz high-pass at 0.45 of
+full scale, primed with the line's average over the first 2 ms. 12 Hz is
+measured: a real PC-1600 + CE-1600P `CSAVE`, recorded through a Mac line
+input (2026-10-04), decays from a lone step with a 13.8 ms time constant,
+and its tones are flat-topped. The real tape has the same lone-step spikes
+as ours (the line switched high before the motor, parked low for the 8 s
+gap): ~1.8x the tone level, gone within ~30 ms. They are authentic, so
+don't filter them out. A 300 Hz corner (tried, from the schematic values)
+made them short but drooped the tones, unlike the real unit. Gain 0.45
+keeps the 2x steps from clipping; the priming keeps sample 0 silent. The
+real leader also starts ~1.6x louder and settles over ~1.5 s; that may be
+the recording input's automatic gain, so it isn't modelled.
+
+### LH5811 transmitter: an L write restarts the divider; TD means "sent"
+`LH5811Serial` starts a frame at the L write: it restarts the divider and
+begins a full start bit at once, and TD is set when the second stop bit is
+done. All three come from a real PC-1500 (A01) + CE-150 `CSAVE`
+(2026-10-04):
+- Back-to-back nibble frames carry exactly 6 mark bits (4 data + 2 stop),
+  no extra idle bit: the next frame must start at the write, not at the
+  next clock edge.
+- The pauses after the header and around the end byte (`TIME_DELAY`, 17
+  TP periods) are 78-80 bits of mark. With TD = "L empty" the last frame
+  was still being sent during the delay and the pauses came out 11 bits
+  (one frame) short.
+- The first frame after a pause starts with a whole start bit, its tones
+  in phase with the bit. A start bit cut short by a free-running bit clock
+  gives the CE-150 reader ERROR 44; tones out of phase give `wav2bin`
+  glitches the real tape doesn't have.
+The CL1 timer (MSK b7) uses the same divider, but the CE-150 only reads it
+while loading, when it doesn't transmit.
+
+### PC-1500 PB7 reads high while ON is pressed
+The CE-150's tape reader (LOAD_NIBBLE &BE2F) takes PB7 = 1 as BREAK, IF1
+latches PB7's rising edge on a press (TRM p.71), and the PC-1600's
+compatible block reads 1 = pressed. The system ROM only sees IF1, so the
+polarity matters for the CE-150 alone.
+
+### CE-1600P port 82H reads back its latch
+The service manual lists the readback, and the plotter and tape drivers
+read-modify-write 82H. Open bus (FFH) would pulse both relay coils and the
+CMT-in enable on every plotter Z-motor write.
 
 ### HLE sub-CPU answers IOCS 25H
 The HLE sub-CPU answers the IOCS 25H probe (4FH/4EH → AAH/55H) and responds
@@ -124,9 +210,11 @@ calling `intCause()` so that a masked live source (UART, sub-CPU) isn't even
 evaluated on this per-step path; keep the two bit assignments in step.
 
 ### Absolute-deadline emulation pacing
-`Qt6/app/EmulationPacer.cpp` schedules each batch against
-`start + n * batch`, not a fresh relative sleep. Relative sleeps oversleep by
-about 4% on macOS, and the error builds up into a visible TIME lag.
+`Shared/Pacer.cpp` credits each frame tick against an absolute deadline
+(`start + elapsed * clockHz` minus the cycles already run), not the time
+since the last tick or a fresh relative sleep. Relative sleeps oversleep by
+about 4% on macOS, and the error builds up into a visible TIME lag. Only a
+stall over 0.1 s rebases the deadline (dropped, not caught up).
 
 ### RTC keeps running while the LH5803 owns the bus
 The RTC accumulator advances in both CPU branches of `PC1600Machine::step()`.
@@ -178,6 +266,13 @@ CE-151 then lands at A800-B7FF.
 - **`INIT"Sx:","P"` / `"M"` can wipe the S0 program.** When the S0 area moves
   (a slot leaves or joins it), `PRGMOVED` (rom3b 65C8H) empties the S0
   program at the new base.
+- **A `bin2wav` tape with its default leader doesn't `CLOAD`** (0.5 s on
+  the PC-1500; on the PC-1600 its minimum of ~2.1 s, 6406 cycles). The
+  ROM pulses the remote relay, waits ~0.6 s for the motor (PC-1600
+  `CASMOTOR` 642EH + `DELAYF0`; the CE-150 likewise), then counts the
+  leader: 5000 cycles on the PC-1600 (`CMSYNC`, F1AAH). The ROM's own
+  `CSAVE` writes 10000 (PC-1600) or ~8 s (PC-1500). Use `bin2wav -s 3`,
+  or `-l 0x400`, which writes the ROM's own gap and leader lengths.
 - **`CLOAD -1` doesn't read a PC-1500 tape in MODE 0.** The `-1` is parsed
   and skipped (CE-1600P bank 5 77F6H); only MODE (BMODE b6) picks the tape
   format. Through the CE-1600P, `CSAVE` in MODE 1 is ERROR 110 (66A0H).
@@ -188,6 +283,14 @@ CE-151 then lands at A800-B7FF.
 - **`MEM` ignores `TITLE`.** `MEM` / `STATUS 0` always reports the S0 area
   (LH5803 $CC30 reads only the S0 pointers), even with `TITLE "S1:"`. The free
   space of an S1/S2 program module is `STATUS 259` / `260`.
+- **CE-158 `TERMINAL` / `DTE` drop a byte that arrived before they
+  started.** On entry both call `RXCOM` (CE-158 8CBDH) and ignore the
+  result; `RXCOM` (81E6H) reads the UART data register on every path, so
+  the byte waiting in the receiver is consumed. A peer that sends "AB..."
+  before `TERMINAL` runs shows "B..."; bytes that arrive after the call,
+  menu phase included, all appear. Same on the PC-1500 and the PC-1600 in
+  MODE 1 (checked 2026-10-07 with `--ce158-rx-hold`; the order of events
+  traced). In headless runs, hold the peer until `TERMINAL` has started.
 
 ## Accepted limitations: won't fix
 
@@ -228,6 +331,14 @@ authentic speed for the span that matters.
 - **Hardcoding the PC-1600 idle PC ($92xx)** in `waitUntilBasicIdle` is fine,
   because the ROM set is fixed. "Small stable PC span" alone isn't enough:
   INPUT, plot and FOR/NEXT waits are tight loops too.
+- **`waitUntilBasicIdle` judges a frame by its share in the command loop**
+  (32 PC samples per frame, idle at 3/4), not by one end-of-frame sample.
+  The 1/64 s ISR runs at the prompt too; one sample per 60 fps frame hits
+  or misses it depending on how the 64 Hz timer lines up with the frame
+  grid, and that drifts. After 8858e75 the single sample kept "busy" going
+  for 8 s after LH5803 use and made every boot hit its 20 s cap. Don't go
+  back to one sample per frame. The prompt is the Z-80 loop in MODE 1 too
+  (the LH5803 idles there), so the LH5803 needs no part in the test.
 - **The PC-1600 fast loader finishes like the ROM's `LOAD`.** Besides the
   program bytes it writes F867/F02C (or an S1/S2 descriptor end and module
   header), the VARIABLE POINTER check, PRGADR (FE3C-FE41), F89E and F1C1
@@ -239,6 +350,16 @@ authentic speed for the span that matters.
   address order: a CE-155 keeps A000H (S1) at 0800H and B800H (its own
   decoder) at 0000H. Found by the loader matrix (dev/loader-matrix/).
   Don't bring back image-offset writes.
+- **A PC-1600 module window starts at 8000H, A000H or B000H, nothing
+  else.** The ROM's module map (rom3b 67B2-6892) takes the first of
+  8000H / A000H / B000H in Slot 1, 8000H / A000H in Slot 2, where
+  `MEMORYCHK` finds RAM, and always runs the area up to BFFFH. A module
+  whose RAM isn't top-justified (e.g. 8000-9FFF only) is one the ROM can't
+  use either, so the loaders need no other geometry. A PC-1500 module using
+  YO and S1-S3 together can't work in the PC-1600 at all: pin 4 is RAM2,
+  the whole 8000-BFFF window, and with 3CH = 5BH S1-S3 land inside it.
+  The CE-151 / CE-155 fit comes from the Slot 1 remap (see "PC-1600 Slot 1
+  S1-S3 follow Port 3CH b6").
 - **Machine code may run from a module window on past &BFFF** into
   internal RAM, as `BLOAD` and `CLOAD M` write it. In MODE 1 that is one
   LH5803 range, where PC-1500 machine code naturally lives.
@@ -292,6 +413,29 @@ authentic speed for the span that matters.
   with a missing file fails before the machine starts, like every other
   parse error.
 
+### Names and descriptions (docs/background/plans/Media-Names-Plan.md)
+- **The name lives in the file.** A preset's `preset-name:` / `description:`,
+  a card's or disk's `description:`: no list kept beside the files says
+  what they are. `examples/bundled.yaml` only says *which* presets the app
+  ships and in which group, so it can't drift from them.
+- **Optional in a file, required in the bundle.** A user's preset without
+  them still loads (the file name stands in); every preset `bundled.yaml`
+  lists must have both, short names at most 18 characters and unique per
+  model within a list (`presetNameProblems()`, checked by the tests).
+- **Two lists, not one.** `defaults` are offered only in Settings ▸ Default
+  presets, `examples` only in File ▸ Examples: a startup setup isn't
+  something to load from a menu, and a demo isn't a startup setup.
+- **Settings stores a bundled preset as `examples:<file>`**, resolved
+  against the bundled examples folder, not as a path: the app bundle moves
+  with every update (and the web client has no stable path at all).
+- **Long in the list, short once chosen.** The pickers show descriptions
+  while open and the short name when closed (Qt `NamedComboBox`, web
+  `NamedCombo`), so a choice is never cut off. A native `<select>` can't
+  do that, hence the web's own combo.
+- **Cards and disks keep their name as the label.** `module-name:` /
+  `disk-name:` are short and unique already; the `description:` is only a
+  tooltip. Name & Save and the autosave keep it.
+
 ### Loading programs (docs/background/plans/Loader-Mode-Plan.md)
 - **The loaders follow MODE and `TITLE` and never change them.** Load
   BASIC, Load Machine Code, presets and the debugger read BMODE b6 and F1D5H
@@ -316,6 +460,13 @@ authentic speed for the span that matters.
   survives only as `looksLikeCode`, which admits a dropped file. A header
   auto-run of `0` or `FFFF` means no auto-run (the library only knows
   `FFFF`). The library is therefore a required build dependency.
+- **A cassette WAV is a program file too.** `Core/ProgramFile` decodes it with
+  libsharpdx (`sde_wav_decode`) and describes the file on the tape, so every
+  loader (menus, drop, presets) takes WAVs without its own code. This
+  fast-load is separate from the cassette bay, where the ROM reads the tape
+  in emulated time; the two never share code. A tape with several files:
+  the GUI asks which one and hands its image to the loader as bytes;
+  everywhere else (presets, a drop's target) the first file counts.
 - **A dropped file's content picks the loader** (`Core/DropFile`,
   docs/background/plans/Drag-And-Drop-Plan.md). Presets are recognized by a top-level
   `model:` line, not by extension and not by sde: a preset with a character
@@ -344,17 +495,35 @@ authentic speed for the span that matters.
 
 ### Expansion bus
 - **Cards know only the bus.** A peripheral card (CE-150, CE-158, memory
-  modules, ...) reacts to the connector signals in its `PinState`: address,
-  ME0/ME1, R/W, PU, PV and chip selects. It never knows which calculator it
-  is attached to. Host differences belong in the host's bus model, which
+  modules, ...) reacts to the contacts of its plug: `PinState` (40-pin) or
+  `SystemBusPins` (60-pin, `Contact60::k…`), with address, R/W, PU, PV and
+  the strobes/chip selects. It never knows which calculator it is attached to. Host differences belong in the host's bus model, which
   decides what reaches each pin. Don't give a card host-specific hooks or
   shortcuts. `makeSoftwareDefinedCard(path, host)` doesn't break this: the
   host only checks the file's `compatible-hosts` at load time, like the
   label on the box, and the built card keeps no host.
+- **One 60-pin connector per machine, and each card decodes the contacts
+  of its own CPU family.** The PC-1600's plug is a single `SystemBus` that
+  both CPUs drive (`PC1600BusDrive`). PC-1500-family cards (CE-150, CE-158,
+  `BusRomCard`) select on DME0 (56) and ME1/IOE (59); the SC7852-family
+  cards (CE-1600P, CE-1600F, host drive, `PC1600BusRomCard`) on MREQ/IORQ and
+  the bank bits PT/PU/PVOUT (14/15/16), and ignore every cycle while ELH̄
+  (58) is asserted. Don't give the host a per-CPU card list again: which
+  card answers which CPU follows from the contacts.
+  - DME0 is driven for LH5803 ME0 cycles only. The TRM names contact 56
+    DME0, as on the PC-1500, and the CE-150/CE-158 need it; on Z-80 cycles
+    its level is unknown and it stays low. Assumed, not measured.
+  - The SC7852-family cards' ELH̄ gate is documented for the CE-1600P's ROM
+    select (CSNO) only. For their I/O decode it is an assumption that keeps
+    the LH5803's ME1 cycles (which drive IORQ) away from ports 70H-9FH. It
+    is what blocks a CE-158 + CE-1600P combination (TODO.md).
+  - Where a contact's level is unknown (M1 on memory cycles, PT/PU/PVOUT on
+    I/O cycles, DME0 on Z-80 cycles), the drive leaves it inactive. Don't
+    make a card depend on one of those.
 - **Peripheral-ROM fetches take the generic open-bus path. This is fine as
   is.** Every fetch from a card ROM (CE-150 at 0xA000-0xBFFF, CE-158 at
   0x8000-0x9FFF) on the PC-1500 goes through `resolve()` → `readOpenBus()`
-  → `SystemBus` decode → each card's `respondsToRead`. It costs a few calls
+  → `SystemBus` → each card's `respondsToRead`. It costs a few calls
   and compares of host time per fetch. It costs no emulated time: LH5801
   cycles come from the opcode tables, and the memory path adds none. The
   ~1.3 MHz guest leaves plenty of host headroom. Don't add a per-card ROM
@@ -364,7 +533,8 @@ authentic speed for the span that matters.
 - **A CE-1600P ROM switch swaps the box. It doesn't reset the machine.** The
   ROM sits in the CE-1600P, so picking the other version on an attached one
   counts as unplugging one CE-1600P and plugging in another. The switch runs
-  through the attach/detach OFF/ON cycle (`MachineController::swapCE1600PRom()`).
+  through the attach/detach OFF/ON cycle (`shared::AppSession::selectCE1600PRomJob()`,
+  `MachineSession::swapCE1600PRom()`).
   RAM survives. The floppy goes into the new drive with the same side up, and
   the changed-disk latch is armed. The PC-1600's own ROM switch still rebuilds
   the machine, because that ROM is in the calculator.
@@ -398,9 +568,35 @@ authentic speed for the span that matters.
   record would trim twice.
 
 ### Typing into the machine
+- **How a host key is typed is `MachineSession::hostKeyDown()`'s
+  decision**, not the frontend's: PC-1600 accents (and keys behind one)
+  through the live queue, shifted keys as a Shift sequence, plain physical
+  keys as real presses; PC-1500 cursor keys as real presses (the ROM's own
+  auto-repeat), the rest through the keystroke queue. Any of them stops a
+  paste. The frontend keeps only which physical key to release.
+- **A faceplate or host key stays down at least 2 emulated frames**
+  (`MachineSession::releaseKey()` defers an earlier release). A quick
+  finger tap can deliver press and release between two `advance()` calls,
+  and the ROM's key scan would never see the key. One frame is scanned on
+  both models; a longer hold made fast typing overlap keys. A key pressed
+  while another key's deferred release is still to come waits for it plus
+  the same gap: with two keys down the ROM drops one, so the hold must
+  never create an overlap the typist didn't make. A quick double tap of
+  one key queues the same way and stays two taps. The minimum counts
+  emulated time, so it holds under pacing and turbo alike. The timed taps
+  and the paste feeder press the machine directly, keeping their own holds.
+- **A button inside the web client never keeps the focus**
+  (`onFocusCapture` in `Web/src/CalcU1600.jsx`): every key, Tab included,
+  goes to the calculator, and iOS moves the focus on its own (a tapped
+  button after the tap, a menu title on its first letter typed on a
+  hardware keyboard), after which ENTER or SPACE would press that button.
+- **Touch takes the nearest key within 24 px** (`Web/src/Faceplate.jsx`),
+  a mouse only its exact rectangle. A finger is reported as one point a few
+  pixels off, and on a phone a PC-1600 F-key is ~7 px tall; without the
+  slop a touch in the gap between keys does nothing.
 - **The GUI Paste Text never presses ENTER.** This is deliberate: a careless
   paste must not run anything. Tool paths (debugger auto-start, future inbound
-  APIs) use `MachineController::typeCommand()`, which does press ENTER.
+  APIs) use `MachineSession::typeCommand()`, which does press ENTER.
 - **PC-1600 accented characters are typed through KBII, one sequence per
   character.** A character from the ROM's KBII tables (`KYCDKB2` /
   `KYCDSK2`, P2-B6 9592H / 95E5H) is typed as KBII, [SHIFT,] key, KBII.
@@ -429,9 +625,28 @@ authentic speed for the span that matters.
     latch. A self-contained sequence always leaves KBII off.
 
 ### GUI
+- **The INSPECTOR's views are built in Core** (`Core/Debug/Inspect`), from
+  one locked snapshot (`debugInspect()`), not in the panel: they are tested
+  there and the CLIs print them (`--inspect`). Every read in them is free
+  of side effects; a slot read uses `slotBusRead()` (no probe write), and a
+  card register a read would disturb counts as "answers" without being read.
+  A view goes into the log as one entry, so a long dump isn't cut to the
+  last display page.
+- **Inspector: F055H / F05BH are the module's non-disk RAM**, in 2 KB units
+  (P1-B3 4B9A-4BBC: `INIT "F"` leaves 0, "M"/"P" add up to 10H). The
+  RAM disk is the module above that, and the inspector counts it only with
+  its 55H 80H boot sector. The research's "RAM-disk size" reading of these
+  bytes doesn't match the ROM; don't switch to it.
+- **An empty slot reads as open bus in the Z80 View** (`DebugBankState`),
+  as `PC1600Memory::read()` serves it, not as "Slot 1".
 - **Hardware pickers (model, memory modules) live on the control bar**, not
   in Settings. The picks reset on a model switch and aren't saved. Settings
   holds app-level preferences only.
+- **ROM versions and the "foreign" peripherals are in the Machine menu
+  only**, to keep the control bar narrow; they rarely change. The bar has
+  buttons only for each model's own peripherals (CE-150 + CE-158 on a
+  PC-1500/1500A, CE-1600P on a PC-1600); Machine ▸ Peripherals has all of
+  them. The tape counter doubles as the motor lamp (green while it runs).
 - **Mount Directory is in the File menu**, not on the control bar, at the
   user's request. Like the hardware pickers, it isn't saved across launches.
 - **The app registers `ApplePersistenceIgnoreState = YES`**
@@ -445,20 +660,32 @@ authentic speed for the span that matters.
   draw some ASCII codes as other signs (PC-1500 5BH √, PC-1600 `CGSPEC`).
 
 ### File formats
+- **Every file format the app reads carries a required `format-version`**
+  (cards, floppies, presets). A reader checks it before the key list and
+  refuses a missing or unknown version instead of guessing. A file without
+  it fails like any other unreadable file: a saved card without the line
+  drops out of the module picker without a message, on purpose (no
+  migration before 1.0).
+- **From 1.0 on, the previous format version keeps working** (at least
+  one version back). A file the app writes itself (a named card instance,
+  a floppy) is read transparently and upgraded in place at its next save.
+  A file the app doesn't usually write (a preset) still loads, with an
+  information pop-up that it uses an older format. The files that ship
+  with the app (bundled cards and disks, `examples/`, the VS Code
+  templates) are updated in the repository with every format change, so
+  the release package always carries the current version. Until 1.0, old
+  forms just fail (see "Preset format").
 - **Floppies are `.floppy.yaml` only.** `.floppy.img` isn't read, and no
   backward compatibility is wanted. Any format change bumps `format-version`.
 - **Cards and floppies resolve bundled-first**, then the configured save
   folder, in both the GUI and the preset loader.
-- **`INIT "S3:"` is refused.** The host-drive ROM has no token table, so INIT
-  finds no handler. A format must never wipe a host folder.
+- **`INIT "S3:"` is refused.** The host-drive ROM's token table (CDIR, LDIR)
+  has no INIT, so INIT finds no handler. A format must never wipe a host folder.
 - **Host-drive directory dates say 1986.** The PC-1600 clock has no year, so
   the ROM's own FATTIME writes year field 6, and the host drive does the
   same. FILES shows no year. The host file keeps its real time stamp.
 - **The host drive shows only 8.3 names** the ROM's parser accepts, and
   stores bytes unchanged: there is no line-ending conversion.
-- **The slot-record layout stays additive** for the planned battery-backed
-  module split. Reserve the `batteryBacked` flag and keep
-  `ExpansionCard` serialize/deserialize as the single seam for it.
 - **Serial port files are named after their connector:**
   `calcu1600-rs232c.serial`, `calcu1600-ce158.serial`, and later
   `calcu1600-sio.serial`. One file per connector; a file carries data only
@@ -495,6 +722,108 @@ authentic speed for the span that matters.
   interpolation, and the tests check the compiled forms against it. The
   duplication is deliberate.
 
+### Shared layer (docs/background/plans/Shared-Layer-Plan.md)
+- **Shared is single-threaded; there is no threaded mode.** Unlike
+  Calc-U-59's Shared layer, nothing here runs on a worker thread: the app
+  has always run the emulation on its GUI thread, and a browser can't share
+  memory with a worker without COOP/COEP headers. Everything long is a
+  resumable job instead. Core's machine mutexes stay (uncontended).
+- **Long machine work is C++20 coroutines, not hand-written state
+  machines.** `co_await job::run(machine, n)` keeps each typer, boot and
+  preset step exactly as the blocking code read, which is why the project
+  is C++20. The blocking function names remain (they run the job to
+  completion), so the CLIs, probes and tests call the same API.
+- **A job's run request is never split.** `job::Job::step()` may overshoot
+  its budget by up to one request rather than cut a `runCycles()` call in
+  two, so a sliced job and one run straight through leave the machine in
+  the same state. `job_tests.cpp` checks this on real presets; keep it.
+- **The GUI no longer installs the machines' yield hook.** Operations run
+  through `AppSession::runNow()`, which steps the job in 10 ms slices and
+  pumps the Qt event loop between them. The hook stays in Core for the
+  CLIs (they drain WAV audio from it).
+- **The PC-1600's live key taps count emulated time.** `tapKey()` /
+  `tapShiftedKey()` (30 ms hold, 100 ms gap) release on `advance()`'s
+  budget, not on wall-clock QTimers, so they follow pause and turbo like
+  the paste queue.
+- **A host character outside ASCII types nothing, except PC-1600 KBII
+  accents** (`Shared/HostKeyMap`).
+- **Bay messages are English sentences from Shared.** The app has no
+  translations; a frontend shows them as they are.
+- **The busy state is AppSession's alone.** `AppSession::busy()` and
+  `Platform::busyChanged` are the only "an operation runs" signal; the Qt
+  app re-emits it (`MachineController::appBusyChanged`), and `MainWindow`
+  resyncs every surface (`syncUiFromController()`) when it goes false
+  instead of each call site picking the pieces it remembers. The resync
+  runs directly, not queued, so a caller sees a synced window when its
+  operation returns.
+- **`tick()` owns the audio policy.** The pump is AppSession's: turbo
+  ticks and operation slices aren't real time and their audio is thrown
+  away; scripted runs (`runFor()`) too. A frontend supplies only the sink.
+- **Rebuilds re-attach one peripheral snapshot.** `switchModelJob(model,
+  keepPeripherals)` re-attaches CE-150, CE-1600P, CE-158 and host drive in
+  that order after the modules, whatever the model; an attach the model
+  can't take is a no-op. Anything that can drop the CE-1600P goes through
+  `MachineSession::busChange()`, which saves the disk first.
+- **Settings are stored as strings.** `QSettings` reads back the native
+  ints/bools older versions wrote, and older versions read the strings.
+
+- **The UI's rules are Shared's, also the small ones.** Which peripheral a
+  model offers and what excludes what (`ControlState`), the multi-file
+  tape choice and the Load Machine Code plan, hints and advice
+  (`MachineCodeLoad`), a model pick with its default preset
+  (`pickModelJob()`), the Card YAML dump: each was Qt code once and moved
+  when the web client needed it. Drop dispatch stays per frontend: Core's
+  `dropfile::classify` already decides, and holding a drop while busy is
+  event timing.
+- **ControlState names each control, even when two fields agree today**
+  (`pc1600RomMenu`, `floppyShown`, `ce1600p.offered` are all "is a
+  PC-1600" now): a frontend asks about the control it draws, and a rule
+  that changes for one of them changes in one place.
+- **The web ROM pickers skip a pick of the ROM already in use** before
+  starting the Shared job, which would do nothing: a started job would
+  still blip the busy state, and a pick during another operation would
+  say "Wait until ...".
+- **Media pickers cache by file stamps, not by invalidation calls**
+  (`DirectoryScanCache`). Names, sizes and times are read with no file
+  opened, so a file copied in from outside is noticed too, and no save
+  path can forget to invalidate.
+
+### Web client (docs/background/plans/Web-GUI-Plan.md)
+- **No threads, one worker.** The engine runs in a Web Worker, single
+  threaded, without `-pthread`: SharedArrayBuffer needs COOP/COEP headers a
+  static host (GitHub Pages, a site that embeds the client) can't be relied
+  on to send. The page only draws and forwards input.
+- **IDBFS with `autoPersist`, not OPFS.** WasmFS's OPFS backend needs
+  threads. IDBFS keeps the save folder in memory and writes each change to
+  IndexedDB itself, Core's tape and preset writes included, so Shared needs
+  no "files changed" hook.
+- **One tab writes the storage** (Web Lock `calcu1600-storage`). A second
+  tab works on a copy it doesn't save and says so; two writers would
+  overwrite each other's cards.
+- **The ROMs ship in `dist/`**, as in the desktop release, and the
+  installed app precaches them.
+- **Left out on the web:** the DAP debugger (not in Shared), serial ports
+  (host PTYs), the host drive S3:, TRACE/LOG. The CE-158 demos wait for
+  serial input, so they aren't among the bundled presets.
+- **No key hold of its own on the web.** Keydown and keyup are separate
+  worker messages and can land in one 60 Hz frame; Shared's 2-frame minimum
+  (`MachineSession::releaseKey()`, above) covers that. A 50 ms real-time
+  hold on top of it made fast typing overlap keys, and the ROM dropped
+  letters.
+- **Hit-testing and the LCD drawing are in the page.** They are drawing
+  (the Qt widgets do the same with the same Shared numbers); a round trip to
+  the worker per pointer event would add a frame of latency.
+- **React is vendored, JSX compiled at build time** (as in Calc-U-59): no
+  npm runtime dependencies, no bundler, one global (`CalcU1600`).
+- **The calculator before the panels.** The faceplate is never shrunk to
+  make room for a panel: the panels appear only when the full-width
+  faceplate leaves at least `PANEL_MIN` below it. So a phone in landscape
+  shows the calculator alone, and so does a wide, short desktop window (no
+  inspector there; make the window taller). At the user's request.
+- **The page's `model` / `preset` go to the worker's `start()`**, run in
+  the startup operation in place of the default preset. Sent as calls
+  after `ready`, they arrived while that operation ran and were refused.
+
 ### Debugger IDE integration (docs/background/plans/Debugger-Use-Cases-Plan.md)
 - **Nothing is copied into a project for the generic cases.** The VS Code
   extension carries the "Debug current file" / "Reset and stop"
@@ -505,10 +834,16 @@ authentic speed for the span that matters.
   something the app can load by hand too; `launch.json` only points at it
   (`project`) and says what to build. The app ignores `debug:` when loading
   the preset.
-- **ROM extensions go in through preset keys (`bus-rom:`, `encoding: file`
-  in a card), not app command-line options.** Every clean start re-reads
-  the preset and the files, so Build & Load needs no app restart and the
-  debug session stays attached.
+- **ROM extensions go in through preset keys (`bus-rom:`, `slot-N-rom:`),
+  not app command-line options.** Every clean start re-reads the preset and
+  the files, so Build & Load needs no app restart and the debug session
+  stays attached.
+- **A card file never points at another file.** `encoding: file` is gone:
+  a card is one self-contained file. A ROM module under development keeps
+  a placeholder ROM (`$0000: FF...`) and the preset's `slot-N-rom:`
+  replaces its bytes. That only works for a single-region ROM module of
+  exactly the file's size, and such a card is never saved back (its file
+  doesn't hold that ROM).
 - **A bus ROM shadows a bundled ROM at the same place** (it is attached in
   front of the chain). On real hardware that would be a bus conflict; here
   it is how a rebuilt ROM replaces a bundled one (the host drive's bank 7,

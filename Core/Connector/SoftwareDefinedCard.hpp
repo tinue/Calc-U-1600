@@ -1,6 +1,5 @@
 #pragma once
 #include <algorithm>
-#include <filesystem>
 #include <cstdint>
 #include <fstream>
 #include <memory>
@@ -18,9 +17,9 @@
 // MemoryCardDefinition (docs/Memory-Card-Definition-Format.md) -- every
 // memory module in this project is one of these, built from a .card.yaml.
 //
-// v1: Regular or Flash content (a JEDEC-style flash command decoder, see
-// flashWrite()), single-kind or `by-bank`-split; Unbanked or
-// trigger-based Banked. The definition loader still rejects rom/line-based
+// Regular, Flash (a JEDEC-style flash command decoder, see flashWrite())
+// or ROM content, single-kind or `by-bank`-split; Unbanked or
+// trigger-based Banked. The definition loader rejects line-based latches
 // before a card is built.
 
 class SoftwareDefinedCard : public ExpansionCard {
@@ -113,6 +112,29 @@ public:
     const MemoryCardDefinition& definition() const { return m_def; }
 
     std::string moduleName() const override { return m_def.moduleName; }
+
+    /// One entry per region; a `by-bank:` split of different kinds is Mixed.
+    std::vector<CardMemory> debugMemories() const override {
+        std::vector<CardMemory> out;
+        for (const Region& r : m_def.regions) {
+            CardMemory m;
+            m.name = r.name;
+            m.size = r.capacity;
+            m.banks = r.banking.bankCount ? r.banking.bankCount : 1;
+            m.portBanked = r.banked && r.banking.triggerKind == TriggerKind::IoPort;
+            m.port = r.banking.triggerPort;
+            for (uint32_t b = 0; b < m.banks; ++b) {
+                const RegionContent& c = r.contentForBank(b);
+                const CardMemory::Kind k = c.kind == ContentKind::Flash ? CardMemory::Kind::Flash
+                    : (c.kind == ContentKind::Rom || !c.writable)        ? CardMemory::Kind::Rom
+                                                                          : CardMemory::Kind::Ram;
+                if (b == 0) m.kind = k;
+                else if (k != m.kind) m.kind = CardMemory::Kind::Mixed;
+            }
+            out.push_back(m);
+        }
+        return out;
+    }
 
     uint64_t contentRevision() const override { return m_contentRevision; }
 
@@ -335,10 +357,12 @@ private:
 /// host. Returns nullptr and fills `error` on a read/parse failure or when
 /// the file's `compatible-hosts` does not list `targetHost`
 /// (Memory-Card-Definition-Spec.md §1/§2). The card reports its
-/// `module-name:` via moduleName().
+/// `module-name:` via moduleName(). `romOverride`, if given, replaces the
+/// ROM of a ROM module (replaceRomContent()).
 inline std::unique_ptr<ExpansionCard> makeSoftwareDefinedCard(const std::string& specPath,
                                                               CardHost targetHost,
-                                                              std::string* error) {
+                                                              std::string* error,
+                                                              const std::vector<uint8_t>* romOverride = nullptr) {
     std::ifstream in(specPath, std::ios::binary);
     if (!in) {
         *error = "cannot open module spec '" + specPath + "'";
@@ -348,7 +372,7 @@ inline std::unique_ptr<ExpansionCard> makeSoftwareDefinedCard(const std::string&
     ss << in.rdbuf();
 
     MemoryCardDefinition def;
-    if (!parseMemoryCardDefinition(ss.str(), &def, error, std::filesystem::path(specPath).parent_path().string())) {
+    if (!parseMemoryCardDefinition(ss.str(), &def, error)) {
         *error = "module spec '" + specPath + "': " + *error;
         return nullptr;
     }
@@ -357,5 +381,6 @@ inline std::unique_ptr<ExpansionCard> makeSoftwareDefinedCard(const std::string&
                  ") is not compatible with " + cardHostToken(targetHost);
         return nullptr;
     }
+    if (romOverride && !replaceRomContent(&def, *romOverride, error)) return nullptr;
     return std::make_unique<SoftwareDefinedCard>(std::move(def));
 }

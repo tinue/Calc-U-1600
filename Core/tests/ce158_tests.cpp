@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "../Connector/Ce158Card.hpp"
+#include "../Connector/PC1500SignalDecode.hpp"
 #include "../PC1500/PC1500Machine.hpp"
 #include "../PC1500/PC1500PresetLoader.hpp"
 #include "../Preset/PresetFile.hpp"
@@ -32,14 +33,12 @@ int g_fail = 0;
     else { g_fail++; std::fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } \
 } while (0)
 
-PinState me1(uint16_t addr, bool forWrite) {
-    PinState p; p.address = addr; p.forWrite = forWrite; p.me1 = true; return p;
+// Cycles as the PC-1500 drives the 60-pin contacts.
+SystemBusPins me1(uint16_t addr, bool forWrite) {
+    return PC1500SignalDecode::systemBusPins(addr, forWrite, /*me1=*/true, false, false);
 }
-PinState me0Read(uint16_t addr, bool pu, bool pv) {
-    PinState p; p.address = addr; p.forWrite = false;
-    p.pin[2] = pv; // PV
-    p.pin[3] = pu; // PU
-    return p;
+SystemBusPins me0Read(uint16_t addr, bool pu, bool pv) {
+    return PC1500SignalDecode::systemBusPins(addr, /*forWrite=*/false, /*me1=*/false, pu, pv);
 }
 
 uint8_t rd(Ce158Card& c, uint16_t addr) {
@@ -102,7 +101,7 @@ void test_rom_window_pv_gated_and_pu_banked() {
     CHECK(!card.respondsToRead(me0Read(0x8000, false, /*pv=*/false), v));
     CHECK(!card.respondsToRead(me0Read(0xA000, false, true), v));
     CHECK(!card.respondsToRead(me0Read(0x7FFF, false, true), v));
-    PinState w = me0Read(0x8000, false, true); w.forWrite = true;
+    SystemBusPins w = me0Read(0x8000, false, true); w.forWrite = true;
     CHECK(!card.respondsToWrite(w, 0x55));
 }
 
@@ -297,15 +296,15 @@ void test_debug_peek_skips_card_registers() {
     PC1600Machine pc1600;
     auto& lh = pc1600.lh5803Memory();
     lh.debugPeek(0xD200, /*me1=*/true, &readable);
-    CHECK(readable);                                   // no CE-158: LH5803 ROM alias
+    CHECK(!readable);                                  // no CE-158: nothing answers, the bus floats
+    lh.debugPeek(0xF00C, /*me1=*/true, &readable);
+    CHECK(readable);                                   // the port block 10H-1FH
     CHECK(pc1600.attachCE158(rom.data(), rom.size()));
     lh.debugPeek(0xD200, /*me1=*/true, &readable);
-    CHECK(!readable);
+    CHECK(!readable);                                  // its UART: a read would disturb it
     lh.debugPeek(0xD400, /*me1=*/true, &readable);
-    CHECK(readable);                                   // just past the CE-158's blocks
+    CHECK(!readable);                                  // just past the CE-158's blocks: floats
     pc1600.detachCE158();
-    lh.debugPeek(0xD200, /*me1=*/true, &readable);
-    CHECK(readable);
 }
 
 const char* kSysRom = "roms/PC-1500_A04.ROM";
@@ -334,13 +333,13 @@ std::string text(const std::vector<uint8_t>& bytes) { return std::string(bytes.b
 
 void test_preset_parse_interface_key() {
     PresetFile p;
-    CHECK(loadPreset("model: PC-1500A\ninterface: CE-158\n", &p));
+    CHECK(loadPreset("format-version: 1\nmodel: PC-1500A\ninterface: CE-158\n", &p));
     CHECK(p.interfaceName == "ce158");
     PresetFile none;
-    CHECK(loadPreset("model: PC-1500\n", &none));
+    CHECK(loadPreset("format-version: 1\nmodel: PC-1500\n", &none));
     CHECK(none.interfaceName.empty());
     PresetFile bad;
-    CHECK(!loadPreset("model: PC-1500A\ninterface: ce-999\n", &bad));
+    CHECK(!loadPreset("format-version: 1\nmodel: PC-1500A\ninterface: ce-999\n", &bad));
 }
 
 // LPRINT to the Centronics port with the CE-150 also on the chain: the
@@ -349,7 +348,7 @@ void test_rom_lprint_centronics_with_ce150_chained() {
     if (!haveRoms(__func__)) return;
     PresetFile preset;
     CHECK(loadPreset(
-        "model: PC-1500A:A04\nplotter: CE-150\ninterface: CE-158\n"
+        "format-version: 1\nmodel: PC-1500A:A04\nplotter: CE-150\ninterface: CE-158\n"
         "keys:\n  - key: cl\n  - type: NEW0\n"
         "program:\n  text: |\n"
         "    10 OPN \"LPRT\"\n    20 LPRINT \"HELLO CE-158\"\n    30 OPN\n    40 LPRINT \"CE150\"\n"
@@ -373,7 +372,7 @@ void test_rom_serial_lprint_and_input() {
     if (!haveRoms(__func__)) return;
     PresetFile preset;
     CHECK(loadPreset(
-        "model: PC-1500A:A04\ninterface: CE-158\n"
+        "format-version: 1\nmodel: PC-1500A:A04\ninterface: CE-158\n"
         "keys:\n  - key: cl\n  - type: NEW0\n"
         "program:\n  text: |\n"
         "    10 SETDEV PO\n    20 OUTSTAT 0\n    30 LPRINT \"SERIAL OUT\"\n"
@@ -424,12 +423,14 @@ void test_pc1600_lh5803_window_and_io_routing() {
     CHECK(mem.readME1(0xDE00) == 0x80);
 
     // ME1 8000-BFFF is an I/O cycle: never a card ROM byte, whatever PV is.
+    // Nothing answers there, so the bus floats and keeps its last byte.
+    mem.writeME1(0x0100, 0x5A); // nothing there: only the bus carries it
     mem.updatePUPV(false, /*pv=*/true);
-    CHECK(mem.readME1(0x8000) == 0xFF);
+    CHECK(mem.readME1(0x8000) == 0x5A);
     mem.updatePUPV(false, /*pv=*/false);
-    CHECK(mem.readME1(0xA000) == 0xFF);
-    CHECK(mem.readME1(0xB010) == 0xFF);
-    CHECK(mem.readME1(0xB000) == 0xFF); // B000-B007: LH5810 select, no register
+    CHECK(mem.readME1(0xA000) == 0x5A);
+    CHECK(mem.readME1(0xB010) == 0x5A);
+    CHECK(mem.readME1(0xB000) == 0x5A); // B000-B007: LH5810 select, no register
 
     m.detachCE158();
     CHECK(mem.readME1(0xD00C) != 0x3C || mem.readME0(0xD00C) == 0x3C); // falls back to the ROM alias
@@ -448,9 +449,9 @@ void test_pc1600_ce158_and_ce1600p_exclusive() {
     CHECK(m.ce158Attached() && !m.ce1600pAttached());
 
     PresetFile p;
-    CHECK(!loadPreset("model: PC-1600\nplotter: CE-1600P\ninterface: CE-158\n", &p));
+    CHECK(!loadPreset("format-version: 1\nmodel: PC-1600\nplotter: CE-1600P\ninterface: CE-158\n", &p));
     PresetFile ok;
-    CHECK(loadPreset("model: PC-1600\nplotter: CE-150\ninterface: CE-158\n", &ok));
+    CHECK(loadPreset("format-version: 1\nmodel: PC-1600\nplotter: CE-150\ninterface: CE-158\n", &ok));
     CHECK(ok.interfaceName == "ce158" && ok.plotter == "ce150");
 }
 
@@ -461,7 +462,7 @@ bool havePC1600Roms(const char* test) {
 }
 
 std::string pc1600Preset(const std::string& program) {
-    return "model: PC-1600\ninterface: CE-158\n"
+    return "format-version: 1\nmodel: PC-1600\ninterface: CE-158\n"
            "keys:\n  - key: mode\n  - type: NEW\n  - type: MODE1\n"
            "program:\n  text: |\n" + program +
            "keys:\n  - key: mode\n  - type: RUN\n";
@@ -516,6 +517,76 @@ void test_pc1600_rom_mode1_rinkey() {
     machine.setCE158SerialLink(nullptr);
 }
 
+// The SC7852's LHNMIO trap (pin 92): the LH5803 fetching 9400H with PU = PV
+// = 1 -- the CE-158 high bank's display shift, 93F9H-9439H -- raises its
+// NMI; the LH5803 ROM's handler (C440H) runs a copy of the shift, redraws
+// the LCD through ME1 A058H/A059H, acknowledges at port 36H and resumes at
+// 943AH. Ref/PC-1600/PC-1600-CPU-LH5803-Compat.md §6.1.
+void test_pc1600_lhnmio_trap_runs_ce158_shift() {
+    if (!havePC1600Roms(__func__)) return;
+    PC1600Machine m;
+    std::string err;
+    CHECK(BundledRoms::loadPC1600RomSet(m, {"roms"}, "new", &err));
+    CHECK(BundledRoms::attachCE158(m, {"roms"}, &err));
+    m.allReset();
+    m.runCycles(PC1600Machine::kTStateHz); // LCD on
+    auto& mem = m.lh5803Memory();
+    auto& cpu = m.lh5803();
+    // Runs the LH5803 from `pc` with the given PU/PV until it reaches
+    // `stop` (or gives up); returns whether the handler (C440H) ran.
+    auto runFrom = [&](uint16_t pc, bool pu, bool pv, uint16_t stop) {
+        m.busArbiter().switchToLH5803();
+        cpu.setPU(pu); cpu.setPV(pv);
+        mem.updatePUPV(pu, pv);
+        cpu.setStatusReg(0);
+        cpu.setSP(0x7840);
+        cpu.setUL(5); cpu.setUH(0); cpu.setA(0);
+        cpu.setPC(pc);
+        bool handler = false;
+        for (int i = 0; i < 20000 && cpu.pc() != stop; ++i) {
+            if (cpu.pc() == 0xC440) handler = true;
+            m.step();
+        }
+        return handler;
+    };
+
+    // The trap: handler, LCD redraw, back at 943AH with the frame dropped,
+    // interrupts on (SIE) and the latch acknowledged.
+    CHECK(runFrom(0x93F9, true, true, 0x943A));
+    CHECK(cpu.pc() == 0x943A);
+    CHECK(cpu.sp() == 0x7840);
+    CHECK(cpu.flagIE());
+    CHECK(!m.memory().lhNmiLatched());
+    // Re-armed by that port 36H write: it fires again.
+    CHECK(runFrom(0x93F9, true, true, 0x943A));
+
+    // Not at PU = 0 (the CE-158 low bank runs other code there), not at
+    // PV = 0, and not at 9401H: one instruction later, still no handler.
+    CHECK(!runFrom(0x9400, false, true, 0x9401));
+    CHECK(!runFrom(0x9400, true, false, 0x9401));
+    CHECK(!runFrom(0x9401, true, true, 0x9402));
+    CHECK(!m.memory().lhNmiLatched());
+
+    // While the latch is set (no acknowledge yet) there is no second NMI.
+    m.memory().latchLhNmi();
+    CHECK(!runFrom(0x9400, true, true, 0x9401));
+    m.memory().writeIO(0x36, 0x00);
+    CHECK(!m.memory().lhNmiLatched());
+}
+
+// ME1 A040H-A05FH is Z-80 ports 40H-5FH for the LH5803 (LCD1500_ALL polls
+// the HD61102 busy bit at #(A058H)/#(A059H)): not open bus.
+void test_pc1600_lh5803_me1_reaches_lcd_ports() {
+    PC1600Machine m;
+    auto& mem = m.lh5803Memory();
+    CHECK(mem.readME1(0xA058) == m.memory().readIO(0x58));
+    CHECK(mem.readME1(0xA05B) == m.memory().readIO(0x5B));
+    CHECK(mem.readME1(0xA058) != 0xFF);
+    bool readable = true;
+    mem.debugPeek(0xA059, /*me1=*/true, &readable);
+    CHECK(!readable); // a data read would advance the HD61102's address
+}
+
 } // namespace
 
 int run_ce158_tests() {
@@ -534,6 +605,8 @@ int run_ce158_tests() {
     test_pc1600_ce158_and_ce1600p_exclusive();
     test_pc1600_rom_mode1_printing();
     test_pc1600_rom_mode1_rinkey();
+    test_pc1600_lhnmio_trap_runs_ce158_shift();
+    test_pc1600_lh5803_me1_reaches_lcd_ports();
 
     std::printf("ce158_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

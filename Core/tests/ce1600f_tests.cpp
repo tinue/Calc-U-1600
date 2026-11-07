@@ -14,6 +14,7 @@
 
 #include "../Connector/CE1600FCard.hpp"
 #include "../Connector/FloppyImageFile.hpp"
+#include "../PC1600/PC1600BusDrive.hpp"
 
 namespace {
 
@@ -25,12 +26,8 @@ int g_fail = 0;
     else { g_fail++; std::fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); } \
 } while (0)
 
-PC1600BusPins ioPins(uint8_t port, bool forWrite) {
-    PC1600BusPins pins;
-    pins.address = port;
-    pins.io = true;
-    pins.forWrite = forWrite;
-    return pins;
+SystemBusPins ioPins(uint8_t port, bool forWrite) {
+    return PC1600BusDrive::z80IoPins(port, forWrite);
 }
 
 uint8_t readReg(CE1600FCard& card, uint8_t port) {
@@ -386,8 +383,10 @@ void test_claims_only_its_own_ports() {
     CE1600FCard card;
     card.insertBlankDisk();
     uint8_t v = 0;
-    PC1600BusPins romPins;  // io=false: ROM window, not this card's concern
-    CHECK(!card.respondsToRead(romPins, v));
+    // A page-1 ROM read (bank 5, the CE-1600P's half) is not this card's.
+    CHECK(!card.respondsToRead(PC1600BusDrive::z80MemPins(0x4000, false, 5), v));
+    // Nor is an LH5803 ME1 cycle whose low byte matches (ELH̄ asserted).
+    CHECK(!card.respondsToRead(PC1600BusDrive::lh5803Pins(0xD070, false, /*me1=*/true, false, false), v));
     CHECK(!card.respondsToRead(ioPins(0x81, false), v));  // read side is CE1600PCard's
     CHECK(!card.respondsToWrite(ioPins(0x82, true), 0));
     CHECK(!card.respondsToRead(ioPins(0x90, false), v));
@@ -422,6 +421,26 @@ void test_floppy_file_round_trips_both_sides() {
     CHECK(f.image == image);
 }
 
+// `description:` is written when set (single-quoted around a '"') and read
+// back, by the full parse and by the header-only catalogue entry.
+void test_floppy_file_description_round_trips() {
+    const std::vector<uint8_t> blank(CE1600FCard::kImageSize, 0);
+    for (const std::string d : {std::string("Two formatted sides"), std::string("The \"Progs\" disk")}) {
+        const std::string text = formatFloppyFile("D", blank, false, d);
+        FloppyFile f;
+        std::string err;
+        CHECK(parseFloppyFile(text, &f, &err));
+        CHECK(f.description == d);
+        FloppyCatalogEntry e;
+        CHECK(floppy_detail::parseCatalogEntry(text, "x", &e, &err));
+        CHECK(e.description == d);
+    }
+    FloppyFile f;
+    std::string err;
+    CHECK(parseFloppyFile(formatFloppyFile("D", blank), &f, &err));
+    CHECK(f.description.empty());
+}
+
 void test_floppy_file_blank_disk_is_compact() {
     const std::vector<uint8_t> blank(CE1600FCard::kImageSize, 0);
     const std::string text = formatFloppyFile("Empty", blank);
@@ -437,13 +456,13 @@ void test_floppy_file_rejects_missing_or_unknown_version() {
     std::string v2 = good;
     v2.replace(v2.find("format-version: 1"), 17, "format-version: 2");
     CHECK(!parseFloppyFile(v2, &f, &err));
-    CHECK(err.find("format-version 2") != std::string::npos);
+    CHECK(err == "unsupported floppy format-version 2 (this build reads 1)");
 
     std::string noVersion = good;
     noVersion.erase(noVersion.find("format-version: 1\n"), 18);
     err.clear();
     CHECK(!parseFloppyFile(noVersion, &f, &err));
-    CHECK(err.find("format-version") != std::string::npos);
+    CHECK(err == "missing 'format-version'");
 
     std::string wrongFormat = good;
     wrongFormat.replace(wrongFormat.find("ce1600f-floppy"), 14, "something-else");
@@ -529,6 +548,7 @@ int run_ce1600f_tests() {
     test_seek_busies_the_drive_for_the_real_step_time();
     test_claims_only_its_own_ports();
     test_floppy_file_round_trips_both_sides();
+    test_floppy_file_description_round_trips();
     test_floppy_file_blank_disk_is_compact();
     test_floppy_file_rejects_missing_or_unknown_version();
     test_floppy_file_rejects_wrong_side_size();

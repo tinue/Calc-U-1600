@@ -28,6 +28,10 @@
 //   3. the dispatch (peek the model, build the machine, call its loader)
 //      in the GUI's PresetController::loadPreset and in each CLI.
 //
+// Every preset carries `format-version:` (kPresetFormatVersion), checked
+// before any other key: a preset of a newer format says so instead of
+// naming its first unknown key.
+//
 // Where trace, screenshot and by-name `saveas:` files go is the caller's
 // business: Core parses `saveas:` into a PresetSaveAsRequest for
 // PresetSaveAsFn (below); without that callback the step is a logged no-op.
@@ -74,7 +78,7 @@ struct PresetSaveAsRequest {
 /// Fired for a `- saveas:` step (see the top-of-file doc comment) -- WHERE a
 /// by-name save goes, and how to splice/format it, are environment-specific
 /// (Qt6/app's AppPaths/MemoryModuleManager/FloppyDiskManager, or
-/// PC1600PresetMedia.hpp for the headless tools), so Core only calls out
+/// Core/Preset/PresetMedia.hpp for the headless tools), so Core only calls out
 /// here, mirroring onArmed/onBooted. `request.target` is always S1 on a
 /// PC-1500/1500A (the parser rejects the others). Returns true on success,
 /// or false with `*error` filled in -- a failure stops the preset exactly
@@ -167,6 +171,12 @@ struct PresetFile {
     /// "PC-1500", "PC-1500A" or "PC-1600" (canonical spelling; the ROM
     /// suffix is split off into `romVariant`).
     std::string model;
+    // `preset-name:` -- the short name a picker shows once the preset is
+    // chosen ("Hanoi"); `description:` -- the one line lists, menus and
+    // tooltips show ("Towers of Hanoi, up to seven bricks"). Both optional;
+    // presetDisplayName() stands in for a missing name.
+    std::string presetName;
+    std::string description;
     /// The PC-1600 is a separate machine (Core/PC1600/), applied by
     /// Core/PC1600/PC1600PresetLoader.cpp, not applyPC1500Preset().
     bool isPC1600() const { return model == "PC-1600"; }
@@ -223,6 +233,11 @@ struct PresetFile {
     std::string slot1ModuleSpecName;
     std::string slot2ModuleSpecFile;
     std::string slot2ModuleSpecName;
+    // `slot-N-rom: <path>`, resolved: replaces the ROM of the ROM module
+    // in that slot (makePresetModuleCard()); read when the preset is
+    // applied, so every clean start sees the latest build. Empty = none.
+    std::string slot1RomFile;
+    std::string slot2RomFile;
 
     // `bus-rom:` -- ROM files plugged into the 60-pin bus before power-on,
     // in front of every other card there, so they shadow a bundled ROM at
@@ -247,7 +262,25 @@ struct PresetFile {
 /// number when available) on any parse failure or unsupported field; a
 /// preset is parsed all-or-nothing, so a bad preset fails before the
 /// machine is even started.
+constexpr uint32_t kPresetFormatVersion = 1;
+
 bool parsePresetFile(const std::string& path, PresetFile* out, std::string* error);
+
+/// What a preset list shows of a preset, without loading it.
+struct PresetHeader {
+    std::string model;        // canonical, as PresetFile::model
+    std::string presetName;   // `preset-name:`, "" = none
+    std::string description;  // `description:`, "" = none
+};
+
+/// Reads only the top-level `format-version:`, `model:`, `preset-name:` and
+/// `description:` of the preset at `path` -- no files resolved, no steps
+/// parsed -- for a list of presets. False (with `error`) when the file can't
+/// be read, has no supported `format-version`, or no known `model:`.
+bool readPresetHeader(const std::string& path, PresetHeader* out, std::string* error);
+
+/// `presetName`, or the file name without its extension when there is none.
+std::string presetDisplayName(const std::string& presetName, const std::string& path);
 
 /// A path in a preset: `~` / `~/...` is the home directory, anything else
 /// relative is relative to the preset's directory `dir`.

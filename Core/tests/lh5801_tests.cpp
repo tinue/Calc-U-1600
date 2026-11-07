@@ -242,8 +242,8 @@ void test_hlt_and_interrupt_wake() {
 
     // IE is off: requestMaskableInterrupt() must NOT wake HLT at all for
     // this interrupt class (timer/general maskable); only an IE-gated
-    // dispatch clears the halted state (an NMI-class line would be
-    // different, but this core doesn't model one -- see the .cpp comment).
+    // dispatch clears the halted state (the NMI line is different, see
+    // test_nmi_ignores_ie_and_vectors_fffc()).
     // The CPU must stay halted, ticking the timer but making no other
     // progress, until IE is actually set.
     CHECK(!r.cpu.flagIE());
@@ -265,6 +265,38 @@ void test_hlt_and_interrupt_wake() {
     CHECK(!r2.cpu.halted());
     CHECK(r2.cpu.pc() == 0x9000);
     CHECK(r2.cpu.a() != 0x99); // vectored away -- "ldi a,0x99" did NOT execute
+}
+
+// The NMI line (the PC-1600's SC7852 LHNMIO trap drives it): serviced
+// whatever IE is, ends a HLT, vectors through FFFC, pushes T then P like
+// the maskable entry and resets IE. One request is one service.
+void test_nmi_ignores_ie_and_vectors_fffc() {
+    Rig r({0xFD, 0xB1, 0xB5, 0x99}); // hlt (0x8000-01) ; ldi a,0x99 (0x8002-03)
+    r.bus.mem[0xFFFC] = 0xC4;
+    r.bus.mem[0xFFFD] = 0x40; // NMI vector -> 0xC440
+    r.bus.mem[0xFFFA] = 0x90;
+    r.bus.mem[0xFFFB] = 0x00; // maskable vector -> 0x9000 (must not be taken)
+    r.cpu.setSP(0x7000);
+    r.cpu.step(); // hlt
+    CHECK(r.cpu.halted());
+    r.cpu.setStatusReg(0x01); // IE=0, C=1: T is pushed as it is
+    r.cpu.requestMaskableInterrupt(); // pending, but IE is off
+    r.cpu.requestNonMaskableInterrupt();
+    CHECK(!r.cpu.halted());
+    int c = r.cpu.step(); // services the NMI, not the maskable request
+    CHECK(c > 0);
+    CHECK(r.cpu.pc() == 0xC440);
+    CHECK(!r.cpu.flagIE());
+    CHECK(r.cpu.sp() == 0x7000 - 3);
+    CHECK(r.bus.mem[0x7000] == 0x01); // T, pushed first
+    CHECK(r.bus.mem[0x6FFF] == 0x02); // PL of 0x8002, the instruction after HLT
+    CHECK(r.bus.mem[0x6FFE] == 0x80); // PH, popped first by RTI
+    CHECK(r.cpu.a() != 0x99);
+    // Serviced once: the next step executes at the vector (here 0x00 bytes,
+    // a plain instruction), it does not enter the NMI again.
+    r.cpu.step();
+    CHECK(r.cpu.pc() != 0xC440);
+    CHECK(r.cpu.sp() == 0x7000 - 3);
 }
 
 // wakeFromHalt() is the unconditional counterpart to
@@ -677,7 +709,7 @@ void test_io_chip_keyboard_wiring_through_memory() {
     // Exercises the real ROM's own protocol (confirmed against real
     // hardware, see PC1500Memory.hpp's top comment): DDA at register 0xC,
     // OPA (column strobe) at register 0xE, both ME1-mapped and mirrored
-    // across any address with bits 12-13 set.
+    // across ME1 F000-FFFF (bits 4-11 don't matter).
     PC1500Memory mem;
     mem.writeME1(0xF00C, 0xFF); // DDA: PA all-output
     CHECK(mem.readME1(0xF00C) == 0xFF);
@@ -687,15 +719,29 @@ void test_io_chip_keyboard_wiring_through_memory() {
     mem.keyboard().setKeyState(PC1500Keyboard::Key::Digit1, true); // IN0/PA2
     CHECK(mem.readInputPort() == 0xFE);
 
-    // Confirmed mirror: bits 14-15 don't matter, only bits 12-13.
-    CHECK(mem.readME1(0xB00C) == 0xFF);
-    mem.writeME1(0xB00E, 0xFF); // re-strobe nothing via the mirror address
+    // Mirrored across F000-FFFF: bits 4-11 don't matter.
+    CHECK(mem.readME1(0xFA5C) == 0xFF);
+    mem.writeME1(0xFA5E, 0xFF); // re-strobe nothing via the mirror address
     CHECK(mem.readInputPort() == 0xFF);
 
-    // An ME1 address outside the I/O-chip's decode window (bits 12-13 not
-    // both set) mirrors ME0.
+    // Only F000-FFFF: a real PC-1500A reads PEEK# &700C = 255 but
+    // PEEK# &F00C = 8, so A14/A15 matter too.
+    mem.writeME1(0xF00C, 0x08);
+    CHECK(mem.readME1(0x700C) == 0xFF);
+    CHECK(mem.readME1(0xB00C) == 0xFF);
+    CHECK(mem.readME1(0xF00C) == 0x08);
+    // Register slots 0-3 hold no register (the first is the divider reset at
+    // F004H): open bus, PEEK# &F002 = 255.
+    mem.writeME1(0xF002, 0x12);
+    CHECK(mem.readME1(0xF002) == 0xFF);
+
+    // An ME1 address outside the I/O-chip's decode window is open bus: the RAM decodes ME0 only (a real PC-1500A
+    // reads PEEK# &111 = 255), so an ME1 write doesn't reach it.
+    mem.writeME0(0x4100, 0x11);
     mem.writeME1(0x4100, 0x77);
-    CHECK(mem.readME0(0x4100) == 0x77);
+    CHECK(mem.readME0(0x4100) == 0x11);
+    CHECK(mem.readME1(0x4100) == 0xFF);
+    CHECK(mem.readME1(0xC000) == 0xFF); // the ROM too (PEEK# &C000 = 255)
 }
 
 void test_rtc_tp_rate_and_gating() {
@@ -895,7 +941,7 @@ void test_rtc_calendar_seed_and_read() {
 void test_preset_syncclock_reseeds_rtc() {
     PresetFile preset;
     std::string err;
-    CHECK(parsePresetString("model: PC-1500A\nkeys:\n  - wait: 1\n  - syncclock:\n",
+    CHECK(parsePresetString("format-version: 1\nmodel: PC-1500A\nkeys:\n  - wait: 1\n  - syncclock:\n",
                             "/tmp/lh5801_tests_syncclock.pc1500a", &preset, &err));
     PC1500Machine machine(PC1500Variant::PC1500A);
     auto hostOnBoot = [&machine] {
@@ -1414,6 +1460,15 @@ int run_pc1600_basictyper_tests();
 // Defined in piezo_sampler_tests.cpp (buzzer audio) -- same single-binary
 // convention.
 int run_piezo_sampler_tests();
+// Defined in tape_deck_tests.cpp (cassette recorder + WAV reader) -- same
+// single-binary convention.
+int run_tape_deck_tests();
+// Defined in pc1600_tape_tests.cpp (CLOAD/CSAVE through the CE-1600P) --
+// same single-binary convention.
+int run_pc1600_tape_tests();
+// Defined in pc1500_tape_tests.cpp (CLOAD/CSAVE through the CE-150) --
+// same single-binary convention.
+int run_pc1500_tape_tests();
 // Defined in pc1600_bank_tests.cpp (PC1600Bank/PC1600Memory bank-switching
 // truth tables) -- same single-binary convention.
 int run_pc1600_bank_tests();
@@ -1478,6 +1533,8 @@ int run_basic_program_source_tests();
 // Defined in pc1600_program_placement_tests.cpp -- the scattered-bank
 // segment-list + placement logic for the fast BASIC loader.
 int run_pc1600_program_placement_tests();
+// Defined in inspector_tests.cpp -- the debug panel's inspector views.
+int run_inspector_tests();
 // Defined in key_paste_tests.cpp -- the GUI's clipboard-paste feeder.
 int run_key_paste_tests();
 // Defined in lcd_screenshot_tests.cpp -- LCD PNG render + `screenshot:` step.
@@ -1493,6 +1550,10 @@ int run_disasm_tests();
 int run_debug_target_tests();
 int run_listing_tests();
 int run_run_control_tests();
+// job_tests.cpp -- Core/Job.hpp and sliced-vs-straight preset equivalence.
+int run_job_tests();
+// Shared/tests/shared_tests.cpp -- the Shared/ layer above Core.
+int run_shared_tests();
 
 int main() {
     test_reset_vector();
@@ -1507,6 +1568,7 @@ int main() {
     test_sjp_rtn_stack_roundtrip();
     test_psh_pop_pair_roundtrip();
     test_hlt_and_interrupt_wake();
+    test_nmi_ignores_ie_and_vectors_fffc();
     test_wake_from_halt_ignores_ie();
     test_off_instruction_powers_down_until_power_on();
     test_rti_restores_flags_and_pc();
@@ -1587,7 +1649,11 @@ int main() {
     int pc1600BasicLoaderFailures = run_pc1600_basicloader_tests();
     int basicProgramSourceFailures = run_basic_program_source_tests();
     int pc1600ProgramPlacementFailures = run_pc1600_program_placement_tests();
+    int inspectorFailures = run_inspector_tests();
     int piezoSamplerFailures = run_piezo_sampler_tests();
+    int tapeDeckFailures = run_tape_deck_tests();
+    int pc1600TapeFailures = run_pc1600_tape_tests();
+    int pc1500TapeFailures = run_pc1500_tape_tests();
     int keyPasteFailures = run_key_paste_tests();
     int lcdScreenshotFailures = run_lcd_screenshot_tests();
     int lcdTextFailures = run_lcd_text_tests();
@@ -1597,7 +1663,9 @@ int main() {
     int debugTargetFailures = run_debug_target_tests();
     int listingFailures = run_listing_tests();
     int runControlFailures = run_run_control_tests();
-    return (g_fail == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && lcdTextFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && connectorFailures == 0 && ce151Failures == 0 && ce155Failures == 0 && ce161Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
+    int jobFailures = run_job_tests();
+    int sharedFailures = run_shared_tests();
+    return (g_fail == 0 && jobFailures == 0 && sharedFailures == 0 && machineCodeFileFailures == 0 && programFileFailures == 0 && disasmFailures == 0 && debugTargetFailures == 0 && listingFailures == 0 && runControlFailures == 0 && piezoSamplerFailures == 0 && tapeDeckFailures == 0 && pc1600TapeFailures == 0 && pc1500TapeFailures == 0 && keyPasteFailures == 0 && lcdScreenshotFailures == 0 && lcdTextFailures == 0 && basicFastLoaderFailures == 0 && pc1600BasicLoaderFailures == 0 && basicProgramSourceFailures == 0 && pc1600ProgramPlacementFailures == 0 && inspectorFailures == 0 && connectorFailures == 0 && ce151Failures == 0 && ce155Failures == 0 && ce161Failures == 0 && ce1638Failures == 0 && ce502bFailures == 0 &&
             ce163fFailures == 0 && memoryCardFailures == 0 && batteryCardInstanceFailures == 0 &&
             presetFailures == 0 &&
             basicTyperFailures == 0 && pc1600BasicTyperFailures == 0 &&

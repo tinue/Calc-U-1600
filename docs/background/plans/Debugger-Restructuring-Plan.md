@@ -1,6 +1,6 @@
 # Debugger restructuring plan
 
-**Status (2026-09-25):** implemented, phases R1–R12 committed on `dev-0.6.0` (7dcfd61 … 263baec). Deviations: the clean start without a default preset isn't in the smoke test (it would need the user's Settings changed); the plan's `Core/MachineCodeLoad.*` became `planLoad()` inside `Core/MachineCodeFile.*`, with each caller keeping its own writer. See `docs/background/handoffs/Debugger-Handoff.md`.
+**Status (2026-09-25):** implemented, phases R1–R12 committed on `dev-0.6.0` (7dcfd61 … 263baec). Deviations: the clean start without a default preset isn't in the smoke test (it would need the user's Settings changed); the plan's `Core/MachineCodeLoad.*` became `planLoad()` inside `Core/MachineCodeFile.*`, with each caller keeping its own writer. Internals: `docs/developer/Debugger-Internals.md`.
 
 ## Context
 

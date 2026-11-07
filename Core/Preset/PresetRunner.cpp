@@ -8,6 +8,7 @@
 
 #include "../Connector/MemoryCardCatalog.hpp"
 #include "../Connector/SoftwareDefinedCard.hpp"
+#include "../FileIO.hpp"
 #include "../TraceTypes.hpp"
 
 std::vector<std::string> presetModuleDirs(const std::string& moduleDir,
@@ -18,12 +19,22 @@ std::vector<std::string> presetModuleDirs(const std::string& moduleDir,
 }
 
 std::unique_ptr<ExpansionCard> makePresetModuleCard(const std::string& specFile, const std::string& specName,
+                                                    const std::string& romFile,
                                                     const std::vector<std::string>& moduleDirs, CardHost host,
                                                     std::string* resolvedPath, std::string* error) {
     std::string specPath = specFile;
     if (specPath.empty() && !resolveModuleSpecByName(moduleDirs, specName, &specPath, error)) return nullptr;
-    std::unique_ptr<ExpansionCard> card = makeSoftwareDefinedCard(specPath, host, error);
-    if (card) *resolvedPath = specPath;
+    std::vector<uint8_t> rom;
+    if (!romFile.empty() && !readWholeFile(romFile, &rom)) {
+        *error = "could not read " + romFile;
+        return nullptr;
+    }
+    std::unique_ptr<ExpansionCard> card = makeSoftwareDefinedCard(specPath, host, error, romFile.empty() ? nullptr : &rom);
+    if (!card) {
+        if (!romFile.empty()) *error = romFile + ": " + *error;
+        return nullptr;
+    }
+    *resolvedPath = specPath;
     return card;
 }
 
@@ -40,23 +51,23 @@ int countLines(const std::string& text) {
     return text.back() == '\n' ? n : n + 1;
 }
 
-bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std::string* error,
-              const PresetLogFn& log, const std::string& traceDir, const PresetSaveAsFn& onSaveAs) {
+job::Task<bool> runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std::string* error,
+                         const PresetLogFn& log, const std::string& traceDir, const PresetSaveAsFn& onSaveAs) {
     const double hz = machine.cyclesPerSecond();
     for (const PresetStep& step : steps) {
         switch (step.kind) {
             case PresetStep::Kind::Key:
-                if (!machine.key(step.text, error)) {
+                if (!co_await machine.key(step.text, error)) {
                     if (log) log("  key: " + step.text + " FAILED: " + *error);
-                    return false;
+                    co_return false;
                 }
                 if (log) log("  key: " + step.text + machine.stepTag());
                 break;
             case PresetStep::Kind::Type:
                 if (log) log("  type: \"" + step.text + "\" ...");
-                if (!machine.typeLine(step.text, error)) {
+                if (!co_await machine.typeLine(step.text, error)) {
                     if (log) log("  type: \"" + step.text + "\" FAILED: " + *error);
-                    return false;
+                    co_return false;
                 }
                 if (log) log("  type: \"" + step.text + "\" done" + machine.stepTag());
                 break;
@@ -70,8 +81,8 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
                     // instant false "idle".
                     const uint64_t leadIn = static_cast<uint64_t>(hz / 2);                   // 0.5 s emulated
                     const uint64_t untilIdleCap = static_cast<uint64_t>(hz) * kSecondsPerHour;  // 1 h emulated
-                    uint64_t spent = machine.runCycles(leadIn);
-                    spent += machine.waitUntilBasicIdle(untilIdleCap);
+                    uint64_t spent = co_await machine.runCycles(leadIn);
+                    spent += co_await machine.waitUntilBasicIdle(untilIdleCap);
                     if (log) {
                         char secs[24];
                         std::snprintf(secs, sizeof(secs), "%.1f", spent / hz);
@@ -79,7 +90,7 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
                             (spent >= untilIdleCap ? "s -- CAP HIT)" : "s)") + machine.stepTag());
                     }
                 } else {
-                    machine.runCycles(static_cast<uint64_t>(step.waitSeconds * hz));
+                    co_await machine.runCycles(static_cast<uint64_t>(step.waitSeconds * hz));
                     if (log) {
                         char secs[16];
                         std::snprintf(secs, sizeof(secs), "%.3g", step.waitSeconds);
@@ -104,7 +115,7 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
                 if (!fh) {
                     *error = "could not open trace file: " + path + " (" + std::strerror(errno) + ")";
                     if (log) log("  trace: FAILED to open " + path + ": " + std::strerror(errno));
-                    return false;
+                    co_return false;
                 }
                 machine.beginCpuTrace(fh, TRACE_FULL);
                 if (log) log("  trace: started -> " + path);
@@ -118,7 +129,7 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
                 if (!machine.writeScreenshot(path, &writeError)) {
                     *error = "screenshot: " + writeError;
                     if (log) log("  screenshot: FAILED: " + writeError);
-                    return false;
+                    co_return false;
                 }
                 if (log) log("  screenshot: -> " + path);
                 break;
@@ -128,7 +139,7 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
                 if (!screen.contains(step.text)) {
                     *error = "expect: \"" + step.text + "\" is not on the LCD:\n" + screen.report();
                     if (log) log("  expect: \"" + step.text + "\" NOT FOUND" + machine.stepTag());
-                    return false;
+                    co_return false;
                 }
                 if (log) log("  expect: \"" + step.text + "\" found");
                 break;
@@ -141,11 +152,11 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
                 break;
             }
             case PresetStep::Kind::SaveAs:
-                if (!runPresetSaveAsStep(step, onSaveAs, log, error)) return false;
+                if (!runPresetSaveAsStep(step, onSaveAs, log, error)) co_return false;
                 break;
         }
     }
-    return true;
+    co_return true;
 }
 
 // A machine-code `program:` block. The file may carry a CE-158
@@ -158,8 +169,8 @@ bool runSteps(PresetMachine& machine, const std::vector<PresetStep>& steps, std:
 // address); the preset switches MODE / TITLE itself. A non-zero auto-run
 // address makes the loader type `CALL &<addr>` afterwards and wait for the
 // interpreter to come back -- the machine must be in RUN mode by then.
-bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, const std::string& tag,
-                       const PresetLogFn& log, std::string* error) {
+job::Task<bool> loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, std::string tag,
+                                  const PresetLogFn& log, std::string* error) {
     errno = 0;
     std::ifstream in(program.path, std::ios::binary);
     if (!in) {
@@ -168,7 +179,7 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
         // and "No such file or directory" (a genuinely missing/mistyped
         // path) look identical from `!in` alone otherwise.
         *error = tag + "could not read program file: " + program.path + " (" + std::strerror(errno) + ")";
-        return false;
+        co_return false;
     }
     const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 
@@ -191,23 +202,23 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
         case machinecode::LoadError::BadFile:
             *error = tag + program.path + ": " + file.error;
             if (file.lengthMismatch) *error += " Add an explicit 'length:' to override.";
-            return false;
+            co_return false;
         case machinecode::LoadError::NeedsAddress:
             *error = tag + program.path + " has no machine-code header: 'address' is required";
-            return false;
+            co_return false;
         case machinecode::LoadError::Empty:
             *error = tag + "program is empty (length 0)";
-            return false;
+            co_return false;
         case machinecode::LoadError::LengthExceeds:
             *error = tag + "'length' " + std::to_string(program.length) + " exceeds the " +
                      std::to_string(file.payload.size()) + " program bytes available in " + program.path;
-            return false;
+            co_return false;
         case machinecode::LoadError::LhRange:
             *error = tag + program.path + ": LH5803 code must sit in &0000-&7FFF";
-            return false;
+            co_return false;
         default: // HeaderMismatch, NoSlot
             *error = tag + program.path + ": " + plan.detail;
-            return false;
+            co_return false;
     }
     const bool hasHeader = file.header != machinecode::File::Header::None;
     const uint32_t addr = plan.addr;
@@ -215,7 +226,7 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
     std::string loadError;
     if (!machine.loadMachineCode(plan.slot, plan.bank, plan.busAddr, file.payload.data(), len, &loadError)) {
         *error = tag + "binary " + program.path + ": " + loadError;
-        return false;
+        co_return false;
     }
     if (log) {
         const bool pc1600 = machine.codeTarget() == machinecode::Target::PC1600;
@@ -237,22 +248,22 @@ bool loadBinaryProgram(PresetMachine& machine, const PresetProgram& program, con
                                                      file.autorunAddr, 0, 0, state, plan.cpu)
                                      .callCommand;
         std::string typeError;
-        if (!machine.typeLine(line, &typeError)) {
+        if (!co_await machine.typeLine(line, &typeError)) {
             *error = tag + "auto-run '" + line + "' failed: " + typeError;
-            return false;
+            co_return false;
         }
-        machine.waitUntilBasicIdle(static_cast<uint64_t>(machine.cyclesPerSecond()) * kSecondsPerHour);
+        co_await machine.waitUntilBasicIdle(static_cast<uint64_t>(machine.cyclesPerSecond()) * kSecondsPerHour);
         if (log) log("  auto-run " + line + machine.stepTag());
     }
-    return true;
+    co_return true;
 }
 
-bool runProgram(PresetMachine& machine, const PresetProgram& program, const std::string& tag,
-                PresetLoadResult* result, const PresetLogFn& log) {
+job::Task<bool> runProgram(PresetMachine& machine, const PresetProgram& program, std::string tag,
+                           PresetLoadResult* result, const PresetLogFn& log) {
     switch (program.format) {
         case PresetProgram::Format::BasicText: {
             if (log) log(tag + "program (typed, " + std::to_string(countLines(program.text)) + " lines)");
-            BasicTypeResult typed = machine.typeBasicProgram(program.text);
+            BasicTypeResult typed = co_await machine.typeBasicProgram(program.text);
             for (const std::string& rejected : typed.rejectedLines) {
                 result->rejectedBasicLines.push_back(rejected);
                 if (log) log("  REJECTED: " + rejected);
@@ -260,10 +271,10 @@ bool runProgram(PresetMachine& machine, const PresetProgram& program, const std:
             if (!typed.ok) {
                 result->error = typed.error;
                 if (log) log("  program typing FAILED: " + typed.error);
-                return false;
+                co_return false;
             }
             if (log) log("  program typed OK" + machine.stepTag());
-            return true;
+            co_return true;
         }
         case PresetProgram::Format::BasicBinary: {
             if (log) log(tag + "program (BASIC, " + program.path + ")");
@@ -271,29 +282,29 @@ bool runProgram(PresetMachine& machine, const PresetProgram& program, const std:
             if (!loaded.ok) {
                 result->error = tag + "BASIC load failed: " + loaded.error;
                 if (log) log("  " + result->error);
-                return false;
+                co_return false;
             }
             if (log) {
                 char n[96];
                 std::snprintf(n, sizeof(n), "  program loaded OK: $%04X..$%04X", loaded.baseAddr, loaded.endAddr);
                 log(std::string(n) + machine.stepTag());
             }
-            return true;
+            co_return true;
         }
         case PresetProgram::Format::Binary:
-            if (!loadBinaryProgram(machine, program, tag, log, &result->error)) {
+            if (!co_await loadBinaryProgram(machine, program, tag, log, &result->error)) {
                 if (log) log("  " + result->error);
-                return false;
+                co_return false;
             }
-            return true;
+            co_return true;
     }
-    return false;
+    co_return false;
 }
 
 }  // namespace
 
-void runPresetSections(PresetMachine& machine, const PresetFile& preset, PresetLoadResult* result,
-                       const PresetLogFn& log, const std::string& traceDir, const PresetSaveAsFn& onSaveAs) {
+job::Task<void> runPresetSectionsJob(PresetMachine& machine, const PresetFile& preset, PresetLoadResult* result,
+                                     PresetLogFn log, std::string traceDir, PresetSaveAsFn onSaveAs) {
     // A trace started by a `- trace:` step and never explicitly stopped is
     // closed (SESSION_END written, file closed) when the sections are done,
     // by ANY path.
@@ -314,17 +325,22 @@ void runPresetSections(PresetMachine& machine, const PresetFile& preset, PresetL
         if (section.kind == PresetSection::Kind::Keys) {
             const size_t n = section.keys.size();
             if (log) log(tag + "keys (" + std::to_string(n) + (n == 1 ? " step)" : " steps)"));
-            if (!runSteps(machine, section.keys, &result->error, log, traceDir, onSaveAs)) return;
+            if (!co_await runSteps(machine, section.keys, &result->error, log, traceDir, onSaveAs)) co_return;
             continue;
         }
         // A preceding `type:` step returns right after its ENTER, so a
         // command it started (e.g. a SAVE) may still be running -- let it
         // finish before this section types or pokes a program into memory
         // underneath it.
-        machine.waitUntilBasicIdle(programIdleCap);
-        if (!runProgram(machine, section.program, tag, result, log)) return;
+        co_await machine.waitUntilBasicIdle(programIdleCap);
+        if (!co_await runProgram(machine, section.program, tag, result, log)) co_return;
     }
 
     result->ok = true;
     if (log) log("preset applied OK" + machine.stepTag());
+}
+
+void runPresetSections(PresetMachine& machine, const PresetFile& preset, PresetLoadResult* result,
+                       const PresetLogFn& log, const std::string& traceDir, const PresetSaveAsFn& onSaveAs) {
+    job::runToCompletion(runPresetSectionsJob(machine, preset, result, log, traceDir, onSaveAs));
 }

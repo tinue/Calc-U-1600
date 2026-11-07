@@ -15,6 +15,7 @@
 #include "../Connector/Ce158Port.hpp"
 #include "../Connector/ExpansionConnector.hpp"
 #include "../Connector/SystemBus.hpp"
+#include "../Tape/TapeDeck.hpp"
 #include "PC1500Clocks.hpp"
 #include "PC1500Display.hpp"
 #include "PC1500Memory.hpp"
@@ -156,44 +157,20 @@ public:
         return m_cpu.pc();
     }
 
-    /// The attached expansion module's own current bank (-1 if no card is
-    /// attached, or the card has no bank concept) -- for the "Dump Mem"
-    /// panel's per-region label. See ExpansionCard::debugCurrentBank().
-    int debugSlotCardBank() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_attachedExpansionCard ? m_attachedExpansionCard->debugCurrentBank() : -1;
-    }
-
-    /// The attached expansion module's total bank count (-1 if no card is
-    /// attached, or the card has no bank concept). See
-    /// ExpansionCard::debugBankCount().
-    int debugSlotCardBankCount() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_attachedExpansionCard ? m_attachedExpansionCard->debugBankCount() : -1;
-    }
-
-    /// The attached expansion module's whole backing image (every bank
-    /// concatenated), read directly off the card rather than through the
-    /// CPU-visible, single-bank-at-a-time address space -- for a "dump
-    /// whole card" debug feature that needs every bank in one pass, not
-    /// just whichever one is currently latched in. See
-    /// ExpansionCard::debugImage(). Empty if no card is attached.
-    std::vector<uint8_t> debugSlotCardImage() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_attachedExpansionCard ? m_attachedExpansionCard->debugImage() : std::vector<uint8_t>{};
-    }
-
-    /// Whether the attached module actually decodes `addr` -- see
-    /// PC1500Memory::debugSlotResponds().
-    bool debugSlotResponds(uint16_t addr) const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_memory.debugSlotResponds(addr);
-    }
-
     LH5801&       cpu() { return m_cpu; }
     const LH5801& cpu() const { return m_cpu; }
     PC1500Memory&       memory() { return m_memory; }
     const PC1500Memory& memory() const { return m_memory; }
+
+    /// Runs `view(*this)` under the machine lock and returns its result: one
+    /// consistent snapshot for the inspector (Core/Debug/Inspect), which
+    /// reads through the const accessors only -- never a locked debug*()
+    /// call, which would deadlock.
+    template <class F>
+    auto debugInspect(F&& view) const {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return view(*this);
+    }
 
     // The 40-pin (single-slot) and 60-pin (daisy-chain) connectors, owned
     // by m_memory. No card is attached by default -- tests and the app
@@ -234,6 +211,22 @@ public:
     uint64_t ce150PlotRevision() const;
     std::vector<std::string> drainCE150Events();
     void clearCE150Paper();
+
+    // ── Cassette recorder (CE-152 on the CE-150's jacks) ────────────────
+    //
+    // The recorder outlives attach/detach of the interface: arm it with a
+    // WAV to play (CLOAD) or a file to record into (CSAVE); it moves only
+    // while a CE-150 REMOTE relay runs it, in emulated time. A recording is
+    // saved each time the motor stops. All GUI-safe (take m_mutex).
+    bool tapePlay(const std::string& path, std::string& error);
+    void tapeRecord(const std::string& path);
+    bool tapeEject(std::string* error = nullptr);
+    TapeDeck::Status tapeStatus() const;
+    /// Why the last automatic save (at a motor stop) failed, once; empty if
+    /// it didn't (TapeDeck::takeLastError()).
+    std::string tapeTakeLastError();
+    /// Unlocked direct access -- headless/tests only.
+    TapeDeck& tapeDeck() { return m_tapeDeck; }
 
     // ── CE-158 RS-232C / Centronics interface (60-pin system bus) ────────
     //
@@ -311,6 +304,7 @@ private:
     WatchSet*    m_watches{nullptr};
     DebugStopLatch m_debugStop;
     std::unique_ptr<ExpansionCard> m_attachedExpansionCard; // see attachExpansionCard()
+    TapeDeck m_tapeDeck{double(kPC1500CpuHz)};               // see tapePlay()
     std::unique_ptr<Ce150Card> m_ce150Card;                 // see attachCE150()
     Ce158Port m_ce158;                                      // see attachCE158()
     std::vector<std::unique_ptr<BusRomCard>> m_busRoms;     // see attachBusRom()

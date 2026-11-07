@@ -66,7 +66,7 @@ public:
     }
 
     /// True when any card says reading this access would disturb it (see
-    /// ExpansionCard::readHasSideEffects) -- for debugger peeks only.
+    /// the card interface's readHasSideEffects) -- for debugger peeks only.
     bool readHasSideEffects(const Pins& pins) const {
         for (const Card* card : m_cards)
             if (card->readHasSideEffects(pins)) return true;
@@ -75,6 +75,18 @@ public:
 
     // Queried on every host-ROM fetch; see InhibitSource. Only the cards
     // that declared the capability are asked.
+    /// The cassette lines: CMTOUT goes to every card; CMTIN reads as the
+    /// first card that drives it, or `idle` when none does.
+    void setCmtOut(bool level) const {
+        for (Card* card : m_cards) card->cmtOut(level);
+    }
+    bool cmtIn(bool idle) const {
+        bool level = idle;
+        for (const Card* card : m_cards)
+            if (card->cmtIn(level)) return level;
+        return idle;
+    }
+
     bool inhibitAsserted() const {
         for (const InhibitSource* source : m_inhibit)
             if (source->assertsInhibit()) return true;

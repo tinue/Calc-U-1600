@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "../Basic/BasicLoadResults.hpp"
+#include "../Job.hpp"
 
 class PC1600Machine;
 
@@ -57,14 +58,20 @@ class PC1600Machine;
 /// generous -- an over-limit line just means the preset author splits it.
 inline constexpr int kMaxBasicLineLength = 79;
 
+// Each primitive below comes twice: a resumable job (Core/Job.hpp) -- the
+// one implementation -- and the blocking call of the same name, which runs
+// that job to completion.
+
 /// Presses and releases the named key (PC1600Keyboard's vocabulary),
 /// pacing the CPU through a real keystroke's hold/idle cycle. An unmapped
 /// name is silently a no-op, matching PC1600Machine::pressKey/releaseKey.
+job::Task<void> tapKeyJob(PC1600Machine& machine, std::string name);
 void tapKey(PC1600Machine& machine, const std::string& name);
 
 /// Steps the CPU forward, a 60 Hz frame at a time, while the LCD's BUSY
 /// status symbol is lit or `maxTStates` is exhausted (a safety cap).
 /// Returns the T-states actually consumed.
+job::Task<uint64_t> waitIdleJob(PC1600Machine& machine, uint64_t maxTStates);
 uint64_t waitIdle(PC1600Machine& machine, uint64_t maxTStates);
 
 /// Runs frames until a running BASIC program / plot has finished -- the
@@ -74,6 +81,7 @@ uint64_t waitIdle(PC1600Machine& machine, uint64_t maxTStates);
 /// generous cap. NB: an INPUT wait / plot pen-move / FOR-NEXT delay are
 /// each their own tight loop elsewhere, so this deliberately checks the
 /// command-loop address, not just "small stable PC span".
+job::Task<uint64_t> waitUntilBasicIdleJob(PC1600Machine& machine, uint64_t maxTStates);
 uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates);
 
 /// Runs frames until the ROM's keyboard-scan idle loop is sweeping the key
@@ -90,6 +98,7 @@ uint64_t waitUntilBasicIdle(PC1600Machine& machine, uint64_t maxTStates);
 /// (LCD dark until it finishes) and post-line housekeeping open the gap on
 /// the SC7852 side; the CE-150 opens it via the boot's plotter self-test,
 /// which hands off to the LH5803 to home the colour turret.
+job::Task<void> waitForKeyboardScanLoopJob(PC1600Machine& machine);
 void waitForKeyboardScanLoop(PC1600Machine& machine);
 
 /// Runs a machine that was just reset flat out through its boot until it
@@ -97,6 +106,7 @@ void waitForKeyboardScanLoop(PC1600Machine& machine);
 /// sequence, then the BUSY tail (waitIdle, 5 s cap), then -- with a plotter
 /// attached -- the peripheral's power-on init (waitForKeyboardScanLoop).
 /// Used by the preset loader and by the GUI's Reset.
+job::Task<void> runBootToPromptJob(PC1600Machine& machine);
 void runBootToPrompt(PC1600Machine& machine);
 
 /// Types the UTF-8 `line` character by character (a lowercase letter and the
@@ -104,6 +114,7 @@ void runBootToPrompt(PC1600Machine& machine);
 /// accented character a KBII sequence),
 /// optionally tapping ENTER afterward, then a short settle. Returns false
 /// only for a character with no PC-1600 key (`error` names it).
+job::Task<bool> typeLineJob(PC1600Machine& machine, std::string line, bool pressEnter, std::string* error);
 bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, std::string* error);
 
 /// Types a whole BASIC program's source text through the ROM's own line
@@ -115,4 +126,5 @@ bool typeLine(PC1600Machine& machine, const std::string& line, bool pressEnter, 
 /// rewritten) -- i.e. wasn't stored, typically because the machine isn't
 /// in PRO mode -- is put there too. Does not clear a resident
 /// program and does not change mode.
+job::Task<BasicTypeResult> typeBasicProgramTextJob(PC1600Machine& machine, std::string text);
 BasicTypeResult typeBasicProgramText(PC1600Machine& machine, const std::string& text);

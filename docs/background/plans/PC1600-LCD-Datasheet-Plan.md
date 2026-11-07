@@ -1,5 +1,9 @@
 # PC-1600 LCD: apply the HD61102/HD61203 datasheet facts
 
+**Status: Phase 1 implemented** (dev-0.6.0). Phase 2 is recorded, not built: it
+waits for the timing re-fit in TODO.md ("PC-1600 LCD / sub-CPU timing model",
+LCD half).
+
 ## Context
 
 The reference corpus (`Sharp1500-1600-Ref/PC-1600/PC-1600-Display-HD61202.md`,

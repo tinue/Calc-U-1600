@@ -1,12 +1,11 @@
 #pragma once
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 
 #include "../LH5801/LH5801.hpp"
 #include "LH5803Rom.hpp"
-#include "../../Connector/ExpansionCard.hpp"
+#include "../../PC1600/PC1600BusDrive.hpp"
 
 class PC1600Memory;
 class PC1600BusArbiter;
@@ -32,22 +31,21 @@ class PC1600BusArbiter;
 //              drawn on the LCD (the gate array's mirror, see
 //              mirrorPc1500Display())
 //   8000-BFFF  peripheral ROM window, offered to the cards on
-//              PC1600Memory::lh5803PeripheralBus(): CE-150 ROM (PV=0,
+//              PC1600Memory::systemBus(): CE-150 ROM (PV=0,
 //              A000-BFFF) or CE-158 ROM (PV=1, 8000-9FFF, PU picks its
 //              8 KB bank). Open bus where no attached card answers. The
 //              LH5803 ROM sets PV itself from CALLH's PARBAN (E224: RPV,
 //              then SPV if (700EH) bit 0).
 //   C000-FFFF  LH5803-private internal ROM (PC1600-LH5803-C000-FFFF-new.bin), fixed, loadable
 //
-// ME1 defaults to aliasing ME0, EXCEPT:
+// ME1 reaches neither the RAM nor any ROM (an ME1 cycle is the SC7852's
+// IORQ); an ME1 read nothing answers returns the last byte the bus carried
+// (measured, see readME1()). What does answer:
 //   * ME1 0x8000-0xFFFF (after the mainboard decodes below): offered to the
 //     cards with me1=true, terminal when one claims it -- the CE-150's
 //     LH5810 at 0xB008-0xB00F, the CE-158's LH5811 / UART / interrupt-ID
 //     blocks at 0xD000-0xD3FF / 0xDE00-0xDFFF. This host doesn't know
 //     which card sits where.
-//   * ME1 0x8000-0xBFFF that no card claims: an I/O cycle on the bus (the
-//     LH5803's ME1 is the SC7852's IORQ), so it never selects the ME0
-//     peripheral-ROM window -- open bus.
 //   * 0xA038: `STA #(0A038H)` is the LH5803-side handoff trigger (the
 //     LH5803-side alias of the SC7852's Port 38H, since the LH5803 has no
 //     I/O space of its own) -- forwarded to a PC1600BusArbiter via
@@ -57,20 +55,29 @@ class PC1600BusArbiter;
 //     (31H), P_INT (32H), P_LHMSK2 (34H), P_CL1 (36H) in rom1500. P_BANK
 //     is what MODE 1 PEEK/XPEEK depend on (P_MAPPRG, rom1500 E63C). The
 //     32H read clears the cause as on the Z-80 side; only the LH5803 ISR
-//     (E6B9) reads it, and no LH5803 interrupt is raised yet.
-//   * ME1 0xF000-0xF00F: the LH5803's own on-chip LH5811-compat PIO port
-//     controller -- the analogue of the chip PC1500Memory models for the
-//     PC-1500's LH5801 (see that file's top comment / its `case 0xB`).
-//     Modelled here as a plain 16-byte register file: writes latch, reads
-//     return the latched byte. It MUST NOT fall through to readME0(), where
-//     0xF00x >= kRomBase would serve PC1600-LH5803-C000-FFFF-new.bin bytes --
-//     the CE-150 cartridge's per-plot-point pacing poll `BII #(0xF00B),0x02`
-//     (system-ROM helper at E451) depends on reading register 0xB (IF,
-//     input flags) as software-only state, not ROM data. Bit 1 of IF is
-//     the shared TP-edge / BREAK flag: no clear-on-read (the firmware
-//     clears it itself with `ani #(0xF00B),0xFD`), and no live PC-1600
-//     TP/RTC rising-edge source feeds it, so it always reads 0 during a
-//     CE-150 plot loop.
+//     (E6B9) reads it, and no LH5803 maskable interrupt is raised yet. A
+//     36H write acknowledges the SC7852's LHNMIO trap (the NMI handler,
+//     C491H).
+//   * ME1 0xA040-0xA05F and 0x8040-0x805F: Z-80 ports 40H-5FH, the
+//     HD61102 LCD drivers (50H/58H/5BH), the same way. The LH5803 ROM
+//     drives the LCD directly through both forms: LCD1500_ALL (E84AH, the
+//     PC-1500 window redraw the NMI handler calls) and LCD1500_CLR (E8BFH)
+//     poll the busy bit with `BII #(Y),80H` at Y = A058H/A059H;
+//     LCD1500_BYTE (E7E1H, one display-RAM byte: GPRINT and the CE-158
+//     terminal's received characters) at Y = 8059H/8055H. The SC7852
+//     evidently ignores A8-A14 of an LH5803 I/O cycle; only the forms the
+//     ROM uses are routed.
+//   * ME1 0xF000-0xF00F: the SC7852's LH5810-compatible port block, the
+//     same registers the Z-80 reaches at ports 10H-1FH (F00xH = port 1xH)
+//     -- the PC-1500's own LH5810 address, so PC-1500 code finds it where
+//     it expects. Evidence: the SC7852's PCSTB pin goes high when "the
+//     Z-80 writes 18H or the LH-5803 is at F008H in ME1" (TRM §7.1.1), and
+//     the LH5803 ROM's DELAY64 (EEB2H) counts the sub-CPU's 1/64 s pulse
+//     on #(F00FH) bit 5 = PB5 (port 1FH). Routed to PC1600Memory::readIO/
+//     writeIO, so PB5 runs, the keyboard strobes and the IF/MSK registers
+//     are the real ones. It must not fall through to readME0(), where
+//     0xF00x >= kRomBase would serve LH5803 ROM bytes (the CE-150 plot
+//     loop's `BII #(0xF00B),0x02` pacing poll reads IF there).
 //   * the TC8576F UART / LU-57813P sub-CPU register block. The LH-5803
 //     drives the OFF-path clock save through it -- `rom1500 E538`:
 //     `bii #(0x0023),0x20` (poll a UART status bit), `sta #(0x0021)`
@@ -93,23 +100,24 @@ public:
     /// halves of the 8000-BFFF window; PU picks the CE-158's ROM bank.
     void updatePUPV(bool pu, bool pv) { m_pu = pu; m_pv = pv; }
     bool pv() const { return m_pv; }
+    bool pu() const { return m_pu; }
+    bool romLoaded() const { return m_rom.loaded(); }
+    /// The 60-pin card that answers an LH5803 read of `addr` in ME0 / ME1
+    /// at PU/PV `pu`/`pv`, for the inspector's LH5803 view
+    /// (SystemBus::debugResponder()); null when none answers.
+    const SystemBusCard* debugBusCardAt(uint16_t addr, bool me1, bool pu, bool pv) const;
 
     /// Loads the LH5803-private internal ROM at C000-FFFF (PC1600-LH5803-C000-FFFF-new.bin).
     /// Returns false (untouched) if `size` isn't exactly 16384 bytes.
     bool loadROM(const uint8_t* data, size_t size) { return m_rom.load(data, size); }
     bool loadROMFile(const std::string& path) { return m_rom.loadFile(path); }
 
-    /// Clear volatile I/O state -- the internal-PIO register file at ME1
-    /// 0xF000-0xF00F. ROM/PV/card attachment are untouched (matching
-    /// PC1500Memory::reset()'s scope). Called from PC1600Machine::reset*().
-    void reset() { m_ioRegs.fill(0); }
-
     /// Debugger view of the LH5803's ME0/ME1 without bus side effects.
     /// The UART / sub-CPU block, ME1 8000-BFFF and any card register a read
-    /// would disturb (ExpansionCard::readHasSideEffects) can't be read
-    /// without side effects: `*readable` is false there and 0xFF is
-    /// returned. The internal PIO reads as its
-    /// latched register file.
+    /// would disturb (SystemBusCard::readHasSideEffects) can't be read
+    /// without side effects, and an unclaimed ME1 address has no value of
+    /// its own (it floats): `*readable` is false there and 0xFF is
+    /// returned. The F000-F00F port block reads as Z-80 ports 10H-1FH.
     uint8_t debugPeek(uint16_t addr, bool me1, bool* readable) const;
 
     /// The LH5803's ME0 0000-7FFF is the Z-80's 8000-FFFF (the shared RAM
@@ -125,6 +133,13 @@ public:
     void    writeME0(uint16_t addr, uint8_t value) override;
     uint8_t readME1(uint16_t addr) override;
     void    writeME1(uint16_t addr, uint8_t value) override;
+    /// ITA: the keyboard's sense lines, as the Z-80 reads them at port 37H.
+    /// The LH5803's IN0-IN7 (pins 66-73) are on the same net as the SC7852's
+    /// KIN0-KIN7 and the key PWB (CN1-03..10): TRM §9.1(1) F.P.C. circuit
+    /// diagram, printed p.264. The LH5803 ROM scans the keyboard the
+    /// PC-1500 way -- strobes on #(F00EH) (port 1EH, the SC7852's PA), then
+    /// ITA (ISKEY, E41AH).
+    uint8_t readInputPort() override;
 
 private:
     static constexpr uint16_t kRomBase = LH5803Rom::kBase;
@@ -139,23 +154,13 @@ private:
     /// them (rom1500's P_MOD..P_CPUSW). A033 is caught by isUartShadow()
     /// first and A038 by the handoff check; the rest go to readIO/writeIO.
     static bool isControlPort(uint16_t addr) { return (addr & 0xFFF0) == 0xA030; }
+    /// ME1 A040-A05F / 8040-805F: Z-80 ports 40H-5FH (the LCD), also via
+    /// readIO/writeIO.
+    static bool isLcdPort(uint16_t addr) { return (addr & 0xDFE0) == 0x8040; }
 
-    /// Build the PinState the 60-pin peripheral cards decode on (address,
-    /// forWrite, me1, PV, PU) -- no S-block/Y strobe, so no
-    /// PC1500SignalDecode dependency here. See Ce150Card.hpp's "Bus
-    /// dependency" note.
-    /// Shortcut: hands the LH5803's own PU/PV to the cards on their 40-pin
-    /// contacts. Real hardware routes PV out as SC7852 PVOUT, and the
-    /// LH5803's PU has no documented path to the connector (TODO.md,
-    /// "Expansion connectors").
-    PinState peripheralPins(uint16_t addr, bool forWrite, bool me1) const {
-        PinState p;
-        p.address = addr;
-        p.forWrite = forWrite;
-        p.me1 = me1;
-        p.pin[2] = m_pv; // PV
-        p.pin[3] = m_pu; // PU
-        return p;
+    /// The 60-pin contacts of an LH5803 cycle (PC1600BusDrive::lh5803Pins).
+    SystemBusPins busPins(uint16_t addr, bool forWrite, bool me1) const {
+        return PC1600BusDrive::lh5803Pins(addr, forWrite, me1, m_pu, m_pv);
     }
 
     /// The SC7852's LHA90 pin (Ref/PC-1600/PC-1600-CPU-SC7852-Z80.md,
@@ -170,15 +175,21 @@ private:
     /// the LCD, as the gate array does: see PC1600Display::mirrorPc1500Column().
     /// ME1 writes there only reach the RAM.
     void mirrorPc1500Display(uint16_t addr);
-    /// Offers an access to the cards on PC1600Memory::lh5803PeripheralBus().
+    /// Offers an access to the cards on PC1600Memory::systemBus().
     /// True (with *value set, for a read) when a card claims it.
     bool cardRead(uint16_t addr, bool me1, uint8_t* value) const;
     bool cardWrite(uint16_t addr, bool me1, uint8_t value);
 
+    /// The bytes the LH5803's bus really carries; readME1() returns the
+    /// last one where nothing drives the bus.
+    uint8_t onBus(uint8_t v) { m_dataBus = v; return v; }
+    uint8_t readME0Driven(uint16_t addr);
+    bool readME1Driven(uint16_t addr, uint8_t* out);
+
     PC1600Memory& m_shared;
     PC1600BusArbiter* m_arbiter{nullptr};
+    uint8_t m_dataBus{0xFF};
     LH5803Rom m_rom;
-    std::array<uint8_t, 16> m_ioRegs{}; // internal LH5811-compat PIO, ME1 0xF000-0xF00F
     bool m_pv{false};
     bool m_pu{false};
 };

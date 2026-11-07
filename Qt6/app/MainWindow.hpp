@@ -6,13 +6,15 @@
 #include <QString>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
-#include "MachineController.hpp" // Model, PC1500RomRevision (menu<->ControlBar sync)
+#include "MachineController.hpp" // Model, PC1500RomRevision
 
 class QTimer;
 class QKeyEvent;
-namespace PC1500KeyboardMap { struct ResolvedKey; }
+namespace shared { struct ResolvedKey; }
 class QCloseEvent;
 class QDragEnterEvent;
 class QDragMoveEvent;
@@ -24,13 +26,12 @@ class QActionGroup;
 class FaceplateWidget;
 class ControlBar;
 class DebugPanel;
-class PlotterController;
 class SyncOperations;
 class PlotterPaperWidget;
 class Ce158PrinterWidget;
 class MemoryModuleManager;
 class FloppyDiskManager;
-class PresetController;
+class TapeManager;
 class AudioOutput;
 class EmulationPacer;
 
@@ -44,10 +45,11 @@ class EmulationPacer;
 // both advances emulation and repaints the LCD. Also owns physical-keyboard
 // capture -- see PC1500KeyboardMap.hpp.
 //
-// The menu bar (buildMenuBar()) duplicates ControlBar's model/ROM-revision
-// pickers and Reset/Reset All as QActions, and adds File/Help entries
-// (Load Preset/Load BASIC Program/Settings/Quit, About) -- see
-// applyModelSelection()/applyRomRevisionSelection() and the
+// The menu bar (buildMenuBar()) duplicates ControlBar's model picker,
+// peripheral toggles and Reset/Reset All as QActions; the ROM pickers and
+// the peripherals that aren't the model's own live in the Machine menu
+// only. It adds File/Help entries (Load Preset/Load BASIC Program/
+// Settings/Quit, About) -- see applyModelSelection() and the
 // syncMachineMenuFrom*() pair for how the two views of the same
 // MachineController state stay in sync without fighting each other.
 class MainWindow : public QMainWindow {
@@ -104,13 +106,10 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
-    void typeResolved(const PC1500KeyboardMap::ResolvedKey& resolved, QKeyEvent* event);
-
     std::unique_ptr<MachineController> m_controller;
     std::unique_ptr<MemoryModuleManager> m_moduleManager;
     std::unique_ptr<FloppyDiskManager> m_floppyManager;
-    std::unique_ptr<PresetController> m_presetController;
-    std::unique_ptr<PlotterController> m_plotterController;
+    std::unique_ptr<TapeManager> m_tapeManager;
     FaceplateWidget* m_faceplate = nullptr;
     ControlBar* m_controlBar = nullptr;
     DebugPanel* m_debugPanel = nullptr;
@@ -131,16 +130,16 @@ private:
     void pasteClipboardText();
     QAction* m_pasteAction = nullptr;
 
-    // Shared by both ControlBar's combo-box signal and the Machine menu's
-    // QActions, so either source of a model/ROM-revision change drives the
-    // exact same rebuild + resync path.
+    // The model change is shared by ControlBar's combo box and the Machine
+    // menu's QActions, so either source drives the exact same rebuild +
+    // resync path; ROM-revision changes come from the menu only.
     void applyModelSelection(Model model);
     void applyRomRevisionSelection(PC1500RomRevision revision);
     void applyPC1600RomVersionSelection(PC1600RomVersion version);
     void applyCE1600PRomVersionSelection(CE1600PRomVersion version);
-    // Loads `model`'s default preset (AppSettings::defaultPresetPath()), if
-    // one is set -- run whenever a model gets selected, including at startup.
-    void applyDefaultPreset(Model model);
+    // At startup: the startup model's default preset, if one is set (a
+    // model pick loads it inside AppSession::pickModelJob()).
+    void applyDefaultPreset();
 
     // Re-checks the Machine menu's model/ROM QActions to match `model`/
     // `revision` without themselves triggering another applyModelSelection/
@@ -164,11 +163,15 @@ private:
     QActionGroup* m_modelActionGroup = nullptr;
     QActionGroup* m_romActionGroup = nullptr;
     QAction* m_romMenuAction = nullptr; // Machine > ROM Revision submenu's own action, for show/hide
+    // Machine > Peripherals toggles, mirroring the control bar's buttons.
+    QAction* m_ce150Action = nullptr;
+    QAction* m_ce158Action = nullptr;
+    QAction* m_ce1600pAction = nullptr; // PC-1600 only
 
     // File/Help actions whose handlers are wired up in the constructor
     // (alongside the equivalent ControlBar signal), not inside
     // buildMenuBar() itself, so both share one closure over local
-    // constructor state (m_presetController, m_frameTimer, ...).
+    // constructor state (m_sync, m_pacer, ...).
     QAction* m_openPresetAction = nullptr;
     QAction* m_loadBasicProgramAction = nullptr;
     QAction* m_loadMachineCodeAction = nullptr;
@@ -186,14 +189,16 @@ private:
     // (manual, module-driven rebuild, or preset load).
     void syncControlBarForModel();
 
-    // PlotterController::attachStateChanged handler: reads the CE-150/
+    // After a peripheral toggle, a rebuild or a preset: reads the CE-150/
     // CE-1600P/CE-158 attach states from MachineController and matches the
     // control-bar buttons, the floppy picker and the docked panes to them.
     void syncPeripherals();
+    // Attaches or detaches `p` inside the OFF/ON power cycle, then resyncs.
+    void togglePeripheral(shared::Peripheral p);
     // Docks `pane` into (or takes it out of) the debug row.
     void setDockedPane(QWidget* pane, bool show);
 
-    // PresetController::armed handler: the preset has attached its
+    // MachineController::presetWasArmed handler: the preset has attached its
     // model/cards/plotter but the machine is still powered off. Resyncs
     // every GUI element that reflects that state (faceplate/control-bar
     // model, plotter-paper visibility, slot selectors) and forces a repaint
@@ -212,6 +217,10 @@ private:
     void loadPresetFile(const QString& path);
     void loadBasicProgramFile(const QString& path);
     void loadMachineCodeFile(const QString& path);
+    // The bytes of `path` for a loader; for a cassette WAV, the image of the
+    // file on it (several: ask which one). Empty if it can't be read (after a
+    // warning titled `title`) or the user cancels.
+    std::optional<std::vector<uint8_t>> readProgramFile(const QString& path, const QString& title);
     // The one local file a drag carries, if its content is something to
     // load (openDroppedFile()); empty otherwise.
     QString droppableFile(const QMimeData* mime) const;
@@ -220,7 +229,11 @@ private:
     bool m_startupDone = false;  // the startup preset (if any) has run
     void mountHostDirectory();
     void unmountHostDirectory();
-    void syncHostDriveActions();
+    // Control bar > Tape: the cassette bay (TapeManager).
+    void refreshTapeCombo();
+    void selectTape(const QString& nameOrEmpty);
+    void saveTape();
+    void syncHostDriveActions(const shared::ControlState& state);
     // Reset / Reset All (control bar, Machine menu): see resetMachine() in
     // MainWindow.cpp.
     void resetMachine(bool allReset);
@@ -231,9 +244,8 @@ private:
     // Keyed by the physical key, not Qt::Key: key() follows the modifier
     // state, so on e.g. a Swiss layout Shift+3 presses as Key_Asterisk but,
     // with Shift let go first, releases as Key_3 -- the release would miss
-    // and leave "*" held in the machine's matrix. Shift-tap (needsShift)
-    // presses are never entered here since they're self-contained (see
-    // MachineController::tapShiftedKey).
+    // and leave "*" held in the machine's matrix. Only the presses
+    // MachineSession::hostKeyDown() asks to release are entered here.
     QHash<quint32, std::string> m_physicalKeysDown;
     // Releases everything in m_physicalKeysDown. Used whenever the window
     // stops receiving key events (deactivation, focus moving to another

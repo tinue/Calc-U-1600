@@ -6,7 +6,8 @@
 #include <vector>
 
 #include "AlpsPlotterMechanism.hpp"
-#include "ExpansionCard.hpp"
+#include "../Tape/TapeDeck.hpp"
+#include "SystemBusCard.hpp"
 
 // ── CE-150 printer / plotter / cassette interface (PC-1500 60-pin bus) ──
 //
@@ -27,16 +28,22 @@
 // shared ALPS mechanism (see its header) -- this card only does the bus
 // decode and the LH5810 latch/feedback model.
 //
-// Bus dependency -- deliberately narrow: `respondsToRead/Write` read only
-// `pins.address`, `pins.forWrite`, `pins.me1` and `pins.pin[2]` (PV) via
-// `decodeAccess()`. Nothing else. The PC-1500 `SystemBus` fills those four
-// (`decode`/`decodeME1`); on the PC-1600, `LH5803SharedMemory::
-// peripheralPins()` builds the same four with no S-block/Y-strobe decode.
+// Bus decode (60-pin contacts, isRomRead() / isLh5810()): the ROM answers reads
+// with DME0 asserted, PV (16) low and A000-BFFF; the LH5810 answers ME1
+// (59; IOE on the PC-1600, the LH5803's ME1 strobe) at B008-B00F.
+// Ref/PC-1500/Peripherals/CE-150-Hardware.md §3. Nothing else is decoded,
+// so the card is silent on PC-1600 Z-80 cycles, which assert neither.
 //
-// Cassette (CSAVE/CLOAD/CHAIN/PRINT#) is out of scope, same as the
-// CE-1600P: the RMT bits on OPA are latched and ignored, the ROM's tape
-// paths run but move no data.
-class Ce150Card final : public ExpansionCard {
+// Cassette: the bit stream is the main unit's (its LH5811 SDO drives
+// CMTOUT, its PB2 reads CMTIN); the CE-150 conditions it to and from the
+// MIC / EAR jacks and switches the recorder's motor. That's two latching
+// REMOTE relays pulsed on port A (Ref/PC-1500/Peripherals/CE-150-Hardware.md
+// §5; ROM REMOTE_PULSE &BF28): PA1 / PA2 REMOTE 0 on / off, PA3 / PA4
+// REMOTE 1 on / off. The recorder (connectRecorder()) runs while either
+// relay is closed -- one recorder, plugged into whichever jack the command
+// uses (`CLOAD -1` / `RMT ON` select REMOTE 1). CMTIN is driven only while
+// a tape is playing, so the plotter's tests and boot see PB2 unchanged.
+class Ce150Card final : public SystemBusCard {
 public:
     static constexpr size_t   kRomSize = 0x2000;   // 8192 B
     static constexpr uint16_t kRomBase = 0xA000;
@@ -61,12 +68,34 @@ public:
         if (!m_romLoaded) return {};
         return std::vector<uint8_t>(m_rom.begin(), m_rom.end());
     }
+    std::string moduleName() const override { return "CE-150"; }
+    std::vector<CardMemory> debugMemories() const override {
+        return {{"", CardMemory::Kind::Rom, uint32_t(kRomSize)}};
+    }
 
     /// Re-anchor to power-on state: zero the LH5810 latches and reset the
     /// mechanism (which keeps the drawn strokes -- see its reset()).
     void reset() {
         m_opa = m_opb = m_opc = m_dda = m_ddb = m_g = m_msk = m_if = 0;
         m_mechanism.reset();
+    }
+
+    /// The cassette recorder on the jacks, or null for none.
+    void connectRecorder(TapeDeck* deck) {
+        m_recorder = deck;
+        updateMotor();
+    }
+
+    void cmtOut(bool level) override {
+        if (m_recorder) m_recorder->setOutputLevel(level);
+    }
+    bool cmtIn(bool& level) const override {
+        if (!m_recorder || m_recorder->mode() != TapeDeck::Mode::Play) return false;
+        level = m_recorder->inputLevel();
+        return true;
+    }
+    void advanceCassette(uint32_t cycles) override {
+        if (m_recorder) m_recorder->advance(cycles);
     }
 
     /// Per-emulation-step hook. A no-op today: the plotter is fully
@@ -76,48 +105,32 @@ public:
     /// a second edit then.
     void tick(uint64_t /*cycles*/) {}
 
-    bool respondsToRead(const PinState& pins, uint8_t& outValue) const override {
-        const Access a = decodeAccess(pins);
-        if (a.me1) {
-            if (a.addr >= kIoBase && a.addr <= kIoEnd) {
-                const uint8_t sel = static_cast<uint8_t>(a.addr & 0x0F);
-                outValue = readReg(sel);
-                return true;
-            }
-            return false;
+    bool respondsToRead(const SystemBusPins& pins, uint8_t& outValue) const override {
+        if (isLh5810(pins)) {
+            outValue = readReg(static_cast<uint8_t>(pins.address & 0x0F));
+            return true;
         }
-        if (a.forWrite || a.pv) return false;              // ROM: read-only, PV = 0 only
-        if (a.addr < kRomBase || a.addr > kRomEnd) return false;
-        if (!m_romLoaded) return false;
-        outValue = m_rom[a.addr - kRomBase];
+        if (!isRomRead(pins) || !m_romLoaded) return false;
+        outValue = m_rom[pins.address - kRomBase];
         return true;
     }
 
-    WriteResult respondsToWrite(const PinState& pins, uint8_t value) override {
-        const Access a = decodeAccess(pins);
-        if (a.me1 && a.addr >= kIoBase && a.addr <= kIoEnd) {
-            const uint8_t sel = static_cast<uint8_t>(a.addr & 0x0F);
-            writeReg(sel, value);
-            return WriteResult::taken();
-        }
-        return WriteResult::ignored();                     // ROM window read-only
+    WriteResult respondsToWrite(const SystemBusPins& pins, uint8_t value) override {
+        if (!isLh5810(pins)) return WriteResult::ignored(); // ROM window read-only
+        writeReg(static_cast<uint8_t>(pins.address & 0x0F), value);
+        return WriteResult::taken();
     }
 
     /// The LH5810 registers: a debugger must not read them as memory.
-    bool readHasSideEffects(const PinState& pins) const override {
-        const Access a = decodeAccess(pins);
-        return a.me1 && a.addr >= kIoBase && a.addr <= kIoEnd;
-    }
+    bool readHasSideEffects(const SystemBusPins& pins) const override { return isLh5810(pins); }
 
 private:
-    struct Access {
-        uint16_t addr = 0;
-        bool pv = false;
-        bool me1 = false;
-        bool forWrite = false;
-    };
-    static Access decodeAccess(const PinState& p) {
-        return Access{p.address, p.pin[2] /*PV*/, p.me1, p.forWrite};
+    static bool isLh5810(const SystemBusPins& p) {
+        return p.pin[Contact60::kMe1] && p.address >= kIoBase && p.address <= kIoEnd;
+    }
+    static bool isRomRead(const SystemBusPins& p) {
+        return p.pin[Contact60::kDme0] && !p.forWrite && !p.pin[Contact60::kPV] && // PV = 0 only
+               p.address >= kRomBase && p.address <= kRomEnd;
     }
 
     // LH5810 Port B read: the raw latch with the CE-150's live input bits
@@ -158,9 +171,16 @@ private:
             case 0xB: m_if = value; return;
             case 0xC: m_dda = value; return;
             case 0xD: m_ddb = value; return;
-            case 0xE: // OPA -- write reaches output bits only; RMT lives here, latched/ignored
+            case 0xE: { // OPA -- write reaches output bits only; PA1-4 pulse the REMOTE relays
                 m_opa = uint8_t((m_opa & ~m_dda) | (value & m_dda));
+                const uint8_t out = uint8_t(value & m_dda);
+                if (out & 0x02) m_relay[0] = true;
+                if (out & 0x04) m_relay[0] = false;
+                if (out & 0x08) m_relay[1] = true;
+                if (out & 0x10) m_relay[1] = false;
+                updateMotor();
                 return;
+            }
             case 0xF: // OPB -- write reaches output bits only; PB0/PB1 drive the pen
                 m_opb = uint8_t((m_opb & ~m_ddb) | (value & m_ddb));
                 m_mechanism.applyPenSignals(m_opb & 0x01, m_opb & 0x02);
@@ -177,4 +197,11 @@ private:
     uint8_t m_opa = 0, m_opb = 0, m_opc = 0;
     uint8_t m_dda = 0, m_ddb = 0;
     uint8_t m_g = 0, m_msk = 0, m_if = 0;
+
+    // Latching relays: they keep their state through reset().
+    bool m_relay[2] = {false, false};
+    TapeDeck* m_recorder = nullptr;
+    void updateMotor() {
+        if (m_recorder) m_recorder->setMotor(m_relay[0] || m_relay[1]);
+    }
 };

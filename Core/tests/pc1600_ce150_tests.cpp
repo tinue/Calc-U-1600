@@ -69,12 +69,12 @@ void test_lh5803_me1_block_and_motor_writes() {
     mem.writeME1(0xB00C, 0x3C);
     CHECK(mem.readME1(0xB00C) == 0x3C);
 
-    // The whole 0xB000-0xB00F ME1 block is the CE-150's LH5810 chip-select:
-    // the non-register part (0xB000-0xB007) must read back as open bus, not
-    // fall through to readME0() and get mis-served as CE-150 *ROM* bytes,
-    // which would desync LPRINT's inter-step LH5810 poll after one glyph.
+    // ME1 0xB000-0xB007 (no LH5810 register there) is never served the
+    // CE-150 *ROM* bytes: an ME1 cycle is I/O, so with nothing answering the
+    // bus floats and keeps its last byte.
     mem.updatePUPV(false, /*pv=*/false); // ROM window would be live at PV=0
-    for (uint16_t a = 0xB000; a <= 0xB007; ++a) CHECK(mem.readME1(a) == 0xFF);
+    mem.writeME1(0x0100, 0x5A);          // nothing there: only the bus carries it
+    for (uint16_t a = 0xB000; a <= 0xB007; ++a) CHECK(mem.readME1(a) == 0x5A);
     // ...while the ROM itself is still readable in the *ME0* window.
     CHECK(mem.readME0(0xB005) == rom[0xB005 - 0xA000]);
 
@@ -123,12 +123,12 @@ void test_reset_reanchors_but_keeps_the_card() {
 }
 
 void test_lh5803_internal_pio_f00x_is_a_register_not_rom() {
-    // The LH5803's on-chip LH5811-compat PIO at ME1 0xF000-0xF00F must be a
-    // real register file, not a fall-through to readME0() (where 0xF00x >=
-    // kRomBase serves PC1600-LH5803-C000-FFFF-new.bin / open-bus bytes). The CE-150 cartridge's
-    // per-plot-point pacing poll is `BII #(0xF00B),0x02` via the system-ROM
-    // helper at E451; if bit 1 reads set the draw loop unwinds after one
-    // glyph.
+    // ME1 0xF000-0xF00F is the SC7852's LH5810-compatible block, Z-80 ports
+    // 10H-1FH -- real registers, not a fall-through to readME0() (where
+    // 0xF00x >= kRomBase serves LH5803 ROM / open-bus bytes). The CE-150
+    // cartridge's per-plot-point pacing poll is `BII #(0xF00B),0x02` via the
+    // system-ROM helper at E451; if bit 1 reads set the draw loop unwinds
+    // after one glyph.
     PC1600Machine m;
     auto rom = fakeRom(Ce150Card::kRomSize, 7);
     m.attachCE150(rom.data(), rom.size());
@@ -151,11 +151,13 @@ void test_lh5803_internal_pio_f00x_is_a_register_not_rom() {
     CHECK(mem.readME1(0xB00C) == 0x14);
     CHECK(mem.readME1(0xF00C) == 0xAB);
 
-    // reset() clears the internal-PIO file (card stays attached).
-    m.reset();
-    CHECK(m.ce150Attached());
-    CHECK(mem.readME1(0xF00C) == 0x00);
+    // The same registers as the Z-80's ports 1CH (DDA) / 1BH (IF), both ways.
+    CHECK(m.memory().readIO(0x1C) == 0xAB);
+    m.memory().writeIO(0x1B, 0x00);
     CHECK(mem.readME1(0xF00B) == 0x00);
+
+    m.reset();
+    CHECK(m.ce150Attached()); // card stays attached
 }
 
 } // namespace

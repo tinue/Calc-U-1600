@@ -33,7 +33,7 @@ inline std::unique_ptr<SoftwareDefinedCard> bundledCard(const std::string& file,
 // and a 16 KB module leaves the high half open bus.
 inline std::unique_ptr<SoftwareDefinedCard> plainRamCard(size_t sizeBytes) {
     std::string yaml =
-        "module-name: \"Test RAM\"\n"
+        "format-version: 1\nmodule-name: \"Test RAM\"\n"
         "compatible-hosts: [PC-1600-Slot-1, PC-1600-Slot-2]\n"
         "definition-terminology: PC-1600-Slot-1\n"
         "regions:\n"
@@ -62,7 +62,7 @@ inline std::unique_ptr<SoftwareDefinedCard> plainRamCard(size_t sizeBytes) {
 // half of plainRamCard().
 inline std::unique_ptr<SoftwareDefinedCard> slotCardWithContent(const std::string& content) {
     std::string yaml =
-        "module-name: \"Test module\"\n"
+        "format-version: 1\nmodule-name: \"Test module\"\n"
         "compatible-hosts: [PC-1600-Slot-1, PC-1600-Slot-2]\n"
         "definition-terminology: PC-1600-Slot-1\n"
         "regions:\n"

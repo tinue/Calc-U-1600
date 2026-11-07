@@ -12,6 +12,7 @@
 #include "../Connector/MemoryCardDefinition.hpp"
 #include "../Display/LcdText.hpp"
 #include "../HostClock.hpp"
+#include "../Job.hpp"
 #include "../MachineCodeFile.hpp"
 #include "PresetFile.hpp"
 
@@ -59,6 +60,11 @@ struct PresetLoadResult {
     /// attached module should autosave.
     std::string slot1ResolvedPath;
     std::string slot2ResolvedPath;  // PC-1600 only
+    /// The `slot-N-rom:` file the slot's ROM came from, empty if none. Such
+    /// a card must never be saved back (autosave or `saveas:`): its file
+    /// doesn't hold that ROM.
+    std::string slot1RomFile;
+    std::string slot2RomFile;  // PC-1600 only
     /// True when the preset had `plotter: CE-150` and the CE-150 was attached
     /// before reset, so the boot ROM's peripheral scan saw it. (PC-1600
     /// `plotter: CE-1600P` is reported via `machine.ce1600pAttached()`.)
@@ -93,18 +99,18 @@ public:
 
     /// Emulated cycles per second -- the unit of runCycles().
     virtual uint32_t cyclesPerSecond() const = 0;
-    virtual uint64_t runCycles(uint64_t cycles) = 0;
+    virtual job::Task<uint64_t> runCycles(uint64_t cycles) = 0;
     /// Blocks until the BASIC interpreter is back in its command loop (a RUN,
     /// a plot, a SAVE ... has finished), or `maxCycles`. Returns cycles spent.
-    virtual uint64_t waitUntilBasicIdle(uint64_t maxCycles) = 0;
+    virtual job::Task<uint64_t> waitUntilBasicIdle(uint64_t maxCycles) = 0;
     /// Appended to every step's log line: the ROM's input line, the LCD as
     /// text and where the CPU is.
     virtual std::string stepTag() = 0;
 
     /// A `key:` step: `break`/`on` (the ON key) or one named key.
-    virtual bool key(const std::string& name, std::string* error) = 0;
+    virtual job::Task<bool> key(std::string name, std::string* error) = 0;
     /// A `type:` step: the line as keystrokes, then ENTER.
-    virtual bool typeLine(const std::string& line, std::string* error) = 0;
+    virtual job::Task<bool> typeLine(std::string line, std::string* error) = 0;
 
     virtual bool cpuTraceActive() const = 0;
     virtual void beginCpuTrace(std::FILE* fh, uint32_t flags) = 0;
@@ -117,7 +123,7 @@ public:
     virtual std::tm syncClock() = 0;
 
     /// A typed program (`text: |`, `typed: true`): type it in through the ROM's editor.
-    virtual BasicTypeResult typeBasicProgram(const std::string& text) = 0;
+    virtual job::Task<BasicTypeResult> typeBasicProgram(std::string text) = 0;
     /// A BASIC `file:`: load the listing or tokenized file at `path`
     /// (loadBasicProgramFile(): on the PC-1600 the MODE picks the keyword
     /// table and the TITLE area is the target).
@@ -151,11 +157,11 @@ std::string presetInputLine(Machine& machine, uint16_t base) {
 /// through tapKey(): press and release the ON line directly, holding each
 /// state for `holdCycles`.
 template <class Machine>
-void presetTapOn(Machine& machine, uint64_t holdCycles) {
+job::Task<void> presetTapOn(Machine& machine, uint64_t holdCycles) {
     machine.setOnKeyPressed(true);
-    machine.runCycles(holdCycles);
+    co_await job::run(machine, holdCycles);
     machine.setOnKeyPressed(false);
-    machine.runCycles(holdCycles);
+    co_await job::run(machine, holdCycles);
 }
 
 /// The parts of PresetMachine every machine forwards the same way.
@@ -164,7 +170,7 @@ class PresetMachineBase : public PresetMachine {
 public:
     explicit PresetMachineBase(Machine& machine) : m_machine(machine) {}
 
-    uint64_t runCycles(uint64_t cycles) override { return m_machine.runCycles(cycles); }
+    job::Task<uint64_t> runCycles(uint64_t cycles) override { co_return co_await job::run(m_machine, cycles); }
     bool cpuTraceActive() const override { return m_machine.cpuTraceActive(); }
     void beginCpuTrace(std::FILE* fh, uint32_t flags) override { m_machine.beginCpuTrace(fh, flags); }
     void endCpuTrace() override { m_machine.endCpuTrace(); }
@@ -182,9 +188,11 @@ std::vector<std::string> presetModuleDirs(const std::string& moduleDir,
 
 /// Builds the software-defined card a `slot-N-file:` path (`specFile`) or
 /// `slot-N:` name (`specName`, looked up in `moduleDirs`) names, for
-/// `host`. Returns null with `error` set on failure; `resolvedPath` receives
-/// the spec file used.
+/// `host`. A `slot-N-rom:` file (`romFile`, read here on every call) replaces
+/// the ROM of a ROM module. Returns null with `error` set on failure;
+/// `resolvedPath` receives the spec file used.
 std::unique_ptr<ExpansionCard> makePresetModuleCard(const std::string& specFile, const std::string& specName,
+                                                    const std::string& romFile,
                                                     const std::vector<std::string>& moduleDirs, CardHost host,
                                                     std::string* resolvedPath, std::string* error);
 
@@ -194,5 +202,7 @@ std::unique_ptr<ExpansionCard> makePresetModuleCard(const std::string& specFile,
 /// `- trace:` capture still open when this returns is closed. `traceDir` is
 /// where `trace:` and `screenshot:` steps write; `onSaveAs` runs `saveas:`
 /// steps (see PresetSaveAsFn).
+job::Task<void> runPresetSectionsJob(PresetMachine& machine, const PresetFile& preset, PresetLoadResult* result,
+                                     PresetLogFn log, std::string traceDir, PresetSaveAsFn onSaveAs);
 void runPresetSections(PresetMachine& machine, const PresetFile& preset, PresetLoadResult* result,
                        const PresetLogFn& log, const std::string& traceDir, const PresetSaveAsFn& onSaveAs);

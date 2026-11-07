@@ -26,19 +26,21 @@
 # as the real firmware's unlock cycle interleaves writes to the module's
 # bank-select port with the flash-address writes.
 #
-# Power-up fill differs by bank kind, purely as an analysis aid: RAM banks
-# fill 0x00 (CMOS RAM after a power loss); FLASH banks fill 0xAA, so a memory dump can tell
-# "never-touched flash" apart from both an erased sector (0xFF) and
-# freshly powered-up RAM.
+# `initial-content` below defines every byte of every bank: RAM banks 0x00
+# and FLASH banks erased (0xFF), each with the small stub at &0056 and
+# &00C5-&0112. The `power-up-fill` values (RAM 0x00, FLASH 0xAA) therefore
+# never show in this card; they only fill bytes a definition leaves out.
 #
 # PC-1600 slot / Slot-1 caveat: same as ce1638.card.yaml -- see that
-# file's doc comment and MinorIssues.md.
+# file's doc comment and docs/developer/PC1600-Core-Limitations.md.
 #
 # Deliberately not modeled: DQ6/DQ7
 # toggle-bit status polling, software-ID/autoselect, and simulated
 # program/erase timing -- none of it is exercised by the real firmware.
 
+format-version: 1
 module-name: "CE-163F"
+description: "256 KB: 8 RAM banks + 8 flash banks"
 template: true   # read-only starting point; Name & Save copies it
 compatible-hosts: [PC-1500, PC-1500A, PC-1600-Slot-1, PC-1600-Slot-2]
 definition-terminology: PC-1500

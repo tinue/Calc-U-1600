@@ -208,6 +208,9 @@ struct Advice {
 Advice advice(Target target, Slot slot, int bank, uint32_t addr, size_t len, uint32_t autorunAddr, uint32_t ramStart,
               uint32_t ramEnd, const PC1600State& state, Cpu cpu);
 
+// `v` the way messages show an address: "&C0C5".
+std::string hexAddress(uint32_t v);
+
 // Parses a user-typed hex address: `C000`, `&C000`, `$C000`, `0xC000`
 // (surrounding blanks ignored). False on anything else or > $FFFF.
 inline bool parseHexAddress(const std::string& text, uint32_t* out) {

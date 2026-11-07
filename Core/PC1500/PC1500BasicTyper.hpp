@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "../Basic/BasicLoadResults.hpp"
+#include "../Job.hpp"
 
 class PC1500Machine;
 
@@ -34,6 +35,7 @@ class PC1500Machine;
 /// pacing the CPU forward through a real keystroke's hold/idle cycle. An
 /// unmapped `name` is silently a no-op, same as PC1500Machine's own
 /// pressKey/releaseKey.
+job::Task<void> tapKeyJob(PC1500Machine& machine, std::string name);
 void tapKey(PC1500Machine& machine, const std::string& name);
 
 /// Runs a machine that was just reset flat out through its boot (the ROM's
@@ -41,12 +43,14 @@ void tapKey(PC1500Machine& machine, const std::string& name);
 /// then the BUSY tail (waitIdle, 5 s cap). Stops at whatever prompt the ROM
 /// shows -- including "NEW0? :CHECK" after a memory-map change. Used by the
 /// preset loader and by the GUI's Reset.
+job::Task<void> runBootToPromptJob(PC1500Machine& machine);
 void runBootToPrompt(PC1500Machine& machine);
 
 /// Steps the CPU forward, a frame at a time, until the display's BUSY
 /// indicator clears or `maxCycles` is exhausted (a safety cap, so a ROM
 /// that never goes idle can't hang the caller). Returns the number of
 /// cycles actually consumed.
+job::Task<uint64_t> waitIdleJob(PC1500Machine& machine, uint64_t maxCycles);
 uint64_t waitIdle(PC1500Machine& machine, uint64_t maxCycles);
 
 /// Runs the CPU until the BASIC interpreter is back idling in its ROM
@@ -55,6 +59,7 @@ uint64_t waitIdle(PC1500Machine& machine, uint64_t maxCycles);
 /// catches a plain `RUN` / plot finishing, which never asserts BUSY. Used
 /// after each scripted `type:` line to let the line editor / a short RUN
 /// settle. Returns the cycles consumed.
+job::Task<uint64_t> settleUntilIdleJob(PC1500Machine& machine, uint64_t maxCycles);
 uint64_t settleUntilIdle(PC1500Machine& machine, uint64_t maxCycles);
 
 /// Runs the CPU until a running BASIC program / plot has really finished --
@@ -73,6 +78,7 @@ uint64_t settleUntilIdle(PC1500Machine& machine, uint64_t maxCycles);
 /// PC-1500 ROM set is fixed, so the address is stable. Not covered: a
 /// tight single-line `FOR I=1 TO big : NEXT` delay or a long-spinning
 /// `CALL` into machine code -- both want an explicit `wait: N` step.
+job::Task<uint64_t> waitUntilBasicIdleJob(PC1500Machine& machine, uint64_t maxCycles);
 uint64_t waitUntilBasicIdle(PC1500Machine& machine, uint64_t maxCycles);
 
 /// Types `line` character by character (a lowercase letter gets its own
@@ -81,6 +87,7 @@ uint64_t waitUntilBasicIdle(PC1500Machine& machine, uint64_t maxCycles);
 /// only for a character with no keyboard mapping (`error` names it) --
 /// never for a ROM-side syntax rejection, which callers that care (like
 /// typeBasicProgramText) detect themselves via the program-end pointer.
+job::Task<bool> typeLineJob(PC1500Machine& machine, std::string line, bool pressEnter, std::string* error);
 bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, std::string* error);
 
 /// Types a whole BASIC program's source text in through the ROM's own
@@ -93,4 +100,5 @@ bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, 
 /// `- key: cl` / `- type: NEW0` steps). A line that leaves the program
 /// unchanged (BASPRG_END put and its own line, if resident, not rewritten)
 /// is collected into the result as rejected rather than aborting the load.
+job::Task<BasicTypeResult> typeBasicProgramTextJob(PC1500Machine& machine, std::string text);
 BasicTypeResult typeBasicProgramText(PC1500Machine& machine, const std::string& text);

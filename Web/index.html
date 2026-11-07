@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calc-U-1600 — web client</title>
+<!-- The web client's demo and test page: CalcU1600 with the physical
+     keyboard, sized to the window (?width=, ?height= fix either; ?model=
+     0|1|2 and ?preset=<path under presets/> start with them). Every path is
+     relative, like the rest of dist/ (docs/developer/Web-Client.md). -->
+<link rel="stylesheet" href="calc.css">
+<style>
+  html, body { margin: 0; height: 100%; background: #f2f2f2; font: 13px -apple-system, "Segoe UI", sans-serif; }
+  body { display: flex; flex-direction: column; }
+  nav { flex: none; padding: 8px 16px; }
+  nav a { color: #0a84ff; margin-right: 12px; }
+  main { flex: 1; min-height: 0; padding: 0 16px 16px; }
+  #root { width: 100%; height: 100%; display: flex; justify-content: center; }
+  @media (prefers-color-scheme: dark) { html, body { background: #111; color: #ccc; } }
+</style>
+</head>
+<body>
+<nav><a href="./">Client</a><a href="app/">App</a></nav>
+<main><div id="root"></div></main>
+
+<script src="vendor/react.production.min.js"></script>
+<script src="vendor/react-dom.production.min.js"></script>
+<script src="calc.js"></script>
+<script>
+  const q = new URLSearchParams(location.search);
+  const num = (k) => (q.get(k) ? Number(q.get(k)) : undefined);
+  const root = document.getElementById("root");
+  const reactRoot = ReactDOM.createRoot(root);
+  function render() {
+    reactRoot.render(React.createElement(CalcU1600, {
+      keyboard: true,
+      width: num("width") || Math.floor(root.clientWidth),
+      height: num("height") || Math.floor(root.clientHeight),
+      model: num("model"),
+      preset: q.get("preset") || undefined,
+    }));
+  }
+  new ResizeObserver(render).observe(root);
+</script>
+</body>
+</html>

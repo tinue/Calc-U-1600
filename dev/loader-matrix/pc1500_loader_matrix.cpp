@@ -91,7 +91,7 @@ bool applyPreset(PC1500Machine** out, std::unique_ptr<PC1500Machine>* holder, Se
                  const std::string& model, const std::string& card,
                  const std::vector<std::string>& extraKeys, const std::string& loaderFile,
                  PresetLoadResult* res) {
-    std::string yaml = "model: " + model + "\ninterface: CE-158\n";
+    std::string yaml = "format-version: 1\nmodel: " + model + "\ninterface: CE-158\n";
     if (!card.empty()) yaml += "slot-1: " + card + "\n";
     yaml += "keys:\n  - key: cl\n  - type: NEW0\n";
     for (const std::string& k : extraKeys) yaml += "  - type: " + k + "\n";

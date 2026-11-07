@@ -28,7 +28,9 @@
 # for these hosts. The loader declines any host not listed (spec
 # section 2) without second-guessing the list against pin tables.
 
+format-version: 1
 module-name: "CE-155"
+description: "8 KB static RAM"
 template: true   # read-only starting point; Name & Save copies it
 compatible-hosts: [PC-1500, PC-1500A, PC-1600-Slot-1]
 definition-terminology: PC-1500

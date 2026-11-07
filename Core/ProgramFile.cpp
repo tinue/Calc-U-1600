@@ -31,7 +31,30 @@ Kind kindOf(const char* token) {
     return Kind::Other;  // reserve, reserve-text, variables, variables-text, text
 }
 
+bool isTapeToken(const char* token) { return std::strncmp(token, "wav", 3) == 0; }
+
+bool decodeTapeFile(const std::vector<uint8_t>& bytes, size_t index, TapeFile* file) {
+    uint8_t* out = nullptr;
+    size_t outLen = 0;
+    SdeWavFile info{};
+    if (sde_wav_decode(bytes.data(), bytes.size(), index, &out, &outLen, &info) != SDE_OK) return false;
+    *file = {info.name, std::vector<uint8_t>(out, out + outLen)};
+    sde_buf_free(out, outLen);
+    return true;
+}
+
 }  // namespace
+
+std::vector<TapeFile> tapeFiles(const std::vector<uint8_t>& bytes, std::string* error) {
+    // Each call demodulates the whole tape, so decode until the first index
+    // past the end instead of counting first. With nothing to load, file 0's
+    // error says why (no tape, or where the first file is damaged).
+    std::vector<TapeFile> files;
+    TapeFile file;
+    while (decodeTapeFile(bytes, files.size(), &file)) files.push_back(std::move(file));
+    if (files.empty() && error) *error = sde_last_error();
+    return files;
+}
 
 ProgramFile classify(const std::vector<uint8_t>& bytes) {
     ProgramFile f;
@@ -41,6 +64,19 @@ ProgramFile classify(const std::vector<uint8_t>& bytes) {
         f.kind = Kind::Other;
         f.token = "unreadable";
         f.damaged = true;
+        return f;
+    }
+    if (isTapeToken(fi.kind)) {
+        // A cassette WAV: describe the first file on it as if it were that file.
+        TapeFile first;
+        if (decodeTapeFile(bytes, 0, &first)) {
+            f = classify(first.image);
+        } else {
+            f.kind = Kind::Other;
+            f.token = std::string("a cassette WAV with no file that can be read safely (") + sde_last_error() + ")";
+            f.damaged = true;
+        }
+        f.fromTape = true;
         return f;
     }
     f.kind = kindOf(fi.kind);

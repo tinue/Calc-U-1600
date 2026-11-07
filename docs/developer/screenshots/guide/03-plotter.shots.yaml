@@ -3,10 +3,17 @@ out: ../../../images/guide
 window: 1430x1280
 
 shots:
-  - name: 03-plotter-attached
+  - name: 03-paper
     preset: ../presets/pc1600-lissajou.pc1600
     steps:
-      - capture: { target: controlbar, file: 03-plotter-attached.png }
       - capture: { target: paper, file: 03-paper-panel.png }
       # What Copy on the paper panel puts on the clipboard.
       - capture: { target: plot, file: 03-paper-copy.png }
+
+  # Native menu bar menus (Screen Recording + Accessibility + Automation).
+  - name: 03-peripherals-menu
+    window: 1430x1000
+    preset: ../presets/pc1600-lissajou.pc1600
+    steps:
+      - menu: Machine > Peripherals
+    capture: { method: system, target: screen-region, file: 03-peripherals-menu.png, padding: 8 }

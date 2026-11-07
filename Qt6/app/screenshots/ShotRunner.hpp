@@ -1,4 +1,6 @@
 #pragma once
+#include <QElapsedTimer>
+#include <QList>
 #include <QObject>
 #include <QSize>
 #include <QString>
@@ -61,6 +63,26 @@ private:
     // Automation/Accessibility permission) -- see menuScriptError().
     QProcess* m_menuScript = nullptr;
     bool menuScriptError(QString* error);
+    // osascript gives no word on when the menu is up, and a fixed pause
+    // lost the race whenever System Events was slow: the capture missed
+    // the menu, the Escape went out before it opened, and the menu then
+    // stayed open, blocking the run. So the runner watches the menus
+    // themselves (QMenu::aboutToShow/-Hide, forwarded from the NSMenu
+    // delegate) and holds the next step until `menu:` has really opened
+    // the deepest level, or `close` really closed the top one.
+    enum class NativeMenuWait { None, Open, Close };
+    NativeMenuWait m_nativeMenuWait = NativeMenuWait::None;
+    QElapsedTimer m_nativeMenuWaitClock;
+    int m_nativeMenuWaitLine = 0;  // the `menu:` step, for its error
+    int m_nativeMenuCloseDepth = 0; // Escapes per (re)try
+    int m_nativeMenuCloseTries = 0;
+    bool m_nativeMenuShown = false; // deepest level has opened
+    bool m_nativeMenuOpen = false;  // top level is open
+    QList<QMetaObject::Connection> m_nativeMenuConnections;
+    // Called before each step while a wait is pending: true = go ahead,
+    // false = it has scheduled the next try itself.
+    bool nativeMenuSettled();
+    void sendNativeMenuEscapes(int count);
 
     const Shot& currentShot() const { return m_scenario.shots[m_shotOrder[m_shotPos]]; }
     void scheduleNext(int delayMs);

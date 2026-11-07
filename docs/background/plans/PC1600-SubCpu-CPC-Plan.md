@@ -1,5 +1,9 @@
 # PC-1600 sub-CPU, TC8576F CPC and RTC/wake-up: bring the emulation up to the new research
 
+**Status: implemented** (dev-0.6.0, Phases 0–5). What was left inert is tracked in
+TODO.md: F-pin tones, unnamed sub-CPU commands, the RS-232C/SIO connector mux, and
+the sub-CPU response-time re-fit.
+
 ## Context
 
 Two new documents in Sharp1500-1600-Ref (commits 72a1c13, 462de33, 2026-09-26):

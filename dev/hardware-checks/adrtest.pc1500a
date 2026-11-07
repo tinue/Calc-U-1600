@@ -13,6 +13,7 @@
 # PRINT PEEK(&7C03) for the independent cross-check) -- real hardware
 # outranks both the manual and every emulator, this project's own
 # included.
+format-version: 1
 model: PC-1500A
 
 keys:

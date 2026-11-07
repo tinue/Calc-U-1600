@@ -1,12 +1,10 @@
 #pragma once
 #include <QWidget>
 #include <QPixmap>
-#include <QRect>
 #include <QString>
-#include <vector>
 
 #include "MachineController.hpp"
-#include "keylayout/KeyLayoutTypes.hpp"
+#include "Shared/KeyLayout/FaceplateLayout.hpp"
 
 class LcdWidget;
 
@@ -47,13 +45,11 @@ protected:
 private:
     const KeyLayout::Layout* m_layout = nullptr;
     QPixmap m_pixmap;
-    QRect m_fittedRect; // current letterboxed art rect, widget-local coords
-    std::vector<QRect> m_keyRects; // parallel to m_layout->keys, widget-local
+    KeyLayout::FittedLayout m_fitted; // art, key and LCD rects for the current size, widget-local
     LcdWidget* m_lcd = nullptr;
     QString m_pressedKey;
-    int m_pressedIndex = -1; // index into m_keyRects/m_layout->keys, or -1; drives the press-highlight overlay
+    int m_pressedIndex = -1; // index into m_layout->keys, or -1; drives the press-highlight overlay
 
     void relayout();
     void pressIndex(int idx); // highlight + keyPressed() for m_layout->keys[idx]
-    int hitTest(const QPoint& pos) const; // index into m_layout->keys, or -1
 };

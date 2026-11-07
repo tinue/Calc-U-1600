@@ -46,9 +46,35 @@ bool PC1500Machine::attachCE150(const uint8_t* rom, size_t romSize) {
     std::lock_guard<std::mutex> lock(m_mutex);
     detachCE150Locked();
     card->reset();
+    card->connectRecorder(&m_tapeDeck);
     m_memory.systemBus().attach(card.get());
     m_ce150Card = std::move(card);
     return true;
+}
+
+bool PC1500Machine::tapePlay(const std::string& path, std::string& error) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.loadForPlay(path, error);
+}
+
+void PC1500Machine::tapeRecord(const std::string& path) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_tapeDeck.armRecord(path);
+}
+
+bool PC1500Machine::tapeEject(std::string* error) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.eject(error);
+}
+
+TapeDeck::Status PC1500Machine::tapeStatus() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.status();
+}
+
+std::string PC1500Machine::tapeTakeLastError() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.takeLastError();
 }
 
 void PC1500Machine::detachCE150() {
@@ -164,11 +190,11 @@ void PC1500Machine::advancePeripherals(uint32_t cycles) {
     // once per instruction, the same way LH5801's own internal timer
     // advances via tickTimer().
     m_memory.advanceRtc(cycles);
-    m_memory.advancePiezo(cycles); // buzzer time, same clock as the RTC
     advanceKeyQueue(cycles);
     // Per-step hook for an attached CE-150 (no-op today -- the plotter is
     // fully reactive; see Ce150Card::tick()).
     if (m_ce150Card) m_ce150Card->tick(cycles);
+    m_memory.advanceSerial(cycles); // SDO -> CMTOUT, the buzzer, and the cassette recorder's time
     m_ce158.tick(cycles); // the UART's own clock keeps running
 }
 

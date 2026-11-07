@@ -1,0 +1,31 @@
+# The presets the app bundles (Qt6 and the web client), in two lists:
+#
+#   defaults  -- offered in Settings ▸ Default presets (each under its model)
+#   examples  -- offered in File ▸ Examples, grouped by `group`
+#
+# A preset is in one list or the other, never both. Its name, description
+# and model come from the preset file itself (`preset-name:`,
+# `description:`, `model:`); every listed preset must have the first two.
+# The bundles take each listed file's whole folder, so a preset's own files
+# (`.bas`, `.bin`, cards) come along. Shared/PresetCatalog reads this file.
+
+defaults:
+  - file: startup/default-pc1500.pc1500
+  - file: startup/default-pc1500a.pc1500a
+  - file: startup/default-pc1600.pc1600
+
+examples:
+  - group: BASIC
+    file: basic/hanoi.pc1600
+  - group: Plotter
+    file: plotter/lissajou-1500.pc1500a
+  - group: Plotter
+    file: plotter/lissajou-1600.pc1600
+  - group: Plotter
+    file: plotter/globus.pc1600
+  - group: Plotter
+    file: plotter/biorhythmus_1600.pc1600
+  - group: Plotter
+    file: plotter/ascii.pc1600
+  - group: Machine code
+    file: machine-code/memtest_1500a.pc1500a

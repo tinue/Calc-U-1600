@@ -1,0 +1,22 @@
+# PC-1500 memory test. Loads at the start of general RAM and starts with:
+#  X=2 (for 2 passes)
+#  CALL &40C5,X
+# When finished, check X for the test result.
+
+format-version: 1
+model: PC-1500
+
+keys:
+  - key: cl
+  - type: NEW&417D
+  - key: mode
+
+program:
+  file: memtest_stock.bin
+  address: 0x40C5
+
+keys:
+  - type: X=2
+  - type: CALL&40C5,X
+  - type: X
+  - wait: 5

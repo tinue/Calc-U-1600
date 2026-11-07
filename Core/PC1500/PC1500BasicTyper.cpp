@@ -40,7 +40,7 @@ uint16_t readBE16(PC1500Machine& machine, uint16_t addr) {
 // moving, the line really is linked and the next line's keystrokes are safe
 // to send. Cheap for short lines (pointer settles almost immediately);
 // matters for long DATA lines, where the link lags the false idle by ~0.5s.
-void settleUntilProgramPtrStable(PC1500Machine& machine) {
+job::Task<void> settleUntilProgramPtrStable(PC1500Machine& machine) {
     constexpr int kStableFramesNeeded = 30;        // ~0.5s of no change
     constexpr uint64_t kCap = static_cast<uint64_t>(kCpuHz * 6); // ~6s emulated
 
@@ -48,7 +48,7 @@ void settleUntilProgramPtrStable(PC1500Machine& machine) {
     int stable = 0;
     uint16_t last = readBE16(machine, kProgramEndPtr);
     while (stable < kStableFramesNeeded && spent < kCap) {
-        spent += machine.runCycles(kCyclesPerFrame);
+        spent += co_await job::run(machine, kCyclesPerFrame);
         uint16_t now = readBE16(machine, kProgramEndPtr);
         if (now == last) stable++;
         else { stable = 0; last = now; }
@@ -76,7 +76,7 @@ void settleUntilProgramPtrStable(PC1500Machine& machine) {
 // never leaves the same $E2xx dispatch code the idle prompt uses, and a
 // long-spinning `CALL` into machine code -- both want an explicit `wait: N`
 // step in the preset. Returns the cycles consumed.
-uint64_t settleUntilIdle(PC1500Machine& machine, uint64_t maxCycles) {
+job::Task<uint64_t> settleUntilIdleJob(PC1500Machine& machine, uint64_t maxCycles) {
     constexpr int kWindowFrames = 4;               // frames per PC-range sample
     constexpr int kQuietWindowsNeeded = 3;         // consecutive quiet samples (~0.2s)
     constexpr uint16_t kMaxSpan = 0x300;           // "small window"
@@ -88,7 +88,7 @@ uint64_t settleUntilIdle(PC1500Machine& machine, uint64_t maxCycles) {
         uint16_t lo = 0xFFFF, hi = 0;
         const uint64_t edgesBefore = machine.buzzerEdgeCount();
         for (int i = 0; i < kWindowFrames; i++) {
-            spent += machine.runCycles(kCyclesPerFrame);
+            spent += co_await job::run(machine, kCyclesPerFrame);
             uint16_t pc = machine.debugPC();
             if (pc < lo) lo = pc;
             if (pc > hi) hi = pc;
@@ -101,10 +101,10 @@ uint64_t settleUntilIdle(PC1500Machine& machine, uint64_t maxCycles) {
         if (hi - lo < kMaxSpan && lo >= kIdleFloor && !beeping) quiet++;
         else quiet = 0;
     }
-    return spent;
+    co_return spent;
 }
 
-uint64_t waitUntilBasicIdle(PC1500Machine& machine, uint64_t maxCycles) {
+job::Task<uint64_t> waitUntilBasicIdleJob(PC1500Machine& machine, uint64_t maxCycles) {
     // "The program / plot has finished" == the interpreter is back in its
     // prompt command loop, which idles as a HLT-per-frame spin pinned to
     // ~$E2AA. Measured on A04: at the `>` prompt the end-of-frame PC is
@@ -123,46 +123,46 @@ uint64_t waitUntilBasicIdle(PC1500Machine& machine, uint64_t maxCycles) {
     uint64_t spent = 0;
     int inLoop = 0;
     while (inLoop < kFramesNeeded && spent < maxCycles) {
-        spent += machine.runCycles(kCyclesPerFrame);
+        spent += co_await job::run(machine, kCyclesPerFrame);
         if (pc1500AtBasicPrompt(machine)) inLoop++;
         else inLoop = 0;
     }
-    return spent;
+    co_return spent;
 }
 
-void tapKey(PC1500Machine& machine, const std::string& name) {
+job::Task<void> tapKeyJob(PC1500Machine& machine, std::string name) {
     machine.pressKey(name);
-    machine.runCycles(kCyclesPerFrame * kTapFrames);
+    co_await job::run(machine, kCyclesPerFrame * kTapFrames);
     machine.releaseKey(name);
-    machine.runCycles(kCyclesPerFrame * kIdleFrames);
+    co_await job::run(machine, kCyclesPerFrame * kIdleFrames);
 }
 
-uint64_t waitIdle(PC1500Machine& machine, uint64_t maxCycles) {
+job::Task<uint64_t> waitIdleJob(PC1500Machine& machine, uint64_t maxCycles) {
     uint64_t consumed = 0;
     while (machine.display().statusLine().isOn(StatusLine::Symbol::Busy) && consumed < maxCycles) {
-        consumed += machine.runCycles(kCyclesPerFrame);
+        consumed += co_await job::run(machine, kCyclesPerFrame);
     }
-    return consumed;
+    co_return consumed;
 }
 
-void runBootToPrompt(PC1500Machine& machine) {
+job::Task<void> runBootToPromptJob(PC1500Machine& machine) {
     // Generous margin past the ROM's own power-on RAM-check/boot sequence --
     // keys sent immediately after reset are missed entirely, since the ROM
     // doesn't start polling the keyboard until it settles into its post-boot
     // idle loop.
     constexpr uint64_t kBootSettleCycles = static_cast<uint64_t>(kCpuHz * 2);
     constexpr uint64_t kBootIdleCap = static_cast<uint64_t>(kCpuHz * 5);
-    machine.runCycles(kBootSettleCycles);
-    waitIdle(machine, kBootIdleCap);
+    co_await job::run(machine, kBootSettleCycles);
+    co_await waitIdleJob(machine, kBootIdleCap);
 }
 
-bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, std::string* error) {
+job::Task<bool> typeLineJob(PC1500Machine& machine, std::string line, bool pressEnter, std::string* error) {
     for (char c : line) {
         std::string name;
         bool needsShift = false;
         if (!pc1500ResolveTypedChar(c, &name, &needsShift)) {
             if (error) *error = "no keyboard mapping for character '" + std::string(1, c) + "'";
-            return false;
+            co_return false;
         }
         if (needsShift) {
             // SHIFT is a one-shot latch, tapped immediately before the
@@ -172,12 +172,12 @@ bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, 
             // error, e.g. typing `A$=` produced "@" instead of "=") the
             // latch is consumed by whatever key is pressed next and
             // doesn't need to be explicitly cleared afterward.
-            tapKey(machine, "shift");
+            co_await tapKeyJob(machine, "shift");
         }
-        tapKey(machine, name);
+        co_await tapKeyJob(machine, name);
     }
     if (pressEnter) {
-        tapKey(machine, "enter");
+        co_await tapKeyJob(machine, "enter");
         // The line editor tokenises/links WITHOUT asserting BUSY, and a
         // `RUN`/`CALL` that executes real BASIC doesn't assert it either, so
         // waitIdle() alone returns immediately and the next scripted step
@@ -185,14 +185,14 @@ bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, 
         // keystrokes -> rejected lines; RUN: the trailing steps run against
         // a still-executing program). Wait for the interpreter to be back
         // idling in its ROM command loop instead.
-        settleUntilIdle(machine, static_cast<uint64_t>(kCpuHz * 12));  // ~12 s emulated
+        co_await settleUntilIdleJob(machine, static_cast<uint64_t>(kCpuHz * 12));  // ~12 s emulated
     } else {
-        waitIdle(machine, static_cast<uint64_t>(kCpuHz * 2));
+        co_await waitIdleJob(machine, static_cast<uint64_t>(kCpuHz * 2));
     }
-    return true;
+    co_return true;
 }
 
-BasicTypeResult typeBasicProgramText(PC1500Machine& machine, const std::string& text) {
+job::Task<BasicTypeResult> typeBasicProgramTextJob(PC1500Machine& machine, std::string text) {
     BasicTypeResult result;
 
     std::istringstream lines(text);
@@ -206,9 +206,9 @@ BasicTypeResult typeBasicProgramText(PC1500Machine& machine, const std::string& 
             peek, readBE16(machine, kProgramStartPtr), readBE16(machine, kProgramEndPtr), line);
 
         std::string typeError;
-        if (!typeLine(machine, line, /*pressEnter=*/true, &typeError)) {
+        if (!co_await typeLineJob(machine, line, /*pressEnter=*/true, &typeError)) {
             result.error = typeError;
-            return result;
+            co_return result;
         }
 
         // typeLine()'s own settleUntilIdle() can return while the line editor
@@ -219,7 +219,7 @@ BasicTypeResult typeBasicProgramText(PC1500Machine& machine, const std::string& 
         // settle before judging acceptance or moving on. A same-length
         // replacement leaves the pointer put and only rewrites its line,
         // which LineStoreCheck also compares.
-        settleUntilProgramPtrStable(machine);
+        co_await settleUntilProgramPtrStable(machine);
         if (!before.changed(peek, readBE16(machine, kProgramEndPtr))) {
             result.rejectedLines.push_back(line);
         }
@@ -229,5 +229,31 @@ BasicTypeResult typeBasicProgramText(PC1500Machine& machine, const std::string& 
     if (!result.ok && result.error.empty()) {
         result.error = std::to_string(result.rejectedLines.size()) + " line(s) rejected by the ROM";
     }
-    return result;
+    co_return result;
+}
+
+// ---- Blocking forms ----
+
+uint64_t settleUntilIdle(PC1500Machine& machine, uint64_t maxCycles) {
+    return job::runToCompletion(settleUntilIdleJob(machine, maxCycles));
+}
+
+uint64_t waitUntilBasicIdle(PC1500Machine& machine, uint64_t maxCycles) {
+    return job::runToCompletion(waitUntilBasicIdleJob(machine, maxCycles));
+}
+
+void tapKey(PC1500Machine& machine, const std::string& name) { job::runToCompletion(tapKeyJob(machine, name)); }
+
+uint64_t waitIdle(PC1500Machine& machine, uint64_t maxCycles) {
+    return job::runToCompletion(waitIdleJob(machine, maxCycles));
+}
+
+void runBootToPrompt(PC1500Machine& machine) { job::runToCompletion(runBootToPromptJob(machine)); }
+
+bool typeLine(PC1500Machine& machine, const std::string& line, bool pressEnter, std::string* error) {
+    return job::runToCompletion(typeLineJob(machine, line, pressEnter, error));
+}
+
+BasicTypeResult typeBasicProgramText(PC1500Machine& machine, const std::string& text) {
+    return job::runToCompletion(typeBasicProgramTextJob(machine, text));
 }

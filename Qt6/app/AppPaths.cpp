@@ -1,16 +1,22 @@
 #include "AppPaths.hpp"
 #include "AppSettings.hpp"
-#include "Connector/FloppyImageFile.hpp"
-#include "Connector/MemoryCardCatalog.hpp"
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QFile>
-#include <QFileInfo>
-#include <QSaveFile>
 
 namespace AppPaths {
 
+namespace {
+
+// Where the bundled resources live -- *.card.yaml catalog AND ROM images
+// (disjoint filename extensions, one shared directory) -- resolved
+// relative to the running executable: macOS .app bundle's
+// Contents/Resources (via applicationDirPath()'s Contents/MacOS +
+// "../Resources"), or a "resources" folder next to the binary on
+// Windows/Linux (matching windeployqt's and AppImage's flat-next-to-binary
+// convention). Read-only bundled content -- never created if missing; a
+// missing/unreadable directory is tolerated by scanMemoryCardDirectory()/
+// BundledRomCatalog (empty catalogue / resolve failure).
 QString bundledResourcesDir() {
     const QString exeDir = QCoreApplication::applicationDirPath();
 #if defined(Q_OS_MACOS)
@@ -27,77 +33,21 @@ QString bundledResourcesDir() {
 #endif
 }
 
-namespace {
-QString& isolatedInstanceDir() {
-    static QString dir;
-    return dir;
-}
+QString q(const std::string& s) { return QString::fromStdString(s); }
 
-// `path` with the leading `dir` replaced by `shown`, or empty when `path`
-// isn't `dir` itself or inside it.
-QString replacePrefix(const QString& path, const QString& dir, const QString& shown) {
-    if (dir.isEmpty() || !path.startsWith(dir)) return QString();
-    if (path.size() > dir.size() && path.at(dir.size()) != QLatin1Char('/')) return QString();
-    return shown + path.mid(dir.size());
-}
 } // namespace
 
-QString defaultInstanceDir() {
-    const QString dir = isolatedInstanceDir().isEmpty() ? QDir::homePath() + QStringLiteral("/Calc-U-1600")
-                                                        : isolatedInstanceDir();
-    QDir().mkpath(dir);
-    return dir;
+shared::AppPaths& paths() {
+    static shared::AppPaths p(AppSettings::settings(),
+                              shared::HostDirs{QDir::homePath().toStdString(), bundledResourcesDir().toStdString(), {}});
+    return p;
 }
 
-void setIsolatedInstanceDir(const QString& dir) {
-    isolatedInstanceDir() = dir;
-}
-
-QString displayPath(const QString& path) {
-    QString shown = replacePrefix(path, defaultInstanceDir(), QStringLiteral("~/Calc-U-1600"));
-    if (shown.isEmpty()) shown = replacePrefix(path, QDir::homePath(), QStringLiteral("~"));
-    return shown.isEmpty() ? path : shown;
-}
-
-QString instanceDir() {
-    const QString override = AppSettings::instanceDirOverride();
-    if (!override.isEmpty()) {
-        QDir().mkpath(override);
-        return override;
-    }
-    return defaultInstanceDir();
-}
-
-QString sanitizedInstanceFileName(const QString& instanceName) {
-    return QString::fromStdString(namedFileName(instanceName.toStdString(), kCardFileSuffix));
-}
-
-QString instancePathFor(const QString& instanceName) {
-    return QDir(instanceDir()).filePath(sanitizedInstanceFileName(instanceName));
-}
-
-QString sanitizedFloppyFileName(const QString& diskName) {
-    return QString::fromStdString(namedFileName(diskName.toStdString(), kFloppyFileSuffix));
-}
-
-QString floppyInstancePathFor(const QString& diskName) {
-    return QDir(instanceDir()).filePath(sanitizedFloppyFileName(diskName));
-}
-
-bool isUnderDir(const QString& path, const QString& dir) {
-    if (path.isEmpty() || dir.isEmpty()) return false;
-    const QString a = QFileInfo(path).canonicalFilePath();
-    const QString b = QFileInfo(dir).canonicalFilePath();
-    if (a.isEmpty() || b.isEmpty()) return false;
-    // Match whole path components: "<dir>-backup/x" is not under "<dir>".
-    return a == b || a.startsWith(b.endsWith(QLatin1Char('/')) ? b : b + QLatin1Char('/'));
-}
-
-bool atomicWriteFile(const QString& path, const std::string& text) {
-    QSaveFile f(path);
-    if (!f.open(QIODevice::WriteOnly)) return false;
-    f.write(text.data(), static_cast<qint64>(text.size()));
-    return f.commit();
-}
-
+QString defaultInstanceDir() { return q(paths().defaultInstanceDir()); }
+void setIsolatedInstanceDir(const QString& dir) { paths().setIsolatedInstanceDir(dir.toStdString()); }
+QString displayPath(const QString& path) { return q(paths().displayPath(path.toStdString())); }
+QString instanceDir() { return q(paths().instanceDir()); }
+QString tapeDir() { return q(paths().tapeDir()); }
+QString traceDir() { return q(paths().traceDir()); }
+QString serialLinkDir() { return q(paths().serialLinkDir()); }
 }  // namespace AppPaths

@@ -2,6 +2,9 @@
 # "PC-1500A default preset" to have it applied whenever the PC-1500A is
 # selected: CE-150 plotter + an unnamed CE-163F in the expansion slot.
 
+format-version: 1
+preset-name: CE-150 + CE-163F
+description: PC-1500A with the CE-150 plotter and a CE-163F
 model: PC-1500A
 
 plotter: CE-150

@@ -11,3 +11,28 @@ shots:
   - name: 04-hanoi-running
     preset: ../presets/pc1600-hanoi-run.pc1600
     capture: { target: lcd, file: 04-hanoi-running.png }
+
+  # Cassette: Save puts a new tape in, CSAVE records onto it (saved when the
+  # motor stops); then the tape picked from the list plays into CLOAD. The
+  # shot run starts with an empty tape folder, so it records first.
+  - name: 04-tape
+    window: 1760x1000   # the Tape group widens the PC-1600 control bar
+    preset: ../presets/pc1600-tape.pc1600
+    steps:
+      - click: controlbar.tape.save
+      - enter-text: Lissajous
+      - capture: { target: dialog, file: 04-tape-save.png }
+      - accept
+      - type: CSAVE "LISSAJOU"
+      - run: 12
+      - capture: { target: controlbar, file: 04-tape-recording.png, padding: 4 }
+      - run: 40
+      - key: mode
+      - type: NEW0
+      - key: mode
+      - select: controlbar.tape = Lissajous
+      - type: CLOAD
+      - run: 5
+      - capture: { target: controlbar, file: 04-tape-loading.png, padding: 4 }
+      - run: 25
+    capture: { target: lcd, file: 04-tape-loaded.png }

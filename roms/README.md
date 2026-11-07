@@ -4,11 +4,11 @@ ROMs are not in this repository (see `.gitignore`) — they're Sharp
 Corporation's copyrighted firmware. Run
 [`tools/fetch_roms.sh`](../tools/fetch_roms.sh) to (re)download all 21
 files with a known public source into this directory before building; it
-verifies each against the md5 in the table below.
+verifies each against the md5 listed in the script.
 
 | File | Source | Model / role | Confidence |
 |---|---|---|---|
-| `PC-1500_A04.ROM` | [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (`dumps/a04/PC-1500-A04.BIN`), originally [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | Runs on **both** PC-1500 and PC-1500A — originally developed for the PC-1500A's release, later also used in later-production PC-1500 (non-A) units. Sole/default ROM for the PC-1500A-only build; also one of three options in the PC-1500 ROM selector. | Confirmed |
+| `PC-1500_A04.ROM` | [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (`dumps/a04/PC-1500-A04.BIN`), originally [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | Runs on **both** PC-1500 and PC-1500A — originally developed for the PC-1500A's release, later also used in later-production PC-1500 (non-A) units. Sole ROM of the PC-1500A; also one of three options in the PC-1500 ROM selector (Machine ▸ ROM Revision). | Confirmed |
 | `PC-1500_A01.ROM` | [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (`dumps/a01/PC-1500-A01.BIN`), originally [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | PC-1500 (non-A) **only** — must not be offered for PC-1500A. | Confirmed |
 | `PC-1500_A03.ROM` | [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (`dumps/a03/PC-1500-A03.BIN`), originally [Jeff-Birt/Sharp_PC-1500_ROM_Disassembly](https://github.com/Jeff-Birt/Sharp_PC-1500_ROM_Disassembly) (`Original_ROMs/`) | PC-1500 (non-A) **only**, same as A01. | Confirmed |
 | `CE-150.ROM` | [tinue/PC-1500-ROM](https://github.com/tinue/PC-1500-ROM) (`dumps/ce150/CE-150.BIN`) | CE-150 printer/plotter/cassette-interface firmware, 8192 bytes, md5 `eb9aa5156c6849890b137799efc50a4b`. Runs on the host LH5801 from guest 0xA000–0xBFFF (its pc1500 and pc1500A copies are byte-identical). | Confirmed, dumped from real hardware |

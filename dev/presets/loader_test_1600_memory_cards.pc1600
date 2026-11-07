@@ -2,6 +2,7 @@
 # slots (CE-1600M, and the CE-1601M formatted and split as a RAM disk). It
 # loads the globe program (examples/plotter/globus.bas) and plots it on the
 # CE-1600P.
+format-version: 1
 model: PC-1600
 plotter: CE-1600P
 

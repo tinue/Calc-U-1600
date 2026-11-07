@@ -8,8 +8,9 @@
 > - Both CLIs got `--lcd-png`, used to compare every preset's final LCD
 >   before and after. That found two presets that were already broken:
 >   `lissajou-ce150-1600.bas` used `LLINE` in MODE 1 (fixed: `LINE`), and
->   `flashtest_ce163f.pc1500a` typed its lines in RUN mode (fixed), but its
->   program still stops with ERROR 1 IN 10 (TODO.md).
+>   `flashtest_ce163f.pc1500a` typed its lines in RUN mode (fixed); its
+>   program then stopped with ERROR 1 IN 10, fixed later in f89fa8e
+>   (direct-mode steps).
 > - The DiskWorks templates were regenerated in a scratch copy; only their
 >   time stamps differed, so the committed ones stay.
 

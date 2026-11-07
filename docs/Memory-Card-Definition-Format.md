@@ -29,7 +29,9 @@ the same directory.
 
 | Key | Required | Value |
 |---|---|---|
+| `format-version` | yes | Integer; this document is version **1**. |
 | `module-name` | yes | Short identifier for the module (e.g. `CE-155`, `CE-1600M`). Shown verbatim in the GUI's control-bar module picker, and the key a preset's `slot-N: <module-name>` resolves against (§8). Unique across the module directory. |
+| `description` | no | One line about the module (e.g. `"8 KB static RAM"`), the picker's tooltip for it. A saved instance keeps its template's. |
 | `compatible-hosts` | yes | List, non-empty, drawn from `PC-1500`, `PC-1500A`, `PC-1600-Slot-1`, `PC-1600-Slot-2`. The loader's **only** compatibility check (spec §1): a host not on this list is declined; a host on it gets no further test. |
 | `definition-terminology` | yes | Exactly one of the same four identifiers. Names the pin-name vocabulary every `chip-select` / `signal` / `line` field in the file is resolved against, once, at parse time (spec §1). Must appear in `compatible-hosts`. |
 | `regions` | yes | List of one or more region maps (§2). |
@@ -39,6 +41,12 @@ the same directory.
 
 The reset-on-load behaviour (spec §2, last bullet) is a loader invariant,
 not a field — no key can opt out of it.
+
+**Versioning.** A reader rejects a file without `format-version`, or with
+a version it does not know, rather than guess; the version is checked
+before the other keys. Any change a version-1 reader would misread
+requires a new version number. A saved instance keeps the line of the file
+it was saved from.
 
 ### Terminology → signal names
 
@@ -56,8 +64,9 @@ This table is the source-of-truth pin dictionary from
 `Core/Connector/ExpansionCard.hpp` (the `pin[]` role comment): each name
 resolves, once at parse time, to one physical 40-pin contact
 (`Y0`/`RAM2`/`RAM1` → pin 4, `S4`/`PVOUT` → pin 5, `S1`/`S3`/`K0` → pin
-16, `S2`/`S4`/`K1` → pin 17, `S3`/`S5`/`K2` → pin 18, `Y2`/`PT` → pin 19,
-`PU` → pin 3, `PV` → pin 2).
+16, `S2`/`S4`/`K1` → pin 17, `S3`/`S5`/`K2` → pin 18, `Y2`/`PT` → pin 19;
+`PU` → pin 2 and `PV` → pin 3 on the PC-1500/1500A, as measured on a real
+unit (the TRM prints them swapped), `PU` → pin 3 on the PC-1600 slots).
 
 Whether a name resolves to a live pin or a dormant one on a *particular*
 compatible host is not checked here — that is the author's dormant
@@ -241,7 +250,8 @@ range powers up as its `power-up-fill` byte). There is no
 content-kind restriction: a Regular range takes `initial-content` exactly
 like a Flash range does — CE-163F's RAM banks and Flash banks are both
 populated this way when dumped and pasted back in (§9). Never an external
-runtime file.
+file: a ROM under development comes in through the preset instead (§8,
+`slot-N-rom:`).
 
 ```yaml
 initial-content:
@@ -250,14 +260,14 @@ initial-content:
   blocks:
     - bank: 0                # omit entirely for an unbanked region
       offset: 0x0000         # start offset within the region / bank slice
-      encoding: hex          # hex | base64 | addressed-hex | file
+      encoding: hex          # hex | base64 | addressed-hex
       bytes: |
         43 16 00 00 ...       # whitespace/newlines ignored for hex
     - bank: 1
       offset: 0x0000
-      encoding: file
-      path: ce1620m-bank1.bin   # sidecar, resolved relative to this file and
-                                # folded inline at parse time (no run-time lookup)
+      encoding: addressed-hex
+      bytes: |
+        $0000: FF...          # the whole bank slice, one byte value
 ```
 
 - **Multi-bank** content is just multiple `blocks` with different `bank:`
@@ -272,8 +282,8 @@ initial-content:
 ### `encoding: addressed-hex`
 
 A project-specific dialect designed so a memory dump can be pasted
-straight into a `bytes: |` block with no reformatting — the "dump whole
-card, ready to paste" debug feature (§9) emits exactly this. Lines are
+straight into a `bytes: |` block with no reformatting — the Inspector's
+**Card YAML** button (User Guide §9.2) emits exactly this. Lines are
 either an explicit row or a same-byte run:
 
 ```yaml
@@ -292,19 +302,18 @@ bytes: |
   including) the next line's address" — or up to the end of the block's
   span for the last line. This is exact, not a guess: because lines must
   partition the block's address range with no gap or overlap, a run's
-  length is always computable from the surrounding addresses, unlike the
-  existing elided `debugDumpMemRegion` console dump (which drops a run
-  with no record of which byte value it was).
+  length is always computable from the surrounding addresses, unlike an
+  elided hex dump (which drops a run with no record of which byte value it
+  was).
 - A run only ever stands for one uniform byte value — content that
   alternates between two fill values (e.g. `00`/`FF` rows) is written out
   in full, the same as an ordinary row.
 
 ### Implemented encodings
 
-`addressed-hex`, `hex`, and `base64` are implemented
-(`Core/Connector/MemoryCardDefinition.hpp`). `encoding: file` is parsed
-but not yet supported — it would need the definition file's own directory
-threaded through the loader, which nothing else currently needs.
+`addressed-hex`, `hex`, and `base64`
+(`Core/Connector/MemoryCardDefinition.hpp`); any other encoding is an
+error.
 
 ---
 
@@ -324,7 +333,7 @@ threaded through the loader, which nothing else currently needs.
 
 ---
 
-## 8. Loading a card — the `slot-N:` and `slot-N-file:` preset keys
+## 8. Loading a card — the `slot-N:`, `slot-N-file:` and `slot-N-rom:` preset keys
 
 A definition is plugged in from a preset, per slot, by name or by file —
 exactly one of the two per slot:
@@ -366,6 +375,27 @@ slot-1-file: ../cards/prototype.card.yaml
 - `slot-N-file: <path>` names a file directly and never consults the
   module directory.
 
+**A ROM from a file — `slot-N-rom:`.** While a ROM module is being
+developed, its bytes come from the build, not from the card file:
+
+```yaml
+slot-1-file: module.card.yaml   # decode, banking, the ROM's size
+slot-1-rom: build/module.bin    # what the ROM holds
+```
+
+The card file stays a complete definition: its ROM region carries a
+placeholder (`$0000: FF...`, §6) and loads on its own. `slot-N-rom:`
+replaces those bytes, and only those:
+
+- it needs a module in the same slot (`slot-N:` or `slot-N-file:`);
+- the module must be a ROM module of one region (`content: rom`, no
+  `by-bank:` split with RAM or Flash);
+- the file must be exactly the region's size, or the preset fails;
+- the file is read each time the preset is applied, so a clean start in
+  the debugger picks up a rebuilt ROM (docs/Debugger.md);
+- the app never saves such a card: no autosave, no Name & Save, and a
+  `saveas:` of that slot is refused (the card file doesn't hold that ROM).
+
 **Templates and instances.** What happens to a loaded card's file is decided
 by the file itself, not by where it lives:
 
@@ -401,10 +431,8 @@ supports:
   range ignores every write — guest CPU, host poke and the debug/loader
   backing-store path alike — and its `initial-content` must cover every
   byte (`fill:` doesn't count). `initial-content` is supported via
-  `encoding: addressed-hex | hex | base64 | file` (§6). A `file` block's
-  `path` is relative to the definition's own file and is read each time
-  the definition is loaded, so a preset's clean start picks up a rebuilt
-  ROM (docs/Debugger.md).
+  `encoding: addressed-hex | hex | base64` (§6); a preset's `slot-N-rom:`
+  replaces a ROM module's bytes (§8).
 - **Banking:** Unbanked, and **trigger-based** Banked (both a memory-write
   strobe `{ pin: N }` sampling the address bus and an `{ io-port: 0xNN }`
   write sampling the data bus). `line-based` is a hard load error.

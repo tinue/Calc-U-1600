@@ -133,32 +133,32 @@ public:
     using PresetMachineBase::PresetMachineBase;
 
     uint32_t cyclesPerSecond() const override { return kTStateHz; }
-    uint64_t waitUntilBasicIdle(uint64_t maxTStates) override {
-        return ::waitUntilBasicIdle(m_machine, maxTStates);
+    job::Task<uint64_t> waitUntilBasicIdle(uint64_t maxTStates) override {
+        co_return co_await waitUntilBasicIdleJob(m_machine, maxTStates);
     }
     std::string stepTag() override { return ::stepTag(m_machine); }
 
     // `break`/`on` (the ON key) or a single named PC-1600 key
     // (PC1600Keyboard::keyFromName).
-    bool key(const std::string& name, std::string* error) override {
+    job::Task<bool> key(std::string name, std::string* error) override {
         // Same gap as between typed lines: after a prior line's ENTER the ROM
         // is out of its key-scan loop for a bit. No-op without a plotter.
-        waitForKeyboardScanLoop(m_machine);
+        co_await waitForKeyboardScanLoopJob(m_machine);
         if (name == "break" || name == "on") {
-            presetTapOn(m_machine, kHoldTStates);
-            return true;
+            co_await presetTapOn(m_machine, kHoldTStates);
+            co_return true;
         }
         if (PC1600Keyboard::keyFromName(name) == PC1600Keyboard::Key::Unknown) {
             *error = "key: '" + name + "' is not a known PC-1600 key";
-            return false;
+            co_return false;
         }
-        tapKey(m_machine, name);
-        return true;
+        co_await tapKeyJob(m_machine, name);
+        co_return true;
     }
     // Case-sensitive; lowercase and the shifted punctuation / digit-row
     // symbols go via a SHIFT-tap (see PC1600BasicTyper::typeLine).
-    bool typeLine(const std::string& line, std::string* error) override {
-        return ::typeLine(m_machine, line, /*pressEnter=*/true, error);
+    job::Task<bool> typeLine(std::string line, std::string* error) override {
+        co_return co_await typeLineJob(m_machine, line, /*pressEnter=*/true, error);
     }
 
     // The graphics area (no status strip), same image as the GUI's Copy Screen.
@@ -167,8 +167,8 @@ public:
     }
     LcdText lcdText() override { return pc1600LcdText(m_machine); }
 
-    BasicTypeResult typeBasicProgram(const std::string& text) override {
-        return typeBasicProgramText(m_machine, text);
+    job::Task<BasicTypeResult> typeBasicProgram(std::string text) override {
+        co_return co_await typeBasicProgramTextJob(m_machine, text);
     }
     BasicLoadResult loadBasicFile(const std::string& path) override {
         return loadBasicProgramFile(m_machine, path);
@@ -188,24 +188,22 @@ public:
 
 } // namespace
 
-PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& preset,
-                                   const PresetLogFn& log, const std::string& traceDir,
-                                   const std::string& moduleDir,
-                                   const PresetBootedFn& onBooted,
-                                   const std::vector<std::string>& romDirs,
-                                   const std::vector<std::string>& extraModuleDirs,
-                                   const PresetArmedFn& onArmed,
-                                   const PresetSaveAsFn& onSaveAs) {
+job::Task<PresetLoadResult> applyPC1600PresetJob(PC1600Machine& machine, PresetFile preset, PresetLogFn log,
+                                                 std::string traceDir, std::string moduleDir, PresetBootedFn onBooted,
+                                                 std::vector<std::string> romDirs,
+                                                 std::vector<std::string> extraModuleDirs, PresetArmedFn onArmed,
+                                                 PresetSaveAsFn onSaveAs) {
     PresetLoadResult result;
     PC1600PresetMachine adapter(machine);
     const std::vector<std::string> moduleDirs = presetModuleDirs(moduleDir, extraModuleDirs);
 
-    auto plug = [&](const std::string& specFile, const std::string& specName, int slot) -> bool {
+    auto plug = [&](const std::string& specFile, const std::string& specName, const std::string& romFile,
+                    int slot) -> bool {
         if (specFile.empty() && specName.empty()) return true;  // empty slot
         CardHost host = (slot == 1) ? CardHost::PC1600Slot1 : CardHost::PC1600Slot2;
         std::string err, specPath;
         std::unique_ptr<ExpansionCard> card =
-            makePresetModuleCard(specFile, specName, moduleDirs, host, &specPath, &err);
+            makePresetModuleCard(specFile, specName, romFile, moduleDirs, host, &specPath, &err);
         if (!card) {
             result.error = "slot-" + std::to_string(slot) + ": " + err;
             return false;
@@ -214,9 +212,11 @@ PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& pre
         if (slot == 1) {
             machine.attachSlot1Card(std::move(card));
             result.slot1ResolvedPath = specPath;
+            result.slot1RomFile = romFile;
         } else {
             machine.attachSlot2Card(std::move(card));
             result.slot2ResolvedPath = specPath;
+            result.slot2RomFile = romFile;
         }
         if (log) log("slot " + std::to_string(slot) + ": " + label + " attached");
         return true;
@@ -227,8 +227,8 @@ PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& pre
     // connect, power on) the plotter and the CE-158 next to (or instead of)
     // the CE-150; the parser already refused the CE-158 with the CE-1600P.
     // Stops at the first failure.
-    const bool armed = plug(preset.slot1ModuleSpecFile, preset.slot1ModuleSpecName, 1) &&
-                       plug(preset.slot2ModuleSpecFile, preset.slot2ModuleSpecName, 2) &&
+    const bool armed = plug(preset.slot1ModuleSpecFile, preset.slot1ModuleSpecName, preset.slot1RomFile, 1) &&
+                       plug(preset.slot2ModuleSpecFile, preset.slot2ModuleSpecName, preset.slot2RomFile, 2) &&
                        attachPresetPlotter(machine, preset.plotter, preset.ce1600pRomVariant, preset.floppy,
                                            preset.floppyFile, preset.floppySide, romDirs, moduleDirs, log, &result) &&
                        attachPresetInterface(machine, preset.interfaceName, romDirs, log, &result) &&
@@ -240,10 +240,10 @@ PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& pre
     // boot below makes it start running. Fired on a failed arming too, so
     // the caller always sees what did get attached.
     if (onArmed) onArmed(result);
-    if (!armed) return result;
+    if (!armed) co_return result;
     if (preset.armOnly) {
         result.ok = true;
-        return result;
+        co_return result;
     }
 
     // Full cold boot: the slot config just changed, so the IOCS work area
@@ -252,10 +252,19 @@ PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& pre
     // Includes the plotter's power-on init -- `waitForKeyboardScanLoop`
     // also guards every typed line (PC1600BasicTyper) and every `key:` step
     // (PC1600PresetMachine::key) for the same gap that reopens after each line's ENTER.
-    runBootToPrompt(machine);
+    co_await runBootToPromptJob(machine);
     if (log) log("reset + boot settle done" + adapter.stepTag());
     if (onBooted) onBooted();
 
-    runPresetSections(adapter, preset, &result, log, traceDir, onSaveAs);
-    return result;
+    co_await runPresetSectionsJob(adapter, preset, &result, log, traceDir, onSaveAs);
+    co_return result;
+}
+
+PresetLoadResult applyPC1600Preset(PC1600Machine& machine, const PresetFile& preset, const PresetLogFn& log,
+                                   const std::string& traceDir, const std::string& moduleDir,
+                                   const PresetBootedFn& onBooted, const std::vector<std::string>& romDirs,
+                                   const std::vector<std::string>& extraModuleDirs, const PresetArmedFn& onArmed,
+                                   const PresetSaveAsFn& onSaveAs) {
+    return job::runToCompletion(applyPC1600PresetJob(machine, preset, log, traceDir, moduleDir, onBooted, romDirs,
+                                                     extraModuleDirs, onArmed, onSaveAs));
 }

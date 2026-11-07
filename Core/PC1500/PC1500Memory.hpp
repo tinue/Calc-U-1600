@@ -5,6 +5,7 @@
 
 #include "../Audio/PiezoSampler.hpp"
 #include "../CPU/LH5801/LH5801.hpp"
+#include "../CPU/LH5811Serial.hpp"
 #include "../Connector/ExpansionConnector.hpp"
 #include "../Connector/SystemBus.hpp"
 #include "PC1500Keyboard.hpp"
@@ -37,22 +38,28 @@
 // ME1 (the LH5801's second bank, accessed via `#(addr)` forms) hosts the
 // LH5811 I/O-port controller, confirmed by live hardware testing on a
 // real PC-1500. The chip is selected by
-// any ME1 address with bits 12-13 both set (confirmed on real hardware
-// that bits 4-11 and 14-15 don't matter — 0xF000-0xF00F is just the
-// conventional address the ROM uses, not the only one that works); the
-// low 4 bits select one of its registers (RS0-3 = AD0-3). Only the
+// ME1 0xF000-0xFFFF: 1Y3 (A14/A15, C000-FFFF, TRM chip-select circuit)
+// with A12/A13 set; bits 4-11 don't matter (0xF000-0xF00F is just the
+// conventional address the ROM uses). A real PC-1500A reads 255 at ME1
+// 700CH and 8 at F00CH (2026-10-10), so the A14/A15 half matters. The
+// low 4 bits select one of its registers (RS0-3 = AD0-3); 0-3 have no
+// register (the first is F004H, the divider reset) and read open bus
+// (PEEK# &F002 = 255). Only the
 // registers a stock PC-1500 actually needs are modeled — DDA/OPA (drives
 // the keyboard's column strobe; keyboard *rows* are read directly off the
 // CPU's IN0-IN7 pins via ITA, bypassing this chip entirely) and DDB/OPB
-// (PB3's "must read high" ROM dispatch gotcha, PB7's ON-key readback), and
+// (PB3's "must read high" ROM dispatch gotcha, PB7's ON-key readback, PB2
+// the cassette input), and
 // the uPD1990AC real-time clock bit-banged via OPC/PC0-PC5 (see
 // Upd1990ac.hpp) — WAIT/BEEP's timing depends on its TP output, latched
 // into IF bit 1 (0xB). The buzzer is PC6 (OPC bit 6): the ROM's BEEP loop
 // (A04 E655ff) toggles it directly, and every write is forwarded to
 // m_piezo (see PiezoSampler.hpp) so the sound comes from that square wave
-// itself. Serial transfer is out of scope. Any ME1 address outside the
-// I/O-chip's decode window mirrors ME0: nothing else is documented as
-// living there.
+// itself. The serial block (divider, serial clock, F-register modulation,
+// transmitter) is the cassette path -- see LH5811Serial.hpp; serial
+// receive is out of scope. An ME1 address outside the I/O-chip's decode
+// window that no card claims is open bus (FFH): the RAMs, the display RAM
+// and the ROM decode ME0 only, as a real PC-1500A shows (PEEK# reads 255).
 class PC1500Memory : public LH5801Bus {
 public:
     explicit PC1500Memory(PC1500Variant variant = PC1500Variant::PC1500A);
@@ -140,10 +147,21 @@ public:
     /// time.
     void advanceRtc(uint32_t cycles) { m_rtc.advance(cycles); }
 
-    /// The buzzer line (PC6) as PCM -- advanced alongside the RTC, i.e.
-    /// once per instruction (and per halted/off tick) by PC1500Machine.
-    void advancePiezo(uint32_t cycles) { m_piezo.advance(cycles); }
     PiezoSampler& piezo() { return m_piezo; }
+
+    /// The LH5811's serial block (divider, serial clock, SDO), the buzzer
+    /// and the 60-pin cards' cassette recorder, advanced together once per
+    /// instruction (and per halted/off tick) by PC1500Machine. SDO is the
+    /// cassette-write line CMTOUT; it and the buzzer get every SDO edge at
+    /// its exact cycle.
+    void advanceSerial(uint32_t cycles) {
+        m_serial.advance(cycles, [this](uint32_t n, bool sdo) {
+            m_systemBus.setCmtOut(sdo);
+            updateBuzzerLine(sdo);
+            m_piezo.advance(n);
+            m_systemBus.advanceCassette(n);
+        });
+    }
 
     /// Seed the uPD1990AC's calendar from the host clock (see
     /// PC1500Machine::seedClock). month is 1-12, dow 0-6 (Sunday=0), the
@@ -171,7 +189,9 @@ public:
     // open bus. See Core/Connector/ExpansionConnector.hpp and SystemBus.hpp
     // for what these model; PC1500Machine forwards its accessors here.
     ExpansionConnector& expansionConnector() { return m_expansionConnector; }
+    const ExpansionConnector& expansionConnector() const { return m_expansionConnector; }
     SystemBus&          systemBus() { return m_systemBus; }
+    const SystemBus&    systemBus() const { return m_systemBus; }
 
     /// Live LH5801 PU/PV flip-flop state, pushed once per instruction by
     /// PC1500Machine::step()/runCycles() -- PC1500Memory has no CPU
@@ -181,6 +201,8 @@ public:
     /// SPV/RPV) never touch the bus themselves, so updating once per
     /// instruction (rather than mid-instruction) is sufficient.
     void updatePUPV(bool pu, bool pv) { m_pu = pu; m_pv = pv; }
+    bool pu() const { return m_pu; }
+    bool pv() const { return m_pv; }
 
 private:
     static constexpr uint16_t kUserRamBase = 0x4000;
@@ -243,17 +265,28 @@ private:
                         // (which looks like the "obvious" flag-register convention)
                         // is actually what breaks BREAK.
     Upd1990ac m_rtc;
-    PiezoSampler m_piezo{static_cast<double>(kPC1500CpuHz), PiezoSampler::Transducer::PC1500}; // LH5801 clock; buzzer driven from OPC bit 6 (PC6)
+    PiezoSampler m_piezo{static_cast<double>(kPC1500CpuHz), PiezoSampler::Transducer::PC1500}; // LH5801 clock; see updateBuzzerLine()
+    // The buzzer's drive gate (PC-1500 Service Manual p.16): a NAND of SD0
+    // (CMT OUT) and the wired-AND of PC6 and PB2 (CMT IN, through diodes,
+    // pulled up). The piezo sounds when any of the three toggles while the
+    // other two are high: PC6 for BEEP, SDO for CSAVE, CMT IN for CLOAD --
+    // a real unit is audible on both. CMT IN counts as high (the pull-up)
+    // while no tape interface drives it.
+    void updateBuzzerLine(bool sdo) {
+        m_piezo.setLevel(!(sdo && (m_opc & 0x40) != 0 && m_systemBus.cmtIn(true)));
+    }
 
-    // F/G/MSK (registers 0x7,0x9,0xA) and the two unused register-select
-    // codes (0x0-0x3): stored as plain read/write bytes, defaulting to
-    // 0x00. This does NOT model the real hardware behind these registers
-    // (serial transfer, and MSK's real interrupt-masking effect, are out
-    // of scope — see this file's top comment) -- but a real ROM both
-    // writes AND reads some of them (e.g. it zeroes MSK during boot), so
-    // storing what's written and echoing it back is a strictly more
-    // faithful default than a hardcoded constant that ignores writes
-    // entirely.
+    // The serial block behind registers 4 (divider reset), 6 (L), 7 (F)
+    // and 9 (G), plus MSK's CL1 bit and IF's TD bit -- the cassette path.
+    // φOS is the CPU clock.
+    LH5811Serial m_serial{kPC1500CpuHz, kPC1500CpuHz};
+
+    // MSK (register 0xA) and the unused register-select codes (0x0-0x3,
+    // 0x5 = U): stored as plain read/write bytes, defaulting to 0x00.
+    // MSK's interrupt-masking effect isn't modelled -- but a real ROM both
+    // writes AND reads it (e.g. it zeroes MSK during boot), so storing
+    // what's written and echoing it back is a strictly more faithful
+    // default than a hardcoded constant that ignores writes entirely.
     std::array<uint8_t, 16> m_ioScratchRegs{};
 
     // Expansion connectors -- see expansionConnector()/systemBus() above.
@@ -261,13 +294,28 @@ private:
     SystemBus          m_systemBus;
     bool m_pu{false};
     bool m_pv{false};
+    /// The 60-pin contacts of an LH5801 cycle (PC1500SignalDecode::systemBusPins).
+    SystemBusPins busPins(uint16_t addr, bool forWrite, bool me1) const {
+        return PC1500SignalDecode::systemBusPins(addr, forWrite, me1, m_pu, m_pv);
+    }
+    /// Offers a cycle to the 60-pin cards; the contacts are built only when
+    /// a card is plugged in (every ME1 access comes through here).
+    bool busRead(uint16_t addr, bool me1, uint8_t& value) const {
+        return !m_systemBus.empty() && m_systemBus.read(busPins(addr, /*forWrite=*/false, me1), value);
+    }
+    WriteResult busWrite(uint16_t addr, bool me1, uint8_t value) {
+        if (m_systemBus.empty()) return WriteResult::ignored();
+        return m_systemBus.write(busPins(addr, /*forWrite=*/true, me1), value);
+    }
 
     // True if any card on either connector is pulling INHIBIT low --
     // suppresses the system ROM (see resolve()'s ROM branch). With nothing
     // attached, always false (today's unconditional ROM behavior).
     bool inhibitAsserted() const;
 
-    static bool isIoChipAddress(uint16_t addr) { return (addr & 0x3000) == 0x3000; }
+    static bool isIoChipAddress(uint16_t addr) { return (addr & 0xF000) == 0xF000; }
+    /// Register slots 0-3 of the LH5811: no register there.
+    static bool isNoRegister(uint16_t addr) { return (addr & 0xF) < 4; }
 
     // Single source of truth for the address decode, shared by
     // readME0/writeME0/peek/poke. Returns nullptr for an open-bus address,

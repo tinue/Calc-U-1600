@@ -19,6 +19,7 @@ DebugController::DebugController(MachineController* machines, QObject* parent)
     connect(m_server, &DapServer::clientConnected, this, &DebugController::onClientConnected);
     connect(m_server, &DapServer::clientDisconnected, this, &DebugController::onClientDisconnected);
     connect(m_server, &DapServer::messageReceived, this, &DebugController::dispatch);
+    connect(m_machines, &MachineController::appBusyChanged, this, &DebugController::setAppBusy);
 }
 
 void DebugController::dispatch(const QJsonObject& message) {
@@ -41,7 +42,7 @@ void DebugController::drainQueue() {
     finishTeardown();
 }
 
-bool DebugController::appBusy() const { return m_sync && m_sync->busy(); }
+bool DebugController::appBusy() const { return m_machines->app().busy(); }
 
 void DebugController::setAppBusy(bool busy) {
     if (!busy && (!m_queued.empty() || m_teardownPending))
@@ -189,7 +190,6 @@ std::vector<debug::BreakpointStatus> DebugController::rebindListings() {
 
 void DebugController::setSyncOperations(SyncOperations* sync) {
     m_sync = sync;
-    connect(sync, &SyncOperations::busyChanged, this, &DebugController::setAppBusy);
 }
 
 bool DebugController::loadPreset(const QString& path, QString* error, bool armOnly) {
@@ -213,7 +213,7 @@ bool DebugController::cleanStart(const QString& preset, QString* how, QString* e
     if (!preset.isEmpty()) {
         *how = tr("preset %1").arg(preset);
         ok = m_sync->loadPreset(preset, error);
-    } else if (const QString path = AppSettings::defaultPresetPath(modelSettingsKey(m_machines->currentModel()));
+    } else if (const QString path = AppSettings::defaultPresetPath(m_machines->currentModel());
                !path.isEmpty()) {
         // As the app applies it: refused if it's for another model.
         *how = tr("default preset %1").arg(path);
@@ -237,11 +237,10 @@ debug::LoadResult DebugController::loadProgram(const debug::LoadRequest& request
         return r;
     }
     QString error;
-    m_sync->run(tr("Load Program"), [this, &r, &request](QString* e) {
+    m_sync->run(tr("Load Program"), [this, &r, &request] {
         r = debug::loadProgram(m_machines->pc1500(), m_machines->pc1600(), request, m_map, *m_target);
-        *e = QString::fromStdString(r.error);
-        return r.ok;
-    }, {}, &error);
+        return r.ok ? shared::OpResult{} : shared::OpResult::fail(r.error);
+    }, &error);
     if (!r.ok) return r;
     if (after == After::None) return r;
     if (!command.empty()) r.callCommand = command;
@@ -267,11 +266,11 @@ bool DebugController::resetMachine(bool allReset, bool stop, QString* error) {
     }
     // Without the boot run (ROM research starts at the vector), but like
     // any reset: timer stopped meanwhile, clock re-seeded after.
-    if (!m_sync->run(allReset ? tr("Reset All") : tr("Reset"), [this, allReset](QString*) {
+    if (!m_sync->run(allReset ? tr("Reset All") : tr("Reset"), [this, allReset] {
             m_machines->cancelPaste();
             m_target->reset(allReset);
-            return true;
-        }, {}, error))
+            return shared::OpResult{};
+        }, error))
         return false;
     if (stop) m_run->pause(debug::DebugEvent::Entry);
     else m_run->resume();

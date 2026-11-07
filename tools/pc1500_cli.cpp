@@ -9,7 +9,7 @@
 //   - a demonstration of the trace ring buffer.
 //
 // Usage: pc1500_cli <rom-file> [maxCycles]
-//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--wav <out.wav>] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
+//        pc1500_cli --preset <preset-file.pc1500> [maxCycles] [--modules-dir <dir>] [--save-dir <dir>] [--wav <out.wav>] [--tape-in <in.wav>] [--tape-out <out.wav>] [--dump-mem <addr>,<len>] [--inspect <view>] [--lcd-png <out.png>] [--lcd-text <out.txt|->]
 //
 // The --preset form parses and applies a `.pc1500` scenario file
 // (PresetFile.hpp/PC1500PresetLoader.hpp) instead of a bare ROM --
@@ -23,6 +23,10 @@
 // directories, searched in the order given after the first. A
 // `slot-1-file: <path>` reference ignores it.
 //
+// `- saveas:` steps write the card like the GUI (Core/Preset/
+// PresetMedia.hpp): the `file:<path>` form writes that file; a by-name save
+// goes to --save-dir <dir> (<dir>/<name>.card.yaml) and fails without it.
+//
 // --lcd-png <out.png> writes the LCD, as Copy Screen does, at the end of
 // the run. --lcd-text <out.txt> (or - for stdout) writes it as text at the
 // same point (Core/Display/LcdText.hpp): the row, the lit status symbols,
@@ -30,6 +34,13 @@
 //
 // --wav <out.wav> records the buzzer (PC6, see PiezoSampler.hpp) for the
 // whole run -- preset script included -- as 48 kHz mono 16-bit PCM.
+//
+// --tape-in <in.wav> / --tape-out <out.wav> put a cassette into the
+// recorder behind the CE-150 (Core/Tape/TapeDeck.hpp) before the run: a
+// WAV to play for the preset's CLOAD, or a blank tape whose recording (the
+// preset's CSAVE) is saved to <out.wav> when the motor stops. The tape moves only
+// while a CE-150 REMOTE relay runs it. The preset needs `plotter: CE-150`.
+// --dump-mem <addr>,<len> (repeatable) prints memory as hex at the end.
 //
 // CE-158 (a preset with `interface: CE-158`):
 //   --ce158-pty       attach a host PTY as the RS-232C peer; its stable
@@ -39,7 +50,8 @@
 //                     receives, in order.
 //   --ce158-rx-hold <n> start sending the --ce158-rx bytes only after n
 //                     character times (the ROM flushes the receiver when
-//                     e.g. SETDEV runs, so a byte sent too early is lost).
+//                     e.g. SETDEV, TERMINAL or DTE starts, so a byte sent
+//                     too early is lost).
 //   --ce158-tx <file> write every byte the CE-158 sends to <file>.
 // Anything printed on the Centronics port is dumped after the run.
 
@@ -52,8 +64,10 @@
 #include <vector>
 
 #include "../Core/Audio/WavFile.hpp"
+#include "../Core/Debug/Inspect/PC1500Inspector.hpp"
 #include "../Core/PC1500/PC1500Machine.hpp"
 #include "../Core/Preset/PresetFile.hpp"
+#include "../Core/Preset/PresetMedia.hpp"
 #include "../Core/PC1500/PC1500PresetLoader.hpp"
 #include "../Core/PC1500/PC1500LcdText.hpp"
 #include "../Core/PC1500/PC1500Screenshot.hpp"
@@ -66,10 +80,14 @@ int main(int argc, char** argv) {
     std::string moduleDir = "Qt6/resources/cards";
     std::vector<std::string> extraModuleDirs;  // 2nd+ `--modules-dir`, searched after `moduleDir`
     bool moduleDirSet = false;
+    std::string saveDir;
     bool dumpBasic = false;
     std::string wavPath;
     std::string lcdPng;
     std::string lcdTextPath;
+    cli::TapeOptions tape;
+    cli::MemDumps memDumps;
+    cli::InspectViews inspectViews;
     Ce158CliPeer ce158Peer;
     {
         std::vector<char*> kept;
@@ -86,9 +104,22 @@ int main(int argc, char** argv) {
                 lcdTextPath = argv[++i];
                 continue;
             }
+            if (tape.parseArg(argc, argv, i)) continue;
+            if (std::strcmp(argv[i], "--dump-mem") == 0 && i + 1 < argc) {
+                if (!cli::parseMemDump(argv[++i], &memDumps)) return 1;
+                continue;
+            }
+            if (std::strcmp(argv[i], "--inspect") == 0 && i + 1 < argc) {
+                if (!cli::parseInspect(argv[++i], &inspectViews)) return 1;
+                continue;
+            }
             if (std::strcmp(argv[i], "--modules-dir") == 0 && i + 1 < argc) {
                 if (!moduleDirSet) { moduleDir = argv[++i]; moduleDirSet = true; }
                 else               { extraModuleDirs.push_back(argv[++i]); }
+                continue;
+            }
+            if (std::strcmp(argv[i], "--save-dir") == 0 && i + 1 < argc) {
+                saveDir = argv[++i];
                 continue;
             }
             if (ce158Peer.parseArg(argc, argv, i)) continue;
@@ -104,7 +135,7 @@ int main(int argc, char** argv) {
     if (argc < 2) {
         std::fprintf(stderr, "usage: %s <rom-file> [maxCycles]\n", argv[0]);
         std::fprintf(stderr, "       %s --preset <preset-file.pc1500> [maxCycles]\n", argv[0]);
-        std::fprintf(stderr, "       options: --modules-dir <dir>  --dump-basic  --wav <out.wav>  --lcd-png <out.png>  --lcd-text <out.txt|->\n");
+        std::fprintf(stderr, "       options: --modules-dir <dir>  --save-dir <dir>  --dump-basic  --wav <out.wav>  --tape-in <in.wav>  --tape-out <out.wav>  --dump-mem <addr>,<len>  --inspect <view>  --lcd-png <out.png>  --lcd-text <out.txt|->\n");
         std::fprintf(stderr, "                %s\n", Ce158CliPeer::kUsage);
         return 1;
     }
@@ -154,14 +185,24 @@ int main(int argc, char** argv) {
     // The CE-158's serial peer. Set before the preset attaches the card --
     // attachCE158() picks up whatever link the machine already holds.
     if (!ce158Peer.attach(machine)) return 1;
+    if (!tape.arm(machine)) return 1;
 
     if (usingPreset) {
         std::string presetPath = argv[2];
+        // `saveas:` -- the card the loader attached, spliced into its file.
+        PresetLoadResult armedResult;
+        const auto onArmed = [&armedResult](const PresetLoadResult& r) { armedResult = r; };
+        const PresetSaveAsFn onSaveAs = [&](const PresetSaveAsRequest& request, std::string* err) {
+            PresetMedia media;
+            media.slots[0] = {machine.expansionConnector().attachedCard(), armedResult.slot1ResolvedPath,
+                              armedResult.slot1RomFile};
+            return savePresetMedia(request, {moduleDir, saveDir}, media, err);
+        };
         PresetLoadResult loaded = applyPC1500Preset(
             machine, preset,
             [](const std::string& line) { std::fprintf(stderr, "[preset] %s\n", line.c_str()); },
             /*traceDir=*/".",  // a `- trace: name.bin` step writes ./name.bin (same cwd convention as roms/)
-            moduleDir, /*onBooted=*/{}, /*romDirs=*/{"roms"}, extraModuleDirs);
+            moduleDir, /*onBooted=*/{}, /*romDirs=*/{"roms"}, extraModuleDirs, onArmed, onSaveAs);
         for (const std::string& rejected : loaded.rejectedBasicLines) {
             std::fprintf(stderr, "preset: ROM rejected BASIC line: %s\n", rejected.c_str());
         }
@@ -217,6 +258,9 @@ int main(int argc, char** argv) {
     }
 
     std::printf("Ran %llu instructions, %llu cycles\n", (unsigned long long)steps, (unsigned long long)consumed);
+    if (!tape.finish(machine)) return 1;
+    cli::printMemDumps(machine, memDumps);
+    cli::printInspect(machine, inspectViews, inspect::pc1500View);
     if (!lcdPng.empty()) {
         std::string pngError;
         if (!writeLcdScreenshotPng(pc1500LcdBitmap(machine), kPC1500ScreenMm, lcdPng, &pngError)) {

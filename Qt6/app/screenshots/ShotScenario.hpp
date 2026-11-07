@@ -47,6 +47,7 @@ struct ShotStep {
         Close,        // close the topmost popup/dialog
         ChooseFile,   // text = absolute path: pick it in the open file dialog
         EnterText,    // text: into the text field of the topmost dialog
+        Accept,       // accept (OK) the topmost dialog
         Capture,      // capture
     };
     Kind kind = Kind::Settle;

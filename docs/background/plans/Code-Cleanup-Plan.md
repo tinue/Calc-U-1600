@@ -122,4 +122,7 @@ All four low-risk phases landed as planned, with two small deviations:
 - Phase 4: `pc1600_cli` now prints the CE-150 event list like `pc1500_cli`
   (one shared `cli::printCe150Report`). All other CLI output is unchanged.
 
-The six "Before fixing" items remain in TODO.md.
+The six "Before fixing" items remain in TODO.md. Since then the TC8576F INT
+plumbing (aa176e4), the connectors (Sixty-Pin-Connector-Plan.md) and the
+program-pointer chapter are resolved; the picker, card/floppy and LCD/sub-CPU
+re-fit items are still there.

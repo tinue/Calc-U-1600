@@ -25,26 +25,35 @@ decisions, plans, handoffs — is in [../background/README.md](../background/REA
 
 | Folder | What's in it |
 |---|---|
-| `Core/` | The emulator, free of Qt: CPUs, machines, connectors and cards, loaders, presets, the debug server core; `Core/tests/` holds the test suite |
+| `Core/` | The emulator, free of Qt: CPUs, machines, connectors and cards, loaders, presets, resumable jobs, the debug server core; `Core/tests/` holds the test suite |
+| `Shared/` | The app logic every frontend shares, free of Qt: the live machine and its operations, bays, pacing, settings, paths, layouts ([Shared-Architecture.md](Shared-Architecture.md)); `Shared/tests/` |
+| `Web/` | The web client: WASM bindings, worker, React UI, installable app, Playwright tests ([Web-Client.md](Web-Client.md)) |
 | `Qt6/` | The desktop app (`Qt6/app/`) and its bundled resources: cards, faceplates, platform files (`Qt6/resources/`) |
+| `cmake/` | `CalcU.cmake`: the `calcu_core` / `calcu_shared` libraries for every CMake build |
 | `firmware/` | Our own ROMs, e.g. the host-drive driver ROM (`firmware/pc1600-hostdrive/`) |
 | `vscode/` | The VS Code debugger extension ([README](../../vscode/calcu1600-debug/README.md)); `tools/install_vscode_extension.sh` packages and installs it |
-| `tools/` | Build scripts, the headless CLIs (`pc1500_cli`, `pc1600_cli`), probes, `fetch_roms.sh`, `fetch_sharpdx.sh` / `refresh_sharpdx.sh`, `run_tests.sh`, `dap_smoke.py`, `read_trace.py`, `make_screenshots.sh` |
+| `tools/` | Build scripts, the headless CLIs (`pc1500_cli`, `pc1600_cli`), probes, `fetch_roms.sh`, `fetch_sharpdx.sh` / `refresh_sharpdx.sh`, `run_tests.sh`, `build_wasm_check.sh` / `build_sharpdx_wasm.sh`, `dap_smoke.py`, `read_trace.py`, `make_screenshots.sh` |
 | `examples/` | User-facing samples, shipped as `Calc-U-1600-examples.zip` ([README](../../examples/README.md)); `examples/setup/` prepares memory cards ([README](../../examples/setup/README.md)) |
 | `dev/` | Developer material that is not shipped: hardware checks and their presets ([README](../../dev/README.md)) |
 | `headless/` | Gitignored scratch output of the CLIs and probes ([README](../../headless/README.md)) |
-| `bin/` | The release script |
+| `release.yaml` | The release settings (assets, signing certificates) for the ReleaseIt tool |
 
 ## How the emulator works
 
+- [Shared-Architecture.md](Shared-Architecture.md) — Core, Shared and the
+  frontends: the layering rules, `AppSession`, resumable jobs, the
+  WebAssembly check.
+- [Web-Client.md](Web-Client.md) — the WebAssembly frontend: worker and
+  bindings, the `dist/` contract for embedding, the installable app,
+  storage, what it leaves out.
 - [PC1600-Core-Limitations.md](PC1600-Core-Limitations.md) — the deliberate
   shortcuts, unmodelled parts and open assumptions in the PC-1600 core.
 - [PC1600-Serial-Port.md](PC1600-Serial-Port.md) — the RS-232C port on a
   host pseudo-terminal: transport, line model, probe tooling.
 - [PC1600-Host-Drive-Internals.md](PC1600-Host-Drive-Internals.md) — the
   host-drive ROM, its I/O protocol and FILE functions.
-- [PC1500-BASIC-Variable-Layout.md](PC1500-BASIC-Variable-Layout.md) — how
-  the PC-1500 ROM BASIC stores variables in RAM.
+- [Debugger-Internals.md](Debugger-Internals.md) — how the DAP debugger is
+  built: transport, run control, where the code is, design rules.
 - [LCD-Text.md](LCD-Text.md) — reading the display as text: the ROM fonts,
   the cursor, the encoding, and where to use it (`--lcd-text`, `expect:`,
   `calcu1600/screen`).

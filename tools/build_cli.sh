@@ -3,11 +3,15 @@
 set -e
 cd "$(dirname "$0")/.."
 mkdir -p headless
-clang++ -std=c++17 -Wall -Wextra -O2 \
+clang++ -std=c++20 -Wall -Wextra -O2 \
   Core/CPU/LH5801/LH5801.cpp \
   Core/Audio/PiezoSampler.cpp \
   Core/PC1500/PC1500Memory.cpp \
   Core/PC1500/PC1500Machine.cpp \
+  Core/Debug/Inspect/Inspector.cpp \
+  Core/Debug/Inspect/TextTable.cpp \
+  Core/Debug/Inspect/HexDump.cpp \
+  Core/Debug/Inspect/PC1500Inspector.cpp \
   Core/PC1500/PC1500Keyboard.cpp \
   Core/PC1500/PC1500Display.cpp \
   Core/PC1500/Upd1990ac.cpp \

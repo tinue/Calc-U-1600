@@ -58,7 +58,7 @@ The findings from `docs/background/plans/Debugger-Restructuring-Plan.md` are thi
 
 ## 5. How to run the planning session
 
-Use plan mode on high effort, and hand it three documents: the research doc, `docs/background/plans/Debugger-Restructuring-Plan.md` (as the list of things to avoid) and `docs/background/handoffs/Debugger-Handoff.md`. A prompt along these lines:
+Use plan mode on high effort, and hand it three documents: the research doc, `docs/background/plans/Debugger-Restructuring-Plan.md` (as the list of things to avoid) and `docs/developer/Debugger-Internals.md`. A prompt along these lines:
 
 > Plan a BASIC-level debugger. First produce the interface inventory and state the layering decision, then the thin first slice, then breadth. Any change under Core/CPU or to the machine run loops needs justification. Every phase has an automatic check: a CoreTest against the ROM or a DAP smoke scenario.
 

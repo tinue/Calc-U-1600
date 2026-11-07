@@ -3,6 +3,7 @@
 # file again and powers on, so the ROM's module scan finds the new build.
 # A bus ROM also shadows a bundled ROM at the same place: bank 7 with
 # `host-drive:` replaces the host drive's ROM.
+format-version: 1
 model: PC-1600
 
 bus-rom:

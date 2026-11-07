@@ -1,5 +1,131 @@
 # Changelog
 
+## [0.8.0] - 2026-11-07
+
+### New
+
+- **A web version, as a preview** at <https://tinue.github.io/1600>. The
+  same emulator, compiled to WebAssembly, runs in the browser with the
+  desktop app's faceplate, menus, control bar, INSPECTOR, plotter paper
+  and CE-158 printer. It is made for tablets and desktop browsers; a phone
+  works too (a tap takes the nearest key, the menus are taller), and in
+  landscape shows the calculator alone. The browser can install it as an
+  app that runs offline. Saved cards, disks and tapes stay in the
+  browser: **File ▸ Import Card, Disk or Tape…** brings files in, **File ▸
+  Saved Media…** downloads or deletes them, and **File ▸ Load Preset ▸
+  Upload Preset…** runs your own preset. Only one tab saves; a second tab
+  says so. Drag and drop, copy and paste, the buzzer and turbo (hold the
+  LCD) work as in the desktop app; `?model=` and `?preset=` choose what it
+  starts with. Not in the browser: the debugger, the serial ports, the
+  host drive `S3:`, and TRACE/LOG. A release attaches it as
+  `Calc-U-1600-web.zip`, to put on your own web server.
+
+- **Presets, cards and disks name themselves.** A preset can carry
+  `preset-name:` (short, shown once chosen) and `description:` (the line
+  lists and menus show); cards and disks a `description:`, shown as the
+  picker's tooltip and kept by Name & Save. **File ▸ Examples** (in the
+  browser: **File ▸ Load Preset**) loads the bundled example presets, and **Settings ▸ Default presets** offers the
+  bundled startup presets by description and shows the chosen one by its
+  short name -- in the desktop app and in the browser. Which presets are
+  bundled is `examples/bundled.yaml`.
+
+- **Fast-load cassette WAVs.** File ▸ Load BASIC Program…, Load Machine
+  Code… and a drop open a WAV of a PC-1500 (CE-150) or PC-1600 (CE-1600P)
+  tape and write the file on it straight into memory, as for a `.bbin` or
+  `.bin` -- no `CLOAD`, no tape time. Real recordings work too: quiet,
+  noisy, a little fast or slow. A tape with several files asks which one; a
+  damaged file is refused with where it is damaged. Decoding is
+  libsharpdx's (SharpDataExchange 0.3.5).
+
+- **Cassette tape: CLOAD and CSAVE.** The CE-150 (PC-1500/1500A) and the
+  CE-1600P (PC-1600, MODE 0) now drive a cassette recorder. Its tapes are
+  WAV files in a tape folder (Settings ▸ Storage ▸ Tapes): pick one on the
+  control bar to `CLOAD` it, or name a new one with the save button to
+  `CSAVE` onto it -- saved each time the motor stops, further `CSAVE`s
+  appended. A counter shows where the tape is, green while the motor runs. The
+  calculator's own ROM does the bit timing, the remote relay runs the tape,
+  and the tape runs in emulated time, so turbo doesn't change the WAV.
+  The WAVs work with Pocket Tools' `bin2wav` / `wav2bin` (give `bin2wav`
+  `-s 3` or `-l 0x400`) and with real recordings; the headless CLIs take
+  `--tape-in` / `--tape-out`. As on the real machines, the buzzer sounds
+  the tape while saving and loading. Not yet: the PC-1600 reading PC-1500
+  tapes in MODE 1, and the CE-150 on a PC-1600.
+
+- **A 3D-printable memory-slot cover** for the PC-1500/1600 (OpenSCAD,
+  `3d-print/memory-slot-cover.scad`), all dimensions adjustable.
+
+### Changed
+
+- **The Debug panel is now the INSPECTOR.** Pointers lists many more of
+  the work-area variables, in groups and with flags decoded, checked
+  against the ROM disassembly; three wrong PC-1500 entries are gone
+  (`BREAK_STAT` was the evaluator's type byte, the real BREAK flag is
+  `BREAKPARAM` at 788AH; `WARM_START`/`STK_SAVE` lie in an arithmetic
+  register). Dump Mem is replaced by two menus. **Memory ▾** has tables:
+  Inventory, Z80 View, LH5803/LH5801 View, BASIC Area, Program Areas, Disk
+  Areas and Physical RAM. **Dump ▾** has hex dumps of the BASIC area, the
+  S1/S2 program areas, the S1:/S2: RAM disks and the PC-1500's
+  machine-language area. The views are built in Core
+  and the headless CLIs print them with `--inspect <view>`. Dump Card YAML
+  is now Card YAML.
+- **Presets and memory-card files carry `format-version: 1`**, and it is
+  required: add the line to your own presets and to saved cards
+  (`.card.yaml` in the Battery-card saves folder). A card without it no
+  longer appears in the module picker. Floppies (`.floppy.yaml`) always
+  had it. A file written for a newer format is refused with its version
+  instead of being misread.
+- **A ROM module under development gets its ROM from the preset:**
+  `slot-1-rom: build/module.bin` (or `slot-2-rom:`) next to `slot-1-file:`
+  replaces the bytes of the module's ROM, read again at every clean start.
+  Card files no longer take `encoding: file`; the card keeps a placeholder
+  ROM (`$0000: FF...`). docs/Debugger.md has the example.
+- **`saveas:` follows the same rules everywhere.** The app and the
+  headless tools save cards and floppies through one set of rules:
+  `pc1500_cli` now runs `saveas:` too (`--save-dir` for a by-name save),
+  and the CLIs refuse a bundled or template name and never overwrite a
+  template file, as the app always did.
+
+- **The emulator's app logic is now a GUI-neutral layer (`Shared/`)**
+  under the Qt app, which the web version runs on too: model and ROM
+  switches, presets, peripheral power cycles, pacing, the module, disk and
+  tape bays, settings and paths. Long operations run in slices, so a
+  model, module or ROM switch now shows the "Loading…" popup like a preset
+  instead of freezing the window. Building needs a C++20 compiler.
+- **A narrower control bar.** The ROM pickers (PC-1500 ROM Revision,
+  PC-1600 ROM Version, CE-1600P ROM) are in the Machine menu only, and the
+  new **Machine ▸ Peripherals** submenu attaches the CE-150, CE-158 and
+  CE-1600P. The bar keeps buttons for each model's own peripherals.
+- **`PEEK#` and `XPEEK#` read ME1 as the real machines do** (measured):
+  ME1 is no longer a mirror of ME0. On the PC-1500 an address nothing
+  answers at in ME1 reads 255 (the internal LH5811 answers only at
+  F000-FFFF); on the PC-1600 `XPEEK#` returns the last byte on the bus
+  (37).
+- **Quick taps register.** A key clicked, tapped or typed is held at least
+  two frames, and the next press waits for it, so a fast tap or double tap
+  is never lost.
+
+### Fixed
+
+- **PC-1600 `.bas` files: `MODE` loads as `MODE` again.** `10 MODE 0`
+  loaded as `10 MOD E0` in 0.7.0 (libsharpdx 0.3.4 fixes it).
+
+- **PC-1600: the CE-158 terminal works in MODE 1.** `TERMINAL` and `DTE`
+  now show their menu, take the soft keys (F4 = Ent) and display received
+  text, scrolling long lines as the real machine does. They used to stop
+  after a character or two. The LH-5803 now reaches the LCD, the 1/64 s
+  pulse and the keyboard the way the PC-1600's wiring connects them.
+
+- **PC-1600: an OFF in PC-1500 machine code no longer freezes MODE 1.** On
+  the LH-5803, OFF (and SDP/RDP) does nothing, as the TRM states.
+
+- **PC-1500: the ON key reads high on PB7 while pressed.** The CE-150's
+  tape reader saw BREAK all the time before.
+
+- **The floppy side button's A/B letter is no longer clipped** on macOS.
+
+- **Examples:** `flashtest_ce163f.pc1500a` no longer stops with ERROR 1
+  IN 10, and in `dampflok.bas` wagon W2 shows its own picture.
+
 ## [0.7.0] - 2026-10-04
 
 ### New

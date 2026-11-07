@@ -3,20 +3,30 @@
 ;
 ; Menu-driven Z-80 ML program for the Sharp PC-1600:
 ;
-;   1 = SWEEP -- pages every known Z-80-addressable ROM bank into the CPU's
-;       address space in turn and shows a short hex sample on the LCD,
-;       pausing for a keypress between screens. Diagnostic tool: confirms
-;       which banks hold real ROM vs. open bus, and lets you eyeball a
-;       bank's content before committing to a full dump.
+;   1 = SWEEP -- pages every Z-80-addressable bank of pages 1 and 2 into the
+;       CPU's address space in turn and shows two short hex samples on the
+;       LCD (4000H/6000H or 8000H/A000H, where module headers sit), pausing
+;       for a keypress between screens. Diagnostic tool: confirms which
+;       banks hold real ROM vs. open bus, and lets you eyeball a bank's
+;       content before committing to a full dump.
 ;
 ;   2 = DUMP+SEND -- pages in the 7 banks confirmed to hold real ROM content
 ;       (see dump_table below), shows a 16-bit checksum per page, and on a
 ;       keypress sends the full 16KB page out over COM1: via the serial
 ;       IOCS (CSNDA). Press S to skip a page instead of sending it. COM1:
 ;       itself must already be configured (SETCOM/OUTSTAT/SNDSTAT/RCVSTAT/
-;       INIT) from BASIC before this program is CALLed -- see the
-;       accompanying .pc1600 preset / README for the exact sequence. This
+;       INIT) from BASIC before this program is CALLed -- see
+;       DUMPING.md for the exact sequence. This
 ;       program only calls CSNDA; it never touches CWCOM/CESND/CCLRSB.
+;
+;   4 = OTHER BANKS -- same UX as DUMP+SEND for every other bank that
+;       could hold a peripheral ROM: page 1 banks 1, 2, 6, 7 (the 60-pin
+;       bus banks the reset scan SCANMODS probes, besides the CE-1600P's
+;       4/5 and the internal 0/3), page 2 banks 0-3 (memory slots, e.g. a
+;       CE-1620M ROM cartridge; vertical bank 0 only, Port 28H untouched),
+;       bank 4 plain and with Port 3DH = 02H (the JAPAN/kanji ROM view the
+;       firmware's SELJROM selects), 5 and 7. Pages that read all FFH say
+;       so on the send prompt, so empty banks are easy to skip.
 ;
 ;   3 = LH5803 ROM -- dumps the LH-5803 co-processor's own private 16KB ROM
 ;       (LH-5803 view C000H-FFFFH), which no Z-80 bank-switching combination
@@ -30,26 +40,26 @@
 ;
 ; Runs entirely from C000-FFFF (page 3, bank 0 -- never touched by this
 ; program) so paging banks into 4000-7FFF/8000-BFFF never disturbs the code
-; that is doing the paging. All display/IOCS calls used here live in the
+; that is doing the paging. Page 3 bank 1 (Port 31H b7) and the Slot 2
+; remap into pages 0/1 (Port 3CH) are therefore out of reach, and hold no
+; known ROM anyway. All display/IOCS calls used here live in the
 ; always-resident bank 0 (0000-3FFF), so they too are unaffected.
 ;
 ; Assumes the machine is already NEW'd with enough S0: space to hold this
-; program; the .pc1600 preset / load sequence handles that.
+; program; DUMPING.md gives the load sequence.
 ;
 ; Hardware note -- Port 3DH (hidden-BASIC-ROM sub-bank select, bit b2):
 ; clearing b2 selects Bank 3b instead of Bank 3 at 4000-7FFF. This port is
 ; write-only. Getting a correct read of Bank 3/3b requires two things this
 ; program does everywhere it touches the port:
-;   1. BANKSET before the Port 3DH write, not after (the ROM's own BANKSET
-;      routine does not preserve an out-of-order Port 3DH state).
-;   2. Interrupts briefly disabled (DI/EI) around the write and the read
-;      that follows it. The PC-1600's own interrupt handlers (keyboard
-;      scan / the 1/64s timer tick) do not preserve Port 3DH's state, so a
-;      read landing between the write and the actual memory access can
-;      silently see the wrong bank. For the serial send specifically (too
-;      long, ~17s at 9600 baud, to run under one DI), Port 3DH is instead
-;      re-asserted before every byte, each reassert individually DI/EI-
-;      guarded.
+; write-only; the firmware keeps its current value in RAM at F07DH. The
+; IM2 interrupt entry (082CH) and every RST 18H / BANKCALL bank switch
+; (which all the IOCS calls used here go through) force Port 3DH to 04H
+; while they run and then restore it *from F07DH*. So SET_PORT3D writes
+; F07DH and the port together, as the ROM itself does; the selection then
+; survives interrupts and IOCS calls. A bare OUT (3DH) would be undone by
+; the next interrupt (F07DH still says 04H) -- the cause of the early
+; "Bank 3b reads identical to Bank 3" results.
 ; ============================================================================
 
 #target bin
@@ -68,6 +78,7 @@ SERIAL      equ 0x01D8      ; C=routine#, D=channel(1=COM1:) as needed -> dispat
 S_CSNDA     equ 0x03        ; A=byte to send -> CF=1/A=error byte on failure
 
 PORT3D      equ 0x3D        ; hidden-BASIC-ROM sub-bank select (bit 2; not readable via IN)
+PORT3D_M    equ 0xF07D      ; firmware's copy of Port 3DH; interrupts/bank calls restore from it
 
 ; ---- Z-80 -> LH-5803 bridge (PC-1600-CPU-LH5803-Compat.md Part 3) ----
 CALLH       equ 0x01C6      ; hands off to an LH-5803 subroutine, returns when it RTNs
@@ -82,7 +93,8 @@ PARBAN      equ 0xF00E      ; subroutine bank: 00H = PV(0), 01H = PV(1)
 #code CODE, 0xC0C5
 
 ; ============================================================================
-; Entry point: menu -- 1 = sweep, 2 = dump+send, 3 = LH5803 ROM.
+; Entry point: menu -- 1 = sweep, 2 = dump+send, 3 = LH5803 ROM,
+; 4 = other banks.
 start:
         call CLS
         ld   hl, lbl_menu1
@@ -105,6 +117,15 @@ start:
         xor  a
         call PRTASTR
 
+        ld   d, 0
+        ld   e, 3
+        call CRSRSET
+        ld   hl, lbl_menu4
+        ld   d, h
+        ld   e, l
+        xor  a
+        call PRTASTR
+
 menu_wait:
         call KEYGET
         cp   '1'
@@ -113,6 +134,8 @@ menu_wait:
         jp   z, dump_start
         cp   '3'
         jp   z, lh5803_dump_start
+        cp   '4'
+        jp   z, other_dump_start
         jr   menu_wait
 
 ; ============================================================================
@@ -127,8 +150,6 @@ sweep_start:
         ld   d, 0
         ld   e, 0x00
         call show_status           ; MEMORYCHK D=0,E=00 -- page-0 bank 0
-        ld   a, 0x04                ; page 0 doesn't involve Port 3DH
-        ld   (cur_port3d), a
         ld   hl, 0x0000
         ld   de, line_buf
         call BUILD_HEX_LINE
@@ -164,7 +185,7 @@ p2_loop:
         call run_page2_entry
         push ix
         pop  hl
-        ld   de, 4      ; page2_table record size: bank,mode,lbl_lo,lbl_hi
+        ld   de, 4      ; page2_table record size: bank,port3d,lbl_lo,lbl_hi
         add  hl, de
         push hl
         pop  ix
@@ -181,7 +202,7 @@ all_done:
         ld   b, 2
         call BANKSET
         ld   a, 0x04
-        out  (PORT3D), a
+        call SET_PORT3D
 
         call CLS
         ld   hl, lbl_done
@@ -193,9 +214,14 @@ all_done:
 ; checksum, wait for a keypress (S = skip, anything else = send), then send
 ; the full 16KB page over COM1:.
 dump_start:
-        call CLS
-
         ld   ix, dump_table
+        jr   dump_run
+
+; Other banks: the same loop over other_table (menu option 4).
+other_dump_start:
+        ld   ix, other_table
+dump_run:
+        call CLS
 dump_loop:
         ld   a, (ix+0)
         cp   0xFF
@@ -247,7 +273,7 @@ dump_done:
         ld   b, 2
         call BANKSET
         ld   a, 0x04
-        out  (PORT3D), a
+        call SET_PORT3D
 
         call CLS
         ld   hl, lbl_done
@@ -274,17 +300,12 @@ rde_no_bankset:
         jr   nz, rde_have_port3d
         ld   a, 0x04                ; "don't touch" -> the safe/normal default
 rde_have_port3d:
-        ld   (cur_port3d), a        ; SEND_PAGE reasserts this every byte later
+        call SET_PORT3D
 
-        di
-        out  (PORT3D), a
-
-        ; checksum over the 16KB page, base address = (ix+3):(ix+4) --
-        ; the actual hardware read, done immediately, interrupts disabled.
+        ; checksum over the 16KB page, base address = (ix+3):(ix+4)
         ld   l, (ix+4)
         ld   h, (ix+3)
-        call COMPUTE_CHECKSUM       ; HL preserved, DE = checksum
-        ei
+        call COMPUTE_CHECKSUM       ; HL preserved, DE = checksum, (page_and)
         push de                     ; stash across the display calls below
 
         call CLS
@@ -327,6 +348,11 @@ rde_have_port3d:
         ld   e, 3
         call CRSRSET
         ld   hl, lbl_press_key
+        ld   a, (page_and)
+        inc  a
+        jr   nz, rde_prompt           ; some byte is not FFH
+        ld   hl, lbl_empty_key        ; all FFH: open bus or erased
+rde_prompt:
         ld   d, h
         ld   e, l
         xor  a
@@ -338,29 +364,8 @@ rde_have_port3d:
         cp   's'                      ; hint needed; any other key sends)
         jr   z, rde_skip
 
-        ; Re-assert bank/Port 3DH immediately before the actual send: the
-        ; checksum above was read under DI, but the display/keypress wait
-        ; since then ran with interrupts enabled and may have disturbed
-        ; Port 3DH again. SEND_PAGE itself reasserts before every byte too
-        ; (the send is far too long to cover with a single DI), so this is
-        ; just what gets the very first bytes right before its first
-        ; reassert point.
-        ld   a, (ix+2)              ; page number
-        or   a
-        jr   z, rde_no_bankset2
-        ld   c, a
-        ld   a, (ix+0)              ; bank number
-        ld   b, c
-        call BANKSET
-rde_no_bankset2:
-        ld   a, (ix+1)              ; port3d value, or 0xFF = don't touch
-        cp   0xFF
-        jr   z, rde_no_port3d2
-        di
-        out  (PORT3D), a
-        ei
-rde_no_port3d2:
-
+        ; The display/keypress IOCS calls above restored bank and Port 3DH
+        ; on return, so the page is still mapped.
         ld   l, (ix+4)               ; reload base address -- clobbered above
         ld   h, (ix+3)
         jp   SEND_PAGE                ; tail call: CF/A propagate to caller
@@ -370,14 +375,30 @@ rde_skip:
         ret
 
 ; ============================================================================
+; SET_PORT3D: A = Port 3DH value (04H = bank 3, 00H = hidden bank 3b).
+; Writes the firmware's copy at F07DH first, then the port -- same order as
+; the ROM's own ROMSELN (08A5H) -- so an interrupt in between restores the
+; new value, not the old one.
+SET_PORT3D:
+        ld   (PORT3D_M), a
+        out  (PORT3D), a
+        ret
+
+; ============================================================================
 ; COMPUTE_CHECKSUM: HL = base address of a 16KB (0x4000-byte) page.
-; Returns DE = 16-bit additive checksum (sum of all bytes, mod 65536).
+; Returns DE = 16-bit additive checksum (sum of all bytes, mod 65536) and
+; (page_and) = AND of all bytes (FFH = the page reads all FFH).
 ; HL is preserved.
 COMPUTE_CHECKSUM:
         push hl
         ld   bc, 0x4000
         ld   de, 0x0000
+        ld   a, 0xFF
+        ld   (page_and), a
 cs_loop:
+        ld   a, (page_and)
+        and  (hl)
+        ld   (page_and), a
         ld   a, (hl)
         add  a, e
         ld   e, a
@@ -397,19 +418,9 @@ cs_noc:
 ; byte over COM1: via CSNDA. On success returns CF=0. On a CSNDA error,
 ; stops immediately and returns CF=1, A=CSNDA's error byte (b0=timeout,
 ; b1=BREAK pressed) -- no channel parameter needed, per the IOCS table.
-;
-; Port 3DH is re-asserted from cur_port3d before every byte (each reassert
-; individually DI/EI-guarded; CSNDA itself runs with interrupts enabled,
-; since the send is too long -- ~17s at 9600 baud -- to cover with a
-; single DI without starving whatever the serial IOCS needs interrupts
-; for).
 SEND_PAGE:
         ld   bc, 0x4000
 sp_loop:
-        di
-        ld   a, (cur_port3d)
-        out  (PORT3D), a
-        ei
         ld   a, (hl)
         push hl
         push bc
@@ -456,9 +467,8 @@ LH5803_FETCH_BYTE:
 
 ; ============================================================================
 ; LH5803_SELFTEST: fetches LH-5803 address C000H twice in a row and compares
-; the two results. Returns CF=0 if they agree, CF=1 if they don't. Mirrors
-; the double-fetch check that originally caught the Port 3DH interrupt bug --
-; run once before trusting a full LH5803 dump.
+; the two results. Returns CF=0 if they agree, CF=1 if they don't. Run once
+; before trusting a full LH5803 dump.
 LH5803_SELFTEST:
         ld   hl, 0xC000
         call LH5803_FETCH_BYTE
@@ -627,38 +637,28 @@ lh5803_unstable:
 
 ; ============================================================================
 ; run_page1_entry: (ix) = { bank, port3d, mode, lo(label), hi(label) }
-;   mode: 0 = normal sample at 4000H, 1 = bank-5 style, samples at 5000H/6000H
+;   mode: 0 = samples at 4000H/6000H (the two module-header offsets the
+;   reset scan checks), 1 = bank-5 style, samples at 5000H/6000H
 run_page1_entry:
         ld   a, (ix+0)             ; bank number
         ld   b, 1                  ; page 1 = 4000-7FFF
         call BANKSET
 
         ld   a, (ix+1)             ; port3d value
-        ld   (cur_port3d), a
-        di
-        out  (PORT3D), a
-
-        ld   a, (ix+2)             ; mode
-        cp   1
-        jr   z, p1_bank5_read
+        call SET_PORT3D
 
         ld   hl, 0x4000
-        ld   de, line_buf
-        call BUILD_HEX_LINE
-        jr   p1_reads_done
-
-p1_bank5_read:
+        ld   a, (ix+2)             ; mode
+        cp   1
+        jr   nz, p1_first_read
         ld   hl, 0x5000
+p1_first_read:
         ld   de, line_buf
         call BUILD_HEX_LINE
         ld   hl, 0x6000
         ld   de, line_buf2
         call BUILD_HEX_LINE
 
-p1_reads_done:
-        ei
-
-p1_display:
         call CLS
         ld   l, (ix+3)
         ld   h, (ix+4)
@@ -668,37 +668,25 @@ p1_display:
         ld   d, a
         ld   e, 0x40
         call show_status
-
-        ld   a, (ix+2)             ; mode
-        cp   1
-        jr   z, p1_bank5_show
-
-        ld   d, 0
-        ld   e, 2
-        ld   hl, line_buf
-        call DISPLAY_LINE_AT
-        jr   p1_entry_done
-
-p1_bank5_show:
-        ld   d, 0
-        ld   e, 2
-        ld   hl, line_buf
-        call DISPLAY_LINE_AT
-        ld   d, 0
-        ld   e, 3
-        ld   hl, line_buf2
-        call DISPLAY_LINE_AT
-
-p1_entry_done:
-        jp   wait_key
+        jr   show_samples
 
 ; ============================================================================
-; run_page2_entry: (ix) = { bank, mode, lo(label), hi(label) }
-;   mode: 0 = MEMORYCHK only, 1 = full hex sample too
+; run_page2_entry: (ix) = { bank, port3d, lo(label), hi(label) }
+;   samples at 8000H and A000H (module headers sit at 8000H/A000H/B000H)
 run_page2_entry:
         ld   a, (ix+0)
         ld   b, 2                  ; page 2 = 8000-BFFF
         call BANKSET
+
+        ld   a, (ix+1)             ; port3d value (02H = kanji ROM view)
+        call SET_PORT3D
+
+        ld   hl, 0x8000
+        ld   de, line_buf
+        call BUILD_HEX_LINE
+        ld   hl, 0xA000
+        ld   de, line_buf2
+        call BUILD_HEX_LINE
 
         call CLS
         ld   l, (ix+2)
@@ -710,21 +698,16 @@ run_page2_entry:
         ld   e, 0x80
         call show_status
 
-        ld   a, (ix+1)
-        cp   1
-        jr   nz, p2_entry_done
-
-        ld   a, 0x04                ; page 2 doesn't involve Port 3DH
-        ld   (cur_port3d), a
-        ld   hl, 0x8000
-        ld   de, line_buf
-        call BUILD_HEX_LINE
+; show_samples: line_buf on Y=2, line_buf2 on Y=3, then wait for a key.
+show_samples:
         ld   d, 0
         ld   e, 2
         ld   hl, line_buf
         call DISPLAY_LINE_AT
-
-p2_entry_done:
+        ld   d, 0
+        ld   e, 3
+        ld   hl, line_buf2
+        call DISPLAY_LINE_AT
         jp   wait_key
 
 ; ============================================================================
@@ -810,9 +793,7 @@ ss_tag:
 
 ; ============================================================================
 ; BUILD_HEX_LINE: HL = base address to sample 8 bytes from, DE = dest
-; buffer. Fills DE with "AAAA:xxxxxxxxxxxxxxxx" (null-terminated). Pure
-; computation -- no IOCS calls -- so it can run immediately after a Port
-; 3DH/BANKSET write with nothing else in between.
+; buffer. Fills DE with "AAAA:xxxxxxxxxxxxxxxx" (null-terminated).
 BUILD_HEX_LINE:
         push hl
         ld   a, h
@@ -904,15 +885,17 @@ page1_table:
         db 7, 0x04, 0, lo(lbl_p1_b7), hi(lbl_p1_b7)
         db 0xFF
 
-; Page-2 sweep table: { bank, mode, label_lo, label_hi }, 0xFF ends it
+; Page-2 sweep table: { bank, port3d, label_lo, label_hi }, 0xFF ends it
 page2_table:
-        db 0, 0, lo(lbl_p2_b0), hi(lbl_p2_b0)
-        db 1, 0, lo(lbl_p2_b1), hi(lbl_p2_b1)
-        db 2, 0, lo(lbl_p2_b2), hi(lbl_p2_b2)
-        db 3, 0, lo(lbl_p2_b3), hi(lbl_p2_b3)
-        db 4, 0, lo(lbl_p2_b4), hi(lbl_p2_b4)
-        db 6, 1, lo(lbl_p2_b6), hi(lbl_p2_b6)
-        db 7, 0, lo(lbl_p2_b7), hi(lbl_p2_b7)
+        db 0, 0x04, lo(lbl_p2_b0), hi(lbl_p2_b0)
+        db 1, 0x04, lo(lbl_p2_b1), hi(lbl_p2_b1)
+        db 2, 0x04, lo(lbl_p2_b2), hi(lbl_p2_b2)
+        db 3, 0x04, lo(lbl_p2_b3), hi(lbl_p2_b3)
+        db 4, 0x04, lo(lbl_p2_b4), hi(lbl_p2_b4)
+        db 4, 0x02, lo(lbl_p2_b4k), hi(lbl_p2_b4k)
+        db 5, 0x04, lo(lbl_p2_b5), hi(lbl_p2_b5)
+        db 6, 0x04, lo(lbl_p2_b6), hi(lbl_p2_b6)
+        db 7, 0x04, lo(lbl_p2_b7), hi(lbl_p2_b7)
         db 0xFF
 
 ; ============================================================================
@@ -932,12 +915,36 @@ dump_table:
         db 6, 0xFF, 2, 0x80,0x00, lo(lbl_d_p2b6),hi(lbl_d_p2b6),   lo(fn_p2b6),hi(fn_p2b6)
         db 0xFF
 
+; Other-banks table (menu option 4), same record layout as dump_table: every
+; remaining bank that could hold a peripheral ROM. Page 1: the 60-pin bus
+; banks the reset scan (SCANMODS, P0-B0 07C5H) probes besides 0, 3 (internal)
+; and 4, 5 (CE-1600P) -- bank 7 is where the MEP rev3 module puts its ROM.
+; Page 2: the memory slots (banks 0-3, Port 28H vertical bank as left by the
+; firmware), bank 4 without and with the kanji-ROM select (Port 3DH = 02H,
+; as SELJROM, P0-B0 077EH), and the unassigned banks 5 and 7.
+other_table:
+        db 1, 0x04, 1, 0x40,0x00, lo(lbl_d_p1b1),hi(lbl_d_p1b1),   lo(fn_p1b1),hi(fn_p1b1)
+        db 2, 0x04, 1, 0x40,0x00, lo(lbl_d_p1b2),hi(lbl_d_p1b2),   lo(fn_p1b2),hi(fn_p1b2)
+        db 6, 0x04, 1, 0x40,0x00, lo(lbl_d_p1b6),hi(lbl_d_p1b6),   lo(fn_p1b6),hi(fn_p1b6)
+        db 7, 0x04, 1, 0x40,0x00, lo(lbl_d_p1b7),hi(lbl_d_p1b7),   lo(fn_p1b7),hi(fn_p1b7)
+        db 0, 0x04, 2, 0x80,0x00, lo(lbl_d_p2b0),hi(lbl_d_p2b0),   lo(fn_p2b0),hi(fn_p2b0)
+        db 1, 0x04, 2, 0x80,0x00, lo(lbl_d_p2b1),hi(lbl_d_p2b1),   lo(fn_p2b1),hi(fn_p2b1)
+        db 2, 0x04, 2, 0x80,0x00, lo(lbl_d_p2b2),hi(lbl_d_p2b2),   lo(fn_p2b2),hi(fn_p2b2)
+        db 3, 0x04, 2, 0x80,0x00, lo(lbl_d_p2b3),hi(lbl_d_p2b3),   lo(fn_p2b3),hi(fn_p2b3)
+        db 4, 0x04, 2, 0x80,0x00, lo(lbl_d_p2b4),hi(lbl_d_p2b4),   lo(fn_p2b4),hi(fn_p2b4)
+        db 4, 0x02, 2, 0x80,0x00, lo(lbl_d_p2b4k),hi(lbl_d_p2b4k), lo(fn_p2b4k),hi(fn_p2b4k)
+        db 5, 0x04, 2, 0x80,0x00, lo(lbl_d_p2b5),hi(lbl_d_p2b5),   lo(fn_p2b5),hi(fn_p2b5)
+        db 7, 0x04, 2, 0x80,0x00, lo(lbl_d_p2b7),hi(lbl_d_p2b7),   lo(fn_p2b7),hi(fn_p2b7)
+        db 0xFF
+
 ; ============================================================================
 lbl_menu1:      db "PC1600 ROM DUMPER", 0
 lbl_menu2:      db "1=SWEEP  2=DUMP+SEND", 0
 lbl_menu3:      db "3=LH5803 ROM", 0
+lbl_menu4:      db "4=OTHER BANKS", 0
 lbl_error:      db "SEND ERROR - ABORTED", 0
 lbl_press_key:  db "PRESS KEY TO SEND", 0
+lbl_empty_key:  db "ALL FF - S TO SKIP", 0
 
 lbl_lh5803:            db "LH5803 ROM C000-FFFF", 0
 lbl_computing:          db "COMPUTING...", 0
@@ -960,6 +967,32 @@ fn_p1b4:     db "PC1600-P1-B4-CE1600P.BIN", 0
 fn_p1b5:     db "PC1600-P1-B5-CE1600P-OR-F.BIN", 0
 fn_p2b6:     db "PC1600-P2-B6.BIN", 0
 
+lbl_d_p1b1:  db "DUMP P1 4000H BANK1", 0
+lbl_d_p1b2:  db "DUMP P1 4000H BANK2", 0
+lbl_d_p1b6:  db "DUMP P1 4000H BANK6", 0
+lbl_d_p1b7:  db "DUMP P1 4000H BANK7", 0
+lbl_d_p2b0:  db "DUMP P2 8000H BANK0", 0
+lbl_d_p2b1:  db "DUMP P2 8000H BANK1", 0
+lbl_d_p2b2:  db "DUMP P2 8000H BANK2", 0
+lbl_d_p2b3:  db "DUMP P2 8000H BANK3", 0
+lbl_d_p2b4:  db "DUMP P2 8000H BANK4", 0
+lbl_d_p2b4k: db "DUMP P2 8000H BANK4 KANJI", 0
+lbl_d_p2b5:  db "DUMP P2 8000H BANK5", 0
+lbl_d_p2b7:  db "DUMP P2 8000H BANK7", 0
+
+fn_p1b1:     db "PC1600-P1-B1.BIN", 0
+fn_p1b2:     db "PC1600-P1-B2.BIN", 0
+fn_p1b6:     db "PC1600-P1-B6.BIN", 0
+fn_p1b7:     db "PC1600-P1-B7.BIN", 0
+fn_p2b0:     db "PC1600-P2-B0.BIN", 0
+fn_p2b1:     db "PC1600-P2-B1.BIN", 0
+fn_p2b2:     db "PC1600-P2-B2.BIN", 0
+fn_p2b3:     db "PC1600-P2-B3.BIN", 0
+fn_p2b4:     db "PC1600-P2-B4.BIN", 0
+fn_p2b4k:    db "PC1600-P2-B4-KANJI.BIN", 0
+fn_p2b5:     db "PC1600-P2-B5.BIN", 0
+fn_p2b7:     db "PC1600-P2-B7.BIN", 0
+
 ; ============================================================================
 lbl_page0:   db "PAGE0 (0000H) BANK0", 0
 lbl_done:    db "DONE - BASIC RESTORED", 0
@@ -978,7 +1011,9 @@ lbl_p2_b0:   db "P2 8000H BANK0", 0
 lbl_p2_b1:   db "P2 8000H BANK1", 0
 lbl_p2_b2:   db "P2 8000H BANK2", 0
 lbl_p2_b3:   db "P2 8000H BANK3", 0
-lbl_p2_b4:   db "P2 8000H BANK4 KANJI", 0
+lbl_p2_b4:   db "P2 8000H BANK4", 0
+lbl_p2_b4k:  db "P2 8000H BANK4 KANJI", 0
+lbl_p2_b5:   db "P2 8000H BANK5", 0
 lbl_p2_b6:   db "P2 8000H BANK6 CS123", 0
 lbl_p2_b7:   db "P2 8000H BANK7", 0
 
@@ -997,7 +1032,7 @@ status_buf:             ds 24
 line_buf:               ds 24
 line_buf2:              ds 24
 send_err_code:          ds 1
-cur_port3d:             ds 1
+page_and:               ds 1
 lh5803_addr:            ds 2
 lh5803_count:           ds 2
 lh5803_chk:             ds 2

@@ -25,7 +25,6 @@ void PC1600Machine::resetLocked() {
     // m_rtcAccum is the sub-CPU's divider, which runs on the always-on rail:
     // no reset or power cycle touches it (seedClock() sets its phase).
     m_z80Mem.setTimer64Bit(false);
-    m_lh5803Mem.reset();                  // clear the internal-PIO register file (0xF00x)
     m_lh5803Mem.updatePUPV(false, false); // match the just-reset LH5803 CPU
     if (m_ce150Card) m_ce150Card->reset(); // re-anchor, keep it attached (like the CE-1600P)
     m_ce158.reset();
@@ -89,9 +88,10 @@ bool PC1600Machine::attachCE1600P(const uint8_t* rom1, size_t rom1Size,
     std::lock_guard<std::mutex> lock(m_mutex);
     detachCE1600PLocked();
     detachCE150Locked(); // one plotter on the bus at a time
-    detachCE158Locked(); // the CE-158 cannot be used with the CE-1600P
-    m_z80Mem.ce1600pBus().attach(card.get());
-    m_z80Mem.ce1600pBus().attach(floppy.get());
+    detachCE158Locked(); // CE-158 + CE-1600P not supported yet (TODO.md, IO7N)
+    card->connectRecorder(&m_tapeDeck);
+    m_z80Mem.systemBus().attach(card.get());
+    m_z80Mem.systemBus().attach(floppy.get());
     m_ce1600pCard = std::move(card);
     m_ce1600fCard = std::move(floppy);
     return true;
@@ -104,11 +104,11 @@ void PC1600Machine::detachCE1600P() {
 
 void PC1600Machine::detachCE1600PLocked() {
     if (m_ce1600fCard) {
-        m_z80Mem.ce1600pBus().detach(m_ce1600fCard.get());
+        m_z80Mem.systemBus().detach(m_ce1600fCard.get());
         m_ce1600fCard.reset();
     }
     if (!m_ce1600pCard) return;
-    m_z80Mem.ce1600pBus().detach(m_ce1600pCard.get());
+    m_z80Mem.systemBus().detach(m_ce1600pCard.get());
     m_ce1600pCard.reset();
 }
 
@@ -118,21 +118,15 @@ bool PC1600Machine::attachHostDrive(const uint8_t* rom, size_t romSize, const st
     card->drive().setDirectory(dir);
     std::lock_guard<std::mutex> lock(m_mutex);
     detachHostDriveLocked();
-    m_z80Mem.ce1600pBus().attach(card.get());
+    m_z80Mem.systemBus().attach(card.get());
     m_hostDriveCard = std::move(card);
     return true;
 }
 
-void PC1600Machine::attachBusRom(std::unique_ptr<PC1600BusRomCard> card) {
+void PC1600Machine::attachBusRom(std::unique_ptr<SystemBusCard> card) {
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_z80Mem.ce1600pBus().attachFirst(card.get());
-    m_systemBusRoms.push_back(std::move(card));
-}
-
-void PC1600Machine::attachBusRom(std::unique_ptr<BusRomCard> card) {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    m_z80Mem.lh5803PeripheralBus().attachFirst(card.get());
-    m_lh5803BusRoms.push_back(std::move(card));
+    m_z80Mem.systemBus().attachFirst(card.get());
+    m_busRoms.push_back(std::move(card));
 }
 
 void PC1600Machine::detachHostDrive() {
@@ -142,7 +136,7 @@ void PC1600Machine::detachHostDrive() {
 
 void PC1600Machine::detachHostDriveLocked() {
     if (!m_hostDriveCard) return;
-    m_z80Mem.ce1600pBus().detach(m_hostDriveCard.get());
+    m_z80Mem.systemBus().detach(m_hostDriveCard.get());
     m_hostDriveCard.reset();
 }
 
@@ -233,6 +227,33 @@ bool PC1600Machine::ce1600fMotorOn() const {
     return m_ce1600fCard && m_ce1600fCard->motorOn();
 }
 
+// ── Cassette recorder ─────────────────────────────────────────────────
+
+bool PC1600Machine::tapePlay(const std::string& path, std::string& error) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.loadForPlay(path, error);
+}
+
+void PC1600Machine::tapeRecord(const std::string& path) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_tapeDeck.armRecord(path);
+}
+
+bool PC1600Machine::tapeEject(std::string* error) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.eject(error);
+}
+
+TapeDeck::Status PC1600Machine::tapeStatus() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.status();
+}
+
+std::string PC1600Machine::tapeTakeLastError() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_tapeDeck.takeLastError();
+}
+
 // ── CE-150 plotter (LH5803 side) ──────────────────────────────────────
 
 bool PC1600Machine::attachCE150(const uint8_t* rom, size_t romSize) {
@@ -243,7 +264,7 @@ bool PC1600Machine::attachCE150(const uint8_t* rom, size_t romSize) {
     detachCE150Locked();
     detachCE1600PLocked(); // one plotter on the bus at a time
     card->reset();
-    m_z80Mem.lh5803PeripheralBus().attach(card.get());
+    m_z80Mem.systemBus().attach(card.get());
     m_ce150Card = std::move(card);
     return true;
 }
@@ -255,7 +276,7 @@ void PC1600Machine::detachCE150() {
 
 void PC1600Machine::detachCE150Locked() {
     if (!m_ce150Card) return;
-    m_z80Mem.lh5803PeripheralBus().detach(m_ce150Card.get());
+    m_z80Mem.systemBus().detach(m_ce150Card.get());
     m_ce150Card.reset();
 }
 
@@ -267,7 +288,7 @@ bool PC1600Machine::attachCE158(const uint8_t* rom, size_t romSize) {
     if (!card) return false;
     detachCE158Locked();
     detachCE1600PLocked(); // not usable together with the CE-1600P
-    m_z80Mem.lh5803PeripheralBus().attach(card.get());
+    m_z80Mem.systemBus().attach(card.get());
     m_ce158.install(std::move(card));
     return true;
 }
@@ -279,7 +300,7 @@ void PC1600Machine::detachCE158() {
 
 void PC1600Machine::detachCE158Locked() {
     if (!m_ce158.attached()) return;
-    m_z80Mem.lh5803PeripheralBus().detach(m_ce158.card());
+    m_z80Mem.systemBus().detach(m_ce158.card());
     m_ce158.remove();
 }
 
@@ -359,28 +380,7 @@ int PC1600Machine::stepLocked(uint64_t* tstates) {
         // to wake it: the boot reaches a genuine HALT waiting on this
         // interrupt, so the timer must keep advancing once it gets there.
         const int cost = (c > 0 ? c : SC7852::kHaltTickCycles);
-        m_timer64Accum += cost * kTimer64AccumScale;
-        while (m_timer64Accum >= kTimer64HalfPeriodScaled) {
-            m_timer64Accum -= kTimer64HalfPeriodScaled;
-            m_timer64State = !m_timer64State;
-            m_z80Mem.setTimer64Bit(m_timer64State); // PB5 raw level only, see its own comment
-            // TRM pin table (INT4, pin 83): "an interrupt is sent to the
-            // CPU on a falling edge." Each high->low transition latches
-            // port 32H bit 4, separately from PB5's raw level (the real ISR
-            // reads 32H right after waking and needs the bit still set --
-            // see latchTimer64InterruptCause()). It latches whatever 35H
-            // says (the ROM's ISR filters the 32H byte with 35H itself,
-            // P1-B3 4102H/4112H); the mask only gates the INT level -- see
-            // PC1600Memory::interruptLevel().
-            if (!m_timer64State) m_z80Mem.latchTimer64InterruptCause();
-            // The sub-CPU's 0.5 s tick comes from the same divider as this
-            // 64 Hz signal, see kTimer64EdgesPerHalfSecond. It raises SRIRQ
-            // bit 1, and INT6 when the mask enables it.
-            if (++m_timer64EdgeCount == kTimer64EdgesPerHalfSecond) {
-                m_timer64EdgeCount = 0;
-                m_z80Mem.subCpu().halfSecondTick();
-            }
-        }
+        advanceTimer64(cost);
         advanceSharedClocks(cost);
         *tstates = static_cast<uint64_t>(cost);
         if (m_ce1600fCard) m_ce1600fCard->advance(static_cast<uint32_t>(cost));
@@ -394,6 +394,20 @@ int PC1600Machine::stepLocked(uint64_t* tstates) {
         }
         maybeDrainTrace();
         return c;
+    }
+    // SC7852 LHNMIO (pin 92): the opcode fetch at 9400H with PU = PV = 1
+    // -- inside the CE-158 high bank's display shift (93F9H-9439H) --
+    // raises the LH5803's NMI. Its handler (C440H) runs a copy of that
+    // routine, redraws the LCD once, acknowledges at port 36H and resumes
+    // the CE-158 at 943AH. Raised before the fetch: the handler redoes
+    // 9400H-9403H itself. The Service Manual says "94**H"; the CE-158 runs
+    // on through 943AH-94xxH with the trap re-armed, so only the 9400H
+    // fetch is decoded here (that and whether port 30H b0 gates the trap
+    // are open). Ref/PC-1600/PC-1600-CPU-LH5803-Compat.md §6.1.
+    if (m_lh5803.pc() == 0x9400 && m_lh5803.pu() && m_lh5803.pv() && !m_lh5803.halted() &&
+        !m_z80Mem.lhNmiLatched()) {
+        m_z80Mem.latchLhNmi();
+        m_lh5803.requestNonMaskableInterrupt();
     }
     int c = m_lh5803.step();
     if (c == 0 && m_lh5803.breakpointsEnabled() && m_lh5803.consumeBreakpointHit()) {
@@ -410,6 +424,7 @@ int PC1600Machine::stepLocked(uint64_t* tstates) {
     // running while it owns the bus -- see advanceSharedClocks(). A halted
     // step returns 0 and is charged LH5801::kHaltTickCycles.
     *tstates = toTStates(static_cast<uint64_t>(c > 0 ? c : LH5801::kHaltTickCycles), /*sc7852Owned=*/false);
+    advanceTimer64(static_cast<int>(*tstates));
     advanceSharedClocks(static_cast<int>(*tstates));
     // LH5803->SC7852: the STA #(0A038H) store is the whole handoff, so the
     // switch happens immediately after this step(). It raises cause bit 3,
@@ -428,6 +443,34 @@ int PC1600Machine::stepLocked(uint64_t* tstates) {
     }
     maybeDrainTrace();
     return c;
+}
+
+void PC1600Machine::advanceTimer64(int tstates) {
+    // The sub-CPU's 64 Hz square wave runs whichever CPU owns the bus: the
+    // LH5803 ROM counts it too (DELAY64, EEB2H/EEECH, polls PB5 at
+    // #(F00FH) -- the CE-158 terminal's menu waits there).
+    m_timer64Accum += tstates * kTimer64AccumScale;
+    while (m_timer64Accum >= kTimer64HalfPeriodScaled) {
+        m_timer64Accum -= kTimer64HalfPeriodScaled;
+        m_timer64State = !m_timer64State;
+        m_z80Mem.setTimer64Bit(m_timer64State); // PB5 raw level only, see its own comment
+        // TRM pin table (INT4, pin 83): "an interrupt is sent to the
+        // CPU on a falling edge." Each high->low transition latches
+        // port 32H bit 4, separately from PB5's raw level (the real ISR
+        // reads 32H right after waking and needs the bit still set --
+        // see latchTimer64InterruptCause()). It latches whatever 35H
+        // says (the ROM's ISR filters the 32H byte with 35H itself,
+        // P1-B3 4102H/4112H); the mask only gates the INT level -- see
+        // PC1600Memory::interruptLevel().
+        if (!m_timer64State) m_z80Mem.latchTimer64InterruptCause();
+        // The sub-CPU's 0.5 s tick comes from the same divider as this
+        // 64 Hz signal, see kTimer64EdgesPerHalfSecond. It raises SRIRQ
+        // bit 1, and INT6 when the mask enables it.
+        if (++m_timer64EdgeCount == kTimer64EdgesPerHalfSecond) {
+            m_timer64EdgeCount = 0;
+            m_z80Mem.subCpu().halfSecondTick();
+        }
+    }
 }
 
 void PC1600Machine::advanceSharedClocks(int tstates) {
@@ -449,6 +492,7 @@ void PC1600Machine::advanceSharedClocks(int tstates) {
     m_z80Mem.subCpu().tickByTStates(tstates);
     m_z80Mem.display().tick(tstates);
     m_ce158.tick(static_cast<uint64_t>(tstates)); // the CE-158's own UART clock
+    m_z80Mem.systemBus().advanceCassette(static_cast<uint32_t>(tstates)); // the cassette recorder
 }
 
 uint64_t PC1600Machine::runCycles(uint64_t maxCycles) {
@@ -575,6 +619,10 @@ std::vector<uint8_t> PC1600Machine::debugSlotImage(int slot) {
 
 PC1600Machine::DebugBankState PC1600Machine::debugBankState() {
     std::lock_guard<std::mutex> lock(m_mutex);
+    return inspectBankState();
+}
+
+PC1600Machine::DebugBankState PC1600Machine::inspectBankState() const {
     DebugBankState s;
     s.port31 = m_bank.readPort31();
     s.port28 = m_bank.slot2VerticalBank();
@@ -624,9 +672,17 @@ PC1600Machine::DebugBankState PC1600Machine::debugBankState() {
         switch (s.pageBBank) {
             case 0:  s.target[1] = PT::SystemRomHi; break;
             case 3:  s.target[1] = s.hiddenBasicRom ? PT::Bank3bRom : PT::Bank3Rom; break;
-            case 4:
-            case 5:  s.target[1] = PT::PeripheralRom; break;
-            default: s.target[1] = PT::OpenBus; break; // banks 1/2/6/7
+            case 1:
+            case 2:  s.target[1] = PT::OpenBus; break;
+            default: {
+                // Banks 4-7 go out on the 60-pin bus (PC1600Memory::read()):
+                // whichever card answers the page's first byte owns it.
+                const SystemBusCard* card = m_z80Mem.systemBus().debugResponder(
+                    PC1600BusDrive::z80MemPins(0x4000, /*forWrite=*/false, s.pageBBank));
+                s.target[1] = card ? PT::BusCard : PT::OpenBus;
+                if (card) s.busCard = card->moduleName();
+                break;
+            }
         }
     }
 
@@ -636,9 +692,9 @@ PC1600Machine::DebugBankState PC1600Machine::debugBankState() {
     } else {
         switch (s.pageCBank) {
             case 0:
-            case 1:  s.target[2] = PT::Slot1; break;
+            case 1:  s.target[2] = s1 ? PT::Slot1 : PT::OpenBus; break;
             case 2:
-            case 3:  s.target[2] = PT::Slot2; break;
+            case 3:  s.target[2] = s2 ? PT::Slot2 : PT::OpenBus; break;
             case 6:  s.target[2] = PT::Bank6Rom; break;
             default: s.target[2] = PT::OpenBus; break; // banks 4/5/7
         }

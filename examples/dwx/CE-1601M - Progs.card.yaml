@@ -33,6 +33,7 @@
 # Ships blank (plain-ram-no-header): a RAM-disk / S0: expansion image is
 # written into it by the PC-1600's own INIT, not baked into the module.
 
+format-version: 1
 module-name: "CE-1601M - Progs"
 template: true
 compatible-hosts: [PC-1600-Slot-2]

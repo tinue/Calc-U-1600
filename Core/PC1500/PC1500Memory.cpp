@@ -8,8 +8,7 @@ PC1500Memory::PC1500Memory(PC1500Variant variant)
     : m_variant(variant),
       m_userRamSize(variant == PC1500Variant::PC1500A ? kUserRamSizeA : kUserRamSizePlain),
       m_systemRamAddrMask(variant == PC1500Variant::PC1500A ? 0x7FF : 0x3FF),
-      m_expansionConnector(variant),
-      m_systemBus(variant) {
+      m_expansionConnector(variant) {
     m_rom.fill(0xFF);  // open until a ROM is loaded
     // Power-up: user CMOS RAM that has lost its supply comes back (mostly)
     // zero on real hardware, not 0xFF -- modelled as all 0x00. The 1.5K at
@@ -51,7 +50,8 @@ void PC1500Memory::reset() {
     // to keep. Clearing RAM is clearRam()'s job (power-up, ALL RESET).
     m_dda = m_opa = m_ddb = m_opb = 0;
     m_opc = 0;
-    m_piezo.setLevel(false);
+    m_serial.reset();
+    updateBuzzerLine(m_serial.sdo());
     m_if = 0;
     m_rtc = Upd1990ac{}; // fresh chip state -- TP un-configured until the ROM issues a rate-select, same as real power-on
     m_ioScratchRegs.fill(0);
@@ -109,7 +109,7 @@ uint8_t PC1500Memory::readOpenBus(uint16_t addr) const {
     // shortcut.
     uint8_t v;
     if (m_expansionConnector.read(addr, m_pu, m_pv, v)) return v;
-    if (m_systemBus.read(addr, m_pu, m_pv, v)) return v;
+    if (busRead(addr, /*me1=*/false, v)) return v;
     return 0xFF;
 }
 
@@ -121,7 +121,7 @@ uint8_t PC1500Memory::readME0(uint16_t addr) {
 void PC1500Memory::writeME0(uint16_t addr, uint8_t value) {
     if (uint8_t* p = resolve(addr, /*forWrite=*/true)) { *p = value; return; }
     if (m_expansionConnector.write(addr, m_pu, m_pv, value)) return;
-    if (m_systemBus.write(addr, m_pu, m_pv, value)) return;
+    if (busWrite(addr, /*me1=*/false, value)) return;
 }
 
 uint8_t PC1500Memory::peek(uint16_t addr) const {
@@ -145,23 +145,23 @@ bool PC1500Memory::poke(uint16_t addr, uint8_t value) {
     if (uint8_t* p = resolve(addr, /*forWrite=*/true)) { *p = value; return true; }
     if (const WriteResult r = m_expansionConnector.write(addr, m_pu, m_pv, value, /*direct=*/true))
         return r.stored;
-    // SystemBus (60-pin) carries no lock-gating card today, so a plain
-    // write is enough -- PinState::direct defaults false, matching the
-    // pre-`direct` behavior.
-    return m_systemBus.write(addr, m_pu, m_pv, value).stored;
+    // The 60-pin plug carries no lock-gating card, so a plain write is
+    // enough.
+    return busWrite(addr, /*me1=*/false, value).stored;
 }
 
 uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
     *readable = true;
     // Same order as readME1(); a card register a read would disturb stays
-    // unread (see ExpansionCard::readHasSideEffects).
+    // unread (see SystemBusCard::readHasSideEffects).
     uint8_t v;
-    if (m_systemBus.me1ReadHasSideEffects(addr, m_pu, m_pv)) {
+    const SystemBusPins pins = busPins(addr, /*forWrite=*/false, /*me1=*/true);
+    if (m_systemBus.readHasSideEffects(pins)) {
         *readable = false;
         return 0xFF;
     }
-    if (m_systemBus.readME1(addr, m_pu, m_pv, v)) return v;
-    if (isIoChipAddress(addr)) {
+    if (m_systemBus.read(pins, v)) return v;
+    if (isIoChipAddress(addr) && !isNoRegister(addr)) {
         switch (addr & 0xF) {
             case 0xC: return m_dda;
             case 0xE: return m_opa;
@@ -172,23 +172,21 @@ uint8_t PC1500Memory::debugPeekME1(uint16_t addr, bool* readable) const {
             default: return m_ioScratchRegs[addr & 0xF];
         }
     }
-    return peek(addr);
+    return 0xFF; // open bus, as readME1()
 }
 
 uint8_t PC1500Memory::readME1(uint16_t addr) {
-    // Only the 60-pin SystemBus carries ME1 (the 40-pin connector has no
+    // Only the 60-pin plug carries ME1 (the 40-pin connector has no
     // equivalent), and a card there gets first refusal on every ME1
-    // access. A card register inside the internal LH5811's broad decode
-    // (isIoChipAddress() matches any ME1 address with bits 12-13 set)
-    // shadows it: the CE-150's LH5810 at 0xB008-0xB00F is exactly such a
-    // clash, which the firmware avoids by addressing its own chip at
-    // 0xF00x. The host doesn't need to know which card sits where; with no
-    // card on the chain this falls straight through.
+    // access. The host doesn't need to know which card sits where; with no
+    // card on the chain this falls straight through. The internal LH5811
+    // answers ME1 F000-FFFF (isIoChipAddress()), the CE-150's LH5810 the
+    // B000-BFFF page, so the two never clash.
     {
         uint8_t v;
-        if (m_systemBus.readME1(addr, m_pu, m_pv, v)) return v;
+        if (busRead(addr, /*me1=*/true, v)) return v;
     }
-    if (isIoChipAddress(addr)) {
+    if (isIoChipAddress(addr) && !isNoRegister(addr)) {
         switch (addr & 0xF) { // RS0-3 = AD0-3
             case 0xC: return m_dda;
             case 0xE: return m_opa;
@@ -197,7 +195,14 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
                 uint8_t v = uint8_t(m_opb | 0x08); // PB3 must read high -- confirmed ROM-dispatch gotcha, see header comment
                 if (m_rtc.tp()) v |= 0x20; else v &= uint8_t(~0x20); // PB5 = RTC TP live level (+ any pending edge) -- see Upd1990ac::tp()
                 if (m_rtc.dataOut()) v |= 0x40; else v &= uint8_t(~0x40); // PB6 = RTC DATA OUT -- the bit WRITE_2_CLOCK ($E52B) clocks out on a TIME read
-                if (m_onKeyPressed) v &= uint8_t(~0x80); else v |= 0x80; // ON key on PB7; polarity unconfirmed, see header comment
+                // ON key on PB7, high while pressed: IF1 latches PB7's rising
+                // edge on a press (TRM p.71), the CE-150's tape reader takes
+                // PB7 = 1 as BREAK (LOAD_NIBBLE &BE2F), and the PC-1600's
+                // compatible block reads 1 = pressed (Baum p.92). The system
+                // ROM itself only sees the IF1 latch.
+                if (m_onKeyPressed) v |= 0x80; else v &= uint8_t(~0x80);
+                // PB2 = CMTIN, while a tape interface drives it
+                if (m_systemBus.cmtIn((v & 0x04) != 0)) v |= 0x04; else v &= uint8_t(~0x04);
                 return v;
             }
             case 0x8: return m_opc;
@@ -207,17 +212,25 @@ uint8_t PC1500Memory::readME1(uint16_t addr) {
                 // comment in the header for why that specific behavior is
                 // what actually breaks BREAK.
                 if (m_rtc.consumeRisingEdge()) m_if |= 0x02;
-                return m_if;
-            default: return m_ioScratchRegs[addr & 0xF]; // serial/etc: not modeled, but read back what was written
+                return uint8_t((m_if & ~0x08) | (m_serial.td() ? 0x08 : 0x00)); // b3 = TD, read-only
+            // MSK read: bit 7 = CL1, wired to CL0 (the serial clock; PC-1500
+            // Service Manual pin table) -- the CE-150 tape reader's timer.
+            case 0xA: return uint8_t((m_ioScratchRegs[0xA] & 0x7F) | (m_serial.cl0() ? 0x80 : 0x00));
+            case 0x9: return m_serial.g();
+            default: return m_ioScratchRegs[addr & 0xF]; // not modeled, but read back what was written
         }
     }
-    return readME0(addr); // no other documented ME1 wiring -- conservative mirror
+    // Nothing else answers in ME1: the RAMs, the display RAM and the ROM
+    // decode ME0 only (TRM chip-select table: "S0-S7, V2, V3 are applicable
+    // only for the ME0 area"), and a real PC-1500A reads 255 there --
+    // PEEK# &111, &7C02 and &C000 (2026-10-10, docs/background/Decisions.md).
+    return 0xFF;
 }
 
 void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
     // See readME1(): a 60-pin card gets first refusal on every ME1 access.
-    if (m_systemBus.writeME1(addr, m_pu, m_pv, value)) return;
-    if (isIoChipAddress(addr)) {
+    if (busWrite(addr, /*me1=*/true, value)) return;
+    if (isIoChipAddress(addr) && !isNoRegister(addr)) {
         switch (addr & 0xF) {
             case 0xC: m_dda = value; return;
             case 0xE: m_opa = value; return; // drives the keyboard column strobe -- see readInputPort()
@@ -232,14 +245,18 @@ void PC1500Memory::writeME1(uint16_t addr, uint8_t value) {
                 m_rtc.setControlPins((value & 0x01) != 0, (value & 0x02) != 0,
                                       (value & 0x04) != 0, (value & 0x08) != 0,
                                       (value & 0x10) != 0, (value & 0x20) != 0);
-                // PC6 drives the piezo buzzer; the BEEP loop toggles it.
-                m_piezo.setLevel((value & 0x40) != 0);
+                // PC6 is one input of the buzzer gate; the BEEP loop toggles it.
+                updateBuzzerLine(m_serial.sdo());
                 return;
             case 0xB: m_if = value; return;
-            default: m_ioScratchRegs[addr & 0xF] = value; return; // serial/etc: not modeled, but not discarded either
+            case 0x4: m_serial.resetDivider(); return;
+            case 0x6: m_serial.writeL(value); return;
+            case 0x7: m_serial.writeF(value); return;
+            case 0x9: m_serial.writeG(value); return;
+            default: m_ioScratchRegs[addr & 0xF] = value; return; // not modeled, but not discarded either
         }
     }
-    writeME0(addr, value);
+    // Unclaimed ME1: no chip takes the write (see readME1()).
 }
 
 uint8_t PC1500Memory::readInputPort() {

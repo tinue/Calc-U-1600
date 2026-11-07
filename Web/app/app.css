@@ -1,0 +1,49 @@
+/* The installed app: the client filling the viewport, clear of notches and
+   the home indicator. */
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #ffffff;
+  overscroll-behavior: none; /* no rubber-band / pull-to-refresh */
+}
+@media (prefers-color-scheme: dark) { html, body { background: #1e1e1e; } }
+
+* {
+  -webkit-touch-callout: none;
+  touch-action: manipulation; /* no ~300 ms tap delay */
+}
+
+#root {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.install-banner {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 100;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom)) 14px;
+  background: rgba(240, 240, 240, .95);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid #ccc;
+  font: 13px -apple-system, "Segoe UI", sans-serif;
+  color: #222;
+}
+.install-banner-text { flex: 1 1 auto; }
+.install-banner-cta {
+  flex: 0 0 auto;
+  font-weight: 700; font-size: 12px; padding: 7px 14px;
+  border-radius: 6px; border: 0; cursor: pointer;
+  background: #0a84ff; color: #fff;
+}
+.install-banner-close {
+  flex: 0 0 auto;
+  width: 24px; height: 24px;
+  background: transparent; border: 0; border-radius: 4px;
+  color: #777; font-size: 16px; line-height: 1; cursor: pointer;
+}
