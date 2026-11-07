@@ -1,6 +1,6 @@
 # macOS signing & notarization
 
-The `macos` job in [`workflows/build.yml`](workflows/build.yml):
+The `mac-aarch64` job in [`workflows/build.yml`](workflows/build.yml):
 
 1. Runs `macdeployqt` on the `.app` (Qt6/CMakeLists.txt's `MACOSX_BUNDLE`) to embed the
    Qt frameworks, so the bundle doesn't depend on Homebrew's Qt being present on the

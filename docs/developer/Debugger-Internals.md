@@ -56,7 +56,8 @@ and [../background/plans/Debugger-Use-Cases-Plan.md](../background/plans/Debugge
   load drives the machine directly and must never park on a breakpoint;
   those loops would hang.
 - **Queueing:** DAP messages wait while the app runs a synchronous
-  operation (`SyncOperations::busyChanged`). An attach handled during the
+  operation (`MachineController::appBusyChanged`, from `AppSession`'s
+  `busyChanged`). An attach handled during the
   startup preset would rebuild the machine under the running loader.
 - **Typing:** the GUI paste never presses ENTER; that's deliberate. Tools
   use `typeCommand()`, which does. `enqueueKey()` is PC-1500 only.

@@ -23,9 +23,9 @@ frameworks.
 
 ## Linking
 
-The Qt6 app links `libsharpdx.a` through `Qt6/CMakeLists.txt`. The headless
-CLI / test builds (`tools/*.sh`) pass the archive path on the clang++
-command line.
+Every CMake build (the Qt6 app, the tests, the web engine) links it through
+the `calcu_sharpdx` target in `cmake/CalcU.cmake`. Only the script builds
+(`tools/build_*.sh`) pass the archive path on the clang++ command line.
 
 `ld` prints a handful of `object file ... was built for newer 'macOS'
 version (26.0) than being linked` warnings: those are the Rust toolchain's
@@ -48,7 +48,7 @@ Run `tools/refresh_sharpdx.sh` from the repo root after the sibling
 `libsharpdx-wasm.a` is the same crate built for `wasm32-unknown-emscripten`
 by `tools/build_sharpdx_wasm.sh` (needs `rustup target add
 wasm32-unknown-emscripten` and `emcc`), committed so the WebAssembly check
-(`tools/build_wasm_check.sh`, CI job `wasm-check`) needs no Rust toolchain.
+(`tools/build_wasm_check.sh`, CI job `web`) needs no Rust toolchain.
 Rust's std for that target uses native wasm exception handling, so the C++
 side is built with `-fwasm-exceptions`, and the Emscripten used to link it
 should match the one it was built with (6.0.13).

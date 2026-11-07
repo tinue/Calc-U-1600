@@ -5,7 +5,9 @@ Calc-U-1600 emulates three Sharp pocket computers in one desktop app: the
 the memory modules, the CE-150 and CE-1600P plotters with their cassette
 interfaces, the CE-1600F floppy drive and the CE-158 interface. It connects the calculators' serial ports
 to your computer, and on the PC-1600 a folder on your computer can be a
-drive.
+drive. A preview of the same emulator runs in the browser
+([README](../README.md#web-version-preview)); this guide describes the
+desktop app.
 
 This guide starts with the basics and gets more technical as it goes:
 
@@ -109,7 +111,7 @@ Your computer's keyboard drives the calculator directly:
 
 - **Letters, digits, `+ - * / ( ) . =`**, **Space**, **Enter/Return**
   (ENTER) and the **arrow keys** type as you'd expect.
-- **Backspace** is the calculator's delete-left key.
+- **Backspace** is BS on the PC-1600 and ← on the PC-1500/1500A.
 - **F1–F6** are the six function keys.
 - **Tab** is MODE (RUN/PRO).
 - **Delete** is CL; **Shift+Delete** is Shift+CL.
@@ -146,6 +148,9 @@ SHIFT symbol:
   match a character, for example a block like `█`, is copied as that
   character. Paste Text after Copy Screen types the screen's first line back
   in.
+
+  While text is selected in the Inspector, the same menu entry reads
+  **Copy Log Selection** and copies that text instead.
 
 - **Edit ▸ Paste Text** (⌘V / Ctrl-V) types the clipboard's **first line**
   into the calculator, key by key. It stops at the line break and doesn't
@@ -624,7 +629,8 @@ model, modules and peripherals, then what to type and which programs to
 load. The file extension matches the model: `.pc1500`, `.pc1500a` or
 `.pc1600`. Open one with **File ▸ Load Preset…**. The
 [examples/](../examples/) folder is full of them; the ones the app comes
-with are under **File ▸ Examples**, by their description.
+with are under **File ▸ Examples**, grouped (BASIC, Plotter, Machine
+code, Memory) and listed by their description.
 
 A preset always runs in the same order:
 
@@ -926,6 +932,8 @@ debugger ([Debugger.md](Debugger.md)).
   a `.card.yaml` (see below).
 - **Clear** (bin icon): empties the log.
 - **TRACE:** starts / stops a CPU instruction trace into the trace directory.
+- **LOG:** a placeholder for now: it cycles Off / Info / Debug, but logs
+  nothing yet.
 
 The headless CLIs print the same views: `--inspect <view>` (repeatable)
 with `pointers`, `inventory`, `z80`, `lh`, `basic`, `programs`, `disks`,
@@ -947,8 +955,8 @@ why) and [Memory-Card-Definition-Format.md](Memory-Card-Definition-Format.md)
   [examples/memory/memory-cards/pc1500-maxed-out.card.yaml](../examples/memory/memory-cards/pc1500-maxed-out.card.yaml)
   shows every PC-1500 expansion pin in use, and its preset loads it with
   `slot-1-file:`.
-- **Make it appear in the pickers:** put a file with `template: true` in
-  the Battery-card saves folder. Like the bundled cards it is never written
+- **Make it appear in the pickers:** put a file with `format-version: 1`
+  and `template: true` in the Battery-card saves folder. Like the bundled cards it is never written
   to, and Name & Save makes your own copy.
 - **A card with content already on it:**
   1. Prepare it with a preset (see [examples/setup/](../examples/setup/)).

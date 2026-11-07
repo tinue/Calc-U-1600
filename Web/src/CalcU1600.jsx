@@ -76,7 +76,7 @@ function CalcU1600(props) {
   }, []);
 
   const ready = useEngine(engine, (s) => s.ready);
-  // File ▸ Examples: examples/bundled.yaml's `examples`, from the engine.
+  // File ▸ Load Preset: examples/bundled.yaml's `examples`, from the engine.
   React.useEffect(() => {
     if (ready) engine.request("presetExamples").then(setPresets).catch(() => {});
   }, [ready]);

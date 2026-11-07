@@ -2,6 +2,8 @@
 
 Calc-U-1600 is an emulator for the Sharp PC-1500, PC-1500A, and PC-1600
 pocket computers, built as a Qt6 desktop app (macOS / Linux / Windows).
+A preview of a web version runs in the browser at
+<https://tinue.github.io/1600>.
 
 ## Quick Start
 
@@ -9,11 +11,13 @@ pocket computers, built as a Qt6 desktop app (macOS / Linux / Windows).
    download the package for your platform, along with
    `Calc-U-1600-examples.zip` — the sample presets and BASIC programs
    used below.
-2. Launch the app, open **Settings…** (Cmd-, / Ctrl-,), and point **Samples
-   folder** at the unzipped `examples/` folder from step 1.
-3. Pick a model (PC-1500, PC-1500A, or PC-1600) from the control bar, and
+2. Launch the app and pick one of the presets under **File ▸ Examples**:
+   each builds a machine and runs a program on it.
+3. Open **Settings…** (Cmd-, / Ctrl-,), and point **Samples folder** at
+   the unzipped `examples/` folder from step 1.
+4. Pick a model (PC-1500, PC-1500A, or PC-1600) from the control bar, and
    attach a memory module and/or a plotter if you'd like to try those.
-4. **File ▸ Load BASIC Program…**, pick a `.bas` file from `examples/`
+5. **File ▸ Load BASIC Program…**, pick a `.bas` file from `examples/`
    (e.g. `plotter/lissajou-1600.bas` on a PC-1600), and `RUN` it.
    `examples/README.md` lists what else is in there.
 
@@ -22,8 +26,28 @@ pocket computers, built as a Qt6 desktop app (macOS / Linux / Windows).
 This is a **beta release**. The emulation itself is complete and
 working: all three models run their real firmware, not a simulated
 subset. Future releases will focus on the surroundings around that core
-— things like the debugger and the debug panel — rather than the emulation
+— things like the debugger and the Inspector — rather than the emulation
 itself. What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
+
+## Web version (preview)
+
+<https://tinue.github.io/1600> runs the same emulator in the browser,
+compiled to WebAssembly, with the desktop app's faceplate, menus, control
+bar and panels. It is a preview, made for tablets and desktop browsers; a
+phone works, and in landscape it shows the calculator alone. The browser
+can install it as an app, which then runs offline.
+
+- **File ▸ Load Preset** has the bundled examples; **Upload Preset…** loads
+  your own.
+- Cards, disks and tapes you save stay in the browser.
+  **File ▸ Import Card, Disk or Tape…** brings files in, **File ▸ Saved
+  Media…** downloads or deletes them. Only one tab saves; a second tab
+  says so.
+- A link can choose the model (0 PC-1500, 1 PC-1500A, 2 PC-1600) and a
+  bundled preset to start with:
+  `https://tinue.github.io/1600/calc/?model=2&preset=plotter/lissajou-1600.pc1600`.
+- Not in the browser: the debugger, the serial ports, the host drive
+  `S3:`, and the Inspector's TRACE and LOG.
 
 ## Documentation
 

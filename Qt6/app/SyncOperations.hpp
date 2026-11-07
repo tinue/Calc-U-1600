@@ -20,7 +20,8 @@ class QWidget;
 // painting between job slices (user input excluded), and a "Loading…"
 // popup when it takes long. Afterwards the frame timer restarts. Pending
 // card/disk writes go first, and the stale audio and the clock are dealt
-// with, inside AppSession. busyChanged() tells listeners (the debugger's
+// with, inside AppSession. AppSession's busyChanged (as
+// MachineController::appBusyChanged) tells listeners (the debugger's
 // request queue) when the machine is being driven this way.
 class SyncOperations : public QObject {
     Q_OBJECT

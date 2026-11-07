@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")/../.."
 mkdir -p headless/loader-matrix
-clang++ -std=c++17 -Wall -Wextra -O2 \
+clang++ -std=c++20 -Wall -Wextra -O2 \
   Core/CPU/LH5801/LH5801.cpp \
   Core/Audio/PiezoSampler.cpp \
   Core/PC1500/PC1500Memory.cpp \

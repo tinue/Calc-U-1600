@@ -32,11 +32,11 @@ decisions, plans, handoffs — is in [../background/README.md](../background/REA
 | `cmake/` | `CalcU.cmake`: the `calcu_core` / `calcu_shared` libraries for every CMake build |
 | `firmware/` | Our own ROMs, e.g. the host-drive driver ROM (`firmware/pc1600-hostdrive/`) |
 | `vscode/` | The VS Code debugger extension ([README](../../vscode/calcu1600-debug/README.md)); `tools/install_vscode_extension.sh` packages and installs it |
-| `tools/` | Build scripts, the headless CLIs (`pc1500_cli`, `pc1600_cli`), probes, `fetch_roms.sh`, `fetch_sharpdx.sh` / `refresh_sharpdx.sh`, `run_tests.sh`, `dap_smoke.py`, `read_trace.py`, `make_screenshots.sh` |
+| `tools/` | Build scripts, the headless CLIs (`pc1500_cli`, `pc1600_cli`), probes, `fetch_roms.sh`, `fetch_sharpdx.sh` / `refresh_sharpdx.sh`, `run_tests.sh`, `build_wasm_check.sh` / `build_sharpdx_wasm.sh`, `dap_smoke.py`, `read_trace.py`, `make_screenshots.sh` |
 | `examples/` | User-facing samples, shipped as `Calc-U-1600-examples.zip` ([README](../../examples/README.md)); `examples/setup/` prepares memory cards ([README](../../examples/setup/README.md)) |
 | `dev/` | Developer material that is not shipped: hardware checks and their presets ([README](../../dev/README.md)) |
 | `headless/` | Gitignored scratch output of the CLIs and probes ([README](../../headless/README.md)) |
-| `bin/` | The release script |
+| `release.yaml` | The release settings (assets, signing certificates) for the ReleaseIt tool |
 
 ## How the emulator works
 

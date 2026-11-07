@@ -16,7 +16,7 @@ Top line: with host Shift held; bottom line: plain.
 ---
 
 How host keys map to calculator keys in the Qt6 app
-(`Qt6/app/PC1500KeyboardMap.cpp`, shifted symbols from
+(`Shared/HostKeyMap.cpp`, shifted symbols from
 `Core/SharpShiftedSymbols.hpp`). "Shift+`X`" in the calculator column
 means the calculator's own SHIFT is tapped first, then `X`.
 

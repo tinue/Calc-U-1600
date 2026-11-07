@@ -329,8 +329,8 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   `PC1500Memory.hpp`
 - **MSK and the unused register-select codes** are stored as plain
   read/write bytes (default `0x00`); a MSK read adds CL1 in bit 7. MSK's
-  interrupt-masking effect isn't modelled. `PC1500Memory::readIO()` /
-  `writeIO()`
+  interrupt-masking effect isn't modelled. `m_ioScratchRegs` in
+  `PC1500Memory::readME1()` / `writeME1()`
 - **BREAK via the ON key** is reproduced by a direct write to IF bit 1 on
   the press transition. Real hardware most plausibly has the ON key's IRQ
   line OR-wired onto the same latch TP's rising edge sets — "plausible but
@@ -424,7 +424,7 @@ wildcards, the interrupt mask/pending bits and INT6, the password, the reset
   latch, two-sided media, real motor-startup/access timing. CE-1600F
   attaches as a union with CE-1600P (there is no separate floppy
   attach/detach); persistence is a versioned `<name>.floppy.yaml`
-  (`Connector/FloppyImageFile.hpp`) via `FloppyDiskManager`.
+  (`Connector/FloppyImageFile.hpp`) via `shared::FloppyBay`.
 - **Not modeled**: GCR (4/5) encoding (sector bytes are stored decoded,
   per the Service Manual's own note that this only matters at the
   flux/bitstream level), the FDU-250's solenoid/cam seek mechanics,

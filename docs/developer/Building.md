@@ -36,7 +36,7 @@ library, `Core/Basic/vendor/sharpdx/`: it tells what a file is and
 tokenizes BASIC listings.
 
 - On **macOS** it's committed directly to the repo — nothing to do.
-- On **Linux/Windows** it's fetched at configure time by
+- On **Linux/Windows** fetch it before configuring with
   `tools/fetch_sharpdx.sh` (see below) from a `SharpDataExchange`
   GitHub release.
 
@@ -116,8 +116,7 @@ see the `linux-x86_64`/`linux-aarch64` jobs in
 [`.github/workflows/build.yml`](../../.github/workflows/build.yml) for the
 full `linuxdeploy`/`linuxdeploy-plugin-qt` recipe (it's involved enough —
 Wayland plugin handling included — that it's not worth hand-transcribing
-here; run the workflow or copy its steps directly). Linux arm64 CI is
-`continue-on-error` in that workflow, i.e. best-effort even there.
+here; run the workflow or copy its steps directly).
 
 ### Windows (best-effort — CI-derived, not verified on a fresh machine)
 

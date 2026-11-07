@@ -805,10 +805,11 @@ authentic speed for the span that matters.
 - **Left out on the web:** the DAP debugger (not in Shared), serial ports
   (host PTYs), the host drive S3:, TRACE/LOG. The CE-158 demos wait for
   serial input, so they aren't among the bundled presets.
-- **A host key is held at least 50 ms.** Keydown and keyup are separate
-  worker messages and can land in one 60 Hz frame; a press that lasts no
-  emulated time is never scanned (the PC-1600 presses physical keys for
-  real).
+- **No key hold of its own on the web.** Keydown and keyup are separate
+  worker messages and can land in one 60 Hz frame; Shared's 2-frame minimum
+  (`MachineSession::releaseKey()`, above) covers that. A 50 ms real-time
+  hold on top of it made fast typing overlap keys, and the ROM dropped
+  letters.
 - **Hit-testing and the LCD drawing are in the page.** They are drawing
   (the Qt widgets do the same with the same Shared numbers); a round trip to
   the worker per pointer event would add a frame of latency.

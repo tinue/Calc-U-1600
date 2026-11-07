@@ -60,6 +60,12 @@ WebAssembly check.
 | `Settings`, `AppPaths`, `Utf8Path` | Every settings key with its default; the save/tapes/bundle folders and by-name save paths |
 | `HostKeyMap`, `KeyLayout/`, `LcdLayout`, `PlotterPaper`, `Rgb` | Host keys → calculator keys; key hit-regions and the faceplate fit; LCD geometry, colours and status indicators (`lcd::indicators()`); plotter-paper geometry |
 | `MachineModel` | The `Model` and ROM-version enums |
+| `ControlState` | What the pickers, menus and panels offer right now: every rule about which control a model has and which peripheral excludes which |
+| `MediaLibrary` | The save folder's cards, disks and tapes as items to list, export, import and delete (the web's Saved Media…) |
+| `MachineCodeLoad` | Load BASIC Program… / Load Machine Code…: a WAV's files to pick from, then the load and its advice |
+| `CardYamlDump` | The INSPECTOR's Card YAML: each slot's module RAM as an `initial-content:` block |
+| `DisplayFrame` | One model-agnostic LCD frame a renderer paints from |
+| `DirectoryScanCache`, `Text` | A media folder's last parse, reused while its files are unchanged; small string helpers |
 
 ## How a frontend drives it
 

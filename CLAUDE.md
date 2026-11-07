@@ -13,9 +13,9 @@ cmake --build build-debug --target CoreTests
 
 ## Core, Shared, frontends
 
-Three layers (docs/developer/Shared-Architecture.md): `Core/` is the hardware, `Shared/` all app logic that isn't drawing, `Qt6/app/` the desktop GUI (a WebAssembly GUI will be the second frontend).
+Three layers (docs/developer/Shared-Architecture.md): `Core/` is the hardware, `Shared/` all app logic that isn't drawing, `Qt6/app/` the desktop GUI, `Web/` the WebAssembly browser GUI.
 
 - Non-GUI logic goes in `Shared/` (or `Core/`), never in `Qt6/app/`; Qt classes translate types and show what Shared decides.
 - Core and Shared: portable C++20, standard library only, single-threaded, never blocking. Long machine work is a resumable job (`Core/Job.hpp`: `co_await job::run(machine, n)`); coroutine parameters by value.
-- A change to `Core/` or `Shared/` passes `tools/run_tests.sh` and `tools/build_wasm_check.sh`, and the Qt app builds.
+- A change to `Core/` or `Shared/` passes `tools/run_tests.sh` and `tools/build_wasm_check.sh`, and the Qt app builds; a change the web client sees also passes `Web/build.sh` + `Web/run-tests.sh`.
 

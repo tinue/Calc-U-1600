@@ -33,6 +33,7 @@ keys (the test suite checks it).
 |---|---|---|
 | `hanoi.pc1600` | PC-1600 | Towers of Hanoi game, up to seven bricks |
 | `dampflok.bas` | PC-1600 | Steam train animation on the LCD, with sound (from Baum's *PC-1600 Systemhandbuch*) |
+| `old-vs-new-rom.bas` | PC-1600 + CE-1600P | Plots the characters that differ between the old and the new ROM |
 
 ## interfaces/ — CE-158 and the PC-1600 serial port
 

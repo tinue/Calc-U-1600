@@ -282,8 +282,8 @@ initial-content:
 ### `encoding: addressed-hex`
 
 A project-specific dialect designed so a memory dump can be pasted
-straight into a `bytes: |` block with no reformatting — the "dump whole
-card, ready to paste" debug feature (§9) emits exactly this. Lines are
+straight into a `bytes: |` block with no reformatting — the Inspector's
+**Card YAML** button (User Guide §9.2) emits exactly this. Lines are
 either an explicit row or a same-byte run:
 
 ```yaml
@@ -302,9 +302,9 @@ bytes: |
   including) the next line's address" — or up to the end of the block's
   span for the last line. This is exact, not a guess: because lines must
   partition the block's address range with no gap or overlap, a run's
-  length is always computable from the surrounding addresses, unlike the
-  existing elided `debugDumpMemRegion` console dump (which drops a run
-  with no record of which byte value it was).
+  length is always computable from the surrounding addresses, unlike an
+  elided hex dump (which drops a run with no record of which byte value it
+  was).
 - A run only ever stands for one uniform byte value — content that
   alternates between two fill values (e.g. `00`/`FF` rows) is written out
   in full, the same as an ordinary row.

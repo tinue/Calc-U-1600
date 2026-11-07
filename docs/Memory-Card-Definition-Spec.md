@@ -8,7 +8,7 @@ in `Memory-Card-Definition-Format.md`, with worked examples under
 model is the fixed part. For a gentler, example-first introduction (starting
 from the "fully maxed out" fictional PC-1500 card in
 `examples/memory/memory-cards/pc1500-maxed-out.card.yaml`), see
-`docs/User-Guide.md`'s "Custom YAML memory cards" section — this document
+`docs/User-Guide.md`'s "Custom memory cards" section (§9.3) — this document
 and the format spec are the full reference the walkthrough links back to.
 This document also isn't the "concrete
 software-defined memory module" implementation itself
@@ -142,7 +142,7 @@ address map, since there's no signal name to anchor the decision to.
   template's source text — the splicing itself is a shared Core function,
   `spliceBatteryCardInstance()` in `Core/Connector/BatteryCardInstance.hpp`;
   the GUI-side orchestration — naming, save triggers, the instance
-  directory — is `Qt6/app/MemoryModuleManager.cpp` + `AppPaths.cpp`)
+  directory — is `Shared/ModuleBay.cpp` + `Shared/AppPaths.cpp`)
   that keeps its contents durably up to date across reloads and app
   restarts. A card without `battery: true` stays purely volatile.
 
@@ -359,12 +359,11 @@ incomplete without one) and any other region or bank-range may carry
 regardless of its D2 kind. It expresses:
 
 - **The bytes themselves**, as an ordered sequence over the range's
-  capacity. The concrete encoding (hex text, base64 blob, numeric array,
-  or a parse-time include of a sidecar data file folded into the file) is
-  a serialization question settled in Format.md §6 (`hex` / `base64` /
-  `addressed-hex` / `file`) — the content-model requirement is only that
-  the definition file is self-contained, with no file lookup at *run*
-  time.
+  capacity. The concrete encoding is a serialization question settled in
+  Format.md §6 (`hex` / `base64` / `addressed-hex`) — the content-model
+  requirement is only that the definition file is self-contained, with no
+  file lookup. A ROM module under development takes its bytes from the
+  preset instead (`slot-N-rom:`, see `docs/Debugger.md`).
 - **Placement within the region / bank window** — the offset each run of
   bytes starts at, so a range that populates only part of its address span
   (e.g. the 8-byte PC-1600 module header at its fixed offset plus a jump
@@ -605,7 +604,7 @@ Three structural points this table confirms rather than just illustrates:
 
 - **File format/serialization** — specified in
   `Memory-Card-Definition-Format.md` (YAML; key names, the §3 addressing
-  grammar, and hex/base64/sidecar encoding of the §5a byte blocks), with
+  grammar, and hex/base64/addressed-hex encoding of the §5a byte blocks), with
   worked `Qt6/resources/cards/*.card.yaml` for CE-151, CE-155, CE-161, CE-1600M,
   CE-1601M, superRAM, CE-1638, CE-163F and CE-502B (Format.md §7). That
   format is still revisable — this content model, not the YAML spelling,

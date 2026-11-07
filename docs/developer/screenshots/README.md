@@ -180,7 +180,7 @@ pictures don't change when an example preset does.
 
 **Leave the calculator in RUN mode.** PRO mode is only right when the shot
 shows a LIST or program entry. A capture taken in PRO mode logs a note. Start
-from a clean `NEW0`, or the BASIC pointers (and so Debug ▸ Pointers, MEM
+from a clean `NEW0`, or the BASIC pointers (and so the INSPECTOR's Pointers, MEM
 and so on) are garbage:
 
 - PC-1500/1500A cold boot lands in PRO mode, so use `key: cl`, `type: NEW0`,

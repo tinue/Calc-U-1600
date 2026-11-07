@@ -7,8 +7,9 @@ One build (`Web/dist/`) serves two uses:
 - **embedded** in a web page, as a component;
 - **installed** as an offline app (`dist/app/`, a PWA), for a tablet.
 
-It is made for landscape screens and tablets; phones are not designed
-for. The calculator comes first: the faceplate is as large as the client
+It is made for landscape screens and tablets; a phone works (touch takes
+the nearest key, the menus are taller on touch screens) but gets the
+calculator alone in landscape. The calculator comes first: the faceplate is as large as the client
 allows, and the panels (inspector, plotter paper, printer) appear only when
 the faceplate spans the full width and leaves at least 220 px below it --
 in portrait and in tall windows, not on a phone in landscape or in a wide,
@@ -117,9 +118,10 @@ Things that are only in the Qt app, or that a browser can't do:
   key with two fingers. Holding the LCD runs turbo.
 - **Keyboard.** `KeyboardEvent.code` / `.key` go to
   `shared::resolveHostKey`. A bare Shift tapped within 400 ms is SHIFT.
-  Auto-repeat is ignored and held keys are released on blur. A release
-  reaches the engine at least 50 ms after its press, since both can land
-  in one frame.
+  Auto-repeat is ignored and held keys are released on blur. The web keeps
+  no hold of its own: `MachineSession::releaseKey()` holds every key at
+  least 2 emulated frames and a following press waits for it, so a press
+  and release in one frame are still scanned.
 - **Clipboard.** ⌘/Ctrl+C copies the screen; ⌘/Ctrl+V pastes text (the
   browser's paste event).
 - **Drag and drop.** One file of up to 1 MB, routed by

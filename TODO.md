@@ -80,15 +80,18 @@ obligations.
 
   MODE 1 (LH-5803) hasn't been re-measured since the host-pacing fix; the
   old "~7% fast" figure predates it.
-- **Open bus reads as a constant FFH; real hardware returns the last byte
-  on the data bus. To decide.** PC-1600 MODE 0, CE-163F in Slot 2:
+- **An empty slot in ME0 reads as a constant FFH; real hardware returns
+  the last byte on the data bus. To decide.** ME1 is settled (a782c7a,
+  Decisions.md "Unclaimed ME1 is not a mirror of ME0"): the PC-1600's
+  `LH5803SharedMemory::readME1` already returns the last bus byte. ME0
+  isn't: PC-1600 MODE 0, CE-163F in Slot 2:
   `XPEEK&C5` returns 37 on a real unit and 255 in the emulator. In MODE 0
   the Z-80 hands over with Port 31H = 06H (page C = bank 0, the empty
   Slot 1) and `P_MAPPRG` leaves it there, so the mapping is right. The
   LH5803's PEEK reads with `lda (u)` (rom1500 D997), opcode 25H = 37: the
-  floating bus still holds the opcode just fetched. Decide whether to
-  model this (last data-bus byte per CPU/bus, on both machines?) or keep
-  FFH and record the choice in Decisions.md. A change would reach every
+  floating bus still holds the opcode just fetched. Decide whether ME0
+  follows ME1 (last data-bus byte per CPU/bus, on both machines?) or keeps
+  FFH, and record the choice in Decisions.md. A change would reach every
   open-bus read, e.g. the RAM-sizing probes and the empty-slot checks in
   the tests.
 
@@ -380,8 +383,9 @@ Shared-Layer-Followup-Plan.md and Web-GUI-Plan.md.
 
 - **Web client: the play page on calc-u.org/1600**, wiring the pinned
   `Calc-U-1600-web.zip` into calc-u-site like `59/` (fetch script, page,
-  app link), and a user-guide section for the web. Parity table
-  (Calc-U-59 style) still open.
+  app link); it replaces the temporary preview at tinue.github.io/1600.
+  Then a user-guide section for the web (README has a short one) and a
+  parity table (Calc-U-59 style).
 - **Web client: check on a real iPad** -- touch, two-finger SHIFT + key,
   install from Safari, persistence after closing the app, audio.
 - **The DAP debugger to Shared.** `Qt6/app/debug/DapSession` (~1100 lines)
@@ -393,8 +397,6 @@ Shared-Layer-Followup-Plan.md and Web-GUI-Plan.md.
   run presets through `AppSession` (headless Platform) instead.
 - **`tools/build_*.sh` and the probes still list Core sources by hand**
   (the probes need `PC1600_POWER_PROBE`); CMake globs everything else.
-- **CI `web` job not run yet** (workflow is manual-dispatch only): the
-  emsdk 6.0.13 / node 24 versions are pinned blind.
 
 ## Feature ideas
 
@@ -491,7 +493,7 @@ Shared-Layer-Followup-Plan.md and Web-GUI-Plan.md.
     and the key table in Floppy-Image-Format.md.
   - Emulator: a cheap periodic check of the inserted disk (mtime first,
     then the header only, not the 1 MB of sector hex) and the
-    unload/clear/reload in `FloppyDiskManager`, skipped while an autosave
+    unload/clear/reload in `Shared/FloppyBay`, skipped while an autosave
     is pending.
   - SharpDataExchange (separate repo): `sde put`/`del` set `dirty: true`
     (and refuse a template), and libsharpdx's reader accepts the key.
@@ -508,17 +510,18 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
   the connector model; can be done any time.
   - `CE1600PRomVersion` clones `PC1600RomVersion`, and
     `BundledRoms::isCE1600PRomVersion` == `isPC1600RomVersion`.
-  - The enum↔string mapping is inlined in `MachineController.cpp`
-    (`versionName` lambda in `attachCE1600P`, the member
-    `loadPC1600RomSet`) and `PresetController.cpp`.
-  - The old-ROM fallback `QMessageBox` is copied.
+  - The enum↔string mapping is inlined in `Shared/MachineSession.cpp`
+    (`versionName` lambda in `attachCE1600P`,
+    `makePC1600WithRomFallback`) and `Shared/AppSession.cpp`.
+  - The old-ROM fallback is written twice (`makePC1600WithRomFallback`
+    and `attachCE1600P`, two `Notice`s).
   - MainWindow's Machine menu has four copy-pasted action-group builders
     (`addModelAction`, `addRomAction`, `addRom1600Action`,
     `addCE1600PRomAction`) with four `syncMachineMenuFrom*` setters, and
     the four `apply*Selection` handlers (model, PC-1500 ROM, PC-1600 ROM,
     CE-1600P ROM) each carry an "already checked" guard (dff5d13). The
     ControlBar's model combo duplicates Machine > Model.
-  - `MachineController::serialLinkStatus`/`ce158SerialLinkStatus` are a
+  - `MachineSession::serialLinkStatus`/`ce158SerialLinkStatus` are a
     pair.
 
   Fix: one `NewOldRom` enum with to/from-string, one
@@ -531,11 +534,11 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
   every sync setter only moves them.
 - **Peripheral buttons are one setter per peripheral.**
   `ControlBar::setCe150State`/`setCe158State`/`setCe1600pState` (and the
-  matching `set*Visible` and `*ToggleRequested` triples),
-  `PlotterController`'s per-peripheral toggles and
-  `MachineController::attachCE150/158/1600P` + `detach*` repeat the same
-  shape, and `MainWindow::syncPeripherals()` hard-codes the exclusion rules
-  ("CE-1600P excludes CE-150 and CE-158").
+  matching `set*Visible` and `*ToggleRequested` triples) and
+  `MachineSession::attachCE150/158/1600P` + `detach*` repeat the same
+  shape. The exclusion rules are data already (`Shared/ControlState.cpp`,
+  `{offered, attached, enabled}` per peripheral, b5e553a);
+  `MainWindow::syncPeripherals()` only renders them.
 
   The connector work this waited for is done (2026-10-07): every
   peripheral sits on the one 60-pin `SystemBus`. Target: one button setter
@@ -547,8 +550,10 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
 - **Card/floppy lists and classification are written twice and re-parse
   files.** The save rules are shared since the format freeze
   (`Core/Connector/MediaSave.hpp`: names, template refusals, the target
-  path). Still twice: `MemoryModuleManager` (`moduleLists`, `classifySlot`)
-  and `FloppyDiskManager` (`diskLists`, `classifySource`) each hold
+  path), and the pickers reuse the last directory scan while the files are
+  unchanged (`Shared/DirectoryScanCache.hpp`, dabfe63). Still twice:
+  `Shared/ModuleBay` (`moduleLists`, `classifySlot`) and
+  `Shared/FloppyBay` (`diskLists`, `classifySource`) each hold
   bundled-first shadowing, the template/instance split and the "never
   autosave under the bundle" rule. They also re-read files Core just
   parsed: `attachOneSlot` parses the same `.card.yaml` three times
@@ -576,13 +581,12 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
   - `PresetLoadResult` / the attach path return `{path, isTemplate,
     battery}`, not a bare path;
   - a shared `NamedFileCatalog`-level helper for lists and classify,
-    leaving the managers only Qt glue;
-  - one directory scan per refresh.
+    used by both bays.
 
   **Do this before** the feature ideas that build on this layer: viewing
   a module's or diskette's contents, and watching `.floppy.yaml` for
   outside changes.
-- **PC-1600 live typing rides on the paste feeder.** `MachineController`
+- **PC-1600 live typing rides on the paste feeder.** `Shared/MachineSession`
   runs PC-1600 live keys through the paste `KeyPasteFeeder` with a
   `m_liveTyping` flag that changes what `pasteActive()` means; every paste
   entry point (`enqueueTyped`, `cancelPaste`, `discardMachine`,
@@ -593,11 +597,11 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
   **Before fixing:** the interrupt-a-paste-mid-KBII behaviour
   (`cancel(..., finishKbii)`) must survive the move; check it against the
   KBII entry in docs/background/Decisions.md.
-- **`MachineCodeLoadDialog::refresh()` repeats `planLoad()`'s PC-1600
-  steps** (the LH5803 range check, `lh5803ToZ80`, `pc1600TargetFor`). The
-  dialog gets only the length, not the `File`. Fix: hand it the `File` and
-  `LoadOptions`, call `planLoad()` and add `pc1600WorkAreaWarning` on top.
-  **Before fixing:** the dialog's own texts ("The LH5803's RAM is
+- **`MachineCodeLoad::setAddress()` repeats `planLoad()`'s PC-1600
+  steps** (`Shared/MachineCodeLoad.cpp`: the LH5803 range check,
+  `lh5803ToZ80`, `pc1600TargetFor`). Fix: call `planLoad()` with the
+  `File` it already holds and add `pc1600WorkAreaWarning` on top.
+  **Before fixing:** its own texts ("The LH5803's RAM is
   &0000-&7FFF.") differ from `planLoad()`'s; decide which wording stays.
   Three more places word the same range check differently
   (`machinecode::plan()`, `PresetRunner.cpp`, `Core/Debug/ProgramLoader.cpp`).
@@ -664,11 +668,11 @@ somewhere else doesn't count (see docs/background/plans/Code-Cleanup-Plan.md).
 - **The debugger parses the project preset twice per session action.**
   Attach, restart and Build & Load call `effectiveConfig` →
   `parsePresetFile`, then `loadPreset` / `cleanStart` parse the same file
-  again by path (`parsePreset`, file-local in `PresetController.cpp`),
+  again by path (`parsePresetFile` in `Shared/AppSession.cpp`),
   each time re-reading every `program: file:`. One parse per clean start
   is deliberate (docs/background/Decisions.md), two isn't. Fix: pass the
   `PresetFile` from `effectiveConfig` down (`DebugController` →
-  `SyncOperations` → `PresetController::runPreset(preset)`).
+  `SyncOperations` → `AppSession`).
 - **Small leftovers from the 2026-09-30 simplify pass.** Take them when
   the file is next touched:
   - `--lcd-png` and `--lcd-text` write-and-error blocks are the same in
