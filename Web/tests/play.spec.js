@@ -131,6 +131,15 @@ test('the keyboard comes back to the calculator after a picker or a click', asyn
   await page.keyboard.press('Enter');
   await waitForScreen(page, /56/);
   await expect(page.locator('.calcu-menu')).toHaveCount(0);
+  // iOS moves the focus to a menu title on its first letter typed on a
+  // hardware keyboard: the client takes it straight back, and the next
+  // keys still reach the calculator.
+  await page.keyboard.press('p');
+  await page.locator('.calcu-menubar-item > button', { hasText: 'File' }).focus();
+  await expect(page.locator('.calcu-client')).toBeFocused();
+  await page.keyboard.type('RINT 9*9', { delay: 60 });
+  await page.keyboard.press('Enter');
+  await waitForScreen(page, /81/);
 });
 
 test('a faceplate key types while its pointer is down', async ({ page }) => {

@@ -115,6 +115,14 @@ function CalcU1600(props) {
     }, 0);
   };
 
+  // A button in the client never keeps the focus: every key, Tab included,
+  // goes to the calculator, and a focused button would take ENTER or SPACE.
+  // iOS moves the focus there on its own (a tapped button after the tap, a
+  // menu title on its first letter typed on a hardware keyboard).
+  const onFocusCapture = (e) => {
+    if (e.target.tagName === "BUTTON" && !e.target.closest(".calcu-modal")) reclaimFocus();
+  };
+
   // Notices from the engine, one at a time.
   React.useEffect(() => {
     if (!engine || !notices.length || dialogs.open) return;
@@ -363,6 +371,7 @@ function CalcU1600(props) {
       onKeyDown={onKeyDown} onKeyUp={onKeyUp} onBlur={releaseHeldKeys}
       onPointerDown={() => { shiftTap.current = null; if (engine) engine.unlockAudio(); }}
       onPointerUp={reclaimFocus}
+      onFocusCapture={onFocusCapture}
       onChange={(e) => {
         if (e.target.tagName === "SELECT" && !e.target.closest(".calcu-modal")) { e.target.blur(); reclaimFocus(); }
       }}

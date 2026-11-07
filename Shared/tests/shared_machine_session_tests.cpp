@@ -127,8 +127,8 @@ void test_minimum_key_hold(Model model) {
     std::string text = screen(f.session);
     CHECK(text.find('A') != std::string::npos);
     CHECK(text.find("AA") == std::string::npos);
-    // Pressed again while its deferred release is still pending: the new
-    // press isn't cut short by the old release.
+    // Pressed again while its deferred release is still pending (a quick
+    // double tap): two taps, the second not cut short by the first's release.
     f.session.pressKey("b");
     f.session.releaseKey("b");
     f.session.pressKey("b");
@@ -136,9 +136,20 @@ void test_minimum_key_hold(Model model) {
     f.session.releaseKey("b");
     run(f.session, 1.5);
     text = screen(f.session);
-    CHECK(text.find("AB") != std::string::npos);
-    CHECK(text.find("BB") == std::string::npos);
-    if (text.find("AB") == std::string::npos) std::fprintf(stderr, "  screen: %s\n", text.c_str());
+    CHECK(text.find("ABB") != std::string::npos);
+    CHECK(text.find("BBB") == std::string::npos);
+    if (text.find("ABB") == std::string::npos) std::fprintf(stderr, "  screen: %s\n", text.c_str());
+    // A fast typist: the next key comes while the last one's release is
+    // still deferred. It waits for that release instead of overlapping it
+    // (two keys down at once, and the ROM drops one).
+    for (const char* k : {"c", "d", "d", "e"}) {
+        f.session.pressKey(k);
+        f.session.releaseKey(k);
+    }
+    run(f.session, 1.5);
+    text = screen(f.session);
+    CHECK(text.find("ABBCDDE") != std::string::npos);
+    if (text.find("ABBCDDE") == std::string::npos) std::fprintf(stderr, "  screen: %s\n", text.c_str());
 }
 
 // hostKeyDown() routes a host key the way the model needs.

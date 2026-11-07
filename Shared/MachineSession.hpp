@@ -193,7 +193,8 @@ public:
     // A frontend's own key (faceplate, physical host key). A release that
     // comes before kMinKeyHoldFrames (2) of emulated time since the press -- a
     // quick finger tap, both events between two advance() calls -- is
-    // deferred until then, so the ROM's key scan always sees the key.
+    // deferred until then, so the ROM's key scan always sees the key; a
+    // press while such a release is still to come waits for it.
     void pressKey(const std::string& name);
     void releaseKey(const std::string& name);
     void setOnKeyPressed(bool pressed);
@@ -400,6 +401,7 @@ private:
     std::map<std::string, std::uint64_t> m_keyPressedAt;
     // The machine's key matrix, now: the timed taps and the paste feeder,
     // whose holds are their own.
+    std::uint64_t minKeyHoldCycles() const;
     void machinePressKey(const std::string& name);
     void machineReleaseKey(const std::string& name);
 

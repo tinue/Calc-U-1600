@@ -575,13 +575,21 @@ authentic speed for the span that matters.
   auto-repeat), the rest through the keystroke queue. Any of them stops a
   paste. The frontend keeps only which physical key to release.
 - **A faceplate or host key stays down at least 2 emulated frames**
-  (`MachineSession::releaseKey()` defers an earlier release; one frame is
-  scanned on both models, a longer hold made fast typing overlap keys and
-  drop letters). A quick
+  (`MachineSession::releaseKey()` defers an earlier release). A quick
   finger tap can deliver press and release between two `advance()` calls,
-  and the ROM's key scan would never see the key. The minimum counts
+  and the ROM's key scan would never see the key. One frame is scanned on
+  both models; a longer hold made fast typing overlap keys. A key pressed
+  while another key's deferred release is still to come waits for it plus
+  the same gap: with two keys down the ROM drops one, so the hold must
+  never create an overlap the typist didn't make. A quick double tap of
+  one key queues the same way and stays two taps. The minimum counts
   emulated time, so it holds under pacing and turbo alike. The timed taps
   and the paste feeder press the machine directly, keeping their own holds.
+- **A button inside the web client never keeps the focus**
+  (`onFocusCapture` in `Web/src/CalcU1600.jsx`): every key, Tab included,
+  goes to the calculator, and iOS moves the focus on its own (a tapped
+  button after the tap, a menu title on its first letter typed on a
+  hardware keyboard), after which ENTER or SPACE would press that button.
 - **Touch takes the nearest key within 24 px** (`Web/src/Faceplate.jsx`),
   a mouse only its exact rectangle. A finger is reported as one point a few
   pixels off, and on a phone a PC-1600 F-key is ~7 px tall; without the

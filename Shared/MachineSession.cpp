@@ -277,17 +277,28 @@ job::Task<void> MachineSession::powerCycleAroundJob(std::function<void()> change
 // ---- Keys and typing ----
 
 void MachineSession::pressKey(const std::string& name) {
-    // A release still pending from an earlier quick tap must not cut this
-    // press short.
-    std::erase_if(m_timedKeys, [&](const TimedKey& k) { return !k.press && k.name == name; });
+    // A release still to come (a fast typist: released for real, held on
+    // for the minimum -- this key's own too, a quick double tap): this
+    // press waits for it and a gap, so two keys never overlap (the ROM
+    // drops one) and a double tap stays two taps.
+    if (!m_timedKeys.empty()) {
+        const auto at = m_timedKeys.back().due + minKeyHoldCycles();
+        m_keyPressedAt[name] = at;
+        scheduleKeyAt(at, true, name);
+        return;
+    }
     m_keyPressedAt[name] = m_budgetClock;
     machinePressKey(name);
+}
+
+std::uint64_t MachineSession::minKeyHoldCycles() const {
+    return static_cast<std::uint64_t>(kMinKeyHoldFrames * clockHz() / 60.0);
 }
 
 void MachineSession::releaseKey(const std::string& name) {
     const auto it = m_keyPressedAt.find(name);
     if (it != m_keyPressedAt.end()) {
-        const auto holdUntil = it->second + static_cast<std::uint64_t>(kMinKeyHoldFrames * clockHz() / 60.0);
+        const auto holdUntil = it->second + minKeyHoldCycles();
         m_keyPressedAt.erase(it);
         if (m_budgetClock < holdUntil) {
             scheduleKeyAt(holdUntil, false, name);
