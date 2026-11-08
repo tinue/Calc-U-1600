@@ -32,16 +32,39 @@ export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-15.8}
 # ship, so there's no serialport/IOKit code to link.
 CARGO_FLAGS="--release --lib --no-default-features"
 
+# Refuse a library whose objects claim a newer macOS than the deployment
+# target. Not every Rust toolchain ships std built for rustc's default
+# (11.0): one whose std was compiled on the build machine stamps every std
+# object with that machine's macOS (26.0, 27.0, ...), and the app's link
+# then warns "built for newer 'macOS' version". Use rustup's toolchain.
+check_minos() {
+  newest=$(otool -l "$1" | awk '$1 == "minos" {print $2}' | sort -uV | tail -1)
+  if [ -z "$newest" ]; then
+    echo "$1: no minos found (otool -l)" >&2
+    exit 1
+  fi
+  top=$(printf '%s\n%s\n' "$MACOSX_DEPLOYMENT_TARGET" "$newest" | sort -V | tail -1)
+  if [ "$top" != "$MACOSX_DEPLOYMENT_TARGET" ]; then
+    echo "$1: objects built for macOS $newest, newer than $MACOSX_DEPLOYMENT_TARGET -- not vendoring it" >&2
+    echo "(rustc: $(command -v rustc), $(rustc -V))" >&2
+    otool -l "$1" | awk '$1 == "minos" {print $2}' | sort -V | uniq -c >&2
+    exit 1
+  fi
+}
+
 if [ "$1" = "--universal" ]; then
   rustup target add x86_64-apple-darwin aarch64-apple-darwin >/dev/null 2>&1 || true
   cargo build $CARGO_FLAGS --target aarch64-apple-darwin
   cargo build $CARGO_FLAGS --target x86_64-apple-darwin
+  check_minos target/aarch64-apple-darwin/release/libsharpdx.a
+  check_minos target/x86_64-apple-darwin/release/libsharpdx.a
   lipo -create \
     target/aarch64-apple-darwin/release/libsharpdx.a \
     target/x86_64-apple-darwin/release/libsharpdx.a \
     -output "$DST/libsharpdx.a"
 else
   cargo build $CARGO_FLAGS
+  check_minos target/release/libsharpdx.a
   cp target/release/libsharpdx.a "$DST/libsharpdx.a"
 fi
 
