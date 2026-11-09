@@ -124,7 +124,9 @@ program &00C5, RAM &4000–&47FF, `NEW 0` → &4000).
   What the built-in RAM held is lost; the module keeps its program and
   reserve keys.
 
-The user-level version, with `MEM` figures for the PC-1500 and PC-1500A,
+The research repository has the same as a reference section:
+[Ref/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md](https://github.com/tinue/Sharp1500-1600-Ref/blob/main/PC-1500/Memory-Architecture/PC-1500-Address-Decoding.md)
+§5.6. The user-level version, with `MEM` figures for the PC-1500 and PC-1500A,
 is in the [User Guide](../User-Guide.md#program-modules-on-the-pc-1500-where-basic-and-the-reserve-keys-go).
 
 ## Module program and RAM program as one
