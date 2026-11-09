@@ -101,12 +101,31 @@ writable and takes the header; RAM is &4000–&47FF only.
 The PC-1500A has RAM to &57FF, so `RAM_END` is &58 there; the manual
 covers the PC-1500 only.
 
-Both rules are the ROM's general program-module handling, not anything
-CE-161-specific: whenever the scan has found a module (`ST_ROM_MOD` ≠ FF),
-`NEW 0` starts RAM BASIC at `RAM_ST`:00, because `RSRV_MEM_START` then
-puts the reserve area in the module (`ST_ROM_MOD`:08). The reserve keys
-come from the module and can't be reprogrammed (`RSRV_MEM_START` returns
-error code 24 for that case). A CE-502B gives the same layout.
+## Program modules in general
+
+None of this is CE-161-specific: the ROM treats every module the scan
+finds (`ST_ROM_MOD` ≠ FF) the same way, a protected CE-161 and Sharp's
+mask-ROM modules alike (checked with the CE-502B: module at page &00,
+program &00C5, RAM &4000–&47FF, `NEW 0` → &4000).
+
+- **Reserve area:** `RSRV_MEM_START` (CE9F) returns `ST_ROM_MOD`:08
+  instead of `RAM_ST`:08, so the reserve keys are read from the module.
+  They can't be reprogrammed (`RSRV_MEM_START` hands back error code 24
+  for that case).
+- **RAM BASIC:** `BCMD_NEW` (C80A) sets `NEW 0` to `RAM_ST`:00 instead of
+  `RAM_ST`:C5 — the &C5 bytes in front are only for the reserve area,
+  which now lives in the module.
+- **Variables:** as always, down from `RAM_END`, in the built-in RAM.
+- **Program start:** `RUN` and line searches start at the module's program
+  (`PRG_SA_2_XREG`); labels reach the RAM program, line numbers don't
+  (next section).
+- **Plugging in or out:** the scan result changes, so `ARV` bit 2 asks
+  for `NEW 0`, which moves RAM BASIC between `RAM_ST`:00 and `RAM_ST`:C5.
+  What the built-in RAM held is lost; the module keeps its program and
+  reserve keys.
+
+The user-level version, with `MEM` figures for the PC-1500 and PC-1500A,
+is in the [User Guide](../User-Guide.md#program-modules-on-the-pc-1500-where-basic-and-the-reserve-keys-go).
 
 ## Module program and RAM program as one
 

@@ -401,6 +401,48 @@ machine, like a model switch does.
 | CE-1601M | PC-1600 Slot 2 | 64 KB banked RAM | yes |
 | superRAM | PC-1600 Slot 2 | 512 KB banked RAM (fictional, fully loaded Slot 2) | yes |
 
+### Program modules on the PC-1500: where BASIC and the reserve keys go
+
+A **program module** holds a BASIC program and its reserve keys in memory
+the calculator can't write: Sharp's ROM modules such as the CE-502B, or a
+CE-161 saved with **Write-protect** (see [Naming and saving](#naming-and-saving)).
+At power-on the PC-1500 ROM looks for one in &0000–&6FFF: a page that
+can't be written and starts with the byte &55 (a module header). How
+memory is used then depends on what it finds:
+
+| PC-1500 with … | Reserve keys | BASIC after `NEW 0` | Variables | `MEM` (empty) |
+|---|---|---|---|---|
+| no module | &4008–&40C4 | &40C5 | down from &47FF | 1850 |
+| a RAM module (CE-161 unprotected) | &0008–&00C4 | &00C5 | down from &47FF | 18234 |
+| a program module (CE-502B, protected CE-161) | in the module, &0008–&00C4 | &4000 | down from &47FF | 2047 |
+
+On the PC-1500A the built-in RAM ends at &57FF, so every row has 4 KB
+more and the variables start at &57FF (`MEM` 5946 without a module, 6143
+next to a program module).
+
+With a program module:
+
+- **Your own program goes into the built-in RAM.** BASIC starts right at
+  &4000, without the usual &C5 bytes in front, because the reserve area
+  is in the module. Variables, also those of the module's program, live
+  in the built-in RAM.
+- **The reserve keys are the module's.** They come from the module and
+  can't be changed while it is plugged in.
+- **Start programs by label.** `RUN` starts the module's program, and DEF
+  or `GOTO "label"` finds a label in either program. Line numbers don't
+  cross over: `GOTO`, `LIST` or `GOSUB` with a number only find lines in
+  the same program, otherwise ERROR 11. Give a program of your own a label
+  and start it with DEF or `RUN "label"`.
+- **Plugging in or pulling out costs the built-in RAM.** Either way the
+  memory layout changes, the calculator shows `NEW0? :CHECK`, and you
+  type `NEW 0` (the table's middle column moves). A program and variables
+  in the built-in RAM are lost; the module's program and reserve keys are
+  not. In the emulator, choosing a module in the picker is plugging it in.
+
+How the ROM recognizes a module, the header layout and the CE-161's
+`POKE` are in
+[background/CE-161-Program-Module.md](background/CE-161-Program-Module.md).
+
 ### The floppy disk (PC-1600)
 
 The CE-1600F floppy drive comes with the CE-1600P: attaching the plotter
