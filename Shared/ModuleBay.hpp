@@ -96,8 +96,14 @@ public:
     // (`romFile`) makes the slot unsaveable.
     void syncFromPresetLoad(int slot, const std::string& resolvedPathOrEmpty = {}, const std::string& romFile = {});
 
-    // "Name & Save". A template's name is always refused.
-    bool nameAndSave(int slot, const std::string& instanceName, std::string* error);
+    // The Name & Save dialog may offer "write-protect": the slot's card has
+    // a write-protect switch (CE-161) that is still off.
+    bool canWriteProtect(int slot) const;
+
+    // "Name & Save". A template's name is always refused. `writeProtect`
+    // saves the card with its write-protect switch on and turns it on in
+    // the live card; refused for a card without a switch.
+    bool nameAndSave(int slot, const std::string& instanceName, std::string* error, bool writeProtect = false);
     // Preset `saveas: template|live s1:<name>` / `s2:`. Like nameAndSave(),
     // the slot is then retargeted at the saved file, but it works when the
     // slot is already saved, and silently overwrites a file of that name.
@@ -105,7 +111,7 @@ public:
     // name of a user template and never overwrites a template file.
     // `filePath` (the `file:` form) writes exactly that file.
     bool saveAsFromPreset(int slot, const std::string& instanceName, const std::string& filePath, bool asTemplate,
-                          std::string* error);
+                          std::string* error, bool writeProtect = false);
 
     // Once per frame: notices changed cards and writes them once the
     // debounce has passed. `nowSeconds` is any monotonic host clock.
@@ -134,7 +140,7 @@ private:
     // file's own `template:` key. Empty path = no file.
     void classifySlot(SlotState& st, const std::string& resolvedPath) const;
     bool saveSlotAs(int slot, const std::string& instanceName, bool fromPreset, std::string* error,
-                    const std::string& filePath = {}, bool asTemplate = false);
+                    const std::string& filePath = {}, bool asTemplate = false, bool writeProtect = false);
     bool nameCollides(const std::string& instanceName) const;
     CardHost hostFor(int slot) const;
     std::uint64_t currentSlotRevision(int slot) const;

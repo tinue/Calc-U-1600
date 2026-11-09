@@ -91,9 +91,12 @@ struct RegionContent {
     // Regular RAM powers up 0x00 (CMOS RAM after a power loss); the flash
     // parser sets 0xFF (erased) unless the file says otherwise.
     uint8_t powerUpFill = 0x00;
+    // `write-protect:` -- the module's write-protect switch (CE-161: a
+    // switch in the RAMs' R/W line). Present = the module has one;
+    // writeProtected is the switch position the file records. The card
+    // holds one switch for all its regions (SoftwareDefinedCard).
     bool hasWriteProtect = false;
-    bool writeProtectDefaultProtected = false;
-    bool writeProtectPersisted = false;
+    bool writeProtected = false;
     FlashProtocol flash;  // meaningful only when kind == ContentKind::Flash
 };
 
@@ -643,26 +646,15 @@ inline bool parseContent(const YamlNode& node, RegionContent* out, std::string* 
             out->powerUpFill = static_cast<uint8_t>(v);
         }
         if (const YamlNode* wp = body->find("write-protect")) {
-            if (!wp->isMap() || !wp->requireOnlyKeys({"default", "persisted"}, error)) {
-                if (error->empty())
-                    *error = "line " + std::to_string(wp->line) + ": 'write-protect' must be a mapping";
+            std::string pos;
+            if (!wp->asString(&pos, error)) return false;
+            if (pos == "protected") out->writeProtected = true;
+            else if (pos == "unprotected") out->writeProtected = false;
+            else {
+                *error = "line " + std::to_string(wp->line) + ": write-protect must be protected|unprotected";
                 return false;
             }
             out->hasWriteProtect = true;
-            if (const YamlNode* d = wp->find("default")) {
-                std::string s;
-                if (!d->asString(&s, error)) return false;
-                if (s == "protected") out->writeProtectDefaultProtected = true;
-                else if (s == "unprotected") out->writeProtectDefaultProtected = false;
-                else {
-                    *error = "line " + std::to_string(d->line) +
-                             ": write-protect default must be protected|unprotected";
-                    return false;
-                }
-            }
-            if (const YamlNode* p = wp->find("persisted")) {
-                if (!p->asBool(&out->writeProtectPersisted, error)) return false;
-            }
         }
     }
     return true;

@@ -1,6 +1,7 @@
 #pragma once
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -106,9 +107,11 @@ inline std::string mediaSaveRefusalText(MediaSaveRefusal refusal, const std::str
 }
 
 // The text of `card` saved as `name`: its live contents spliced into
-// `sourcePath`, the file it was loaded from.
+// `sourcePath`, the file it was loaded from. `writeProtect` set = save
+// with the card's write-protect switch in that position.
 inline bool formatCardSave(const ExpansionCard& card, const std::string& sourcePath, const std::string& name,
-                           bool asTemplate, std::string* text, std::string* error) {
+                           bool asTemplate, std::string* text, std::string* error,
+                           std::optional<bool> writeProtect = {}) {
     std::string sourceText;
     if (!named_file_detail::readTextFile(sourcePath, &sourceText)) {
         *error = "cannot read " + sourcePath;
@@ -123,7 +126,7 @@ inline bool formatCardSave(const ExpansionCard& card, const std::string& sourceP
     // format differently (formatBatteryCardInitialContentBlock()).
     return spliceBatteryCardInstance(sourceText, name, card.moduleName(),
                                      formatBatteryCardInitialContentBlock(card.debugBankCount(), image), text, error,
-                                     currentIso8601Timestamp(), asTemplate);
+                                     currentIso8601Timestamp(), asTemplate, writeProtect);
 }
 
 // Writes `text` to `path` through a temporary file next to it, so a failed

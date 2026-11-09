@@ -293,13 +293,13 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, const std::fi
             }
             step.kind = PresetStep::Kind::SyncClock;
         } else if (verb == "saveas") {
-            // `- saveas: template|live <target>:<name>` or `... <target>:file:<path>`
+            // `- saveas: template|live [protected] <target>:<name>` or `... <target>:file:<path>`
             // (see PresetFile.hpp's top-of-file doc comment). The leading
             // word is required; the rest splits on ITS first colon
             // (mirroring splitKeyValue's own rule) into target/name.
             const std::string usage = "line " + std::to_string(line.lineNo) +
-                                      ": expected 'saveas: template|live <slot-1|slot-2|floppy>:<name>' or "
-                                      "'saveas: template|live <slot-1|slot-2|floppy>:file:<path>'";
+                                      ": expected 'saveas: template|live [protected] <slot-1|slot-2|floppy>:<name>' or "
+                                      "'saveas: template|live [protected] <slot-1|slot-2|floppy>:file:<path>'";
             const size_t space = value.find_first_of(" \t");
             std::string kind = space == std::string::npos ? value : value.substr(0, space);
             lowerAscii(kind);
@@ -308,7 +308,17 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, const std::fi
                 return false;
             }
             step.saveAsTemplate = kind == "template";
-            const std::string rest = space == std::string::npos ? "" : trim(value.substr(space + 1));
+            std::string rest = space == std::string::npos ? "" : trim(value.substr(space + 1));
+            {
+                // An optional `protected` word: the card's write-protect switch goes on.
+                const size_t sp = rest.find_first_of(" \t");
+                std::string word = sp == std::string::npos ? rest : rest.substr(0, sp);
+                lowerAscii(word);
+                if (word == "protected") {
+                    step.saveAsProtected = true;
+                    rest = sp == std::string::npos ? "" : trim(rest.substr(sp + 1));
+                }
+            }
             const size_t targetColon = rest.find(':');
             if (targetColon == std::string::npos) {
                 *error = usage;
@@ -323,6 +333,11 @@ bool parseStepList(const std::vector<RawLine>& lines, size_t& idx, const std::fi
             else {
                 *error = "line " + std::to_string(line.lineNo) + ": 'saveas: " + value +
                          "' -- target must be 'slot-1', 'slot-2' or 'floppy'";
+                return false;
+            }
+            if (step.saveAsProtected && step.saveAsTarget == PresetStep::SaveAsTarget::Floppy) {
+                *error = "line " + std::to_string(line.lineNo) + ": 'saveas: " + value +
+                         "' -- 'protected' is for a memory module, not a disk";
                 return false;
             }
             if (name.rfind("file:", 0) == 0) {

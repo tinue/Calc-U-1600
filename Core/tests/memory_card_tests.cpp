@@ -1566,6 +1566,59 @@ void test_reject_unknown_key_inside_all_of() {
     CHECK(err.find("chip-selct") != std::string::npos);
 }
 
+// `write-protect:` is the module's switch position (CE-161): a scalar,
+// part of the file. While protected, every write into the RAM is refused --
+// host pokes (`direct`) too -- and setWriteProtected() moves it at runtime.
+void test_write_protect_switch() {
+    auto yamlWith = [](const std::string& wp) {
+        return std::string(kMinPrefix) +
+               "  - name: r\n    capacity: 0x800\n    banking: none\n"
+               "    content: { kind: regular, write-protect: " + wp + " }\n"
+               "    addressing: { chip-select: Y0, span: 0x800 }\n";
+    };
+    MemoryCardDefinition def;
+    std::string err;
+    CHECK(parseMemoryCardDefinition(yamlWith("protected"), &def, &err));
+    CHECK(def.regions.size() == 1 && def.regions[0].contentForBank(0).hasWriteProtect &&
+          def.regions[0].contentForBank(0).writeProtected);
+    CHECK(rejects(yamlWith("on"), &err));
+    CHECK(err.find("protected|unprotected") != std::string::npos);
+    CHECK(rejects(yamlWith("{ default: protected, persisted: true }"), &err));  // the old map form
+
+    auto sd = buildCard(yamlWith("unprotected").c_str(), CardHost::PC1500);
+    CHECK(sd != nullptr);
+    if (!sd) return;
+    PinState p;
+    p.forWrite = true;
+    p.pin[4] = true;  // Y0
+    p.address = 0x0010;
+    CHECK(sd->hasWriteProtectSwitch() && !sd->writeProtected());
+    WriteResult w = sd->respondsToWrite(p, 0x5A);
+    CHECK(w.claimed && w.stored);
+    sd->setWriteProtected(true);
+    w = sd->respondsToWrite(p, 0xA5);
+    CHECK(w.claimed && !w.stored);
+    p.direct = true;  // a host poke can't get past the switch either
+    w = sd->respondsToWrite(p, 0xA5);
+    CHECK(w.claimed && !w.stored);
+    uint8_t v = 0;
+    PinState r;
+    r.pin[4] = true;
+    r.address = 0x0010;
+    CHECK(sd->respondsToRead(r, v) && v == 0x5A);
+    CHECK(!sd->debugMemories().empty() && sd->debugMemories()[0].kind == CardMemory::Kind::Rom);
+
+    auto plain = buildCard((std::string(kMinPrefix) +
+                            "  - name: r\n    capacity: 0x800\n    banking: none\n    content: regular\n"
+                            "    addressing: { chip-select: Y0, span: 0x800 }\n").c_str(),
+                           CardHost::PC1500);
+    CHECK(plain && !plain->hasWriteProtectSwitch());
+    if (plain) {
+        plain->setWriteProtected(true);  // no switch: ignored
+        CHECK(!plain->writeProtected());
+    }
+}
+
 // A memory-range window need be neither a power of two nor aligned: its
 // offset counts from `from`.
 void test_memory_range_offset_counts_from_range_start() {
@@ -1740,6 +1793,7 @@ int run_memory_card_tests() {
     test_yaml_apostrophe_inside_plain_scalar();
     test_reject_unknown_key_inside_all_of();
     test_memory_range_offset_counts_from_range_start();
+    test_write_protect_switch();
     test_flash_unbanked_chip_and_sector_erase();
     test_reject_unbanked_flash_sector_not_dividing_capacity();
 

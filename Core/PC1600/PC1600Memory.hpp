@@ -273,6 +273,7 @@ public:
     bool slot2Attached() const { return m_slot2Conn.attachedCard() != nullptr; }
     /// The card in Slot `slot` (1 or 2), null for an empty slot.
     const ExpansionCard* slotCard(int slot) const { return (slot == 1 ? m_slot1Conn : m_slot2Conn).attachedCard(); }
+    ExpansionCard* slotCard(int slot) { return (slot == 1 ? m_slot1Conn : m_slot2Conn).attachedCard(); }
     /// The module in Slot `slot` (1 or 2) by name (ExpansionCard::moduleName()),
     /// "" for an empty slot.
     std::string slotModuleName(int slot) const {

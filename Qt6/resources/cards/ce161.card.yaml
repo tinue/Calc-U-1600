@@ -1,19 +1,28 @@
-# CE-161 -- 16 KB static RAM module for the PC-1500 family.
+# CE-161 -- 16 KB battery-backed program module for the PC-1500 family.
 #
 # Y0 alone: the module fills the whole 16 KB Y0 window (&0000-&3FFF), with
 # A0-A13 as the offset and no other strobe (Memory-Card-Definition-Spec.md
-# section 9). Below the built-in RAM at &4000, so BASIC starts at &00C5.
+# section 9). Service Manual schematic: eight 2 KB RAMs (two 8 KB in the
+# flat version), an on-module TC40H138 picks the chip from AD11-AD13
+# (G1 = DME0, G2A = Y0); a CR2032 keeps the contents.
 #
-# Modelled as plain RAM. The real module is a program module; battery
-# backup and a write-protect switch are not modelled here.
+# The "Exclusive Readout Area Set Switch" sits in the RAMs' R/W line:
+# protected, the module can't be written, so the PC-1500's power-on scan
+# finds page &00 not writable and reads the module header the user POKEd
+# there (POKE 0,85,0,1,0,0,0,0,255: &55, page 00, program at &0100,
+# listable) -- the module then acts as a ROM program module. Workflow
+# (Instruction Manual): NEW 256, enter the program, run the fill program,
+# POKE the header, then Name & Save with "write-protect" ticked, OFF/ON,
+# NEW 0. Full analysis: docs/background/CE-161-Program-Module.md.
 #
 # Hosts: PC-1500/1500A natively; on the PC-1600 it fills the slot's
 # 8000-BFFF page (pin 4) in Slot 1, or Slot 2 (as a RAM disk).
 
 format-version: 1
 module-name: "CE-161"
-description: "16 KB static RAM"
+description: "16 KB battery-backed RAM, write-protect switch"
 template: true   # read-only starting point; Name & Save copies it
+battery: true
 compatible-hosts: [PC-1500, PC-1500A, PC-1600-Slot-1, PC-1600-Slot-2]
 definition-terminology: PC-1500
 
@@ -25,6 +34,7 @@ regions:
       kind: regular
       writable: true
       power-up-fill: 0x00
+      write-protect: unprotected   # the Set Switch: protected = "Setting", unprotected = "Release"
     addressing:
       any-of:
         - chip-select: Y0

@@ -338,11 +338,12 @@ void test_saveas_step_parses_all_targets_pc1600() {
         "keys:\n"
         "  - saveas: live slot-1:First Card\n"
         "  - saveas: template slot-2:CE-1601M - Progs\n"
-        "  - saveas: LIVE floppy:Progs\n",
+        "  - saveas: LIVE floppy:Progs\n"
+        "  - saveas: live Protected slot-1:My Rom\n",
         &p, &err));
     CHECK(!p.sections.empty());
     const auto& steps = p.sections[0].keys;
-    CHECK(steps.size() == 3);
+    CHECK(steps.size() == 4);
     CHECK(steps[0].kind == PresetStep::Kind::SaveAs);
     CHECK(steps[0].saveAsTarget == PresetStep::SaveAsTarget::Slot1);
     CHECK(steps[0].text == "First Card");
@@ -354,6 +355,11 @@ void test_saveas_step_parses_all_targets_pc1600() {
     CHECK(steps[2].saveAsTarget == PresetStep::SaveAsTarget::Floppy);
     CHECK(steps[2].text == "Progs");
     CHECK(!steps[2].saveAsTemplate);
+    CHECK(!steps[0].saveAsProtected && !steps[1].saveAsProtected && !steps[2].saveAsProtected);
+    if (steps.size() < 4) return;
+    CHECK(steps[3].saveAsProtected);  // `protected`: the card's write-protect switch goes on
+    CHECK(steps[3].saveAsTarget == PresetStep::SaveAsTarget::Slot1);
+    CHECK(steps[3].text == "My Rom");
 }
 
 // `file:<path>` is resolved against the preset's directory, and the name is
@@ -397,6 +403,8 @@ void test_saveas_step_rejects_malformed_forms() {
     CHECK(!parse("format-version: 1\nmodel: PC-1600\nkeys:\n  - saveas: template slot-2:file:Card.floppy.yaml\n", &p, &err));
     CHECK(err.find(".card.yaml") != std::string::npos);
     CHECK(!parse("format-version: 1\nmodel: PC-1600\nkeys:\n  - saveas: template floppy:file:.floppy.yaml\n", &p, &err));
+    CHECK(!parse("format-version: 1\nmodel: PC-1600\nkeys:\n  - saveas: live protected floppy:Progs\n", &p, &err));
+    CHECK(err.find("not a disk") != std::string::npos);
 }
 
 // `slot-1` is valid on a PC-1500/1500A preset (its one slot); `slot-2`

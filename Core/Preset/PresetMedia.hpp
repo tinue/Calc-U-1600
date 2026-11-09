@@ -17,7 +17,7 @@
 // What a machine holds for `saveas:` -- either model, filled by the caller
 // from the machine and the loader's PresetLoadResult.
 struct PresetMediaSlot {
-    const ExpansionCard* card = nullptr;  // null = empty slot
+    ExpansionCard* card = nullptr;        // null = empty slot; a protected save flips its switch
     std::string sourcePath;               // PresetLoadResult::slotNResolvedPath
     std::string romFile;                  // PresetLoadResult::slotNRomFile: never saved
 };
@@ -40,7 +40,12 @@ inline bool savePresetMedia(const PresetSaveAsRequest& request, const MediaSaveF
     }
 
     std::string text;
+    ExpansionCard* protectCard = nullptr;  // `saveas: ... protected`: flipped once the file is written
     if (floppy) {
+        if (request.writeProtect) {
+            *error = "a disk has no write-protect switch";
+            return false;
+        }
         if (!media.floppyImage) {
             *error = "there's no disk in the drive";
             return false;
@@ -58,8 +63,16 @@ inline bool savePresetMedia(const PresetSaveAsRequest& request, const MediaSaveF
                      ", not from the module file, so it can't be saved";
             return false;
         }
-        if (!formatCardSave(*slot.card, slot.sourcePath, request.name, request.isTemplate, &text, error))
+        if (request.writeProtect && !slot.card->hasWriteProtectSwitch()) {
+            *error = "slot " + std::to_string(n) + ": " + slot.card->moduleName() + " has no write-protect switch";
             return false;
+        }
+        if (!formatCardSave(*slot.card, slot.sourcePath, request.name, request.isTemplate, &text, error,
+                            request.writeProtect ? std::optional<bool>(true) : std::nullopt))
+            return false;
+        if (request.writeProtect) protectCard = slot.card;
     }
-    return writeFileAtomically(path, text, error);
+    if (!writeFileAtomically(path, text, error)) return false;
+    if (protectCard) protectCard->setWriteProtected(true);
+    return true;
 }

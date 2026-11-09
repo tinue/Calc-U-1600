@@ -62,6 +62,9 @@ struct PresetStep {
     SaveAsTarget saveAsTarget = SaveAsTarget::Slot1;
     // (SaveAs) `template` (true) or `live` (false).
     bool saveAsTemplate = false;
+    // (SaveAs) `protected` after the mode: save with the card's
+    // write-protect switch on (and turn it on in the live card).
+    bool saveAsProtected = false;
     // (SaveAs) the `file:<path>` form: the file to write, resolved relative
     // to the preset's directory. Empty = save by name into the save folder.
     std::string saveAsPath;
@@ -73,6 +76,7 @@ struct PresetSaveAsRequest {
     std::string name;      // module-name / disk-name to save under
     std::string path;      // `file:` form: the file to write; "" = by name, into the save folder
     bool isTemplate = false;
+    bool writeProtect = false;  // `protected`: the card's write-protect switch goes on
 };
 
 /// Fired for a `- saveas:` step (see the top-of-file doc comment) -- WHERE a
@@ -100,6 +104,7 @@ inline bool runPresetSaveAsStep(const PresetStep& step, const PresetSaveAsFn& on
     request.name = step.text;
     request.path = step.saveAsPath;
     request.isTemplate = step.saveAsTemplate;
+    request.writeProtect = step.saveAsProtected;
     std::string saveError;
     if (!onSaveAs(request, &saveError)) {
         if (error) *error = "saveas: " + saveError;
@@ -107,7 +112,8 @@ inline bool runPresetSaveAsStep(const PresetStep& step, const PresetSaveAsFn& on
         return false;
     }
     if (log)
-        log(std::string("  saveas: ") + (request.isTemplate ? "template" : "live") + " -> \"" + request.name + "\"" +
+        log(std::string("  saveas: ") + (request.isTemplate ? "template" : "live") +
+            (request.writeProtect ? " protected" : "") + " -> \"" + request.name + "\"" +
             (request.path.empty() ? "" : " (" + request.path + ")"));
     return true;
 }

@@ -568,6 +568,13 @@ const ExpansionCard* MachineSession::slotCard(int slot) const {
     return nullptr;
 }
 
+void MachineSession::setSlotWriteProtected(int slot, bool protect) {
+    ExpansionCard* card = nullptr;
+    if (m_pc1600 && (slot == 1 || slot == 2)) card = m_pc1600->memory().slotCard(slot);
+    else if (m_pc1500 && slot == 1) card = m_pc1500->memory().expansionConnector().attachedCard();
+    if (card) card->setWriteProtected(protect);
+}
+
 void MachineSession::attachSlotCard(int slot, std::unique_ptr<ExpansionCard> card) {
     if (m_pc1600) {
         if (slot == 1) m_pc1600->attachSlot1Card(std::move(card));

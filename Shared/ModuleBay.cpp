@@ -142,17 +142,22 @@ bool ModuleBay::nameCollides(const std::string& instanceName) const {
     return false;
 }
 
-bool ModuleBay::nameAndSave(int slot, const std::string& instanceName, std::string* error) {
-    return saveSlotAs(slot, instanceName, /*fromPreset=*/false, error);
+bool ModuleBay::canWriteProtect(int slot) const {
+    const ExpansionCard* card = m_session.slotCard(slot);
+    return card && card->hasWriteProtectSwitch() && !card->writeProtected();
+}
+
+bool ModuleBay::nameAndSave(int slot, const std::string& instanceName, std::string* error, bool writeProtect) {
+    return saveSlotAs(slot, instanceName, /*fromPreset=*/false, error, {}, false, writeProtect);
 }
 
 bool ModuleBay::saveAsFromPreset(int slot, const std::string& instanceName, const std::string& filePath,
-                                 bool asTemplate, std::string* error) {
-    return saveSlotAs(slot, instanceName, /*fromPreset=*/true, error, filePath, asTemplate);
+                                 bool asTemplate, std::string* error, bool writeProtect) {
+    return saveSlotAs(slot, instanceName, /*fromPreset=*/true, error, filePath, asTemplate, writeProtect);
 }
 
 bool ModuleBay::saveSlotAs(int slot, const std::string& instanceName, bool fromPreset, std::string* error,
-                           const std::string& filePath, bool asTemplate) {
+                           const std::string& filePath, bool asTemplate, bool writeProtect) {
     const std::string name = trimmed(instanceName);
     if (name.empty()) {
         *error = "Name cannot be empty.";
@@ -194,9 +199,14 @@ bool ModuleBay::saveSlotAs(int slot, const std::string& instanceName, bool fromP
         *error = "Couldn't read the live card contents.";
         return false;
     }
+    if (writeProtect && !card->hasWriteProtectSwitch()) {
+        *error = inQuotes(st.moduleName) + " has no write-protect switch.";
+        return false;
+    }
     const std::uint64_t revision = card->contentRevision();
     std::string spliced, splErr;
-    if (!formatCardSave(*card, st.sourcePath, name, asTemplate, &spliced, &splErr)) {
+    if (!formatCardSave(*card, st.sourcePath, name, asTemplate, &spliced, &splErr,
+                        writeProtect ? std::optional<bool>(true) : std::nullopt)) {
         *error = "Couldn't generate the instance file: " + splErr;
         return false;
     }
@@ -204,6 +214,10 @@ bool ModuleBay::saveSlotAs(int slot, const std::string& instanceName, bool fromP
         *error = "Couldn't write " + inQuotes(newPath) + ".";
         return false;
     }
+
+    // The switch flips in the running card too: writes stop now, and the
+    // host ROM sees the module as unwritable at its next power-on scan.
+    if (writeProtect) m_session.setSlotWriteProtected(slot, true);
 
     // Retarget the slot at the saved copy: it now shows under its new name
     // and -- unless it was saved as a template -- autosaves there.

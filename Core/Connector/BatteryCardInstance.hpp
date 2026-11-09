@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <ctime>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -210,6 +211,23 @@ inline bool spliceRegionInitialContent(std::vector<std::string>* lines,
     return true;
 }
 
+// Sets every `write-protect:` line (the module's switch, see
+// RegionContent) to `protect`, keeping its indentation and any trailing
+// comment. Returns false if the file has none -- the card has no switch.
+inline bool setWriteProtectLines(std::vector<std::string>* lines, bool protect) {
+    bool found = false;
+    for (std::string& l : *lines) {
+        const std::string t = trimmed(l);
+        if (!startsWith(t, "write-protect:")) continue;
+        const size_t hash = l.find('#');
+        const std::string comment = hash == std::string::npos ? std::string() : "   " + l.substr(hash);
+        l = std::string(static_cast<size_t>(lineIndent(l)), ' ') + "write-protect: " +
+            (protect ? "protected" : "unprotected") + comment;
+        found = true;
+    }
+    return found;
+}
+
 }  // namespace bci_detail
 
 // Splices `contentLines` (an `initial-content:` block, e.g. from
@@ -223,7 +241,9 @@ inline bool spliceRegionInitialContent(std::vector<std::string>* lines,
 // file that has none yet). A top-level `template:` line is dropped: the
 // result is an instance -- or, with `asTemplate`, a template (a
 // `template: true` line after `module-name:`; a preset's
-// `saveas: template ...`). Returns
+// `saveas: template ...`). `writeProtect`, when set, moves the card's
+// write-protect switch (its `write-protect:` lines); unset keeps the
+// file's position. Returns
 // false (and fills *error) if `sourceText` doesn't contain a
 // `module-name:` line or a `regions:` list with at least one region --
 // i.e. isn't a valid card definition to begin with.
@@ -232,7 +252,7 @@ inline bool spliceBatteryCardInstance(const std::string& sourceText, const std::
                                       const std::vector<std::string>& contentLines, std::string* outText,
                                       std::string* error,
                                       const std::string& nowIso8601 = currentIso8601Timestamp(),
-                                      bool asTemplate = false) {
+                                      bool asTemplate = false, std::optional<bool> writeProtect = {}) {
     using namespace bci_detail;
 
     std::vector<std::string> lines;
@@ -296,6 +316,10 @@ inline bool spliceBatteryCardInstance(const std::string& sourceText, const std::
 
     if (!spliceRegionInitialContent(&lines, contentLines)) {
         if (error) *error = "source text has no 'regions:' list with a region item";
+        return false;
+    }
+    if (writeProtect && !setWriteProtectLines(&lines, *writeProtect)) {
+        if (error) *error = "the card has no write-protect switch";
         return false;
     }
 

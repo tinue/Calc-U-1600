@@ -155,6 +155,14 @@ public:
     /// so the GUI can read what sits in a slot from the slot itself.
     /// Empty for a card without one (test stubs).
     virtual std::string moduleName() const { return {}; }
+
+    /// The module's write-protect switch (CE-161: a switch in the RAMs'
+    /// R/W line). A card without one (the default) ignores
+    /// setWriteProtected() and reports false. While protected, every write
+    /// into the switched RAM is refused, host pokes included.
+    virtual bool hasWriteProtectSwitch() const { return false; }
+    virtual bool writeProtected() const { return false; }
+    virtual void setWriteProtected(bool /*protect*/) {}
 };
 
 // A card on a connector numbered with PinState's 40-pin contacts.

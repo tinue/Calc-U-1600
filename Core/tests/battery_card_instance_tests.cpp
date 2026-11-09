@@ -311,6 +311,35 @@ void test_splice_drops_template_key() {
     CHECK(!def.isTemplate);
 }
 
+// A protected save moves the card's switch (every `write-protect:` line,
+// keeping indentation and comment); without the option the file's position
+// stays; a card without the key can't be saved protected.
+void test_splice_write_protect() {
+    const std::string templ =
+        "format-version: 1\nmodule-name: \"CE-161\"\ntemplate: true\nbattery: true\n"
+        "compatible-hosts: [PC-1500]\ndefinition-terminology: PC-1500\nregions:\n"
+        "  - name: r\n    capacity: 0x10\n    banking: none\n    content:\n      kind: regular\n"
+        "      write-protect: unprotected   # the Set Switch\n"
+        "    addressing: { chip-select: Y0, span: 0x10 }\n";
+    const std::vector<std::string> block = formatBatteryCardInitialContentBlock(-1, std::vector<uint8_t>(0x10, 0x55));
+    std::string spliced, err;
+    CHECK(spliceBatteryCardInstance(templ, "Rom", "CE-161", block, &spliced, &err, "2026-11-09T00:00:00Z", false,
+                                    true));
+    CHECK(spliced.find("      write-protect: protected   # the Set Switch\n") != std::string::npos);
+    MemoryCardDefinition def;
+    CHECK(parseMemoryCardDefinition(spliced, &def, &err));
+    CHECK(!def.regions.empty() && def.regions[0].contentForBank(0).writeProtected);
+
+    std::string resaved;  // an autosave of the instance keeps the switch where it is
+    CHECK(spliceBatteryCardInstance(spliced, "Rom", "Rom", block, &resaved, &err));
+    CHECK(resaved.find("write-protect: protected") != std::string::npos);
+
+    CHECK(!spliceBatteryCardInstance(std::string("template: true\n") + kSyntheticCardYaml, "X", "Synthetic",
+                                     formatBatteryCardInitialContentBlock(1, std::vector<uint8_t>(0x100, 0)),
+                                     &spliced, &err, "2026-11-09T00:00:00Z", false, true));
+    CHECK(err == "the card has no write-protect switch");
+}
+
 // Every bundled card and floppy declares itself a template -- the app never
 // writes to them (and the bundle may be read-only anyway).
 void test_bundled_files_are_templates() {
@@ -488,6 +517,12 @@ void test_save_preset_media() {
     CHECK(saved.moduleName == "My RAM" && !saved.isTemplate);
     CHECK(saved.regions[0].initialContentByBank[0][0] == 0x5A);
 
+    request.writeProtect = true;  // no switch on this card
+    request.name = "Locked";
+    CHECK(!savePresetMedia(request, folders, media, &err));
+    CHECK(err == "slot 1: RAM has no write-protect switch");
+    request.writeProtect = false;
+
     request.name = "RAM";  // the bundled name
     CHECK(!savePresetMedia(request, folders, media, &err));
     CHECK(err == "'RAM' is a template's name");
@@ -527,6 +562,7 @@ int run_battery_card_instance_tests() {
     test_splice_resave_preserves_created_updates_last_saved();
     test_card_template_key();
     test_splice_drops_template_key();
+    test_splice_write_protect();
     test_bundled_files_are_templates();
     test_saved_floppy_is_instance();
     test_splice_fails_without_module_name();
