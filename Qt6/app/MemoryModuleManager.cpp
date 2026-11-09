@@ -23,6 +23,8 @@ MemoryModuleManager::ModuleLists MemoryModuleManager::moduleLists(CardHost host)
     return {toQt(lists.templates), toQt(lists.instances), toQt(lists.roms)};
 }
 
-bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QString* error) {
-    return withQtError(error, [&](std::string* err) { return m_bay->nameAndSave(slot, instanceName.toStdString(), err); });
+bool MemoryModuleManager::nameAndSave(int slot, const QString& instanceName, QString* error, bool writeProtect) {
+    return withQtError(error, [&](std::string* err) {
+        return m_bay->nameAndSave(slot, instanceName.toStdString(), err, writeProtect);
+    });
 }

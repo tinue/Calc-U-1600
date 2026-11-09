@@ -213,6 +213,26 @@ test('a plotter preset draws on the paper', async ({ page }) => {
   await expect(page.locator('[data-panel=paper] .calcu-panel-header')).toHaveText('CE-1600P');
 });
 
+test('Name & Save can write-protect a CE-161, and only a card with the switch', async ({ page }) => {
+  await gotoReady(page);
+  await page.getByLabel('Slot 1', { exact: true }).selectOption('CE-161');
+  await expect(page.getByRole('button', { name: 'Name & Save slot 1' })).toBeEnabled({ timeout: 30000 });
+  await page.getByRole('button', { name: 'Name & Save slot 1' }).click();
+  const box = page.locator('[data-dialog=prompt] input[type=checkbox]');
+  await expect(box).toHaveCount(1);
+  const name = `Rom ${Date.now()}`;
+  await page.locator('[data-dialog=prompt] input[type=text]').fill(name);
+  await box.check();
+  await page.locator('[data-dialog=prompt] button', { hasText: 'OK' }).click();
+  await expect(page.getByLabel('Slot 1', { exact: true })).toHaveValue(name);
+
+  await page.getByLabel('Slot 1', { exact: true }).selectOption('CE-1638');  // battery-backed, no switch
+  await expect(page.getByRole('button', { name: 'Name & Save slot 1' })).toBeEnabled({ timeout: 30000 });
+  await page.getByRole('button', { name: 'Name & Save slot 1' }).click();
+  await expect(page.locator('[data-dialog=prompt] input[type=checkbox]')).toHaveCount(0);
+  await page.locator('[data-dialog=prompt] button', { hasText: 'Cancel' }).click();
+});
+
 test('Name & Save keeps a card across a reload', async ({ page }) => {
   await gotoReady(page);
   await pickModel(page, 2);
@@ -220,7 +240,7 @@ test('Name & Save keeps a card across a reload', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Name & Save slot 1' })).toBeEnabled({ timeout: 30000 });
   await page.getByRole('button', { name: 'Name & Save slot 1' }).click();
   const name = `Work ${Date.now()}`;
-  await page.locator('[data-dialog=prompt] input').fill(name);
+  await page.locator('[data-dialog=prompt] input[type=text]').fill(name);
   await page.locator('[data-dialog=prompt] button', { hasText: 'OK' }).click();
   await expect(page.getByLabel('Slot 1', { exact: true })).toHaveValue(name);
   await page.waitForTimeout(500);  // IndexedDB write
