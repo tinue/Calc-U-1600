@@ -256,10 +256,9 @@ This same sub-model is reused, unmodified, in two other places:
 
 - **Regular** — CPU-read/writable at runtime. Fields: a writability flag
   (read/write vs. wired read-only) and, separately, an optional
-  runtime-togglable **write-protect** state (CE-159: identical addressing
-  and capacity to CE-155, but with a switch the running system can flip —
-  not the same thing as being wired read-only), plus its default on load
-  (§8).
+  **write-protect switch** (CE-161: a switch in the RAMs' R/W line; CE-159
+  likewise) — not the same thing as being wired read-only. The switch
+  position is part of the card file (§8).
 - **ROM** — bytes supplied by an explicit **byte-content section carried
   inside the definition file itself** (§5a), not by a separate
   preload/image file; never written by the running calculator, under any
@@ -537,11 +536,9 @@ region or bank-range at load time:
   declared), the same way it resets a Regular range to its own default
   (above) and a ROM range to its definition-file bytes — a load is a full
   reset of the card regardless of content kind.
-- Whether Regular memory's runtime-togglable write-protect (§5, e.g.
-  CE-159) starts protected or unprotected by default, and whether that
-  state is itself part of the card's persisted state or always resets to
-  a fixed default on load, is a content/behavior question the file should
-  settle explicitly rather than leaving to an implicit loader default.
+- A Regular range's write-protect switch (§5, e.g. CE-161) is part of
+  the card's saved state: the file records the position, a load starts
+  from it, and saving the card with the switch on writes `protected`.
 
 ---
 
@@ -556,7 +553,7 @@ through them:
 | CE-151 | S1 OR S2 — two bare mainboard strobes, one per 2 KB chip, no on-module decode and no Y0 path (Service Manual schematic 5-3) | Regular | Unbanked | — | PC-1500, PC-1500A (pins 16, 17 keep the same role on both), PC-1600 Slot 1 (B000–BFFF, Port 3CH = 1AH) — expressed as `Qt6/resources/cards/ce151.card.yaml` |
 | CE-155 | (Y0 AND `AD11–AD13 = 111`) OR S1 OR S2 OR S3 — the three S groups are bare mainboard strobes, one per dedicated 2KB chip, no on-module decode | Regular | Unbanked | — | PC-1500, PC-1500A (pins 4, 16, 17, 18 keep the same role on both — §1) |
 | CE-157 | RAM: same shape as CE-151/155 area. ROM: likely Y2 sub-range, PV-selected | RAM: Regular. ROM: ROM | RAM: Unbanked. ROM: unconfirmed — possibly banked if PV is a live line | ROM: unconfirmed — flagged in the source doc itself; this spec's job is only to be *capable* of expressing it once confirmed | PC-1500, PC-1500A |
-| CE-159 | Same as CE-155 | Regular, write-protect togglable | Unbanked | — | PC-1500, PC-1500A |
+| CE-159 | Same as CE-155 | Regular, write-protect switch | Unbanked | — | PC-1500, PC-1500A |
 | CE-160 | Same territory class as CE-159 (read-only) | ROM | Unbanked | — | PC-1500, PC-1500A |
 | CE-161 | Y0 alone, full 16KB | Regular | Unbanked | — | PC-1500, PC-1500A, PC-1600 Slot 1, PC-1600 Slot 2 — expressed as `Qt6/resources/cards/ce161.card.yaml` |
 | CE-163 | Y0, 16KB window | Regular, all banks | Banked | Trigger-based: pin 18 write pulse; source `A0` (address domain) | PC-1500, PC-1500A |

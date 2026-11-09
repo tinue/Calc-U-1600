@@ -150,9 +150,10 @@ content:
   kind: regular
   writable: true              # false = wired read-only (not a togglable switch)
   power-up-fill: 0x00         # per-range power-up byte; default 0x00 (CMOS RAM after a power loss, spec §8)
-  write-protect:              # optional runtime-togglable protect (CE-159); omit if absent
-    default: unprotected      # unprotected | protected — state on load (spec §8)
-    persisted: false          # false = always resets to `default` on load; true = part of card state
+  write-protect: unprotected  # optional: the module has a write-protect switch (CE-161); omit if not.
+                              # protected | unprotected = the switch position, part of the card file.
+                              # Protected refuses every write, host pokes included. Name & Save with
+                              # "Write-protect" / `saveas: ... protected` saves it as `protected`.
 ```
 
 ```yaml
@@ -322,7 +323,7 @@ error.
 | File | Card | Shows |
 |---|---|---|
 | `Qt6/resources/cards/ce151.card.yaml` | CE-151, 4 KB | Two bare-strobe `span` groups (`S1`, `S2`), one 2 KB chip each, no on-module decode (Service Manual schematic 5-3); PC-1500/1500A and PC-1600 Slot 1. |
-| `Qt6/resources/cards/ce161.card.yaml` | CE-161, 16 KB | One bare `Y0` group spanning the whole 16 KB window; PC-1500/1500A and both PC-1600 slots. |
+| `Qt6/resources/cards/ce161.card.yaml` | CE-161, 16 KB | One bare `Y0` group spanning the whole 16 KB window; battery-backed with a `write-protect:` switch ([background/CE-161-Program-Module.md](background/CE-161-Program-Module.md)); PC-1500/1500A and both PC-1600 slots. |
 | `Qt6/resources/cards/ce155.card.yaml` | CE-155, 8 KB | one `address-bits` group (the on-module `AD11–AD13` decoder) OR'd with three bare-strobe `span` groups; an author-declared host list (spec §1) covering PC-1500 and PC-1600 Slot 1. |
 | `Qt6/resources/cards/ce1600m.card.yaml` | CE-1600M, 32 KB | `PVOUT` folded into addressing as a half-select line — unbanked despite two physical halves (spec §6); one Slot-1-terminology file declared for both PC-1600 slots (`RAM2` resolves to the pin-4 enable on both — spec §1). |
 | `Qt6/resources/cards/ce1601m.card.yaml` | CE-1601M, 64 KB | Trigger-based vertical banking — `trigger: { io-port: 0x28 }`, `source-domain: data` (the byte written by `OUT (28H)`); `bank-window` nesting the `PVOUT` half-select (spec §4/§9). |

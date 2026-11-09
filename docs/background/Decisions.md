@@ -248,6 +248,14 @@ off, which is electrically a CE-151 (MEM +4096, 3CH = 1AH, RAM at B000 and
 B800 only, BASIC start B0C5H). Don't straighten it to pin 16 = LHS1: the
 CE-151 then lands at A800-B7FF.
 
+### A write-protected RAM module refuses host pokes too
+
+A card's write-protect switch (`write-protect: protected`, CE-161) refuses
+every write, also the debugger's pokes and the program loaders'
+direct writes, which otherwise reach any RAM. The real switch blocks the
+RAMs' R/W line, so nothing can write; a loader into a protected CE-161
+fails instead of changing a "ROM". To change one, use a writable copy.
+
 ## Authentic ROM behaviour: not bugs
 
 - **CE-1600P Y clip at about 1000 units.** This is the `PAPER` default (999
