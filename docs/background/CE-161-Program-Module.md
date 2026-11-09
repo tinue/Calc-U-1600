@@ -166,10 +166,30 @@ module or in the RAM program. **Line numbers** don't cross over: a direct
 `GOTO 500` or `LIST 500` for a RAM line gives ERROR 11, and so does
 `GOTO 10` from a RAM line into the module. That matches the manual
 (p. 37): a program in the remaining RAM must be a label ("definable")
-program, started with DEF or `RUN "label"`. The &FF fill keeps old bytes
-in the module from being read as lines. Why the extra `65279 END` line is
-needed hasn't been traced; the manual only says a RAM program can't be
-run without the fill program.
+program, started with DEF or `RUN "label"`.
+
+**Why the &FF fill.** When a search reaches a block's end marker it
+doesn't stop: it skips &FF bytes (the `cin` loop in `LINE_SEARCH`, bounded
+by `BASPRG_END`) and reads the first other byte as the start of the next
+block. Between the module program's end and &4000 only &FF is certain to
+be skipped. Anything else is read as a block of lines, and the search
+loses its way before it reaches the RAM program. Measured (A04 ROM,
+PC-1500, module protected, RAM program with a label at &4000):
+
+| Contents after the module program | Module labels, `RUN`, `LIST` | Label in the RAM program |
+|---|---|---|
+| &FF to &3FF8 + `65279 END` (manual) | OK | OK |
+| &FF to &3FFF, no `END` line | OK | OK |
+| old contents of the card | OK | ERROR 11 |
+| zeros, gap a multiple of 3 | OK | OK |
+| zeros, gap not a multiple of 3 | OK | ERROR 11 |
+
+Zeros only work by luck: `00 00 00` reads as an empty line 3 bytes long,
+which lands exactly on &4000 only if the gap divides by 3. The module's
+own program needs no fill. The `65279 END` line made no difference in
+these tests; its purpose remains open (perhaps a defined last line, so
+execution can't run on into the RAM program). The manual only says a RAM
+program can't be run without the fill program.
 
 ## In the emulator
 
