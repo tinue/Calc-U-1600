@@ -56,10 +56,16 @@ ignored and the module is ordinary RAM.
 `POKE 0,85,0,1,0,0,0,0,255` writes `55 00 01 00 00 00 00 FF` to
 &0000–&0007: module at page &00, BASIC program at **&0100**, listable.
 
-That is why the manual says `NEW 256` first: with RAM from &00, `NEW`
-accepts any address from `RAM_ST`:C5 up (`BCMD_NEW`, C80A), and &0100 is
-where the header will say the program starts. For RAM-only use, `NEW 0`
-works too and gives 59 more bytes (BASIC from &00C5).
+The manual starts with `NEW 256` so that the program sits where this
+header says. The ROM doesn't need &0100: `NEW` accepts any address from
+`RAM_ST`:C5 up (`BCMD_NEW`, C80A), nothing uses &00C5–&00FF, and Sharp's
+own CE-502B mask-ROM module starts its program at &00C5 (header
+`55 00 00 C5 40 00 00 FF`). `NEW 0` with `POKE 0,85,0,0,197,0,0,0,255`
+behaves the same as the manual's variant in every check (RUN, labels,
+LIST, MEM, OFF/ON) and gives 59 more bytes. The manual's CE-153 variant
+loads that board's machine code at &0100 (`CALL &100`, `&104`, `&108`) and
+starts BASIC at &052A (`POKE 0,85,0,5,42,…`); a page-aligned start is the
+likeliest reason for &0100, but the manual doesn't say.
 
 The manual's fill program (lines 65273–65278) fills the module from the
 program's end marker (`STATUS 2`) to &3FF8 with &FF and writes
@@ -95,16 +101,26 @@ writable and takes the header; RAM is &4000–&47FF only.
 The PC-1500A has RAM to &57FF, so `RAM_END` is &58 there; the manual
 covers the PC-1500 only.
 
+Both rules are the ROM's general program-module handling, not anything
+CE-161-specific: whenever the scan has found a module (`ST_ROM_MOD` ≠ FF),
+`NEW 0` starts RAM BASIC at `RAM_ST`:00, because `RSRV_MEM_START` then
+puts the reserve area in the module (`ST_ROM_MOD`:08). The reserve keys
+come from the module and can't be reprogrammed (`RSRV_MEM_START` returns
+error code 24 for that case). A CE-502B gives the same layout.
+
 ## Module program and RAM program as one
 
 `PRG_SA_2_XREG` (VMJ 12, DF93) returns the module's program start whenever
-&7861 bit 7 is clear, so line searches start in the module. A line number
-starting &FF ends a block; the search (`LINE_SEARCH`, D2E0) then skips &FF
-bytes up to `BASPRG_END` and goes on in the next block, the same mechanism
-MERGE uses. Labels and `GOTO` therefore find lines in the module first,
-then in RAM. The &FF fill keeps old bytes in the module from being read as
-lines. Why the extra `65279 END` line is needed hasn't been traced; the
-manual only says a RAM program can't be run without the fill program.
+&7861 bit 7 is clear, so `RUN` and line searches start in the module.
+**Labels** reach both programs: `GOTO "A"` / DEF finds a label in the
+module or in the RAM program. **Line numbers** don't cross over: a direct
+`GOTO 500` or `LIST 500` for a RAM line gives ERROR 11, and so does
+`GOTO 10` from a RAM line into the module. That matches the manual
+(p. 37): a program in the remaining RAM must be a label ("definable")
+program, started with DEF or `RUN "label"`. The &FF fill keeps old bytes
+in the module from being read as lines. Why the extra `65279 END` line is
+needed hasn't been traced; the manual only says a RAM program can't be
+run without the fill program.
 
 ## In the emulator
 
