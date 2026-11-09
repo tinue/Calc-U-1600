@@ -131,7 +131,29 @@ covers the PC-1500 only.
 
 ## Program modules in general
 
-None of this is CE-161-specific: the ROM treats every module the scan
+**Layout.** Sharp's program modules follow one layout, the mask-ROM
+CE-502B as well as a CE-161 prepared by its manual (both have the same
+closing bytes at &3FF9–&3FFF):
+
+| Address (module at page &00) | Contents |
+|---|---|
+| &0000–&0007 | Header: &55, module page, program start (page offset, low byte), 3 bytes not read by the scan, list flag |
+| &0008–&00C4 | Reserve area: the DEF-key labels and key strings |
+| &00C5 or &0100 → | The tokenized BASIC program, ending in the usual &FF end marker |
+| … – &3FF8 | &FF fill |
+| &3FF9–&3FFE | `FE FF 03 F1 8E 0D` = line `65279 END` |
+| &3FFF | &FF, its end marker |
+
+- **Program start:** the CE-502B starts at &00C5, the CE-161 manual at
+  &0100 (&052A with the CE-153's machine code at &0100). The ROM accepts
+  any start from &00C5 up; why Sharp chose &0100 for the CE-161 is unknown.
+- **&FF fill:** needed. It lets the block search skip the gap to a RAM
+  program at &4000 (measured, see below).
+- **`65279 END`:** present in the CE-502B mask ROM and written by the
+  CE-161 procedure, but its purpose is unknown. On A01, A03 and A04, &FF
+  up to &3FFF without this line worked the same.
+
+**How the system ROM treats one.** None of this is CE-161-specific: the ROM treats every module the scan
 finds (`ST_ROM_MOD` ≠ FF) the same way, a protected CE-161 and Sharp's
 mask-ROM modules alike (checked with the CE-502B: module at page &00,
 program &00C5, RAM &4000–&47FF, `NEW 0` → &4000).
