@@ -18,10 +18,38 @@ table sits elsewhere.
 - Eight 2 KB RAMs (two 8 KB HM6264 in the flat version) fill the Y0 window
   &0000–&3FFF. An on-module TC40H138 picks the chip from AD11–AD13; Y0 on
   G2A gates it to the window, DME0 on G1 to ME0 cycles.
-- A CR2032 keeps the contents while the module is out of the computer.
-- The **Exclusive Readout Area Set Switch** sits in the RAMs' R/W line.
-  *Release*: normal RAM. *Setting*: the chips always see "read", so writes
-  are lost and reads still work.
+- **Power:** the RAMs and the '138 run from a diode-OR of V<sub>GG</sub>
+  (1SS98) and a CR2032 (DAN202), buffered by 1 µF. Pulled from the
+  computer, the module keeps its contents; nothing on the board erases
+  them.
+- **Deselect when unplugged:** AD11–AD13, Y0 and DME0 have 1.2 MΩ
+  pull-downs. Without the computer DME0 (G1) sits low, so all chip enables
+  stay high and the RAMs hold their data in standby.
+- **Power-up lock:** G2B hangs on 0.1 µF from V<sub>CC</sub>, with 1.2 MΩ and
+  a DAN202 clamp to ground. While V<sub>CC</sub> rises it pulses G2B high
+  and deselects every chip, so the switch-on transient can't write; with
+  V<sub>CC</sub> steady G2B is low and the decoder works.
+- **Output gating:** contact 38, OD (output disable), drives the chips'
+  output control (ŌD on the 2 KB chips; on the flat version's HM6264
+  probably ŌE). A chip drives the data bus only when OD allows it, so a
+  write cycle to a protected chip, which sees "read", can't fight the CPU
+  on the bus.
+- The **Exclusive Readout Area Set Switch** sits in the RAMs' R/W line
+  (contact 39). *Release*: R/W passes through, normal RAM. *Setting*: the
+  switch is open and 3.3 MΩ pulls the chips' R/W to the backed-up
+  V<sub>DD</sub>, so they always see "read": writes are lost, reads still
+  work.
+- **Open point:** the 2 KB-chip schematic shows a second, unlabelled input
+  that joins the chips' R/W *after* the switch. OD is drawn separately (to
+  ŌD), and a host signal driving that node would defeat the write
+  protection, which the manual says works. Probably a drafting error,
+  perhaps a leftover of the OD line; only a measurement on a real module
+  would settle it.
+
+The manual's "the program and data … are cleared when it is
+disconnected" (RAM mode) is about use, not hardware: the bytes stay, but
+the program also runs through the built-in RAM and its pointers live in
+the PC-1500, which asks for `NEW` after the memory layout changes.
 
 The 18 KB the manual speaks of are just the CE-161 at &0000–&3FFF plus the
 PC-1500's own 2 KB at &4000–&47FF, back to back.
