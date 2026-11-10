@@ -160,6 +160,16 @@ instead of the tape or serial line; `OPN` (or `OPN "COM"`) switches back.
   kept alive as in §3.
 - Programs that use `CLOAD`/`CHAIN` keep working unchanged and chain from
   the card.
+- **Cost: the table needs a 2K boundary that is visible while BASIC runs.**
+  `TOK_PROCESS` masks `OPN_TBL` with &FC (FA94), so the table starts at
+  xx00 with xx a multiple of 8. Outside the window none is free: &4000,
+  &4800, &5000 lie in BASIC's program and variable area (lowering
+  `RAM_END` to fence one off makes the power-on scan differ from &7864:
+  `NEW0? :CHECK` at every ON), &7800 is the CPU stack. Inside the window
+  the table has to be in **every** bank, at &0800 at the earliest
+  (&0000–&00C4 is the reserve area), so BASIC starts at about &0880: about
+  1.9 KB less per bank than `NEW &112`. BASWORD pays the same price. See
+  §5a for the alternative.
 
 ### C. Own keywords through the keyboard hook
 
@@ -202,6 +212,54 @@ bank that gets switched out.
   battery-backed (CE-163F FLASH even without battery), so later only the
   arming step runs.
 
+## 5a. What stays outside the driver bank, and what it costs
+
+Estimate, 2026-11-10; byte counts are LH5801 guesses, not assembled code.
+
+The driver (file system, `SAVE`/`LOAD`/`MERGE` with the pointer fix-up,
+directory, format, squeeze; roughly 2–4 KB) sits in its bank and costs
+BASIC nothing. It reads the BASIC pointers directly, because the system
+RAM &7600–&7FFF and the CPU stack (&7800–&784F) are not banked. Only these
+pieces must be reachable from whichever bank is live:
+
+| Piece | Bytes |
+|---|---|
+| Hop: save the caller's bank, select the driver bank, call, select the caller's bank, return | 20–30 |
+| Copy loop between two banks through a buffer (select A, copy to buffer, select B, copy out, repeat) | 40–60 |
+| Keyboard hook: on ENTER, a line with the driver's prefix (say `*LOAD GAME`) goes to the driver, anything else on to the card's OFF intercept and the ROM | 30–50 |
+| Shared state: caller's bank, command, status, length/counters, 16-byte name | 24–32 |
+| Transfer buffer | 64–256, freely chosen |
+| **Total** | **about 180–430** |
+
+**PC-1500A: all of it fits in the machine-language area &7C01–&7FFF
+(1023 bytes, not banked; Ref Address-Decoding §4).** BASIC loses nothing
+beyond the card firmware's own stub (`NEW &112`), which the card needs
+anyway. Even a 256-byte buffer leaves about 600 bytes of the area for the
+user. One catch: if the driver waits for a key (paging the directory),
+the ROM calls the keyboard hook while the driver bank is live, so the
+hook must not point into the window. With the hook at &7C01+ that holds
+by itself.
+
+**PC-1500: no such area** (&7C00–&7FFF mirrors &7800–&7BFF). The hop,
+copy loop and hook go into every bank right after the firmware stub, the
+same trick the stub uses: about 100–140 bytes, so `NEW` at about &190
+instead of &112, roughly 1 % of a bank. Shared state can't go there (a
+byte written in one bank isn't seen in the next), so it travels on the
+CPU stack and in registers, and the buffer borrows system RAM that is
+idle during the command (the cassette header buffer &7B60–&7BAF is the
+candidate, still to be checked).
+
+**Disk banks** keep the firmware stub area (274 bytes on the CE-163F), so
+a stray `CALL &E3` there can't break the firmware: 16110 bytes each. The
+driver bank has room for files after the driver.
+
+**The route decides the rest:** `CALL` (route A) and a prefixed command
+line on the keyboard hook cost only the table above. A token table for
+`CLOAD`/`CSAVE` (route B) adds about 1.9 KB in every bank (see route B).
+So the cheap combination is the command line for typing plus `CALL` inside
+programs. `CHAIN` from the card inside a program then needs a `CALL` form
+of its own.
+
 ## 6. A file system that fits
 
 Smaller than the PC-1600's, because LH5801 code space is the scarce part
@@ -241,6 +299,10 @@ the PC-1600 RAM-disk item in TODO.md.
   OFF-key intercept keeps `OPN_TBL` and &79D4 alive (measure on the unit).
 - Free system RAM for a transfer buffer and a trampoline while `CLOAD`
   runs.
+- Whether the keyboard hook gets the typed line on ENTER before the ROM
+  tokenizes it (BASWORD's driver suggests so; not traced), and how to
+  chain it with the card firmware's OFF intercept, which uses the same
+  hook.
 - The DEF-key tokens without CE-150/CE-158: do `CLOAD`/`CSAVE` typed that
   way list and run through a RAM `OPN_TBL`?
 - Whether machine code may run from a CE-163F FLASH bank (the card notes
