@@ -20,6 +20,15 @@ this is needed to use or build the emulator — for that, see the
   PC-1500 ROM's power-on scan and module header, and what the manual's
   `POKE` does.
 
+## Ideas
+
+Features thought through but not planned: what the hardware and ROMs
+offer and which routes look workable.
+
+- [PC1500-Card-Disk-Idea.md](PC1500-Card-Disk-Idea.md) — a software-only
+  RAM disk for the PC-1500(A) on a CE-1638 / CE-163F card, with ideas from
+  the PC-1600 ROM's RAM disk and the PC-1500's load paths and hooks.
+
 ## Plans
 
 Each plan was written before the work and committed with it. Most start

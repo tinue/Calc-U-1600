@@ -400,6 +400,10 @@ Shared-Layer-Followup-Plan.md and Web-GUI-Plan.md.
 
 ## Feature ideas
 
+- **PC-1500 RAM disk on a CE-1638 / CE-163F card**, software only (a
+  driver loaded once over the CE-158): idea, routes and open points in
+  docs/background/PC1500-Card-Disk-Idea.md.
+
 - **LCD text: the kana set.** No font that the parser reads has katakana
   yet, so they come out unparsed. On the PC-1500 they come from the second
   character set at (KATACHAR) when KATAFLAGS enables it (`CHAR_2_ADDR_4`,
