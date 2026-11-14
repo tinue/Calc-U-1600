@@ -2,14 +2,16 @@
 # a 16 KB mask ROM holding a ready-to-run BASIC program.
 #
 # It plugs into the 40-pin memory-module slot and answers on Y0
-# (&0000-&3FFF), where a RAM module would sit. Layout (the program-module
-# convention, per Jeff Birt's dump notes):
-#   &0000-&0007  ROM header: 55 (marker) 00 (ROM top, high byte)
-#                00 C5 (top of the BASIC program) 40 (size: 16 KB)
-#                00 00 FF (FF = LIST allowed)
+# (&0000-&3FFF), where a RAM module would sit. Layout (Sharp's
+# program-module layout, docs/background/CE-161-Program-Module.md):
+#   &0000-&0007  header: 55 (marker) 00 (module page) 00 C5 (program
+#                start &00C5) 40 00 00 (not read by the power-on scan; &40
+#                presumably the size) FF (LIST allowed)
 #   &0008-&00C4  reserve area: the DEF-key labels HG BD PD ND WD ED CD STD
 #                FD MLR and their key strings
-#   &00C5-       the tokenized BASIC program
+#   &00C5-&3FE7  the tokenized BASIC program
+#   &3FE8-&3FF8  FF fill
+#   &3FF9-&3FFF  FE FF 03 F1 8E 0D FF: line 65279 END + end marker
 #
 # Bytes: Jeff Birt's dump (https://github.com/Jeff-Birt/PC-1500_ROM_Modules,
 # CE-502B_Statistics/CE-502B.bin), taken over a CE-158 with

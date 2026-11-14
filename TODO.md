@@ -209,8 +209,8 @@ Decisions.md, "One 60-pin connector per machine".
     module is ME0-only if it gates on DME0, and answers in ME1 too if it
     doesn't. Known modules: CE-151 (S strobes only); CE-155/CE-159 (Y0 chip
     gates on DME0); CE-161 (schematic: on-module TC40H138FP with G1 = DME0,
-    G2A = Y0, A/B/C = AD11-13; G2B unreadable, apparently a supply-fail
-    lock); CE-163F (measured: ME0 only). Unknown: CE-1638, CE-502B.
+    G2A = Y0, A/B/C = AD11-13; G2B = power-up lock, RC from VCC, see
+    docs/background/CE-161-Program-Module.md); CE-163F (measured: ME0 only). Unknown: CE-1638, CE-502B.
   - **Why it works today:** `PC1500Memory::readME1` / `writeME1` /
     `debugPeekME1` offer ME1 cycles to the 60-pin `SystemBus` only, never to
     the 40-pin `ExpansionConnector`. That equals "every 40-pin module gates
@@ -399,6 +399,10 @@ Shared-Layer-Followup-Plan.md and Web-GUI-Plan.md.
   (the probes need `PC1600_POWER_PROBE`); CMake globs everything else.
 
 ## Feature ideas
+
+- **PC-1500 RAM disk on a CE-1638 / CE-163F card**, software only (a
+  driver loaded once over the CE-158): idea, routes and open points in
+  docs/background/PC1500-Card-Disk-Idea.md.
 
 - **LCD text: the kana set.** No font that the parser reads has katakana
   yet, so they come out unparsed. On the PC-1500 they come from the second

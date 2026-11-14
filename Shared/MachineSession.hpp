@@ -168,6 +168,9 @@ public:
     int slotCount() const;
     // The card in `slot`, null for an empty or missing slot.
     const ExpansionCard* slotCard(int slot) const;
+    // Moves the write-protect switch of the card in `slot` (no-op for an
+    // empty slot or a card without one).
+    void setSlotWriteProtected(int slot, bool protect);
     // Takes ownership of `card` and plugs it into `slot` (ignored for a
     // missing slot); detachSlots() empties every slot.
     void attachSlotCard(int slot, std::unique_ptr<ExpansionCard> card);

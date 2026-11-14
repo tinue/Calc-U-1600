@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "MemorySettingsStore.hpp"
+#include "PC1500/PC1500Machine.hpp"
 #include "PC1600/PC1600Machine.hpp"
 #include "Shared/AppSession.hpp"
 #include "Shared/CardYamlDump.hpp"
@@ -335,6 +336,47 @@ void test_media_library() {
     CHECK(!library.importFile("notes.txt", {'x'}).ok);
 }
 
+// Name & Save with "write-protect": the file records the switch, the live
+// card stops taking writes at once, and the saved instance comes back
+// protected with its contents. A card without a switch is refused.
+void test_card_write_protect() {
+    Fixture f;
+    f.settings.setStartupModelPreference("PC1500");
+    f.app->start();
+    CHECK(f.app->runNow(f.app->selectModuleJob(1, "CE-161")).ok);
+    CHECK(f.app->modules().canNameAndSave(1));
+    CHECK(f.app->modules().canWriteProtect(1));
+    PC1500Machine* m = f.app->machine().pc1500();
+    CHECK(m != nullptr);
+    if (!m) return;
+    m->memory().writeME0(0x0000, 0x55);
+    CHECK(m->memory().readME0(0x0000) == 0x55);
+
+    std::string error;
+    CHECK(f.app->modules().nameAndSave(1, "Rom", &error, /*writeProtect=*/true));
+    CHECK(!f.app->modules().canWriteProtect(1));
+    const ExpansionCard* card = f.app->machine().slotCard(1);
+    CHECK(card && card->writeProtected());
+    m->memory().writeME0(0x0000, 0xAA);  // the switch blocks it
+    CHECK(m->memory().readME0(0x0000) == 0x55);
+    std::ifstream in(fs::path(f.paths->instanceDir()) / "Rom.card.yaml");
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    CHECK(text.find("write-protect: protected") != std::string::npos);
+
+    // Reloaded from its file: still protected, contents kept.
+    CHECK(f.app->runNow(f.app->selectModuleJob(1, "")).ok);
+    CHECK(f.app->runNow(f.app->selectModuleJob(1, "Rom")).ok);
+    m = f.app->machine().pc1500();
+    card = f.app->machine().slotCard(1);
+    CHECK(m && card && card->writeProtected());
+    if (m) CHECK(m->memory().readME0(0x0000) == 0x55);
+
+    CHECK(f.app->runNow(f.app->selectModuleJob(1, "CE-1638")).ok);  // battery-backed, no switch
+    CHECK(!f.app->modules().canWriteProtect(1));
+    CHECK(!f.app->modules().nameAndSave(1, "Locked", &error, true));
+    CHECK(error == "\"CE-1638\" has no write-protect switch.");
+}
+
 // cardYamlDump(): a header and the initial-content block per slot card,
 // or one line saying there's nothing.
 void test_card_yaml_dump() {
@@ -426,6 +468,7 @@ int run_shared_app_session_tests() {
     test_program_choice();
     test_machine_code_load();
     test_media_library();
+    test_card_write_protect();
     test_card_yaml_dump();
     test_pick_model();
     test_example_ref_default_preset();

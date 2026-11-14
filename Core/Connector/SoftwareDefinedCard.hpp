@@ -42,6 +42,15 @@ public:
             }
             m_regions.push_back(std::move(st));
         }
+        // One switch for the whole module: any content that declares
+        // `write-protect:` hangs on it; the file records one position.
+        for (const Region& r : m_def.regions)
+            for (uint32_t b = 0; b < r.banking.bankCount; b++) {
+                const RegionContent& c = r.contentForBank(b);
+                if (!c.hasWriteProtect) continue;
+                m_hasWriteProtectSwitch = true;
+                m_writeProtected = m_writeProtected || c.writeProtected;
+            }
     }
 
     bool respondsToRead(const PinState& pins, uint8_t& outValue) const override {
@@ -94,7 +103,8 @@ public:
                 flashWrite(st, r, c.flash, off - bankBase, value);
                 return WriteResult::taken();  // the chip took the command, even one that leaves the array untouched
             }
-            bool protectedNow = c.hasWriteProtect && c.writeProtectDefaultProtected;
+            // The switch blocks R/W at the chips: host pokes and loaders are refused too.
+            const bool protectedNow = c.hasWriteProtect && m_writeProtected;
             if (!c.writable || protectedNow) return WriteResult::refused();  // the card claims the write either way
             store(st.backing[off], value);
             return WriteResult::taken();
@@ -126,7 +136,8 @@ public:
             for (uint32_t b = 0; b < m.banks; ++b) {
                 const RegionContent& c = r.contentForBank(b);
                 const CardMemory::Kind k = c.kind == ContentKind::Flash ? CardMemory::Kind::Flash
-                    : (c.kind == ContentKind::Rom || !c.writable)        ? CardMemory::Kind::Rom
+                    : (c.kind == ContentKind::Rom || !c.writable || (c.hasWriteProtect && m_writeProtected))
+                    ? CardMemory::Kind::Rom
                                                                           : CardMemory::Kind::Ram;
                 if (b == 0) m.kind = k;
                 else if (k != m.kind) m.kind = CardMemory::Kind::Mixed;
@@ -137,6 +148,12 @@ public:
     }
 
     uint64_t contentRevision() const override { return m_contentRevision; }
+
+    bool hasWriteProtectSwitch() const override { return m_hasWriteProtectSwitch; }
+    bool writeProtected() const override { return m_writeProtected; }
+    void setWriteProtected(bool protect) override {
+        if (m_hasWriteProtectSwitch) m_writeProtected = protect;
+    }
 
     /// First banked region's current bank, for the GUI "Dump Mem" column
     /// label; -1 when no region banks (a purely unbanked definition).
@@ -351,6 +368,8 @@ private:
     MemoryCardDefinition m_def;
     std::vector<RegionState> m_regions;
     uint64_t m_contentRevision = 0; // see contentRevision()
+    bool m_hasWriteProtectSwitch = false;  // some content declares `write-protect:`
+    bool m_writeProtected = false;         // the switch position (see setWriteProtected())
 };
 
 /// Build the universal card from a definition file for a specific target

@@ -50,9 +50,11 @@ function ConfirmDialog({ title, text, done }) {
   );
 }
 
-function PromptDialog({ title, label, done }) {
+// With a `checkbox` label the answer is { text, checked }; without, the text.
+function PromptDialog({ title, label, checkbox, done }) {
   const [value, setValue] = React.useState("");
-  const ok = () => done(value.trim());
+  const [checked, setChecked] = React.useState(false);
+  const ok = () => done(checkbox ? { text: value.trim(), checked } : value.trim());
   return (
     <Modal title={title} name="prompt" onCancel={() => done(null)}
       buttons={
@@ -66,6 +68,12 @@ function PromptDialog({ title, label, done }) {
         <input type="text" value={value} onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") ok(); }} />
       </label>
+      {checkbox && (
+        <label className="calcu-form-row">
+          <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+          <span>{checkbox}</span>
+        </label>
+      )}
     </Modal>
   );
 }

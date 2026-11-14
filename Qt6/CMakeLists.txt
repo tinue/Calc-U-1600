@@ -36,7 +36,7 @@ qt_standard_project_setup()
 # Version.h below and the MACOSX_BUNDLE_*VERSION* properties further down
 # reference this instead of each hardcoding "0.1.0" separately, as does
 # the Windows installer (generated Version.iss below).
-set(APP_VERSION "0.8.0")
+set(APP_VERSION "0.8.1")
 
 # git describe gives a short, human-meaningful build id (tag or short hash,
 # +"-dirty" if the tree has local changes) for bug reports. Falls back to

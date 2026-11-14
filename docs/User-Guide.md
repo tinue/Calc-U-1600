@@ -393,13 +393,55 @@ machine, like a model switch does.
 |---|---|---|---|
 | CE-151 | PC-1500/1500A, PC-1600 Slot 1 | 4 KB RAM | no |
 | CE-155 | PC-1500/1500A, PC-1600 Slot 1 | 8 KB RAM | no |
-| CE-161 | PC-1500/1500A, PC-1600 Slot 1 or 2 | 16 KB RAM | no |
+| CE-161 | PC-1500/1500A, PC-1600 Slot 1 or 2 | 16 KB RAM with write-protect switch | yes |
 | CE-1638 | PC-1500/1500A, PC-1600 | 128 KB banked RAM (hobbyist module) | yes |
 | CE-163F | PC-1500/1500A, PC-1600 | 128 KB RAM + 128 KB flash (hobbyist module) | yes |
 | CE-502B | PC-1500/1500A | "Statistics" program module (ROM) | – |
 | CE-1600M | PC-1600 Slot 1 or 2 | 32 KB RAM | yes |
 | CE-1601M | PC-1600 Slot 2 | 64 KB banked RAM | yes |
 | superRAM | PC-1600 Slot 2 | 512 KB banked RAM (fictional, fully loaded Slot 2) | yes |
+
+### Program modules on the PC-1500: where BASIC and the reserve keys go
+
+A **program module** holds a BASIC program and its reserve keys in memory
+the calculator can't write: Sharp's ROM modules such as the CE-502B, or a
+CE-161 saved with **Write-protect** (see [Naming and saving](#naming-and-saving)).
+At power-on the PC-1500 ROM looks for one in &0000–&6FFF: a page that
+can't be written and starts with the byte &55 (a module header). How
+memory is used then depends on what it finds:
+
+| PC-1500 with … | Reserve keys | BASIC after `NEW 0` | Variables | `MEM` (empty) |
+|---|---|---|---|---|
+| no module | &4008–&40C4 | &40C5 | down from &47FF | 1850 |
+| a RAM module (CE-161 unprotected) | &0008–&00C4 | &00C5 | down from &47FF | 18234 |
+| a program module (CE-502B, protected CE-161) | in the module, &0008–&00C4 | &4000 | down from &47FF | 2047 |
+
+On the PC-1500A the built-in RAM ends at &57FF, so every row has 4 KB
+more and the variables start at &57FF (`MEM` 5946 without a module, 6143
+next to a program module).
+
+With a program module:
+
+- **Your own program goes into the built-in RAM.** BASIC starts right at
+  &4000, without the usual &C5 bytes in front, because the reserve area
+  is in the module. Variables, also those of the module's program, live
+  in the built-in RAM.
+- **The reserve keys are the module's.** They come from the module and
+  can't be changed while it is plugged in.
+- **Start programs by label.** `RUN` starts the module's program, and DEF
+  or `GOTO "label"` finds a label in either program. Line numbers don't
+  cross over: `GOTO`, `LIST` or `GOSUB` with a number only find lines in
+  the same program, otherwise ERROR 11. Give a program of your own a label
+  and start it with DEF or `RUN "label"`.
+- **Plugging in or pulling out costs the built-in RAM.** Either way the
+  memory layout changes, the calculator shows `NEW0? :CHECK`, and you
+  type `NEW 0` (the table's middle column moves). A program and variables
+  in the built-in RAM are lost; the module's program and reserve keys are
+  not. In the emulator, choosing a module in the picker is plugging it in.
+
+How the ROM recognizes a module, the header layout and the CE-161's
+`POKE` are in
+[background/CE-161-Program-Module.md](background/CE-161-Program-Module.md).
 
 ### The floppy disk (PC-1600)
 
@@ -463,6 +505,15 @@ stateDiagram-v2
     note right of Template: never written to
 ```
 
+- **Write-protect (CE-161).** For a module with a write-protect switch, the
+  Name & Save dialog has a **Write-protect** box. Ticked, the copy is saved
+  with the switch set to read-only, and it stays that way: the calculator
+  can read it but no longer write to it. On the PC-1500 this turns a
+  prepared CE-161 into a program module, as in its manual: `NEW 256`,
+  enter the program, run the manual's fill program,
+  `POKE 0,85,0,1,0,0,0,0,255`, then Name & Save with the box ticked, turn
+  the calculator OFF and ON, and `NEW 0`. Details in
+  [background/CE-161-Program-Module.md](background/CE-161-Program-Module.md).
 - **Where the files go.** Modules are saved as `<name>.card.yaml`, disks as
   `<name>.floppy.yaml`, in **Settings ▸ Storage ▸ Battery-card saves**
   (default `~/Calc-U-1600`). A `/` or `:` in the name becomes `-`.
@@ -768,6 +819,7 @@ program:
 |---|---|
 | `- saveas: live slot-1:My card` | Name & Save the module in slot 1 into your save folder. `slot-2:` and `floppy:` are PC-1600 only. Overwrites a file of the same name, but never takes a template's name. |
 | `- saveas: template slot-1:My card` | The same, saved as a template. Running the preset again replaces your own template of that name; a bundled name is refused. |
+| `- saveas: live protected slot-1:My ROM` | The same, with the module's write-protect switch on (a module that has one, e.g. the CE-161; not a disk). |
 | `- saveas: template slot-2:file:Card.card.yaml` | Saves to that file, next to the preset (`.card.yaml` for a card, `.floppy.yaml` for `floppy:`). The name is the file name. |
 | `- expect: 11834` | Stops the preset with an error unless one line of the display contains that text, e.g. to check a result. The rest of the line is the text, `#` included. A backslash is written `\\`, and a character outside ASCII as `\xHH` (its code). |
 | `- screenshot: shot.png` | Saves the LCD image (as Copy Screen does) in the trace directory. |

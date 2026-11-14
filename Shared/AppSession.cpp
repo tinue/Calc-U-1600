@@ -214,9 +214,11 @@ job::Task<OpResult> AppSession::loadPresetJob(std::string ref, bool armOnly) {
     const PresetSaveAsFn onSaveAs = [this](const PresetSaveAsRequest& request, std::string* error) {
         switch (request.target) {
             case PresetStep::SaveAsTarget::Slot1:
-                return m_modules->saveAsFromPreset(1, request.name, request.path, request.isTemplate, error);
+                return m_modules->saveAsFromPreset(1, request.name, request.path, request.isTemplate, error,
+                                                   request.writeProtect);
             case PresetStep::SaveAsTarget::Slot2:
-                return m_modules->saveAsFromPreset(2, request.name, request.path, request.isTemplate, error);
+                return m_modules->saveAsFromPreset(2, request.name, request.path, request.isTemplate, error,
+                                                   request.writeProtect);
             case PresetStep::SaveAsTarget::Floppy:
                 return m_floppy->saveAsFromPreset(request.name, request.path, request.isTemplate, error);
         }

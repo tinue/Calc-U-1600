@@ -13,6 +13,22 @@ this is needed to use or build the emulator — for that, see the
   cleanup, simplification or review**, and add an entry when a recurring
   question gets settled.
 
+## Hardware notes
+
+- [CE-161-Program-Module.md](CE-161-Program-Module.md) — how the CE-161
+  RAM module becomes a program module: the write-protect switch, the
+  PC-1500 ROM's power-on scan and module header, and what the manual's
+  `POKE` does.
+
+## Ideas
+
+Features thought through but not planned: what the hardware and ROMs
+offer and which routes look workable.
+
+- [PC1500-Card-Disk-Idea.md](PC1500-Card-Disk-Idea.md) — a software-only
+  RAM disk for the PC-1500(A) on a CE-1638 / CE-163F card, with ideas from
+  the PC-1600 ROM's RAM disk and the PC-1500's load paths and hooks.
+
 ## Plans
 
 Each plan was written before the work and committed with it. Most start
@@ -45,6 +61,7 @@ with a status note on how the implementation differed. New plans go into
 | [Shared layer follow-up: frontend-neutral seams](plans/Shared-Layer-Followup-Plan.md) | 2026-11-06 | Implemented |
 | [Web GUI: WebAssembly frontend, embed + PWA](plans/Web-GUI-Plan.md) | 2026-11-06 | Implemented; calc-u.org page, user docs and iPad check in TODO.md |
 | [Names and descriptions: presets, cards, disks](plans/Media-Names-Plan.md) | 2026-11-07 | Implemented |
+| [RAM write-protect switch; CE-161 battery-backed](plans/RAM-Write-Protect-Plan.md) | 2026-11-09 | Implemented |
 
 ## Handoffs
 

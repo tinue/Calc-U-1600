@@ -6,7 +6,7 @@
 // What a PC-1600 holds for a preset's `saveas:` `request` (savePresetMedia()):
 // both slots, as the loader attached them (`armed`, from onArmed), and --
 // for a floppy save only -- the disk in the CE-1600F.
-inline PresetMedia pc1600PresetMedia(const PC1600Machine& machine, const PresetLoadResult& armed,
+inline PresetMedia pc1600PresetMedia(PC1600Machine& machine, const PresetLoadResult& armed,
                                      const PresetSaveAsRequest& request) {
     PresetMedia media;
     media.slots[0] = {machine.memory().slotCard(1), armed.slot1ResolvedPath, armed.slot1RomFile};

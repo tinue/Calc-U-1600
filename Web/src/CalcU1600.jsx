@@ -197,9 +197,13 @@ function CalcU1600(props) {
 
   const actions = {
     nameAndSaveCard: async (slot) => {
-      const name = await dialogs.ask("prompt", { title: "Name & Save", label: "Instance name:" });
-      if (name === null) return;
-      const err = await engine.request("nameAndSaveCard", slot, name);
+      // A card with a write-protect switch (CE-161) may be saved read-only, for good.
+      const checkbox = ui.slots[slot - 1]?.canWriteProtect
+        ? "Write-protect (switch to read-only, can't be undone)" : undefined;
+      const answer = await dialogs.ask("prompt", { title: "Name & Save", label: "Instance name:", checkbox });
+      if (answer === null) return;
+      const { text: name, checked } = typeof answer === "string" ? { text: answer, checked: false } : answer;
+      const err = await engine.request("nameAndSaveCard", slot, name, checked);
       if (err) tell("Name & Save", err);
     },
     nameAndSaveDisk: async () => {

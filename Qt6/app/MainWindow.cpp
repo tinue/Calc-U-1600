@@ -34,6 +34,10 @@
 #include <QElapsedTimer>
 #include <QKeyEvent>
 #include <QCloseEvent>
+#include <QCheckBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -125,12 +129,27 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
         m_sync->run(tr("Memory Module"), m_controller->app().selectModuleJob(slot, moduleNameOrEmpty.toStdString()));
     });
     connect(m_controlBar, &ControlBar::nameAndSaveRequested, this, [this](int slot) {
-        bool ok = false;
-        const QString name = QInputDialog::getText(this, tr("Name & Save"), tr("Instance name:"),
-                                                   QLineEdit::Normal, QString(), &ok);
-        if (!ok) return;
+        // The name, plus -- for a card with a write-protect switch (CE-161)
+        // -- whether to save it with the switch on. That is final: the
+        // saved card stays read-only.
+        QDialog dialog(this);
+        dialog.setWindowTitle(tr("Name & Save"));
+        auto* form = new QFormLayout(&dialog);
+        auto* nameEdit = new QLineEdit(&dialog);
+        form->addRow(tr("Instance name:"), nameEdit);
+        QCheckBox* protectBox = nullptr;
+        if (m_moduleManager->canWriteProtect(slot)) {
+            protectBox = new QCheckBox(tr("Write-protect (switch to read-only, can't be undone)"), &dialog);
+            form->addRow(protectBox);
+        }
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        form->addRow(buttons);
+        if (dialog.exec() != QDialog::Accepted) return;
+        const QString name = nameEdit->text();
         QString error;
-        if (!m_moduleManager->nameAndSave(slot, name, &error)) {
+        if (!m_moduleManager->nameAndSave(slot, name, &error, protectBox && protectBox->isChecked())) {
             QMessageBox::warning(this, tr("Name & Save"), error);
             return;
         }

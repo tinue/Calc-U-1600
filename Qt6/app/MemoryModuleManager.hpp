@@ -32,7 +32,8 @@ public:
 
     QString selectedModuleName(int slot) const { return QString::fromStdString(m_bay->selectedModuleName(slot)); }
     bool canNameAndSave(int slot) const { return m_bay->canNameAndSave(slot); }
-    bool nameAndSave(int slot, const QString& instanceName, QString* error);
+    bool canWriteProtect(int slot) const { return m_bay->canWriteProtect(slot); }
+    bool nameAndSave(int slot, const QString& instanceName, QString* error, bool writeProtect = false);
 
     void flushPendingPersist() { m_bay->flushPendingPersist(); }
 

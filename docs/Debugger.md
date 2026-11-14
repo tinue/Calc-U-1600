@@ -268,6 +268,8 @@ slot-1-rom: build/module.bin    # read at every clean start
 
 The `.bin` must be exactly the ROM's size, so pad it to the full size. The app never saves such a card back. There is no template for slot modules yet.
 
+A PC-1500 *BASIC* program module (header, reserve area, program, &FF fill, closing `65279 END` line) follows Sharp's layout in [background/CE-161-Program-Module.md](background/CE-161-Program-Module.md#program-modules-in-general); the system ROM finds it by its &55 header at power-on.
+
 ---
 
 ## 4. Firmware analysis

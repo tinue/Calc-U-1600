@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.8.1] - 2026-11-14
+
+### New
+
+- **CE-161 write-protect switch.** The CE-161 is now battery-backed and
+  has its "Set Switch": Name & Save offers **Write-protect**, which saves
+  the card read-only for good. On the PC-1500 a prepared, protected CE-161
+  works as a program module, as in its manual. Presets:
+  `saveas: live protected slot-1:<name>`.
+
+### Changed
+
+- **Card files:** `write-protect:` on regular content is now the switch
+  position (`protected` / `unprotected`), not a `default`/`persisted` map.
+
 ## [0.8.0] - 2026-11-07
 
 ### New

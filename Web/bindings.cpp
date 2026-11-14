@@ -403,9 +403,10 @@ public:
 
     // ── Bays ─────────────────────────────────────────────────────────────
     // Name & Save / tape errors come back as "" or the sentence to show.
-    std::string nameAndSaveCard(int slot, const std::string& name) {
+    // `writeProtect`: save with the card's write-protect switch on (CE-161).
+    std::string nameAndSaveCard(int slot, const std::string& name, bool writeProtect) {
         std::string error;
-        m_app->modules().nameAndSave(slot, name, &error);
+        m_app->modules().nameAndSave(slot, name, &error, writeProtect);
         postEverything();
         return error;
     }
@@ -741,6 +742,7 @@ private:
                             &shared::ModuleBay::ModuleEntry::moduleName);
             v.set("selected", m_app->modules().selectedModuleName(slot));
             v.set("canSave", m_app->modules().canNameAndSave(slot));
+            v.set("canWriteProtect", m_app->modules().canWriteProtect(slot));
             slots.set(slot - 1, v);
         }
         ui.set("slots", slots);
